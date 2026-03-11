@@ -189,11 +189,13 @@ func RunPodUntilCompletion(
 				ctx.Err(),
 			)
 		case <-deadline.C:
+			timeoutDetails := formatTimedOutPodDetails(ctx, cfg, current)
 			return nil, fmt.Errorf(
-				"timed out waiting for pod %s/%s to complete (last phase: %s)",
+				"timed out waiting for pod %s/%s to complete (last phase: %s)\n%s",
 				pod.Namespace,
 				pod.Name,
 				lastPhase,
+				timeoutDetails,
 			)
 		case <-ticker.C:
 		}
@@ -242,6 +244,31 @@ func getPodLogs(ctx context.Context, cfg *rest.Config, namespace string, name st
 		return "", err
 	}
 	return string(raw), nil
+}
+
+func formatTimedOutPodDetails(ctx context.Context, cfg *rest.Config, pod *corev1.Pod) string {
+	if pod == nil {
+		return "(no pod object)"
+	}
+
+	sections := []string{formatPodContainerStates(pod)}
+	if cfg == nil {
+		return strings.Join(sections, "\n")
+	}
+
+	logs, err := getPodLogs(ctx, cfg, pod.Namespace, pod.Name)
+	if err != nil {
+		sections = append(sections, fmt.Sprintf("log retrieval error: %v", err))
+		return strings.Join(sections, "\n")
+	}
+	if strings.TrimSpace(logs) == "" {
+		sections = append(sections, "(no container logs)")
+		return strings.Join(sections, "\n")
+	}
+
+	sections = append(sections, "logs:")
+	sections = append(sections, logs)
+	return strings.Join(sections, "\n")
 }
 
 // DeletePodBestEffort deletes a pod and ignores NotFound.

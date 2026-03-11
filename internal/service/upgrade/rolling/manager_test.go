@@ -400,6 +400,65 @@ func TestValidateUpgrade_ResumeHealthBlocksQuorumLoss(t *testing.T) {
 	}
 }
 
+func TestValidateUpgrade_ResumeHealthMarksTimedOutTargetAsPodNotReady(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	startedAt := metav1.NewTime(time.Now().Add(-(upgrade.DefaultPodReadyTimeout + time.Minute)))
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.4",
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				FromVersion:      "2.4.4",
+				TargetVersion:    "2.5.0",
+				CurrentPartition: 3,
+				StartedAt:        &startedAt,
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: cluster.Name, Namespace: cluster.Namespace},
+		Status: appsv1.StatefulSetStatus{
+			Replicas:      3,
+			ReadyReplicas: 1,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts).Build()
+	mgr := NewManagerWithClientFactory(
+		k8sClient,
+		scheme,
+		nil,
+		rollingTestClientFactory(),
+		portopenbao.ClientConfig{},
+		nil,
+		"",
+	)
+
+	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "did not become ready within") {
+		t.Fatalf("validateUpgrade() error = %v, want pod-ready timeout", err)
+	}
+	if cluster.Status.Upgrade == nil {
+		t.Fatal("expected rolling upgrade status to remain present")
+	}
+	if cluster.Status.Upgrade.LastErrorReason != upgrade.ReasonPodNotReady {
+		t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, upgrade.ReasonPodNotReady)
+	}
+	if !strings.Contains(cluster.Status.Upgrade.LastErrorMessage, "test-cluster-2") {
+		t.Fatalf("LastErrorMessage=%q, want target pod name", cluster.Status.Upgrade.LastErrorMessage)
+	}
+}
+
 func TestValidateUpgrade_ResumeHealthBlocksNonTargetUnavailableReplica(t *testing.T) {
 	t.Parallel()
 

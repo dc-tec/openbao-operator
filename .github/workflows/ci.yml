@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,6 +20,12 @@ jobs:
     runs-on: &runner ubuntu-24.04
     outputs:
       chart: ${{ steps.diff.outputs.chart }}
+      workflow: ${{ steps.diff.outputs.workflow }}
+      docs: ${{ steps.diff.outputs.docs }}
+      go_quality: ${{ steps.diff.outputs.go_quality }}
+      go_tests: ${{ steps.diff.outputs.go_tests }}
+      config_compat: ${{ steps.diff.outputs.config_compat }}
+      security_scan: ${{ steps.diff.outputs.security_scan }}
       e2e: ${{ steps.diff.outputs.e2e }}
       e2e_backup: ${{ steps.diff.outputs.e2e_backup }}
       e2e_upgrade: ${{ steps.diff.outputs.e2e_upgrade }}
@@ -59,31 +65,69 @@ jobs:
             echo "chart=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|\.github/workflows/ci\.yml|Makefile)'; then
+          if echo "${changed}" | grep -qE '^(\.github/workflows/|\.github/actions/)'; then
+            echo "workflow=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "workflow=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(docs/|mkdocs\.yml|README\.md|\.github/actions/mkdocs-build/)'; then
+            echo "docs=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "docs=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|config/|test/|docs/reference/api\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|boilerplate\.go\.txt)|\.golangci\.yml|\.github/tools/)'; then
+            echo "go_quality=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "go_quality=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|config/|go\.(mod|sum)$|vendor/|Makefile|mk/|test/(integration/|unit/))'; then
+            echo "go_tests=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "go_tests=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(api/|internal/adapter/config/|internal/service/infra/|internal/app/openbaocluster/|internal/controller/openbaocluster/|go\.(mod|sum)$|Makefile|mk/)'; then
+            echo "config_compat=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "config_compat=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|config/|charts/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|vendor/|\.trivyignore|\.trivy\.yaml|Makefile|mk/)'; then
+            echo "security_scan=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "security_scan=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|Makefile|mk/)'; then
             echo "e2e=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/service/backup/|internal/service/restore/|cmd/bao-backup/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
+          if echo "${changed}" | grep -qE '^(internal/service/backup/|internal/service/restore/|cmd/bao-backup/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|backup_restore_test\.go)|Makefile|mk/)'; then
             echo "e2e_backup=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_backup=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/service/upgrade/|cmd/bao-upgrade/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
+          if echo "${changed}" | grep -qE '^(internal/service/upgrade/|cmd/bao-upgrade/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|Upgrade_Strategies_test\.go|Upgrade_Target_Drift_test\.go|Upgrade_Operation_Lock_test\.go)|Makefile|mk/)'; then
             echo "e2e_upgrade=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_upgrade=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/adapter/security/|internal/platform/admission/|internal/service/provisioner/|cmd/provisioner/|config/policy/|internal/controller/|cmd/controller/|test/e2e/|\.github/workflows/ci\.yml|Makefile)'; then
+          if echo "${changed}" | grep -qE '^(internal/adapter/security/|internal/platform/admission/|internal/service/provisioner/|cmd/provisioner/|config/policy/|internal/controller/|cmd/controller/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|Cluster_Profile_Hardened_test\.go|Cluster_TLS_ACME_test\.go|GitOps_Contract_test\.go|hardened_signed_suite\.go)|Makefile|mk/)'; then
             echo "e2e_hardened=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"
           fi
   security:
     name: Security (vulncheck + Trivy FS)
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.security_scan == 'true'
     runs-on: *runner
     steps:
       - name: Checkout
@@ -111,8 +155,34 @@ jobs:
           skip-dirs: test/manifests,vendor
           trivy-config: .trivy.yaml
 
+  workflow-lint:
+    name: Workflow Lint
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.workflow == 'true'
+    runs-on: *runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
+        with:
+          cache-tools: false
+
+      - name: Install actionlint
+        env:
+          GOFLAGS: -mod=mod
+          GOBIN: ${{ github.workspace }}/bin
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
+
+      - name: Run actionlint
+        run: |
+          "${GITHUB_WORKSPACE}/bin/actionlint" .github/workflows/*.yml
+
   lint:
     name: Lint
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.go_quality == 'true'
     runs-on: *runner
     steps:
       - name: Checkout
@@ -147,6 +217,8 @@ jobs:
 
   verify-fmt:
     name: Verify Formatting
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.go_quality == 'true'
     runs-on: *runner
     steps:
       - name: Checkout
@@ -160,6 +232,8 @@ jobs:
 
   tidy-check:
     name: Verify go.mod/go.sum
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.go_quality == 'true'
     runs-on: *runner
     steps:
       - name: Checkout
@@ -173,6 +247,8 @@ jobs:
 
   verify-vendor:
     name: Verify vendor/
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.go_quality == 'true'
     runs-on: *runner
     steps:
       - name: Checkout
@@ -188,6 +264,8 @@ jobs:
 
   verify-generated:
     name: Verify Generated Artifacts
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.go_quality == 'true'
     runs-on: *runner
     steps:
       - name: Checkout
@@ -201,6 +279,8 @@ jobs:
 
   test-unit:
     name: Unit Tests
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.go_tests == 'true'
     runs-on: *runner
     env:
       GOFLAGS: -mod=vendor
@@ -218,6 +298,8 @@ jobs:
 
   test-integration:
     name: Envtest Integration
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.go_tests == 'true'
     runs-on: *runner
     env:
       GOFLAGS: -mod=vendor
@@ -234,6 +316,8 @@ jobs:
 
   openbao-config-compat:
     name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.6.0)
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.config_compat == 'true'
     runs-on: *runner
     timeout-minutes: 25
     steps:
@@ -252,6 +336,8 @@ jobs:
 
   docs:
     name: Docs Build
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.docs == 'true'
     runs-on: *runner
     steps:
       - name: Checkout
@@ -262,6 +348,8 @@ jobs:
 
   helm:
     name: Helm Chart
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.chart == 'true'
     runs-on: *runner
     steps:
       - name: Checkout
@@ -319,6 +407,8 @@ jobs:
 
   build-artifacts:
     name: Build Artifacts
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: *runner
     steps:
       - name: Checkout
@@ -345,7 +435,7 @@ jobs:
     name: Build E2E Images Once
     runs-on: *runner
     needs: [changes, build-artifacts]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || ((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e'))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     permissions:
       contents: read
       packages: write
@@ -457,7 +547,7 @@ jobs:
 
   e2e:
     needs: [changes, build-e2e-images]
-    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     name: E2E (${{ matrix.name }})
     runs-on: *runner
     permissions:
@@ -468,41 +558,78 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: "Lifecycle & Core"
-            focus: "Cluster Lifecycle|Manager|GitOps"
-            slow: "false"
+          - name: "Core Lifecycle & Manager"
+            label_filter: "(((lifecycle && !tls) || manager) && !openshift)"
+            pr_scope: "always"
+            exclude_pentest_on_default_pr: "false"
             hardened_signed: "false"
             openbao_image: ""
             hardened_init_image: ""
             hardened_upgrade_executor_image: ""
-          - name: "Backup & Restore"
-            focus: "Backup & Restore"
-            slow: "true"
-            hardened_signed: "false"
-            openbao_image: ""
-            hardened_init_image: ""
-            hardened_upgrade_executor_image: ""
-          - name: "Upgrades & Chaos"
-            focus: "Upgrade|Chaos"
-            slow: "true"
-            hardened_signed: "false"
-            openbao_image: ""
-            hardened_init_image: ""
-            hardened_upgrade_executor_image: ""
+            load_backup_executor_image: "false"
+            load_upgrade_executor_image: "false"
+            preload_upgrade_images: "false"
+            preload_hardened_assets: "false"
           - name: "Security & Tenants"
-            focus: "Security|TLS|Tenant Isolation|Hardened|Platform"
-            slow: "false"
+            label_filter: "(((security || tenant || tenancy || tls) && !profile-hardened && !gitops && !(tls && slow)) && !openshift)"
+            pr_scope: "always"
+            exclude_pentest_on_default_pr: "true"
             hardened_signed: "false"
             openbao_image: ""
             hardened_init_image: ""
             hardened_upgrade_executor_image: ""
+            load_backup_executor_image: "false"
+            load_upgrade_executor_image: "false"
+            preload_upgrade_images: "false"
+            preload_hardened_assets: "false"
+          - name: "Backup & Restore"
+            label_filter: "((dr || restore) && !openshift)"
+            pr_scope: "backup"
+            exclude_pentest_on_default_pr: "false"
+            hardened_signed: "false"
+            openbao_image: ""
+            hardened_init_image: ""
+            hardened_upgrade_executor_image: ""
+            load_backup_executor_image: "true"
+            load_upgrade_executor_image: "false"
+            preload_upgrade_images: "false"
+            preload_hardened_assets: "false"
+          - name: "Upgrade Rolling"
+            label_filter: "((upgrade && (rolling || validation || guardrails || snapshot || recovery || operation-lock) && !hardened) && !openshift)"
+            pr_scope: "upgrade"
+            exclude_pentest_on_default_pr: "false"
+            hardened_signed: "false"
+            openbao_image: ""
+            hardened_init_image: ""
+            hardened_upgrade_executor_image: ""
+            load_backup_executor_image: "true"
+            load_upgrade_executor_image: "true"
+            preload_upgrade_images: "true"
+            preload_hardened_assets: "false"
+          - name: "Upgrade Blue/Green"
+            label_filter: "((upgrade && (bluegreen || gateway || verification || rollback || chaos || failure) && !hardened) && !openshift)"
+            pr_scope: "upgrade"
+            exclude_pentest_on_default_pr: "false"
+            hardened_signed: "false"
+            openbao_image: ""
+            hardened_init_image: ""
+            hardened_upgrade_executor_image: ""
+            load_backup_executor_image: "true"
+            load_upgrade_executor_image: "true"
+            preload_upgrade_images: "true"
+            preload_hardened_assets: "false"
           - name: "Hardened (Signed)"
-            focus: "Hardened profile|GitOps contract"
-            slow: "true"
+            label_filter: "((profile-hardened || gitops || (tls && slow)) && !openshift)"
+            pr_scope: "hardened"
+            exclude_pentest_on_default_pr: "false"
             hardened_signed: "true"
             openbao_image: "ghcr.io/openbao/openbao:2.5.0"
             hardened_init_image: "ghcr.io/dc-tec/openbao-init:edge"
             hardened_upgrade_executor_image: "ghcr.io/dc-tec/openbao-upgrade:edge"
+            load_backup_executor_image: "true"
+            load_upgrade_executor_image: "true"
+            preload_upgrade_images: "true"
+            preload_hardened_assets: "true"
     env:
       KIND_NODE_IMAGE: kindest/node:v1.34.3
     steps:
@@ -514,82 +641,46 @@ jobs:
         run: |
           set -euo pipefail
 
-          IS_MAIN_PUSH="${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}"
-          TRIGGER_E2E="${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
+          HAS_E2E_CHANGES="${{ needs.changes.outputs.e2e == 'true' }}"
           FULL_E2E="${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
           PR_BACKUP="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'backup') }}"
           PR_UPGRADE="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades') }}"
           PR_HARDENED="${{ github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller')) }}"
 
-          FILTER="!slow && !nightly && !openshift && !pentest"
-          SHOULD_RUN="true"
+          FILTER='${{ matrix.label_filter }}'
+          SHOULD_RUN="false"
 
-          if [[ "${TRIGGER_E2E}" != "true" ]]; then
-            SHOULD_RUN="false"
-            echo "E2E_LABEL_FILTER=$FILTER" >> "${GITHUB_ENV}"
-            echo "SHOULD_RUN=$SHOULD_RUN" >> "${GITHUB_ENV}"
-            echo "::notice::Skipping ${{ matrix.name }} shard (no E2E-triggering changes/labels)"
-            exit 0
-          fi
-
-          if [[ "${IS_MAIN_PUSH}" == "true" ]]; then
-            FILTER="!openshift"
-          fi
-
-          if [[ "${{ matrix.hardened_signed }}" == "true" ]]; then
-            FILTER="!nightly && !openshift && !pentest"
-            SHOULD_RUN="false"
-            if [[ "${FULL_E2E}" == "true" ]]; then
-              SHOULD_RUN="true"
-            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              if [[ "${PR_HARDENED}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_hardened }}" == "true" ]]; then
+          case "${{ matrix.pr_scope }}" in
+            always)
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${HAS_E2E_CHANGES}" == "true" ]]; then
                 SHOULD_RUN="true"
               fi
-            elif [[ "${{ needs.changes.outputs.e2e_hardened }}" == "true" ]]; then
-              SHOULD_RUN="true"
-            fi
-          else
-            if [[ "${FULL_E2E}" == "true" ]]; then
-              FILTER="!openshift"
-            else
-              if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-                if [[ "${PR_UPGRADE}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_upgrade }}" == "true" ]]; then
-                  FILTER="$FILTER || (upgrade)"
-                fi
-                if [[ "${PR_BACKUP}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_backup }}" == "true" ]]; then
-                  FILTER="$FILTER || (backup)"
-                fi
-                if [[ "${PR_HARDENED}" == "true" ]]; then
-                  FILTER="$FILTER || (pentest)"
-                fi
-              else
-                if [[ "${{ needs.changes.outputs.e2e_upgrade }}" == "true" ]]; then
-                  FILTER="$FILTER || (upgrade)"
-                fi
-                if [[ "${{ needs.changes.outputs.e2e_backup }}" == "true" ]]; then
-                  FILTER="$FILTER || (backup)"
-                fi
+              ;;
+            backup)
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_BACKUP}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_backup }}" == "true" ]]; then
+                SHOULD_RUN="true"
               fi
-            fi
+              ;;
+            upgrade)
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_UPGRADE}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_upgrade }}" == "true" ]]; then
+                SHOULD_RUN="true"
+              fi
+              ;;
+            hardened)
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_HARDENED}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_hardened }}" == "true" ]]; then
+                SHOULD_RUN="true"
+              fi
+              ;;
+          esac
 
-            if [[ "${{ matrix.slow }}" == "true" ]]; then
-              SHOULD_RUN="false"
-              if [[ "${FULL_E2E}" == "true" ]]; then SHOULD_RUN="true"; fi
-              case "${{ matrix.name }}" in
-                *Backup*)
-                  if [[ "${FILTER}" == *backup* ]]; then SHOULD_RUN="true"; fi
-                  ;;
-                *Upgrade*)
-                  if [[ "${FILTER}" == *upgrade* ]]; then SHOULD_RUN="true"; fi
-                  ;;
-              esac
-            fi
+          if [[ "${FULL_E2E}" != "true" ]] && [[ "${{ matrix.exclude_pentest_on_default_pr }}" == "true" ]] && [[ "${PR_HARDENED}" != "true" ]]; then
+            FILTER="(${FILTER}) && !pentest"
           fi
 
           echo "E2E_LABEL_FILTER=$FILTER" >> "${GITHUB_ENV}"
           echo "SHOULD_RUN=$SHOULD_RUN" >> "${GITHUB_ENV}"
           if [[ "$SHOULD_RUN" == "false" ]]; then
-            echo "::notice::Skipping ${{ matrix.name }} shard (targeted optimization)"
+            echo "::notice::Skipping ${{ matrix.name }} shard (routing optimization)"
           else
             echo "::notice::Running ${{ matrix.name }} with filter: $FILTER"
           fi
@@ -618,10 +709,13 @@ jobs:
           set -euo pipefail
           docker pull "${{ needs.build-e2e-images.outputs.manager_ref }}"
           docker pull "${{ needs.build-e2e-images.outputs.config_init_ref }}"
-          docker pull "${{ needs.build-e2e-images.outputs.backup_executor_ref }}"
-          docker pull "${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}"
-          if [[ -n "${{ matrix.hardened_upgrade_executor_image }}" ]]; then
+          if [[ "${{ matrix.load_backup_executor_image }}" == "true" ]]; then
+            docker pull "${{ needs.build-e2e-images.outputs.backup_executor_ref }}"
+          fi
+          if [[ "${{ matrix.load_upgrade_executor_image }}" == "true" ]] && [[ -n "${{ matrix.hardened_upgrade_executor_image }}" ]]; then
             docker pull "${{ matrix.hardened_upgrade_executor_image }}"
+          elif [[ "${{ matrix.load_upgrade_executor_image }}" == "true" ]]; then
+            docker pull "${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}"
           fi
 
       - name: Create Kind Cluster
@@ -636,7 +730,6 @@ jobs:
         env:
           GOFLAGS: -mod=vendor
           OPENBAO_REQUEUE_STANDARD: 10s
-          E2E_FOCUS: ${{ matrix.focus }}
           # E2E_LABEL_FILTER is set by previous step
           E2E_PARALLEL_NODES: "1"
           E2E_TIMEOUT: 40m
@@ -648,6 +741,10 @@ jobs:
           E2E_HARDENED_CONFIG_INIT_IMAGE: ${{ matrix.hardened_init_image }}
           E2E_BACKUP_EXECUTOR_IMAGE: ${{ needs.build-e2e-images.outputs.backup_executor_ref }}
           E2E_UPGRADE_EXECUTOR_IMAGE: ${{ matrix.hardened_upgrade_executor_image != '' && matrix.hardened_upgrade_executor_image || needs.build-e2e-images.outputs.upgrade_executor_ref }}
+          E2E_LOAD_BACKUP_EXECUTOR_IMAGE: ${{ matrix.load_backup_executor_image }}
+          E2E_LOAD_UPGRADE_EXECUTOR_IMAGE: ${{ matrix.load_upgrade_executor_image }}
+          E2E_PRELOAD_UPGRADE_IMAGES: ${{ matrix.preload_upgrade_images }}
+          E2E_PRELOAD_HARDENED_ASSETS: ${{ matrix.preload_hardened_assets }}
           KIND_CLUSTER: kind
         run: make test-e2e-ci
 
@@ -726,6 +823,7 @@ jobs:
     needs:
       - prepare-edge-candidate
       - security
+      - workflow-lint
       - lint
       - verify-fmt
       - tidy-check

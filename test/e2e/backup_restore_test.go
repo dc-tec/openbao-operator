@@ -499,6 +499,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		})
 
 		It("executes backup job successfully to S3", func() {
+			By("waiting for the S3 backup job to complete successfully")
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
@@ -518,7 +519,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(foundSuccess).To(BeTrue())
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
 
-			// Capture backup key
+			By("recording the latest S3 backup key from cluster status")
 			Eventually(func(g Gomega) {
 				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -976,6 +977,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 		It("triggers manual backup to GCS", func() {
 			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
+			By("annotating the cluster to trigger a manual GCS backup")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
@@ -990,8 +992,10 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(err).NotTo(HaveOccurred())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+			By("forcing a reconcile after the manual GCS backup trigger")
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 
+			By("waiting for a GCS backup job to be created")
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
@@ -1005,6 +1009,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		})
 
 		It("executes backup job successfully to GCS", func() {
+			By("waiting for the GCS backup job to complete successfully")
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
@@ -1245,6 +1250,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 		It("triggers manual backup to Azure", func() {
 			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
+			By("annotating the cluster to trigger a manual Azure backup")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
@@ -1259,8 +1265,10 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(err).NotTo(HaveOccurred())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+			By("forcing a reconcile after the manual Azure backup trigger")
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 
+			By("waiting for an Azure backup job to be created")
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
@@ -1274,6 +1282,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		})
 
 		It("executes backup job successfully to Azure", func() {
+			By("waiting for the Azure backup job to complete successfully")
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
 				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
@@ -1293,7 +1302,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(foundSuccess).To(BeTrue())
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
 
-			// Capture backup key
+			By("recording the latest Azure backup key from cluster status")
 			Eventually(func(g Gomega) {
 				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -1308,6 +1317,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		It("restores from Azure backup using OpenBaoRestore CR", func() {
 			Expect(backupKey).NotTo(BeEmpty(), "backup key should have been set by previous test")
 
+			By("creating an OpenBaoRestore resource from the Azure backup key")
 			restore := &openbaov1alpha1.OpenBaoRestore{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "azure-restore",
@@ -1340,6 +1350,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_, _ = fmt.Fprintf(GinkgoWriter, "Creating OpenBaoRestore CR: %s\n", restore.Name)
 			Expect(admin.Create(ctx, restore)).To(Succeed())
 
+			By("waiting for the Azure restore to complete")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoRestore{}
 				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updated)

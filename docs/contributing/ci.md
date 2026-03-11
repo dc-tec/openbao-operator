@@ -14,6 +14,9 @@ We use GitHub Actions for pull request validation, `main` branch validation, and
 ### 1.1 Pull Request and `main` CI
 
 The `CI` workflow runs on every pull request update and every push to `main`.
+On pull requests, the `Detect Changes` job narrows which jobs actually execute so
+workflow-only, docs-only, chart-only, and targeted E2E changes do not all pay
+for the full pipeline. Pushes to `main` still run the full gate.
 
 ```mermaid
 graph TD
@@ -104,6 +107,7 @@ make ci-core
 | CI Job | Local Command | Notes |
 | :--- | :--- | :--- |
 | `Lint` | `make lint-ci` | GolangCI-Lint config + lint run, plus ast-grep policy verification, rule tests, and strict scan |
+| `Workflow Lint` | `GOFLAGS=-mod=mod GOBIN="$PWD/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11 && ./bin/actionlint .github/workflows/*.yml` | Runs only when workflow files change on PRs; always runs on `main` |
 | `Verify Formatting` | `make verify-fmt` | Checks `gofmt` compliance |
 | `Verify go.mod/go.sum` | `make verify-tidy` | Ensures module files are clean |
 | `Verify vendor/` | `make verify-vendor` | Fails on stale vendored dependencies |
@@ -131,10 +135,13 @@ Because this repository uses squash merge, the PR title is the release-facing co
 
 We run E2E tests on Kind and route scope based on changed files and labels.
 
-- Default routing runs targeted shards.
+- PRs that only touch workflow files do not trigger E2E by default.
+- PRs that only touch docs do not trigger E2E by default.
+- Default PR routing runs two fast label-based shards: `Core Lifecycle & Manager` and `Security & Tenants`.
+- Specialized shards are routed separately for `Backup & Restore`, `Upgrade Rolling`, `Upgrade Blue/Green`, and `Hardened (Signed)`.
 - Label `ci:full-e2e` enables broader suite coverage.
-- Labels `backup` and `upgrades` expand slow-lane coverage.
-- Hardened signed lane runs for relevant security/controller change scope.
+- Labels `backup`, `upgrades`, `security`, `provisioner`, `admission`, and `controller` can expand targeted PR coverage.
+- Routing uses Ginkgo label filters instead of suite-title regexes, so new suites must carry the right labels.
 - Prebuilt E2E images are reused across shards for speed.
 
 !!! warning
@@ -147,7 +154,7 @@ We run E2E tests on Kind and route scope based on changed files and labels.
     ```sh
     make test-e2e-ci \
       KIND_NODE_IMAGE=kindest/node:v1.34.3 \
-      E2E_LABEL_FILTER='!slow && !nightly && !openshift && !pentest' \
+      E2E_LABEL_FILTER='(((lifecycle && !tls) || manager) && !openshift)' \
       E2E_PARALLEL_NODES=1
     ```
 

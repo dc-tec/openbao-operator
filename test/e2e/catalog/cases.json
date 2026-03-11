@@ -1,0 +1,2986 @@
+[
+  {
+    "id": "deletion-policy-delete-all",
+    "generatedId": "cluster-deletionpolicy-deletes-pvcs-and-secrets-when-policy-4358a35f",
+    "caseLabel": "deletion-policy-delete-all",
+    "coverage": [
+      "deletion-policy",
+      "pvc-cleanup",
+      "recoverability-secret-cleanup",
+      "tls-secret-cleanup"
+    ],
+    "file": "test/e2e/Cluster_DeletionPolicy_test.go",
+    "type": "It",
+    "name": "deletes PVCs and Secrets when policy is DeleteAll",
+    "path": [
+      "Cluster Lifecycle: Deletion Policy",
+      "deletes PVCs and Secrets when policy is DeleteAll"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "deletion",
+      "case:deletion-policy-delete-all",
+      "covers:deletion-policy",
+      "covers:pvc-cleanup",
+      "covers:recoverability-secret-cleanup",
+      "covers:tls-secret-cleanup"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "deletion"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "deletion-policy-delete-pvcs",
+    "generatedId": "cluster-deletionpolicy-deletes-pvcs-and-secrets-when-policy-8c40239c",
+    "caseLabel": "deletion-policy-delete-pvcs",
+    "coverage": [
+      "deletion-policy",
+      "pvc-cleanup",
+      "recoverability-secret-cleanup"
+    ],
+    "file": "test/e2e/Cluster_DeletionPolicy_test.go",
+    "type": "It",
+    "name": "deletes PVCs and Secrets when policy is DeletePVCs",
+    "path": [
+      "Cluster Lifecycle: Deletion Policy",
+      "deletes PVCs and Secrets when policy is DeletePVCs"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "deletion",
+      "case:deletion-policy-delete-pvcs",
+      "covers:deletion-policy",
+      "covers:pvc-cleanup",
+      "covers:recoverability-secret-cleanup"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "deletion"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "deletion-policy-retain",
+    "generatedId": "cluster-deletionpolicy-retains-pvcs-and-recoverability-secrets-when-cbc6acaa",
+    "caseLabel": "deletion-policy-retain",
+    "coverage": [
+      "deletion-policy",
+      "pvc-retention",
+      "recoverability-secret-retention"
+    ],
+    "file": "test/e2e/Cluster_DeletionPolicy_test.go",
+    "type": "It",
+    "name": "retains PVCs and recoverability secrets when policy is Retain",
+    "path": [
+      "Cluster Lifecycle: Deletion Policy",
+      "retains PVCs and recoverability secrets when policy is Retain"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "deletion",
+      "case:deletion-policy-retain",
+      "covers:deletion-policy",
+      "covers:pvc-retention",
+      "covers:recoverability-secret-retention"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "deletion"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-lifecycle-creates-a-cluster-with-self-init-19ac290f",
+    "generatedId": "cluster-lifecycle-creates-a-cluster-with-self-init-19ac290f",
+    "file": "test/e2e/Cluster_Lifecycle_test.go",
+    "type": "It",
+    "name": "creates a cluster with self-init disabled and produces expected Secrets",
+    "path": [
+      "Cluster Lifecycle",
+      "Development Profile: Manual Init (Self-Init Disabled)",
+      "creates a cluster with self-init disabled and produces expected Secrets"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "profile-development"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "profile-development"
+    ],
+    "steps": [
+      "waiting for Secrets to be created",
+      "waiting for root token Secret (self-init disabled)"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-lifecycle-creates-a-cluster-with-1-replica-9792a98c",
+    "generatedId": "cluster-lifecycle-creates-a-cluster-with-1-replica-9792a98c",
+    "file": "test/e2e/Cluster_Lifecycle_test.go",
+    "type": "It",
+    "name": "creates a cluster with 1 replica and verifies autopilot min_quorum=1",
+    "path": [
+      "Cluster Lifecycle",
+      "Development Profile: Scaling with Autopilot Reconciliation",
+      "creates a cluster with 1 replica and verifies autopilot min_quorum=1"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "profile-development",
+      "scaling",
+      "autopilot",
+      "smoke"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "profile-development",
+      "scaling",
+      "autopilot",
+      "smoke"
+    ],
+    "steps": [
+      "waiting for StatefulSet to be ready with 1 replica",
+      "waiting for Available condition",
+      "waiting for SelfInit to complete (SelfInitialized status)",
+      "ensuring public service exists for autopilot verification",
+      "waiting a bit for autopilot config to be reconciled after initialization",
+      "verifying Raft Autopilot min_quorum=1 (Development profile with 1 replica)"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-lifecycle-scales-down-to-2-replicas-and-08833c8b",
+    "generatedId": "cluster-lifecycle-scales-down-to-2-replicas-and-08833c8b",
+    "file": "test/e2e/Cluster_Lifecycle_test.go",
+    "type": "It",
+    "name": "scales down to 2 replicas and verifies autopilot min_quorum=2",
+    "path": [
+      "Cluster Lifecycle",
+      "Development Profile: Scaling with Autopilot Reconciliation",
+      "scales down to 2 replicas and verifies autopilot min_quorum=2"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "profile-development",
+      "scaling",
+      "autopilot",
+      "smoke"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "profile-development",
+      "scaling",
+      "autopilot",
+      "smoke"
+    ],
+    "steps": [
+      "updating cluster to 2 replicas",
+      "waiting for StatefulSet to scale down to 2 replicas",
+      "waiting for pods to be ready",
+      "getting public service for autopilot verification",
+      "verifying Raft Autopilot min_quorum=2 (Development profile with 2 replicas)"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-lifecycle-scales-up-to-3-replicas-and-9bd63a38",
+    "generatedId": "cluster-lifecycle-scales-up-to-3-replicas-and-9bd63a38",
+    "file": "test/e2e/Cluster_Lifecycle_test.go",
+    "type": "It",
+    "name": "scales up to 3 replicas and verifies autopilot min_quorum=3",
+    "path": [
+      "Cluster Lifecycle",
+      "Development Profile: Scaling with Autopilot Reconciliation",
+      "scales up to 3 replicas and verifies autopilot min_quorum=3"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "profile-development",
+      "scaling",
+      "autopilot",
+      "smoke"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "profile-development",
+      "scaling",
+      "autopilot",
+      "smoke"
+    ],
+    "steps": [
+      "updating cluster to 3 replicas",
+      "waiting for StatefulSet to scale to 3 replicas",
+      "waiting for all pods to be ready",
+      "getting public service for autopilot verification",
+      "verifying Raft Autopilot min_quorum=3 (Development profile with 3 replicas)"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-lifecycle-creates-an-openbaocluster-and-converges-to-00cd448b",
+    "generatedId": "cluster-lifecycle-creates-an-openbaocluster-and-converges-to-00cd448b",
+    "file": "test/e2e/Cluster_Lifecycle_test.go",
+    "type": "It",
+    "name": "creates an OpenBaoCluster and converges to Available",
+    "path": [
+      "Cluster Lifecycle",
+      "Tenant + Cluster lifecycle (Self-Init)",
+      "creates an OpenBaoCluster and converges to Available"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "critical",
+      "tenant"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "critical",
+      "tenant"
+    ],
+    "steps": [
+      "waiting for OpenBaoCluster to be observed by the API server",
+      "waiting for StatefulSet to be created",
+      "triggering a reconcile and waiting for Available condition",
+      "verifying reconcile metrics are emitted for the cluster",
+      "verifying Raft Autopilot is configured"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-lifecycle-expands-storage-by-increasing-spec-storage-212f934d",
+    "generatedId": "cluster-lifecycle-expands-storage-by-increasing-spec-storage-212f934d",
+    "file": "test/e2e/Cluster_Lifecycle_test.go",
+    "type": "It",
+    "name": "expands storage by increasing spec.storage.size (if supported)",
+    "path": [
+      "Cluster Lifecycle",
+      "Tenant + Cluster lifecycle (Self-Init)",
+      "expands storage by increasing spec.storage.size (if supported)"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "critical",
+      "tenant"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "critical",
+      "tenant"
+    ],
+    "steps": [
+      "waiting for the data PVC to exist",
+      "capturing the current pod UID (to detect potential restarts)",
+      "updating OpenBaoCluster spec.storage.size from 1Gi to 2Gi",
+      "waiting for the PVC storage request to be updated by the operator",
+      "ensuring the cluster remains Available",
+      "waiting for the pod to restart OR the filesystem resize to complete"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-lifecycle-provisions-tenant-rbac-via-openbaotenant-1798196a",
+    "generatedId": "cluster-lifecycle-provisions-tenant-rbac-via-openbaotenant-1798196a",
+    "file": "test/e2e/Cluster_Lifecycle_test.go",
+    "type": "It",
+    "name": "provisions tenant RBAC via OpenBaoTenant",
+    "path": [
+      "Cluster Lifecycle",
+      "Tenant + Cluster lifecycle (Self-Init)",
+      "provisions tenant RBAC via OpenBaoTenant"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "critical",
+      "tenant"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "critical",
+      "tenant"
+    ],
+    "steps": [
+      "verifying OpenBaoTenant is provisioned"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb",
+    "generatedId": "cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb",
+    "file": "test/e2e/Cluster_Profile_Hardened_test.go",
+    "type": "It",
+    "name": "performs a hardened blue/green upgrade",
+    "path": [
+      "Hardened profile (External TLS + Transit auto-unseal + SelfInit)",
+      "Hardened Blue/Green Upgrade",
+      "performs a hardened blue/green upgrade"
+    ],
+    "labels": [
+      "profile-hardened",
+      "security",
+      "cluster",
+      "upgrade",
+      "bluegreen",
+      "hardened"
+    ],
+    "domainLabels": [
+      "profile-hardened",
+      "security",
+      "cluster",
+      "upgrade",
+      "bluegreen",
+      "hardened"
+    ],
+    "steps": [
+      "verifying the tenant is provisioned for the hardened blue/green cluster",
+      "ensuring the transit credentials secret exists for hardened blue/green unseal",
+      "creating external TLS secrets for the hardened blue/green cluster",
+      "creating a hardened cluster configured for blue/green upgrades",
+      "writing a secret before the hardened blue/green upgrade",
+      "triggering the hardened blue/green upgrade",
+      "verifying the hardened blue/green upgrade starts",
+      "waiting for the hardened blue/green upgrade to complete",
+      "verifying the test secret persists after the hardened blue/green upgrade"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf",
+    "generatedId": "cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf",
+    "file": "test/e2e/Cluster_Profile_Hardened_test.go",
+    "type": "It",
+    "name": "performs a hardened rolling upgrade",
+    "path": [
+      "Hardened profile (External TLS + Transit auto-unseal + SelfInit)",
+      "Hardened Rolling Upgrade",
+      "performs a hardened rolling upgrade"
+    ],
+    "labels": [
+      "profile-hardened",
+      "security",
+      "cluster",
+      "upgrade",
+      "rolling",
+      "hardened"
+    ],
+    "domainLabels": [
+      "profile-hardened",
+      "security",
+      "cluster",
+      "upgrade",
+      "rolling",
+      "hardened"
+    ],
+    "steps": [
+      "verifying the tenant is provisioned for the hardened upgrade cluster",
+      "ensuring the transit credentials secret exists for hardened cluster unseal",
+      "creating external TLS secrets for the hardened upgrade cluster",
+      "creating a hardened cluster configured for rolling upgrades",
+      "writing a secret before the hardened upgrade",
+      "triggering the hardened rolling upgrade",
+      "verifying the hardened rolling upgrade starts",
+      "waiting for the hardened rolling upgrade to complete",
+      "verifying the test secret persists after the hardened upgrade"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d",
+    "generatedId": "cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d",
+    "file": "test/e2e/Cluster_Profile_Hardened_test.go",
+    "type": "It",
+    "name": "creates a Hardened cluster that self-initializes and stays unsealed across restarts",
+    "path": [
+      "Hardened profile (External TLS + Transit auto-unseal + SelfInit)",
+      "creates a Hardened cluster that self-initializes and stays unsealed across restarts"
+    ],
+    "labels": [
+      "profile-hardened",
+      "security",
+      "cluster"
+    ],
+    "domainLabels": [
+      "profile-hardened",
+      "security",
+      "cluster"
+    ],
+    "steps": [
+      "creating external TLS secrets required for TLS mode External",
+      "verifying transit token secret can be read from file and access infra-bao transit key",
+      "waiting for OpenBaoCluster to be observed by the API server",
+      "verifying NetworkPolicy was created",
+      "checking for prerequisite resources (ConfigMap and TLS Secrets)",
+      "waiting for StatefulSet to be created",
+      "waiting for the StatefulSet pod to become Ready (proves auto-unseal worked)",
+      "waiting for status.initialized=true (self-init, no operator init)",
+      "triggering reconcile to ensure status is updated",
+      "asserting root token and static unseal secrets do NOT exist",
+      "deleting pods to verify auto-unseal works after restart (maintenance mode)"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-profile-hardened-provisions-tenant-rbac-via-openbaotenant-90cecec2",
+    "generatedId": "cluster-profile-hardened-provisions-tenant-rbac-via-openbaotenant-90cecec2",
+    "file": "test/e2e/Cluster_Profile_Hardened_test.go",
+    "type": "It",
+    "name": "provisions tenant RBAC via OpenBaoTenant",
+    "path": [
+      "Hardened profile (External TLS + Transit auto-unseal + SelfInit)",
+      "provisions tenant RBAC via OpenBaoTenant"
+    ],
+    "labels": [
+      "profile-hardened",
+      "security",
+      "cluster"
+    ],
+    "domainLabels": [
+      "profile-hardened",
+      "security",
+      "cluster"
+    ],
+    "steps": [
+      "verifying OpenBaoTenant is provisioned"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-profile-hardened-verifies-raft-autopilot-is-configured-with-f66c15e2",
+    "generatedId": "cluster-profile-hardened-verifies-raft-autopilot-is-configured-with-f66c15e2",
+    "file": "test/e2e/Cluster_Profile_Hardened_test.go",
+    "type": "It",
+    "name": "verifies Raft Autopilot is configured with cleanup_dead_servers enabled",
+    "path": [
+      "Hardened profile (External TLS + Transit auto-unseal + SelfInit)",
+      "verifies Raft Autopilot is configured with cleanup_dead_servers enabled"
+    ],
+    "labels": [
+      "profile-hardened",
+      "security",
+      "cluster"
+    ],
+    "domainLabels": [
+      "profile-hardened",
+      "security",
+      "cluster"
+    ],
+    "steps": [
+      "ensuring public service exists before creating verification pod",
+      "ensuring public service has ready endpoints",
+      "allowing verification pod egress to OpenBao cluster (NetworkPolicy)",
+      "reading autopilot configuration via JWT authenticated request"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-ingress-host-san",
+    "generatedId": "cluster-runtime-controls-creates-ingress-resources-and-includes-the-11208c05",
+    "caseLabel": "cluster-ingress-host-san",
+    "coverage": [
+      "ingress",
+      "external-service",
+      "tls-san"
+    ],
+    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
+    "type": "It",
+    "name": "creates ingress resources and includes the ingress host in the server certificate",
+    "path": [
+      "Cluster Runtime Controls",
+      "creates ingress resources and includes the ingress host in the server certificate"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "runtime",
+      "case:cluster-ingress-host-san",
+      "covers:ingress",
+      "covers:external-service",
+      "covers:tls-san"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "runtime"
+    ],
+    "steps": [
+      "verifying the ingress and public service are created for external access",
+      "verifying the operator-managed server certificate includes the ingress host"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-paused-resume",
+    "generatedId": "cluster-runtime-controls-pauses-reconciliation-until-spec-paused-is-7e97d27d",
+    "caseLabel": "cluster-paused-resume",
+    "coverage": [
+      "paused-reconcile",
+      "paused-status"
+    ],
+    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
+    "type": "It",
+    "name": "pauses reconciliation until spec.paused is cleared",
+    "path": [
+      "Cluster Runtime Controls",
+      "pauses reconciliation until spec.paused is cleared"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "runtime",
+      "case:cluster-paused-resume",
+      "covers:paused-reconcile",
+      "covers:paused-status"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "runtime"
+    ],
+    "steps": [
+      "waiting for paused status conditions to be reported",
+      "verifying workload resources are not created while reconciliation is paused",
+      "clearing spec.paused so normal reconciliation resumes"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-telemetry-rendering",
+    "generatedId": "cluster-runtime-controls-renders-telemetry-configuration-when-observability-metrics-b6a0c999",
+    "caseLabel": "cluster-telemetry-rendering",
+    "coverage": [
+      "telemetry",
+      "observability-metrics"
+    ],
+    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
+    "type": "It",
+    "name": "renders telemetry configuration when observability metrics are enabled",
+    "path": [
+      "Cluster Runtime Controls",
+      "renders telemetry configuration when observability metrics are enabled"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "runtime",
+      "case:cluster-telemetry-rendering",
+      "covers:telemetry",
+      "covers:observability-metrics"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "runtime"
+    ],
+    "steps": [
+      "verifying the rendered config includes the telemetry stanza"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-restart-at-rolls-pod",
+    "generatedId": "cluster-runtime-controls-rolls-the-openbao-pod-when-maintenance-b1bebf8a",
+    "caseLabel": "cluster-restart-at-rolls-pod",
+    "coverage": [
+      "restart-at",
+      "pod-rollout"
+    ],
+    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
+    "type": "It",
+    "name": "rolls the OpenBao pod when maintenance.restartAt changes",
+    "path": [
+      "Cluster Runtime Controls",
+      "rolls the OpenBao pod when maintenance.restartAt changes"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "runtime",
+      "case:cluster-restart-at-rolls-pod",
+      "covers:restart-at",
+      "covers:pod-rollout"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "runtime"
+    ],
+    "steps": [
+      "setting spec.maintenance.restartAt to trigger a rolling restart",
+      "waiting for the StatefulSet pod template to carry the restart annotation",
+      "waiting for the original pod to be replaced"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8",
+    "generatedId": "cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8",
+    "file": "test/e2e/Cluster_TLS_ACME_test.go",
+    "type": "It",
+    "name": "creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)",
+    "path": [
+      "ACME TLS (OpenBao native ACME client)",
+      "creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)"
+    ],
+    "labels": [
+      "tls",
+      "security",
+      "slow"
+    ],
+    "domainLabels": [
+      "tls",
+      "security",
+      "slow"
+    ],
+    "steps": [
+      "setting up ACME service and domain",
+      "creating transit token secret for auto-unseal (include TLS CA for transit and PKI CA for ACME)",
+      "verifying transit token secret can access infra-bao transit key",
+      "waiting for OpenBaoCluster to be observed by the API server",
+      "verifying TLS secrets are NOT created (ACME mode)",
+      "checking for prerequisite resources (ConfigMap)",
+      "waiting for StatefulSet to be created",
+      "waiting for StatefulSet pods to become Ready",
+      "validating that the config contains ACME parameters",
+      "verifying the ACME-issued certificate is trusted by the PKI CA"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "cluster-tls-acme-provisions-tenant-rbac-via-openbaotenant-cbd56667",
+    "generatedId": "cluster-tls-acme-provisions-tenant-rbac-via-openbaotenant-cbd56667",
+    "file": "test/e2e/Cluster_TLS_ACME_test.go",
+    "type": "It",
+    "name": "provisions tenant RBAC via OpenBaoTenant",
+    "path": [
+      "ACME TLS (OpenBao native ACME client)",
+      "provisions tenant RBAC via OpenBaoTenant"
+    ],
+    "labels": [
+      "tls",
+      "security",
+      "slow"
+    ],
+    "domainLabels": [
+      "tls",
+      "security",
+      "slow"
+    ],
+    "steps": [
+      "verifying OpenBaoTenant is provisioned"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "tls-lifecycle-server-secret-regeneration",
+    "generatedId": "cluster-tls-lifecycle-verifies-operator-managed-tls-with-the-6dd4a6e5",
+    "caseLabel": "tls-lifecycle-server-secret-regeneration",
+    "coverage": [
+      "tls-lifecycle",
+      "tls-verification",
+      "secret-regeneration",
+      "cert-replacement",
+      "tls-hot-reload",
+      "pod-stability"
+    ],
+    "file": "test/e2e/Cluster_TLS_Lifecycle_test.go",
+    "type": "It",
+    "name": "verifies operator-managed TLS with the cluster CA and regenerates the server Secret",
+    "path": [
+      "Cluster TLS Lifecycle",
+      "verifies operator-managed TLS with the cluster CA and regenerates the server Secret"
+    ],
+    "labels": [
+      "tls",
+      "cluster",
+      "lifecycle",
+      "case:tls-lifecycle-server-secret-regeneration",
+      "covers:tls-lifecycle",
+      "covers:tls-verification",
+      "covers:secret-regeneration",
+      "covers:cert-replacement",
+      "covers:tls-hot-reload",
+      "covers:pod-stability"
+    ],
+    "domainLabels": [
+      "tls",
+      "cluster",
+      "lifecycle"
+    ],
+    "steps": [
+      "waiting for the cluster to become Available with TLS ready",
+      "waiting for the TLS Secrets to exist",
+      "writing a secret through the JWT-authenticated test role",
+      "reading the secret over TLS with explicit CA validation",
+      "recording the initial certificate and pod reload state",
+      "deleting the managed tls-server Secret as the operator controller",
+      "verifying the OpenBao pod stays ready without being recreated while the secret is reissued",
+      "triggering reconcile and waiting for the tls-server Secret to be reissued",
+      "verifying the pod receives a new TLS reload hash without restarting",
+      "reconfirming cluster readiness and stability after server Secret regeneration",
+      "re-reading the secret over TLS with CA validation after regeneration"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "gitops-contract-repeatedly-applies-the-same-manifest-without-43cd8392",
+    "generatedId": "gitops-contract-repeatedly-applies-the-same-manifest-without-43cd8392",
+    "file": "test/e2e/GitOps_Contract_test.go",
+    "type": "It",
+    "name": "repeatedly applies the same manifest without spec/metadata drift",
+    "path": [
+      "GitOps contract (Argo-like apply)",
+      "repeatedly applies the same manifest without spec/metadata drift"
+    ],
+    "labels": [
+      "gitops",
+      "contract"
+    ],
+    "domainLabels": [
+      "gitops",
+      "contract"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "manager-leader-failover",
+    "generatedId": "manager-resilience-fails-over-leader-election-and-continues-2baefc75",
+    "caseLabel": "manager-leader-failover",
+    "coverage": [
+      "leader-election",
+      "controller-failover",
+      "post-failover-reconcile"
+    ],
+    "file": "test/e2e/Manager_Resilience_test.go",
+    "type": "It",
+    "name": "fails over leader election and continues reconciling with a second controller replica",
+    "path": [
+      "Manager Resilience",
+      "fails over leader election and continues reconciling with a second controller replica"
+    ],
+    "labels": [
+      "manager",
+      "cluster",
+      "case:manager-leader-failover",
+      "covers:leader-election",
+      "covers:controller-failover",
+      "covers:post-failover-reconcile"
+    ],
+    "domainLabels": [
+      "manager",
+      "cluster"
+    ],
+    "steps": [
+      "scaling the controller deployment to two replicas",
+      "capturing the current controller lease holder",
+      "deleting the current leader pod to force failover",
+      "waiting for a different controller pod to acquire leadership",
+      "updating the cluster after failover and verifying reconciliation still works"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "manager-outage-adopts-existing-cluster",
+    "generatedId": "manager-resilience-reconciles-an-existing-cluster-after-the-232e887a",
+    "caseLabel": "manager-outage-adopts-existing-cluster",
+    "coverage": [
+      "controller-outage",
+      "existing-cluster-adoption",
+      "post-outage-reconcile"
+    ],
+    "file": "test/e2e/Manager_Resilience_test.go",
+    "type": "It",
+    "name": "reconciles an existing cluster after the controller is scaled down and back up",
+    "path": [
+      "Manager Resilience",
+      "reconciles an existing cluster after the controller is scaled down and back up"
+    ],
+    "labels": [
+      "manager",
+      "cluster",
+      "case:manager-outage-adopts-existing-cluster",
+      "covers:controller-outage",
+      "covers:existing-cluster-adoption",
+      "covers:post-outage-reconcile"
+    ],
+    "domainLabels": [
+      "manager",
+      "cluster"
+    ],
+    "steps": [
+      "scaling the controller deployment to zero replicas",
+      "changing cluster desired state while the controller is offline",
+      "scaling the controller deployment back to one replica",
+      "verifying the existing cluster is adopted and reconciled to the new desired state"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "manager-restart-idempotent-reconcile",
+    "generatedId": "manager-resilience-recovers-idempotently-when-the-controller-restarts-635ba796",
+    "caseLabel": "manager-restart-idempotent-reconcile",
+    "coverage": [
+      "controller-restart",
+      "idempotent-reconcile",
+      "scale-reconcile"
+    ],
+    "file": "test/e2e/Manager_Resilience_test.go",
+    "type": "It",
+    "name": "recovers idempotently when the controller restarts during initial and scale reconciliation",
+    "path": [
+      "Manager Resilience",
+      "recovers idempotently when the controller restarts during initial and scale reconciliation"
+    ],
+    "labels": [
+      "manager",
+      "cluster",
+      "case:manager-restart-idempotent-reconcile",
+      "covers:controller-restart",
+      "covers:idempotent-reconcile",
+      "covers:scale-reconcile"
+    ],
+    "domainLabels": [
+      "manager",
+      "cluster"
+    ],
+    "steps": [
+      "restarting the controller while the initial reconcile is still in progress",
+      "verifying the cluster still converges to a single ready StatefulSet",
+      "scaling the cluster and restarting the controller during the reconcile",
+      "verifying the scale reconcile finishes without duplicating managed resources",
+      "reconfirming the cluster returns to an available steady state"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "operator-manager-should-ensure-the-metrics-endpoint-is-71a02c09",
+    "generatedId": "operator-manager-should-ensure-the-metrics-endpoint-is-71a02c09",
+    "file": "test/e2e/Operator_Manager_test.go",
+    "type": "It",
+    "name": "should ensure the metrics endpoint is serving metrics",
+    "path": [
+      "Manager",
+      "Manager",
+      "should ensure the metrics endpoint is serving metrics"
+    ],
+    "labels": [
+      "manager",
+      "critical",
+      "smoke"
+    ],
+    "domainLabels": [
+      "manager",
+      "critical",
+      "smoke"
+    ],
+    "steps": [
+      "validating that the metrics service is available",
+      "ensuring the controller pod is ready",
+      "verifying that the controller manager is serving the metrics server",
+      "verifying that the controller metrics endpoint returns data"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "operator-manager-should-run-successfully-620495ad",
+    "generatedId": "operator-manager-should-run-successfully-620495ad",
+    "file": "test/e2e/Operator_Manager_test.go",
+    "type": "It",
+    "name": "should run successfully",
+    "path": [
+      "Manager",
+      "Manager",
+      "should run successfully"
+    ],
+    "labels": [
+      "manager",
+      "critical",
+      "smoke"
+    ],
+    "domainLabels": [
+      "manager",
+      "critical",
+      "smoke"
+    ],
+    "steps": [
+      "validating that the controller-manager pod is running as expected"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "platform-openshift-creates-statefulset-pod-template-without-pinned-30198dd7",
+    "generatedId": "platform-openshift-creates-statefulset-pod-template-without-pinned-30198dd7",
+    "file": "test/e2e/Platform_OpenShift_test.go",
+    "type": "It",
+    "name": "creates StatefulSet pod template without pinned UID/GID/FSGroup",
+    "path": [
+      "OpenShift Platform",
+      "creates StatefulSet pod template without pinned UID/GID/FSGroup"
+    ],
+    "labels": [
+      "openshift",
+      "platform"
+    ],
+    "domainLabels": [
+      "openshift",
+      "platform"
+    ],
+    "steps": [
+      "creating a development cluster on OpenShift",
+      "verifying the StatefulSet pod template leaves UID, GID, and FSGroup unpinned"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "platform-openshift-does-not-pin-runasuser-runasgroup-in-ee682f26",
+    "generatedId": "platform-openshift-does-not-pin-runasuser-runasgroup-in-ee682f26",
+    "file": "test/e2e/Platform_OpenShift_test.go",
+    "type": "It",
+    "name": "does not pin runAsUser/runAsGroup in operator Deployments",
+    "path": [
+      "OpenShift Platform",
+      "does not pin runAsUser/runAsGroup in operator Deployments"
+    ],
+    "labels": [
+      "openshift",
+      "platform"
+    ],
+    "domainLabels": [
+      "openshift",
+      "platform"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-accepts-structured-configuration-protected-stanzas-cannot-2a18b9bd",
+    "generatedId": "security-guardrails-accepts-structured-configuration-protected-stanzas-cannot-2a18b9bd",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "accepts structured configuration (protected stanzas cannot be overridden)",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "accepts structured configuration (protected stanzas cannot be overridden)"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-blocks-cross-namespace-tenant-targeting-self-6a21b1fd",
+    "generatedId": "security-guardrails-blocks-cross-namespace-tenant-targeting-self-6a21b1fd",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "blocks cross-namespace tenant targeting (self-service mode)",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "blocks cross-namespace tenant targeting (self-service mode)"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d",
+    "generatedId": "security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "blocks decimal IP encoding in backup endpoint (SSRF protection)",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "blocks decimal IP encoding in backup endpoint (SSRF protection)"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74",
+    "generatedId": "security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "blocks link-local endpoints in restore source (SSRF protection)",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "blocks link-local endpoints in restore source (SSRF protection)"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326",
+    "generatedId": "security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-enforces-hardened-profile-invariants-446324b0",
+    "generatedId": "security-guardrails-enforces-hardened-profile-invariants-446324b0",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "enforces Hardened profile invariants",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "enforces Hardened profile invariants"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-enforces-digest-pinned-images-for-managed-a108b1a3",
+    "generatedId": "security-guardrails-enforces-digest-pinned-images-for-managed-a108b1a3",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "enforces digest-pinned images for managed workloads when digest enforcement is required",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "enforces digest-pinned images for managed workloads when digest enforcement is required"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-reports-degraded-when-gateway-api-crds-d5cb95ff",
+    "generatedId": "security-guardrails-reports-degraded-when-gateway-api-crds-d5cb95ff",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "reports Degraded when Gateway API CRDs are missing",
+    "path": [
+      "Security Guardrails",
+      "Configuration Handling",
+      "reports Degraded when Gateway API CRDs are missing"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "config"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "config"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-applies-admission-guardrails-to-controller-rbac-7093e068",
+    "generatedId": "security-guardrails-applies-admission-guardrails-to-controller-rbac-7093e068",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "applies admission guardrails to controller RBAC writes",
+    "path": [
+      "Security Guardrails",
+      "Operator Pod Hardening",
+      "applies admission guardrails to controller RBAC writes"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens",
+      "rbac"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens",
+      "rbac"
+    ],
+    "steps": [
+      "denying controller creation of arbitrary Roles",
+      "denying controller creation of RoleBindings that do not match the allowlisted pattern"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-applies-admission-guardrails-to-provisioner-namespace-451d674f",
+    "generatedId": "security-guardrails-applies-admission-guardrails-to-provisioner-namespace-451d674f",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "applies admission guardrails to provisioner Namespace mutations",
+    "path": [
+      "Security Guardrails",
+      "Operator Pod Hardening",
+      "applies admission guardrails to provisioner Namespace mutations"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens",
+      "rbac"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens",
+      "rbac"
+    ],
+    "steps": [
+      "denying Namespace label mutations outside the PSS enforcement keys",
+      "allowing Pod Security Standards enforce=restricted label enforcement"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-applies-admission-guardrails-to-provisioner-identity-911cb8f6",
+    "generatedId": "security-guardrails-applies-admission-guardrails-to-provisioner-identity-911cb8f6",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "applies admission guardrails to provisioner identity",
+    "path": [
+      "Security Guardrails",
+      "Operator Pod Hardening",
+      "applies admission guardrails to provisioner identity"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens",
+      "rbac"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens",
+      "rbac"
+    ],
+    "steps": [
+      "denying creation of non-allowlisted Roles",
+      "denying updates that attempt to broaden the tenant Role",
+      "denying updates that attempt to grant pods/exec on the tenant Role",
+      "denying RBAC writes in system namespaces"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-disables-default-serviceaccount-token-automount-67dd5069",
+    "generatedId": "security-guardrails-disables-default-serviceaccount-token-automount-67dd5069",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "disables default ServiceAccount token automount",
+    "path": [
+      "Security Guardrails",
+      "Operator Pod Hardening",
+      "disables default ServiceAccount token automount"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-prevents-operator-identities-from-cluster-scoped-14024c52",
+    "generatedId": "security-guardrails-prevents-operator-identities-from-cluster-scoped-14024c52",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "prevents operator identities from cluster-scoped RBAC writes",
+    "path": [
+      "Security Guardrails",
+      "Operator Pod Hardening",
+      "prevents operator identities from cluster-scoped RBAC writes"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens",
+      "rbac"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens",
+      "rbac"
+    ],
+    "steps": [
+      "denying controller clusterrole/clusterrolebinding creation via RBAC",
+      "denying provisioner clusterrole/clusterrolebinding creation via RBAC"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-uses-projected-kubernetes-api-token-with-51dbf1f2",
+    "generatedId": "security-guardrails-uses-projected-kubernetes-api-token-with-51dbf1f2",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "uses projected Kubernetes API token with explicit audience and TTL",
+    "path": [
+      "Security Guardrails",
+      "Operator Pod Hardening",
+      "uses projected Kubernetes API token with explicit audience and TTL"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "pentest",
+      "tokens"
+    ],
+    "steps": [
+      "inspecting the controller projected service account tokens",
+      "inspecting the provisioner projected Kubernetes API token when present"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-has-required-validatingadmissionpolicy-dependencies-installed-and-87ec7cda",
+    "generatedId": "security-guardrails-has-required-validatingadmissionpolicy-dependencies-installed-and-87ec7cda",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "has required ValidatingAdmissionPolicy dependencies installed and correctly bound",
+    "path": [
+      "Security Guardrails",
+      "RBAC \u0026 Dependencies",
+      "has required ValidatingAdmissionPolicy dependencies installed and correctly bound"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "rbac"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "rbac"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-restricts-openbao-pod-serviceaccount-pod-patching-abbf5716",
+    "generatedId": "security-guardrails-restricts-openbao-pod-serviceaccount-pod-patching-abbf5716",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "restricts OpenBao pod ServiceAccount pod patching to cluster pods",
+    "path": [
+      "Security Guardrails",
+      "RBAC \u0026 Dependencies",
+      "restricts OpenBao pod ServiceAccount pod patching to cluster pods"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "rbac",
+      "pentest"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "rbac",
+      "pentest"
+    ],
+    "steps": [
+      "waiting for the cluster StatefulSet to exist and expose the Pod service account",
+      "creating a non-OpenBao pod in the tenant namespace",
+      "waiting for an OpenBao pod to exist"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9",
+    "generatedId": "security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "scopes Secret access via allowlist Roles",
+    "path": [
+      "Security Guardrails",
+      "RBAC \u0026 Dependencies",
+      "scopes Secret access via allowlist Roles"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "rbac"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "rbac"
+    ],
+    "steps": [
+      "creating a cluster to trigger tenant RBAC provisioning",
+      "verifying the tenant role does not grant broad Secret access",
+      "verifying the dedicated Secrets writer role only grants the expected allowlisted access",
+      "verifying the Secrets writer RoleBinding points at the allowlist role"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-prevents-sidecar-injection-via-statefulset-updates-145c71ee",
+    "generatedId": "security-guardrails-prevents-sidecar-injection-via-statefulset-updates-145c71ee",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "prevents sidecar injection via StatefulSet updates",
+    "path": [
+      "Security Guardrails",
+      "Resource Locking (anti-tamper)",
+      "prevents sidecar injection via StatefulSet updates"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-prevents-unauthorized-deletion-of-the-tls-9e011135",
+    "generatedId": "security-guardrails-prevents-unauthorized-deletion-of-the-tls-9e011135",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "prevents unauthorized deletion of the TLS CA secret",
+    "path": [
+      "Security Guardrails",
+      "Resource Locking (anti-tamper)",
+      "prevents unauthorized deletion of the TLS CA secret"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-prevents-unauthorized-deletion-of-the-unseal-2ea235de",
+    "generatedId": "security-guardrails-prevents-unauthorized-deletion-of-the-unseal-2ea235de",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "prevents unauthorized deletion of the unseal Secret",
+    "path": [
+      "Security Guardrails",
+      "Resource Locking (anti-tamper)",
+      "prevents unauthorized deletion of the unseal Secret"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "tenant-data-plane-isolation",
+    "generatedId": "tenant-data-isolation-isolates-tenant-data-plane-access-across-eb142963",
+    "caseLabel": "tenant-data-plane-isolation",
+    "coverage": [
+      "tenant-isolation",
+      "data-plane-isolation",
+      "network-isolation"
+    ],
+    "file": "test/e2e/Tenant_Data_Isolation_test.go",
+    "type": "It",
+    "name": "isolates tenant data plane access across namespaces",
+    "path": [
+      "Tenant Data Isolation",
+      "isolates tenant data plane access across namespaces"
+    ],
+    "labels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "case:tenant-data-plane-isolation",
+      "covers:tenant-isolation",
+      "covers:data-plane-isolation",
+      "covers:network-isolation"
+    ],
+    "domainLabels": [
+      "security",
+      "tenant",
+      "tenancy"
+    ],
+    "steps": [
+      "writing tenant-specific secrets through each tenant's own data plane",
+      "verifying each tenant can still reach and read its own cluster",
+      "verifying a labeled pod in tenant A still cannot reach tenant B's data plane",
+      "verifying the same labeled access path works inside tenant B"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "tenant-isolation-allows-self-service-provisioning-within-own-67dc337d",
+    "generatedId": "tenant-isolation-allows-self-service-provisioning-within-own-67dc337d",
+    "file": "test/e2e/Tenant_Isolation_test.go",
+    "type": "It",
+    "name": "allows self-service provisioning within own namespace",
+    "path": [
+      "Tenant Isolation",
+      "Multi-Tenant: Self-Service (Confused Deputy Prevention)",
+      "allows self-service provisioning within own namespace"
+    ],
+    "labels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "critical"
+    ],
+    "domainLabels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "critical"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "tenant-isolation-blocks-cross-namespace-provisioning-attempts-15ee6ba1",
+    "generatedId": "tenant-isolation-blocks-cross-namespace-provisioning-attempts-15ee6ba1",
+    "file": "test/e2e/Tenant_Isolation_test.go",
+    "type": "It",
+    "name": "blocks cross-namespace provisioning attempts",
+    "path": [
+      "Tenant Isolation",
+      "Multi-Tenant: Self-Service (Confused Deputy Prevention)",
+      "blocks cross-namespace provisioning attempts"
+    ],
+    "labels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "critical"
+    ],
+    "domainLabels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "critical"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "tenant-isolation-creates-an-openbaocluster-without-openbaotenant-ffc0817d",
+    "generatedId": "tenant-isolation-creates-an-openbaocluster-without-openbaotenant-ffc0817d",
+    "file": "test/e2e/Tenant_Isolation_test.go",
+    "type": "It",
+    "name": "creates an OpenBaoCluster without OpenBaoTenant",
+    "path": [
+      "Tenant Isolation",
+      "Single-Tenant Mode",
+      "creates an OpenBaoCluster without OpenBaoTenant"
+    ],
+    "labels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "single-tenant"
+    ],
+    "domainLabels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "single-tenant"
+    ],
+    "steps": [
+      "creating OpenBaoCluster directly (no tenant required)"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "tenant-isolation-reacts-to-statefulset-deletion-via-event-0a45a642",
+    "generatedId": "tenant-isolation-reacts-to-statefulset-deletion-via-event-0a45a642",
+    "file": "test/e2e/Tenant_Isolation_test.go",
+    "type": "It",
+    "name": "reacts to StatefulSet deletion via event-driven reconciliation",
+    "path": [
+      "Tenant Isolation",
+      "Single-Tenant Mode",
+      "reacts to StatefulSet deletion via event-driven reconciliation"
+    ],
+    "labels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "single-tenant"
+    ],
+    "domainLabels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "single-tenant"
+    ],
+    "steps": [
+      "getting the current StatefulSet UID",
+      "deleting the StatefulSet to test event-driven reconciliation",
+      "waiting for StatefulSet to be recreated (event-driven, should be fast)"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "tenant-isolation-reconciles-the-cluster-to-available-via-ef2fac83",
+    "generatedId": "tenant-isolation-reconciles-the-cluster-to-available-via-ef2fac83",
+    "file": "test/e2e/Tenant_Isolation_test.go",
+    "type": "It",
+    "name": "reconciles the cluster to Available via event-driven reconciliation",
+    "path": [
+      "Tenant Isolation",
+      "Single-Tenant Mode",
+      "reconciles the cluster to Available via event-driven reconciliation"
+    ],
+    "labels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "single-tenant"
+    ],
+    "domainLabels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "single-tenant"
+    ],
+    "steps": [
+      "waiting for StatefulSet to be created",
+      "waiting for StatefulSet pods to be Ready",
+      "waiting for cluster to become Available"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "tenant-isolation-sets-up-single-tenant-mode-environment-4b87e620",
+    "generatedId": "tenant-isolation-sets-up-single-tenant-mode-environment-4b87e620",
+    "file": "test/e2e/Tenant_Isolation_test.go",
+    "type": "It",
+    "name": "sets up single-tenant mode environment",
+    "path": [
+      "Tenant Isolation",
+      "Single-Tenant Mode",
+      "sets up single-tenant mode environment"
+    ],
+    "labels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "single-tenant"
+    ],
+    "domainLabels": [
+      "security",
+      "tenant",
+      "tenancy",
+      "single-tenant"
+    ],
+    "steps": [
+      "creating the single-tenant namespace",
+      "applying the single-tenant ClusterRole",
+      "creating RoleBinding in target namespace",
+      "patching controller deployment with WATCH_NAMESPACE",
+      "waiting for controller to restart with new configuration"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-backup-lock-contention",
+    "generatedId": "upgrade-operation-lock-holds-a-manual-backup-request-until-805368c4",
+    "caseLabel": "upgrade-backup-lock-contention",
+    "coverage": [
+      "operation-lock",
+      "rolling-upgrade",
+      "backup-queueing"
+    ],
+    "file": "test/e2e/Upgrade_Operation_Lock_test.go",
+    "type": "It",
+    "name": "holds a manual backup request until the rolling upgrade lock is released",
+    "path": [
+      "Upgrade Strategies: Operation Lock Contention",
+      "holds a manual backup request until the rolling upgrade lock is released"
+    ],
+    "labels": [
+      "upgrade",
+      "backup",
+      "operation-lock",
+      "slow",
+      "case:upgrade-backup-lock-contention",
+      "covers:operation-lock",
+      "covers:rolling-upgrade",
+      "covers:backup-queueing"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "backup",
+      "operation-lock",
+      "slow"
+    ],
+    "steps": [
+      "starting a rolling upgrade",
+      "waiting for the upgrade controller to hold the cluster operation lock",
+      "requesting a manual backup while the upgrade lock is held",
+      "verifying the backup request remains queued behind the active upgrade",
+      "waiting for the upgrade to complete",
+      "re-triggering reconcile so the queued backup request is picked up immediately",
+      "verifying the queued backup starts once the upgrade lock is released"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17",
+    "generatedId": "upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "holds in Syncing until manual promotion after the pre-promotion hook succeeds",
+    "path": [
+      "Upgrade Strategies",
+      "Blue/Green Syncing Gates",
+      "holds in Syncing until manual promotion after the pre-promotion hook succeeds"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "bluegreen",
+      "verification"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "bluegreen",
+      "verification"
+    ],
+    "steps": [
+      "Triggering a blue/green upgrade with manual promotion",
+      "Waiting for Syncing hold with the hook completed successfully",
+      "Consistently holding in Syncing while no promote request is set",
+      "Approving promotion via spec.upgrade.requests.promote",
+      "Verifying the upgrade resumes and completes cleanly"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7",
+    "generatedId": "upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "executes Blue/Green upgrade cycle with pre-upgrade snapshot",
+    "path": [
+      "Upgrade Strategies",
+      "Blue/Green Upgrade",
+      "executes Blue/Green upgrade cycle with pre-upgrade snapshot"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "bluegreen"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "bluegreen"
+    ],
+    "steps": [
+      "Writing a secret before upgrade",
+      "Ensuring the external Service exists for zero-downtime probing",
+      "Continuously probing Service availability during the full Blue/Green upgrade",
+      "Triggering upgrade",
+      "Verifying pre-upgrade snapshot job is created",
+      "Waiting for pre-upgrade snapshot job to complete",
+      "Waiting for upgrade to complete",
+      "Verifying upgrade completed successfully with snapshots",
+      "Verifying Service availability remained continuous during the upgrade",
+      "Verifying critical blue/green executor actions completed successfully",
+      "Verifying secret persists after upgrade"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-aborts-before-promotion-when-the-pre-230729f6",
+    "generatedId": "upgrade-strategies-aborts-before-promotion-when-the-pre-230729f6",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "aborts before promotion when the pre-promotion hook fails",
+    "path": [
+      "Upgrade Strategies",
+      "Blue/Green Validation Hook Failure",
+      "aborts before promotion when the pre-promotion hook fails"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "bluegreen",
+      "verification",
+      "failure"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "bluegreen",
+      "verification",
+      "failure"
+    ],
+    "steps": [
+      "Writing a secret before the failed validation hook upgrade",
+      "Triggering a blue/green upgrade guarded by a failing pre-promotion hook",
+      "Waiting for the pre-promotion hook to fail after green finishes syncing",
+      "Verifying the upgrade aborts safely before promotion",
+      "Verifying promotion never starts after the validation hook fails",
+      "Verifying the original cluster remains readable after the failed upgrade"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124",
+    "generatedId": "upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "induces executor failure and validates retry plus auto-abort behavior",
+    "path": [
+      "Upgrade Strategies",
+      "Failure Scenarios",
+      "induces executor failure and validates retry plus auto-abort behavior"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "failure",
+      "bluegreen"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "failure",
+      "bluegreen"
+    ],
+    "steps": [
+      "Triggering a Blue/Green upgrade",
+      "Waiting for upgrade to enter an early execution phase",
+      "Verifying an initial early-phase executor job fails due to induced policy restriction",
+      "Verifying retry job for that action is created and also fails",
+      "Verifying threshold triggers early-phase abort and cluster returns to idle on original version"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e",
+    "generatedId": "upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "keeps HTTPRoute stable and switches external Service selector at cutover",
+    "path": [
+      "Upgrade Strategies",
+      "Gateway Integration",
+      "keeps HTTPRoute stable and switches external Service selector at cutover"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "gateway",
+      "requires-gateway-api",
+      "bluegreen"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "gateway",
+      "requires-gateway-api",
+      "bluegreen"
+    ],
+    "steps": [
+      "Capturing HTTPRoute before upgrade to verify stability",
+      "Triggering upgrade",
+      "Waiting for upgrade to progress to cutover phase",
+      "Verifying external Service remains on Blue while DemotingBlue is in progress",
+      "Waiting for Cleanup phase and verifying the external Service selector switches to Green",
+      "Waiting for Blue/Green upgrade to complete",
+      "Verifying legacy blue/green Services do not exist",
+      "Verifying HTTPRoute remains stable throughout upgrade"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935",
+    "generatedId": "upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "triggers late-phase rollback after promotion failures and recovers when auth is restored",
+    "path": [
+      "Upgrade Strategies",
+      "Late-Phase Rollback Scenarios",
+      "triggers late-phase rollback after promotion failures and recovers when auth is restored"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "failure",
+      "bluegreen",
+      "rollback"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "failure",
+      "bluegreen",
+      "rollback"
+    ],
+    "steps": [
+      "Triggering a Blue/Green upgrade",
+      "Waiting for Syncing hold before sending a promote request",
+      "Verifying wait-green-synced completes before forcing promotion",
+      "Introducing a realistic temporary auth misconfiguration and sending a promote request",
+      "Verifying the promote request is recorded before promotion starts",
+      "Verifying promotion executor job fails",
+      "Verifying retry promotion job fails and triggers rollback threshold",
+      "Restoring JWT auth role so rollback automation can proceed",
+      "Verifying rollback was initiated",
+      "Verifying rollback completes and cluster returns to stable initial version"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87",
+    "generatedId": "upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "recovers a failed rolling upgrade after a retry request clears stale state",
+    "path": [
+      "Upgrade Strategies",
+      "Rolling Failure Recovery",
+      "recovers a failed rolling upgrade after a retry request clears stale state"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "rolling",
+      "recovery"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "rolling",
+      "recovery"
+    ],
+    "steps": [
+      "Triggering a rolling upgrade with a bad non-semver image tag",
+      "Waiting for the rolling upgrade to initialize",
+      "Backdating upgrade start time to force the real timeout/retry path instead of waiting ten minutes",
+      "Waiting for the rolling upgrade to fail with a retryable status",
+      "Injecting a stale deterministic step-down job for the retry cleanup path",
+      "Restoring the target image and requesting a rolling retry",
+      "Verifying retry preparation clears failed status, records the handled request, and removes the stale step-down job",
+      "Verifying the rolling upgrade resumes and completes successfully"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-retries-a-failed-rolling-pre-upgrade-fade7ad8",
+    "generatedId": "upgrade-strategies-retries-a-failed-rolling-pre-upgrade-fade7ad8",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "retries a failed rolling pre-upgrade snapshot before starting rollout",
+    "path": [
+      "Upgrade Strategies",
+      "Rolling Snapshot Recovery",
+      "retries a failed rolling pre-upgrade snapshot before starting rollout"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "rolling",
+      "snapshot",
+      "recovery"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "rolling",
+      "snapshot",
+      "recovery"
+    ],
+    "steps": [
+      "Triggering a rolling upgrade with pre-upgrade snapshots enabled",
+      "Waiting for the first pre-upgrade snapshot job to fail while rollout stays blocked",
+      "Repairing the backup policy in OpenBao without changing the cluster generation",
+      "Verifying the failed snapshot job is recycled and a fresh attempt succeeds",
+      "Verifying the rolling upgrade proceeds only after the snapshot succeeds"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-performs-rolling-upgrade-2302a23d",
+    "generatedId": "upgrade-strategies-performs-rolling-upgrade-2302a23d",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "performs rolling upgrade",
+    "path": [
+      "Upgrade Strategies",
+      "Rolling Upgrade",
+      "performs rolling upgrade"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "rolling"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "rolling"
+    ],
+    "steps": [
+      "Writing a secret before upgrade",
+      "Triggering upgrade",
+      "Monitoring rolling invariants during upgrade",
+      "Verifying rolling step-down jobs are deterministic and successful",
+      "Verifying secret persists after upgrade",
+      "Verifying upgrade metrics reflect idle state"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa",
+    "generatedId": "upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "acknowledges break glass and resumes rollback after the upgrade policy is repaired",
+    "path": [
+      "Upgrade Strategies",
+      "Safe Mode (chaos)",
+      "acknowledges break glass and resumes rollback after the upgrade policy is repaired"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "chaos",
+      "bluegreen"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "chaos",
+      "bluegreen"
+    ],
+    "steps": [
+      "Repairing the broken upgrade policy inside OpenBao",
+      "Acknowledging break glass with the current nonce",
+      "Verifying break glass deactivates and rollback resumes",
+      "Verifying rollback completes and the cluster returns to the original version"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327",
+    "generatedId": "upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "enters safe mode when rollback consensus repair job fails",
+    "path": [
+      "Upgrade Strategies",
+      "Safe Mode (chaos)",
+      "enters safe mode when rollback consensus repair job fails"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "chaos",
+      "bluegreen"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "chaos",
+      "bluegreen"
+    ],
+    "steps": [
+      "Writing a secret before upgrade",
+      "Triggering a Blue/Green upgrade",
+      "Waiting for Green revision to be created",
+      "Verifying Blue pods are still on initial version and Green pods are on target version",
+      "Forcing rollback",
+      "Waiting for rollback to start",
+      "Finding the rollback consensus repair job",
+      "Waiting for the rollback consensus repair job to fail",
+      "Verifying secret persists in safe mode",
+      "Asserting safe mode is set on the cluster"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b",
+    "generatedId": "upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "rejects downgrade requests at admission before any rollout begins",
+    "path": [
+      "Upgrade Strategies",
+      "Validation Guardrails",
+      "rejects downgrade requests at admission before any rollout begins"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "guardrails",
+      "validation"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "guardrails",
+      "validation"
+    ],
+    "steps": [
+      "Attempting to patch the cluster to a lower semantic version",
+      "Verifying the persisted spec remains unchanged after the rejected patch"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb",
+    "generatedId": "upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "surfaces image version mismatches as degraded without mutating running pods",
+    "path": [
+      "Upgrade Strategies",
+      "Validation Guardrails",
+      "surfaces image version mismatches as degraded without mutating running pods"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "guardrails",
+      "validation"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "guardrails",
+      "validation"
+    ],
+    "steps": [
+      "Patching a semver-tagged image that conflicts with spec.version",
+      "Waiting for the workload controller to report a permanent configuration error",
+      "Verifying existing OpenBao pods keep the original stable image"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "bluegreen-target-drift-restart",
+    "generatedId": "upgrade-target-drift-abandons-an-outdated-green-revision-and-72046d97",
+    "caseLabel": "bluegreen-target-drift-restart",
+    "coverage": [
+      "bluegreen-drift",
+      "target-revision-drift",
+      "stale-green-cleanup"
+    ],
+    "file": "test/e2e/Upgrade_Target_Drift_test.go",
+    "type": "It",
+    "name": "abandons an outdated green revision and converges on the new desired image",
+    "path": [
+      "Upgrade Strategies: Blue/Green Drift",
+      "abandons an outdated green revision and converges on the new desired image"
+    ],
+    "labels": [
+      "upgrade",
+      "bluegreen",
+      "slow",
+      "case:bluegreen-target-drift-restart",
+      "covers:bluegreen-drift",
+      "covers:target-revision-drift",
+      "covers:stale-green-cleanup"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "bluegreen",
+      "slow"
+    ],
+    "steps": [
+      "starting a blue/green upgrade",
+      "waiting for the first green revision to enter an early phase",
+      "changing the desired target image while the first green revision is still in flight",
+      "verifying the stale green workload is cleaned up",
+      "verifying the upgrade restarts from the new desired revision and completes",
+      "reconfirming the steady-state workload stays singular after the restart"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "anti-tamper-configmap-delete-blocked",
+    "generatedId": "anti-tamper-policy-prevents-deletion-of-the-managed-configmap-19c6bc2c",
+    "caseLabel": "anti-tamper-configmap-delete-blocked",
+    "coverage": [
+      "anti-tamper",
+      "configmap-protection"
+    ],
+    "file": "test/e2e/anti_tamper_policy_test.go",
+    "type": "It",
+    "name": "prevents deletion of the managed ConfigMap",
+    "path": [
+      "Security: Anti-Tamper Policy",
+      "managed-resource mutation guardrails",
+      "prevents deletion of the managed ConfigMap"
+    ],
+    "labels": [
+      "security",
+      "tamper",
+      "cluster",
+      "slow",
+      "case:anti-tamper-configmap-delete-blocked",
+      "covers:anti-tamper",
+      "covers:configmap-protection"
+    ],
+    "domainLabels": [
+      "security",
+      "tamper",
+      "cluster",
+      "slow"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "anti-tamper-statefulset-delete-blocked",
+    "generatedId": "anti-tamper-policy-prevents-deletion-of-the-managed-statefulset-063be7a4",
+    "caseLabel": "anti-tamper-statefulset-delete-blocked",
+    "coverage": [
+      "anti-tamper",
+      "statefulset-protection"
+    ],
+    "file": "test/e2e/anti_tamper_policy_test.go",
+    "type": "It",
+    "name": "prevents deletion of the managed StatefulSet",
+    "path": [
+      "Security: Anti-Tamper Policy",
+      "managed-resource mutation guardrails",
+      "prevents deletion of the managed StatefulSet"
+    ],
+    "labels": [
+      "security",
+      "tamper",
+      "cluster",
+      "slow",
+      "case:anti-tamper-statefulset-delete-blocked",
+      "covers:anti-tamper",
+      "covers:statefulset-protection"
+    ],
+    "domainLabels": [
+      "security",
+      "tamper",
+      "cluster",
+      "slow"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-executes-backup-job-successfully-to-azure-395a20b1",
+    "generatedId": "backup-restore-executes-backup-job-successfully-to-azure-395a20b1",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "executes backup job successfully to Azure",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "Azure Backup \u0026 Restore with Azurite",
+      "executes backup job successfully to Azure"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": [
+      "waiting for the Azure backup job to complete successfully",
+      "recording the latest Azure backup key from cluster status"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-restores-from-azure-backup-using-openbaorestore-b3ea354a",
+    "generatedId": "backup-restore-restores-from-azure-backup-using-openbaorestore-b3ea354a",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "restores from Azure backup using OpenBaoRestore CR",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "Azure Backup \u0026 Restore with Azurite",
+      "restores from Azure backup using OpenBaoRestore CR"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": [
+      "creating an OpenBaoRestore resource from the Azure backup key",
+      "waiting for the Azure restore to complete"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-triggers-manual-backup-to-azure-d31b1484",
+    "generatedId": "backup-restore-triggers-manual-backup-to-azure-d31b1484",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "triggers manual backup to Azure",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "Azure Backup \u0026 Restore with Azurite",
+      "triggers manual backup to Azure"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": [
+      "annotating the cluster to trigger a manual Azure backup",
+      "forcing a reconcile after the manual Azure backup trigger",
+      "waiting for an Azure backup job to be created"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-executes-backup-job-successfully-to-gcs-5e8a1d74",
+    "generatedId": "backup-restore-executes-backup-job-successfully-to-gcs-5e8a1d74",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "executes backup job successfully to GCS",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "GCS Backup with fake-gcs-server",
+      "executes backup job successfully to GCS"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": [
+      "waiting for the GCS backup job to complete successfully"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5",
+    "generatedId": "backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "restores from GCS backup using OpenBaoRestore CR",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "GCS Backup with fake-gcs-server",
+      "restores from GCS backup using OpenBaoRestore CR"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-triggers-manual-backup-to-gcs-a36e4959",
+    "generatedId": "backup-restore-triggers-manual-backup-to-gcs-a36e4959",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "triggers manual backup to GCS",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "GCS Backup with fake-gcs-server",
+      "triggers manual backup to GCS"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": [
+      "annotating the cluster to trigger a manual GCS backup",
+      "forcing a reconcile after the manual GCS backup trigger",
+      "waiting for a GCS backup job to be created"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-completes-restore-deterministically-after-controller-restart-d873984e",
+    "generatedId": "backup-restore-completes-restore-deterministically-after-controller-restart-d873984e",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "completes restore deterministically after controller restart while running",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "S3 Backup \u0026 Restore with RustFS",
+      "completes restore deterministically after controller restart while running"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow",
+      "failure-injection"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow",
+      "failure-injection"
+    ],
+    "steps": [
+      "waiting for restore to enter Running phase",
+      "restarting controller deployment during restore execution",
+      "waiting for restore completion",
+      "ensuring restore remains terminally completed"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-executes-backup-job-successfully-to-s3-6646d680",
+    "generatedId": "backup-restore-executes-backup-job-successfully-to-s3-6646d680",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "executes backup job successfully to S3",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "S3 Backup \u0026 Restore with RustFS",
+      "executes backup job successfully to S3"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": [
+      "waiting for the S3 backup job to complete successfully",
+      "recording the latest S3 backup key from cluster status"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-handles-transient-s3-auth-failure-with-10300347",
+    "generatedId": "backup-restore-handles-transient-s3-auth-failure-with-10300347",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "handles transient S3 auth failure with backup retry after controller restart",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "S3 Backup \u0026 Restore with RustFS",
+      "handles transient S3 auth failure with backup retry after controller restart"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow",
+      "failure-injection"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow",
+      "failure-injection"
+    ],
+    "steps": [
+      "injecting invalid backup credentials",
+      "triggering a manual backup with invalid credentials",
+      "waiting for backup activity",
+      "restarting the controller while failed backup status is being reconciled",
+      "observing failure status with invalid credentials",
+      "restoring valid credentials and retriggering backup",
+      "verifying backup recovery clears stale failure fields",
+      "ensuring backup operation lock is released after recovery"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175",
+    "generatedId": "backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "restores from S3 backup using OpenBaoRestore CR",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "S3 Backup \u0026 Restore with RustFS",
+      "restores from S3 backup using OpenBaoRestore CR"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": [
+      "Verifying secret persists after restore",
+      "Verifying restore metrics are emitted"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-restore-triggers-manual-backup-to-s3-701eaf8b",
+    "generatedId": "backup-restore-triggers-manual-backup-to-s3-701eaf8b",
+    "file": "test/e2e/backup_restore_test.go",
+    "type": "It",
+    "name": "triggers manual backup to S3",
+    "path": [
+      "DR: Storage Providers Backup \u0026 Restore",
+      "S3 Backup \u0026 Restore with RustFS",
+      "triggers manual backup to S3"
+    ],
+    "labels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "domainLabels": [
+      "dr",
+      "backup",
+      "restore",
+      "storage-providers",
+      "nightly",
+      "slow"
+    ],
+    "steps": [
+      "Writing a secret before backup"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  }
+]

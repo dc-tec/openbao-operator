@@ -318,6 +318,8 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 							// The ACME server (infra-bao) needs to connect for both:
 							// - HTTP-01 challenge: service port 80 -> pod port 8200
 							// - TLS-ALPN-01 challenge: service port 443 -> pod port 8200
+							// The test verifier pod also needs access so the suite can prove the issued
+							// certificate is trusted over the Service hostname.
 							// NetworkPolicy is evaluated at the pod level, so we need to allow port 8200.
 							// Since infra-bao is in the same namespace, we can use a pod selector or allow all in namespace.
 							From: []networkingv1.NetworkPolicyPeer{
@@ -325,6 +327,13 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"app": infraBaoName,
+										},
+									},
+								},
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{
+											"role": "test-verifier",
 										},
 									},
 								},
@@ -462,5 +471,78 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 			g.Expect(cfgText).To(ContainSubstring(acmeDomain))
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap contains ACME parameters (tls_acme_ca_directory, tls_acme_domains)\n")
+
+		By("verifying the ACME-issued certificate is trusted by the PKI CA")
+		verifyACMECertPod := &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "verify-acme-cert",
+				Namespace: f.Namespace,
+				Labels: map[string]string{
+					"role": "test-verifier",
+				},
+			},
+			Spec: corev1.PodSpec{
+				RestartPolicy: corev1.RestartPolicyNever,
+				SecurityContext: &corev1.PodSecurityContext{
+					RunAsNonRoot: ptr.To(true),
+					RunAsUser:    ptr.To(int64(100)),
+					RunAsGroup:   ptr.To(int64(1000)),
+					FSGroup:      ptr.To(int64(1000)),
+					SeccompProfile: &corev1.SeccompProfile{
+						Type: corev1.SeccompProfileTypeRuntimeDefault,
+					},
+				},
+				Volumes: []corev1.Volume{
+					{
+						Name: "acme-ca",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: infraBaoTokenSecretName,
+								Items: []corev1.KeyToPath{
+									{
+										Key:  "pki-ca.crt",
+										Path: "ca.crt",
+									},
+								},
+							},
+						},
+					},
+				},
+				Containers: []corev1.Container{
+					{
+						Name:  "bao",
+						Image: openBaoImage,
+						Env: []corev1.EnvVar{
+							{Name: "BAO_ADDR", Value: fmt.Sprintf("https://%s.%s.svc:443", acmeServiceName, f.Namespace)},
+							{Name: "BAO_CACERT", Value: "/etc/acme-ca/ca.crt"},
+							{Name: "BAO_CLIENT_TIMEOUT", Value: "5s"},
+						},
+						Command: []string{"/bin/sh", "-ec"},
+						Args: []string{
+							"rc=0; bao status >/tmp/status.txt 2>&1 || rc=$?; cat /tmp/status.txt; exit $rc",
+						},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      "acme-ca",
+								MountPath: "/etc/acme-ca",
+								ReadOnly:  true,
+							},
+						},
+						SecurityContext: &corev1.SecurityContext{
+							AllowPrivilegeEscalation: ptr.To(false),
+							Capabilities: &corev1.Capabilities{
+								Drop: []corev1.Capability{"ALL"},
+							},
+							RunAsNonRoot: ptr.To(true),
+						},
+					},
+				},
+			},
+		}
+		verifyACMECertResult, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, verifyACMECertPod, 45*time.Second)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(verifyACMECertResult.Phase).To(Equal(corev1.PodSucceeded), "ACME certificate verification failed, logs:\n%s", verifyACMECertResult.Logs)
+		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyACMECertPod.Name)
+		_, _ = fmt.Fprintf(GinkgoWriter, "Verified ACME certificate trust via bao status against %q\n", acmeDomain)
 	})
 })
