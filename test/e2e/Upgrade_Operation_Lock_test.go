@@ -160,6 +160,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 		"covers:backup-queueing",
 	), func() {
 		clusterKey := types.NamespacedName{Name: lockCluster.Name, Namespace: tenantNamespace}
+		preTriggerJobUIDs := map[types.UID]struct{}{}
 
 		By("starting a rolling upgrade")
 		Eventually(func(g Gomega) {
@@ -187,6 +188,19 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 		}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
 		By("requesting a manual backup while the upgrade lock is held")
+		{
+			jobs := &batchv1.JobList{}
+			Expect(admin.List(ctx, jobs,
+				client.InNamespace(tenantNamespace),
+				client.MatchingLabels{
+					constants.LabelOpenBaoCluster:   lockCluster.Name,
+					constants.LabelOpenBaoComponent: backup.ComponentBackup,
+				},
+			)).To(Succeed())
+			for i := range jobs.Items {
+				preTriggerJobUIDs[jobs.Items[i].UID] = struct{}{}
+			}
+		}
 		Expect(triggerManualBackup(ctx, admin, tenantNamespace, lockCluster.Name)).To(Succeed())
 
 		By("verifying the backup request remains queued behind the active upgrade")
@@ -232,9 +246,6 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 				g.Expect(updated.Annotations).NotTo(HaveKey(constants.AnnotationTriggerBackup))
 			}
 
-			g.Expect(updated.Status.OperationLock).NotTo(BeNil())
-			g.Expect(updated.Status.OperationLock.Operation).To(Equal(openbaov1alpha1.ClusterOperationBackup))
-
 			jobs := &batchv1.JobList{}
 			g.Expect(admin.List(ctx, jobs,
 				client.InNamespace(tenantNamespace),
@@ -243,7 +254,22 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 					constants.LabelOpenBaoComponent: backup.ComponentBackup,
 				},
 			)).To(Succeed())
-			g.Expect(jobs.Items).NotTo(BeEmpty(), "queued backup should create a backup job after the upgrade lock is released")
+			hasNewJob := false
+			for i := range jobs.Items {
+				if _, found := preTriggerJobUIDs[jobs.Items[i].UID]; found {
+					continue
+				}
+				hasNewJob = true
+				break
+			}
+			g.Expect(hasNewJob).To(BeTrue(), "queued backup should create a backup job after the upgrade lock is released")
+			g.Expect(updated.Status.Backup).NotTo(BeNil())
+			g.Expect(updated.Status.Backup.LastAttemptScheduledTime).NotTo(BeNil())
+
+			// Backup execution is short in CI, so the lock may already be released by the time we observe the new Job.
+			if updated.Status.OperationLock != nil {
+				g.Expect(updated.Status.OperationLock.Operation).To(Equal(openbaov1alpha1.ClusterOperationBackup))
+			}
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 	})
 })
