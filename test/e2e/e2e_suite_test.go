@@ -111,6 +111,22 @@ var (
 	// to load pre-built images into kind.
 	skipImageBuild = os.Getenv("E2E_SKIP_IMAGE_BUILD") == "true"
 
+	// loadBackupExecutorImage controls whether the backup executor image is loaded into Kind.
+	// Fast shards that never create backup jobs can disable this to reduce bootstrap time.
+	loadBackupExecutorImage = envBoolDefaultTrue("E2E_LOAD_BACKUP_EXECUTOR_IMAGE")
+
+	// loadUpgradeExecutorImage controls whether the upgrade executor image is loaded into Kind.
+	// Fast shards that never create upgrade jobs can disable this to reduce bootstrap time.
+	loadUpgradeExecutorImage = envBoolDefaultTrue("E2E_LOAD_UPGRADE_EXECUTOR_IMAGE")
+
+	// preloadUpgradeImages controls whether upgrade-version OpenBao images are preloaded into Kind.
+	// This should stay enabled for upgrade-focused shards and can be disabled elsewhere.
+	preloadUpgradeImages = envBoolDefaultTrue("E2E_PRELOAD_UPGRADE_IMAGES")
+
+	// preloadHardenedAssets controls whether hardened-only helper images are preloaded into Kind.
+	// This should stay enabled for the hardened signed shard and can be disabled elsewhere.
+	preloadHardenedAssets = envBoolDefaultTrue("E2E_PRELOAD_HARDENED_ASSETS")
+
 	// useExistingCluster runs the e2e suite against an already-running cluster (e.g. OpenShift Local / CRC).
 	// When enabled, the suite:
 	// - does NOT create kind clusters
@@ -249,6 +265,14 @@ func envOrDefault(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func envBoolDefaultTrue(key string) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return true
+	}
+	return !strings.EqualFold(value, "false")
 }
 
 func waitForDeploymentsAvailable(namespace string, timeout time.Duration) error {
@@ -523,20 +547,33 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			err = utils.LoadImageToKindClusterWithName(configInitImage)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the config-init image into Kind (cluster=%s)", clusterName))
 
-			By(fmt.Sprintf("loading the backup executor image on Kind (cluster=%s)", clusterName))
-			err = utils.LoadImageToKindClusterWithName(backupExecutorImage)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the backup executor image into Kind (cluster=%s)", clusterName))
+			if loadBackupExecutorImage {
+				By(fmt.Sprintf("loading the backup executor image on Kind (cluster=%s)", clusterName))
+				err = utils.LoadImageToKindClusterWithName(backupExecutorImage)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the backup executor image into Kind (cluster=%s)", clusterName))
+			} else {
+				By(fmt.Sprintf("skipping backup executor image load (cluster=%s)", clusterName))
+			}
 
-			By(fmt.Sprintf("loading the upgrade executor image on Kind (cluster=%s)", clusterName))
-			err = utils.LoadImageToKindClusterWithName(upgradeExecutorImage)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the upgrade executor image into Kind (cluster=%s)", clusterName))
+			if loadUpgradeExecutorImage {
+				By(fmt.Sprintf("loading the upgrade executor image on Kind (cluster=%s)", clusterName))
+				err = utils.LoadImageToKindClusterWithName(upgradeExecutorImage)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the upgrade executor image into Kind (cluster=%s)", clusterName))
+			} else {
+				By(fmt.Sprintf("skipping upgrade executor image load (cluster=%s)", clusterName))
+			}
 
 			By(fmt.Sprintf("pre-loading OpenBao images on Kind to reduce flakiness (cluster=%s)", clusterName))
-			openBaoImages := []string{
-				openBaoImage,
-				fmt.Sprintf("openbao/openbao:%s", defaultUpgradeFromVersion),
-				fmt.Sprintf("openbao/openbao:%s", defaultUpgradeToVersion),
-				hardenedConfigInitImage,
+			openBaoImages := []string{openBaoImage}
+			if preloadUpgradeImages {
+				openBaoImages = append(
+					openBaoImages,
+					fmt.Sprintf("openbao/openbao:%s", defaultUpgradeFromVersion),
+					fmt.Sprintf("openbao/openbao:%s", defaultUpgradeToVersion),
+				)
+			}
+			if preloadHardenedAssets {
+				openBaoImages = append(openBaoImages, hardenedConfigInitImage)
 			}
 			seen := make(map[string]struct{}, len(openBaoImages))
 			for _, img := range openBaoImages {

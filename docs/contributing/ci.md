@@ -131,10 +131,11 @@ Because this repository uses squash merge, the PR title is the release-facing co
 
 We run E2E tests on Kind and route scope based on changed files and labels.
 
-- Default routing runs targeted shards.
+- Default PR routing runs two fast label-based shards: `Core Lifecycle & Manager` and `Security & Tenants`.
+- Specialized shards are routed separately for `Backup & Restore`, `Upgrade Rolling`, `Upgrade Blue/Green`, and `Hardened (Signed)`.
 - Label `ci:full-e2e` enables broader suite coverage.
-- Labels `backup` and `upgrades` expand slow-lane coverage.
-- Hardened signed lane runs for relevant security/controller change scope.
+- Labels `backup`, `upgrades`, `security`, `provisioner`, `admission`, and `controller` can expand targeted PR coverage.
+- Routing uses Ginkgo label filters instead of suite-title regexes, so new suites must carry the right labels.
 - Prebuilt E2E images are reused across shards for speed.
 
 !!! warning
@@ -147,7 +148,7 @@ We run E2E tests on Kind and route scope based on changed files and labels.
     ```sh
     make test-e2e-ci \
       KIND_NODE_IMAGE=kindest/node:v1.34.3 \
-      E2E_LABEL_FILTER='!slow && !nightly && !openshift && !pentest' \
+      E2E_LABEL_FILTER='(((lifecycle && !tls) || manager) && !openshift)' \
       E2E_PARALLEL_NODES=1
     ```
 
