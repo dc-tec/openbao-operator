@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -187,15 +188,18 @@ func (m *Manager) verifyResumeClusterHealth(ctx context.Context, logger logr.Log
 		return fmt.Errorf("failed to get StatefulSet: %w", err)
 	}
 
-	quorumRequired := (cluster.Spec.Replicas / 2) + 1
-	if sts.Status.ReadyReplicas < quorumRequired {
-		return fmt.Errorf("rolling upgrade cannot continue without quorum-ready replicas (%d/%d ready, need %d)",
-			sts.Status.ReadyReplicas, cluster.Spec.Replicas, quorumRequired)
-	}
-
 	targetPodName := ""
 	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.CurrentPartition > 0 {
 		targetPodName = fmt.Sprintf("%s-%d", cluster.Name, cluster.Status.Upgrade.CurrentPartition-1)
+	}
+
+	quorumRequired := (cluster.Spec.Replicas / 2) + 1
+	if sts.Status.ReadyReplicas < quorumRequired {
+		if err := markResumeUpgradeTimeout(cluster, targetPodName); err != nil {
+			return err
+		}
+		return fmt.Errorf("rolling upgrade cannot continue without quorum-ready replicas (%d/%d ready, need %d)",
+			sts.Status.ReadyReplicas, cluster.Spec.Replicas, quorumRequired)
 	}
 
 	podList, err := m.getClusterPods(ctx, cluster)
@@ -203,6 +207,9 @@ func (m *Manager) verifyResumeClusterHealth(ctx context.Context, logger logr.Log
 		return fmt.Errorf("failed to list cluster pods: %w", err)
 	}
 	if len(podList) < int(quorumRequired) {
+		if err := markResumeUpgradeTimeout(cluster, targetPodName); err != nil {
+			return err
+		}
 		return fmt.Errorf("rolling upgrade cannot continue with too few cluster pods (%d/%d, need at least %d)",
 			len(podList), cluster.Spec.Replicas, quorumRequired)
 	}
@@ -235,6 +242,22 @@ func (m *Manager) verifyResumeClusterHealth(ctx context.Context, logger logr.Log
 		"leaderCount", leaderCount)
 
 	return nil
+}
+
+func markResumeUpgradeTimeout(cluster *openbaov1alpha1.OpenBaoCluster, podName string) error {
+	if cluster == nil || cluster.Status.Upgrade == nil || cluster.Status.Upgrade.StartedAt == nil {
+		return nil
+	}
+	if time.Since(cluster.Status.Upgrade.StartedAt.Time) <= upgrade.DefaultPodReadyTimeout {
+		return nil
+	}
+
+	if strings.TrimSpace(podName) == "" {
+		podName = "upgrade-target"
+	}
+	upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonPodNotReady,
+		fmt.Sprintf(upgrade.MessagePodNotReady, podName, upgrade.DefaultPodReadyTimeout))
+	return fmt.Errorf("pod %s did not become ready within %v", podName, upgrade.DefaultPodReadyTimeout)
 }
 
 func (m *Manager) verifyNonTargetPodsReadyAndHealthy(

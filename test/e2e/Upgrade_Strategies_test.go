@@ -1056,6 +1056,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 
 		It("recovers a failed rolling upgrade after a retry request clears stale state", func() {
+			var failedPartition int32
+
 			By("Triggering a rolling upgrade with a bad non-semver image tag")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -1093,11 +1095,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
 				g.Expect(updated.Status.Upgrade.LastErrorReason).To(Equal(upgrade.ReasonPodNotReady))
-				g.Expect(updated.Status.Upgrade.CurrentPartition).To(Equal(updated.Spec.Replicas))
+				g.Expect(updated.Status.Upgrade.CurrentPartition).To(BeNumerically(">", 0))
+				failedPartition = updated.Status.Upgrade.CurrentPartition
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("Injecting a stale deterministic step-down job for the retry cleanup path")
-			targetPod := fmt.Sprintf("%s-%d", recoveryCluster.Name, recoveryCluster.Spec.Replicas-1)
+			targetPod := fmt.Sprintf("%s-%d", recoveryCluster.Name, failedPartition-1)
 			staleJob := newStaleRollingStepDownJob(tenantNamespace, recoveryCluster.Name, targetPod, initialImage)
 			Expect(admin.Create(ctx, staleJob)).To(Succeed())
 			staleJobUID := staleJob.UID
