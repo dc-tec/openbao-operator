@@ -501,10 +501,16 @@ func Run(args []string) {
 
 	// Set up OpenBaoRestore controller
 	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
-		Client:                mgr.GetClient(),
-		Scheme:                mgr.GetScheme(),
-		Recorder:              mgr.GetEventRecorder(controllerNameOpenBaoRestore),
-		RestoreManager:        restore.NewManager(mgr.GetClient(), mgr.GetScheme(), mgr.GetEventRecorder(controllerNameOpenBaoRestore), operatorImageVerifier, platform),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorder(controllerNameOpenBaoRestore),
+		RestoreManager: restore.NewManager(
+			mgr.GetClient(),
+			mgr.GetScheme(),
+			mgr.GetEventRecorder(controllerNameOpenBaoRestore),
+			operatorImageVerifier,
+			platform,
+		),
 		OperatorImageVerifier: operatorImageVerifier,
 		Platform:              platform,
 	}).SetupWithManager(mgr); err != nil {
