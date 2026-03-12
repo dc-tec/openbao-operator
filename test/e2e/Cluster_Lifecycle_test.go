@@ -476,6 +476,9 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 				Namespace: f.Namespace,
 			}, svc)).To(Succeed())
 
+			By("triggering reconcile after scale up so autopilot settings are refreshed promptly")
+			Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
+
 			By("verifying Raft Autopilot min_quorum=3 (Development profile with 3 replicas)")
 			// Wait a bit for autopilot config to be reconciled after scaling
 			Eventually(func() error {
@@ -490,7 +493,7 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					map[string]string{"role": "test-verifier"},
 					3, // Expected min_quorum for Development profile with 3 replicas
 				)
-			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be updated to 3 after scaling")
+			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be updated to 3 after scaling")
 			_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot min_quorum=3 verified after scale up\n")
 		})
 
@@ -523,6 +526,9 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 				Namespace: f.Namespace,
 			}, svc)).To(Succeed())
 
+			By("triggering reconcile after scale down so autopilot settings are refreshed promptly")
+			Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
+
 			By("verifying Raft Autopilot min_quorum=2 (Development profile with 2 replicas)")
 			// Wait a bit for autopilot config to be reconciled after scaling
 			Eventually(func() error {
@@ -537,7 +543,7 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					map[string]string{"role": "test-verifier"},
 					2, // Expected min_quorum for Development profile with 2 replicas
 				)
-			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be updated to 2 after scale down")
+			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be updated to 2 after scale down")
 			_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot min_quorum=2 verified after scale down\n")
 		})
 	})

@@ -2,6 +2,7 @@ package rolling
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -203,6 +205,135 @@ func TestClearUpgradeFailureForRetry_TableDriven(t *testing.T) {
 			clearUpgradeFailureForRetry(tt.cluster)
 			tt.assert(t, tt.cluster)
 		})
+	}
+}
+
+func TestPrepareFailedUpgradeRetry_WaitsForStatefulSetTemplateToMatchRetryTarget(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add openbaov1alpha1 scheme: %v", err)
+	}
+	if err := appsv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add appsv1 scheme: %v", err)
+	}
+	if err := batchv1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add batchv1 scheme: %v", err)
+	}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add corev1 scheme: %v", err)
+	}
+
+	now := metav1.Now()
+	startedAt := metav1.NewTime(time.Now().Add(-10 * time.Minute))
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version: "2.5.0",
+			Image:   "openbao/openbao:2.5.0",
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Requests: &openbaov1alpha1.UpgradeRequestConfig{
+					Retry: "retry-now",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion:    "2.5.0",
+				FromVersion:      "2.4.0",
+				CurrentPartition: 2,
+				CompletedPods:    []int32{2},
+				StartedAt:        &startedAt,
+				LastErrorReason:  upgrade.ReasonUpgradeFailed,
+				LastErrorMessage: "step-down timed out",
+				LastErrorAt:      &now,
+				LastStepDownTime: &now,
+			},
+		},
+	}
+
+	targetPod := "test-cluster-1"
+	jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, targetPod, "", "")
+	staleJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: cluster.Namespace,
+		},
+	}
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Status: appsv1.StatefulSetStatus{
+			UpdateRevision: "rev-bad",
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  constants.ContainerBao,
+							Image: "openbao/openbao:retry-image-does-not-exist",
+						},
+					},
+				},
+			},
+		},
+	}
+	staleTargetPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      targetPod,
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				appsv1.StatefulSetRevisionLabel: "rev-bad",
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  constants.ContainerBao,
+					Image: "openbao/openbao:retry-image-does-not-exist",
+				},
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, staleJob, sts, staleTargetPod).
+		Build()
+
+	mgr := &Manager{client: k8sClient, scheme: scheme}
+
+	resumed, err := mgr.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster)
+	if err == nil {
+		t.Fatal("prepareFailedUpgradeRetry() error=nil, want transient retry wait")
+	}
+	if resumed {
+		t.Fatal("prepareFailedUpgradeRetry() resumed=true, want false")
+	}
+	if !errors.Is(err, operatorerrors.ErrTransientKubernetesAPI) {
+		t.Fatalf("prepareFailedUpgradeRetry() error = %v, want transient Kubernetes API error", err)
+	}
+	if cluster.Status.Upgrade == nil {
+		t.Fatal("Upgrade=nil, want still failed")
+	}
+	if cluster.Status.Upgrade.LastErrorReason == "" {
+		t.Fatal("LastErrorReason cleared unexpectedly")
+	}
+
+	storedPod := &corev1.Pod{}
+	if getErr := k8sClient.Get(context.Background(), types.NamespacedName{Name: targetPod, Namespace: cluster.Namespace}, storedPod); getErr != nil {
+		t.Fatalf("Get(target pod) error = %v, want pod preserved", getErr)
 	}
 }
 

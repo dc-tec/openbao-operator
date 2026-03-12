@@ -242,6 +242,7 @@ jobs:
           docker pull "${{ needs.build-e2e-images.outputs.config_init_ref }}"
           docker pull "${{ needs.build-e2e-images.outputs.backup_executor_ref }}"
           docker pull "${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}"
+          docker pull "ghcr.io/dc-tec/openbao-upgrade:edge"
 
       - name: Create Kind Cluster
         run: |
@@ -262,6 +263,7 @@ jobs:
           E2E_OPENBAO_IMAGE: ghcr.io/openbao/openbao:2.5.0
           E2E_CONFIG_INIT_IMAGE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
           E2E_HARDENED_CONFIG_INIT_IMAGE: ghcr.io/dc-tec/openbao-init:edge
+          E2E_HARDENED_UPGRADE_EXECUTOR_IMAGE: ghcr.io/dc-tec/openbao-upgrade:edge
           E2E_BACKUP_EXECUTOR_IMAGE: ${{ needs.build-e2e-images.outputs.backup_executor_ref }}
           E2E_UPGRADE_EXECUTOR_IMAGE: ${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}
         run: make test-e2e-ci
