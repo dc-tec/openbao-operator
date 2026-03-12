@@ -6,17 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+        <meta name="description" content="Dependency license policy for OpenBao Operator, including allowed licenses, MPL-2.0 obligations, forbidden licenses, and CI enforcement.">
       
       
       
-        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/contributing/release-management/">
+        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/contributing/dependency-licenses/">
       
       
-        <link rel="prev" href="../ci/">
+        <link rel="prev" href="../supply-chain-security/">
       
       
-        <link rel="next" href="../supply-chain-security/">
+        <link rel="next" href="../distribution/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Release Management - OpenBao Operator</title>
+        <title>Dependency Licenses - OpenBao Operator</title>
       
     
     
@@ -71,19 +71,19 @@
   
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Release Management">
+  <meta property="og:title" content="Dependency Licenses">
   
-    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta property="og:description" content="Dependency license policy for OpenBao Operator, including allowed licenses, MPL-2.0 obligations, forbidden licenses, and CI enforcement.">
   
-  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/contributing/release-management/">
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/contributing/dependency-licenses/">
   
     <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
   
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Release Management">
+  <meta name="twitter:title" content="Dependency Licenses">
   
-    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta name="twitter:description" content="Dependency license policy for OpenBao Operator, including allowed licenses, MPL-2.0 obligations, forbidden licenses, and CI enforcement.">
   
   
     <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#release-management" class="md-skip">
+        <a href="#dependency-license-policy" class="md-skip">
           Skip to content
         </a>
       
@@ -149,7 +149,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Release Management
+              Dependency Licenses
             
           </span>
         </div>
@@ -3798,37 +3798,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Release Management
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../release-management/" class="md-nav__link">
         
   
   
@@ -3844,186 +3817,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#0-channels" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        0. Channels
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#01-release-please-versioning-release-prs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        0.1 Release-Please (Versioning + Release PRs)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#02-automation-workflows" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        0.2 Automation Workflows
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#03-ghcr-housekeeping-policy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        0.3 GHCR Housekeeping Policy
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#1-stableprerelease-release-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Stable/Prerelease Release Flow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-triggers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Triggers
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#21-cutting-betarc-releases-release-as" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 Cutting Beta/RC Releases (Release-As)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-published-artifacts-stableprerelease-only" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Published Artifacts (Stable/Prerelease Only)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-release-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Release Checklist
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="4. Release Checklist">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pre-flight-checks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pre-Flight Checks
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#post-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Post-Release
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#artifact-hub-metadata-sync-oci" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Artifact Hub Metadata Sync (OCI)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#5-verifying-artifacts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Verifying Artifacts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#6-troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        6. Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -4061,10 +3854,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../dependency-licenses/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependency Licenses
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -4080,6 +3900,131 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#allowed-licenses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allowed Licenses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#allowed-with-obligations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allowed With Obligations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Allowed With Obligations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-mpl-20-is-allowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why MPL-2.0 Is Allowed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#required-handling-for-mpl-20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Handling for MPL-2.0
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#forbidden-licenses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forbidden Licenses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enforcement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updating-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating the Policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -4460,10 +4405,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#0-channels" class="md-nav__link">
+  <a href="#scope" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0. Channels
+        Scope
       
     </span>
   </a>
@@ -4471,10 +4416,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#01-release-please-versioning-release-prs" class="md-nav__link">
+  <a href="#allowed-licenses" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.1 Release-Please (Versioning + Release PRs)
+        Allowed Licenses
       
     </span>
   </a>
@@ -4482,88 +4427,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#02-automation-workflows" class="md-nav__link">
+  <a href="#allowed-with-obligations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.2 Automation Workflows
+        Allowed With Obligations
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#03-ghcr-housekeeping-policy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        0.3 GHCR Housekeeping Policy
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#1-stableprerelease-release-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Stable/Prerelease Release Flow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#2-triggers" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Triggers
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#21-cutting-betarc-releases-release-as" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2.1 Cutting Beta/RC Releases (Release-As)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#3-published-artifacts-stableprerelease-only" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Published Artifacts (Stable/Prerelease Only)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#4-release-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Release Checklist
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="4. Release Checklist">
+    <nav class="md-nav" aria-label="Allowed With Obligations">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#pre-flight-checks" class="md-nav__link">
+  <a href="#why-mpl-20-is-allowed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pre-Flight Checks
+        Why MPL-2.0 Is Allowed
       
     </span>
   </a>
@@ -4571,21 +4450,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#post-release" class="md-nav__link">
+  <a href="#required-handling-for-mpl-20" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Post-Release
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#artifact-hub-metadata-sync-oci" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Artifact Hub Metadata Sync (OCI)
+        Required Handling for MPL-2.0
       
     </span>
   </a>
@@ -4598,10 +4466,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-verifying-artifacts" class="md-nav__link">
+  <a href="#forbidden-licenses" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Verifying Artifacts
+        Forbidden Licenses
       
     </span>
   </a>
@@ -4609,10 +4477,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-troubleshooting" class="md-nav__link">
+  <a href="#enforcement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Troubleshooting
+        Enforcement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#local-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#updating-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Updating the Policy
       
     </span>
   </a>
@@ -4639,417 +4529,103 @@
   
 
 
-<h1 id="release-management">Release Management<a class="headerlink" href="#release-management" title="Permanent link">&para;</a></h1>
-<p>We follow a strict "Build Once, Promote Everywhere" philosophy. Releases are automated, signed, and include verifiable provenance.</p>
-<div class="admonition note">
-<p class="admonition-title">Version format</p>
-<p>Git tags and Helm chart versions use SemVer <strong>without</strong> a leading <code>v</code> (for example: <code>0.1.0</code>, <code>0.2.0-rc.1</code>).</p>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Build invariants</p>
-<p>Release/build workflows enforce vendored dependency resolution for Go build/test paths (<code>-mod=vendor</code>) and block publish on provenance or byte-level reproducibility mismatches.</p>
-</div>
-<h2 id="0-channels">0. Channels<a class="headerlink" href="#0-channels" title="Permanent link">&para;</a></h2>
-<p>We publish multiple channels:</p>
-<ul>
-<li><strong>Stable / SemVer</strong>: <code>MAJOR.MINOR.PATCH</code> (and prereleases like <code>X.Y.Z-rc.1</code>, <code>X.Y.Z-beta.1</code>, <code>X.Y.Z-alpha.1</code>). This is the only channel that publishes OCI Helm charts and GitHub Release assets.</li>
-<li><strong>Edge</strong> (main): published automatically after CI passes on <code>main</code> (tags: <code>edge</code>, <code>edge-&lt;shortsha&gt;</code>), with signed manifests and <code>provenance-index.json</code> published to GitHub Pages under <code>/edge/&lt;shortsha&gt;/</code> and <code>/edge/latest/</code>. No OCI Helm chart publication. Edge is for pre-release validation and is not supported for production.</li>
-<li><strong>Nightly</strong>: published automatically after nightly E2E passes (tags: <code>nightly</code>, <code>nightly-YYYYMMDD</code>, <code>nightly-YYYYMMDD-&lt;shortsha&gt;</code>), and published as mutable manifests plus <code>provenance-index.json</code> on GitHub Pages under <code>/nightly/</code>. No OCI Helm chart publication.</li>
-</ul>
-<h2 id="01-release-please-versioning-release-prs">0.1 Release-Please (Versioning + Release PRs)<a class="headerlink" href="#01-release-please-versioning-release-prs" title="Permanent link">&para;</a></h2>
-<p>We use <strong>release-please</strong> as the source of truth for:</p>
-<ul>
-<li>Open/maintain a Release PR on <code>main</code> based on Conventional Commits.</li>
-<li>Update <code>CHANGELOG.md</code> and bump <code>charts/openbao-operator/Chart.yaml</code> (chart <code>version</code> and <code>appVersion</code>).</li>
-<li>Create the <code>X.Y.Z</code> tag and a draft GitHub Release when the Release PR is merged.</li>
-</ul>
-<div class="admonition important">
-<p class="admonition-title">Required token</p>
-<p><code>release-please</code> must use a non-default token, otherwise the resulting tag/release may not trigger downstream GitHub Actions workflows.</p>
-<p>Recommended: configure a GitHub App (for example <code>openbao-operator-release</code>) and use its installation token (no server required; no webhook/callback needed). Store:</p>
-<ul>
-<li><code>OPENBAO_OPERATOR_RELEASE_APP_ID</code></li>
-<li><code>OPENBAO_OPERATOR_RELEASE_PRIVATE_KEY</code></li>
-</ul>
-<p>Fallback: if you prefer a PAT, configure a repository secret named <code>RELEASE_PLEASE_TOKEN</code> with permissions to:
-- Create/update PRs
-- Create tags and releases
-and update <code>.github/workflows/release-please.yml</code> to use it.</p>
-</div>
-<div class="admonition tip">
-<p class="admonition-title">Keep release-please PRs mergable</p>
-<p>If you enforce "required approval" rules, avoid using a PAT for your own user as <code>RELEASE_PLEASE_TOKEN</code>.
-GitHub often excludes self-approvals from required reviews. Prefer a bot account or GitHub App.</p>
-</div>
-<h2 id="02-automation-workflows">0.2 Automation Workflows<a class="headerlink" href="#02-automation-workflows" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Stable / prerelease</label><label for="__tabbed_1_2">Edge (main)</label><label for="__tabbed_1_3">Nightly</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<ul>
-<li>Versioning + release notes: <code>.github/workflows/release-please.yml</code></li>
-<li>Build + gates + artifacts: <code>.github/workflows/release.yml</code></li>
-</ul>
-</div>
-<div class="tabbed-block">
-<ul>
-<li>After CI success on <code>main</code>, <code>.github/workflows/publish-edge.yml</code> publishes:<ul>
-<li>Shared strict gate component: <code>.github/workflows/reusable-channel-hardening.yml</code></li>
-<li>Images: <code>:edge</code> and <code>:edge-&lt;shortsha&gt;</code></li>
-<li>Manifests to GitHub Pages:</li>
-<li>immutable per-commit: <code>/edge/&lt;shortsha&gt;/install.yaml</code> and <code>/edge/&lt;shortsha&gt;/crds.yaml</code></li>
-<li>moving pointer: <code>/edge/latest/install.yaml</code> and <code>/edge/latest/crds.yaml</code></li>
-<li>plus checksums, checksums bundle, <code>provenance-index.json</code>, and metadata in both paths</li>
-<li>No Helm chart publication (release-only)</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="tabbed-block">
-<ul>
-<li>After nightly E2E success, <code>.github/workflows/publish-nightly.yml</code> publishes:<ul>
-<li>Shared strict gate component: <code>.github/workflows/reusable-channel-hardening.yml</code></li>
-<li>Images: <code>:nightly</code>, <code>:nightly-YYYYMMDD</code>, <code>:nightly-YYYYMMDD-&lt;shortsha&gt;</code></li>
-<li>Manifests to GitHub Pages: <code>/nightly/install.yaml</code>, <code>/nightly/crds.yaml</code> (+ checksums, checksums bundle, <code>provenance-index.json</code>, metadata)</li>
-<li>No Helm chart publication (release-only)</li>
-</ul>
-</li>
-</ul>
-</div>
-</div>
-</div>
-<h2 id="03-ghcr-housekeeping-policy">0.3 GHCR Housekeeping Policy<a class="headerlink" href="#03-ghcr-housekeeping-policy" title="Permanent link">&para;</a></h2>
-<p>Run <code>.github/workflows/ghcr-housekeeping.yml</code> to keep GHCR history bounded while preserving release aliases and supply-chain evidence.</p>
-<ul>
-<li>Scope: image packages only (<code>openbao-operator</code>, <code>openbao-init</code>, <code>openbao-backup</code>, <code>openbao-upgrade</code>).</li>
-<li>Unit of deletion: package version (digest), not tag string.</li>
-<li>Alias safety: any version containing a protected tag is never deleted.</li>
-<li>Enforce safety: if any package exceeds <code>max-delete-per-package</code>, no package deletions are attempted in that run.</li>
-</ul>
-<p>Protected tags (kept indefinitely):</p>
-<ul>
-<li>SemVer release/prerelease tags</li>
-<li><code>edge</code> and <code>nightly</code> moving pointers</li>
-<li><code>sha256-*</code> signature/attestation tags</li>
-<li>Unknown/unmatched tags (fail-safe)</li>
-</ul>
+<h1 id="dependency-license-policy">Dependency License Policy<a class="headerlink" href="#dependency-license-policy" title="Permanent link">&para;</a></h1>
+<p>Use this page to review the dependency license policy enforced for shipped OpenBao Operator binaries.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Unknown or unmatched tags are protected by default. This fail-safe prevents accidental deletion when new tag formats appear.</p>
+<p>This page defines project policy for maintainers and contributors. It is not legal advice.</p>
 </div>
-<p>Retention windows for transient tags:</p>
+<h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
+<p>The blocking license gate covers these shipped Go binaries:</p>
 <ul>
-<li>30 days: <code>edge-&lt;shortsha&gt;</code>, <code>nightly-YYYYMMDD</code>, <code>nightly-YYYYMMDD-&lt;shortsha&gt;</code>, legacy <code>dev*</code></li>
-<li>21 days: <code>edge-build-*</code>, <code>edge-repro-*</code>, <code>nightly-build-*</code>, <code>nightly-repro-*</code>, <code>build-*</code>, <code>repro-*</code></li>
-<li>7 days: <code>e2e-*</code>, <code>nightly-e2e-*</code></li>
+<li><code>./cmd/controller</code></li>
+<li><code>./cmd/bao-backup</code></li>
+<li><code>./cmd/bao-upgrade</code></li>
+<li><code>./cmd/provisioner</code></li>
 </ul>
-<p>Rollout/operation model:</p>
+<div class="admonition tip">
+<p class="admonition-title">Tip</p>
+<p>Run license verification in vendored mode (<code>-mod=vendor</code>) so the result matches the build and release path.</p>
+</div>
+<h2 id="allowed-licenses">Allowed Licenses<a class="headerlink" href="#allowed-licenses" title="Permanent link">&para;</a></h2>
+<p>These licenses are allowed without additional license-specific review:</p>
+<ul>
+<li><code>Apache-2.0</code></li>
+<li><code>BSD-2-Clause</code></li>
+<li><code>BSD-3-Clause</code></li>
+<li><code>ISC</code></li>
+<li><code>MIT</code></li>
+<li><code>Unicode-DFS-2016</code></li>
+</ul>
+<p>These licenses generally require preserving notices rather than reciprocal source disclosure across the larger work.</p>
+<h2 id="allowed-with-obligations">Allowed With Obligations<a class="headerlink" href="#allowed-with-obligations" title="Permanent link">&para;</a></h2>
+<p>The following license is allowed, but it requires explicit maintainer care:</p>
+<ul>
+<li><code>MPL-2.0</code></li>
+</ul>
+<h3 id="why-mpl-20-is-allowed">Why <code>MPL-2.0</code> Is Allowed<a class="headerlink" href="#why-mpl-20-is-allowed" title="Permanent link">&para;</a></h3>
+<p><code>MPL-2.0</code> is file-level copyleft, not whole-program copyleft.
+It can be distributed as part of a larger Apache-2.0 project without converting the whole operator to <code>MPL-2.0</code>.</p>
+<h3 id="required-handling-for-mpl-20">Required Handling for <code>MPL-2.0</code><a class="headerlink" href="#required-handling-for-mpl-20" title="Permanent link">&para;</a></h3>
+<p>When you add or update a dependency under <code>MPL-2.0</code>:</p>
 <ol>
-<li>Default mode is <code>dry-run</code> (report only).</li>
-<li>Set repository variable <code>GHCR_HOUSEKEEPING_MODE=enforce</code> after dry-run validation window.</li>
-<li>If candidate count exceeds safety threshold, run fails and requires manual <code>workflow_dispatch</code> override for <code>max_delete_per_package</code>.</li>
+<li>Do not patch vendored <code>MPL-2.0</code> files casually.</li>
+<li>Do not copy <code>MPL-2.0</code> code into first-party files without explicit review.</li>
+<li>Preserve upstream license and notice files during redistribution.</li>
+<li>If modified <code>MPL-2.0</code> files are redistributed in source or binary form, keep corresponding source for those modified files available as required by the license.</li>
+<li>Call out any newly introduced <code>MPL-2.0</code> dependency in the PR description so the review trail is explicit.</li>
 </ol>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>Switch to enforce mode only after reviewing dry-run reports and confirming candidate behavior matches expectations.</p>
-</div>
-<p>Dry-run and enforce reports include unknown-version breakdown for auditability:</p>
+<h2 id="forbidden-licenses">Forbidden Licenses<a class="headerlink" href="#forbidden-licenses" title="Permanent link">&para;</a></h2>
+<p>Do not ship dependencies under these licenses or license classes:</p>
 <ul>
-<li><code>kept_unknown_untagged</code></li>
-<li><code>kept_unknown_unmatched_tag</code></li>
-<li><code>kept_unknown_no_transient_match</code></li>
+<li><code>GPL-2.0</code></li>
+<li><code>GPL-3.0</code></li>
+<li><code>AGPL-3.0</code></li>
+<li><code>LGPL-2.1</code></li>
+<li><code>LGPL-3.0</code></li>
+<li><code>SSPL</code></li>
+<li><code>BUSL</code> / <code>BSL</code></li>
+<li><code>Elastic License</code></li>
+<li><code>Commons-Clause</code></li>
+<li>Non-commercial, no-derivatives, field-of-use-restricted, or source-available-only licenses</li>
+<li><code>Unknown</code>, <code>NOASSERTION</code>, and custom or unrecognized licenses</li>
 </ul>
-<h2 id="1-stableprerelease-release-flow">1. Stable/Prerelease Release Flow<a class="headerlink" href="#1-stableprerelease-release-flow" title="Permanent link">&para;</a></h2>
-<p><code>release-please</code> is responsible for <em>versioning and release notes</em>. The <code>Release</code> workflow is responsible for <em>building, gating, and publishing artifacts</em>.</p>
-<div class="admonition note">
-<p class="admonition-title">Chart version validation contract</p>
-<p>The <code>Release</code> workflow validates that the git tag (<code>X.Y.Z</code> or prerelease tag) matches both <code>charts/openbao-operator/Chart.yaml</code> fields:</p>
+<p>These licenses introduce obligations or restrictions that do not fit the operator's distribution model.</p>
+<h2 id="enforcement">Enforcement<a class="headerlink" href="#enforcement" title="Permanent link">&para;</a></h2>
+<p>The repository enforces license policy in two layers:</p>
+<ol>
+<li>GitHub dependency review checks newly introduced dependencies on pull requests against the allowlist in <code>.github/dependency-review-config.yml</code>.</li>
+<li><code>go-licenses</code> performs a full shipped-dependency graph check in vendored mode through <code>make license-check</code>.</li>
+</ol>
+<p>The <code>go-licenses</code> check is the canonical full-tree gate for this repository.</p>
+<h2 id="local-verification">Local Verification<a class="headerlink" href="#local-verification" title="Permanent link">&para;</a></h2>
+<p>Run these commands after changing dependencies:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>verify-vendor
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>license-check
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>license-report
+</span></code></pre></div>
+<p><code>make license-report</code> writes:</p>
 <ul>
-<li><code>version</code></li>
-<li><code>appVersion</code></li>
+<li><code>dist/licenses/go-licenses-report.csv</code></li>
+<li><code>dist/licenses/go-licenses-report.stderr.log</code></li>
 </ul>
-<p>If either value differs from the tag, the release fails fast in <code>prepare</code>.
-The workflow does <strong>not</strong> override chart version fields at package time; Helm packaging uses the committed <code>Chart.yaml</code> values.</p>
-</div>
-<p>Our pipeline enforces both provenance and byte reproducibility before publish, and ensures that the artifacts we test in E2E are the <em>exact</em> same bits that are published.</p>
-<pre class="mermaid"><code>graph TD
-    RP[Merge release-please PR] --&gt; GitTag[Git tag: X.Y.Z]
-
-    GitTag --&gt; Prepare[Prepare variables]
-
-    subgraph Build [Build Once]
-        Img[Build + push images :build-SHA]
-    end
-
-    subgraph Gate [Gates]
-        Vuln[govulncheck]
-        Scan[Trivy image scan]
-        Test[E2E matrix]
-        Perf[Performance gate]
-    end
-
-    subgraph Promote ["Promote + Publish (No Rebuild)"]
-        Retag["Promote tags by digest (:X.Y.Z)"]
-        Sign[Cosign sign + attest]
-        Chart[Package + push OCI Helm chart]
-        Manifests[Generate install.yaml + crds.yaml]
-        SBOM[Generate SBOMs + checksums]
-    end
-
-    subgraph Publish [GitHub Release + Docs]
-        GH[Create/Update GitHub Release]
-        Assets[Upload dist/* assets]
-        Docs[Deploy versioned docs]
-    end
-
-    Prepare --&gt; Img
-    Img --&gt; Gate
-    Gate --&gt; Promote
-    Promote --&gt; Publish
-
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
-
-    class RP,Prepare process;
-    class GitTag git;
-    class Img,Retag,Sign,Chart,Manifests,SBOM,GH,Assets,Docs write;
-    class Vuln,Scan security;
-    class Test,Perf read;</code></pre>
-<h2 id="2-triggers">2. Triggers<a class="headerlink" href="#2-triggers" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:1"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Release-please</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<ul>
-<li>Merge the release-please PR on <code>main</code>.</li>
-<li>Wait for the tag to be created and for the <code>Release</code> workflow to publish artifacts.</li>
-</ul>
-</div>
-</div>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Policy: release only when ready</p>
-<p>The repository includes an gate (<code>.github/workflows/release-pr-gate.yml</code>) intended for the release-please PR:</p>
-<ul>
-<li>Require a label (default: <code>release:ready</code>)</li>
-<li>Require an explicit approval from the designated release manager (default: <code>@dc-tec</code>)</li>
-</ul>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Manual releases</p>
-<p>Stable/prerelease releases should be created by merging the release-please PR.
-For out-of-band release, prefer cutting a dedicated PR on <code>main</code> and letting release-please generate the tag/release.</p>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Prereleases</p>
-<p>For <code>-alpha.*</code>, <code>-beta.*</code>, and <code>-rc.*</code> tags, the GitHub Release is marked as a prerelease and docs are published without moving the <code>latest</code> alias.</p>
-</div>
-<h2 id="21-cutting-betarc-releases-release-as">2.1 Cutting Beta/RC Releases (Release-As)<a class="headerlink" href="#21-cutting-betarc-releases-release-as" title="Permanent link">&para;</a></h2>
-<p>By default, <code>release-please</code> determines the next version bump from Conventional Commits:</p>
-<ul>
-<li><code>fix:</code> -&gt; patch bump</li>
-<li><code>feat:</code> -&gt; minor bump</li>
-<li><code>feat!:</code> (or <code>BREAKING CHANGE:</code>) -&gt; major bump</li>
-</ul>
-<p>When a ad-hoc prerelease is needed (for example <code>0.2.0-beta.1</code> or <code>0.2.0-rc.1</code>), override the target version using <code>Release-As:</code> in a commit that lands on <code>main</code>. <code>release-please</code> will update the Release PR to that exact version; merge it when you are ready to publish the prerelease.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Override via empty commit</label><label for="__tabbed_3_2">Override via PR merge message</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>commit<span class="w"> </span>--allow-empty<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: release 0.2.0-beta.1&quot;</span><span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release-As: 0.2.0-beta.1&quot;</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>push
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Add the override line to the squash/merge commit message:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>chore: prepare 0.2.0-beta.1
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>Release-As: 0.2.0-beta.1
-</span></code></pre></div>
-</div>
-</div>
-</div>
-<div class="admonition note">
-<p class="admonition-title">Iterating prereleases</p>
-<p>Repeat the same process for <code>0.2.0-beta.2</code>, then <code>0.2.0-rc.1</code>, and finally <code>0.2.0</code>.</p>
-</div>
-<h2 id="3-published-artifacts-stableprerelease-only">3. Published Artifacts (Stable/Prerelease Only)<a class="headerlink" href="#3-published-artifacts-stableprerelease-only" title="Permanent link">&para;</a></h2>
-<p>The stable/prerelease release produces the following artifacts:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="4:3"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><input id="__tabbed_4_3" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">GitHub Release assets</label><label for="__tabbed_4_2">Container images</label><label for="__tabbed_4_3">Helm chart (OCI)</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<ul>
-<li><code>install.yaml</code> (digest-pinned installer manifest)</li>
-<li><code>crds.yaml</code> (CRDs only)</li>
-<li><code>checksums.txt</code> (sha256 of <code>install.yaml</code>, <code>crds.yaml</code>, and SBOMs)</li>
-<li><code>checksums.txt.bundle</code> (keyless Sigstore bundle for <code>checksums.txt</code>)</li>
-<li><code>sbom-openbao-operator.spdx.json</code></li>
-<li><code>sbom-openbao-init.spdx.json</code></li>
-<li><code>sbom-openbao-backup.spdx.json</code></li>
-<li><code>sbom-openbao-upgrade.spdx.json</code></li>
-<li><code>provenance-index.json</code> (image/chart/checksum provenance map)</li>
-</ul>
-</div>
-<div class="tabbed-block">
-<ul>
-<li><code>ghcr.io/&lt;OWNER&gt;/openbao-operator:X.Y.Z</code></li>
-<li><code>ghcr.io/&lt;OWNER&gt;/openbao-init:X.Y.Z</code></li>
-<li><code>ghcr.io/&lt;OWNER&gt;/openbao-backup:X.Y.Z</code></li>
-<li><code>ghcr.io/&lt;OWNER&gt;/openbao-upgrade:X.Y.Z</code></li>
-</ul>
-</div>
-<div class="tabbed-block">
-<ul>
-<li><code>ghcr.io/&lt;OWNER&gt;/charts/openbao-operator:X.Y.Z</code></li>
-</ul>
-</div>
-</div>
-</div>
-<h2 id="4-release-checklist">4. Release Checklist<a class="headerlink" href="#4-release-checklist" title="Permanent link">&para;</a></h2>
-<p>For Release Managers.</p>
-<h3 id="pre-flight-checks">Pre-Flight Checks<a class="headerlink" href="#pre-flight-checks" title="Permanent link">&para;</a></h3>
-<ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Changelog</strong>: Ensure the release-please PR looks correct (changelog entries and version bumps).</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Docs</strong>: Ensure documentation is consistent with new features.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Compatibility</strong>: Verify <code>docs/reference/compatibility.md</code> covers the supported versions.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Clean CI</strong>: Ensure the latest commit on main is green.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Performance Gate</strong>: Run the <strong>Performance Baseline Capture</strong> workflow on <code>main</code> (or release branch), then ensure <code>hack/perf/baseline/kind-v1.34.3-baseline.json</code> and <code>hack/perf/thresholds/kind-v1.34.3.yaml</code> in-repo match captured evidence and <code>make verify-perf</code> passes.</li>
-</ul>
-<h3 id="post-release">Post-Release<a class="headerlink" href="#post-release" title="Permanent link">&para;</a></h3>
-<ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Verify</strong>: Check that the GitHub Release exists and assets are valid.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Provenance Evidence</strong>: Record successful image/chart/<code>checksums.txt</code> attestation verification outputs.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Ruleset Evidence</strong>: Record exported ruleset JSON for default-branch + tag protections.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Artifact Hub</strong>: Confirm chart package metadata is visible and install instructions resolve.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Artifact Hub Metadata (OCI)</strong>: If <code>artifacthub-repo.yml</code> changed, push updated metadata artifact (<code>:artifacthub.io</code> tag) to GHCR.</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Backlink Pack</strong>: Publish and record:</li>
-<li>GitHub release notes URL</li>
-<li>Artifact Hub package URL</li>
-<li>OpenBao docs/community URL</li>
-<li>GitHub Discussions announcement URL</li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>Announce</strong>: Post in relevant community channels.</li>
-</ul>
-<h3 id="artifact-hub-metadata-sync-oci">Artifact Hub Metadata Sync (OCI)<a class="headerlink" href="#artifact-hub-metadata-sync-oci" title="Permanent link">&para;</a></h3>
-<p>For OCI Helm repositories, <code>artifacthub-repo.yml</code> is not served over HTTP. Push it as an OCI artifact to the same chart repository path:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>oras<span class="w"> </span>push<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>ghcr.io/dc-tec/charts/openbao-operator:artifacthub.io<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--config<span class="w"> </span>/dev/null:application/vnd.cncf.artifacthub.config.v1+yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
-</span></code></pre></div>
-<h2 id="5-verifying-artifacts">5. Verifying Artifacts<a class="headerlink" href="#5-verifying-artifacts" title="Permanent link">&para;</a></h2>
-<p>Stable/prerelease releases enforce provenance before publish. Verification must include image, chart, and release-checksum subjects.</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="5:5"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><input id="__tabbed_5_3" name="__tabbed_5" type="radio" /><input id="__tabbed_5_4" name="__tabbed_5" type="radio" /><input id="__tabbed_5_5" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m23 12-2.44-2.78.34-3.68-3.61-.82-1.89-3.18L12 3 8.6 1.54 6.71 4.72l-3.61.81.34 3.68L1 12l2.44 2.78-.34 3.69 3.61.82 1.89 3.18L12 21l3.4 1.46 1.89-3.18 3.61-.82-.34-3.68zm-13 5-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9z"/></svg></span> Verify Image Signature</label><label for="__tabbed_5_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14 2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3v3l2-1 2 1v-3h3a2 2 0 0 0 2-2V7m-5 8v2l-2-1-2 1v-2l-2-1 2-1v-2l2 1 2-1v2l2 1m-3-6V3.5L17.5 8Z"/></svg></span> Verify Image Attestation</label><label for="__tabbed_5_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7.2 11.2c1.77 0 3.2 1.43 3.2 3.2s-1.43 3.2-3.2 3.2S4 16.17 4 14.4s1.43-3.2 3.2-3.2m7.6 4.8a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2m.4-12A4.8 4.8 0 0 1 20 8.8c0 2.65-2.15 4.8-4.8 4.8a4.8 4.8 0 0 1-4.8-4.8c0-2.65 2.15-4.8 4.8-4.8"/></svg></span> Verify Helm Chart Signature + Attestation</label><label for="__tabbed_5_4"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 13c-1.4 0-2.8 1.1-2.8 2.5V17c-.6 0-1.2.6-1.2 1.2v3.5c0 .7.6 1.3 1.2 1.3h5.5c.7 0 1.3-.6 1.3-1.2v-3.5c0-.7-.6-1.3-1.2-1.3v-1.5c0-1.4-1.4-2.5-2.8-2.5m0 1.2c.8 0 1.5.5 1.5 1.3V17h-3v-1.5c0-.8.7-1.3 1.5-1.3M6 2c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h6v-3.8c0-1 .4-1.7 1-2.2.1-.1.2-.1.2-.2v-.3c0-2.7 2.4-4.5 4.8-4.5.7 0 1.4.2 2 .4V8l-6-6zm7 1.5L18.5 9H13z"/></svg></span> Verify Release Checksums Signature + Attestation</label><label for="__tabbed_5_5"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 5h14v2H7zm0 8v-2h14v2zM4 4.5A1.5 1.5 0 0 1 5.5 6 1.5 1.5 0 0 1 4 7.5 1.5 1.5 0 0 1 2.5 6 1.5 1.5 0 0 1 4 4.5m0 6A1.5 1.5 0 0 1 5.5 12 1.5 1.5 0 0 1 4 13.5 1.5 1.5 0 0 1 2.5 12 1.5 1.5 0 0 1 4 10.5M7 19v-2h14v2zm-3-2.5A1.5 1.5 0 0 1 5.5 18 1.5 1.5 0 0 1 4 19.5 1.5 1.5 0 0 1 2.5 18 1.5 1.5 0 0 1 4 16.5"/></svg></span> Verify Provenance Index</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p>Verify image signature on a digest-pinned reference:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nv">IMAGE</span><span class="o">=</span><span class="s2">&quot;ghcr.io/dc-tec/openbao-operator@sha256:&lt;digest&gt;&quot;</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">IMAGE</span><span class="si">}</span><span class="s2">&quot;</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Verify image provenance attestation with strict identity constraints:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nv">IMAGE</span><span class="o">=</span><span class="s2">&quot;ghcr.io/dc-tec/openbao-operator@sha256:&lt;digest&gt;&quot;</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="s2">&quot;oci://</span><span class="si">${</span><span class="nv">IMAGE</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--repo<span class="w"> </span>dc-tec/openbao-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>dc-tec/openbao-operator/.github/workflows/reusable-build.yml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--source-ref<span class="w"> </span>refs/tags/0.1.0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--cert-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>--deny-self-hosted-runners
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Verify both chart signature and provenance attestation:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nv">CHART</span><span class="o">=</span><span class="s2">&quot;ghcr.io/dc-tec/charts/openbao-operator@sha256:&lt;digest&gt;&quot;</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">CHART</span><span class="si">}</span><span class="s2">&quot;</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span><span class="s2">&quot;oci://</span><span class="si">${</span><span class="nv">CHART</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--repo<span class="w"> </span>dc-tec/openbao-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>dc-tec/openbao-operator/.github/workflows/release.yml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>--source-ref<span class="w"> </span>refs/tags/0.1.0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span>--cert-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>--deny-self-hosted-runners
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Verify <code>checksums.txt</code> with both Sigstore bundle and GitHub attestation:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Download checksums artifacts for the release into the current directory first.</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--new-bundle-format<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--bundle<span class="w"> </span>checksums.txt.bundle<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>--certificate-identity<span class="w"> </span><span class="s2">&quot;https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>checksums.txt
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span>checksums.txt<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span>--repo<span class="w"> </span>dc-tec/openbao-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>dc-tec/openbao-operator/.github/workflows/release.yml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>--source-ref<span class="w"> </span>refs/tags/0.1.0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span>--cert-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span>--deny-self-hosted-runners
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Inspect release metadata and subjects:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>jq<span class="w"> </span><span class="s1">&#39;.release, .identity_constraints, .images, .chart, .release_artifacts.checksums_txt&#39;</span><span class="w"> </span>provenance-index.json
-</span></code></pre></div>
-</div>
-</div>
-</div>
-<h2 id="6-troubleshooting">6. Troubleshooting<a class="headerlink" href="#6-troubleshooting" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">Failure</th>
-<th style="text-align: left;">Cause</th>
-<th style="text-align: left;">Action</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><code>gh attestation verify</code> 404</td>
-<td style="text-align: left;">Propagation delay</td>
-<td style="text-align: left;">Retry after short delay; release pipeline already retries before failing.</td>
-</tr>
-<tr>
-<td style="text-align: left;">Attestation signer mismatch</td>
-<td style="text-align: left;">Wrong workflow identity</td>
-<td style="text-align: left;">Use exact <code>--signer-workflow</code> value for subject type (images: <code>reusable-build.yml</code>; chart/checksums: <code>release.yml</code>).</td>
-</tr>
-<tr>
-<td style="text-align: left;">Source ref mismatch</td>
-<td style="text-align: left;">Wrong release ref</td>
-<td style="text-align: left;">Verify against exact <code>refs/tags/&lt;version&gt;</code>.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>cosign verify</code> identity mismatch</td>
-<td style="text-align: left;">Wrong certificate identity</td>
-<td style="text-align: left;">Use full identity including workflow path and tag ref.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>checksums.txt</code> verify failure</td>
-<td style="text-align: left;">File/bundle mismatch or mutation</td>
-<td style="text-align: left;">Re-download both files from the same release or regenerate and re-attest in a new release.</td>
-</tr>
-</tbody>
-</table>
+<h2 id="updating-the-policy">Updating the Policy<a class="headerlink" href="#updating-the-policy" title="Permanent link">&para;</a></h2>
+<p>Treat allowlist changes as maintainer-level changes.</p>
+<p>When you change the allowed or forbidden license set:</p>
+<ol>
+<li>A short explanation in the PR description.</li>
+<li>A matching update to this document.</li>
+<li>A matching update to the machine-enforced CI configuration.</li>
+</ol>
 
 
 
 
 
 
+
+  
+  
 
 
 

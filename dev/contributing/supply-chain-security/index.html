@@ -16,7 +16,7 @@
         <link rel="prev" href="../release-management/">
       
       
-        <link rel="next" href="../distribution/">
+        <link rel="next" href="../dependency-licenses/">
       
       
         
@@ -4003,6 +4003,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../dependency-licenses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependency Licenses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../distribution/" class="md-nav__link">
         
   
@@ -4581,6 +4609,10 @@ For exact verification commands and release execution steps, use <a href="../rel
 <td style="text-align: left;"><code>.github/workflows/reusable-build.yml</code> + <code>actions/attest-build-provenance</code></td>
 </tr>
 <tr>
+<td style="text-align: left;">Dependency license allowlist</td>
+<td style="text-align: left;"><code>.github/workflows/dependency-review.yml</code> + <code>.github/dependency-review-config.yml</code> + <code>make license-check</code></td>
+</tr>
+<tr>
 <td style="text-align: left;">Channel hardening gates (edge/nightly)</td>
 <td style="text-align: left;"><code>.github/workflows/reusable-channel-hardening.yml</code> + <code>hack/ci/verify-image-attestations.sh</code> + <code>hack/ci/verify-byte-reproducibility.sh</code></td>
 </tr>
@@ -4618,6 +4650,8 @@ For exact verification commands and release execution steps, use <a href="../rel
 <p>Deterministic and least-drift controls in use:</p>
 <ol>
 <li>Go build/test paths in CI, edge/nightly hardening, and release use vendored dependency mode (<code>-mod=vendor</code>) where applicable.</li>
+<li>Shipped Go dependency licenses are verified against an explicit allowlist in vendored mode.</li>
+<li>Pull requests also receive dependency-diff license review through GitHub dependency review.</li>
 <li>Build metadata normalization via <code>SOURCE_DATE_EPOCH</code> from commit time.</li>
 <li>Docker base images pinned by digest.</li>
 <li>Critical build tool versions pinned (Buildx, QEMU, Helm, Cosign).</li>

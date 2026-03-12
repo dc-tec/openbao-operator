@@ -4093,6 +4093,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../dependency-licenses/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependency Licenses
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../distribution/" class="md-nav__link">
         
   
@@ -4673,7 +4701,8 @@
 <p>We use GitHub Actions for pull request validation, <code>main</code> branch validation, and release/build hardening channels.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>CI and release workflows enforce vendored Go dependencies. After changing dependencies, run <code>make verify-vendor</code>.</p>
+<p>CI and release workflows enforce vendored Go dependencies. After changing dependencies, run <code>make verify-vendor</code>.
+Dependency license verification uses the same vendored view of the dependency graph.</p>
 </div>
 <h2 id="1-pipeline-overview">1. Pipeline Overview<a class="headerlink" href="#1-pipeline-overview" title="Permanent link">&para;</a></h2>
 <h3 id="11-pull-request-and-main-ci">1.1 Pull Request and <code>main</code> CI<a class="headerlink" href="#11-pull-request-and-main-ci" title="Permanent link">&para;</a></h3>
@@ -4767,6 +4796,11 @@ for the full pipeline. Pushes to <code>main</code> still run the full gate.</p>
 <td style="text-align: left;"><code>Lint</code></td>
 <td style="text-align: left;"><code>make lint-ci</code></td>
 <td style="text-align: left;">GolangCI-Lint config + lint run, plus ast-grep policy verification, rule tests, and strict scan</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Dependency Licenses</code></td>
+<td style="text-align: left;"><code>make license-check</code></td>
+<td style="text-align: left;">Verifies shipped Go dependency licenses against the project allowlist using <code>go-licenses</code> in vendored mode</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Workflow Lint</code></td>
@@ -4873,14 +4907,24 @@ for the full pipeline. Pushes to <code>main</code> still run the full gate.</p>
 </div>
 </div>
 <h2 id="5-security-checks">5. Security Checks<a class="headerlink" href="#5-security-checks" title="Permanent link">&para;</a></h2>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Govulncheck</label><label for="__tabbed_2_2">Trivy</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Govulncheck</label><label for="__tabbed_2_2">Dependency licenses</label><label for="__tabbed_2_3">Trivy</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>vulncheck
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>security-scan<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:edge
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>license-check
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>make<span class="w"> </span>license-report
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The blocking gate covers shipped binaries only: <code>controller</code>, <code>bao-backup</code>, <code>bao-upgrade</code>, and <code>provisioner</code>.
+See <a href="../dependency-licenses/">Dependency License Policy</a> for the allowlist and <code>MPL-2.0</code> handling rules.</p>
+</div>
+</div>
+<div class="tabbed-block">
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>security-scan<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:edge
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Expected RBAC findings</p>
@@ -4896,8 +4940,8 @@ for the full pipeline. Pushes to <code>main</code> still run the full gate.</p>
 </div>
 </div>
 <h2 id="6-documentation-build">6. Documentation Build<a class="headerlink" href="#6-documentation-build" title="Permanent link">&para;</a></h2>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>docs-serve
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>make<span class="w"> </span>docs-build
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>docs-serve
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>make<span class="w"> </span>docs-build
 </span></code></pre></div>
 <h2 id="7-performance-workflows">7. Performance Workflows<a class="headerlink" href="#7-performance-workflows" title="Permanent link">&para;</a></h2>
 <h3 id="71-baseline-capture">7.1 Baseline Capture<a class="headerlink" href="#71-baseline-capture" title="Permanent link">&para;</a></h3>
