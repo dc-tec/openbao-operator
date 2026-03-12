@@ -8,6 +8,7 @@ We use GitHub Actions for pull request validation, `main` branch validation, and
 
 !!! note
     CI and release workflows enforce vendored Go dependencies. After changing dependencies, run `make verify-vendor`.
+    Dependency license verification uses the same vendored view of the dependency graph.
 
 ## 1. Pipeline Overview
 
@@ -107,6 +108,7 @@ make ci-core
 | CI Job | Local Command | Notes |
 | :--- | :--- | :--- |
 | `Lint` | `make lint-ci` | GolangCI-Lint config + lint run, plus ast-grep policy verification, rule tests, and strict scan |
+| `Dependency Licenses` | `make license-check` | Verifies shipped Go dependency licenses against the project allowlist using `go-licenses` in vendored mode |
 | `Workflow Lint` | `GOFLAGS=-mod=mod GOBIN="$PWD/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11 && ./bin/actionlint .github/workflows/*.yml` | Runs only when workflow files change on PRs; always runs on `main` |
 | `Verify Formatting` | `make verify-fmt` | Checks `gofmt` compliance |
 | `Verify go.mod/go.sum` | `make verify-tidy` | Ensures module files are clean |
@@ -183,6 +185,17 @@ We run E2E tests on Kind and route scope based on changed files and labels.
     ```sh
     make vulncheck
     ```
+
+=== "Dependency licenses"
+
+    ```sh
+    make license-check
+    make license-report
+    ```
+
+    !!! note
+        The blocking gate covers shipped binaries only: `controller`, `bao-backup`, `bao-upgrade`, and `provisioner`.
+        See [Dependency License Policy](dependency-licenses.md) for the allowlist and `MPL-2.0` handling rules.
 
 === "Trivy"
 

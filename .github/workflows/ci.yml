@@ -155,6 +155,21 @@ jobs:
           skip-dirs: test/manifests,vendor
           trivy-config: .trivy.yaml
 
+  dependency-licenses:
+    name: Dependency Licenses
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.security_scan == 'true'
+    runs-on: *runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
+
+      - name: Verify shipped dependency licenses
+        run: make license-check
+
   workflow-lint:
     name: Workflow Lint
     needs: changes
