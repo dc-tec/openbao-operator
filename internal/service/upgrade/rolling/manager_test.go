@@ -459,6 +459,81 @@ func TestValidateUpgrade_ResumeHealthMarksTimedOutTargetAsPodNotReady(t *testing
 	}
 }
 
+func TestReconcile_PersistsResumeValidationFailureStatus(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	startedAt := metav1.NewTime(time.Now().Add(-(upgrade.DefaultPodReadyTimeout + time.Minute)))
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.4",
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				FromVersion:      "2.4.4",
+				TargetVersion:    "2.5.0",
+				CurrentPartition: 3,
+				StartedAt:        &startedAt,
+			},
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Status: appsv1.StatefulSetStatus{
+			Replicas:      3,
+			ReadyReplicas: 1,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster, sts).
+		Build()
+	mgr := NewManagerWithClientFactory(
+		k8sClient,
+		scheme,
+		nil,
+		rollingTestClientFactory(),
+		portopenbao.ClientConfig{},
+		nil,
+		"",
+	)
+
+	_, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
+	if err == nil {
+		t.Fatal("expected reconcile error")
+	}
+	if !strings.Contains(err.Error(), "did not become ready within") {
+		t.Fatalf("Reconcile() error = %v, want pod-ready timeout", err)
+	}
+
+	latest := &openbaov1alpha1.OpenBaoCluster{}
+	if getErr := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), latest); getErr != nil {
+		t.Fatalf("failed to get cluster: %v", getErr)
+	}
+	if latest.Status.Upgrade == nil {
+		t.Fatal("expected persisted rolling upgrade status")
+	}
+	if latest.Status.Upgrade.LastErrorReason != upgrade.ReasonPodNotReady {
+		t.Fatalf("persisted LastErrorReason=%q, want %q", latest.Status.Upgrade.LastErrorReason, upgrade.ReasonPodNotReady)
+	}
+	if !strings.Contains(latest.Status.Upgrade.LastErrorMessage, "test-cluster-2") {
+		t.Fatalf("persisted LastErrorMessage=%q, want target pod name", latest.Status.Upgrade.LastErrorMessage)
+	}
+}
+
 func TestValidateUpgrade_ResumeHealthBlocksNonTargetUnavailableReplica(t *testing.T) {
 	t.Parallel()
 

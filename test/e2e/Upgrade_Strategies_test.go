@@ -326,12 +326,28 @@ func newStaleRollingStepDownJob(namespace, clusterName, podName, image string) *
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					RestartPolicy: corev1.RestartPolicyNever,
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot: ptrTo(true),
+						RunAsUser:    ptrTo(int64(100)),
+						RunAsGroup:   ptrTo(int64(1000)),
+						FSGroup:      ptrTo(int64(1000)),
+						SeccompProfile: &corev1.SeccompProfile{
+							Type: corev1.SeccompProfileTypeRuntimeDefault,
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:    "stale-stepdown",
 							Image:   image,
 							Command: []string{"/bin/sh", "-ec"},
 							Args:    []string{"echo stale-stepdown-job"},
+							SecurityContext: &corev1.SecurityContext{
+								AllowPrivilegeEscalation: ptrTo(false),
+								Capabilities: &corev1.Capabilities{
+									Drop: []corev1.Capability{"ALL"},
+								},
+								RunAsNonRoot: ptrTo(true),
+							},
 						},
 					},
 				},

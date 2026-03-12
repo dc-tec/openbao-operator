@@ -16,6 +16,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -156,6 +157,19 @@ func (m *Manager) resetTargetPodForRetry(ctx context.Context, logger logr.Logger
 	desiredRevision := strings.TrimSpace(sts.Status.UpdateRevision)
 	podImage := strings.TrimSpace(baoContainerImage(pod.Spec.Containers))
 	desiredImage := strings.TrimSpace(baoContainerImage(sts.Spec.Template.Spec.Containers))
+	specImage := strings.TrimSpace(cluster.Spec.Image)
+
+	if specImage != "" && desiredImage != specImage {
+		logger.Info("Waiting for StatefulSet template to reflect retry target image before resetting failed pod",
+			"pod", targetPod,
+			"statefulSetImage", desiredImage,
+			"specImage", specImage)
+		return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf(
+			"StatefulSet template still references %q while retry target image is %q",
+			desiredImage,
+			specImage,
+		))
+	}
 
 	needsDelete := !isPodReady(pod)
 	if desiredRevision != "" && podRevision != desiredRevision {

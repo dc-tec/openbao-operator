@@ -235,6 +235,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	// Phase 2: Pre-upgrade Validation
 	if err := m.validateUpgrade(ctx, logger, cluster); err != nil {
+		if cluster.Status.Upgrade != nil {
+			if statusErr := m.patchStatusSSA(ctx, cluster); statusErr != nil {
+				return recon.Result{}, fmt.Errorf("failed to persist rolling upgrade status after validation failure: %w (validation error: %w)", statusErr, err)
+			}
+		}
 		return recon.Result{}, m.releaseUpgradeLockOnPreStartError(ctx, logger, cluster, err)
 	}
 
