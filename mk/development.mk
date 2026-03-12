@@ -1,7 +1,7 @@
 ##@ Development
 
 .PHONY: bootstrap
-bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint ginkgo govulncheck gomu gotestsum dlv air benchstat ## Install repo-managed tools and local development dependencies.
+bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint ginkgo govulncheck go-licenses gomu gotestsum dlv air benchstat ## Install repo-managed tools and local development dependencies.
 	@if command -v "$(NPM)" >/dev/null 2>&1; then \
 		$(MAKE) ast-grep; \
 	else \
@@ -553,6 +553,14 @@ BENCH_ARTIFACT_DIR ?= dist/bench
 BENCH_PKG ?= ./...
 BENCH_FILTER ?= .
 BENCH_COUNT ?= 10
+GO_LICENSES_ALLOWED ?= Apache-2.0 BSD-2-Clause BSD-3-Clause ISC MIT MPL-2.0 Unicode-DFS-2016
+GO_LICENSES_IGNORE ?= github.com/dc-tec/openbao-operator
+GO_LICENSES_PACKAGE_TARGETS ?= ./cmd/controller ./cmd/bao-backup ./cmd/bao-upgrade ./cmd/provisioner
+LICENSE_REPORT_DIR ?= dist/licenses
+go_licenses_empty :=
+go_licenses_space := $(go_licenses_empty) $(go_licenses_empty)
+go_licenses_comma := ,
+GO_LICENSES_ALLOWED_CSV := $(subst $(go_licenses_space),$(go_licenses_comma),$(strip $(GO_LICENSES_ALLOWED)))
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -573,8 +581,25 @@ lint-ci: lint-config lint verify-arch-policy test-ast lint-ast ## Run CI lint ga
 vulncheck: govulncheck ## Run govulncheck to scan for known vulnerabilities (production code only). Findings listed in .govulnignore are ignored. Set VULNCHECK_SHOW_IGNORED=true to print traces even if all findings are ignored.
 	@go run ./hack/govulncheck_wrapper/ -govulncheck "$(GOVULNCHECK)" -ignore .govulnignore -show-ignored="$${VULNCHECK_SHOW_IGNORED:-false}" ./...
 
+.PHONY: license-check
+license-check: verify-vendor go-licenses ## Verify shipped Go dependencies use approved licenses.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" "$(GO_LICENSES)" check \
+		--allowed_licenses="$(GO_LICENSES_ALLOWED_CSV)" \
+		--ignore "$(GO_LICENSES_IGNORE)" \
+		$(GO_LICENSES_PACKAGE_TARGETS)
+
+.PHONY: license-report
+license-report: verify-vendor go-licenses ## Write a CSV inventory for shipped Go dependency licenses to dist/licenses/.
+	@mkdir -p "$(LICENSE_REPORT_DIR)"
+	@GOFLAGS="$(GOFLAGS_VENDOR)" "$(GO_LICENSES)" report \
+		--ignore "$(GO_LICENSES_IGNORE)" \
+		$(GO_LICENSES_PACKAGE_TARGETS) \
+		> "$(LICENSE_REPORT_DIR)/go-licenses-report.csv" \
+		2> "$(LICENSE_REPORT_DIR)/go-licenses-report.stderr.log"
+	@echo "License report written to $(LICENSE_REPORT_DIR)/go-licenses-report.csv"
+
 .PHONY: security-ci
-security-ci: vulncheck security-scan-fs ## Run CI-equivalent security checks.
+security-ci: vulncheck license-check security-scan-fs ## Run CI-equivalent security checks.
 
 .PHONY: security-scan
 security-scan: security-scan-fs security-scan-image ## Run Trivy security scans (filesystem and container image).
