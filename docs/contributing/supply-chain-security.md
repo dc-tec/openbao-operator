@@ -57,6 +57,7 @@ The controls on this page are implemented by these workflows and scripts:
 | Control | Implementation |
 | :--- | :--- |
 | Build and attest images | `.github/workflows/reusable-build.yml` + `actions/attest-build-provenance` |
+| Dependency license allowlist | `.github/workflows/dependency-review.yml` + `.github/dependency-review-config.yml` + `make license-check` |
 | Channel hardening gates (edge/nightly) | `.github/workflows/reusable-channel-hardening.yml` + `hack/ci/verify-image-attestations.sh` + `hack/ci/verify-byte-reproducibility.sh` |
 | Release hardening gates (stable/prerelease) | `.github/workflows/release.yml` + `hack/ci/verify-image-attestations.sh` + `hack/ci/verify-byte-reproducibility.sh` |
 | Chart/checksum attestation verification | `hack/ci/verify-release-artifact-attestations.sh` |
@@ -80,10 +81,12 @@ Current governance controls:
 Deterministic and least-drift controls in use:
 
 1. Go build/test paths in CI, edge/nightly hardening, and release use vendored dependency mode (`-mod=vendor`) where applicable.
-2. Build metadata normalization via `SOURCE_DATE_EPOCH` from commit time.
-3. Docker base images pinned by digest.
-4. Critical build tool versions pinned (Buildx, QEMU, Helm, Cosign).
-5. Release and channel promotion uses digest references, not rebuild-on-promote.
+2. Shipped Go dependency licenses are verified against an explicit allowlist in vendored mode.
+3. Pull requests also receive dependency-diff license review through GitHub dependency review.
+4. Build metadata normalization via `SOURCE_DATE_EPOCH` from commit time.
+5. Docker base images pinned by digest.
+6. Critical build tool versions pinned (Buildx, QEMU, Helm, Cosign).
+7. Release and channel promotion uses digest references, not rebuild-on-promote.
 
 ## 6. Provenance, Signing, and Attestation Controls
 

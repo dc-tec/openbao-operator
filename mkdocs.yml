@@ -194,6 +194,7 @@ nav:
               - CI/CD: contributing/ci.md
               - Release Management: contributing/release-management.md
               - Supply Chain Security: contributing/supply-chain-security.md
+              - Dependency Licenses: contributing/dependency-licenses.md
               - Distribution: contributing/distribution.md
               - SDLC: contributing/sdlc.md
               - Documentation Style Guide: contributing/docs-style-guide.md

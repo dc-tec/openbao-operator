@@ -92,6 +92,13 @@ Follow this checklist to ensure your Pull Request is ready for review:
 
     [:material-arrow-right: Supply Chain Security](supply-chain-security.md)
 
+- **Dependency Licenses**
+
+    ---
+    Allowed licenses, `MPL-2.0` handling, and the CI enforcement model for shipped dependencies.
+
+    [:material-arrow-right: License Policy](dependency-licenses.md)
+
 - **Distribution**
 
     ---
