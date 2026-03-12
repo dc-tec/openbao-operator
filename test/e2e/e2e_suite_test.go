@@ -102,6 +102,11 @@ var (
 	// keeping local dev tests on unsigned local helper images.
 	hardenedConfigInitImage = defaultHardenedConfigInit
 
+	// hardenedUpgradeExecutorImage optionally overrides the upgrade executor image for
+	// hardened-only scenarios. This allows full-suite runs to use a signed executor for
+	// hardened coverage while other upgrade scenarios keep using the candidate image.
+	hardenedUpgradeExecutorImage string
+
 	// skipCleanup controls whether to clean up resources after the suite finishes.
 	// Set E2E_SKIP_CLEANUP=true environment variable to preserve the cluster state for debugging.
 	skipCleanup = os.Getenv("E2E_SKIP_CLEANUP") == "true"
@@ -251,6 +256,7 @@ func TestE2E(t *testing.T) {
 	backupExecutorImage = envOrDefault("E2E_BACKUP_EXECUTOR_IMAGE", backupExecutorImage)
 	upgradeExecutorImage = envOrDefault("E2E_UPGRADE_EXECUTOR_IMAGE", upgradeExecutorImage)
 	hardenedConfigInitImage = envOrDefault("E2E_HARDENED_CONFIG_INIT_IMAGE", hardenedConfigInitImage)
+	hardenedUpgradeExecutorImage = envOrDefault("E2E_HARDENED_UPGRADE_EXECUTOR_IMAGE", hardenedUpgradeExecutorImage)
 	if hardenedConfigInitImage == "" {
 		hardenedConfigInitImage = configInitImage
 	}
@@ -561,6 +567,17 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the upgrade executor image into Kind (cluster=%s)", clusterName))
 			} else {
 				By(fmt.Sprintf("skipping upgrade executor image load (cluster=%s)", clusterName))
+			}
+
+			if preloadHardenedAssets && strings.TrimSpace(hardenedUpgradeExecutorImage) != "" && hardenedUpgradeExecutorImage != upgradeExecutorImage {
+				By(fmt.Sprintf("loading the hardened upgrade executor image on Kind (cluster=%s)", clusterName))
+				if _, err := utils.Run(exec.Command("docker", "image", "inspect", hardenedUpgradeExecutorImage)); err != nil { // #nosec G204 -- test harness command
+					_, _ = fmt.Fprintf(GinkgoWriter, "Pulling hardened upgrade executor image %q...\n", hardenedUpgradeExecutorImage)
+					_, err = utils.Run(exec.Command("docker", "pull", hardenedUpgradeExecutorImage)) // #nosec G204 -- test harness command
+					ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to pull hardened upgrade executor image %q (cluster=%s)", hardenedUpgradeExecutorImage, clusterName))
+				}
+				err = utils.LoadImageToKindClusterWithName(hardenedUpgradeExecutorImage)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to load the hardened upgrade executor image into Kind (cluster=%s)", clusterName))
 			}
 
 			By(fmt.Sprintf("pre-loading OpenBao images on Kind to reduce flakiness (cluster=%s)", clusterName))

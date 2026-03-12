@@ -754,6 +754,7 @@ jobs:
           E2E_OPENBAO_IMAGE: ${{ matrix.openbao_image }}
           E2E_CONFIG_INIT_IMAGE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
           E2E_HARDENED_CONFIG_INIT_IMAGE: ${{ matrix.hardened_init_image }}
+          E2E_HARDENED_UPGRADE_EXECUTOR_IMAGE: ${{ matrix.hardened_upgrade_executor_image }}
           E2E_BACKUP_EXECUTOR_IMAGE: ${{ needs.build-e2e-images.outputs.backup_executor_ref }}
           E2E_UPGRADE_EXECUTOR_IMAGE: ${{ matrix.hardened_upgrade_executor_image != '' && matrix.hardened_upgrade_executor_image || needs.build-e2e-images.outputs.upgrade_executor_ref }}
           E2E_LOAD_BACKUP_EXECUTOR_IMAGE: ${{ matrix.load_backup_executor_image }}
