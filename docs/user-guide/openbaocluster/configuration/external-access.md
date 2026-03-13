@@ -89,7 +89,7 @@ Secure your cluster using one of the following TLS modes.
     - Secret `<name>-tls-server`: Keys `tls.crt`, `tls.key`, `ca.crt`
 
 === "Operator Managed"
-    **Default:** The Operator manages an internal CA and rotates certificates automatically. Good for internal use or testing.
+    **Default:** The Operator manages an internal CA and rotates certificates automatically. Use this for development or internal evaluation, not for Hardened production.
 
     ```yaml
     spec:

@@ -150,6 +150,8 @@ helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-oper
   --namespace openbao-operator-system
 ```
 
+If you install the operator into a custom namespace, replace `openbao-operator-system` consistently in the install, verification, and uninstall commands.
+
 Find the chart in Artifact Hub (indexing may lag shortly after releases):
 [Artifact Hub search: openbao-operator](https://artifacthub.io/packages/search?repo=openbao-operator)
 

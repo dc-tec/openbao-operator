@@ -47,7 +47,10 @@ The Operator ships with a suite of policies to enforce "Least Privilege" and "Gi
 | `openbao-enforce-managed-image-digests` | `openbao-enforce-managed-image-digests-binding` | Operator-managed `StatefulSet` / `Job` | **Block** | Denies mutable tag-based image refs for workloads marked as requiring digest enforcement (Hardened-managed workloads by default). |
 | `openbao-restrict-provisioner-rbac` | `openbao-restrict-provisioner-rbac-binding` | `Role`, `RoleBinding` | **Restrict** | Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces. |
 | `openbao-restrict-provisioner-namespace-mutations` | `openbao-restrict-provisioner-namespace-mutations-binding` | `Namespace` | **Restrict** | Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces. |
+| `openbao-restrict-provisioner-tenant-governance` | `openbao-restrict-provisioner-tenant-governance-binding` | `ResourceQuota`, `LimitRange` | **Restrict** | Restricts the Provisioner to the fixed tenant guardrail quota/limit-range objects, requires operator-managed labels, and blocks direct drift on those objects. |
 | `openbao-restrict-controller-rbac` | `openbao-restrict-controller-rbac-binding` | `Role`, `RoleBinding` | **Restrict** | Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation). |
+| `openbao-restrict-controller-serviceaccounts` | `openbao-restrict-controller-serviceaccounts-binding` | `ServiceAccount` | **Restrict** | Restricts Controller ServiceAccount writes to operator-managed OpenBao, backup, restore, and upgrade ServiceAccounts. |
+| `openbao-restrict-controller-secret-writes` | `openbao-restrict-controller-secret-writes-binding` | `Secret` | **Restrict** | Restricts Controller Secret writes to the fixed operator-managed Secret names and rejects drift on unrelated Secrets from the Controller identity. |
 
 ## Provisioner RBAC Hardening
 
@@ -80,9 +83,18 @@ The `openbao-restrict-provisioner-rbac` policy is a defense-in-depth control tha
     - `openbao-lock-controller-statefulset-mutations` / `openbao-lock-controller-statefulset-mutations-binding`
     - `openbao-restrict-provisioner-rbac` / `openbao-restrict-provisioner-rbac-binding`
     - `openbao-restrict-provisioner-namespace-mutations` / `openbao-restrict-provisioner-namespace-mutations-binding`
+    - `openbao-restrict-provisioner-tenant-governance` / `openbao-restrict-provisioner-tenant-governance-binding`
     - `openbao-restrict-controller-rbac` / `openbao-restrict-controller-rbac-binding`
+    - `openbao-restrict-controller-serviceaccounts` / `openbao-restrict-controller-serviceaccounts-binding`
+    - `openbao-restrict-controller-secret-writes` / `openbao-restrict-controller-secret-writes-binding`
     - `openbao-lock-managed-resource-mutations` / `openbao-lock-managed-resource-mutations-binding`
     - `openbao-enforce-managed-image-digests` / `openbao-enforce-managed-image-digests-binding`
+
+!!! note "Custom raw-manifest installs"
+    Admission dependency resolution follows the rendered install identity, including namespace and name prefix changes. For custom raw-manifest installs, validate the rendered ServiceAccount names and policy names after `kustomize build`, not only the repository defaults.
+
+!!! note "Runtime re-check"
+    Admission dependency enforcement is not only a startup check. The `OpenBaoCluster` workload and admin reconciliation paths re-check the dependency set during runtime and pause when required policies disappear or become misbound.
 
 !!! warning "Unsafe mode"
     Disabling admission policies is treated as **unsafe mode**. When installing via Helm with `admissionPolicies.enabled=false`, the chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.
@@ -108,6 +120,19 @@ The `openbao-restrict-provisioner-namespace-mutations` policy constrains Namespa
   - `pod-security.kubernetes.io/warn=restricted`
 - No other changes are allowed (spec/status/annotations/finalizers/ownerReferences must remain unchanged).
 
+## Provisioner Tenant Guardrail Hardening
+
+The `openbao-restrict-provisioner-tenant-governance` policy constrains the Provisioner when it manages the default tenant `ResourceQuota` and `LimitRange`.
+
+**Key guarantees:**
+
+- The Provisioner may only manage the fixed operator-owned names:
+  - `openbao-operator-tenant-quota`
+  - `openbao-operator-tenant-limits`
+- Those objects must be labeled as operator-managed.
+- Direct mutation or deletion of those fixed guardrails is denied; update the parent `OpenBaoTenant` instead.
+- Self-service tenant onboarding cannot set `spec.quota` or `spec.limitRange`; custom tenant guardrails are reserved for centrally managed onboarding from the operator namespace.
+
 ## Controller RBAC Hardening
 
 The `openbao-restrict-controller-rbac` policy constrains RBAC mutations performed by the Controller identity.
@@ -121,6 +146,29 @@ The `openbao-restrict-controller-rbac` policy constrains RBAC mutations performe
 
 - Roles created/updated by the Controller are restricted to the `pods` resource and must match a narrow allowlist-style pattern.
 - RoleBindings created/updated by the Controller must bind a ServiceAccount to its own `*-role` in the same namespace.
+
+## Controller Secret Write Hardening
+
+The `openbao-restrict-controller-secret-writes` policy constrains Secret writes performed by the Controller identity.
+
+**Key guarantees:**
+
+- The Controller may create only the fixed operator-managed Secret names used by cluster lifecycle flows.
+- Updates and deletes remain name-scoped to those operator-managed Secret names.
+- Direct Controller writes to unrelated tenant Secrets are denied even if a broader RBAC grant is introduced accidentally.
+- The policy follows the rendered install identity, including custom raw-manifest namespace and prefix changes.
+
+## Controller ServiceAccount Hardening
+
+The `openbao-restrict-controller-serviceaccounts` policy constrains ServiceAccount writes performed by the Controller identity.
+
+**Key guarantees:**
+
+- The Controller may only create, update, or delete operator-managed ServiceAccounts tied to an `OpenBaoCluster`.
+- Backup, restore, and upgrade ServiceAccounts remain fixed-name resources derived from the cluster name.
+- The main OpenBao ServiceAccount can still use a custom `spec.serviceAccount.name`, but it must remain labeled as the operator-managed primary ServiceAccount for that cluster.
+- Direct Controller writes to unrelated ServiceAccounts are denied even if a broader RBAC grant is introduced accidentally.
+- The policy follows the rendered install identity, including custom raw-manifest namespace and prefix changes.
 
 ## Configuration Ownership
 

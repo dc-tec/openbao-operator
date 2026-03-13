@@ -127,11 +127,11 @@ You can append **additional** rules to the default policy to allow integrations 
     spec:
       network:
         egressRules:
-          # Example: Allow access to Transit Vault in operator namespace
+          # Example: Allow access to a Transit provider in a dedicated infrastructure namespace
           - to:
               - namespaceSelector:
                   matchLabels:
-                    kubernetes.io/metadata.name: openbao-operator-system
+                    kubernetes.io/metadata.name: openbao-infra
             ports:
               - protocol: TCP
                 port: 8200

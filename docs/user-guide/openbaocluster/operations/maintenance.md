@@ -125,6 +125,10 @@ For planned maintenance, consider:
    This is also required for the operator to complete certain day-2 operations that may need pod restarts,
    such as finishing filesystem expansion after increasing `spec.storage.size`.
 
+   By default, break-glass edits under maintenance mode are allowed only for callers in the Kubernetes group `system:masters`.
+   If you install with Helm, tune `admissionPolicies.maintenanceBreakGlassGroups` to match your cluster-admin groups.
+   For raw-manifest installs, update `config/default/maintenance_break_glass_settings.yaml` before rendering manifests.
+
 3. **Trigger a rolling restart** (for example, after rotating external dependencies):
    ```yaml
    spec:

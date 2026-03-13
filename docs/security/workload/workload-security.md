@@ -16,7 +16,7 @@ The `StatefulSet` creates pods with a hardened security context compliant with t
 | **Privilege Escalation** | `false` | Prevents setuid binaries from gaining root. |
 
 !!! note "Volume Mounts"
-    Since the root filesystem is read-only, all mutable data (logs, storage, tmp) is written to explicit, size-limited volume mounts.
+    Since the root filesystem is read-only, all mutable data (logs, storage, tmp) is written to explicit writable volume mounts. Backup and restore jobs also run with explicit resource requests and limits.
 
 ## Resource Guardrails
 

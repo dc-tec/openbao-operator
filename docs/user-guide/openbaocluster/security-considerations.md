@@ -116,14 +116,17 @@ OpenBao requires an "unseal key" to decrypt its master key on startup. You must 
         spec:
           unseal:
             type: transit
+            credentialsSecretRef:
+              name: transit-unseal-creds
             transit:
               address: "https://central-openbao.example.com"
-              token: "hvs.CAES..."  # Token with 'update' on transit/encrypt/key
               keyName: "tenant-1-key"
               mountPath: "transit"
               # Optional: TLS verification
               # tlsSkipVerify: false
         ```
+
+        The referenced Secret should contain the transit token under key `token`. For custom CA or client mTLS, add the matching files to the same Secret and reference those file paths from the transit stanza.
 
     === "PKCS#11 (HSM)"
         Connect to a physical Hardware Security Module (HSM).

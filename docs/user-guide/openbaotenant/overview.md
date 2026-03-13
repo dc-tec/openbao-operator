@@ -9,21 +9,21 @@ It is the key to **Multi-Tenancy**, ensuring that different teams can safely sha
 
 ## Tenant Isolation Model
 
-When you apply an `OpenBaoTenant`, the Operator creates a "Sandbox" around the target namespace.
+When you apply an `OpenBaoTenant`, the Operator creates a tenant governance boundary around the target namespace.
 
 ```mermaid
 graph TD
     subgraph Namespace ["Tenant Namespace"]
         direction TB
         RBAC["fa:fa-id-badge RBAC RoleBinding"]
-        NetPol["fa:fa-shield-halved NetworkPolicy"]
         Quota["fa:fa-chart-pie ResourceQuota"]
+        PSS["fa:fa-shield-halved Pod Security Labels"]
         
         App[["Tenant App"]]
         
         RBAC -->|Binds| App
-        NetPol -->|Isolates| App
         Quota -->|Limits| App
+        PSS -->|Constrain| App
     end
     
     Op["fa:fa-gears Operator"] -->|Provisions| Namespace
@@ -35,7 +35,7 @@ graph TD
 
     class Op process;
     class App read;
-    class RBAC,NetPol,Quota security;
+    class RBAC,Quota,PSS security;
 ```
 
 ## Features
@@ -46,13 +46,13 @@ graph TD
 
     Automatically provisions Kubernetes **RoleBindings** to efficiently manage permissions for the Tenant.
 
-- :material-network-off: **Network Isolation**
-
-    Enforces **NetworkPolicies** to block cross-tenant traffic, ensuring strict isolation between namespaces.
-
 - :material-chart-pie: **Resource Quotas**
 
-    Applies **ResourceQuotas** to prevent a single tenant from consuming all cluster storage or compute. Limits are configurable via the `OpenBaoTenant` spec.
+    Applies operator-managed **ResourceQuotas** and **LimitRanges** to prevent a single tenant from consuming all cluster storage or compute. Self-service tenants use the default guardrails; custom values are reserved for centrally managed onboarding.
+
+- :material-shield-check: **Namespace Guardrails**
+
+    Applies Pod Security Standards labels and reserves quota customization for centrally managed onboarding paths.
 
 </div>
 

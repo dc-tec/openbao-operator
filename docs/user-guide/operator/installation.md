@@ -25,6 +25,9 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
 
     Install the operator using the official Helm chart:
 
+    !!! note "Rendered operator namespace"
+        The examples below use the default release namespace `openbao-operator-system`. If you install the chart into another namespace, replace it consistently in the commands and later verification steps.
+
     ```bash
     helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
       --namespace openbao-operator-system \
@@ -135,16 +138,16 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
 
 Check that the operator pods are running:
 
-```bash
-kubectl get pods -n openbao-operator-system
-```
+    ```bash
+    kubectl get pods -n <operator-namespace>
+    ```
 
 Expected output (multi-tenant mode):
 
 ```
 NAME                                              READY   STATUS    RESTARTS   AGE
-openbao-operator-controller-xxxxxxxxxx-xxxxx      1/1     Running   0          1m
-openbao-operator-provisioner-xxxxxxxxxx-xxxxx     1/1     Running   0          1m
+    <controller-pod>      1/1     Running   0          1m
+    <provisioner-pod>     1/1     Running   0          1m
 ```
 
 !!! success "Ready"
@@ -172,6 +175,8 @@ openbao-operator-provisioner-xxxxxxxxxx-xxxxx     1/1     Running   0          1
 ```bash
 kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
 ```
+
+For custom raw-manifest installs, use your rendered namespace, ServiceAccount names, and policy names rather than assuming the repository defaults.
 
 ## Uninstallation
 
