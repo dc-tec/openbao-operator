@@ -912,6 +912,21 @@ spec:
                     items:
                       type: string
                     type: array
+                  dnsEndpointIPs:
+                    description: |-
+                      DNSEndpointIPs is an optional list of DNS resolver endpoint IPs that should be
+                      allow-listed directly in the operator-managed NetworkPolicy on TCP/UDP port 53.
+
+                      Use this for clusters that resolve DNS through node-local or host-networked caches
+                      instead of pod-backed DNS Services in a namespace. These IP-based rules are additive
+                      to the namespace-based allow-list controlled by DNSNamespace.
+
+                      The operator does not auto-detect these endpoint IPs because doing so reliably would
+                      require environment-specific node or DNS discovery logic outside the current trust model.
+                      Example: ["169.254.20.10"]
+                    items:
+                      type: string
+                    type: array
                   dnsNamespace:
                     default: kube-system
                     description: |-
@@ -1330,6 +1345,163 @@ spec:
                           x-kubernetes-list-type: atomic
                       type: object
                     type: array
+                  trustedIngressPeers:
+                    description: |-
+                      TrustedIngressPeers allows users to declare ingress-controller or passthrough-proxy peers
+                      that should be allowed to reach OpenBao on the API port without writing full raw
+                      NetworkPolicy ingress rules.
+
+                      This is useful for user-managed TCP passthrough or external ingress components that the
+                      operator does not manage directly. The operator adds least-privilege ingress rules for
+                      port 8200 using these peers.
+
+                      Example: Allow a Traefik namespace to reach OpenBao on port 8200:
+                        trustedIngressPeers:
+                        - namespaceSelector:
+                            matchLabels:
+                              kubernetes.io/metadata.name: traefik
+
+                      Example: Allow only specific ingress-controller pods in another namespace:
+                        trustedIngressPeers:
+                        - namespaceSelector:
+                            matchLabels:
+                              kubernetes.io/metadata.name: ingress-system
+                          podSelector:
+                            matchLabels:
+                              app.kubernetes.io/name: traefik
+                    items:
+                      description: |-
+                        NetworkPolicyPeer describes a peer to allow traffic to/from. Only certain combinations of
+                        fields are allowed
+                      properties:
+                        ipBlock:
+                          description: |-
+                            ipBlock defines policy on a particular IPBlock. If this field is set then
+                            neither of the other fields can be.
+                          properties:
+                            cidr:
+                              description: |-
+                                cidr is a string representing the IPBlock
+                                Valid examples are "192.168.1.0/24" or "2001:db8::/64"
+                              type: string
+                            except:
+                              description: |-
+                                except is a slice of CIDRs that should not be included within an IPBlock
+                                Valid examples are "192.168.1.0/24" or "2001:db8::/64"
+                                Except values will be rejected if they are outside the cidr range
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - cidr
+                          type: object
+                        namespaceSelector:
+                          description: |-
+                            namespaceSelector selects namespaces using cluster-scoped labels. This field follows
+                            standard label selector semantics; if present but empty, it selects all namespaces.
+
+                            If podSelector is also set, then the NetworkPolicyPeer as a whole selects
+                            the pods matching podSelector in the namespaces selected by namespaceSelector.
+                            Otherwise it selects all pods in the namespaces selected by namespaceSelector.
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              items:
+                                description: |-
+                                  A label selector requirement is a selector that contains values, a key, and an operator that
+                                  relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      operator represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      values is an array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. This array is replaced during a strategic
+                                      merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                operator is "In", and the values array contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        podSelector:
+                          description: |-
+                            podSelector is a label selector which selects pods. This field follows standard label
+                            selector semantics; if present but empty, it selects all pods.
+
+                            If namespaceSelector is also set, then the NetworkPolicyPeer as a whole selects
+                            the pods matching podSelector in the Namespaces selected by NamespaceSelector.
+                            Otherwise it selects the pods matching podSelector in the policy's own namespace.
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              items:
+                                description: |-
+                                  A label selector requirement is a selector that contains values, a key, and an operator that
+                                  relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      operator represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      values is an array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. This array is replaced during a strategic
+                                      merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                operator is "In", and the values array contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                          x-kubernetes-map-type: atomic
+                      type: object
+                    type: array
                 type: object
               observability:
                 description: Observability configures telemetry and metrics integration.
@@ -1372,7 +1544,8 @@ spec:
                   OperatorImageVerification configures supply chain security checks for operator-managed helper images
                   (init container, backup/upgrade/restore executors). These images are typically signed
                   by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
-                  If not specified, falls back to the main ImageVerification config.
+                  If omitted, helper image verification does not fall back to ImageVerification.
+                  In Development, omitted means disabled. In Hardened, omitted means enabled.
                 properties:
                   enabled:
                     description: Enabled controls whether image verification is enforced.
@@ -2288,6 +2461,58 @@ spec:
                       email:
                         description: Email is the email address to use for ACME registration.
                         type: string
+                      sharedCache:
+                        description: |-
+                          SharedCache configures a filesystem cache shared across OpenBao replicas for ACME account
+                          and certificate state. This is required for HA ACME topologies where more than one Pod
+                          can serve the same hostname concurrently.
+                        properties:
+                          existingClaimName:
+                            description: |-
+                              ExistingClaimName is the name of a pre-created RWX PVC in the same namespace.
+                              Required when Mode is ExistingPVC.
+                            minLength: 1
+                            type: string
+                          mode:
+                            description: Mode selects whether the operator creates
+                              a dedicated RWX PVC or mounts an existing one.
+                            enum:
+                            - ManagedPVC
+                            - ExistingPVC
+                            type: string
+                          size:
+                            description: |-
+                              Size is the requested capacity for the managed ACME cache PVC.
+                              Required when Mode is ManagedPVC.
+                            minLength: 1
+                            type: string
+                          storageClassName:
+                            description: StorageClassName is an optional StorageClass
+                              for the managed ACME cache PVC.
+                            type: string
+                        required:
+                        - mode
+                        type: object
+                        x-kubernetes-validations:
+                        - message: tls.acme.sharedCache.existingClaimName is only
+                            supported when mode is ExistingPVC
+                          rule: self.mode != 'ManagedPVC' || !has(self.existingClaimName)
+                            || size(self.existingClaimName) == 0
+                        - message: tls.acme.sharedCache.existingClaimName is required
+                            when mode is ExistingPVC
+                          rule: self.mode != 'ExistingPVC' || size(self.existingClaimName)
+                            > 0
+                        - message: tls.acme.sharedCache.size is only supported when
+                            mode is ManagedPVC
+                          rule: self.mode != 'ExistingPVC' || !has(self.size) || size(self.size)
+                            == 0
+                        - message: tls.acme.sharedCache.storageClassName is only supported
+                            when mode is ManagedPVC
+                          rule: self.mode != 'ExistingPVC' || !has(self.storageClassName)
+                            || size(self.storageClassName) == 0
+                        - message: tls.acme.sharedCache.size is required when mode
+                            is ManagedPVC
+                          rule: self.mode != 'ManagedPVC' || size(self.size) > 0
                     required:
                     - directoryURL
                     type: object
@@ -2412,7 +2637,8 @@ spec:
                   credentialsSecretRef:
                     description: |-
                       CredentialsSecretRef references a Secret containing provider credentials
-                      (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON, Azure client secret, etc.).
+                      (for example AWS access keys, GCP credentials.json, Azure client-secret keys,
+                      or OCI SDK config for authTypeAPIKey mode).
                       If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
                       The Secret must exist in the same namespace as the OpenBaoCluster.
                       Cross-namespace references are not allowed for security reasons.
@@ -2465,48 +2691,81 @@ spec:
                       KMIP configures the KMIP seal type.
                       Required when Type is "kmip".
                     properties:
-                      address:
-                        description: Address is the address of the KMIP server.
-                        minLength: 1
-                        type: string
                       caCert:
                         description: CACert is the path to the CA certificate for
                           KMIP communication.
                         type: string
-                      certificate:
-                        description: Certificate is the path to the client certificate
+                      clientCert:
+                        description: ClientCert is the path to the client certificate
+                          used for KMIP communication.
+                        minLength: 1
+                        type: string
+                      clientKey:
+                        description: ClientKey is the path to the private key used
                           for KMIP communication.
+                        minLength: 1
                         type: string
-                      key:
-                        description: Key is the path to the private key for KMIP communication.
-                        type: string
-                      tlsServerName:
-                        description: TLSServerName is the SNI host name to use when
-                          connecting via TLS.
-                        type: string
-                      tlsSkipVerify:
-                        description: TLSSkipVerify disables verification of TLS certificates.
+                      disabled:
+                        description: Disabled disables this seal configuration, for
+                          example during seal migration.
                         type: boolean
+                      encryptAlg:
+                        description: EncryptAlg is the encryption algorithm used for
+                          KMIP requests.
+                        enum:
+                        - AES_GCM
+                        - RSA_OAEP_SHA256
+                        - RSA_OAEP_SHA384
+                        - RSA_OAEP_SHA512
+                        type: string
+                      endpoint:
+                        description: Endpoint is the KMIP server endpoint.
+                        minLength: 1
+                        type: string
+                      kmsKeyID:
+                        description: KMSKeyID is the unique identifier of the KMIP
+                          key to use.
+                        minLength: 1
+                        type: string
+                      serverName:
+                        description: ServerName is the TLS server name to use when
+                          connecting to the KMIP endpoint.
+                        type: string
+                      timeout:
+                        description: Timeout is the timeout in seconds for KMIP requests.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      tls12Ciphers:
+                        description: |-
+                          TLS12Ciphers configures the TLS 1.2 cipher suites to use when connecting
+                          to the KMIP endpoint.
+                        type: string
                     required:
-                    - address
+                    - clientCert
+                    - clientKey
+                    - endpoint
+                    - kmsKeyID
                     type: object
                   ocikms:
                     description: |-
                       OCIKMS configures the OCI KMS seal type.
                       Required when Type is "ocikms".
                     properties:
-                      authType:
-                        description: AuthType is the authentication type (e.g., "instance_principal",
-                          "user_principal").
-                        type: string
-                      compartmentID:
-                        description: CompartmentID is the OCID of the compartment
-                          containing the key.
-                        type: string
+                      authTypeAPIKey:
+                        description: |-
+                          AuthTypeAPIKey enables OCI API key authentication through an OCI SDK config file.
+                          When false or omitted, OpenBao uses the default OCI principal flow for the runtime
+                          environment, such as instance principal.
+                        type: boolean
                       cryptoEndpoint:
                         description: CryptoEndpoint is the OCI KMS crypto endpoint.
                         minLength: 1
                         type: string
+                      disabled:
+                        description: Disabled disables this seal configuration, for
+                          example during seal migration.
+                        type: boolean
                       keyID:
                         description: KeyID is the OCID of the master encryption key.
                         minLength: 1
@@ -2526,13 +2785,17 @@ spec:
                       PKCS11 configures the PKCS#11 seal type.
                       Required when Type is "pkcs11".
                     properties:
-                      generateKey:
-                        description: GenerateKey indicates whether OpenBao should
-                          generate the key if it doesn't exist.
+                      disableSoftwareEncryption:
+                        description: DisableSoftwareEncryption disables the software
+                          encryption fallback.
                         type: boolean
-                      hmacKeyLabel:
-                        description: HMACKeyLabel is the label for the HMAC key used
-                          by OpenBao.
+                      disabled:
+                        description: Disabled disables this seal configuration, for
+                          example during seal migration.
+                        type: boolean
+                      keyID:
+                        description: KeyID is the PKCS#11 key identifier to use instead
+                          of KeyLabel.
                         type: string
                       keyLabel:
                         description: KeyLabel is the label for the encryption key
@@ -2544,15 +2807,15 @@ spec:
                           by the HSM vendor.
                         minLength: 1
                         type: string
+                      mechanism:
+                        description: Mechanism overrides the PKCS#11 wrapping or encryption
+                          mechanism.
+                        type: string
                       pin:
                         description: |-
                           PIN is the PIN for accessing the HSM token.
                           Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
                         type: string
-                      rsaEncryptLocal:
-                        description: RSAEncryptLocal allows performing encryption
-                          locally for HSMs that don't support encryption for RSA keys.
-                        type: boolean
                       rsaOAEPHash:
                         description: |-
                           RSAOAEPHash specifies the hash algorithm to use for RSA with OAEP padding.
@@ -2568,10 +2831,23 @@ spec:
                         description: Slot is the slot number where the HSM token is
                           located.
                         type: string
+                      tokenLabel:
+                        description: TokenLabel is the token label of the HSM slot
+                          to use instead of Slot.
+                        type: string
                     required:
                     - keyLabel
                     - lib
                     type: object
+                    x-kubernetes-validations:
+                    - message: spec.unseal.pkcs11.slot or spec.unseal.pkcs11.tokenLabel
+                        is required
+                      rule: (has(self.slot) && size(self.slot) > 0) || (has(self.tokenLabel)
+                        && size(self.tokenLabel) > 0)
+                    - message: spec.unseal.pkcs11.slot and spec.unseal.pkcs11.tokenLabel
+                        are mutually exclusive
+                      rule: '!(has(self.slot) && size(self.slot) > 0 && has(self.tokenLabel)
+                        && size(self.tokenLabel) > 0)'
                   static:
                     description: |-
                       Static configures the static seal type.
@@ -2667,10 +2943,14 @@ spec:
                 description: |-
                   Upgrade configures upgrade operations.
 
-                  When spec.upgrade.preUpgradeSnapshot is true, if upgrade authentication is not
-                  Upgrade authentication must be explicitly configured via spec.upgrade.jwtAuthRole
-                  or spec.upgrade.tokenSecretRef. The operator automatically creates an upgrade ServiceAccount
-                  (<cluster-name>-upgrade-serviceaccount) for JWT Auth authentication.
+                  Built-in upgrade executor Jobs authenticate with JWT auth using the
+                  upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount). If
+                  spec.selfInit.oidc.enabled is true and spec.upgrade.jwtAuthRole is empty,
+                  the operator assumes or bootstraps the default "openbao-operator-upgrade"
+                  role.
+
+                  Pre-upgrade snapshots use spec.backup configuration and backup
+                  authentication rather than spec.upgrade credentials.
                 properties:
                   blueGreen:
                     description: BlueGreen configures the behavior when Strategy is
@@ -2679,9 +2959,12 @@ spec:
                       autoPromote:
                         default: true
                         description: |-
-                          AutoPromote controls whether the operator automatically switches traffic
-                          and deletes the old cluster after sync. If false, it stays in the Syncing
-                          phase waiting for the user to enable it (set autoPromote=true).
+                          AutoPromote controls whether newly started blue/green upgrades
+                          automatically switch traffic and delete the old cluster after sync.
+                          If false when an upgrade starts, that upgrade stays in the Syncing
+                          phase waiting for an explicit promotion request via spec.upgrade.requests.promote.
+                          Changing this field while an upgrade is already in progress affects only
+                          future upgrades.
                         type: boolean
                       autoRollback:
                         description: AutoRollback configures automatic rollback behavior.
@@ -2699,8 +2982,9 @@ spec:
                             type: boolean
                           onValidationFailure:
                             default: true
-                            description: OnValidationFailure triggers rollback if
-                              pre-promotion hook fails.
+                            description: |-
+                              OnValidationFailure triggers automatic abort/rollback if the pre-promotion
+                              hook fails.
                             type: boolean
                         required:
                         - enabled
@@ -2732,7 +3016,9 @@ spec:
                             description: |-
                               PrePromotionHook specifies a Job template to run before promoting Green.
                               The job must complete successfully (exit 0) for promotion to proceed.
-                              If the job fails, the upgrade enters a paused state until manually resolved.
+                              If the job fails, the operator either aborts or rolls back automatically
+                              when blueGreen.autoRollback.onValidationFailure is enabled; otherwise it
+                              holds for manual resolution.
                             properties:
                               args:
                                 description: Args are arguments passed to the command.
@@ -2776,21 +3062,22 @@ spec:
                   jwtAuthRole:
                     description: |-
                       JWTAuthRole is the name of the JWT Auth role configured in OpenBao
-                      for upgrade operations. When set, the upgrade manager will use JWT Auth
-                      (projected ServiceAccount token) instead of a static token. This is the preferred authentication
-                      method as tokens are automatically rotated by Kubernetes.
+                      for upgrade executor Jobs. The executor authenticates with a projected
+                      ServiceAccount token from <cluster-name>-upgrade-serviceaccount.
 
-                      The role must be configured in OpenBao and must grant:
+                      The role must be configured in OpenBao and must grant the permissions
+                      required by the selected upgrade strategy, including:
                       - "read" capability on sys/health
-                      - "update" capability on sys/step-down
-                      - "read" capability on sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
+                      - "sudo" and "update" capability on sys/step-down
+                      - "read" capability on sys/storage/raft/autopilot/state
+                      - for Blue/Green, raft join/configuration/remove-peer/promote/demote operations
                       The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),
                       which is automatically created by the operator.
 
                       If OIDC is enabled in SelfInit and this field is empty, a default role
                       named "openbao-operator-upgrade" will be assumed/created.
 
-                      Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
+                      This is the supported authentication mechanism for built-in upgrade orchestration.
                     type: string
                   preUpgradeSnapshot:
                     description: |-
@@ -2805,6 +3092,42 @@ spec:
                       Requires spec.backup to be configured with target, image, and
                       authentication (jwtAuthRole or tokenSecretRef).
                     type: boolean
+                  requests:
+                    description: |-
+                      Requests defines explicit one-shot operator requests for the current
+                      upgrade workflow. The operator acts only when a request value changes.
+                    properties:
+                      promote:
+                        description: |-
+                          Promote requests promotion of a held blue/green upgrade when changed to a
+                          new non-empty value while spec.upgrade.blueGreen.autoPromote=false.
+
+                          The operator compares this value against
+                          status.upgradeRequests.lastHandledPromote and acts only when the value
+                          changes. Recommended value is an RFC3339 timestamp string.
+                        minLength: 1
+                        type: string
+                      retry:
+                        description: |-
+                          Retry requests a retry of the current failed rolling upgrade when changed
+                          to a new non-empty value.
+
+                          The operator compares this value against status.upgradeRequests.lastHandledRetry
+                          and acts only when the value changes. Recommended value is an RFC3339
+                          timestamp string.
+                        minLength: 1
+                        type: string
+                      rollback:
+                        description: |-
+                          Rollback requests a manual abort or rollback of the current blue/green
+                          upgrade when changed to a new non-empty value.
+
+                          The operator compares this value against
+                          status.upgradeRequests.lastHandledRollback and acts only when the value
+                          changes. Recommended value is an RFC3339 timestamp string.
+                        minLength: 1
+                        type: string
+                    type: object
                   strategy:
                     default: RollingUpdate
                     description: Strategy defines the update strategy to use.
@@ -2815,18 +3138,11 @@ spec:
                   tokenSecretRef:
                     description: |-
                       TokenSecretRef optionally references a Secret containing an OpenBao API
-                      token to use for upgrade operations.
+                      token for future non-JWT upgrade authentication flows.
 
-                      The Secret must exist in the same namespace as the OpenBaoCluster.
-                      Cross-namespace references are not allowed for security reasons.
-
-                      The token must have permission to:
-                      - read sys/health
-                      - update sys/step-down
-                      - read sys/storage/raft/snapshot (if preUpgradeSnapshot is enabled)
-
-                      Either JWTAuthRole or TokenSecretRef must be set for upgrade operations.
-                      If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
+                      Built-in rolling and blue/green upgrade orchestration does not support
+                      token-based authentication. Configure spec.upgrade.jwtAuthRole or enable
+                      spec.selfInit.oidc.enabled instead.
                     properties:
                       name:
                         default: ""
@@ -2839,6 +3155,10 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                    x-kubernetes-validations:
+                    - message: spec.upgrade.tokenSecretRef is not supported; configure
+                        spec.upgrade.jwtAuthRole or enable spec.selfInit.oidc.enabled
+                      rule: self == null
                 type: object
               version:
                 description: |-
@@ -2869,6 +3189,18 @@ spec:
             - message: spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged
               rule: self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod)
                 > 0
+            - message: spec.tls.acme.sharedCache is only supported when spec.tls.mode
+                is ACME
+              rule: self.tls.mode == 'ACME' || !has(self.tls.acme) || !has(self.tls.acme.sharedCache)
+            - message: HA ACME clusters require spec.tls.acme.sharedCache when more
+                than one Pod can serve the same hostname
+              rule: self.tls.mode != 'ACME' || ((self.replicas <= 1) && (!has(self.upgrade)
+                || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) &&
+                has(self.tls.acme.sharedCache))
+            - message: spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true
+              rule: '!has(self.unseal) || self.unseal.type != ''ocikms'' || !has(self.unseal.credentialsSecretRef)
+                || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey)
+                && self.unseal.ocikms.authTypeAPIKey == true)'
           status:
             description: Status defines the observed state of OpenBaoCluster.
             properties:
@@ -2973,6 +3305,13 @@ spec:
                     description: LastJobFailure records the name of the last failed
                       job for debugging.
                     type: string
+                  manualPromotionRequired:
+                    description: |-
+                      ManualPromotionRequired snapshots whether the current in-flight blue/green
+                      upgrade requires an explicit spec.upgrade.requests.promote request before
+                      promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote
+                      when the upgrade starts.
+                    type: boolean
                   phase:
                     description: Phase is the current phase of the blue/green upgrade.
                     enum:
@@ -3225,6 +3564,27 @@ spec:
                 - currentPartition
                 - fromVersion
                 - targetVersion
+                type: object
+              upgradeRequests:
+                description: |-
+                  UpgradeRequests tracks which explicit upgrade request values have already
+                  been handled so one-shot requests are edge-triggered instead of level-triggered.
+                properties:
+                  lastHandledPromote:
+                    description: |-
+                      LastHandledPromote is the last observed spec.upgrade.requests.promote
+                      value that the operator has handled.
+                    type: string
+                  lastHandledRetry:
+                    description: |-
+                      LastHandledRetry is the last observed spec.upgrade.requests.retry value
+                      that the operator has handled.
+                    type: string
+                  lastHandledRollback:
+                    description: |-
+                      LastHandledRollback is the last observed spec.upgrade.requests.rollback
+                      value that the operator has handled.
+                    type: string
                 type: object
               workload:
                 description: Workload holds signals owned by the workload controller
