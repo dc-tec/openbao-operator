@@ -26,6 +26,9 @@ This page defines the cross-cutting guarantees OpenBao Operator tries to preserv
 | **Admission enforcement is part of the normal safety model** | Keep API-level guardrails active before invalid or unsafe objects persist. | `ValidatingAdmissionPolicy` inventory, fail-closed startup, optional enforcement canary. | [Admission Policies](../security/infrastructure/admission-policies.md) |
 | **Admission dependency loss pauses sensitive reconciliation** | Prevent the operator from continuing privileged writes after required guardrails disappear or stop applying. | Runtime admission tracker, fail-closed reconciliation gates, status conditions and degraded reasons. | [Status Conditions and Events](../reference/status-and-events.md) |
 
+!!! note "Identity Map"
+    For the compact bridge between Kubernetes identities, OpenBao authentication, and authorization surfaces, see [Operator Identity And Access](../user-guide/operator/identity-and-access.md).
+
 ## Production Posture Invariants
 
 | Invariant | Why it exists | Primary enforcement | Reference |

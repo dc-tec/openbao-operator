@@ -29,6 +29,10 @@ func TestKustomizeClusterScopedResourcesHaveNoNamespace(t *testing.T) {
 			name: "config-overlays-single-tenant",
 			dir:  filepath.Join("..", "..", "config", "overlays", "single-tenant"),
 		},
+		{
+			name: "config-overlays-single-tenant-custom-identity",
+			dir:  filepath.Join("..", "..", "config", "overlays", "single-tenant-custom-identity"),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -58,7 +62,8 @@ func TestKustomizeClusterScopedResourcesHaveNoNamespace(t *testing.T) {
 					continue
 				}
 
-				if tc.name == "config-overlays-single-tenant" && allowsClusterScopedNamespaceInSingleTenantOverlay(obj.GroupVersionKind()) {
+				if (tc.name == "config-overlays-single-tenant" || tc.name == "config-overlays-single-tenant-custom-identity") &&
+					allowsClusterScopedNamespaceInSingleTenantOverlay(obj.GroupVersionKind()) {
 					continue
 				}
 
