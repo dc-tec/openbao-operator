@@ -129,6 +129,169 @@ func init() {
 	utilruntime.Must(gatewayv1alpha2.Install(scheme))
 }
 
+func newManagerOptions(
+	scheme *runtime.Scheme,
+	metricsServerOptions metricsserver.Options,
+	probeAddr string,
+	enableLeaderElection bool,
+	watchNamespace string,
+) ctrl.Options {
+	singleTenantMode := watchNamespace != ""
+	mgrOpts := ctrl.Options{
+		Scheme:                 scheme,
+		Metrics:                metricsServerOptions,
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "openbao-controller-leader.openbao.org",
+	}
+
+	if singleTenantMode {
+		mgrOpts.Cache = cache.Options{
+			DefaultNamespaces: map[string]cache.Config{
+				watchNamespace: {},
+			},
+		}
+		return mgrOpts
+	}
+
+	disableForCache := []client.Object{
+		&corev1.Secret{},
+		&batchv1.Job{},
+		&appsv1.StatefulSet{},
+		&corev1.Service{},
+		&corev1.ConfigMap{},
+		&corev1.Namespace{},
+		&networkingv1.Ingress{},
+		&networkingv1.NetworkPolicy{},
+		&rbacv1.Role{},
+		&rbacv1.RoleBinding{},
+		&corev1.ServiceAccount{},
+		&corev1.Pod{},
+		&corev1.PersistentVolumeClaim{},
+		&discoveryv1.EndpointSlice{},
+		&gatewayv1.HTTPRoute{},
+		&gatewayv1alpha2.TLSRoute{},
+		&gatewayv1.BackendTLSPolicy{},
+	}
+	mgrOpts.Client = client.Options{
+		Cache: &client.CacheOptions{
+			DisableFor: disableForCache,
+		},
+	}
+	return mgrOpts
+}
+
+func discoverStartupOIDC(config *rest.Config) *portauth.OIDCConfig {
+	oidcConfig, err := auth.DiscoverConfig(context.Background(), config, "")
+	if err != nil {
+		setupLog.Error(err, "Failed to discover Kubernetes OIDC configuration. Hardened profile requires OIDC.")
+		if oidcConfig == nil {
+			oidcConfig = &portauth.OIDCConfig{}
+		}
+	} else {
+		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", oidcConfig.IssuerURL)
+		if oidcConfig.JWKSURL != "" {
+			setupLog.Info("Selected OIDC JWKS URL for operator bootstrap", "jwksURL", oidcConfig.JWKSURL)
+		}
+		if len(oidcConfig.JWKSKeys) > 0 {
+			setupLog.Info("Fetched OIDC JWKS public keys", "count", len(oidcConfig.JWKSKeys))
+		}
+	}
+	if err != nil && oidcConfig.IssuerURL != "" {
+		setupLog.Info("Continuing with partial OIDC discovery results", "issuer", oidcConfig.IssuerURL)
+	}
+	return oidcConfig
+}
+
+func initializeAdmissionTracker(
+	mgr ctrl.Manager,
+	admissionEnforcement string,
+	admissionStartupTimeout time.Duration,
+) *admission.Tracker {
+	admissionTracker := admission.NewTracker(
+		mgr.GetAPIReader(),
+		admission.DefaultDependencies(),
+		admission.DefaultNamePrefixes(),
+		30*time.Second,
+	)
+
+	if admission.UnsafeAdmissionDisabled() {
+		setupLog.Info("UNSAFE MODE: admission policy enforcement disabled; skipping dependency checks")
+		logging.LogAuditEvent(setupLog, logging.EventAdmissionUnsafeModeEnabled, map[string]string{
+			"component":             "controller",
+			"admission_enforcement": admissionEnforcement,
+		})
+		admission.SetAdmissionDependenciesReady(true)
+		admissionTracker.MarkReadyForUnsafeMode()
+		return admissionTracker
+	}
+
+	var admissionStatus admission.Status
+	switch admissionEnforcement {
+	case entrypoint.AdmissionEnforcementFail:
+		setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
+		status, err := admission.WaitForDependencies(
+			context.Background(),
+			mgr.GetAPIReader(),
+			admission.DefaultDependencies(),
+			admission.DefaultNamePrefixes(),
+			admissionStartupTimeout,
+			2*time.Second,
+		)
+		admissionStatus = status
+		if !admissionStatus.OverallReady {
+			if err == nil {
+				err = fmt.Errorf("admission policy dependencies not ready")
+			}
+			logging.LogAuditEvent(setupLog, logging.EventAdmissionStartupBlocked, map[string]string{
+				"component":             "controller",
+				"admission_enforcement": admissionEnforcement,
+				"summary":               admissionStatus.SummaryMessage(),
+			})
+			setupLog.Error(
+				err,
+				"Admission policy dependencies not ready; refusing to start",
+				"summary",
+				admissionStatus.SummaryMessage(),
+			)
+			os.Exit(1)
+		}
+	default:
+		admissionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		status, err := admission.CheckDependencies(
+			admissionCtx,
+			mgr.GetAPIReader(),
+			admission.DefaultDependencies(),
+			admission.DefaultNamePrefixes(),
+		)
+		admissionStatus = status
+		if err != nil {
+			setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
+			admissionStatus.OverallReady = false
+		}
+	}
+
+	admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
+	admissionTracker.Set(admissionStatus)
+	if admissionStatus.OverallReady {
+		setupLog.Info("Admission policy dependencies ready")
+		logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
+			"component":             "controller",
+			"admission_enforcement": admissionEnforcement,
+		})
+	} else {
+		setupLog.Info("Admission policy dependencies not ready", "summary", admissionStatus.SummaryMessage())
+		logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesNotReady, map[string]string{
+			"component":             "controller",
+			"admission_enforcement": admissionEnforcement,
+			"summary":               admissionStatus.SummaryMessage(),
+		})
+	}
+
+	return admissionTracker
+}
+
 // Run starts the OpenBaoCluster controller manager.
 // The Controller is responsible for reconciling OpenBaoCluster resources,
 // managing StatefulSets, and executing upgrades.
@@ -273,71 +436,7 @@ func Run(args []string) {
 	}
 
 	// Configure manager options based on tenancy mode
-	var mgrOpts ctrl.Options
-	mgrOpts.Scheme = scheme
-	mgrOpts.Metrics = metricsServerOptions
-	mgrOpts.HealthProbeBindAddress = probeAddr
-	mgrOpts.LeaderElection = enableLeaderElection
-	mgrOpts.LeaderElectionID = "openbao-controller-leader.openbao.org"
-
-	if singleTenantMode {
-		// SINGLE-TENANT MODE: Enable namespace-scoped caching
-		// The controller has full RBAC permissions in the watched namespace,
-		// so we can use informers/cache for high-performance reconciliation.
-		mgrOpts.Cache = cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				watchNamespace: {},
-			},
-		}
-		// No need to disable cache for any resources - we have full access
-	} else {
-		// MULTI-TENANT MODE: Disable cache for namespace-scoped resources
-		// SECURITY: The controller uses namespace-scoped permissions via tenant Roles,
-		// so it does not have cluster-wide list/watch permissions required for cache sync.
-		// Disabling cache prevents errors during manager startup and ensures the controller
-		// uses direct API calls (GET) for these resources instead.
-		//
-		// Resources disabled:
-		// - Secrets: Prevents secret enumeration attacks (only 'get' permission granted)
-		// - Jobs: Controller manages Jobs but only has namespace-scoped permissions
-		// - StatefulSets: Controller manages StatefulSets but only has namespace-scoped permissions
-		// - Services: Controller manages Services but only has namespace-scoped permissions
-		// - ConfigMaps: Controller manages ConfigMaps but only has namespace-scoped permissions
-		// - Ingress: Controller manages Ingress but only has namespace-scoped permissions
-		// - NetworkPolicy: Controller manages NetworkPolicy but only has namespace-scoped permissions
-		// - Roles/RoleBindings: Controller manages Roles/RoleBindings for OpenBao pod discovery
-		// - ServiceAccounts: Controller manages ServiceAccounts for OpenBao clusters
-		// - Pods: Controller reads Pods for health checks and leader detection
-		// - PersistentVolumeClaims: Controller manages PVCs via StatefulSet volume claim templates
-		// - Endpoints/EndpointSlices: Controller reads for service discovery
-		// - Gateway HTTPRoute/TLSRoute/BackendTLSPolicy: Controller manages Gateway routes
-		disableForCache := []client.Object{
-			&corev1.Secret{},
-			&batchv1.Job{},
-			&appsv1.StatefulSet{},
-			&corev1.Service{},
-			&corev1.ConfigMap{},
-			// The controller must not list/watch namespaces. It only operates within
-			// namespaces where tenant Roles grant scoped permissions.
-			&corev1.Namespace{},
-			&networkingv1.Ingress{},
-			&networkingv1.NetworkPolicy{},
-			&rbacv1.Role{},
-			&rbacv1.RoleBinding{},
-			&corev1.ServiceAccount{},
-			&corev1.Pod{},
-			&corev1.PersistentVolumeClaim{},
-			&discoveryv1.EndpointSlice{},
-			&gatewayv1.HTTPRoute{},
-			&gatewayv1alpha2.TLSRoute{},
-			&gatewayv1.BackendTLSPolicy{},
-		}
-		mgrOpts.Client = client.Options{
-			Cache: &client.CacheOptions{
-				DisableFor: disableForCache,
-			},
-		}
-	}
+	mgrOpts := newManagerOptions(scheme, metricsServerOptions, probeAddr, enableLeaderElection, watchNamespace)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
@@ -403,107 +502,10 @@ func Run(args []string) {
 
 	// Discover OIDC configuration immediately at startup
 	config = mgr.GetConfig()
-	oidcConfig, err := auth.DiscoverConfig(context.Background(), config, "")
-	if err != nil {
-		setupLog.Error(err, "Failed to discover Kubernetes OIDC configuration. Hardened profile requires OIDC.")
-		// TIGHTENED: Do not exit; just log. If a user tries to use Hardened mode later,
-		// the Reconciler will fail then. This allows the operator to run on clusters
-		// without OIDC if they only use Development mode.
-		if oidcConfig == nil {
-			oidcConfig = &portauth.OIDCConfig{}
-		}
-	} else {
-		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", oidcConfig.IssuerURL)
-		if oidcConfig.JWKSURL != "" {
-			setupLog.Info("Selected OIDC JWKS URL for operator bootstrap", "jwksURL", oidcConfig.JWKSURL)
-		}
-		if len(oidcConfig.JWKSKeys) > 0 {
-			setupLog.Info("Fetched OIDC JWKS public keys", "count", len(oidcConfig.JWKSKeys))
-		}
-	}
-	if err != nil && oidcConfig.IssuerURL != "" {
-		setupLog.Info("Continuing with partial OIDC discovery results", "issuer", oidcConfig.IssuerURL)
-	}
+	oidcConfig := discoverStartupOIDC(config)
 
 	// Admission policy dependency check (release-critical security boundary).
-	var admissionStatus admission.Status
-	admissionTracker := admission.NewTracker(
-		mgr.GetAPIReader(),
-		admission.DefaultDependencies(),
-		admission.DefaultNamePrefixes(),
-		30*time.Second,
-	)
-	if admission.UnsafeAdmissionDisabled() {
-		setupLog.Info("UNSAFE MODE: admission policy enforcement disabled; skipping dependency checks")
-		logging.LogAuditEvent(setupLog, logging.EventAdmissionUnsafeModeEnabled, map[string]string{
-			"component":             "controller",
-			"admission_enforcement": admissionEnforcement,
-		})
-		admissionStatus.OverallReady = true
-		admission.SetAdmissionDependenciesReady(true)
-		admissionTracker.MarkReadyForUnsafeMode()
-	} else {
-		switch admissionEnforcement {
-		case entrypoint.AdmissionEnforcementFail:
-			setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
-			status, err := admission.WaitForDependencies(
-				context.Background(),
-				mgr.GetAPIReader(),
-				admission.DefaultDependencies(),
-				admission.DefaultNamePrefixes(),
-				admissionStartupTimeout,
-				2*time.Second,
-			)
-			admissionStatus = status
-			if !admissionStatus.OverallReady {
-				if err == nil {
-					err = fmt.Errorf("admission policy dependencies not ready")
-				}
-				logging.LogAuditEvent(setupLog, logging.EventAdmissionStartupBlocked, map[string]string{
-					"component":             "controller",
-					"admission_enforcement": admissionEnforcement,
-					"summary":               admissionStatus.SummaryMessage(),
-				})
-				setupLog.Error(
-					err,
-					"Admission policy dependencies not ready; refusing to start",
-					"summary",
-					admissionStatus.SummaryMessage(),
-				)
-				os.Exit(1)
-			}
-		default: // warn
-			admissionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			status, err := admission.CheckDependencies(
-				admissionCtx,
-				mgr.GetAPIReader(),
-				admission.DefaultDependencies(),
-				admission.DefaultNamePrefixes(),
-			)
-			admissionStatus = status
-			if err != nil {
-				setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
-				admissionStatus.OverallReady = false
-			}
-		}
-		admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
-		admissionTracker.Set(admissionStatus)
-		if admissionStatus.OverallReady {
-			setupLog.Info("Admission policy dependencies ready")
-			logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
-				"component":             "controller",
-				"admission_enforcement": admissionEnforcement,
-			})
-		} else {
-			setupLog.Info("Admission policy dependencies not ready", "summary", admissionStatus.SummaryMessage())
-			logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesNotReady, map[string]string{
-				"component":             "controller",
-				"admission_enforcement": admissionEnforcement,
-				"summary":               admissionStatus.SummaryMessage(),
-			})
-		}
-	}
+	admissionTracker := initializeAdmissionTracker(mgr, admissionEnforcement, admissionStartupTimeout)
 
 	// Pass these values into the Reconciler struct
 	if err := (&openbaoclustercontroller.OpenBaoClusterReconciler{
