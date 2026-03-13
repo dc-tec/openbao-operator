@@ -14,10 +14,18 @@ spec:
         operations: ["UPDATE"]
         resources: ["statefulsets"]
   variables:
+    - name: operator_namespace
+      expression: >-
+        '{{ .Release.Namespace }}'
+    - name: controller_serviceaccount_name
+      expression: >-
+        '{{ include "openbao-operator.controllerServiceAccountName" . }}'
+    - name: controller_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name
     - name: is_controller
       expression: >-
-        request.userInfo.username ==
-        "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.controllerServiceAccountName" . }}"
+        request.userInfo.username == variables.controller_principal
   validations:
     - expression: >-
         !variables.is_controller ||

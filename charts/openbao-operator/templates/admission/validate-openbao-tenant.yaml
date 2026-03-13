@@ -13,6 +13,10 @@ spec:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["openbaotenants"]
+  variables:
+    - name: operator_namespace
+      expression: >-
+        '{{ .Release.Namespace }}'
   validations:
     # API contract: target namespace is immutable after creation.
     - expression: >-
@@ -21,7 +25,7 @@ spec:
     # Self-Service Constraint: targetNamespace must match metadata.namespace
     # Exception: Tenants in the operator namespace can target any namespace (admin mode)
     - expression: >-
-        object.metadata.namespace == '{{ .Release.Namespace }}' ||
+        object.metadata.namespace == variables.operator_namespace ||
         !has(object.spec.targetNamespace) ||
         object.spec.targetNamespace == '' ||
         object.spec.targetNamespace == object.metadata.namespace

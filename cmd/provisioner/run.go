@@ -264,7 +264,10 @@ func Run(args []string) {
 	}
 
 	// Get operator namespace for security validation
-	operatorNS := os.Getenv("OPERATOR_NAMESPACE")
+	operatorNS := os.Getenv("POD_NAMESPACE")
+	if operatorNS == "" {
+		operatorNS = os.Getenv("OPERATOR_NAMESPACE")
+	}
 	if operatorNS == "" {
 		operatorNS = "openbao-operator-system"
 	}

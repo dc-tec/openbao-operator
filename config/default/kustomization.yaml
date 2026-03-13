@@ -171,6 +171,158 @@ patchesJson6902:
     # The following replacements add the cert-manager CA injection annotations.
 replacements:
   - source:
+      version: v1
+      kind: ServiceAccount
+      name: openbao-operator-controller
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: apps
+          version: v1
+          kind: Deployment
+          name: openbao-operator-controller
+        fieldPaths:
+          - spec.template.spec.containers.[name=manager].env.[name=OPERATOR_SERVICE_ACCOUNT_NAME].value
+      - select:
+          group: apps
+          version: v1
+          kind: Deployment
+          name: openbao-operator-provisioner
+        fieldPaths:
+          - spec.template.spec.containers.[name=manager].env.[name=OPERATOR_SERVICE_ACCOUNT_NAME].value
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-controller-statefulset-mutations
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-managed-resource-mutations
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-rbac
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-rbac
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+  - source:
+      version: v1
+      kind: ServiceAccount
+      name: openbao-operator-controller
+      fieldPath: metadata.namespace
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-controller-statefulset-mutations
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-managed-resource-mutations
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-rbac
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-rbac
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-validate-openbao-tenant
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+  - source:
+      version: v1
+      kind: ServiceAccount
+      name: openbao-operator-provisioner
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+        fieldPaths:
+          - spec.variables.[name=provisioner_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-rbac
+        fieldPaths:
+          - spec.variables.[name=provisioner_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+  - source:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy

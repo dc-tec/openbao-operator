@@ -11,10 +11,18 @@ spec:
         operations: ["UPDATE"]
         resources: ["statefulsets"]
   variables:
+    - name: operator_namespace
+      expression: >-
+        'openbao-operator-system'
+    - name: controller_serviceaccount_name
+      expression: >-
+        'openbao-operator-controller'
+    - name: controller_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name
     - name: is_controller
       expression: >-
-        request.userInfo.username ==
-        "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+        request.userInfo.username == variables.controller_principal
   validations:
     - expression: >-
         !variables.is_controller ||

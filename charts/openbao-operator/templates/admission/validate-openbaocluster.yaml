@@ -140,9 +140,30 @@ spec:
           object.spec.unseal.type != "static" &&
           has(object.spec.selfInit) &&
           object.spec.selfInit.enabled == true &&
-          !(has(object.spec.unseal.transit) && has(object.spec.unseal.transit.tlsSkipVerify) && object.spec.unseal.transit.tlsSkipVerify == true) &&
-          !(has(object.spec.unseal.kmip) && has(object.spec.unseal.kmip.tlsSkipVerify) && object.spec.unseal.kmip.tlsSkipVerify == true))
+          !(has(object.spec.unseal.transit) && has(object.spec.unseal.transit.tlsSkipVerify) && object.spec.unseal.transit.tlsSkipVerify == true))
       message: Hardened profile requires TLS mode External or ACME, an external unseal (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.transit) ||
+        !has(object.spec.unseal.transit.token) ||
+        size(object.spec.unseal.transit.token) == 0
+      message: Hardened profile does not allow spec.unseal.transit.token; use spec.unseal.credentialsSecretRef instead.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.transit) ||
+        !has(object.spec.unseal.transit.address) ||
+        object.spec.unseal.transit.address.startsWith("https://")
+      message: Hardened profile requires spec.unseal.transit.address to use HTTPS.
+    - expression: >-
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.transit) ||
+        ((has(object.spec.unseal.transit.tlsClientCert) && size(object.spec.unseal.transit.tlsClientCert) > 0) ==
+          (has(object.spec.unseal.transit.tlsClientKey) && size(object.spec.unseal.transit.tlsClientKey) > 0))
+      message: spec.unseal.transit.tlsClientCert and spec.unseal.transit.tlsClientKey must be set together.
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||

@@ -14,16 +14,23 @@ spec:
         operations: ["UPDATE"]
         resources: ["namespaces"]
   variables:
+    - name: operator_namespace
+      expression: >-
+        '{{ .Release.Namespace }}'
+    - name: provisioner_serviceaccount_name
+      expression: >-
+        'openbao-operator-provisioner'
+    - name: provisioner_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.provisioner_serviceaccount_name
     - name: is_provisioner
       # Matches the ServiceAccount of the Provisioner.
       expression: >-
-        request.userInfo.username in [
-          "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.provisionerServiceAccountName" . }}"
-        ]
+        request.userInfo.username == variables.provisioner_principal
     - name: is_system_namespace
       # Use request.name for cluster-scoped Namespace objects.
       expression: >-
-        request.name == "{{ .Release.Namespace }}" ||
+        request.name == variables.operator_namespace ||
         request.name.startsWith("kube-") ||
         request.name == "openshift" ||
         request.name.startsWith("openshift-") ||
@@ -79,7 +86,6 @@ spec:
           )
         )
       message: "The Provisioner may only enforce Pod Security Standards labels (restricted) on Namespaces."
-
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
