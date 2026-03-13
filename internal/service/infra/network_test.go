@@ -6,6 +6,7 @@ package infra
 import (
 	"testing"
 
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -385,5 +386,180 @@ func TestBuildJobNetworkPolicy_DNSNamespace(t *testing.T) {
 				t.Errorf("Job NetworkPolicy egress rule for DNS namespace %q not found", tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildNetworkPolicy_DNSEndpointIPs(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "dns-endpoints",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Network: &openbaov1alpha1.NetworkConfig{
+				DNSEndpointIPs: []string{"169.254.20.10", "fd00::a"},
+			},
+		},
+	}
+
+	policy, err := buildNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.96.0.0/12"}, "openbao-operator-system")
+	if err != nil {
+		t.Fatalf("buildNetworkPolicy() error: %v", err)
+	}
+
+	wantCIDRs := map[string]bool{
+		"169.254.20.10/32": false,
+		"fd00::a/128":      false,
+	}
+	for _, rule := range policy.Spec.Egress {
+		for _, peer := range rule.To {
+			if peer.IPBlock == nil {
+				continue
+			}
+			if _, ok := wantCIDRs[peer.IPBlock.CIDR]; !ok {
+				continue
+			}
+			gotUDP53 := false
+			gotTCP53 := false
+			for _, port := range rule.Ports {
+				if port.Port == nil || port.Port.Type != intstr.Int || port.Port.IntVal != 53 || port.Protocol == nil {
+					continue
+				}
+				switch *port.Protocol {
+				case "UDP":
+					gotUDP53 = true
+				case "TCP":
+					gotTCP53 = true
+				}
+			}
+			if !gotUDP53 || !gotTCP53 {
+				t.Fatalf("expected DNS endpoint rule %s to allow both UDP/TCP 53", peer.IPBlock.CIDR)
+			}
+			wantCIDRs[peer.IPBlock.CIDR] = true
+		}
+	}
+
+	for cidr, found := range wantCIDRs {
+		if !found {
+			t.Fatalf("expected NetworkPolicy egress rule for DNS endpoint %s", cidr)
+		}
+	}
+}
+
+func TestBuildJobNetworkPolicy_DNSEndpointIPs(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "dns-endpoints-jobs",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Network: &openbaov1alpha1.NetworkConfig{
+				DNSEndpointIPs: []string{"169.254.20.10"},
+			},
+		},
+	}
+
+	policy, err := buildJobNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.0.0.0/16"})
+	if err != nil {
+		t.Fatalf("buildJobNetworkPolicy() error: %v", err)
+	}
+
+	found := false
+	for _, rule := range policy.Spec.Egress {
+		for _, peer := range rule.To {
+			if peer.IPBlock == nil || peer.IPBlock.CIDR != "169.254.20.10/32" {
+				continue
+			}
+			gotUDP53 := false
+			gotTCP53 := false
+			for _, port := range rule.Ports {
+				if port.Port == nil || port.Port.Type != intstr.Int || port.Port.IntVal != 53 || port.Protocol == nil {
+					continue
+				}
+				switch *port.Protocol {
+				case "UDP":
+					gotUDP53 = true
+				case "TCP":
+					gotTCP53 = true
+				}
+			}
+			if !gotUDP53 || !gotTCP53 {
+				t.Fatalf("expected job DNS endpoint rule to allow both UDP/TCP 53")
+			}
+			found = true
+		}
+	}
+
+	if !found {
+		t.Fatal("expected Job NetworkPolicy egress rule for DNS endpoint 169.254.20.10/32")
+	}
+}
+
+func TestBuildNetworkPolicy_TrustedIngressPeers(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "trusted-ingress",
+			Namespace: "openbao",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Network: &openbaov1alpha1.NetworkConfig{
+				TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
+					{
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"kubernetes.io/metadata.name": "traefik",
+							},
+						},
+					},
+					{
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"kubernetes.io/metadata.name": "ingress-system",
+							},
+						},
+						PodSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"app.kubernetes.io/name": "traefik",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	policy, err := buildNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.96.0.0/12"}, "openbao-operator-system")
+	if err != nil {
+		t.Fatalf("buildNetworkPolicy() error: %v", err)
+	}
+
+	var foundNamespaceOnly bool
+	var foundNamespaceAndPod bool
+	for _, rule := range policy.Spec.Ingress {
+		if len(rule.Ports) != 1 || rule.Ports[0].Port == nil || rule.Ports[0].Port.IntValue() != constants.PortAPI {
+			continue
+		}
+		for _, peer := range rule.From {
+			if peer.NamespaceSelector == nil || peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] == "" {
+				continue
+			}
+			switch peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] {
+			case "traefik":
+				if peer.PodSelector == nil {
+					foundNamespaceOnly = true
+				}
+			case "ingress-system":
+				if peer.PodSelector != nil && peer.PodSelector.MatchLabels["app.kubernetes.io/name"] == "traefik" {
+					foundNamespaceAndPod = true
+				}
+			}
+		}
+	}
+
+	if !foundNamespaceOnly {
+		t.Fatal("expected trusted ingress namespace peer rule for traefik namespace")
+	}
+	if !foundNamespaceAndPod {
+		t.Fatal("expected trusted ingress peer rule with namespace and pod selector")
 	}
 }

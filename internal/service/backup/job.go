@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
@@ -18,6 +19,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
+	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
 const (
@@ -40,29 +42,39 @@ const (
 	backupTLSCAVolumeName        = "tls-ca"
 )
 
-func backupJobFailureReason(job *batchv1.Job) string {
+func backupJobFailureReason(job *batchv1.Job, failureHint string) string {
+	message := ""
 	if job == nil {
-		return "Backup Job failed."
-	}
-
-	for _, cond := range job.Status.Conditions {
-		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue && cond.Message != "" {
-			return fmt.Sprintf(
-				"Backup Job %s failed: %s. Check kubectl logs job/%s -n %s.",
-				job.Name,
-				cond.Message,
-				job.Name,
-				job.Namespace,
-			)
+		message = "Backup Job failed."
+	} else {
+		for _, cond := range job.Status.Conditions {
+			if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue && cond.Message != "" {
+				message = fmt.Sprintf(
+					"Backup Job %s failed: %s. Check kubectl logs job/%s -n %s.",
+					job.Name,
+					cond.Message,
+					job.Name,
+					job.Namespace,
+				)
+				break
+			}
 		}
 	}
 
-	return fmt.Sprintf(
-		"Backup Job %s failed. Check kubectl logs job/%s -n %s.",
-		job.Name,
-		job.Name,
-		job.Namespace,
-	)
+	if message == "" && job != nil {
+		message = fmt.Sprintf(
+			"Backup Job %s failed. Check kubectl logs job/%s -n %s.",
+			job.Name,
+			job.Name,
+			job.Namespace,
+		)
+	}
+
+	if strings.TrimSpace(failureHint) == "" {
+		return message
+	}
+
+	return message + " " + strings.TrimSpace(failureHint)
 }
 
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.
@@ -177,6 +189,9 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 			"cluster_name":      cluster.Name,
 			"job":               jobName,
 		})
+		if message, ok := workloadidentity.IdentityConfigurationEventMessage(cluster.Spec.Backup.Target, backupServiceAccountName(cluster)); ok {
+			m.emitNormalEvent(cluster, ReasonBackupIdentityConfiguration, "%s", message)
+		}
 		m.emitNormalEvent(cluster, ReasonBackupJobCreated, "Created backup Job %s", jobName)
 		return true, nil
 	}
@@ -268,7 +283,7 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	if kube.JobFailed(job) {
 		// Job failed - check if we've already processed this specific job failure
 		// to avoid incrementing ConsecutiveFailures on every reconcile
-		expectedFailureReason := backupJobFailureReason(job)
+		expectedFailureReason := backupJobFailureReason(job, workloadidentity.FailureHint(cluster.Spec.Backup.Target, backupServiceAccountName(cluster)))
 		if cluster.Status.Backup.LastFailureReason == expectedFailureReason {
 			// Already processed this job failure, don't update status again
 			logger.V(1).Info("Backup Job failure already processed", "job", jobName)

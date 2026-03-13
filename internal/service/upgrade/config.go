@@ -1,6 +1,7 @@
 package upgrade
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -21,7 +22,8 @@ type ExecutorConfig struct {
 	JWTAuthRole string
 	JWTToken    string
 
-	TLSCACert []byte
+	TLSCACert     []byte
+	TLSServerName string
 
 	BlueRevision  string
 	GreenRevision string
@@ -55,9 +57,6 @@ func (c *ExecutorConfig) Validate() error {
 	}
 	if strings.TrimSpace(c.JWTToken) == "" {
 		return fmt.Errorf("JWT token is required")
-	}
-	if len(c.TLSCACert) == 0 {
-		return fmt.Errorf("TLS CA certificate is required")
 	}
 	switch c.Action {
 	case ExecutorActionBlueGreenJoinGreenNonVoters,
@@ -135,15 +134,24 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 	}
 	cfg.JWTToken = strings.TrimSpace(string(jwtToken))
 
-	caCertPath := constants.PathTLSCACert
-	if envPath := strings.TrimSpace(os.Getenv(constants.EnvTLSCAPath)); envPath != "" {
-		caCertPath = envPath
+	if envPath, ok := os.LookupEnv(constants.EnvTLSCAPath); ok {
+		caCertPath := strings.TrimSpace(envPath)
+		if caCertPath != "" {
+			caCert, err := os.ReadFile(caCertPath) // #nosec G304 -- Path from environment variable
+			if err != nil {
+				return nil, fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
+			}
+			cfg.TLSCACert = caCert
+		}
+	} else {
+		caCert, err := os.ReadFile(constants.PathTLSCACert) // #nosec G304 -- Constant path
+		if err == nil {
+			cfg.TLSCACert = caCert
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("failed to read TLS CA certificate from %q: %w", constants.PathTLSCACert, err)
+		}
 	}
-	caCert, err := os.ReadFile(caCertPath) // #nosec G304 -- Path from constant or environment variable
-	if err != nil {
-		return nil, fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
-	}
-	cfg.TLSCACert = caCert
+	cfg.TLSServerName = strings.TrimSpace(os.Getenv(constants.EnvTLSServerName))
 
 	cfg.BlueRevision = strings.TrimSpace(os.Getenv(constants.EnvUpgradeBlueRevision))
 	cfg.GreenRevision = strings.TrimSpace(os.Getenv(constants.EnvUpgradeGreenRevision))

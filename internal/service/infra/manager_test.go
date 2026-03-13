@@ -104,6 +104,7 @@ func TestReconcile_ACMEMode_CreatesChallengeService(t *testing.T) {
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-acme", ns)
 	cluster.Status.Initialized = true
+	cluster.Spec.Replicas = 1
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	acmeDomain := fmt.Sprintf("%s-acme.%s.svc", cluster.Name, cluster.Namespace)
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
@@ -138,6 +139,50 @@ func TestReconcile_ACMEMode_CreatesChallengeService(t *testing.T) {
 	}
 }
 
+func TestReconcile_ACMEMode_ManagedSharedCacheCreatesPVC(t *testing.T) {
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-acme-cache", ns)
+	cluster.Status.Initialized = true
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	acmeDomain := fmt.Sprintf("%s-acme.%s.svc", cluster.Name, cluster.Namespace)
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://example.invalid/acme",
+		Domains:      []string{acmeDomain},
+		SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
+			Mode: openbaov1alpha1.ACMESharedCacheModeManagedPVC,
+			Size: "1Gi",
+		},
+	}
+	createClusterCRForTest(t, k8sClient, cluster)
+
+	ctx := context.Background()
+	spec := newTestStatefulSetSpec(cluster)
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name + "-acme-cache",
+	}, pvc); err != nil {
+		t.Fatalf("expected managed ACME shared cache PVC to exist: %v", err)
+	}
+	if len(pvc.OwnerReferences) != 0 {
+		t.Fatalf("expected managed ACME shared cache PVC to have no OwnerReferences, got %v", pvc.OwnerReferences)
+	}
+	if len(pvc.Spec.AccessModes) != 1 || pvc.Spec.AccessModes[0] != corev1.ReadWriteMany {
+		t.Fatalf("expected managed ACME shared cache PVC to request ReadWriteMany, got %v", pvc.Spec.AccessModes)
+	}
+	storage := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	if storage.Cmp(resource.MustParse("1Gi")) != 0 {
+		t.Fatalf("expected managed ACME shared cache PVC size 1Gi, got %s", storage.String())
+	}
+}
+
 func TestReconcile_ACMEMode_PreflightRejectsGatewayTermination(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
 	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
@@ -145,6 +190,7 @@ func TestReconcile_ACMEMode_PreflightRejectsGatewayTermination(t *testing.T) {
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("acme-gw", ns)
 	cluster.Status.Initialized = true
+	cluster.Spec.Replicas = 1
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	acmeDomain := fmt.Sprintf("%s-acme.%s.svc", cluster.Name, cluster.Namespace)
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
@@ -183,13 +229,42 @@ func TestReconcile_ACMEMode_PreflightRejectsUnresolvableDomainForPrivateCA(t *te
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://example.invalid/acme",
 		Domains:      []string{"no-such-host.openbao.invalid"},
+		SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
+			Mode: openbaov1alpha1.ACMESharedCacheModeManagedPVC,
+			Size: "1Gi",
+		},
 	}
 	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
 		ACMECARoot: "/etc/bao/seal-creds/ca.crt",
 	}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Address:   "https://infra-bao.example",
+			KeyName:   "autounseal",
+			MountPath: "transit/",
+		},
+		CredentialsSecretRef: &corev1.LocalObjectReference{
+			Name: "infra-bao-token",
+		},
+	}
 	createClusterCRForTest(t, k8sClient, cluster)
-
 	ctx := context.Background()
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "infra-bao-token",
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"token":      []byte("root"),
+			"pki-ca.crt": newTestCACertPEM(t),
+		},
+	}
+	if err := k8sClient.Create(ctx, secret); err != nil {
+		t.Fatalf("failed to create credentials secret: %v", err)
+	}
+
 	spec := newTestStatefulSetSpec(cluster)
 	err := manager.Reconcile(ctx, logr.Discard(), cluster, spec)
 	if err == nil {

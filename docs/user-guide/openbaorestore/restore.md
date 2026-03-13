@@ -18,6 +18,13 @@ The OpenBao Operator supports restoring clusters from snapshots stored in object
   - JWT (`spec.jwtAuthRole`, or the default `openbao-operator-restore` role when `spec.selfInit.oidc.enabled=true`)
   - Static token (`spec.tokenSecretRef`)
 
+!!! note "Separate Restore Identity"
+    Restore Jobs use a generated restore ServiceAccount and do not inherit cloud identity from the main OpenBao Pods automatically.
+    If the cluster uses cloud KMS unseal identity on the main workload, configure restore storage access separately with:
+    - `spec.source.target.credentialsSecretRef`
+    - `spec.source.target.workloadIdentity.*`
+    - or an intentional provider default credential chain
+
 ---
 
 ## 2. Restore Workflow

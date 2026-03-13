@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	clusterpkg "github.com/dc-tec/openbao-operator/internal/adapter/cluster"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -624,35 +625,6 @@ func TestReconcileExternalModeTriggersReloadOnExistingSecrets(t *testing.T) {
 		t.Fatalf("failed to add OpenBao scheme: %v", err)
 	}
 
-	// Create external secrets manually (simulating cert-manager or user-provided)
-	caSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "external-cluster-tls-ca",
-			Namespace: "security",
-		},
-		Data: map[string][]byte{
-			caCertKey: []byte("fake-ca-cert"),
-			caKeyKey:  []byte("fake-ca-key"),
-		},
-	}
-
-	serverSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "external-cluster-tls-server",
-			Namespace: "security",
-		},
-		Data: map[string][]byte{
-			tlsCertKey: []byte("fake-server-cert"),
-			tlsKeyKey:  []byte("fake-server-key"),
-			caCertKey:  []byte("fake-ca-cert"),
-		},
-	}
-
-	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret, serverSecret).Build()
-
-	reloader := &recordingReloadSignaler{}
-	manager := NewManagerWithReloader(client, scheme, reloader)
-
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "external-cluster",
@@ -673,10 +645,59 @@ func TestReconcileExternalModeTriggersReloadOnExistingSecrets(t *testing.T) {
 		},
 	}
 
+	now := time.Now()
+	caCertPEM, caKeyPEM, err := generateCA(cluster, now)
+	if err != nil {
+		t.Fatalf("generateCA() error = %v", err)
+	}
+	caCert, caKey, parsedCAPEM, err := parseCAFromSecret(&corev1.Secret{
+		Data: map[string][]byte{
+			caCertKey: caCertPEM,
+			caKeyKey:  caKeyPEM,
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseCAFromSecret() error = %v", err)
+	}
+	dnsSANs := clusterpkg.ComputeRequiredDNSSANs(cluster)
+	serverCertPEM, serverKeyPEM, err := issueServerCertificate(cluster, caCert, caKey, now, dnsSANs)
+	if err != nil {
+		t.Fatalf("issueServerCertificate() error = %v", err)
+	}
+
+	// Create external secrets manually (simulating cert-manager or user-provided)
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "external-cluster-tls-ca",
+			Namespace: "security",
+		},
+		Data: map[string][]byte{
+			caCertKey: caCertPEM,
+			caKeyKey:  caKeyPEM,
+		},
+	}
+
+	serverSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "external-cluster-tls-server",
+			Namespace: "security",
+		},
+		Data: map[string][]byte{
+			tlsCertKey: serverCertPEM,
+			tlsKeyKey:  serverKeyPEM,
+			caCertKey:  parsedCAPEM,
+		},
+	}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret, serverSecret).Build()
+
+	reloader := &recordingReloadSignaler{}
+	manager := NewManagerWithReloader(client, scheme, reloader)
+
 	ctx := context.Background()
 
 	// Reconcile should find the secrets and trigger reload
-	_, err := manager.Reconcile(ctx, logr.Discard(), cluster)
+	_, err = manager.Reconcile(ctx, logr.Discard(), cluster)
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
@@ -699,7 +720,7 @@ func TestReconcileExternalModeTriggersReloadOnExistingSecrets(t *testing.T) {
 		t.Fatalf("expected server Secret to still exist: %v", err)
 	}
 
-	if string(updatedServerSecret.Data[tlsCertKey]) != "fake-server-cert" {
+	if string(updatedServerSecret.Data[tlsCertKey]) != string(serverCertPEM) {
 		t.Fatalf("expected external server Secret to not be modified by operator")
 	}
 }

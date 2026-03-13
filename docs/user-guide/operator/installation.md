@@ -104,6 +104,21 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
     !!! note
         This installs CRDs, RBAC, ValidatingAdmissionPolicies, and the operator deployments in `openbao-operator-system`.
 
+    Raw-manifest installs have three supported starting points:
+
+    - `config/default`: default multi-tenant install
+    - `config/overlays/custom-identity`: multi-tenant install with custom operator namespace or `namePrefix`
+    - `config/overlays/single-tenant`: direct single-tenant install without the provisioner
+
+    !!! tip "Custom Namespace Or Prefix"
+        For raw-manifest installs with a custom operator namespace or extra name prefix, start from `config/overlays/custom-identity`. Set `namespace` there and optionally add `namePrefix`. The controller and provisioner ServiceAccount identities, RoleBinding subjects, and admission-policy identity checks follow the installed ServiceAccounts automatically.
+
+    !!! tip "Single-Tenant Raw Manifests"
+        For direct single-tenant installs, start from `config/overlays/single-tenant`. That overlay owns the operator namespace and target namespace wiring instead of relying on manual `WATCH_NAMESPACE` patches.
+
+    !!! note "Operator JWT Auth"
+        If you use custom raw-manifest identities together with manual OpenBao JWT configuration or self-init OIDC bootstrap, verify the rendered controller ServiceAccount name and namespace first. See [Operator Authentication](authn.md#custom-install-checklist).
+
 === ":material-code-brackets: Developer (Source)"
 
     For local development and contribution:

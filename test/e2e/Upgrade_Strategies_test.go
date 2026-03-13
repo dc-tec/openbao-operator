@@ -18,6 +18,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -27,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
@@ -3224,6 +3226,163 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					}
 				}
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+	})
+
+	Context("Gateway TLS Passthrough", Label("gateway", "requires-gateway-api", "tls-passthrough"), func() {
+		var (
+			tenantNamespace     string
+			tenantFW            *framework.Framework
+			admin               client.Client
+			passthroughCluster  *openbaov1alpha1.OpenBaoCluster
+			passthroughHostname = "bao-passthrough.example.local"
+			passthroughListener = "tls-passthrough"
+			passthroughGateway  = "tenant-gateway-passthrough"
+		)
+
+		BeforeAll(func() {
+			var err error
+
+			tenantFW, err = framework.NewSetup(ctx, "tenant-gateway-tls", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+			admin = tenantFW.Client
+
+			cleanup, err := tenantFW.RequireGatewayAPI()
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanup)
+
+			gw := &gatewayv1.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      passthroughGateway,
+					Namespace: tenantNamespace,
+				},
+				Spec: gatewayv1.GatewaySpec{
+					GatewayClassName: "traefik",
+					Listeners: []gatewayv1.Listener{
+						{
+							Name:     gatewayv1.SectionName(passthroughListener),
+							Port:     443,
+							Protocol: gatewayv1.TLSProtocolType,
+							Hostname: ptrTo(gatewayv1.Hostname(passthroughHostname)),
+							TLS: &gatewayv1.ListenerTLSConfig{
+								Mode: ptrTo(gatewayv1.TLSModePassthrough),
+							},
+						},
+					},
+				},
+			}
+			Expect(admin.Create(ctx, gw)).To(Succeed())
+
+			passthroughCluster = &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "gateway-passthrough-cluster",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  openBaoVersion,
+					Image:    openBaoImage,
+					Replicas: 1,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					Gateway: &openbaov1alpha1.GatewayConfig{
+						Enabled:        true,
+						TLSPassthrough: true,
+						ListenerName:   passthroughListener,
+						Hostname:       passthroughHostname,
+						GatewayRef: openbaov1alpha1.GatewayReference{
+							Name: passthroughGateway,
+						},
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, passthroughCluster)).To(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: passthroughCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+				g.Expect(available).NotTo(BeNil())
+				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("creates a TLSRoute and reports healthy passthrough integration", func() {
+			By("waiting for passthrough Gateway integration status")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: passthroughCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+
+				cond := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
+				g.Expect(cond).NotTo(BeNil())
+				g.Expect(cond.Status).NotTo(Equal(metav1.ConditionFalse))
+				switch cond.Status {
+				case metav1.ConditionTrue:
+					g.Expect(cond.Reason).To(Equal("GatewayIntegrationReady"))
+				case metav1.ConditionUnknown:
+					g.Expect(cond.Reason).To(Equal("GatewayCapabilitiesUnknown"))
+				default:
+					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+				}
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("verifying a TLSRoute is created for passthrough access")
+			Eventually(func(g Gomega) {
+				tlsRoute := &gatewayv1alpha2.TLSRoute{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      fmt.Sprintf("%s-tlsroute", passthroughCluster.Name),
+					Namespace: tenantNamespace,
+				}, tlsRoute)).To(Succeed())
+
+				g.Expect(tlsRoute.Spec.ParentRefs).To(HaveLen(1))
+				g.Expect(tlsRoute.Spec.ParentRefs[0].Name).To(Equal(gatewayv1alpha2.ObjectName(passthroughGateway)))
+				g.Expect(tlsRoute.Spec.ParentRefs[0].SectionName).NotTo(BeNil())
+				g.Expect(*tlsRoute.Spec.ParentRefs[0].SectionName).To(Equal(gatewayv1alpha2.SectionName(passthroughListener)))
+				g.Expect(tlsRoute.Spec.Hostnames).To(Equal([]gatewayv1alpha2.Hostname{gatewayv1alpha2.Hostname(passthroughHostname)}))
+				g.Expect(tlsRoute.Spec.Rules).To(HaveLen(1))
+				g.Expect(tlsRoute.Spec.Rules[0].BackendRefs).To(HaveLen(1))
+				g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Name).To(Equal(gatewayv1alpha2.ObjectName(fmt.Sprintf("%s-public", passthroughCluster.Name))))
+				g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Port).NotTo(BeNil())
+				g.Expect(*tlsRoute.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gatewayv1alpha2.PortNumber(constants.PortAPI)))
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("verifying BackendTLSPolicy is not created for passthrough mode")
+			Consistently(func() bool {
+				err := admin.Get(ctx, types.NamespacedName{
+					Name:      fmt.Sprintf("%s-backend-tls", passthroughCluster.Name),
+					Namespace: tenantNamespace,
+				}, &gatewayv1.BackendTLSPolicy{})
+				return apierrors.IsNotFound(err)
+			}, 30*time.Second, framework.DefaultPollInterval).Should(BeTrue())
 		})
 	})
 })

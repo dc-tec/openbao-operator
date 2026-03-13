@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 const (
@@ -38,7 +39,17 @@ func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, err
 	if cluster.Spec.InitContainer != nil && cluster.Spec.InitContainer.Image != "" {
 		return cluster.Spec.InitContainer.Image, nil
 	}
-	return constants.DefaultInitImage()
+	image, err := constants.DefaultInitImage()
+	if err != nil {
+		return "", operatorerrors.WrapPermanentConfig(operatorerrors.WithReason(
+			constants.ReasonHelperImageConfigurationInvalid,
+			fmt.Errorf(
+				"default init container image is unavailable; set spec.initContainer.image explicitly or configure OPERATOR_VERSION in the operator Deployment: %w",
+				err,
+			),
+		))
+	}
+	return image, nil
 }
 
 // getContainerImage returns the container image to use for the OpenBao container.

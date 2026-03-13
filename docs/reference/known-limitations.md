@@ -16,7 +16,7 @@ See [Deprecation Policy](deprecation-policy.md) for lifecycle details.
 ## 2. CRD Version Surface
 
 - Current served/storage CRD API is `openbao.org/v1alpha1`.
-- Multi-version conversion webhooks are not part of the current `0.1.x` scope.
+- Multi-version conversion webhooks are not part of the current pre-GA scope.
 
 ## 3. Operator Upgrade / Downgrade Constraints
 

@@ -35,6 +35,15 @@ spec:
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["tlsroutes"]
   variables:
+    - name: operator_namespace
+      expression: >-
+        'openbao-operator-system'
+    - name: controller_serviceaccount_name
+      expression: >-
+        'openbao-operator-controller'
+    - name: controller_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name
     - name: is_openbao_managed_by_operator
       expression: >-
         request.operation == "DELETE" ?
@@ -73,8 +82,7 @@ spec:
         variables.is_openbao_managed_by_operator && variables.has_openbao_specific_label
     - name: is_operator_controller
       expression: >-
-        request.userInfo.username ==
-        "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+        request.userInfo.username == variables.controller_principal
     - name: is_kube_controller_manager
       expression: >-
         request.userInfo.username == "system:kube-controller-manager" ||

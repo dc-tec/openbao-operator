@@ -72,6 +72,11 @@ func DefaultNamePrefixes() []string {
 		}
 		prefixes = append(prefixes, env)
 	}
+	if controllerSA := strings.TrimSpace(os.Getenv("OPERATOR_SERVICE_ACCOUNT_NAME")); controllerSA != "" {
+		if derived, ok := strings.CutSuffix(controllerSA, "controller"); ok {
+			prefixes = append(prefixes, derived)
+		}
+	}
 
 	// Backward compatible defaults.
 	prefixes = append(prefixes, "openbao-operator-", "")

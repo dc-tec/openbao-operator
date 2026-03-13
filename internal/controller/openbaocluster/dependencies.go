@@ -38,8 +38,8 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 			Recorder: r.Recorder,
 		},
 		Pods: appopenbaocluster.InfraPodRuntime{
-			ClientForPodFunc: func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.ScaleDownPodClient, error) {
-				return r.clientForPod(cluster, podName)
+			ClientForPodFunc: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.ScaleDownPodClient, error) {
+				return r.clientForPod(ctx, cluster, podName)
 			},
 		},
 	}
@@ -48,11 +48,80 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 func (r *OpenBaoClusterReconciler) infraReasonPolicy() appopenbaocluster.InfraReasonPolicy {
 	return appopenbaocluster.InfraReasonPolicy{
 		GatewayAPIMissing:                   ReasonGatewayAPIMissing,
+		OIDCBootstrapConfiguration:          ReasonOIDCBootstrapConfigurationInvalid,
+		APIServerNetworkConfiguration:       ReasonAPIServerNetworkConfigurationInvalid,
 		PrerequisitesMissing:                ReasonPrerequisitesMissing,
 		ACMEDomainNotResolvable:             ReasonACMEDomainNotResolvable,
 		ACMEGatewayNotConfiguredPassthrough: ReasonACMEGatewayNotConfiguredForPassthrough,
 		ImageVerificationFailed:             constants.ReasonImageVerificationFailed,
 		InitContainerImageVerification:      constants.ReasonInitContainerImageVerificationFailed,
+	}
+}
+
+func (r *OpenBaoClusterReconciler) acmeIntegrationDependencies() appopenbaocluster.ACMEIntegrationDependencies {
+	return appopenbaocluster.ACMEIntegrationDependencies{
+		Client:            r.Client,
+		APIReader:         r.APIReader,
+		Scheme:            r.ControllerRuntime.Scheme,
+		OperatorNamespace: r.OperatorNamespace,
+		Platform:          r.Platform,
+	}
+}
+
+func (r *OpenBaoClusterReconciler) gatewayIntegrationDependencies() appopenbaocluster.GatewayIntegrationDependencies {
+	return appopenbaocluster.GatewayIntegrationDependencies{
+		Client:            r.Client,
+		APIReader:         r.APIReader,
+		Scheme:            r.ControllerRuntime.Scheme,
+		OperatorNamespace: r.OperatorNamespace,
+		Platform:          r.Platform,
+	}
+}
+
+func (r *OpenBaoClusterReconciler) apiServerNetworkDependencies() appopenbaocluster.APIServerNetworkDependencies {
+	return appopenbaocluster.APIServerNetworkDependencies{
+		Client:            r.Client,
+		APIReader:         r.APIReader,
+		Scheme:            r.ControllerRuntime.Scheme,
+		OperatorNamespace: r.OperatorNamespace,
+		Platform:          r.Platform,
+	}
+}
+
+func acmeIntegrationReasonPolicy() appopenbaocluster.ACMEIntegrationReasonPolicy {
+	return appopenbaocluster.ACMEIntegrationReasonPolicy{
+		Ready:                               ReasonACMEIntegrationReady,
+		Unknown:                             reasonUnknown,
+		GatewayAPIMissing:                   ReasonGatewayAPIMissing,
+		PrerequisitesMissing:                ReasonPrerequisitesMissing,
+		ACMEDomainNotResolvable:             ReasonACMEDomainNotResolvable,
+		ACMEGatewayNotConfiguredPassthrough: ReasonACMEGatewayNotConfiguredForPassthrough,
+	}
+}
+
+func apiServerNetworkReasonPolicy() appopenbaocluster.APIServerNetworkReasonPolicy {
+	return appopenbaocluster.APIServerNetworkReasonPolicy{
+		Ready:                ReasonAPIServerNetworkReady,
+		Recommended:          ReasonAPIServerEndpointIPsRecommended,
+		ConfigurationInvalid: ReasonAPIServerNetworkConfigurationInvalid,
+	}
+}
+
+func gatewayIntegrationReasonPolicy() appopenbaocluster.GatewayIntegrationReasonPolicy {
+	return appopenbaocluster.GatewayIntegrationReasonPolicy{
+		Ready:                       ReasonGatewayIntegrationReady,
+		Unknown:                     reasonUnknown,
+		GatewayAPIMissing:           ReasonGatewayAPIMissing,
+		GatewayReferenceMissing:     ReasonGatewayReferenceMissing,
+		GatewayClassMissing:         ReasonGatewayClassMissing,
+		GatewayClassPending:         ReasonGatewayClassPending,
+		GatewayClassNotAccepted:     ReasonGatewayClassNotAccepted,
+		GatewayVersionUnsupported:   ReasonGatewayVersionUnsupported,
+		GatewayFeatureUnsupported:   ReasonGatewayFeatureUnsupported,
+		GatewayCapabilitiesUnknown:  ReasonGatewayCapabilitiesUnknown,
+		GatewayNotProgrammed:        ReasonGatewayNotProgrammed,
+		GatewayProgrammingPending:   ReasonGatewayProgrammingPending,
+		GatewayListenerIncompatible: ReasonGatewayListenerIncompatible,
 	}
 }
 
@@ -77,8 +146,8 @@ func (r *OpenBaoClusterReconciler) storageResizeRestartDependencies() appopenbao
 			Recorder: r.Recorder,
 		},
 		Pods: appopenbaocluster.StoragePodRuntime{
-			ClientForPodFunc: func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.StoragePodClient, error) {
-				return r.clientForPod(cluster, podName)
+			ClientForPodFunc: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.StoragePodClient, error) {
+				return r.clientForPod(ctx, cluster, podName)
 			},
 		},
 	}

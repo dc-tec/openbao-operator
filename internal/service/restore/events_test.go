@@ -33,6 +33,30 @@ func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...s
 	}
 }
 
+func expectAnyEventContains(t *testing.T, recorder *events.FakeRecorder, attempts int, parts ...string) {
+	t.Helper()
+
+	for i := 0; i < attempts; i++ {
+		select {
+		case event := <-recorder.Events:
+			match := true
+			for _, part := range parts {
+				if !strings.Contains(event, part) {
+					match = false
+					break
+				}
+			}
+			if match {
+				return
+			}
+		case <-time.After(time.Second):
+			t.Fatal("expected event, got none")
+		}
+	}
+
+	t.Fatalf("did not find event containing %q within %d attempts", strings.Join(parts, ", "), attempts)
+}
+
 func newRestoreEventScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 
@@ -128,7 +152,8 @@ func TestCreateRestoreJob_EmitsJobCreatedEvent(t *testing.T) {
 		t.Fatalf("result = %+v, want positive requeue", result)
 	}
 
-	expectEventContains(t, recorder, "Normal", ReasonRestoreJobCreated)
+	expectAnyEventContains(t, recorder, 2, "Normal", ReasonRestoreIdentityConfiguration)
+	expectAnyEventContains(t, recorder, 2, "Normal", ReasonRestoreJobCreated)
 }
 
 func TestRestoreTerminalEvents(t *testing.T) {

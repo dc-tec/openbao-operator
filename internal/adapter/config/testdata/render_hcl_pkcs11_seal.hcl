@@ -13,12 +13,13 @@ listener "tcp" {
   tls_client_ca_file   = "/etc/bao/tls/ca.crt"
 }
 seal "pkcs11" {
-  lib            = "/usr/lib/libpkcs11.so"
-  slot           = "0"
-  key_label      = "vault-key"
-  hmac_key_label = "vault-hmac-key"
-  generate_key   = "true"
-  rsa_oaep_hash  = "sha256"
+  lib                         = "/usr/lib/libpkcs11.so"
+  token_label                 = "openbao-token"
+  key_label                   = "openbao-hsm-key"
+  key_id                      = "01"
+  mechanism                   = "0x0009"
+  disable_software_encryption = "true"
+  rsa_oaep_hash               = "sha256"
 }
 storage "raft" {
   path    = "/bao/data"

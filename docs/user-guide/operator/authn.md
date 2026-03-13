@@ -39,9 +39,55 @@ When using **Self-Initialization** (`spec.selfInit.enabled: true`), the relation
 2. **Role Creation:** It creates a policy and role named `openbao-operator`.
 3. **Binding:** This role is bound to the operator's ServiceAccount in the operator's namespace.
 
+!!! note "Operator Auth vs Human Auth"
+    `spec.selfInit.oidc.enabled: true` bootstraps operator authentication only. It does not create a human login path by itself. Watch `UserAccessBootstrap` on the cluster if you rely on `spec.selfInit.requests` to create JWT, OIDC, `userpass`, or other operator-facing auth mounts.
+
 !!! success "Recommended Configuration"
     For production environments, we strongly recommend using **Hardened Profile** with **Self
     Initialization**. This ensures no root token is ever persisted to a Kubernetes Secret.
+
+## Custom Install Checklist
+
+Use this checklist when you install the operator with raw manifests, a custom namespace, or a `namePrefix`.
+
+1. Confirm the controller ServiceAccount name and namespace from the rendered manifest.
+2. Confirm the controller Deployment still mounts the projected token used for OpenBao auth.
+3. Confirm the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks` from the Kubernetes API server.
+4. Confirm the JWT role in OpenBao binds to the rendered controller ServiceAccount name and namespace, not the default examples.
+5. Confirm the JWT audience in OpenBao matches `OPENBAO_JWT_AUDIENCE` on the operator.
+
+!!! warning "Custom Identity Installs"
+    `spec.selfInit.oidc.enabled: true` does not infer your custom operator identity from the OpenBao side. If you manually configure JWT auth, the role binding in OpenBao must match the rendered controller ServiceAccount name and namespace exactly.
+
+### Example: Custom Raw-Manifest Identity
+
+This example uses `config/overlays/custom-identity` with:
+
+- `namespace: platform-security`
+- `namePrefix: demo-`
+
+That render path produces a controller ServiceAccount named `demo-openbao-operator-controller` in namespace `platform-security`.
+
+If you are not using operator-managed self-init bootstrap, configure the OpenBao JWT role against that rendered identity:
+
+```bash
+bao write auth/jwt-operator/role/openbao-operator \
+    role_type="jwt" \
+    bound_audiences="openbao-internal" \
+    user_claim="sub" \
+    bound_service_account_names="demo-openbao-operator-controller" \
+    bound_service_account_namespaces="platform-security" \
+    token_policies="openbao-operator" \
+    token_ttl="1h"
+```
+
+To verify the rendered identity before applying manifests:
+
+```bash
+kubectl kustomize config/overlays/custom-identity
+```
+
+Check the rendered `ServiceAccount`, the controller `Deployment`, and any RoleBinding or admission-policy subject that references the controller identity.
 
 ## Troubleshooting
 
@@ -58,10 +104,18 @@ failed to create authenticated OpenBao client: ... permission denied
 1. **Projected Volume Mounted:** Ensure the operator Deployment has the projected volume mounted at `/var/run/secrets/tokens/openbao-token`.
 2. **Audience Matching:** The `aud` (audience) in the mounted token must match the `bound_audiences` in the OpenBao JWT role. The default is `openbao-internal`.
 3. **Self-Init Status:** If the cluster was manually initialized, you must manually create the `openbao-operator` role and binding.
+4. **OIDC Discovery RBAC:** Ensure the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks`.
+5. **Rendered Identity Match:** If you customized the raw-manifest install namespace or `namePrefix`, ensure the JWT role binds to the rendered controller ServiceAccount name and namespace rather than the defaults.
+
+If OIDC discovery or operator identity bootstrap is miswired, the cluster surfaces `OIDCBootstrapConfigurationInvalid`.
+
+If the operator cannot recognize a human login path from `spec.selfInit.requests`, the cluster surfaces `UserAccessBootstrap=Unknown` with reason `UserAccessUnverified`. This is a warning signal, not a hard block.
 
 ### Manual Role Configuration
 
-If you are **not** using Self-Initialization (e.g., Brownfield adoption), you must manually configure the operator's access:
+If you are **not** using Self-Initialization, you must manually configure the operator's access:
+
+If you customized the raw-manifest install namespace or name prefix, substitute your controller ServiceAccount name and operator namespace in the role binding below.
 
 ```bash
 # Enable JWT Auth

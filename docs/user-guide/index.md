@@ -8,7 +8,15 @@ This guide covers everything you need to know to successfully operate OpenBao on
 
 <div class="grid cards" markdown>
 
-- :material-download: **1. Install Operator**
+- :material-sign-direction: **1. Choose a Path**
+
+    ---
+
+    Pick the default operating model for tenancy, security posture, bootstrap, TLS, and upgrades.
+
+    [:material-arrow-right: Decision Guide](deployment-decision-guide.md)
+
+- :material-download: **2. Install Operator**
 
     ---
 
@@ -18,7 +26,7 @@ This guide covers everything you need to know to successfully operate OpenBao on
     
     [:material-arrow-right: Single-Tenant Mode](operator/single-tenant-mode.md)
 
-- :material-account-multiple-plus: **2. Onboard Tenants**
+- :material-account-multiple-plus: **3. Onboard Tenants**
 
     ---
 
@@ -26,7 +34,7 @@ This guide covers everything you need to know to successfully operate OpenBao on
 
     [:material-arrow-right: Tenant Onboarding](openbaotenant/overview.md)
 
-- :material-server-plus: **3. Deploy Cluster**
+- :material-server-plus: **4. Deploy Cluster**
 
     ---
 
@@ -34,7 +42,7 @@ This guide covers everything you need to know to successfully operate OpenBao on
 
     [:material-arrow-right: Create Cluster](openbaocluster/overview.md)
 
-- :material-backup-restore: **4. Operate & Restore**
+- :material-backup-restore: **5. Operate & Restore**
 
     ---
 
@@ -50,6 +58,8 @@ This guide covers everything you need to know to successfully operate OpenBao on
 
 ## Advanced Topics
 
+- [**Deployment Decision Guide**](deployment-decision-guide.md) – Choose the default path for tenancy, security posture, bootstrap, TLS, and upgrades.
+- [**Step-by-Step Recipes**](openbaocluster/recipes/index.md) – Follow validated recipes for development bootstrap, backups, restore, and Hardened deployment paths.
 - [**Architecture**](../architecture/index.md) – Understand the internal controller design.
 - [**Security Model**](../security/index.md) – Learn about the zero-trust security model.
 - [**Troubleshooting**](openbaocluster/operations/troubleshooting.md) – Common issues and remediation steps.

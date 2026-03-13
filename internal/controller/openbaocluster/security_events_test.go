@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,5 +86,114 @@ func TestEmitSecurityWarningEvents_RecordsAndPersistsTimestamps(t *testing.T) {
 		if updated.Annotations[key] == "" {
 			t.Fatalf("expected annotation %q to be persisted", key)
 		}
+	}
+}
+
+func TestEmitSecurityWarningEvents_EmitsAmbientUnsealIdentityNote(t *testing.T) {
+	scheme := newOpenBaoClusterTestScheme(t)
+	cluster := newOpenBaoClusterStatusTestObject()
+	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: true}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "awskms",
+		AWSKMS: &openbaov1alpha1.AWSKMSSealConfig{
+			Region:   "eu-central-1",
+			KMSKeyID: "alias/openbao",
+		},
+	}
+	cluster.Spec.ServiceAccount = &openbaov1alpha1.ServiceAccountConfig{
+		Annotations: map[string]string{
+			"eks.amazonaws.com/role-arn": "arn:aws:iam::123456789012:role/openbao",
+		},
+	}
+	cluster.Annotations = map[string]string{}
+
+	recorder := events.NewFakeRecorder(10)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster).
+		Build()
+	reconciler := &OpenBaoClusterReconciler{
+		Client: k8sClient,
+		ControllerRuntime: ControllerRuntime{
+			Recorder: recorder,
+		},
+	}
+
+	if err := reconciler.emitSecurityWarningEvents(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("emitSecurityWarningEvents() error = %v", err)
+	}
+
+	found := false
+	for i := 0; i < 4; i++ {
+		select {
+		case event := <-recorder.Events:
+			if strings.Contains(event, ReasonAmbientUnsealIdentity) {
+				found = true
+			}
+		default:
+		}
+	}
+	if !found {
+		t.Fatal("expected ambient unseal identity event to be recorded")
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updated); err != nil {
+		t.Fatalf("get updated cluster: %v", err)
+	}
+	if updated.Annotations[annotationLastAmbientUnsealNote] == "" {
+		t.Fatalf("expected annotation %q to be persisted", annotationLastAmbientUnsealNote)
+	}
+}
+
+func TestEmitSecurityWarningEvents_DoesNotEmitAmbientUnsealIdentityForInlineCredentials(t *testing.T) {
+	scheme := newOpenBaoClusterTestScheme(t)
+	cluster := newOpenBaoClusterStatusTestObject()
+	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: true}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "awskms",
+		AWSKMS: &openbaov1alpha1.AWSKMSSealConfig{
+			Region:    "eu-central-1",
+			KMSKeyID:  "alias/openbao",
+			AccessKey: "AKIA...",
+			SecretKey: "secret",
+		},
+	}
+	cluster.Annotations = map[string]string{}
+
+	recorder := events.NewFakeRecorder(10)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster).
+		Build()
+	reconciler := &OpenBaoClusterReconciler{
+		Client: k8sClient,
+		ControllerRuntime: ControllerRuntime{
+			Recorder: recorder,
+		},
+	}
+
+	if err := reconciler.emitSecurityWarningEvents(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("emitSecurityWarningEvents() error = %v", err)
+	}
+
+	for i := 0; i < 4; i++ {
+		select {
+		case event := <-recorder.Events:
+			if strings.Contains(event, ReasonAmbientUnsealIdentity) {
+				t.Fatalf("unexpected ambient unseal identity event: %q", event)
+			}
+		default:
+		}
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updated); err != nil {
+		t.Fatalf("get updated cluster: %v", err)
+	}
+	if updated.Annotations[annotationLastAmbientUnsealNote] != "" {
+		t.Fatalf("did not expect annotation %q to be persisted", annotationLastAmbientUnsealNote)
 	}
 }

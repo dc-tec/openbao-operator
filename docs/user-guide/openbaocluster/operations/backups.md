@@ -34,6 +34,11 @@ flowchart LR
 - Grant write access to the bucket or container.
 - Allow egress to the storage endpoint. This is required for the `Hardened` profile.
 
+!!! note "Separate Identity Surfaces"
+    The main OpenBao Pods and backup Jobs use different ServiceAccounts.
+    Cloud KMS unseal identity on the main workload does not automatically apply to backup or restore Jobs.
+    Check `CloudUnsealIdentityReady` for the main Pods and `BackupConfigurationReady` for the generated backup Job identity path.
+
 ## Configuration
 
 Select an authentication method. Use JWT Auth for automatic token rotation.
@@ -114,6 +119,9 @@ Select an authentication method. Use JWT Auth for automatic token rotation.
             - `roleArn` for the operator-managed Web Identity path
             - ambient workload identity/default credentials (for example EKS Pod Identity)
             - `workloadIdentity.serviceAccountAnnotations` when your platform integration is driven by ServiceAccount metadata
+            
+            The operator reports `WorkloadIdentityConfigured` when it can see an explicit Job identity path such as `roleArn` or `target.workloadIdentity.*`.
+            It reports `AmbientIdentityAssumed` only when no storage Secret or explicit Job identity metadata is configured.
 
     === "GCS (Google Cloud Storage)"
 
@@ -125,7 +133,7 @@ Select an authentication method. Use JWT Auth for automatic token rotation.
         spec:
           backup:
             schedule: "0 3 * * *"
-            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
             jwtAuthRole: backup
             
             target:
@@ -153,6 +161,7 @@ Select an authentication method. Use JWT Auth for automatic token rotation.
             **Option 2: Application Default Credentials (ADC)**
             If running on GKE or with Workload Identity, omit `credentialsSecretRef` to use ADC.
             When needed, set `target.workloadIdentity.serviceAccountAnnotations` so the generated backup/restore ServiceAccount carries the required provider annotation.
+            This is separate from any workload identity attached to the main OpenBao Pods for unseal.
 
     === "Azure Blob Storage"
 
@@ -164,7 +173,7 @@ Select an authentication method. Use JWT Auth for automatic token rotation.
         spec:
           backup:
             schedule: "0 3 * * *"
-            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
             jwtAuthRole: backup
             
             target:
@@ -193,6 +202,8 @@ Select an authentication method. Use JWT Auth for automatic token rotation.
             If your cluster integration requires Kubernetes metadata, use:
             - `target.workloadIdentity.serviceAccountAnnotations`
             - `target.workloadIdentity.podLabels`
+            
+            The operator treats both fields together as the explicit Azure workload identity path for backup and restore Jobs.
 
 === "Static Token (Legacy)"
 
@@ -221,7 +232,7 @@ Select an authentication method. Use JWT Auth for automatic token rotation.
         spec:
           backup:
             schedule: "0 3 * * *"
-            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
             tokenSecretRef:
               name: backup-token
             target:
@@ -243,7 +254,7 @@ Select an authentication method. Use JWT Auth for automatic token rotation.
         spec:
           backup:
             schedule: "0 3 * * *"
-            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
             tokenSecretRef:
               name: backup-token
             target:
@@ -265,7 +276,7 @@ Select an authentication method. Use JWT Auth for automatic token rotation.
         spec:
           backup:
             schedule: "0 3 * * *"
-            image: "ghcr.io/dc-tec/openbao-backup:0.1.0"
+            image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
             tokenSecretRef:
               name: backup-token
             target:

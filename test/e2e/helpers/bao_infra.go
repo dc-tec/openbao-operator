@@ -31,8 +31,9 @@ type InfraBaoConfig struct {
 	Namespace string
 	Name      string
 	Image     string
-	RootToken string
 }
+
+const infraBaoCAMountPath = "/etc/bao/infra-ca"
 
 // EnsureInfraBao creates (or reuses) a production-mode OpenBao pod + service with TLS.
 // The service is reachable at https://<name>.<namespace>.svc:8200.
@@ -54,9 +55,6 @@ func EnsureInfraBao(ctx context.Context, restCfg *rest.Config, c client.Client, 
 	}
 	if cfg.Image == "" {
 		return fmt.Errorf("image is required")
-	}
-	if cfg.RootToken == "" {
-		return fmt.Errorf("root token is required")
 	}
 
 	// Always generate TLS certificates and configure production mode (never dev mode)
@@ -341,6 +339,183 @@ listener "tcp" {
 	return nil
 }
 
+func infraBaoRootTokenSecretName(name string) string {
+	return name + "-root-token"
+}
+
+func infraBaoTLSCASecretName(name string) string {
+	return name + "-tls-ca"
+}
+
+func readSecretData(ctx context.Context, c client.Client, namespace, name, key string) ([]byte, error) {
+	secret := &corev1.Secret{}
+	if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, secret); err != nil {
+		return nil, err
+	}
+
+	value, ok := secret.Data[key]
+	if !ok || len(strings.TrimSpace(string(value))) == 0 {
+		return nil, fmt.Errorf("secret %s/%s missing non-empty key %q", namespace, name, key)
+	}
+	return value, nil
+}
+
+// ReadInfraBaoRootToken returns the initialized infra-bao root token captured by EnsureInfraBao.
+func ReadInfraBaoRootToken(ctx context.Context, c client.Client, namespace, name string) (string, error) {
+	data, err := readSecretData(ctx, c, namespace, infraBaoRootTokenSecretName(name), "token")
+	if err != nil {
+		return "", fmt.Errorf("failed to read infra-bao root token: %w", err)
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+// ReadInfraBaoTLSCACert returns the infra-bao TLS CA bundle used to trust the helper service.
+func ReadInfraBaoTLSCACert(ctx context.Context, c client.Client, namespace, name string) ([]byte, error) {
+	data, err := readSecretData(ctx, c, namespace, infraBaoTLSCASecretName(name), "ca.crt")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read infra-bao CA bundle: %w", err)
+	}
+	return data, nil
+}
+
+func buildInfraBaoSealCredentialsData(rootToken string, tlsCACert, pkiCACert []byte) map[string][]byte {
+	data := map[string][]byte{
+		"token":  []byte(strings.TrimSpace(rootToken)),
+		"ca.crt": tlsCACert,
+	}
+	if len(pkiCACert) > 0 {
+		data["pki-ca.crt"] = pkiCACert
+	}
+	return data
+}
+
+// EnsureInfraBaoSealCredentialsSecret upserts a Secret matching the transit/private-ACME
+// seal credential contract used by the E2E suites.
+func EnsureInfraBaoSealCredentialsSecret(
+	ctx context.Context,
+	c client.Client,
+	namespace string,
+	secretName string,
+	rootToken string,
+	tlsCACert []byte,
+	pkiCACert []byte,
+) error {
+	if c == nil {
+		return fmt.Errorf("kubernetes client is required")
+	}
+	if namespace == "" {
+		return fmt.Errorf("namespace is required")
+	}
+	if secretName == "" {
+		return fmt.Errorf("secret name is required")
+	}
+	if strings.TrimSpace(rootToken) == "" {
+		return fmt.Errorf("root token is required")
+	}
+	if len(tlsCACert) == 0 {
+		return fmt.Errorf("tls CA certificate is required")
+	}
+
+	desiredData := buildInfraBaoSealCredentialsData(rootToken, tlsCACert, pkiCACert)
+	key := types.NamespacedName{Name: secretName, Namespace: namespace}
+	existing := &corev1.Secret{}
+	err := c.Get(ctx, key, existing)
+	switch {
+	case apierrors.IsNotFound(err):
+		return c.Create(ctx, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: namespace,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: desiredData,
+		})
+	case err != nil:
+		return err
+	default:
+		original := existing.DeepCopy()
+		existing.Type = corev1.SecretTypeOpaque
+		existing.Data = desiredData
+		return c.Patch(ctx, existing, client.MergeFrom(original))
+	}
+}
+
+func newInfraBaoClientPod(
+	namespace string,
+	podName string,
+	image string,
+	infraBaoName string,
+	infraBaoAddress string,
+	token string,
+	script string,
+) *corev1.Pod {
+	env := []corev1.EnvVar{
+		{Name: "BAO_ADDR", Value: infraBaoAddress},
+		{Name: "BAO_CACERT", Value: infraBaoCAMountPath + "/ca.crt"},
+	}
+	if strings.TrimSpace(token) != "" {
+		env = append(env, corev1.EnvVar{Name: "BAO_TOKEN", Value: strings.TrimSpace(token)})
+	}
+
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: ptr.To(true),
+				RunAsUser:    ptr.To(int64(100)),
+				RunAsGroup:   ptr.To(int64(1000)),
+				FSGroup:      ptr.To(int64(1000)),
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeRuntimeDefault,
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:    "bao",
+					Image:   image,
+					Env:     env,
+					Command: []string{"/bin/sh", "-ec"},
+					Args:    []string{script},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "infra-ca",
+							MountPath: infraBaoCAMountPath,
+							ReadOnly:  true,
+						},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: ptr.To(false),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						RunAsNonRoot: ptr.To(true),
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "infra-ca",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: infraBaoTLSCASecretName(infraBaoName),
+							Items: []corev1.KeyToPath{
+								{
+									Key:  "ca.crt",
+									Path: "ca.crt",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 // CleanupInfraBao best-effort deletes the infra-bao resources created by EnsureInfraBao.
 // It is safe to call even if resources were partially created or already removed.
 func CleanupInfraBao(ctx context.Context, c client.Client, cfg InfraBaoConfig) {
@@ -362,7 +537,7 @@ func CleanupInfraBao(ctx context.Context, c client.Client, cfg InfraBaoConfig) {
 	})
 	_ = c.Delete(ctx, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cfg.Name + "-root-token",
+			Name:      infraBaoRootTokenSecretName(cfg.Name),
 			Namespace: cfg.Namespace,
 		},
 	})
@@ -380,7 +555,7 @@ func CleanupInfraBao(ctx context.Context, c client.Client, cfg InfraBaoConfig) {
 // It uses the static auto-unseal configuration, so no secret_shares or secret_threshold
 // are needed. The root token is stored in a Secret for later use.
 func initializeInfraBao(ctx context.Context, restCfg *rest.Config, c client.Client, cfg InfraBaoConfig) error {
-	secretName := cfg.Name + "-root-token"
+	secretName := infraBaoRootTokenSecretName(cfg.Name)
 	if err := c.Get(ctx, types.NamespacedName{Name: secretName, Namespace: cfg.Namespace}, &corev1.Secret{}); err == nil {
 		return nil
 	} else if !apierrors.IsNotFound(err) {
@@ -388,32 +563,7 @@ func initializeInfraBao(ctx context.Context, restCfg *rest.Config, c client.Clie
 	}
 
 	infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", cfg.Name, cfg.Namespace)
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cfg.Name + "-operator-init",
-			Namespace: cfg.Namespace,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "bao",
-					Image: cfg.Image,
-					Env: []corev1.EnvVar{
-						{Name: "BAO_ADDR", Value: infraAddr},
-						{Name: "BAO_SKIP_VERIFY", Value: "true"},
-					},
-					Command: []string{"/bin/sh", "-c"},
-					Args: []string{`
+	pod := newInfraBaoClientPod(cfg.Namespace, cfg.Name+"-operator-init", cfg.Image, cfg.Name, infraAddr, "", `
 set -u
 
 wait_for_api() {
@@ -437,18 +587,7 @@ wait_for_api || exit 1
 
 # For static seal, we don't need to pass secret_shares or secret_threshold.
 bao operator init -format=json
-`},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
-	}
+`)
 
 	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
 	if err != nil {
@@ -500,60 +639,34 @@ func ConfigureInfraBaoTransit(
 	restCfg *rest.Config,
 	c client.Client,
 	namespace string,
+	infraBaoName string,
 	clientImage string,
 	infraBaoAddress string,
-	rootToken string,
 	keyName string,
 ) (*PodResult, error) {
 	if infraBaoAddress == "" {
 		return nil, fmt.Errorf("infra-bao address is required")
 	}
+	if infraBaoName == "" {
+		return nil, fmt.Errorf("infra-bao name is required")
+	}
 	if keyName == "" {
 		return nil, fmt.Errorf("key name is required")
 	}
 
-	// Always use the root token captured during initialization
-	secret := &corev1.Secret{}
-	if err := c.Get(ctx, types.NamespacedName{
-		Name:      "infra-bao-root-token",
-		Namespace: namespace,
-	}, secret); err != nil {
-		return nil, fmt.Errorf("failed to read infra-bao root token Secret: %w", err)
+	tokenToUse, err := ReadInfraBaoRootToken(ctx, c, namespace, infraBaoName)
+	if err != nil {
+		return nil, err
 	}
-	tokenBytes, ok := secret.Data["token"]
-	if !ok || len(tokenBytes) == 0 {
-		return nil, fmt.Errorf("infra-bao root token Secret missing token data")
-	}
-	tokenToUse := strings.TrimSpace(string(tokenBytes))
 
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "infra-bao-configure-transit",
-			Namespace: namespace,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "bao",
-					Image: clientImage,
-					Env: []corev1.EnvVar{
-						{Name: "BAO_ADDR", Value: infraBaoAddress},
-						{Name: "BAO_TOKEN", Value: tokenToUse},
-						// Skip TLS verification for self-signed certificates in test environment
-						{Name: "BAO_SKIP_VERIFY", Value: "true"},
-					},
-					Command: []string{"/bin/sh", "-ec"},
-					Args: []string{`
+	pod := newInfraBaoClientPod(
+		namespace,
+		"infra-bao-configure-transit",
+		clientImage,
+		infraBaoName,
+		infraBaoAddress,
+		tokenToUse,
+		`
 wait_for_unsealed() {
   # Ensure the server is reachable and unsealed. OpenBao CLI returns exit code 2
   # when sealed/uninitialized; treat that as "not ready yet" and keep polling.
@@ -585,23 +698,13 @@ if ! out="$(bao secrets enable transit 2>&1)"; then
 fi
 
 # Ensure the transit key exists.
-if ! bao read -format=json transit/keys/` + keyName + ` >/dev/null 2>&1; then
-  bao write -f transit/keys/` + keyName + ` type=aes256-gcm96 >/dev/null
+if ! bao read -format=json transit/keys/`+keyName+` >/dev/null 2>&1; then
+  bao write -f transit/keys/`+keyName+` type=aes256-gcm96 >/dev/null
 fi
 
 echo "ok"
-`},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
-	}
+`,
+	)
 
 	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
 	if err != nil {
@@ -619,60 +722,34 @@ func ConfigureInfraBaoPKIACME(
 	restCfg *rest.Config,
 	c client.Client,
 	namespace string,
+	infraBaoName string,
 	clientImage string,
 	infraBaoAddress string,
-	rootToken string,
 	clusterPath string,
 ) (*PodResult, error) {
 	if infraBaoAddress == "" {
 		return nil, fmt.Errorf("infra-bao address is required")
 	}
+	if infraBaoName == "" {
+		return nil, fmt.Errorf("infra-bao name is required")
+	}
 	if clusterPath == "" {
 		return nil, fmt.Errorf("cluster path is required")
 	}
 
-	// Always use the root token captured during initialization
-	secret := &corev1.Secret{}
-	if err := c.Get(ctx, types.NamespacedName{
-		Name:      "infra-bao-root-token",
-		Namespace: namespace,
-	}, secret); err != nil {
-		return nil, fmt.Errorf("failed to read infra-bao root token Secret: %w", err)
+	tokenToUse, err := ReadInfraBaoRootToken(ctx, c, namespace, infraBaoName)
+	if err != nil {
+		return nil, err
 	}
-	tokenBytes, ok := secret.Data["token"]
-	if !ok || len(tokenBytes) == 0 {
-		return nil, fmt.Errorf("infra-bao root token Secret missing token data")
-	}
-	tokenToUse := strings.TrimSpace(string(tokenBytes))
 
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "infra-bao-configure-pki-acme",
-			Namespace: namespace,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "bao",
-					Image: clientImage,
-					Env: []corev1.EnvVar{
-						{Name: "BAO_ADDR", Value: infraBaoAddress},
-						{Name: "BAO_TOKEN", Value: tokenToUse},
-						// Skip TLS verification for self-signed certificates in test environment
-						{Name: "BAO_SKIP_VERIFY", Value: "true"},
-					},
-					Command: []string{"/bin/sh", "-ec"},
-					Args: []string{`
+	pod := newInfraBaoClientPod(
+		namespace,
+		"infra-bao-configure-pki-acme",
+		clientImage,
+		infraBaoName,
+		infraBaoAddress,
+		tokenToUse,
+		`
 wait_for_unsealed() {
   i=0
   while [ "$i" -lt 60 ]; do
@@ -701,32 +778,22 @@ if ! out="$(bao secrets enable pki 2>&1)"; then
   esac
 fi
 
-bao secrets tune -tls-skip-verify \
+bao secrets tune \
   -allowed-response-headers=Location \
   -allowed-response-headers=Replay-Nonce \
   -allowed-response-headers=Link \
   pki/ >/dev/null
 
-if ! bao read -format=json -tls-skip-verify pki/cert/ca >/dev/null 2>&1; then
-  bao write -format=json -tls-skip-verify pki/root/generate/internal \
+if ! bao read -format=json pki/cert/ca >/dev/null 2>&1; then
+  bao write -format=json pki/root/generate/internal \
     common_name="E2E ACME Root CA" ttl=87600h >/dev/null
 fi
 
-bao write -tls-skip-verify pki/config/cluster path="` + clusterPath + `" >/dev/null
-bao write -tls-skip-verify pki/config/acme enabled=true >/dev/null
+bao write pki/config/cluster path="`+clusterPath+`" >/dev/null
+bao write pki/config/acme enabled=true >/dev/null
 echo "ok"
-`},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
-	}
+`,
+	)
 
 	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
 	if err != nil {
@@ -744,67 +811,31 @@ func FetchInfraBaoPKICA(
 	restCfg *rest.Config,
 	c client.Client,
 	namespace string,
+	infraBaoName string,
 	clientImage string,
 	infraBaoAddress string,
 ) ([]byte, error) {
 	if infraBaoAddress == "" {
 		return nil, fmt.Errorf("infra-bao address is required")
 	}
+	if infraBaoName == "" {
+		return nil, fmt.Errorf("infra-bao name is required")
+	}
 
-	// Get the root token
-	secret := &corev1.Secret{}
-	if err := c.Get(ctx, types.NamespacedName{
-		Name:      "infra-bao-root-token",
-		Namespace: namespace,
-	}, secret); err != nil {
-		return nil, fmt.Errorf("failed to read infra-bao root token Secret: %w", err)
+	tokenToUse, err := ReadInfraBaoRootToken(ctx, c, namespace, infraBaoName)
+	if err != nil {
+		return nil, err
 	}
-	tokenBytes, ok := secret.Data["token"]
-	if !ok || len(tokenBytes) == 0 {
-		return nil, fmt.Errorf("infra-bao root token Secret missing token data")
-	}
-	tokenToUse := strings.TrimSpace(string(tokenBytes))
 
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "infra-bao-fetch-pki-ca",
-			Namespace: namespace,
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(100)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:  "bao",
-					Image: clientImage,
-					Env: []corev1.EnvVar{
-						{Name: "BAO_ADDR", Value: infraBaoAddress},
-						{Name: "BAO_TOKEN", Value: tokenToUse},
-						{Name: "BAO_SKIP_VERIFY", Value: "true"},
-					},
-					Command: []string{"/bin/sh", "-ec"},
-					Args: []string{
-						`bao read -format=json pki/cert/ca`,
-					},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
-	}
+	pod := newInfraBaoClientPod(
+		namespace,
+		"infra-bao-fetch-pki-ca",
+		clientImage,
+		infraBaoName,
+		infraBaoAddress,
+		tokenToUse,
+		`bao read -format=json pki/cert/ca`,
+	)
 
 	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
 	if err != nil {

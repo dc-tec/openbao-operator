@@ -96,52 +96,47 @@ graph LR
 
     For manual deployment without Helm:
 
-    **1. Apply CRDs**
+    **1. Apply the single-tenant overlay**
 
     ```bash
-    kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/latest/download/crds.yaml
+    kubectl apply -k config/overlays/single-tenant
     ```
 
-    **2. Apply ClusterRole**
+    The overlay:
 
-    ```bash
-    kubectl apply -f https://raw.githubusercontent.com/dc-tec/openbao-operator/main/config/rbac/single_tenant_clusterrole.yaml
-    ```
+    - installs the default controller stack
+    - removes the Provisioner deployment and its RBAC
+    - adds the single-tenant ClusterRole and target namespace RoleBinding
+    - sets `WATCH_NAMESPACE` on the controller Deployment
+    - creates the operator namespace from `config/overlays/single-tenant/kustomization.yaml`
 
-    **3. Create Namespace and RoleBinding**
+    **2. Customize the operator namespace (optional)**
+
+    To change the operator namespace, edit the `namespace` field in `config/overlays/single-tenant/kustomization.yaml`.
+
+    **3. Customize the target namespace (optional)**
+
+    By default the overlay targets the `openbao` namespace. To change it, edit `config/overlays/single-tenant/target_namespace_config.yaml` before applying:
 
     ```yaml
     apiVersion: v1
-    kind: Namespace
+    kind: ConfigMap
     metadata:
-      name: openbao
-    ---
-    apiVersion: rbac.authorization.k8s.io/v1
-    kind: RoleBinding
-    metadata:
-      name: openbao-operator-controller
-      namespace: openbao  # (1)!
-    roleRef:
-      apiGroup: rbac.authorization.k8s.io
-      kind: ClusterRole
-      name: openbao-operator-single-tenant
-    subjects:
-    - kind: ServiceAccount
-      name: openbao-operator-controller
-      namespace: openbao-operator-system
+      name: single-tenant-settings
+      annotations:
+        config.kubernetes.io/local-config: "true"
+    data:
+      WATCH_NAMESPACE: my-openbao
     ```
 
-    1. The target namespace where OpenBaoCluster will be deployed.
+    The overlay wires this value into both the target namespace `RoleBinding` and the controller `WATCH_NAMESPACE` environment variable.
 
-    **4. Patch Controller Deployment**
+    !!! note "Target Namespace Creation"
+        The single-tenant overlay does not create the target namespace. Create it before applying the overlay:
 
-    Add the `WATCH_NAMESPACE` environment variable:
-
-    ```bash
-    kubectl set env deployment/openbao-operator-controller \
-      -n openbao-operator-system \
-      WATCH_NAMESPACE=openbao
-    ```
+        ```bash
+        kubectl create namespace my-openbao
+        ```
 
 ## Verify Installation
 
@@ -163,7 +158,7 @@ openbao-operator-controller-xxxxxxxxxx-xxxxx      1/1     Running   0          1
 
 | Variable | Description |
 | :--- | :--- |
-| `WATCH_NAMESPACE` | **Required for manual deployments.** Target namespace. Enables caching and event-driven reconciliation. Helm sets this automatically when `tenancy.mode=single`. |
+| `WATCH_NAMESPACE` | Target namespace for the controller cache. The manual single-tenant overlay sets this automatically from `config/overlays/single-tenant/target_namespace_config.yaml`. Helm sets it automatically when `tenancy.mode=single`. |
 
 ## Migration
 

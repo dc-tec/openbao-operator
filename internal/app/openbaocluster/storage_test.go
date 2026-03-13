@@ -218,7 +218,7 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 			Resources: StorageResourceRuntime{Client: c, APIReader: c},
 			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
 			Pods: StoragePodRuntime{
-				ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
+				ClientForPodFunc: func(_ context.Context, _ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
 					return &openbao.MockClusterActions{
 						IsLeaderFunc: func(ctx context.Context) (bool, error) { return false, nil },
 					}, nil
@@ -291,7 +291,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 			Resources: StorageResourceRuntime{Client: c, APIReader: c},
 			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
 			Pods: StoragePodRuntime{
-				ClientForPodFunc: func(_ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
+				ClientForPodFunc: func(_ context.Context, _ *openbaov1alpha1.OpenBaoCluster, _ string) (StoragePodClient, error) {
 					return &openbao.MockClusterActions{
 						IsLeaderFunc: func(ctx context.Context) (bool, error) { return true, nil },
 						StepDownLeaderFunc: func(ctx context.Context) error {

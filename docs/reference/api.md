@@ -43,6 +43,45 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `domain` _string_ | Domain is the domain name for which to obtain the certificate.<br />Deprecated: use Domains to request a certificate with multiple SANs. |  | MinLength: 1 <br />Optional: \{\} <br /> |
     | `domains` _string array_ | Domains is the list of domain names for which to obtain the certificate.<br />This maps to OpenBao's listener `tls_acme_domains` field.<br />When empty, the operator will default to an internal Service name suitable for<br />private ACME CAs running inside the cluster (e.g., "<cluster>-acme.<namespace>.svc"). |  | MinItems: 1 <br />Optional: \{\} <br /> |
     | `email` _string_ | Email is the email address to use for ACME registration. |  | Optional: \{\} <br /> |
+    | `sharedCache` _[ACMESharedCacheConfig](#acmesharedcacheconfig)_ | SharedCache configures a filesystem cache shared across OpenBao replicas for ACME account<br />and certificate state. This is required for HA ACME topologies where more than one Pod<br />can serve the same hostname concurrently. |  | Optional: \{\} <br /> |
+
+
+    #### ACMESharedCacheConfig
+
+
+
+    ACMESharedCacheConfig configures the shared filesystem cache for ACME account and certificate state.
+    See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
+
+
+
+    _Appears in:_
+    - [ACMEConfig](#acmeconfig)
+
+    | Field | Description | Default | Validation |
+    | --- | --- | --- | --- |
+    | `mode` _[ACMESharedCacheMode](#acmesharedcachemode)_ | Mode selects whether the operator creates a dedicated RWX PVC or mounts an existing one. |  | Enum: [ManagedPVC ExistingPVC] <br /> |
+    | `existingClaimName` _string_ | ExistingClaimName is the name of a pre-created RWX PVC in the same namespace.<br />Required when Mode is ExistingPVC. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+    | `size` _string_ | Size is the requested capacity for the managed ACME cache PVC.<br />Required when Mode is ManagedPVC. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+    | `storageClassName` _string_ | StorageClassName is an optional StorageClass for the managed ACME cache PVC. |  | Optional: \{\} <br /> |
+
+
+    #### ACMESharedCacheMode
+
+    _Underlying type:_ _string_
+
+    ACMESharedCacheMode controls how the operator provides a shared filesystem for OpenBao's ACME cache.
+
+    _Validation:_
+    - Enum: [ManagedPVC ExistingPVC]
+
+    _Appears in:_
+    - [ACMESharedCacheConfig](#acmesharedcacheconfig)
+
+    | Field | Description |
+    | --- | --- |
+    | `ManagedPVC` | ACMESharedCacheModeManagedPVC instructs the operator to create a dedicated RWX PVC.<br /> |
+    | `ExistingPVC` | ACMESharedCacheModeExistingPVC instructs the operator to mount an existing RWX PVC.<br /> |
 
 
     #### AWSKMSSealConfig
@@ -665,12 +704,16 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
 
     | Field | Description | Default | Validation |
     | --- | --- | --- | --- |
-    | `address` _string_ | Address is the address of the KMIP server. |  | MinLength: 1 <br /> |
-    | `certificate` _string_ | Certificate is the path to the client certificate for KMIP communication. |  | Optional: \{\} <br /> |
-    | `key` _string_ | Key is the path to the private key for KMIP communication. |  | Optional: \{\} <br /> |
+    | `endpoint` _string_ | Endpoint is the KMIP server endpoint. |  | MinLength: 1 <br /> |
+    | `kmsKeyID` _string_ | KMSKeyID is the unique identifier of the KMIP key to use. |  | MinLength: 1 <br /> |
+    | `clientCert` _string_ | ClientCert is the path to the client certificate used for KMIP communication. |  | MinLength: 1 <br /> |
+    | `clientKey` _string_ | ClientKey is the path to the private key used for KMIP communication. |  | MinLength: 1 <br /> |
     | `caCert` _string_ | CACert is the path to the CA certificate for KMIP communication. |  | Optional: \{\} <br /> |
-    | `tlsServerName` _string_ | TLSServerName is the SNI host name to use when connecting via TLS. |  | Optional: \{\} <br /> |
-    | `tlsSkipVerify` _boolean_ | TLSSkipVerify disables verification of TLS certificates. |  | Optional: \{\} <br /> |
+    | `serverName` _string_ | ServerName is the TLS server name to use when connecting to the KMIP endpoint. |  | Optional: \{\} <br /> |
+    | `timeout` _integer_ | Timeout is the timeout in seconds for KMIP requests. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+    | `encryptAlg` _string_ | EncryptAlg is the encryption algorithm used for KMIP requests. |  | Enum: [AES_GCM RSA_OAEP_SHA256 RSA_OAEP_SHA384 RSA_OAEP_SHA512] <br />Optional: \{\} <br /> |
+    | `tls12Ciphers` _string_ | TLS12Ciphers configures the TLS 1.2 cipher suites to use when connecting<br />to the KMIP endpoint. |  | Optional: \{\} <br /> |
+    | `disabled` _boolean_ | Disabled disables this seal configuration, for example during seal migration. |  | Optional: \{\} <br /> |
 
 
     #### ListenerConfig
@@ -763,8 +806,10 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `apiServerCIDR` _string_ | APIServerCIDR is an optional CIDR block for the Kubernetes API server.<br />When specified, this value is used instead of auto-detection for NetworkPolicy egress rules.<br />This is useful when you want an explicit allow-list (or when the in-cluster service VIP<br />injected into pods is unavailable/unusable in your environment).<br />Example: "10.43.0.0/16" for service network or "192.168.1.0/24" for control plane nodes. |  | Optional: \{\} <br /> |
     | `apiServerEndpointIPs` _string array_ | APIServerEndpointIPs is an optional list of Kubernetes API server endpoint IPs.<br />When set, the operator adds least-privilege NetworkPolicy egress rules for these IPs on port 6443.<br />This is required on some CNI implementations where egress enforcement happens on the post-NAT<br />destination (the API server endpoint) rather than the kubernetes Service IP (10.43.0.1:443).<br />The operator does not auto-detect these endpoint IPs because doing so reliably requires broader<br />cluster permissions (list/watch). Configure this field explicitly when needed.<br />Example (k3d): ["192.168.166.2"] |  | Optional: \{\} <br /> |
     | `dnsNamespace` _string_ | DNSNamespace specifies the namespace where the cluster DNS service resides.<br />Defaults to "kube-system" if not specified. | kube-system | Optional: \{\} <br /> |
+    | `dnsEndpointIPs` _string array_ | DNSEndpointIPs is an optional list of DNS resolver endpoint IPs that should be<br />allow-listed directly in the operator-managed NetworkPolicy on TCP/UDP port 53.<br />Use this for clusters that resolve DNS through node-local or host-networked caches<br />instead of pod-backed DNS Services in a namespace. These IP-based rules are additive<br />to the namespace-based allow-list controlled by DNSNamespace.<br />The operator does not auto-detect these endpoint IPs because doing so reliably would<br />require environment-specific node or DNS discovery logic outside the current trust model.<br />Example: ["169.254.20.10"] |  | Optional: \{\} <br /> |
     | `egressRules` _[NetworkPolicyEgressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#networkpolicyegressrule-v1-networking) array_ | EgressRules allows users to specify additional egress rules that will be merged into<br />the operator-managed NetworkPolicy. This is useful for allowing access to external<br />services such as transit seal backends, object storage endpoints, or other dependencies.<br />The operator's default egress rules (DNS, API server, cluster pods) are always included<br />and cannot be overridden. User-provided rules are appended to the operator-managed rules.<br />Example: Allow egress to a transit seal backend in another namespace:<br />  egressRules:<br />  - to:<br />    - namespaceSelector:<br />        matchLabels:<br />          kubernetes.io/metadata.name: transit-namespace<br />    ports:<br />    - protocol: TCP<br />      port: 8200 |  | Optional: \{\} <br /> |
     | `ingressRules` _[NetworkPolicyIngressRule](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#networkpolicyingressrule-v1-networking) array_ | IngressRules allows users to specify additional ingress rules that will be merged into<br />the operator-managed NetworkPolicy. This is useful for allowing access from external<br />services, monitoring tools, or other components that need to reach OpenBao pods.<br />The operator's default ingress rules (cluster pods, kube-system, operator, gateway)<br />are always included and cannot be overridden. User-provided rules are appended to<br />the operator-managed rules.<br />Example: Allow ingress from a monitoring namespace:<br />  ingressRules:<br />  - from:<br />    - namespaceSelector:<br />        matchLabels:<br />          kubernetes.io/metadata.name: monitoring<br />    ports:<br />    - protocol: TCP<br />      port: 8200 |  | Optional: \{\} <br /> |
+    | `trustedIngressPeers` _[NetworkPolicyPeer](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#networkpolicypeer-v1-networking) array_ | TrustedIngressPeers allows users to declare ingress-controller or passthrough-proxy peers<br />that should be allowed to reach OpenBao on the API port without writing full raw<br />NetworkPolicy ingress rules.<br />This is useful for user-managed TCP passthrough or external ingress components that the<br />operator does not manage directly. The operator adds least-privilege ingress rules for<br />port 8200 using these peers.<br />Example: Allow a Traefik namespace to reach OpenBao on port 8200:<br />  trustedIngressPeers:<br />  - namespaceSelector:<br />      matchLabels:<br />        kubernetes.io/metadata.name: traefik<br />Example: Allow only specific ingress-controller pods in another namespace:<br />  trustedIngressPeers:<br />  - namespaceSelector:<br />      matchLabels:<br />        kubernetes.io/metadata.name: ingress-system<br />    podSelector:<br />      matchLabels:<br />        app.kubernetes.io/name: traefik |  | Optional: \{\} <br /> |
 
 
     #### OCIKMSSealConfig
@@ -784,8 +829,8 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `keyID` _string_ | KeyID is the OCID of the master encryption key. |  | MinLength: 1 <br /> |
     | `cryptoEndpoint` _string_ | CryptoEndpoint is the OCI KMS crypto endpoint. |  | MinLength: 1 <br /> |
     | `managementEndpoint` _string_ | ManagementEndpoint is the OCI KMS management endpoint. |  | MinLength: 1 <br /> |
-    | `authType` _string_ | AuthType is the authentication type (e.g., "instance_principal", "user_principal"). |  | Optional: \{\} <br /> |
-    | `compartmentID` _string_ | CompartmentID is the OCID of the compartment containing the key. |  | Optional: \{\} <br /> |
+    | `authTypeAPIKey` _boolean_ | AuthTypeAPIKey enables OCI API key authentication through an OCI SDK config file.<br />When false or omitted, OpenBao uses the default OCI principal flow for the runtime<br />environment, such as instance principal. |  | Optional: \{\} <br /> |
+    | `disabled` _boolean_ | Disabled disables this seal configuration, for example during seal migration. |  | Optional: \{\} <br /> |
 
 
     #### ObservabilityConfig
@@ -974,11 +1019,13 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | --- | --- | --- | --- |
     | `lib` _string_ | Lib is the path to the PKCS#11 library provided by the HSM vendor. |  | MinLength: 1 <br /> |
     | `slot` _string_ | Slot is the slot number where the HSM token is located. |  | Optional: \{\} <br /> |
+    | `tokenLabel` _string_ | TokenLabel is the token label of the HSM slot to use instead of Slot. |  | Optional: \{\} <br /> |
     | `pin` _string_ | PIN is the PIN for accessing the HSM token.<br />Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly. |  | Optional: \{\} <br /> |
     | `keyLabel` _string_ | KeyLabel is the label for the encryption key used by OpenBao. |  | MinLength: 1 <br /> |
-    | `hmacKeyLabel` _string_ | HMACKeyLabel is the label for the HMAC key used by OpenBao. |  | Optional: \{\} <br /> |
-    | `generateKey` _boolean_ | GenerateKey indicates whether OpenBao should generate the key if it doesn't exist. |  | Optional: \{\} <br /> |
-    | `rsaEncryptLocal` _boolean_ | RSAEncryptLocal allows performing encryption locally for HSMs that don't support encryption for RSA keys. |  | Optional: \{\} <br /> |
+    | `keyID` _string_ | KeyID is the PKCS#11 key identifier to use instead of KeyLabel. |  | Optional: \{\} <br /> |
+    | `mechanism` _string_ | Mechanism overrides the PKCS#11 wrapping or encryption mechanism. |  | Optional: \{\} <br /> |
+    | `disableSoftwareEncryption` _boolean_ | DisableSoftwareEncryption disables the software encryption fallback. |  | Optional: \{\} <br /> |
+    | `disabled` _boolean_ | Disabled disables this seal configuration, for example during seal migration. |  | Optional: \{\} <br /> |
     | `rsaOAEPHash` _string_ | RSAOAEPHash specifies the hash algorithm to use for RSA with OAEP padding.<br />Valid values: sha1, sha224, sha256, sha384, sha512. |  | Enum: [sha1 sha224 sha256 sha384 sha512] <br />Optional: \{\} <br /> |
 
 
@@ -1545,7 +1592,7 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | `kmip` _[KMIPSealConfig](#kmipsealconfig)_ | KMIP configures the KMIP seal type.<br />Required when Type is "kmip". |  | Optional: \{\} <br /> |
     | `ocikms` _[OCIKMSSealConfig](#ocikmssealconfig)_ | OCIKMS configures the OCI KMS seal type.<br />Required when Type is "ocikms". |  | Optional: \{\} <br /> |
     | `pkcs11` _[PKCS11SealConfig](#pkcs11sealconfig)_ | PKCS11 configures the PKCS#11 seal type.<br />Required when Type is "pkcs11". |  | Optional: \{\} <br /> |
-    | `credentialsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | CredentialsSecretRef references a Secret containing provider credentials<br />(e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON, Azure client secret, etc.).<br />If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons. |  | Optional: \{\} <br /> |
+    | `credentialsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | CredentialsSecretRef references a Secret containing provider credentials<br />(for example AWS access keys, GCP credentials.json, Azure client-secret keys,<br />or OCI SDK config for authTypeAPIKey mode).<br />If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons. |  | Optional: \{\} <br /> |
 
 
     #### UpdateStrategyType

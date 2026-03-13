@@ -1,6 +1,9 @@
 package infra
 
 import (
+	"path"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
@@ -39,7 +42,7 @@ func newSealWiringProvider(cluster *openbaov1alpha1.OpenBaoCluster) sealWiringPr
 	}
 
 	switch cluster.Spec.Unseal.Type {
-	case "transit":
+	case unsealTypeTransit:
 		return &transitSealWiringProvider{cluster: cluster}
 	case "gcpckms":
 		return &gcpCKMSSealWiringProvider{cluster: cluster}
@@ -196,7 +199,21 @@ type ociKMSSealWiringProvider struct {
 	cluster *openbaov1alpha1.OpenBaoCluster
 }
 
-func (p *ociKMSSealWiringProvider) EnvVars() []corev1.EnvVar { return nil }
+func (p *ociKMSSealWiringProvider) EnvVars() []corev1.EnvVar {
+	if p.cluster.Spec.Unseal == nil || p.cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return nil
+	}
+	if p.cluster.Spec.Unseal.OCIKMS == nil || p.cluster.Spec.Unseal.OCIKMS.AuthTypeAPIKey == nil || !*p.cluster.Spec.Unseal.OCIKMS.AuthTypeAPIKey {
+		return nil
+	}
+
+	return []corev1.EnvVar{
+		{
+			Name:  "OCI_CONFIG_FILE",
+			Value: sealCredsVolumeMountPath + "/config",
+		},
+	}
+}
 
 func (p *ociKMSSealWiringProvider) VolumeMounts() []corev1.VolumeMount {
 	return (&credentialsSecretSealWiringProvider{cluster: p.cluster}).VolumeMounts()
@@ -236,6 +253,9 @@ func (p *transitSealWiringProvider) EnvVars() []corev1.EnvVar {
 	if p.cluster.Spec.Unseal == nil || p.cluster.Spec.Unseal.CredentialsSecretRef == nil {
 		return nil
 	}
+	if p.cluster.Spec.Unseal.Transit != nil && strings.TrimSpace(p.cluster.Spec.Unseal.Transit.Token) != "" {
+		return nil
+	}
 
 	// Read token from the mounted secret file and set as VAULT_TOKEN.
 	// This allows the seal to use the "token" parameter instead of "token_file",
@@ -251,12 +271,6 @@ func (p *transitSealWiringProvider) EnvVars() []corev1.EnvVar {
 					},
 				},
 			},
-		},
-		{
-			// If the credentials Secret provides a CA bundle, surface it via VAULT_CACERT
-			// so transit seal HTTP calls verify infra-bao TLS.
-			Name:  "VAULT_CACERT",
-			Value: sealCredsVolumeMountPath + "/ca.crt",
 		},
 	}
 }
@@ -295,4 +309,23 @@ func (p *gcpCKMSSealWiringProvider) VolumeMounts() []corev1.VolumeMount {
 
 func (p *gcpCKMSSealWiringProvider) Volumes() []corev1.Volume {
 	return (&credentialsSecretSealWiringProvider{cluster: p.cluster}).Volumes()
+}
+
+func mountedSealCredentialsKey(filePath string) (string, bool) {
+	cleanPath := path.Clean(strings.TrimSpace(filePath))
+	if cleanPath == "." || cleanPath == "" {
+		return "", false
+	}
+
+	cleanMount := path.Clean(sealCredsVolumeMountPath)
+	if cleanPath == cleanMount || !strings.HasPrefix(cleanPath, cleanMount+"/") {
+		return "", false
+	}
+
+	rel := strings.TrimPrefix(cleanPath, cleanMount+"/")
+	if rel == "" || strings.Contains(rel, "/") {
+		return "", false
+	}
+
+	return rel, true
 }

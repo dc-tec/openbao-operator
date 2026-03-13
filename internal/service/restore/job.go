@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storageenv"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
@@ -65,9 +66,21 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 	// Build environment variables
 	envVars := buildRestoreEnvVars(restore, cluster)
 
+	tlsTrust, err := portopenbao.ResolveClientTrustBundle(cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve restore TLS trust source: %w", err)
+	}
+	tlsServerName := portopenbao.ComputeTLSServerName(cluster)
+	if tlsServerName != "" {
+		envVars = append(envVars, corev1.EnvVar{Name: constants.EnvTLSServerName, Value: tlsServerName})
+	}
+	if !tlsTrust.UseSystemRoots {
+		envVars = append(envVars, corev1.EnvVar{Name: constants.EnvTLSCAPath, Value: constants.PathTLSCACert})
+	}
+
 	// Build volumes and mounts
-	volumes := buildRestoreVolumes(restore, cluster)
-	volumeMounts := buildRestoreVolumeMounts(restore, cluster)
+	volumes := buildRestoreVolumes(restore, cluster, tlsTrust)
+	volumeMounts := buildRestoreVolumeMounts(restore, cluster, tlsTrust)
 
 	// Build container
 	container := corev1.Container{
@@ -219,17 +232,22 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 }
 
 // buildRestoreVolumes builds volumes for the restore job.
-func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Volume {
+func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster, tlsTrust portopenbao.TrustBundleSource) []corev1.Volume {
 	var volumes []corev1.Volume
 
-	// TLS CA volume (if TLS is enabled)
-	if cluster.Spec.TLS.Enabled {
-		tlsSecretName := cluster.Name + constants.SuffixTLSCA
+	// TLS CA volume (when a trust bundle Secret is required)
+	if !tlsTrust.UseSystemRoots {
 		volumes = append(volumes, corev1.Volume{
 			Name: restoreTLSCAVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: tlsSecretName,
+					SecretName: tlsTrust.SecretName,
+					Items: []corev1.KeyToPath{
+						{
+							Key:  tlsTrust.SecretKey,
+							Path: "ca.crt",
+						},
+					},
 				},
 			},
 		})
@@ -306,11 +324,11 @@ func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 }
 
 // buildRestoreVolumeMounts builds volume mounts for the restore container.
-func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) []corev1.VolumeMount {
+func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster, tlsTrust portopenbao.TrustBundleSource) []corev1.VolumeMount {
 	var mounts []corev1.VolumeMount
 
 	// TLS CA mount
-	if cluster.Spec.TLS.Enabled {
+	if !tlsTrust.UseSystemRoots {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      restoreTLSCAVolumeName,
 			MountPath: restoreTLSCAMountPath,

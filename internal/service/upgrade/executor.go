@@ -1392,6 +1392,7 @@ func newOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, func(
 	mgr := openbao.NewClientManager(portopenbao.ClientConfig{
 		ClusterKey:                     fmt.Sprintf("%s/%s", cfg.ClusterNamespace, cfg.ClusterName),
 		CACert:                         cfg.TLSCACert,
+		TLSServerName:                  cfg.TLSServerName,
 		RateLimitQPS:                   cfg.ClientQPS,
 		RateLimitBurst:                 cfg.ClientBurst,
 		CircuitBreakerFailureThreshold: cfg.ClientCircuitBreakerFailureThreshold,

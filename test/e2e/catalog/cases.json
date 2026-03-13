@@ -211,6 +211,7 @@
       "waiting for StatefulSet to scale down to 2 replicas",
       "waiting for pods to be ready",
       "getting public service for autopilot verification",
+      "triggering reconcile after scale down so autopilot settings are refreshed promptly",
       "verifying Raft Autopilot min_quorum=2 (Development profile with 2 replicas)"
     ],
     "focused": false,
@@ -250,6 +251,7 @@
       "waiting for StatefulSet to scale to 3 replicas",
       "waiting for all pods to be ready",
       "getting public service for autopilot verification",
+      "triggering reconcile after scale up so autopilot settings are refreshed promptly",
       "verifying Raft Autopilot min_quorum=3 (Development profile with 3 replicas)"
     ],
     "focused": false,
@@ -475,6 +477,7 @@
       "waiting for the StatefulSet pod to become Ready (proves auto-unseal worked)",
       "waiting for status.initialized=true (self-init, no operator init)",
       "triggering reconcile to ensure status is updated",
+      "verifying the documented hardened production readiness condition",
       "asserting root token and static unseal secrets do NOT exist",
       "deleting pods to verify auto-unseal works after restart (maintenance mode)"
     ],
@@ -722,6 +725,8 @@
       "checking for prerequisite resources (ConfigMap)",
       "waiting for StatefulSet to be created",
       "waiting for StatefulSet pods to become Ready",
+      "waiting for the ACME shared cache PVC to become Bound",
+      "verifying documented ACME readiness conditions",
       "validating that the config contains ACME parameters",
       "verifying the ACME-issued certificate is trusted by the PKI CA"
     ],
@@ -2140,6 +2145,45 @@
     "suiteTitle": ""
   },
   {
+    "id": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d",
+    "generatedId": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "creates a TLSRoute and reports healthy passthrough integration",
+    "path": [
+      "Upgrade Strategies",
+      "Gateway TLS Passthrough",
+      "creates a TLSRoute and reports healthy passthrough integration"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "gateway",
+      "requires-gateway-api",
+      "tls-passthrough"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "gateway",
+      "requires-gateway-api",
+      "tls-passthrough"
+    ],
+    "steps": [
+      "waiting for passthrough Gateway integration status",
+      "verifying a TLSRoute is created for passthrough access",
+      "verifying BackendTLSPolicy is not created for passthrough mode"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935",
     "generatedId": "upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935",
     "file": "test/e2e/Upgrade_Strategies_test.go",
@@ -2940,6 +2984,7 @@
       "slow"
     ],
     "steps": [
+      "verifying restore configuration is accepted before execution",
       "Verifying secret persists after restore",
       "Verifying restore metrics are emitted"
     ],

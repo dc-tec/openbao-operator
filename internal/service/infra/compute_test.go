@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -392,6 +393,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("acme-probe", ns)
+	cluster.Spec.Replicas = 1
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	acmeDomain := fmt.Sprintf("%s.%s.svc", cluster.Name, cluster.Namespace)
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
@@ -423,8 +425,9 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 			Namespace: cluster.Namespace,
 		},
 		Data: map[string][]byte{
-			"token":  []byte("root"),
-			"ca.crt": []byte("dummy"),
+			"token":      []byte("root"),
+			"ca.crt":     []byte("dummy"),
+			"pki-ca.crt": newTestCACertPEM(t),
 		},
 	}
 	if err := k8sClient.Create(context.Background(), secret); err != nil {
@@ -475,6 +478,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("acme-public", ns)
+	cluster.Spec.Replicas = 1
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
@@ -550,7 +554,7 @@ func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
 		t.Fatalf("expected StatefulSet to exist: %v", err)
 	}
 
-	wantServerName := fmt.Sprintf("-servername=%s-public.%s.svc", cluster.Name, cluster.Namespace)
+	wantServerName := "-servername=" + portopenbao.ComputeTLSServerName(cluster)
 
 	var probesFound bool
 	for _, c := range statefulSet.Spec.Template.Spec.Containers {
@@ -560,7 +564,7 @@ func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
 		probesFound = true
 		cmd := strings.Join(c.ReadinessProbe.Exec.Command, " ")
 		if !strings.Contains(cmd, wantServerName) {
-			t.Fatalf("expected readiness probe to set SNI to external service DNS (%s), got %v", wantServerName, c.ReadinessProbe.Exec.Command)
+			t.Fatalf("expected readiness probe to set SNI to internal TLS server name (%s), got %v", wantServerName, c.ReadinessProbe.Exec.Command)
 		}
 	}
 	if !probesFound {
@@ -787,8 +791,82 @@ func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 	}
 }
 
+func TestDeletePVCsPreservesExistingACMESharedCachePVC(t *testing.T) {
+	k8sClient, scheme := envtestClientForPackage(t)
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+
+	ns := testNamespace(t)
+	cluster := newMinimalCluster("infra-delete-acme-cache", ns)
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://example.invalid/acme",
+		Domain:       "example.com",
+		SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
+			Mode:              openbaov1alpha1.ACMESharedCacheModeExistingPVC,
+			ExistingClaimName: "shared-acme-cache",
+		},
+	}
+	createClusterCRForTest(t, k8sClient, cluster)
+
+	ctx := context.Background()
+
+	dataPVC := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "data-infra-delete-acme-cache-0",
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelOpenBaoCluster: cluster.Name,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+	cachePVC := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "shared-acme-cache",
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				constants.LabelOpenBaoCluster: cluster.Name,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+
+	if err := k8sClient.Create(ctx, dataPVC); err != nil {
+		t.Fatalf("failed to create data PVC: %v", err)
+	}
+	if err := k8sClient.Create(ctx, cachePVC); err != nil {
+		t.Fatalf("failed to create cache PVC: %v", err)
+	}
+
+	if err := manager.Cleanup(ctx, logr.Discard(), cluster, openbaov1alpha1.DeletionPolicyDeletePVCs); err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: dataPVC.Name}, &corev1.PersistentVolumeClaim{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("expected data PVC to be deleted, got error: %v", err)
+	}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cachePVC.Name}, &corev1.PersistentVolumeClaim{}); err != nil {
+		t.Fatalf("expected existing ACME shared cache PVC to be preserved, got error: %v", err)
+	}
+}
+
 func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
 	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.Replicas = 1
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
@@ -825,6 +903,7 @@ func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
 
 func TestStatefulSet_ACMEMode_NoTLSVolume(t *testing.T) {
 	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.Replicas = 1
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
@@ -864,8 +943,36 @@ func TestStatefulSet_ACMEMode_NoTLSVolume(t *testing.T) {
 	}
 }
 
+func TestStatefulSet_ACMEMode_WithSharedCacheMount(t *testing.T) {
+	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+		Domain:       "example.com",
+		SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
+			Mode: openbaov1alpha1.ACMESharedCacheModeManagedPVC,
+			Size: "1Gi",
+		},
+	}
+
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
+	if err != nil {
+		t.Fatalf("buildStatefulSet() error = %v", err)
+	}
+
+	if !hasVolume(statefulSet.Spec.Template.Spec.Volumes, acmeCacheVolumeName) {
+		t.Fatal("expected StatefulSet to include ACME shared cache volume")
+	}
+
+	openBaoContainer := statefulSet.Spec.Template.Spec.Containers[0]
+	if !hasVolumeMountWithPath(openBaoContainer.VolumeMounts, acmeCacheVolumeName, "/bao/acme-cache") {
+		t.Fatal("expected OpenBao container to mount ACME shared cache volume at /bao/acme-cache")
+	}
+}
+
 func TestStatefulSet_ACMEMode_NoShareProcessNamespace(t *testing.T) {
 	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.Replicas = 1
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",

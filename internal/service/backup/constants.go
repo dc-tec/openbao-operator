@@ -2,9 +2,6 @@ package backup
 
 // Reason constants for OpenBaoBackup conditions.
 const (
-	// ReasonNoBackupToken indicates the backup token is missing.
-	ReasonNoBackupToken = "NoBackupToken"
-
 	// ReasonBackupManualTriggerAccepted indicates a manual backup request was accepted.
 	ReasonBackupManualTriggerAccepted = "BackupManualTriggerAccepted"
 
@@ -13,6 +10,9 @@ const (
 
 	// ReasonBackupStarted indicates the operator has started a backup attempt.
 	ReasonBackupStarted = "BackupStarted"
+
+	// ReasonBackupIdentityConfiguration describes how the generated backup workload receives cloud identity.
+	ReasonBackupIdentityConfiguration = "BackupIdentityConfiguration"
 
 	// ReasonBackupJobCreated indicates the backup Job was created successfully.
 	ReasonBackupJobCreated = "BackupJobCreated"

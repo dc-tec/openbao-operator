@@ -2,8 +2,17 @@ package openbaocluster
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
+	"net"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -17,6 +26,7 @@ import (
 
 func TestSetTLSReadyCondition(t *testing.T) {
 	scheme := newOpenBaoClusterTestScheme(t)
+	validCASecret, validServerSecret := newTLSReadyTestSecrets(t)
 
 	tests := []struct {
 		name          string
@@ -58,15 +68,15 @@ func TestSetTLSReadyCondition(t *testing.T) {
 		{
 			name:          "invalid secret",
 			cluster:       newOpenBaoClusterStatusTestObject(),
-			objects:       []runtime.Object{&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "example" + constants.SuffixTLSServer, Namespace: "default"}, Data: map[string][]byte{"tls.crt": []byte("cert")}}},
+			objects:       []runtime.Object{validCASecret.DeepCopy(), &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "example" + constants.SuffixTLSServer, Namespace: "default"}, Data: map[string][]byte{"tls.crt": []byte("cert")}}},
 			wantStatus:    metav1.ConditionFalse,
 			wantReason:    ReasonTLSSecretInvalid,
-			wantMessageIn: "missing required keys",
+			wantMessageIn: "Server TLS Secret is invalid",
 		},
 		{
 			name:          "valid secret",
 			cluster:       newOpenBaoClusterStatusTestObject(),
-			objects:       []runtime.Object{&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "example" + constants.SuffixTLSServer, Namespace: "default"}, Data: map[string][]byte{"tls.crt": []byte("cert"), "tls.key": []byte("key")}}},
+			objects:       []runtime.Object{validCASecret.DeepCopy(), validServerSecret.DeepCopy()},
 			wantStatus:    metav1.ConditionTrue,
 			wantReason:    reasonReady,
 			wantMessageIn: "provisioned",
@@ -94,4 +104,80 @@ func TestSetTLSReadyCondition(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newTLSReadyTestSecrets(t *testing.T) (*corev1.Secret, *corev1.Secret) {
+	t.Helper()
+
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey() error = %v", err)
+	}
+	now := time.Now()
+	caTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName: "test-ca",
+		},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("CreateCertificate(ca) error = %v", err)
+	}
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
+
+	serverKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey(server) error = %v", err)
+	}
+	serverTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject: pkix.Name{
+			CommonName: "test-server",
+		},
+		NotBefore:   now.Add(-time.Hour),
+		NotAfter:    now.Add(24 * time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		DNSNames:    []string{"openbao-cluster-example.local"},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	serverDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caTemplate, &serverKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("CreateCertificate(server) error = %v", err)
+	}
+	serverPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverDER})
+	serverKeyDER, err := x509.MarshalECPrivateKey(serverKey)
+	if err != nil {
+		t.Fatalf("MarshalECPrivateKey() error = %v", err)
+	}
+	serverKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER})
+
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example" + constants.SuffixTLSCA,
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": caPEM,
+		},
+	}
+	serverSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example" + constants.SuffixTLSServer,
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"tls.crt": serverPEM,
+			"tls.key": serverKeyPEM,
+			"ca.crt":  caPEM,
+		},
+	}
+
+	return caSecret, serverSecret
 }

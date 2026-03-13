@@ -53,6 +53,7 @@ import (
 	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
@@ -98,6 +99,27 @@ func detectPlatform(cfg *rest.Config) string {
 	}
 
 	return platformKubernetes
+}
+
+func unavailableHelperImageDefaultFields() []string {
+	checks := []struct {
+		field string
+		fn    func() (string, error)
+	}{
+		{field: "spec.initContainer.image", fn: constants.DefaultInitImage},
+		{field: "spec.backup.image", fn: constants.DefaultBackupImage},
+		{field: "spec.upgrade.image", fn: constants.DefaultUpgradeImage},
+	}
+
+	missing := make([]string, 0, len(checks))
+	for _, check := range checks {
+		if _, err := check.fn(); err == nil {
+			continue
+		}
+		missing = append(missing, check.field)
+	}
+
+	return missing
 }
 
 func init() {
@@ -368,6 +390,15 @@ func Run(args []string) {
 		setupLog.Info("POD_NAMESPACE not set, using default", "namespace", operatorNamespace)
 	} else {
 		setupLog.Info("Using operator namespace from POD_NAMESPACE", "namespace", operatorNamespace)
+	}
+
+	if missingHelperImages := unavailableHelperImageDefaultFields(); len(missingHelperImages) > 0 {
+		setupLog.Info(
+			"Operator-managed default helper images are unavailable until OPERATOR_VERSION is configured; "+
+				"clusters can still override helper images explicitly in the cluster spec",
+			"fields",
+			missingHelperImages,
+		)
 	}
 
 	// Discover OIDC configuration immediately at startup

@@ -39,6 +39,7 @@ layerCoverage:
       - platform/errors
       - platform/logging
       - platform/observability
+      - platform/openbaotls
       - platform/predicates
       - platform/reconcile
       - platform/testutil

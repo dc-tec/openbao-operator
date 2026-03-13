@@ -12,6 +12,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 type hclCoreAttributes struct {
@@ -37,6 +38,7 @@ type hclListenerTCP struct {
 	TLSACMECADir                *string   `hcl:"tls_acme_ca_directory"`
 	TLSACMEDomains              *[]string `hcl:"tls_acme_domains"`
 	TLSACMEEmail                *string   `hcl:"tls_acme_email"`
+	TLSACMECachePath            *string   `hcl:"tls_acme_cache_path"`
 	TLSACMEDisableHTTPChallenge *bool     `hcl:"tls_acme_disable_http_challenge"`
 	TLSACMECARoot               *string   `hcl:"tls_acme_ca_root"`
 }
@@ -202,12 +204,16 @@ type hclSealGCPCloudKMS struct {
 type hclSealKMIP struct {
 	Type string `hcl:"type,label"`
 
-	Address       string  `hcl:"address"`
-	Certificate   *string `hcl:"certificate"`
-	Key           *string `hcl:"key"`
-	CACert        *string `hcl:"ca_cert"`
-	TLSServerName *string `hcl:"tls_server_name"`
-	TLSSkipVerify *string `hcl:"tls_skip_verify"`
+	Endpoint     string  `hcl:"endpoint"`
+	KMSKeyID     string  `hcl:"kms_key_id"`
+	ClientCert   *string `hcl:"client_cert"`
+	ClientKey    *string `hcl:"client_key"`
+	CACert       *string `hcl:"ca_cert"`
+	ServerName   *string `hcl:"server_name"`
+	Timeout      *int32  `hcl:"timeout"`
+	EncryptAlg   *string `hcl:"encrypt_alg"`
+	TLS12Ciphers *string `hcl:"tls12_ciphers"`
+	Disabled     *string `hcl:"disabled"`
 }
 
 type hclSealOCIKMS struct {
@@ -216,21 +222,23 @@ type hclSealOCIKMS struct {
 	KeyID              string  `hcl:"key_id"`
 	CryptoEndpoint     string  `hcl:"crypto_endpoint"`
 	ManagementEndpoint string  `hcl:"management_endpoint"`
-	AuthType           *string `hcl:"auth_type"`
-	CompartmentID      *string `hcl:"compartment_id"`
+	AuthTypeAPIKey     *bool   `hcl:"auth_type_api_key"`
+	Disabled           *string `hcl:"disabled"`
 }
 
 type hclSealPKCS11 struct {
 	Type string `hcl:"type,label"`
 
-	Lib             string  `hcl:"lib"`
-	Slot            *string `hcl:"slot"`
-	PIN             *string `hcl:"pin"`
-	KeyLabel        string  `hcl:"key_label"`
-	HMACKeyLabel    *string `hcl:"hmac_key_label"`
-	GenerateKey     *string `hcl:"generate_key"`
-	RSAEncryptLocal *string `hcl:"rsa_encrypt_local"`
-	RSAOAEPHash     *string `hcl:"rsa_oaep_hash"`
+	Lib                       string  `hcl:"lib"`
+	Slot                      *string `hcl:"slot"`
+	TokenLabel                *string `hcl:"token_label"`
+	PIN                       *string `hcl:"pin"`
+	KeyLabel                  string  `hcl:"key_label"`
+	KeyID                     *string `hcl:"key_id"`
+	Mechanism                 *string `hcl:"mechanism"`
+	DisableSoftwareEncryption *string `hcl:"disable_software_encryption"`
+	Disabled                  *string `hcl:"disabled"`
+	RSAOAEPHash               *string `hcl:"rsa_oaep_hash"`
 }
 
 func stringPtr(v string) *string {
@@ -302,9 +310,10 @@ func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Bloc
 			return nil, fmt.Errorf("tls.acme.domain and tls.acme.domains are mutually exclusive; use only one")
 		}
 		listener.TLSACMECADir = stringPtr(cluster.Spec.TLS.ACME.DirectoryURL)
-		domains := acmeDomains(cluster)
+		domains := portopenbao.ComputeACMEDomains(cluster)
 		listener.TLSACMEDomains = &domains
 		listener.TLSACMEEmail = stringPtr(cluster.Spec.TLS.ACME.Email)
+		listener.TLSACMECachePath = stringPtr(portopenbao.ACMESharedCachePath(cluster))
 		listener.TLSACMEDisableHTTPChallenge = boolPtrValue(true)
 		if cluster.Spec.Configuration != nil {
 			listener.TLSACMECARoot = stringPtr(cluster.Spec.Configuration.ACMECARoot)
@@ -352,7 +361,7 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 
 	retryJoinAttrs := hclRetryJoin{
 		AutoJoin:            autoJoinExpr,
-		LeaderTLSServerName: leaderTLSServerName(cluster),
+		LeaderTLSServerName: portopenbao.ComputeTLSServerName(cluster),
 	}
 
 	if cluster.Spec.TLS.Mode != openbaov1alpha1.TLSModeACME {
@@ -376,78 +385,6 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 	storageBlock.Body().AppendBlock(retryJoinBlock)
 
 	return storageBlock
-}
-
-func leaderTLSServerName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	tlsMode := cluster.Spec.TLS.Mode
-	if tlsMode == "" {
-		tlsMode = openbaov1alpha1.TLSModeOperatorManaged
-	}
-
-	// In ACME mode, OpenBao obtains certificates for the configured ACME domain(s).
-	// retry_join must verify leader certificates using a name that is present in those
-	// certificates; the default operator-managed "openbao-cluster-<name>.local" SAN is
-	// not guaranteed (and commonly not allowed by public ACME CAs).
-	if tlsMode == openbaov1alpha1.TLSModeACME && cluster.Spec.TLS.ACME != nil {
-		if d := acmeLeaderTLSServerName(acmeDomains(cluster)); d != "" {
-			return d
-		}
-	}
-
-	return fmt.Sprintf("openbao-cluster-%s.local", cluster.Name)
-}
-
-func acmeLeaderTLSServerName(domains []string) string {
-	for _, d := range domains {
-		d = strings.TrimSpace(d)
-		if d == "" {
-			continue
-		}
-		// Prefer a stable internal Service name when available.
-		if strings.Contains(d, ".svc") {
-			return d
-		}
-	}
-	for _, d := range domains {
-		d = strings.TrimSpace(d)
-		if d != "" {
-			return d
-		}
-	}
-	return ""
-}
-
-func acmeDomains(cluster *openbaov1alpha1.OpenBaoCluster) []string {
-	if cluster == nil || cluster.Spec.TLS.ACME == nil {
-		return nil
-	}
-
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(cluster.Spec.TLS.ACME.Domains)+1)
-
-	for _, raw := range cluster.Spec.TLS.ACME.Domains {
-		d := strings.TrimSpace(raw)
-		if d == "" {
-			continue
-		}
-		if _, ok := seen[d]; ok {
-			continue
-		}
-		seen[d] = struct{}{}
-		out = append(out, d)
-	}
-
-	if len(out) == 0 {
-		if d := strings.TrimSpace(cluster.Spec.TLS.ACME.Domain); d != "" {
-			out = append(out, d)
-		}
-	}
-
-	if len(out) == 0 {
-		out = append(out, fmt.Sprintf("%s-acme.%s.svc", cluster.Name, cluster.Namespace))
-	}
-
-	return out
 }
 
 func boolPtrValue(v bool) *bool {
@@ -738,13 +675,17 @@ func buildSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, e
 		}
 		cfg := cluster.Spec.Unseal.KMIP
 		return gohcl.EncodeAsBlock(hclSealKMIP{
-			Type:          "kmip",
-			Address:       cfg.Address,
-			Certificate:   stringPtr(cfg.Certificate),
-			Key:           stringPtr(cfg.Key),
-			CACert:        stringPtr(cfg.CACert),
-			TLSServerName: stringPtr(cfg.TLSServerName),
-			TLSSkipVerify: boolPtrString(cfg.TLSSkipVerify),
+			Type:         "kmip",
+			Endpoint:     cfg.Endpoint,
+			KMSKeyID:     cfg.KMSKeyID,
+			ClientCert:   stringPtr(cfg.ClientCert),
+			ClientKey:    stringPtr(cfg.ClientKey),
+			CACert:       stringPtr(cfg.CACert),
+			ServerName:   stringPtr(cfg.ServerName),
+			Timeout:      cfg.Timeout,
+			EncryptAlg:   stringPtr(cfg.EncryptAlg),
+			TLS12Ciphers: stringPtr(cfg.TLS12Ciphers),
+			Disabled:     boolPtrString(cfg.Disabled),
 		}, "seal"), nil
 	case "ocikms":
 		if cluster.Spec.Unseal == nil || cluster.Spec.Unseal.OCIKMS == nil {
@@ -756,8 +697,8 @@ func buildSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, e
 			KeyID:              cfg.KeyID,
 			CryptoEndpoint:     cfg.CryptoEndpoint,
 			ManagementEndpoint: cfg.ManagementEndpoint,
-			AuthType:           stringPtr(cfg.AuthType),
-			CompartmentID:      stringPtr(cfg.CompartmentID),
+			AuthTypeAPIKey:     cfg.AuthTypeAPIKey,
+			Disabled:           boolPtrString(cfg.Disabled),
 		}, "seal"), nil
 	case "pkcs11":
 		if cluster.Spec.Unseal == nil || cluster.Spec.Unseal.PKCS11 == nil {
@@ -765,15 +706,17 @@ func buildSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, e
 		}
 		cfg := cluster.Spec.Unseal.PKCS11
 		return gohcl.EncodeAsBlock(hclSealPKCS11{
-			Type:            "pkcs11",
-			Lib:             cfg.Lib,
-			Slot:            stringPtr(cfg.Slot),
-			PIN:             stringPtr(cfg.PIN),
-			KeyLabel:        cfg.KeyLabel,
-			HMACKeyLabel:    stringPtr(cfg.HMACKeyLabel),
-			GenerateKey:     boolPtrString(cfg.GenerateKey),
-			RSAEncryptLocal: boolPtrString(cfg.RSAEncryptLocal),
-			RSAOAEPHash:     stringPtr(cfg.RSAOAEPHash),
+			Type:                      "pkcs11",
+			Lib:                       cfg.Lib,
+			Slot:                      stringPtr(cfg.Slot),
+			TokenLabel:                stringPtr(cfg.TokenLabel),
+			PIN:                       stringPtr(cfg.PIN),
+			KeyLabel:                  cfg.KeyLabel,
+			KeyID:                     stringPtr(cfg.KeyID),
+			Mechanism:                 stringPtr(cfg.Mechanism),
+			DisableSoftwareEncryption: boolPtrString(cfg.DisableSoftwareEncryption),
+			Disabled:                  boolPtrString(cfg.Disabled),
+			RSAOAEPHash:               stringPtr(cfg.RSAOAEPHash),
 		}, "seal"), nil
 	default:
 		return nil, fmt.Errorf("unsupported unseal type %q", unsealType)

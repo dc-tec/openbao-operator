@@ -3,6 +3,7 @@ package infra
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -12,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 const (
@@ -174,5 +176,40 @@ func TestDetectAPIServerInfo_InvalidManualEndpointIPEntryErrors(t *testing.T) {
 	_, err := m.detectAPIServerInfo(context.Background(), logr.Discard(), cluster)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
+	}
+}
+
+func TestEnsureNetworkPolicy_APIServerDiscoveryFailureIsPermanentConfig(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example",
+			Namespace: "default",
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithReturnManagedFields().
+		Build()
+
+	m := &Manager{
+		client:            k8sClient,
+		reader:            k8sClient,
+		scheme:            testScheme,
+		operatorNamespace: "openbao-operator-system",
+	}
+
+	err := m.ensureNetworkPolicy(context.Background(), logr.Discard(), cluster)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrAPIServerNetworkConfigurationInvalid) {
+		t.Fatalf("expected ErrAPIServerNetworkConfigurationInvalid, got %v", err)
+	}
+	if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+		t.Fatalf("expected permanent config error, got %v", err)
+	}
+	if got := err.Error(); !strings.Contains(got, "spec.network.apiServerEndpointIPs") {
+		t.Fatalf("error %q does not mention apiServerEndpointIPs", got)
 	}
 }

@@ -89,6 +89,7 @@ func newBinding(name, policyName string, actions ...admissionregistrationv1.Vali
 func TestDefaultNamePrefixes(t *testing.T) {
 	t.Run("defaults when env unset", func(t *testing.T) {
 		t.Setenv("OPERATOR_NAME_PREFIX", "")
+		t.Setenv("OPERATOR_SERVICE_ACCOUNT_NAME", "")
 		got := DefaultNamePrefixes()
 		want := []string{"openbao-operator-", ""}
 		if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
@@ -98,6 +99,7 @@ func TestDefaultNamePrefixes(t *testing.T) {
 
 	t.Run("normalizes env prefix and preserves fallback order", func(t *testing.T) {
 		t.Setenv("OPERATOR_NAME_PREFIX", "demo")
+		t.Setenv("OPERATOR_SERVICE_ACCOUNT_NAME", "")
 		got := DefaultNamePrefixes()
 		want := []string{"demo-", "openbao-operator-", ""}
 		if strings.Join(got, ",") != strings.Join(want, ",") {
@@ -107,8 +109,19 @@ func TestDefaultNamePrefixes(t *testing.T) {
 
 	t.Run("dedupes duplicate prefixes", func(t *testing.T) {
 		t.Setenv("OPERATOR_NAME_PREFIX", "openbao-operator-")
+		t.Setenv("OPERATOR_SERVICE_ACCOUNT_NAME", "")
 		got := DefaultNamePrefixes()
 		want := []string{"openbao-operator-", ""}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("DefaultNamePrefixes()=%v, want %v", got, want)
+		}
+	})
+
+	t.Run("derives prefix from controller service account", func(t *testing.T) {
+		t.Setenv("OPERATOR_NAME_PREFIX", "")
+		t.Setenv("OPERATOR_SERVICE_ACCOUNT_NAME", "demo-openbao-operator-controller")
+		got := DefaultNamePrefixes()
+		want := []string{"demo-openbao-operator-", "openbao-operator-", ""}
 		if strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Fatalf("DefaultNamePrefixes()=%v, want %v", got, want)
 		}

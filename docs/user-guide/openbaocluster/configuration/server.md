@@ -120,7 +120,7 @@ The `OpenBaoCluster` Custom Resource provides comprehensive configuration option
         image: "internal-registry.example.com/openbao-init:1.0.0"
 
       backup:
-        image: "internal-registry.example.com/openbao-backup:0.1.0"
+        image: "internal-registry.example.com/openbao-backup:X.Y.Z"
         schedule: "0 3 * * *"
         retention:
           maxCount: 7

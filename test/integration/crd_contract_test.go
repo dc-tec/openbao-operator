@@ -190,6 +190,176 @@ func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
 	}
 }
 
+func TestCRD_OpenBaoCluster_RejectsHAACMEWithoutSharedCache(t *testing.T) {
+	namespace := newTestNamespace(t)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-acme-ha-missing-cache")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://acme.example/directory",
+		Domain:       "bao.example.com",
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireInvalidRequest(t, err)
+	if !strings.Contains(err.Error(), "HA ACME clusters require spec.tls.acme.sharedCache") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_RejectsSharedCacheOutsideACME(t *testing.T) {
+	namespace := newTestNamespace(t)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-non-acme-shared-cache")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
+			Mode: openbaov1alpha1.ACMESharedCacheModeManagedPVC,
+			Size: "1Gi",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireInvalidRequest(t, err)
+	if !strings.Contains(err.Error(), "spec.tls.acme.sharedCache is only supported when spec.tls.mode is ACME") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_RejectsOCIKMSCredentialsSecretWithoutAPIKeyMode(t *testing.T) {
+	namespace := newTestNamespace(t)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-ocikms-secret-without-api-key")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type:                 "ocikms",
+		CredentialsSecretRef: &corev1.LocalObjectReference{Name: "oci-creds"},
+		OCIKMS: &openbaov1alpha1.OCIKMSSealConfig{
+			KeyID:              "ocid1.key.oc1..example",
+			CryptoEndpoint:     "https://kms.us-ashburn-1.oraclecloud.com",
+			ManagementEndpoint: "https://kms.us-ashburn-1.oraclecloud.com",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireInvalidRequest(t, err)
+	if !strings.Contains(err.Error(), "spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_RejectsPKCS11WithoutSlotOrTokenLabel(t *testing.T) {
+	namespace := newTestNamespace(t)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-pkcs11-missing-slot-tokenlabel")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "pkcs11",
+		PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+			Lib:      "/usr/lib/libpkcs11.so",
+			KeyLabel: "openbao-key",
+			PIN:      "1234",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireInvalidRequest(t, err)
+	if !strings.Contains(err.Error(), "spec.unseal.pkcs11.slot or spec.unseal.pkcs11.tokenLabel is required") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_RejectsPKCS11WithSlotAndTokenLabel(t *testing.T) {
+	namespace := newTestNamespace(t)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-pkcs11-slot-and-tokenlabel")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "pkcs11",
+		PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+			Lib:        "/usr/lib/libpkcs11.so",
+			Slot:       "0",
+			TokenLabel: "openbao-token",
+			KeyLabel:   "openbao-key",
+			PIN:        "1234",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireInvalidRequest(t, err)
+	if !strings.Contains(err.Error(), "spec.unseal.pkcs11.slot and spec.unseal.pkcs11.tokenLabel are mutually exclusive") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_RejectsHardenedTransitInlineToken(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-hardened-transit-inline-token")
+	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: true}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Address:   "https://infra-bao.example",
+			Token:     "s.inline",
+			KeyName:   "autounseal",
+			MountPath: "transit/",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "Hardened profile does not allow spec.unseal.transit.token") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_RejectsHardenedTransitAddressWithoutHTTPS(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-hardened-transit-http")
+	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: true}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Address:   "http://infra-bao.example",
+			KeyName:   "autounseal",
+			MountPath: "transit/",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "Hardened profile requires spec.unseal.transit.address to use HTTPS") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_RejectsTransitClientCertWithoutKey(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-transit-client-cert-without-key")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Address:       "https://infra-bao.example",
+			KeyName:       "autounseal",
+			MountPath:     "transit/",
+			TLSClientCert: "/etc/bao/seal-creds/client.crt",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "spec.unseal.transit.tlsClientCert and spec.unseal.transit.tlsClientKey must be set together") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
 func TestVAP_OpenBaoCluster_RejectsDisabledInitContainerOverride(t *testing.T) {
 	ensureDefaultAdmissionPoliciesApplied(t)
 	namespace := newTestNamespace(t)

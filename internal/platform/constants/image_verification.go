@@ -16,4 +16,5 @@ const (
 	ReasonBlueGreenImageVerificationFailed         = "BlueGreenImageVerificationFailed"
 	ReasonBlueGreenSnapshotImageVerificationFailed = "BlueGreenSnapshotImageVerificationFailed"
 	ReasonPreUpgradeBackupImageVerificationFailed  = "PreUpgradeBackupImageVerificationFailed"
+	ReasonHelperImageConfigurationInvalid          = "HelperImageConfigurationInvalid"
 )

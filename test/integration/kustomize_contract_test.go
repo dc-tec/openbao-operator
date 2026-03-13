@@ -16,35 +16,63 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
-func TestKustomizeDefault_ClusterScopedResourcesHaveNoNamespace(t *testing.T) {
-	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
-	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlBytes), 4096)
-
-	for {
-		var raw map[string]any
-		if err := decoder.Decode(&raw); err != nil {
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			t.Fatalf("decode YAML: %v", err)
-		}
-		if len(raw) == 0 {
-			continue
-		}
-
-		obj := &unstructured.Unstructured{Object: raw}
-		if obj.GetAPIVersion() == "" || obj.GetKind() == "" || obj.GetName() == "" {
-			continue
-		}
-
-		if !isClusterScopedManifestObject(obj.GroupVersionKind()) {
-			continue
-		}
-
-		if obj.GetNamespace() != "" {
-			t.Fatalf("cluster-scoped %s %s has unexpected namespace %q", obj.GetKind(), obj.GetName(), obj.GetNamespace())
-		}
+func TestKustomizeClusterScopedResourcesHaveNoNamespace(t *testing.T) {
+	testCases := []struct {
+		name string
+		dir  string
+	}{
+		{
+			name: "config-default",
+			dir:  filepath.Join("..", "..", "config", "default"),
+		},
+		{
+			name: "config-overlays-single-tenant",
+			dir:  filepath.Join("..", "..", "config", "overlays", "single-tenant"),
+		},
 	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			yamlBytes := kustomizeBuild(t, tc.dir)
+			decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlBytes), 4096)
+
+			for {
+				var raw map[string]any
+				if err := decoder.Decode(&raw); err != nil {
+					if errors.Is(err, io.EOF) {
+						return
+					}
+					t.Fatalf("decode YAML: %v", err)
+				}
+				if len(raw) == 0 {
+					continue
+				}
+
+				obj := &unstructured.Unstructured{Object: raw}
+				if obj.GetAPIVersion() == "" || obj.GetKind() == "" || obj.GetName() == "" {
+					continue
+				}
+
+				if !isClusterScopedManifestObject(obj.GroupVersionKind()) {
+					continue
+				}
+
+				if tc.name == "config-overlays-single-tenant" && allowsClusterScopedNamespaceInSingleTenantOverlay(obj.GroupVersionKind()) {
+					continue
+				}
+
+				if obj.GetNamespace() != "" {
+					t.Fatalf("cluster-scoped %s %s has unexpected namespace %q", obj.GetKind(), obj.GetName(), obj.GetNamespace())
+				}
+			}
+		})
+	}
+}
+
+func allowsClusterScopedNamespaceInSingleTenantOverlay(gvk schema.GroupVersionKind) bool {
+	return gvk.Group == "admissionregistration.k8s.io" &&
+		(gvk.Kind == "ValidatingAdmissionPolicy" || gvk.Kind == "ValidatingAdmissionPolicyBinding")
 }
 
 func TestKustomizePolicy_BindingsReferenceExistingPolicies(t *testing.T) {
@@ -146,6 +174,109 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	}
 	if !strings.Contains(isManagedExpression, "variables.has_openbao_specific_label") {
 		t.Fatalf("is_managed expression does not require has_openbao_specific_label: %q", isManagedExpression)
+	}
+}
+
+func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "overlays", "single-tenant"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
+
+	var controller *unstructured.Unstructured
+	var singleTenantBinding *unstructured.Unstructured
+	var hasOperatorNamespace bool
+
+	for _, obj := range objs {
+		switch obj.GetKind() {
+		case "Namespace":
+			if obj.GetName() == "openbao-operator-system" {
+				hasOperatorNamespace = true
+			}
+		case "Deployment":
+			if obj.GetName() == "openbao-operator-controller" {
+				controller = obj
+			}
+			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
+				t.Fatalf("unexpected provisioner deployment in single-tenant overlay: %s", obj.GetName())
+			}
+		case "Service":
+			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
+				t.Fatalf("unexpected provisioner service in single-tenant overlay: %s", obj.GetName())
+			}
+		case "ServiceAccount":
+			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
+				t.Fatalf("unexpected provisioner serviceaccount in single-tenant overlay: %s", obj.GetName())
+			}
+		case "ClusterRole":
+			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
+				t.Fatalf("unexpected provisioner clusterrole in single-tenant overlay: %s", obj.GetName())
+			}
+		case "ClusterRoleBinding":
+			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
+				t.Fatalf("unexpected provisioner clusterrolebinding in single-tenant overlay: %s", obj.GetName())
+			}
+		case "RoleBinding":
+			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
+				t.Fatalf("unexpected provisioner rolebinding in single-tenant overlay: %s", obj.GetName())
+			}
+			if obj.GetName() == "openbao-operator-single-tenant" {
+				singleTenantBinding = obj
+			}
+		}
+	}
+
+	if !hasOperatorNamespace {
+		t.Fatal("single-tenant overlay did not include operator namespace")
+	}
+	if controller == nil {
+		t.Fatal("single-tenant overlay missing controller deployment")
+	}
+	if singleTenantBinding == nil {
+		t.Fatal("single-tenant overlay missing target namespace rolebinding")
+	}
+	if singleTenantBinding.GetNamespace() != "openbao" {
+		t.Fatalf("single-tenant rolebinding namespace = %q, want %q", singleTenantBinding.GetNamespace(), "openbao")
+	}
+
+	envs, found, err := unstructured.NestedSlice(controller.Object, "spec", "template", "spec", "containers")
+	if err != nil || !found || len(envs) == 0 {
+		t.Fatalf("read controller containers: found=%v err=%v", found, err)
+	}
+	container, ok := envs[0].(map[string]any)
+	if !ok {
+		t.Fatalf("controller container has unexpected type %T", envs[0])
+	}
+	envList, found, err := unstructured.NestedSlice(container, "env")
+	if err != nil || !found {
+		t.Fatalf("read controller env: found=%v err=%v", found, err)
+	}
+	var watchNamespace string
+	for _, item := range envList {
+		envMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if name, _ := envMap["name"].(string); name == "WATCH_NAMESPACE" {
+			watchNamespace, _ = envMap["value"].(string)
+			break
+		}
+	}
+	if watchNamespace != "openbao" {
+		t.Fatalf("WATCH_NAMESPACE = %q, want %q", watchNamespace, "openbao")
+	}
+
+	subjects, found, err := unstructured.NestedSlice(singleTenantBinding.Object, "subjects")
+	if err != nil || !found || len(subjects) != 1 {
+		t.Fatalf("read rolebinding subjects: found=%v len=%d err=%v", found, len(subjects), err)
+	}
+	subject, ok := subjects[0].(map[string]any)
+	if !ok {
+		t.Fatalf("rolebinding subject has unexpected type %T", subjects[0])
+	}
+	if got, _ := subject["name"].(string); got != "openbao-operator-controller" {
+		t.Fatalf("rolebinding subject name = %q, want %q", got, "openbao-operator-controller")
+	}
+	if got, _ := subject["namespace"].(string); got != "openbao-operator-system" {
+		t.Fatalf("rolebinding subject namespace = %q, want %q", got, "openbao-operator-system")
 	}
 }
 

@@ -13,6 +13,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `upgrade-strategies-aborts-before-promotion-when-the-pre-230729f6` | aborts before promotion when the pre-promotion hook fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `failure` |
 | `upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124` | induces executor failure and validates retry plus auto-abort behavior | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen` |
 | `upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e` | keeps HTTPRoute stable and switches external Service selector at cutover | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `bluegreen` |
+| `upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d` | creates a TLSRoute and reports healthy passthrough integration | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `tls-passthrough` |
 | `upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935` | triggers late-phase rollback after promotion failures and recovers when auth is restored | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `rollback` |
 | `upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87` | recovers a failed rolling upgrade after a retry request clears stale state | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `recovery` |
 | `upgrade-strategies-retries-a-failed-rolling-pre-upgrade-fade7ad8` | retries a failed rolling pre-upgrade snapshot before starting rollout | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `snapshot`, `recovery` |
@@ -120,6 +121,22 @@ Recorded checkpoints:
 - Waiting for Blue/Green upgrade to complete
 - Verifying legacy blue/green Services do not exist
 - Verifying HTTPRoute remains stable throughout upgrade
+
+
+## `upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d`
+
+Path: `Upgrade Strategies > Gateway TLS Passthrough > creates a TLSRoute and reports healthy passthrough integration`
+
+State: `active`
+
+Covers: _none_
+
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `tls-passthrough`
+
+Recorded checkpoints:
+- waiting for passthrough Gateway integration status
+- verifying a TLSRoute is created for passthrough access
+- verifying BackendTLSPolicy is not created for passthrough mode
 
 
 ## `upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935`

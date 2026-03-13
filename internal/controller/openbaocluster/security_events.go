@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 )
 
 func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -24,12 +25,15 @@ func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context
 	annotationUpdates := make(map[string]string)
 
 	// Helper to check and potentially add warning
-	maybeWarn := func(annotationKey, reason, message string) {
+	maybeEvent := func(annotationKey, eventType, reason, message string) {
 		if !shouldEmitSecurityWarning(cluster.Annotations, annotationKey, now) {
 			return
 		}
-		r.Recorder.Eventf(cluster, nil, corev1.EventTypeWarning, reason, reason, "%s", message)
+		r.Recorder.Eventf(cluster, nil, eventType, reason, reason, "%s", message)
 		annotationUpdates[annotationKey] = now.Format(time.RFC3339Nano)
+	}
+	maybeWarn := func(annotationKey, reason, message string) {
+		maybeEvent(annotationKey, corev1.EventTypeWarning, reason, message)
 	}
 
 	if cluster.Spec.Profile == "" {
@@ -47,6 +51,15 @@ func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
 	if !selfInitEnabled {
 		maybeWarn(annotationLastRootTokenWarning, ReasonRootTokenStored, "SelfInit is disabled; the operator will store a root token in a Kubernetes Secret during bootstrap, which is not suitable for production")
+	}
+
+	if message, ok := appopenbaocluster.AmbientCloudUnsealIdentityMessage(cluster); ok {
+		maybeEvent(
+			annotationLastAmbientUnsealNote,
+			corev1.EventTypeNormal,
+			ReasonAmbientUnsealIdentity,
+			message,
+		)
 	}
 
 	if len(annotationUpdates) == 0 {

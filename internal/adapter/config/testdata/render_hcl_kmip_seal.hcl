@@ -13,12 +13,15 @@ listener "tcp" {
   tls_client_ca_file   = "/etc/bao/tls/ca.crt"
 }
 seal "kmip" {
-  address         = "kmip.example.com:5696"
-  certificate     = "/etc/kmip/cert.pem"
-  key             = "/etc/kmip/key.pem"
-  ca_cert         = "/etc/kmip/ca.pem"
-  tls_server_name = "kmip.example.com"
-  tls_skip_verify = "false"
+  endpoint      = "kmip.example.com:5696"
+  kms_key_id    = "openbao-kmip-key"
+  client_cert   = "/etc/kmip/client.crt"
+  client_key    = "/etc/kmip/client.key"
+  ca_cert       = "/etc/kmip/ca.pem"
+  server_name   = "kmip.example.com"
+  timeout       = 30
+  encrypt_alg   = "AES_GCM"
+  tls12_ciphers = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
 }
 storage "raft" {
   path    = "/bao/data"

@@ -65,6 +65,7 @@ Recorded checkpoints:
 - waiting for StatefulSet to scale down to 2 replicas
 - waiting for pods to be ready
 - getting public service for autopilot verification
+- triggering reconcile after scale down so autopilot settings are refreshed promptly
 - verifying Raft Autopilot min_quorum=2 (Development profile with 2 replicas)
 
 
@@ -83,6 +84,7 @@ Recorded checkpoints:
 - waiting for StatefulSet to scale to 3 replicas
 - waiting for all pods to be ready
 - getting public service for autopilot verification
+- triggering reconcile after scale up so autopilot settings are refreshed promptly
 - verifying Raft Autopilot min_quorum=3 (Development profile with 3 replicas)
 
 

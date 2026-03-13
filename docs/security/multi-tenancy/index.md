@@ -7,6 +7,9 @@ description: Multi-tenancy security model for OpenBao Operator, describing tenan
 !!! abstract "Shared Platform, Isolated Tenants"
     OpenBao Operator is designed for **Hard Multi-Tenancy**. It allows multiple independent teams to share a single Kubernetes cluster and Operator installation while maintaining strict cryptographic, network, and identity isolation.
 
+!!! success "Recommended Production Model"
+    Multi-tenant mode is the recommended production operating model. It combines Provisioner/Controller separation, admission guardrails, and namespace introduction controls to keep tenant onboarding and workload management isolated.
+
 ## Security Pillars
 
 <div class="grid cards" markdown>
@@ -15,7 +18,7 @@ description: Multi-tenancy security model for OpenBao Operator, describing tenan
 
     ---
 
-    How the "Provisioner" controller enforces strict namespace boundaries and prevents cross-tenant access.
+    How the Provisioner controller enforces strict namespace boundaries and prevents cross-tenant access.
 
     [:material-arrow-right: Isolation Model](tenant-isolation.md)
 
@@ -23,7 +26,7 @@ description: Multi-tenancy security model for OpenBao Operator, describing tenan
 
     ---
 
-    The "Zero Trust" split-controller architecture that ensures no single credential has total cluster control.
+    The Zero Trust split-controller architecture that ensures no single credential has total cluster control.
 
     [:material-arrow-right: RBAC Architecture](../infrastructure/rbac.md)
 

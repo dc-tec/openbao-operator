@@ -14,12 +14,22 @@ spec:
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["roles", "rolebindings"]
   variables:
+    - name: operator_namespace
+      expression: >-
+        '{{ .Release.Namespace }}'
+    - name: controller_serviceaccount_name
+      expression: >-
+        '{{ include "openbao-operator.controllerServiceAccountName" . }}'
+    - name: provisioner_serviceaccount_name
+      expression: >-
+        'openbao-operator-provisioner'
+    - name: provisioner_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.provisioner_serviceaccount_name
     - name: is_provisioner
       # Matches the ServiceAccount of the Provisioner.
       expression: >-
-        request.userInfo.username in [
-          "system:serviceaccount:{{ .Release.Namespace }}:{{ include "openbao-operator.provisionerServiceAccountName" . }}"
-        ]
+        request.userInfo.username == variables.provisioner_principal
   validations:
     # Rule 0: Namespace Restriction
     # The Provisioner must not manage tenant RBAC in system namespaces.
@@ -36,7 +46,7 @@ spec:
     - expression: >-
         !variables.is_provisioner ||
         !(
-          request.namespace == '{{ .Release.Namespace }}' ||
+          request.namespace == variables.operator_namespace ||
           request.namespace.startsWith('kube-') ||
           request.namespace == 'openshift' ||
           request.namespace.startsWith('openshift-') ||
@@ -263,24 +273,24 @@ spec:
             object.roleRef.name == 'openbao-operator-tenant-role' &&
             object.subjects.size() == 1 &&
             object.subjects[0].kind == 'ServiceAccount' &&
-            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
-            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+            object.subjects[0].name == variables.controller_serviceaccount_name &&
+            object.subjects[0].namespace == variables.operator_namespace
           ) ||
           (
             object.metadata.name == 'openbao-operator-tenant-secrets-reader-rolebinding' &&
             object.roleRef.name == 'openbao-operator-tenant-secrets-reader' &&
             object.subjects.size() == 1 &&
             object.subjects[0].kind == 'ServiceAccount' &&
-            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
-            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+            object.subjects[0].name == variables.controller_serviceaccount_name &&
+            object.subjects[0].namespace == variables.operator_namespace
           ) ||
           (
             object.metadata.name == 'openbao-operator-tenant-secrets-writer-rolebinding' &&
             object.roleRef.name == 'openbao-operator-tenant-secrets-writer' &&
             object.subjects.size() == 1 &&
             object.subjects[0].kind == 'ServiceAccount' &&
-            object.subjects[0].name == '{{ include "openbao-operator.controllerServiceAccountName" . }}' &&
-            object.subjects[0].namespace == '{{ .Release.Namespace }}'
+            object.subjects[0].name == variables.controller_serviceaccount_name &&
+            object.subjects[0].namespace == variables.operator_namespace
           )
         )
       message: "The Provisioner can only bind tenant RBAC to the operator controller ServiceAccount."

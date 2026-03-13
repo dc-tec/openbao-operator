@@ -6,6 +6,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -51,7 +52,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 
 	var (
 		infraBaoRootToken string
-		infraBaoCASecret  *corev1.Secret
+		infraBaoTLSCACert []byte
 		infraBaoPKICA     []byte
 	)
 
@@ -80,49 +81,36 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 			Namespace: f.Namespace,
 			Name:      infraBaoName,
 			Image:     openBaoImage,
-			// Placeholder; actual root token is captured from init secret below.
-			RootToken: "placeholder",
 		}
 		Expect(e2ehelpers.EnsureInfraBao(ctx, cfg, c, infraCfg)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Infra-bao instance %q is running in production mode with TLS\n", infraBaoName)
 
-		// Fetch the actual root token captured during infra-bao initialization.
-		rootTokenSecret := &corev1.Secret{}
-		Expect(c.Get(ctx, types.NamespacedName{
-			Name:      infraBaoName + "-root-token",
-			Namespace: f.Namespace,
-		}, rootTokenSecret)).To(Succeed())
-		tokenBytes := rootTokenSecret.Data["token"]
-		Expect(tokenBytes).NotTo(BeEmpty(), "infra-bao root token should be present")
-		infraBaoRootToken = strings.TrimSpace(string(tokenBytes))
+		var errRead error
+		infraBaoRootToken, errRead = e2ehelpers.ReadInfraBaoRootToken(ctx, c, f.Namespace, infraBaoName)
+		Expect(errRead).NotTo(HaveOccurred())
 
-		// Fetch infra-bao CA certificate for TLS verification when using transit seal.
-		infraBaoCASecret = &corev1.Secret{}
-		Expect(c.Get(ctx, types.NamespacedName{
-			Name:      infraBaoName + "-tls-ca",
-			Namespace: f.Namespace,
-		}, infraBaoCASecret)).To(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "Fetched infra-bao CA secret %q\n", infraBaoName+"-tls-ca")
-		Expect(infraBaoCASecret.Data["ca.crt"]).NotTo(BeEmpty(), "infra-bao CA certificate should exist")
+		infraBaoTLSCACert, errRead = e2ehelpers.ReadInfraBaoTLSCACert(ctx, c, f.Namespace, infraBaoName)
+		Expect(errRead).NotTo(HaveOccurred())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Fetched infra-bao CA bundle for %q\n", infraBaoName)
 
 		By("configuring PKI secrets engine with ACME support on infra-bao")
 		// Use HTTPS since infra-bao is configured with TLS for ACME tests
 		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
 		clusterPath := infraAddr + "/v1/pki"
 
-		result, err := e2ehelpers.ConfigureInfraBaoPKIACME(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr, infraBaoRootToken, clusterPath)
+		result, err := e2ehelpers.ConfigureInfraBaoPKIACME(ctx, cfg, c, f.Namespace, infraBaoName, openBaoImage, infraAddr, clusterPath)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao pki/acme setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "PKI secrets engine configured with ACME support at path %q\n", clusterPath)
 
 		By("configuring transit secrets engine on infra-bao")
-		result, err = e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr, infraBaoRootToken, infraBaoKeyName)
+		result, err = e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, infraBaoName, openBaoImage, infraAddr, infraBaoKeyName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao transit setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Transit secrets engine configured with key %q\n", infraBaoKeyName)
 
 		By("fetching PKI CA certificate from infra-bao for ACME certificate verification")
-		infraBaoPKICA, err = e2ehelpers.FetchInfraBaoPKICA(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr)
+		infraBaoPKICA, err = e2ehelpers.FetchInfraBaoPKICA(ctx, cfg, c, f.Namespace, infraBaoName, openBaoImage, infraAddr)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(infraBaoPKICA).NotTo(BeEmpty(), "PKI CA certificate should not be empty")
 		_, _ = fmt.Fprintf(GinkgoWriter, "Fetched PKI CA certificate from infra-bao (length: %d bytes)\n", len(infraBaoPKICA))
@@ -167,22 +155,16 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		_, _ = fmt.Fprintf(GinkgoWriter, "ACME directory URL: %q, domain: %q\n", acmeDirectoryURL, acmeDomain)
 
 		By("creating transit token secret for auto-unseal (include TLS CA for transit and PKI CA for ACME)")
-		tokenSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      infraBaoTokenSecretName,
-				Namespace: f.Namespace,
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-				"token":      []byte(infraBaoRootToken),
-				"ca.crt":     infraBaoCASecret.Data["ca.crt"], // TLS CA for transit seal
-				"pki-ca.crt": infraBaoPKICA,                   // PKI CA for ACME certificate verification
-			},
-		}
-		err = c.Create(ctx, tokenSecret)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
+		err = e2ehelpers.EnsureInfraBaoSealCredentialsSecret(
+			ctx,
+			c,
+			f.Namespace,
+			infraBaoTokenSecretName,
+			infraBaoRootToken,
+			infraBaoTLSCACert,
+			infraBaoPKICA,
+		)
+		Expect(err).NotTo(HaveOccurred())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created transit token secret %q\n", infraBaoTokenSecretName)
 
 		// Verify the token in the secret works with infra-bao before the cluster tries to use it
@@ -237,6 +219,10 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyTokenPod.Name)
 
 		By(fmt.Sprintf("creating OpenBaoCluster %q with ACME TLS mode", clusterName))
+		var acmeCacheStorageClass *string
+		if sc := strings.TrimSpace(os.Getenv("E2E_STORAGE_CLASS")); sc != "" {
+			acmeCacheStorageClass = &sc
+		}
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterName,
@@ -286,6 +272,11 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 					ACME: &openbaov1alpha1.ACMEConfig{
 						DirectoryURL: acmeDirectoryURL,
 						Email:        "e2e@example.invalid",
+						SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
+							Mode:             openbaov1alpha1.ACMESharedCacheModeManagedPVC,
+							Size:             "1Gi",
+							StorageClassName: acmeCacheStorageClass,
+						},
 					},
 				},
 				Configuration: &openbaov1alpha1.OpenBaoConfiguration{
@@ -455,6 +446,22 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		}, 10*time.Minute, 5*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q pods are Ready\n", clusterName)
 
+		By("waiting for the ACME shared cache PVC to become Bound")
+		Eventually(func(g Gomega) {
+			pvc := &corev1.PersistentVolumeClaim{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-acme-cache", Namespace: f.Namespace}, pvc)).To(Succeed())
+			_, _ = fmt.Fprintf(GinkgoWriter, "ACME cache PVC %q phase=%s accessModes=%v\n", pvc.Name, pvc.Status.Phase, pvc.Spec.AccessModes)
+			g.Expect(pvc.Spec.AccessModes).To(ContainElement(corev1.ReadWriteMany))
+			g.Expect(pvc.Status.Phase).To(Equal(corev1.ClaimBound))
+		}, 5*time.Minute, 5*time.Second).Should(Succeed())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Managed ACME shared cache PVC is Bound\n")
+
+		By("verifying documented ACME readiness conditions")
+		f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
+		f.WaitForConditionReason(clusterName, openbaov1alpha1.ConditionACMEIntegrationReady, metav1.ConditionTrue, "ACMEIntegrationReady")
+		f.WaitForConditionReason(clusterName, openbaov1alpha1.ConditionACMECacheReady, metav1.ConditionTrue, "ACMECacheReady")
+		f.WaitForConditionReason(clusterName, openbaov1alpha1.ConditionProductionReady, metav1.ConditionTrue, "ProductionReady")
+
 		By("validating that the config contains ACME parameters")
 		// Validate that the config rendered by the operator contains the ACME parameters.
 		// We run a short-lived pod that queries the OpenBao pod's config via the API server
@@ -469,8 +476,10 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 			g.Expect(cfgText).To(ContainSubstring(acmeDirectoryURL))
 			g.Expect(cfgText).To(ContainSubstring("tls_acme_domains"))
 			g.Expect(cfgText).To(ContainSubstring(acmeDomain))
+			g.Expect(cfgText).To(ContainSubstring("tls_acme_cache_path"))
+			g.Expect(cfgText).To(ContainSubstring("/bao/acme-cache/certmagic"))
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap contains ACME parameters (tls_acme_ca_directory, tls_acme_domains)\n")
+		_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap contains ACME parameters (tls_acme_ca_directory, tls_acme_domains, tls_acme_cache_path)\n")
 
 		By("verifying the ACME-issued certificate is trusted by the PKI CA")
 		verifyACMECertPod := &corev1.Pod{

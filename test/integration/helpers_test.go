@@ -126,6 +126,7 @@ func waitForOpenBaoClusterAdmissionPolicies(t *testing.T, namespace string) {
 func createTLSSecret(t *testing.T, namespace, clusterName string) {
 	t.Helper()
 
+	caPEM := []byte("test-ca")
 	secretName := clusterName + constants.SuffixTLSServer
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -135,13 +136,15 @@ func createTLSSecret(t *testing.T, namespace, clusterName string) {
 		Data: map[string][]byte{
 			"tls.crt": []byte("test-cert"),
 			"tls.key": []byte("test-key"),
-			"ca.crt":  []byte("test-ca"),
+			"ca.crt":  caPEM,
 		},
 	}
 
 	if err := k8sClient.Create(ctx, secret); err != nil && !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("create TLS secret: %v", err)
 	}
+
+	createCASecret(t, namespace, clusterName, caPEM)
 }
 
 func createCASecret(t *testing.T, namespace, clusterName string, caPEM []byte) {
@@ -158,8 +161,21 @@ func createCASecret(t *testing.T, namespace, clusterName string, caPEM []byte) {
 		},
 	}
 
-	if err := k8sClient.Create(ctx, secret); err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := k8sClient.Create(ctx, secret); err == nil {
+		return
+	} else if !apierrors.IsAlreadyExists(err) {
 		t.Fatalf("create CA secret: %v", err)
+	}
+
+	existing := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: secretName}, existing); err != nil {
+		t.Fatalf("get existing CA secret: %v", err)
+	}
+	existing.Data = map[string][]byte{
+		"ca.crt": caPEM,
+	}
+	if err := k8sClient.Update(ctx, existing); err != nil {
+		t.Fatalf("update CA secret: %v", err)
 	}
 }
 

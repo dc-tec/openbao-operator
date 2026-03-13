@@ -55,7 +55,13 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	original := cluster.DeepCopy()
 
 	// Set TLSReady early (evaluated separately from clusterState).
+	r.setAPIServerNetworkReadyCondition(ctx, cluster)
 	r.setTLSReadyCondition(ctx, cluster)
+	r.setACMEIntegrationReadyCondition(ctx, cluster)
+	r.setACMECacheReadyCondition(ctx, cluster)
+	r.setGatewayIntegrationReadyCondition(ctx, cluster)
+	r.setBackupConfigurationReadyCondition(ctx, cluster)
+	r.setCloudUnsealIdentityReadyCondition(ctx, cluster)
 
 	// 1. Gather all observed state (API calls).
 	state, err := appopenbaocluster.GatherStatusState(ctx, logger, r.statusDependencies(), cluster)
