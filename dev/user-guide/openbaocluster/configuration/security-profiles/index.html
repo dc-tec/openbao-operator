@@ -4797,9 +4797,10 @@
 <li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> <strong>Secure Network</strong>: If backups are enabled, explicit egress rules are required (fail-closed networking).</li>
 <li><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 7 9 19l-5.5-5.5 1.41-1.41L9 16.17 19.59 5.59z"/></svg></span> <strong>Supply Chain Guardrails</strong>: <code>spec.imageVerification</code> and <code>spec.operatorImageVerification</code> cannot be disabled and cannot use <code>failurePolicy: Warn</code>.</li>
 </ul>
-<p>If verification blocks are omitted in Hardened, verification is still applied. For official release image
-repositories/tags, default GitHub keyless identity values are used. For mirrored/private registries, provide
-explicit <code>publicKey</code> or keyless identity fields in the verification config.</p>
+<p>If verification blocks are omitted in Hardened, or are present with <code>enabled: true</code> but no explicit trust
+material, verification is still applied. For official release image repositories/tags, default GitHub keyless
+identity values are used. For mirrored/private registries, provide explicit <code>publicKey</code> or keyless identity
+fields in the verification config.</p>
 <h3 id="benefits">Benefits<a class="headerlink" href="#benefits" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Zero Trust</strong>: No root token Secret is created; initialization credentials are auto-revoked.</li>

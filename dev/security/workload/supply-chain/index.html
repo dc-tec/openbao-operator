@@ -4766,7 +4766,8 @@
 <div class="admonition tip">
 <p class="admonition-title">Keyless Defaults for Official Images</p>
 <p>When verification is enabled and no <code>publicKey</code>/keyless identity fields are provided
-(<code>issuer</code>/<code>subject</code> or <code>issuerRegExp</code>/<code>subjectRegExp</code>),
+(<code>issuer</code>/<code>subject</code> or <code>issuerRegExp</code>/<code>subjectRegExp</code>), including when the verification block is
+present with <code>enabled: true</code> but otherwise empty,
 the operator auto-fills keyless identity defaults for official release images:</p>
 <ul>
 <li><code>openbao/openbao:&lt;tag&gt;</code>, <code>ghcr.io/openbao/openbao:&lt;tag&gt;</code>, <code>quay.io/openbao/openbao:&lt;tag&gt;</code> -&gt; OpenBao release workflow identity</li>
@@ -4849,7 +4850,8 @@ pins verified digests.</p>
 <div class="admonition warning">
 <p class="admonition-title">Hardened Profile Guardrails</p>
 <p>Hardened profile rejects explicit <code>enabled=false</code> and <code>failurePolicy=Warn</code> for image verification blocks.
-Omitted verification blocks are still allowed, and are implicitly treated as enabled in Hardened.</p>
+Omitted verification blocks, or enabled blocks without explicit trust material for official images, are still
+allowed and are implicitly treated as enabled in Hardened.</p>
 </div>
 <h2 id="verified-workloads">Verified Workloads<a class="headerlink" href="#verified-workloads" title="Permanent link">&para;</a></h2>
 <p>Verification applies to all images managed by the Operator:</p>
