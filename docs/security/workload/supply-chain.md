@@ -56,7 +56,8 @@ flowchart LR
 
     !!! tip "Keyless Defaults for Official Images"
         When verification is enabled and no `publicKey`/keyless identity fields are provided
-        (`issuer`/`subject` or `issuerRegExp`/`subjectRegExp`),
+        (`issuer`/`subject` or `issuerRegExp`/`subjectRegExp`), including when the verification block is
+        present with `enabled: true` but otherwise empty,
         the operator auto-fills keyless identity defaults for official release images:
 
         - `openbao/openbao:<tag>`, `ghcr.io/openbao/openbao:<tag>`, `quay.io/openbao/openbao:<tag>` -> OpenBao release workflow identity
@@ -121,7 +122,8 @@ By default, the Operator verifies signatures against the [Sigstore Rekor](https:
 
 !!! warning "Hardened Profile Guardrails"
     Hardened profile rejects explicit `enabled=false` and `failurePolicy=Warn` for image verification blocks.
-    Omitted verification blocks are still allowed, and are implicitly treated as enabled in Hardened.
+    Omitted verification blocks, or enabled blocks without explicit trust material for official images, are still
+    allowed and are implicitly treated as enabled in Hardened.
 
 ## Verified Workloads
 
