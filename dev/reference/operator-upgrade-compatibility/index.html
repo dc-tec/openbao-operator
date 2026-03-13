@@ -4622,7 +4622,7 @@
 <p>Use the release assets:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>openbao-operator<span class="w"> </span>oci://ghcr.io/dc-tec/charts/openbao-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--namespace<span class="w"> </span>openbao-operator-system
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;operator-namespace&gt;
 </span></code></pre></div>
 <p>This matches the operator installation guidance in <a href="../../user-guide/operator/installation/#upgrading">Installation</a>.</p>
 <h2 id="3-upgrade-safety-checklist">3. Upgrade Safety Checklist<a class="headerlink" href="#3-upgrade-safety-checklist" title="Permanent link">&para;</a></h2>

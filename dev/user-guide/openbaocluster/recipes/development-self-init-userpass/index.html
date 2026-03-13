@@ -4806,6 +4806,11 @@
 <td style="text-align: left;"><code>bao-demo.example.com</code></td>
 <td style="text-align: left;">External hostname for optional Gateway exposure</td>
 </tr>
+<tr>
+<td style="text-align: left;"><code>&lt;operator-namespace&gt;</code></td>
+<td style="text-align: left;"><code>openbao-operator-system</code></td>
+<td style="text-align: left;">Rendered operator namespace used for centralized tenant onboarding</td>
+</tr>
 </tbody>
 </table>
 <h2 id="step-1-create-the-tenant-namespace">Step 1: Create the tenant namespace<a class="headerlink" href="#step-1-create-the-tenant-namespace" title="Permanent link">&para;</a></h2>
@@ -4821,7 +4826,7 @@
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoTenant</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;cluster-name&gt;-tenant</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-system</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;operator-namespace&gt;</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span><span class="nt">targetNamespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;namespace&gt;</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="nn">---</span>
@@ -4832,7 +4837,7 @@
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;namespace&gt;</span>
 </span></code></pre></div>
 <p>Verify that the tenant is provisioned:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>openbao-operator-system<span class="w"> </span>describe<span class="w"> </span>openbaotenant<span class="w"> </span>&lt;cluster-name&gt;-tenant
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;operator-namespace&gt;<span class="w"> </span>describe<span class="w"> </span>openbaotenant<span class="w"> </span>&lt;cluster-name&gt;-tenant
 </span></code></pre></div>
 <h2 id="step-2-apply-the-openbaocluster">Step 2: Apply the OpenBaoCluster<a class="headerlink" href="#step-2-apply-the-openbaocluster" title="Permanent link">&para;</a></h2>
 <p>Apply the cluster manifest:</p>

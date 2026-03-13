@@ -2793,6 +2793,23 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-conditions-to-watch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Conditions To Watch
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Conditions To Watch">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#tenancy-security-models" class="md-nav__link">
     <span class="md-ellipsis">
@@ -4551,6 +4568,23 @@
   
 </li>
         
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-conditions-to-watch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Conditions To Watch
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Conditions To Watch">
+      <ul class="md-nav__list">
+        
           <li class="md-nav__item">
   <a href="#tenancy-security-models" class="md-nav__link">
     <span class="md-ellipsis">
@@ -4610,9 +4644,9 @@
 
 
 <h1 id="security-openbao-operator">Security: OpenBao Operator<a class="headerlink" href="#security-openbao-operator" title="Permanent link">&para;</a></h1>
-<p>This section provides a comprehensive security overview for the OpenBao Operator, covering the security model, RBAC architecture, and threat analysis.</p>
+<p>This section provides a security overview for OpenBao Operator, covering the trust model, RBAC and admission boundaries, workload hardening, and tenant isolation.</p>
 <h2 id="security-model-overview">Security Model Overview<a class="headerlink" href="#security-model-overview" title="Permanent link">&para;</a></h2>
-<p>The security model relies on a <strong>Supervisor Pattern</strong>, where the operator orchestrates security-critical configuration (TLS, unseal keys, network policies) from the outside, while delegating data plane security to OpenBao itself.</p>
+<p>The security model relies on a <strong>Supervisor Pattern</strong>. The operator manages lifecycle, guardrails, and integration points around OpenBao, while OpenBao remains responsible for data-plane consistency, seal semantics, and runtime cryptography.</p>
 <h3 id="secure-by-default">Secure by Default<a class="headerlink" href="#secure-by-default" title="Permanent link">&para;</a></h3>
 <p>The Operator enforces a "Secure by Default" posture:</p>
 <ul>
@@ -4622,6 +4656,17 @@
 <li><strong>Least-Privilege RBAC:</strong> Split-controller design with minimal permissions</li>
 <li><strong>Supply Chain Security:</strong> Optional Cosign image verification</li>
 </ul>
+<h2 id="security-conditions-to-watch">Security Conditions To Watch<a class="headerlink" href="#security-conditions-to-watch" title="Permanent link">&para;</a></h2>
+<p>These conditions are the fastest operator-visible checks for security posture and integration drift:</p>
+<ul>
+<li><code>ProductionReady</code></li>
+<li><code>CloudUnsealIdentityReady</code></li>
+<li><code>BackupConfigurationReady</code></li>
+<li><code>RestoreConfigurationReady</code></li>
+<li><code>GatewayIntegrationReady</code></li>
+<li><code>APIServerNetworkReady</code></li>
+</ul>
+<p>Use <a href="../reference/status-and-events/">Status Conditions and Events</a> for the full reason list.</p>
 <h3 id="tenancy-security-models">Tenancy Security Models<a class="headerlink" href="#tenancy-security-models" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Multi-Tenant (Zero Trust):</strong> The Controller is treated as untrusted across namespaces. It cannot enumerate Secrets and only gets name-scoped Secret access via Provisioner-managed RBAC. With admission policies enabled, this creates a strong boundary between tenants.</li>

@@ -4586,7 +4586,7 @@
 <li><a href="../../configuration/security-profiles/">Learn more</a></li>
 </ul>
 </li>
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>External Unseal</strong>: Use Transit or Cloud KMS. Do <strong>NOT</strong> use auto-unseal with Kubernetes Secrets in production.<ul>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>External Root of Trust</strong>: Use a non-static external seal such as <code>transit</code>, cloud KMS, <code>ocikms</code>, <code>kmip</code>, or <code>pkcs11</code>. Do <strong>NOT</strong> use static unseal keys in Kubernetes Secrets for production.<ul>
 <li><a href="../../configuration/self-init/">Learn more</a></li>
 </ul>
 </li>
@@ -4607,7 +4607,18 @@
 <p class="admonition-title">Admission Control</p>
 <p>Without these policies, tenant isolation cannot be guaranteed.</p>
 <ul class="task-list">
-<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>ValidatingAdmissionPolicies</strong>: Verify that <code>openbao-validate-openbaocluster</code> and <code>openbao-restrict-provisioner-rbac</code> are installed and Enforced.<ul>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <strong>ValidatingAdmissionPolicies</strong>: Verify that the full required dependency set is installed and enforced, including:<ul>
+<li><code>openbao-validate-openbaocluster</code></li>
+<li><code>openbao-validate-openbao-tenant</code></li>
+<li><code>openbao-validate-openbaorestore</code></li>
+<li><code>openbao-lock-controller-statefulset-mutations</code></li>
+<li><code>openbao-lock-managed-resource-mutations</code></li>
+<li><code>openbao-enforce-managed-image-digests</code></li>
+<li><code>openbao-restrict-provisioner-rbac</code></li>
+<li><code>openbao-restrict-provisioner-namespace-mutations</code></li>
+<li><code>openbao-restrict-provisioner-tenant-governance</code></li>
+<li><code>openbao-restrict-controller-rbac</code></li>
+<li><code>openbao-restrict-controller-secret-writes</code></li>
 <li><a href="../../../../security/infrastructure/admission-policies/">Learn more</a></li>
 </ul>
 </li>
@@ -4673,6 +4684,13 @@
 <ul class="task-list">
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Condition <code>ProductionReady</code> is <strong>True</strong>.</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Condition <code>Available</code> is <strong>True</strong>.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> Relevant integration conditions are healthy for your topology:<ul>
+<li><code>CloudUnsealIdentityReady</code></li>
+<li><code>GatewayIntegrationReady</code></li>
+<li><code>APIServerNetworkReady</code></li>
+<li><code>BackupConfigurationReady</code></li>
+</ul>
+</li>
 <li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled/><span class="task-list-indicator"></span></label> <code>Status.Phase</code> is <strong>Running</strong>.</li>
 </ul>
 

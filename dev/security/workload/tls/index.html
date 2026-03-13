@@ -3281,6 +3281,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#exposure-guidance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exposure Guidance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4556,6 +4567,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#exposure-guidance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exposure Guidance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4601,7 +4623,7 @@
 <div class="admonition abstract">
 <p class="admonition-title">Encryption in Transit</p>
 <p>When <code>spec.tls.enabled=true</code>, the Operator configures TLS for internal and external communication using one of three modes: <strong>Operator Managed</strong>, <strong>External</strong>, or <strong>ACME</strong>.
-In production, keep TLS enabled and use a trusted certificate source.</p>
+In production, keep TLS enabled, prefer TLS passthrough at the edge, and use a trusted certificate source.</p>
 </div>
 <h2 id="certificate-rotation-flow">Certificate Rotation Flow<a class="headerlink" href="#certificate-rotation-flow" title="Permanent link">&para;</a></h2>
 <p>In the default <strong>Operator Managed</strong> mode, the operator handles the full lifecycle of the certificates, including rotation and hot-reloading.</p>
@@ -4633,6 +4655,7 @@ In production, keep TLS enabled and use a trusted certificate source.</p>
 <li><strong>Strict Identity:</strong> Certificates use strict <strong>SANs</strong> (Subject Alternative Names) matching the Service and Pod DNS.</li>
 <li><strong>Rotation:</strong> Automatically rotates certificates before expiry (configurable via <code>spec.tls.rotationPeriod</code>).</li>
 <li><strong>Gateway Support:</strong> Automatically manages a CA ConfigMap for ingress controllers.</li>
+<li><strong>Security Posture:</strong> Suitable for development or internal evaluation. It is not a supported Hardened production mode.</li>
 </ul>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
@@ -4705,12 +4728,18 @@ In production, keep TLS enabled and use a trusted certificate source.</p>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Best For</strong></td>
-<td style="text-align: left;">Development, Simple Prod</td>
-<td style="text-align: left;">Enterprise PKI Integration</td>
-<td style="text-align: left;">Zero Trust, Public Facing</td>
+<td style="text-align: left;">Development, local evaluation</td>
+<td style="text-align: left;">Enterprise PKI integration, internal or external production</td>
+<td style="text-align: left;">Public-facing production with native ACME</td>
 </tr>
 </tbody>
 </table>
+<h2 id="exposure-guidance">Exposure Guidance<a class="headerlink" href="#exposure-guidance" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Prefer <strong>TLS passthrough</strong> when exposing OpenBao through Gateway API or another edge proxy.</li>
+<li>Use <strong>edge termination</strong> only when you explicitly need policy enforcement or certificate management at the edge.</li>
+<li><code>OperatorManaged</code> TLS is not a supported production path for the <code>Hardened</code> profile.</li>
+</ul>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../workload-security/"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21.81 10.25c-.06-.04-.56-.43-1.64-.43-.28 0-.56.03-.84.08-.21-1.4-1.38-2.11-1.43-2.14l-.29-.17-.18.27c-.24.36-.43.77-.51 1.19-.2.8-.08 1.56.33 2.21-.49.28-1.29.35-1.46.35H2.62c-.34 0-.62.28-.62.63 0 1.15.18 2.3.58 3.38.45 1.19 1.13 2.07 2 2.61.98.6 2.59.94 4.42.94.79 0 1.61-.07 2.42-.22 1.12-.2 2.2-.59 3.19-1.16A8.3 8.3 0 0 0 16.78 16c1.05-1.17 1.67-2.5 2.12-3.65h.19c1.14 0 1.85-.46 2.24-.85.26-.24.45-.53.59-.87l.08-.24zm-17.96.99h1.76c.08 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16H3.85c-.09 0-.16.07-.16.16v1.58c.01.09.07.16.16.16m2.43 0h1.76c.08 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16H6.28c-.09 0-.16.07-.16.16v1.58c.01.09.07.16.16.16m2.47 0h1.75c.1 0 .17-.07.17-.16V9.5c0-.08-.06-.16-.17-.16H8.75c-.08 0-.15.07-.15.16v1.58c0 .09.06.16.15.16m2.44 0h1.77c.08 0 .15-.07.15-.16V9.5c0-.08-.06-.16-.15-.16h-1.77c-.08 0-.15.07-.15.16v1.58c0 .09.07.16.15.16M6.28 9h1.76c.08 0 .16-.09.16-.18V7.25c0-.09-.07-.16-.16-.16H6.28c-.09 0-.16.06-.16.16v1.57c.01.09.07.18.16.18m2.47 0h1.75c.1 0 .17-.09.17-.18V7.25c0-.09-.06-.16-.17-.16H8.75c-.08 0-.15.06-.15.16v1.57c0 .09.06.18.15.18m2.44 0h1.77c.08 0 .15-.09.15-.18V7.25c0-.09-.07-.16-.15-.16h-1.77c-.08 0-.15.06-.15.16v1.57c0 .09.07.18.15.18m0-2.28h1.77c.08 0 .15-.07.15-.16V5c0-.1-.07-.17-.15-.17h-1.77c-.08 0-.15.06-.15.17v1.56c0 .08.07.16.15.16m2.46 4.52h1.76c.09 0 .16-.07.16-.16V9.5c0-.08-.07-.16-.16-.16h-1.76c-.08 0-.15.07-.15.16v1.58c0 .09.07.16.15.16"/></svg></span> Pod Security</a></li>

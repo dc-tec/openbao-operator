@@ -3121,10 +3121,43 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#provisioner-tenant-guardrail-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provisioner Tenant Guardrail Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controller-rbac-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       
         Controller RBAC Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controller-secret-write-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller Secret Write Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controller-serviceaccount-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller ServiceAccount Hardening
       
     </span>
   </a>
@@ -4589,10 +4622,43 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#provisioner-tenant-guardrail-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Provisioner Tenant Guardrail Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controller-rbac-hardening" class="md-nav__link">
     <span class="md-ellipsis">
       
         Controller RBAC Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controller-secret-write-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller Secret Write Hardening
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controller-serviceaccount-hardening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controller ServiceAccount Hardening
       
     </span>
   </a>
@@ -4741,11 +4807,32 @@
 <td style="text-align: left;">Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces.</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>openbao-restrict-provisioner-tenant-governance</code></td>
+<td style="text-align: left;"><code>openbao-restrict-provisioner-tenant-governance-binding</code></td>
+<td style="text-align: left;"><code>ResourceQuota</code>, <code>LimitRange</code></td>
+<td style="text-align: left;"><strong>Restrict</strong></td>
+<td style="text-align: left;">Restricts the Provisioner to the fixed tenant guardrail quota/limit-range objects, requires operator-managed labels, and blocks direct drift on those objects.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>openbao-restrict-controller-rbac</code></td>
 <td style="text-align: left;"><code>openbao-restrict-controller-rbac-binding</code></td>
 <td style="text-align: left;"><code>Role</code>, <code>RoleBinding</code></td>
 <td style="text-align: left;"><strong>Restrict</strong></td>
 <td style="text-align: left;">Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>openbao-restrict-controller-serviceaccounts</code></td>
+<td style="text-align: left;"><code>openbao-restrict-controller-serviceaccounts-binding</code></td>
+<td style="text-align: left;"><code>ServiceAccount</code></td>
+<td style="text-align: left;"><strong>Restrict</strong></td>
+<td style="text-align: left;">Restricts Controller ServiceAccount writes to operator-managed OpenBao, backup, restore, and upgrade ServiceAccounts.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>openbao-restrict-controller-secret-writes</code></td>
+<td style="text-align: left;"><code>openbao-restrict-controller-secret-writes-binding</code></td>
+<td style="text-align: left;"><code>Secret</code></td>
+<td style="text-align: left;"><strong>Restrict</strong></td>
+<td style="text-align: left;">Restricts Controller Secret writes to the fixed operator-managed Secret names and rejects drift on unrelated Secrets from the Controller identity.</td>
 </tr>
 </tbody>
 </table>
@@ -4780,10 +4867,21 @@
 <li><code>openbao-lock-controller-statefulset-mutations</code> / <code>openbao-lock-controller-statefulset-mutations-binding</code></li>
 <li><code>openbao-restrict-provisioner-rbac</code> / <code>openbao-restrict-provisioner-rbac-binding</code></li>
 <li><code>openbao-restrict-provisioner-namespace-mutations</code> / <code>openbao-restrict-provisioner-namespace-mutations-binding</code></li>
+<li><code>openbao-restrict-provisioner-tenant-governance</code> / <code>openbao-restrict-provisioner-tenant-governance-binding</code></li>
 <li><code>openbao-restrict-controller-rbac</code> / <code>openbao-restrict-controller-rbac-binding</code></li>
+<li><code>openbao-restrict-controller-serviceaccounts</code> / <code>openbao-restrict-controller-serviceaccounts-binding</code></li>
+<li><code>openbao-restrict-controller-secret-writes</code> / <code>openbao-restrict-controller-secret-writes-binding</code></li>
 <li><code>openbao-lock-managed-resource-mutations</code> / <code>openbao-lock-managed-resource-mutations-binding</code></li>
 <li><code>openbao-enforce-managed-image-digests</code> / <code>openbao-enforce-managed-image-digests-binding</code></li>
 </ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Custom raw-manifest installs</p>
+<p>Admission dependency resolution follows the rendered install identity, including namespace and name prefix changes. For custom raw-manifest installs, validate the rendered ServiceAccount names and policy names after <code>kustomize build</code>, not only the repository defaults.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Runtime re-check</p>
+<p>Admission dependency enforcement is not only a startup check. The <code>OpenBaoCluster</code> workload and admin reconciliation paths re-check the dependency set during runtime and pause when required policies disappear or become misbound.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Unsafe mode</p>
@@ -4809,6 +4907,17 @@
 <li><code>pod-security.kubernetes.io/warn=restricted</code></li>
 <li>No other changes are allowed (spec/status/annotations/finalizers/ownerReferences must remain unchanged).</li>
 </ul>
+<h2 id="provisioner-tenant-guardrail-hardening">Provisioner Tenant Guardrail Hardening<a class="headerlink" href="#provisioner-tenant-guardrail-hardening" title="Permanent link">&para;</a></h2>
+<p>The <code>openbao-restrict-provisioner-tenant-governance</code> policy constrains the Provisioner when it manages the default tenant <code>ResourceQuota</code> and <code>LimitRange</code>.</p>
+<p><strong>Key guarantees:</strong></p>
+<ul>
+<li>The Provisioner may only manage the fixed operator-owned names:</li>
+<li><code>openbao-operator-tenant-quota</code></li>
+<li><code>openbao-operator-tenant-limits</code></li>
+<li>Those objects must be labeled as operator-managed.</li>
+<li>Direct mutation or deletion of those fixed guardrails is denied; update the parent <code>OpenBaoTenant</code> instead.</li>
+<li>Self-service tenant onboarding cannot set <code>spec.quota</code> or <code>spec.limitRange</code>; custom tenant guardrails are reserved for centrally managed onboarding from the operator namespace.</li>
+</ul>
 <h2 id="controller-rbac-hardening">Controller RBAC Hardening<a class="headerlink" href="#controller-rbac-hardening" title="Permanent link">&para;</a></h2>
 <p>The <code>openbao-restrict-controller-rbac</code> policy constrains RBAC mutations performed by the Controller identity.</p>
 <p><strong>Why this exists:</strong></p>
@@ -4820,6 +4929,25 @@
 <ul>
 <li>Roles created/updated by the Controller are restricted to the <code>pods</code> resource and must match a narrow allowlist-style pattern.</li>
 <li>RoleBindings created/updated by the Controller must bind a ServiceAccount to its own <code>*-role</code> in the same namespace.</li>
+</ul>
+<h2 id="controller-secret-write-hardening">Controller Secret Write Hardening<a class="headerlink" href="#controller-secret-write-hardening" title="Permanent link">&para;</a></h2>
+<p>The <code>openbao-restrict-controller-secret-writes</code> policy constrains Secret writes performed by the Controller identity.</p>
+<p><strong>Key guarantees:</strong></p>
+<ul>
+<li>The Controller may create only the fixed operator-managed Secret names used by cluster lifecycle flows.</li>
+<li>Updates and deletes remain name-scoped to those operator-managed Secret names.</li>
+<li>Direct Controller writes to unrelated tenant Secrets are denied even if a broader RBAC grant is introduced accidentally.</li>
+<li>The policy follows the rendered install identity, including custom raw-manifest namespace and prefix changes.</li>
+</ul>
+<h2 id="controller-serviceaccount-hardening">Controller ServiceAccount Hardening<a class="headerlink" href="#controller-serviceaccount-hardening" title="Permanent link">&para;</a></h2>
+<p>The <code>openbao-restrict-controller-serviceaccounts</code> policy constrains ServiceAccount writes performed by the Controller identity.</p>
+<p><strong>Key guarantees:</strong></p>
+<ul>
+<li>The Controller may only create, update, or delete operator-managed ServiceAccounts tied to an <code>OpenBaoCluster</code>.</li>
+<li>Backup, restore, and upgrade ServiceAccounts remain fixed-name resources derived from the cluster name.</li>
+<li>The main OpenBao ServiceAccount can still use a custom <code>spec.serviceAccount.name</code>, but it must remain labeled as the operator-managed primary ServiceAccount for that cluster.</li>
+<li>Direct Controller writes to unrelated ServiceAccounts are denied even if a broader RBAC grant is introduced accidentally.</li>
+<li>The policy follows the rendered install identity, including custom raw-manifest namespace and prefix changes.</li>
 </ul>
 <h2 id="configuration-ownership">Configuration Ownership<a class="headerlink" href="#configuration-ownership" title="Permanent link">&para;</a></h2>
 <p>The Operator ensures that user intent (<code>spec.configuration</code>) is respected while enforcing mandatory platform settings.</p>

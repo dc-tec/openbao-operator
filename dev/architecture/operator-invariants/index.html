@@ -4653,10 +4653,22 @@
 <td style="text-align: left;"><a href="../../user-guide/operator/installation/">Operator Installation</a></td>
 </tr>
 <tr>
+<td style="text-align: left;"><strong>Operator-managed identities and RBAC stay mutation-locked</strong></td>
+<td style="text-align: left;">Prevent users, GitOps, or tenant workloads from drifting the ServiceAccounts, Roles, and RoleBindings that define operator access boundaries.</td>
+<td style="text-align: left;">Managed-resource admission locks, RBAC restrictor policies, break-glass allowlist.</td>
+<td style="text-align: left;"><a href="../../security/infrastructure/admission-policies/">Admission Policies</a></td>
+</tr>
+<tr>
 <td style="text-align: left;"><strong>Tenant namespace access is introduced explicitly, not discovered</strong></td>
 <td style="text-align: left;">Keep tenant onboarding intentional and prevent broad namespace discovery.</td>
 <td style="text-align: left;"><code>OpenBaoTenant</code> onboarding flow, RoleBinding introduction, no namespace list for Controller.</td>
 <td style="text-align: left;"><a href="../../security/multi-tenancy/tenant-isolation/">Tenant Isolation</a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Tenant guardrails remain provisioner-owned</strong></td>
+<td style="text-align: left;">Preserve the Day 0 / Day 1 boundary so tenant quotas, limit ranges, and namespace labels do not drift into normal workload reconciliation.</td>
+<td style="text-align: left;">Provisioner-owned onboarding flow, tenant governance admission policy, controller RBAC exclusions.</td>
+<td style="text-align: left;"><a href="../../security/infrastructure/rbac/">RBAC Architecture</a></td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Secret access is name-scoped and non-enumerating</strong></td>
@@ -4665,10 +4677,22 @@
 <td style="text-align: left;"><a href="../../security/infrastructure/rbac/">RBAC Architecture</a></td>
 </tr>
 <tr>
+<td style="text-align: left;"><strong>Tenant Secret mutation remains blind-create and name-scoped</strong></td>
+<td style="text-align: left;">Allow operator-managed Secret creation without enabling arbitrary tenant Secret discovery or mutation.</td>
+<td style="text-align: left;">Dedicated Secret reader/writer Roles, name-scoped mutate verbs, admission policy restrictions on managed Secret writes.</td>
+<td style="text-align: left;"><a href="../../security/infrastructure/rbac/">RBAC Architecture</a></td>
+</tr>
+<tr>
 <td style="text-align: left;"><strong>Admission enforcement is part of the normal safety model</strong></td>
 <td style="text-align: left;">Keep API-level guardrails active before invalid or unsafe objects persist.</td>
 <td style="text-align: left;"><code>ValidatingAdmissionPolicy</code> inventory, fail-closed startup, optional enforcement canary.</td>
 <td style="text-align: left;"><a href="../../security/infrastructure/admission-policies/">Admission Policies</a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Admission dependency loss pauses sensitive reconciliation</strong></td>
+<td style="text-align: left;">Prevent the operator from continuing privileged writes after required guardrails disappear or stop applying.</td>
+<td style="text-align: left;">Runtime admission tracker, fail-closed reconciliation gates, status conditions and degraded reasons.</td>
+<td style="text-align: left;"><a href="../../reference/status-and-events/">Status Conditions and Events</a></td>
 </tr>
 </tbody>
 </table>
@@ -4762,6 +4786,12 @@
 <td style="text-align: left;">Make disaster recovery visible and prevent restore from being treated as a routine reconcile side effect.</td>
 <td style="text-align: left;"><code>OpenBaoRestore</code> CRD, restore validation, break-glass override, operation lock checks.</td>
 <td style="text-align: left;"><a href="../../user-guide/openbaorestore/restore/">Restore</a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Break-glass access remains explicit and narrow</strong></td>
+<td style="text-align: left;">Preserve a deliberate maintenance escape hatch without turning administrative mutation into the normal operating model.</td>
+<td style="text-align: left;">Configured maintenance break-glass groups, managed-resource admission exceptions, recovery and maintenance runbooks.</td>
+<td style="text-align: left;"><a href="../../security/infrastructure/admission-policies/">Admission Policies</a></td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>OpenBao remains the source of truth for data consistency and snapshot semantics</strong></td>

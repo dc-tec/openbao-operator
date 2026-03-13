@@ -4659,8 +4659,8 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>ResourceQuota</code>, <code>LimitRange</code></td>
-<td style="text-align: left;"><code>get</code>, <code>create</code>, <code>patch</code></td>
-<td style="text-align: left;">Apply default quota/limits during onboarding (Server-Side Apply). <strong>No <code>list</code></strong> (prevents discovery).</td>
+<td style="text-align: left;"><code>create</code>, <code>get</code>, <code>patch</code></td>
+<td style="text-align: left;">Apply the fixed tenant guardrail quota/limits during onboarding (Server-Side Apply). <code>get</code>/<code>patch</code> are name-scoped to the operator-managed objects. <strong>No <code>list</code></strong> (prevents discovery).</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Role / RoleBinding</code></td>
@@ -4749,12 +4749,18 @@
 <td style="text-align: left;">(Optional) Manage Gateway API resources if enabled.</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>ServiceAccount</code></td>
+<td style="text-align: left;"><em>(restricted)</em></td>
+<td style="text-align: left;">Create the main OpenBao ServiceAccount plus backup, restore, and upgrade executor ServiceAccounts. Admission policy restricts writes to operator-managed ServiceAccount shapes and names.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>Role / RoleBinding</code></td>
 <td style="text-align: left;"><em>(restricted)</em></td>
 <td style="text-align: left;">Create minimal per-cluster pod discovery RBAC for OpenBao service accounts. Admission policy restricts RBAC writes to a narrow, allowlisted pattern (prevents RBAC self-escalation).</td>
 </tr>
 </tbody>
 </table>
+<p>The Controller tenant Role does not manage <code>ResourceQuota</code> or <code>LimitRange</code>. Those namespace guardrails remain provisioner-owned Day 0 resources.</p>
 </div>
 </div>
 </div>
@@ -4763,7 +4769,7 @@
 <li><strong>No Secret Enumeration:</strong> Neither ServiceAccount has <code>list</code> permissions on Secrets cluster-wide.</li>
 <li><strong>No Topology Discovery:</strong> Neither ServiceAccount has <code>list</code> permissions on Namespaces (Provisioner knows only what you tell it via CRs).</li>
 <li><strong>Privilege Separation:</strong> The account that <em>writes</em> the permissions (Provisioner) cannot <em>use</em> them, and the account that <em>uses</em> them (Controller) cannot <em>change</em> them. Admission policies provide defense-in-depth by constraining both RBAC writes and Namespace mutations.</li>
-<li><strong>Name-Scoped Secrets:</strong> Tenant Secret access is restricted to explicit Secret name allowlists and enforced by admission policy (no Secrets wildcards or enumeration).</li>
+<li><strong>Blind Create, Name-Scoped Mutate:</strong> Tenant Secret writer roles use Kubernetes' blind-create pattern for <code>create</code> plus name-scoped <code>get</code>/<code>patch</code>/<code>update</code>/<code>delete</code> for fixed Secret names. Admission policy constrains operator-managed Secret writes so this does not expand into arbitrary tenant Secret mutation.</li>
 </ol>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>

@@ -4822,7 +4822,7 @@ Run the <code>remove-peer</code> command from a healthy node, targeting the <str
 <ol>
 <li>
 <p><strong>Scale Down</strong>: Stop the operator to prevent it from interfering.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>openbao-operator-system<span class="w"> </span>scale<span class="w"> </span>deploy<span class="w"> </span>openbao-operator-controller-manager<span class="w"> </span>--replicas<span class="o">=</span><span class="m">0</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;operator-namespace&gt;<span class="w"> </span>scale<span class="w"> </span>deploy<span class="w"> </span>&lt;controller-deployment&gt;<span class="w"> </span>--replicas<span class="o">=</span><span class="m">0</span>
 </span></code></pre></div>
 </li>
 <li>
@@ -4858,8 +4858,9 @@ Run the <code>remove-peer</code> command from a healthy node, targeting the <str
 </li>
 <li>
 <p><strong>Resume Operator</strong>:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>openbao-operator-system<span class="w"> </span>scale<span class="w"> </span>deploy<span class="w"> </span>openbao-operator-controller-manager<span class="w"> </span>--replicas<span class="o">=</span><span class="m">1</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;operator-namespace&gt;<span class="w"> </span>scale<span class="w"> </span>deploy<span class="w"> </span>&lt;controller-deployment&gt;<span class="w"> </span>--replicas<span class="o">=</span><span class="m">1</span>
 </span></code></pre></div>
+<p>For custom raw-manifest installs, use the rendered operator namespace and controller deployment name from your install manifests.</p>
 </li>
 </ol>
 <hr />

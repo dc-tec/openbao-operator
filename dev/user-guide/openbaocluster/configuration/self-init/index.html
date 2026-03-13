@@ -4749,7 +4749,7 @@ the default role names with your own custom roles.</p>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">oidc</span><span class="p">:</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="c1"># issuer: &quot;https://...&quot; (optional override)</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="c1"># audience: &quot;openbao-internal&quot; (optional override)</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">      </span><span class="c1"># audience: &quot;openbao-internal&quot; (must match the operator installation audience if set)</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">OIDC prerequisites</p>
@@ -4759,9 +4759,15 @@ If you customized the operator namespace or <code>namePrefix</code>, also ensure
 </div>
 <div class="admonition note">
 <p class="admonition-title">JWT audience</p>
-<p>The operator uses <code>OPENBAO_JWT_AUDIENCE</code> (default: <code>openbao-internal</code>) when creating JWT roles.
-Set the same value in any manually managed roles and pass the env var to the operator
-(<code>controller.extraEnv</code> and <code>provisioner.extraEnv</code> in Helm).</p>
+<p>The operator uses an installation-scoped JWT audience from <code>OPENBAO_JWT_AUDIENCE</code>
+(default: <code>openbao-internal</code>) when creating JWT roles. If you set
+<code>spec.selfInit.oidc.audience</code>, it must match that installation audience.
+Configure the audience on the operator installation:</p>
+<ul>
+<li>Helm: <code>serviceAccountToken.openBaoAudience</code></li>
+<li>Raw manifests: <code>config/default/openbao_jwt_settings.yaml</code></li>
+</ul>
+<p>Keep the same value in any manually managed OpenBao roles.</p>
 </div>
 <h3 id="request-structure">Request Structure<a class="headerlink" href="#request-structure" title="Permanent link">&para;</a></h3>
 <p>Each item in <code>requests[]</code> maps to an OpenBao API call.</p>

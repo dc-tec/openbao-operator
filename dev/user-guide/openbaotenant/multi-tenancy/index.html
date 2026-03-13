@@ -803,10 +803,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#blocking-secret-access" class="md-nav__link">
+  <a href="#supplemental-policy-engines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Blocking Secret Access
+        Supplemental Policy Engines
       
     </span>
   </a>
@@ -4629,10 +4629,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#blocking-secret-access" class="md-nav__link">
+  <a href="#supplemental-policy-engines" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Blocking Secret Access
+        Supplemental Policy Engines
       
     </span>
   </a>
@@ -4742,7 +4742,7 @@
 
 
 <h1 id="multi-tenancy-security">Multi-Tenancy Security<a class="headerlink" href="#multi-tenancy-security" title="Permanent link">&para;</a></h1>
-<p>Running multiple <code>OpenBaoCluster</code> resources in a shared Kubernetes cluster requires strict isolation layers. This guide outlines how to secure tenants using <abbr title="Role-Based Access Control">RBAC</abbr>, Network Policies, and Resource Quotas.</p>
+<p>Running multiple <code>OpenBaoCluster</code> resources in a shared Kubernetes cluster requires strict isolation layers. This guide outlines how to secure tenants using the operator's built-in <abbr title="Role-Based Access Control">RBAC</abbr>, admission policies, NetworkPolicies, and default tenant guardrails.</p>
 <div class="admonition success">
 <p class="admonition-title">Recommended Production Architecture</p>
 <p>Multi-tenant mode is the recommended production operating model for OpenBao Operator. It combines tenant onboarding guardrails, namespace introduction, and workload isolation in one control-plane model.</p>
@@ -4792,7 +4792,12 @@
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 12h7c-.53 4.11-3.28 7.78-7 8.92zH5V6.3l7-3.11M12 1 3 5v6c0 5.55 3.84 10.73 9 12 5.16-1.27 9-6.45 9-12V5z"/></svg></span> 1. Identity (<abbr title="Role-Based Access Control">RBAC</abbr>)</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 13v2h1c.6 0 1 .4 1 1h7v2h-7c0 .6-.4 1-1 1h-4c-.6 0-1-.4-1-1H2v-2h7c0-.6.4-1 1-1h1v-2H3.2c-.7 0-1.2-.7-1.2-1.6V6.6C2 5.7 2.5 5 3.2 5h17.6c.7 0 1.2.7 1.2 1.6v4.8c0 .9-.5 1.6-1.2 1.6zm-4-3V8h1v2zM5 8h2v2H5zm15-1H4v4h16z"/></svg></span> 2. Network</label><label for="__tabbed_1_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m6 2a6 6 0 0 0-6 6c0 3.31 2.69 6 6.1 6l-.88-2.23a1.01 1.01 0 0 1 .37-1.37l.86-.5a1.01 1.01 0 0 1 1.37.37l1.92 2.42A5.98 5.98 0 0 0 18 10a6 6 0 0 0-6-6m0 5a1 1 0 0 1 1 1 1 1 0 0 1-1 1 1 1 0 0 1-1-1 1 1 0 0 1 1-1m-5 9a1 1 0 0 0-1 1 1 1 0 0 0 1 1 1 1 0 0 0 1-1 1 1 0 0 0-1-1m5.09-4.73 2.49 6.31 2.59-1.5-4.22-5.31z"/></svg></span> 3. Storage &amp; Quota</label><label for="__tabbed_1_4"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7.5 5C9.43 5 11 6.57 11 8.5S9.43 12 7.5 12 4 10.43 4 8.5 5.57 5 7.5 5M1 19v-2.5C1 14.57 4.46 13 7.5 13c1.18 0 2.42.24 3.5.64V19zm21 0h-8c-.55 0-1-.45-1-1V6c0-.55.45-1 1-1h5l4 4v9c0 .55-.45 1-1 1m-4-9h3v-.17L18.17 7H18zm-3 2v1.5h6V12zm0 3v1.5h6V15z"/></svg></span> 4. Compliance</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<p>The most critical layer is Identity. You must prevent tenants from accessing the "Keys to the Kingdom" (Root Tokens and Unseal Keys).</p>
+<p>The most critical layer is identity. The operator's built-in control plane already starts from:</p>
+<ul>
+<li>editor roles without Secret read access</li>
+<li>dedicated Secret reader/writer allowlist Roles</li>
+<li>admission policies that constrain Provisioner and Controller <abbr title="Role-Based Access Control">RBAC</abbr> mutation</li>
+</ul>
 <h3 id="tenant-roles">Tenant Roles<a class="headerlink" href="#tenant-roles" title="Permanent link">&para;</a></h3>
 <p>Use the provided ClusterRoles to granularly grant permissions.</p>
 <table>
@@ -4821,12 +4826,11 @@
 </tr>
 </tbody>
 </table>
-<h3 id="blocking-secret-access">Blocking Secret Access<a class="headerlink" href="#blocking-secret-access" title="Permanent link">&para;</a></h3>
-<div class="admonition danger">
-<p class="admonition-title">Critical Restriction</p>
-<p>Tenants with <code>get secrets</code> permission can read the <strong>Root Token</strong> and <strong>Unseal Key</strong>, effectively becoming admins of their OpenBao cluster.</p>
+<h3 id="supplemental-policy-engines">Supplemental Policy Engines<a class="headerlink" href="#supplemental-policy-engines" title="Permanent link">&para;</a></h3>
+<div class="admonition note">
+<p class="admonition-title">Optional Additional Guardrail</p>
+<p>Kyverno or Gatekeeper can still be useful as cluster-wide supplemental controls, but they are not the primary secret-isolation mechanism. The primary controls are the built-in <abbr title="Role-Based Access Control">RBAC</abbr> and admission model above.</p>
 </div>
-<p>Use a <strong>Policy Engine</strong> (Kyverno/Gatekeeper) to enforce this restriction.</p>
 <div class="language-yaml highlight"><span class="filename">Kyverno Policy: Block Sensitive Secrets</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kyverno.io/v1</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterPolicy</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -4844,23 +4848,24 @@
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;*-root-token&quot;</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">                </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;*-unseal-key&quot;</span>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span><span class="nt">exclude</span><span class="p">:</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">        </span><span class="nt">any</span><span class="p">:</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">subjects</span><span class="p">:</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceAccount</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-controller</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">                </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-system</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">            </span><span class="nt">any</span><span class="p">:</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">subjects</span><span class="p">:</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">                  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceAccount</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;rendered-controller-serviceaccount&gt;</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">                </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;operator-namespace&gt;</span>
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">      </span><span class="nt">validate</span><span class="p">:</span>
 </span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">        </span><span class="nt">message</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Access</span><span class="nv"> </span><span class="s">to</span><span class="nv"> </span><span class="s">OpenBao</span><span class="nv"> </span><span class="s">root</span><span class="nv"> </span><span class="s">token</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">unseal</span><span class="nv"> </span><span class="s">key</span><span class="nv"> </span><span class="s">is</span><span class="nv"> </span><span class="s">restricted.&quot;</span>
 </span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">        </span><span class="nt">deny</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
 </span></code></pre></div>
+<p>Use the rendered operator ServiceAccount name and namespace for custom raw-manifest installs.</p>
 </div>
 <div class="tabbed-block">
-<p>By default, the Operator creates a <code>NetworkPolicy</code> that implements a <strong>Default Deny</strong> posture for Ingress.</p>
+<p>By default, the Operator creates OpenBao workload NetworkPolicies that implement a <strong>Default Deny</strong> posture for ingress.</p>
 <h3 id="default-behavior">Default Behavior<a class="headerlink" href="#default-behavior" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Ingress</strong>: Only allows traffic from within the cluster (OpenBao-to-OpenBao) and the generic Ingress Controller.</li>
-<li><strong>Egress</strong>: Allows DNS, API Server, and cluster-internal traffic.</li>
-<li><strong>Backup Jobs</strong>: Excluded from default policy to allow S3 access.</li>
+<li><strong>Ingress</strong>: Allows operator traffic, Raft peer traffic, and configured Gateway or trusted-ingress paths.</li>
+<li><strong>Egress</strong>: Allows DNS, Kubernetes API, and cluster-internal traffic.</li>
+<li><strong>Backup / Restore Jobs</strong>: Use a separate Job NetworkPolicy and their own identity and egress contract.</li>
 </ul>
 <h3 id="custom-restrictions">Custom Restrictions<a class="headerlink" href="#custom-restrictions" title="Permanent link">&para;</a></h3>
 <p>If you need strict egress control for backup jobs, apply a dedicated policy.</p>
@@ -4883,41 +4888,29 @@
 <div class="tabbed-block">
 <p>Prevent "Noisy Neighbor" issues where one tenant consumes all cluster resources.</p>
 <h3 id="resource-quotas">Resource Quotas<a class="headerlink" href="#resource-quotas" title="Permanent link">&para;</a></h3>
-<p>Limit the number of nodes and storage a tenant can provision by configuring the <code>OpenBaoTenant</code> Custom Resource.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoTenant</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">targetNamespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">quota</span><span class="p">:</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">hard</span><span class="p">:</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">      </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10&quot;</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">      </span><span class="nt">requests.storage</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;100Gi&quot;</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">      </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">      </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8Gi&quot;</span>
-</span></code></pre></div>
+<p>The operator applies default tenant <code>ResourceQuota</code> and <code>LimitRange</code> guardrails during onboarding. Self-service <code>OpenBaoTenant</code> requests cannot weaken those defaults. Custom values are reserved for centrally managed onboarding from the operator namespace.</p>
+<p>Platform-admin onboarding can still provide custom tenant guardrails from the operator namespace when stricter or larger defaults are needed.</p>
 <h3 id="s3-bucket-isolation">S3 Bucket Isolation<a class="headerlink" href="#s3-bucket-isolation" title="Permanent link">&para;</a></h3>
 <p>When using shared object storage for backups, ensure each tenant uses a unique <strong>Prefix</strong> and has credentials scoped <em>only</em> to that prefix.</p>
-<div class="language-json highlight"><span class="filename">AWS IAM Policy Example</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;Effect&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Allow&quot;</span><span class="p">,</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">&quot;Action&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;s3:PutObject&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;s3:GetObject&quot;</span><span class="p">],</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">&quot;Resource&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;arn:aws:s3:::my-backups/tenant-a/*&quot;</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">}</span>
+<div class="language-json highlight"><span class="filename">AWS IAM Policy Example</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;Effect&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Allow&quot;</span><span class="p">,</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;Action&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;s3:PutObject&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;s3:GetObject&quot;</span><span class="p">],</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">&quot;Resource&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;arn:aws:s3:::my-backups/tenant-a/*&quot;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">}</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
 <p>Ensure all workloads meet your organization's security baseline.</p>
 <h3 id="pod-security-standards">Pod Security Standards<a class="headerlink" href="#pod-security-standards" title="Permanent link">&para;</a></h3>
 <p>The Operator is compatible with the <strong>Restricted</strong> profile.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Namespace</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">    </span><span class="c1"># Enforce restricted profile</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="nt">pod-security.kubernetes.io/enforce</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restricted</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nt">pod-security.kubernetes.io/audit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restricted</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Namespace</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">    </span><span class="c1"># Enforce restricted profile</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">    </span><span class="nt">pod-security.kubernetes.io/enforce</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restricted</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">    </span><span class="nt">pod-security.kubernetes.io/audit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restricted</span>
 </span></code></pre></div>
 <h3 id="audit-logging">Audit Logging<a class="headerlink" href="#audit-logging" title="Permanent link">&para;</a></h3>
 <p>Enable Kubernetes Audit Logging to track who accesses the <code>OpenBaoCluster</code> CRD and related Secrets.</p>

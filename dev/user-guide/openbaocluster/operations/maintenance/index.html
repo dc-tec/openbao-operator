@@ -4866,6 +4866,9 @@ any pod failure results in complete unavailability.</p>
    to support controlled deletes/restarts under strict admission policies.
    This is also required for the operator to complete certain day-2 operations that may need pod restarts,
    such as finishing filesystem expansion after increasing <code>spec.storage.size</code>.</p>
+<p>By default, break-glass edits under maintenance mode are allowed only for callers in the Kubernetes group <code>system:masters</code>.
+   If you install with Helm, tune <code>admissionPolicies.maintenanceBreakGlassGroups</code> to match your cluster-admin groups.
+   For raw-manifest installs, update <code>config/default/maintenance_break_glass_settings.yaml</code> before rendering manifests.</p>
 <ol>
 <li>
 <p><strong>Trigger a rolling restart</strong> (for example, after rotating external dependencies):

@@ -3127,6 +3127,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#security-checkpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Checkpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controller-network-security" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4534,6 +4545,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#security-checkpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Checkpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#controller-network-security" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4578,7 +4600,7 @@
 <h1 id="network-security">Network Security<a class="headerlink" href="#network-security" title="Permanent link">&para;</a></h1>
 <div class="admonition abstract">
 <p class="admonition-title">Core Concept</p>
-<p>The Operator enforces a <strong>Default Deny</strong> network posture for every OpenBao cluster. This means the OpenBao pods start in total isolation, and the Operator explicitly whitelists only the traffic required for clustering, monitoring, and management.</p>
+<p>The Operator enforces a <strong>Default Deny</strong> network posture for every OpenBao cluster. OpenBao Pods and day-2 Jobs start from explicit allowlists, and the operator only opens the traffic required for clustering, management, and configured integrations.</p>
 </div>
 <h2 id="network-perimeter">Network Perimeter<a class="headerlink" href="#network-perimeter" title="Permanent link">&para;</a></h2>
 <p>The following diagram illustrates the trusted communication paths allowed through the NetworkPolicy firewall:</p>
@@ -4596,7 +4618,9 @@
 
     %% Ingress Rules
     Operator --"Ingress (8200)"--&gt; Yield
-    Peer --"Ingress (8200/8201)"--&gt; Yield
+    Peer --"Ingress (8201)"--&gt; Yield
+    Ingress["Gateway / Trusted Ingress Peer"] --"Ingress (8200 passthrough or edge-terminated traffic)"--&gt; Yield
+    Jobs["Backup / Restore Job"] --&gt; Yield
 
     %% Egress Rules
     Yield --"Egress (443)"--&gt; K8sAPI
@@ -4624,8 +4648,8 @@
 <tbody>
 <tr>
 <td style="text-align: left;"><strong>Operator</strong></td>
-<td style="text-align: left;"><code>8200</code> (HTTP)</td>
-<td style="text-align: left;">Required for liveness probes, initialization checks, and status updates.</td>
+<td style="text-align: left;"><code>8200</code></td>
+<td style="text-align: left;">Required for probes, initialization checks, and status updates.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Raft Peers</strong></td>
@@ -4633,9 +4657,9 @@
 <td style="text-align: left;">Required for Raft consensus and replication between pods in the StatefulSet.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Gateway</strong></td>
-<td style="text-align: left;"><code>8200</code> (HTTP)</td>
-<td style="text-align: left;">(Optional) Allowed only if <code>spec.gateway</code> is enabled, permitting traffic from the Gateway API namespace.</td>
+<td style="text-align: left;"><strong>Gateway / trusted ingress peer</strong></td>
+<td style="text-align: left;"><code>8200</code></td>
+<td style="text-align: left;">Allowed only if <code>spec.gateway</code> is enabled or <code>spec.network.trustedIngressPeers</code> is set. Prefer passthrough; edge termination is optional.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Kube System</strong></td>
@@ -4646,7 +4670,11 @@
 </table>
 <div class="admonition warning">
 <p class="admonition-title">Custom Ingress</p>
-<p>You can allow additional traffic (e.g., from your application namespaces) via <code>spec.network.ingressRules</code>. These rules are <strong>additive</strong> and cannot disable the core operator rules.</p>
+<p>You can allow additional traffic via:</p>
+<ul>
+<li><code>spec.network.ingressRules</code> for explicit additive peer rules</li>
+<li><code>spec.network.trustedIngressPeers</code> for user-managed ingress or passthrough proxies</li>
+</ul>
 </div>
 </div>
 <div class="tabbed-block">
@@ -4678,12 +4706,19 @@
 </tbody>
 </table>
 <div class="admonition note">
-<p class="admonition-title">Backup Jobs</p>
-<p>Backup and Restore jobs are <strong>excluded</strong> from this restrictive policy. They run as separate pods that need broad access to reach external object storage (S3, GCS, Azure).</p>
+<p class="admonition-title">Backup and Restore Jobs</p>
+<p>Backup and restore use a separate Job NetworkPolicy, not the main workload policy. In Hardened clusters, they also require explicit <code>spec.network.egressRules</code> to reach object storage or external identity systems.</p>
 </div>
 </div>
 </div>
 </div>
+<h2 id="security-checkpoints">Security Checkpoints<a class="headerlink" href="#security-checkpoints" title="Permanent link">&para;</a></h2>
+<p>Use these conditions when network behavior is not clear from the manifests alone:</p>
+<ul>
+<li><code>APIServerNetworkReady</code> for Kubernetes API reachability assumptions</li>
+<li><code>GatewayIntegrationReady</code> for Gateway listener/controller compatibility</li>
+<li><code>BackupConfigurationReady</code> and <code>RestoreConfigurationReady</code> for day-2 Job egress and identity assumptions</li>
+</ul>
 <h2 id="controller-network-security">Controller Network Security<a class="headerlink" href="#controller-network-security" title="Permanent link">&para;</a></h2>
 <p>The OpenBao Operator Controller itself uses restrictive <strong>ingress</strong> policies when operator network policies are enabled.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5zm0 6c1.4 0 2.8 1.1 2.8 2.5V11c.6 0 1.2.6 1.2 1.3v3.5c0 .6-.6 1.2-1.3 1.2H9.2c-.6 0-1.2-.6-1.2-1.3v-3.5c0-.6.6-1.2 1.2-1.2V9.5C9.2 8.1 10.6 7 12 7m0 1.2c-.8 0-1.5.5-1.5 1.3V11h3V9.5c0-.8-.7-1.3-1.5-1.3"/></svg></span> Ingress</label><label for="__tabbed_2_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5M4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4z"/></svg></span> Egress</label></div>

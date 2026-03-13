@@ -4991,13 +4991,13 @@
 <td style="text-align: left;">Operator-known restore prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions</td>
 <td style="text-align: left;"><code>Ready</code>, <code>AuthenticationRequired</code>, <code>TokenSecretMissing</code>, <code>CredentialsSecretMissing</code>, <code>WorkloadIdentityConfigured</code>, <code>AmbientIdentityAssumed</code>, <code>NetworkEgressRulesRequired</code></td>
 </tr>
-<tr>
-<td style="text-align: left;"><code>OperationLockOverride</code></td>
-<td style="text-align: left;">Break-glass lock override occurred</td>
-<td style="text-align: left;"><code>OperationLockOverridden</code></td>
-</tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Ambient identity reasons</p>
+<p><code>AmbientIdentityAssumed</code> means the operator classified the configuration as relying on a provider default chain or other ambient identity path. It does not prove that the cloud-side identity binding is correct.</p>
+</div>
+<p>| <code>OperationLockOverride</code> | Break-glass lock override occurred | <code>OperationLockOverridden</code> |</p>
 <h2 id="openbaotenant-conditions">OpenBaoTenant Conditions<a class="headerlink" href="#openbaotenant-conditions" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

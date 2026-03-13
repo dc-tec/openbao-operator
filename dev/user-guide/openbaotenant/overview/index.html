@@ -4583,19 +4583,19 @@
 <p><code>spec.targetNamespace</code> is immutable after creation.</p>
 </div>
 <h2 id="tenant-isolation-model">Tenant Isolation Model<a class="headerlink" href="#tenant-isolation-model" title="Permanent link">&para;</a></h2>
-<p>When you apply an <code>OpenBaoTenant</code>, the Operator creates a "Sandbox" around the target namespace.</p>
+<p>When you apply an <code>OpenBaoTenant</code>, the Operator creates a tenant governance boundary around the target namespace.</p>
 <pre class="mermaid"><code>graph TD
     subgraph Namespace ["Tenant Namespace"]
         direction TB
         RBAC["fa:fa-id-badge RBAC RoleBinding"]
-        NetPol["fa:fa-shield-halved NetworkPolicy"]
         Quota["fa:fa-chart-pie ResourceQuota"]
+        PSS["fa:fa-shield-halved Pod Security Labels"]
 
         App[["Tenant App"]]
 
         RBAC --&gt;|Binds| App
-        NetPol --&gt;|Isolates| App
         Quota --&gt;|Limits| App
+        PSS --&gt;|Constrain| App
     end
 
     Op["fa:fa-gears Operator"] --&gt;|Provisions| Namespace
@@ -4607,7 +4607,7 @@
 
     class Op process;
     class App read;
-    class RBAC,NetPol,Quota security;</code></pre>
+    class RBAC,Quota,PSS security;</code></pre>
 <h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
 <div class="grid cards">
 <ul>
@@ -4616,12 +4616,12 @@
 <p>Automatically provisions Kubernetes <strong>RoleBindings</strong> to efficiently manage permissions for the Tenant.</p>
 </li>
 <li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m1 5.27 4 4V15a2 2 0 0 0 2 2h4v2h-1a1 1 0 0 0-1 1H2v2h7a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1h2.73l2 2L21 22.72 2.28 4zM15 20a1 1 0 0 0-1-1h-1v-1.73L15.73 20zm2.69-3.13L5.13 4.31C5.41 3.55 6.14 3 7 3h10a2 2 0 0 1 2 2v10c0 .86-.55 1.59-1.31 1.87M22 20v1.18L20.82 20z"/></svg></span> <strong>Network Isolation</strong></p>
-<p>Enforces <strong>NetworkPolicies</strong> to block cross-tenant traffic, ensuring strict isolation between namespaces.</p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 2v20c-5.1-.5-9-4.8-9-10s3.9-9.5 9-10m2 0v9h9c-.5-4.8-4.2-8.5-9-9m0 11v9c4.7-.5 8.5-4.2 9-9z"/></svg></span> <strong>Resource Quotas</strong></p>
+<p>Applies operator-managed <strong>ResourceQuotas</strong> and <strong>LimitRanges</strong> to prevent a single tenant from consuming all cluster storage or compute. Self-service tenants use the default guardrails; custom values are reserved for centrally managed onboarding.</p>
 </li>
 <li>
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 2v20c-5.1-.5-9-4.8-9-10s3.9-9.5 9-10m2 0v9h9c-.5-4.8-4.2-8.5-9-9m0 11v9c4.7-.5 8.5-4.2 9-9z"/></svg></span> <strong>Resource Quotas</strong></p>
-<p>Applies <strong>ResourceQuotas</strong> to prevent a single tenant from consuming all cluster storage or compute. Limits are configurable via the <code>OpenBaoTenant</code> spec.</p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m10 17-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9m-6-8L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5z"/></svg></span> <strong>Namespace Guardrails</strong></p>
+<p>Applies Pod Security Standards labels and reserves quota customization for centrally managed onboarding paths.</p>
 </li>
 </ul>
 </div>

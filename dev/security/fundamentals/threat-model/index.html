@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+        <meta name="description" content="STRIDE threat model for OpenBao Operator covering threat actors, trust boundaries, protected assets, and accepted residual risks.">
       
       
       
@@ -73,7 +73,7 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="Threat Model">
   
-    <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta property="og:description" content="STRIDE threat model for OpenBao Operator covering threat actors, trust boundaries, protected assets, and accepted residual risks.">
   
   <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/security/fundamentals/threat-model/">
   
@@ -83,7 +83,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Threat Model">
   
-    <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
+    <meta name="twitter:description" content="STRIDE threat model for OpenBao Operator covering threat actors, trust boundaries, protected assets, and accepted residual risks.">
   
   
     <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
@@ -2878,10 +2878,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-trust-boundaries" class="md-nav__link">
+  <a href="#1-threat-actors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Trust Boundaries
+        1. Threat Actors
       
     </span>
   </a>
@@ -2889,10 +2889,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-asset-identification" class="md-nav__link">
+  <a href="#2-trust-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Asset Identification
+        2. Trust Boundaries
       
     </span>
   </a>
@@ -2900,10 +2900,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-stride-analysis" class="md-nav__link">
+  <a href="#3-asset-identification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. STRIDE Analysis
+        3. Asset Identification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Asset Identification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#always-relevant-assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Always-Relevant Assets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#conditional-assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional Assets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-stride-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. STRIDE Analysis
       
     </span>
   </a>
@@ -2911,10 +2950,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-secrets-management" class="md-nav__link">
+  <a href="#5-accepted-residual-risks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Secrets Management
+        5. Accepted Residual Risks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. See Also
       
     </span>
   </a>
@@ -4512,10 +4562,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#1-trust-boundaries" class="md-nav__link">
+  <a href="#1-threat-actors" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Trust Boundaries
+        1. Threat Actors
       
     </span>
   </a>
@@ -4523,10 +4573,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-asset-identification" class="md-nav__link">
+  <a href="#2-trust-boundaries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Asset Identification
+        2. Trust Boundaries
       
     </span>
   </a>
@@ -4534,10 +4584,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#3-stride-analysis" class="md-nav__link">
+  <a href="#3-asset-identification" class="md-nav__link">
     <span class="md-ellipsis">
       
-        3. STRIDE Analysis
+        3. Asset Identification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Asset Identification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#always-relevant-assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Always-Relevant Assets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#conditional-assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional Assets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-stride-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. STRIDE Analysis
       
     </span>
   </a>
@@ -4545,10 +4634,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-secrets-management" class="md-nav__link">
+  <a href="#5-accepted-residual-risks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Secrets Management
+        5. Accepted Residual Risks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. See Also
       
     </span>
   </a>
@@ -4576,48 +4676,80 @@
 
 
 <h1 id="threat-model">Threat Model<a class="headerlink" href="#threat-model" title="Permanent link">&para;</a></h1>
-<div class="admonition abstract">
+<p>This page analyzes the OpenBao Operator security model with the <strong>STRIDE</strong> framework. It focuses on operator-owned control-plane behavior, tenant isolation, and lifecycle workflows.</p>
+<div class="admonition note">
 <p class="admonition-title">Scope</p>
-<p>This document analyzes the security boundaries, assets, and potential threats to the OpenBao Operator using the <strong>STRIDE</strong> framework.</p>
+<p>This page models threats to the OpenBao Operator control plane, tenant isolation boundaries, and lifecycle workflows. It does not replace OpenBao's own internal threat model.</p>
 </div>
-<h2 id="1-trust-boundaries">1. Trust Boundaries<a class="headerlink" href="#1-trust-boundaries" title="Permanent link">&para;</a></h2>
-<p>The system is divided into three major trust zones.</p>
+<div class="admonition note">
+<p class="admonition-title">Lifecycle Contract</p>
+<p><code>OpenBaoCluster</code> is an operator-owned lifecycle contract. This model assumes the operator manages clusters it created and reconciles. Generic import of arbitrary unmanaged OpenBao clusters is out of scope.</p>
+</div>
+<h2 id="1-threat-actors">1. Threat Actors<a class="headerlink" href="#1-threat-actors" title="Permanent link">&para;</a></h2>
+<p>This model assumes the following actors are relevant.</p>
+<ul>
+<li>A tenant author with namespace-scoped write access.</li>
+<li>A GitOps pipeline or human operator with namespace or cluster write access.</li>
+<li>A compromised Controller Pod.</li>
+<li>A compromised Provisioner Pod.</li>
+<li>A compromised OpenBao Pod or backup, restore, or upgrade Job.</li>
+<li>A misconfigured or compromised external dependency such as object storage, PKI, KMS, or an ingress controller.</li>
+</ul>
+<h2 id="2-trust-boundaries">2. Trust Boundaries<a class="headerlink" href="#2-trust-boundaries" title="Permanent link">&para;</a></h2>
+<p>The system is divided into five trust zones. Admission policy is the API enforcement boundary between submitted intent and persisted state.</p>
 <pre class="mermaid"><code>graph TD
-    subgraph Operator_Zone [Trust Zone: Operator]
-        Op[Operator Controller]
-        OpSA[ServiceAccount: Operator]
+    subgraph Client_Zone ["Trust Zone: Mutation Clients"]
+        GitOps["GitOps / Human Operator"]
+        Tenant["Tenant Author"]
     end
 
-    subgraph Tenant_Zone [Trust Zone: Tenant Namespace]
-        Bao[OpenBao Cluster]
-        Secret[Root Token / Unseal Key]
-        PVC[Raft Storage PVC]
+    subgraph Operator_Zone ["Trust Zone: Operator Identities"]
+        Prov["Provisioner"]
+        Ctrl["Controller"]
     end
 
-    subgraph Cloud_Zone [Trust Zone: External]
-        S3[Object Storage]
-        K8sAPI[Kubernetes API]
+    subgraph API_Zone ["Trust Zone: Kubernetes API"]
+        K8sAPI["Kubernetes API"]
+        VAP["Admission Policies"]
     end
 
-    Op -- Reconciles --&gt; Bao
-    Op -- Minimal Access --&gt; K8sAPI
-    Op -.-&gt;|Scoped Access| Secret
-    Bao -- Streams Snapshots --&gt; S3
+    subgraph Tenant_Zone ["Trust Zone: Tenant Namespace"]
+        Bao["OpenBao Pods"]
+        Jobs["Backup / Restore / Upgrade Jobs"]
+        Managed["Managed Resources"]
+    end
 
-    linkStyle 0 stroke:#22c55e,stroke-width:2px;
-    linkStyle 2 stroke:#dc2626,stroke-width:2px;
+    subgraph External_Zone ["Trust Zone: External Systems"]
+        Edge["Gateway / Ingress"]
+        Storage["Object Storage"]
+        Trust["Seal / PKI / Identity Systems"]
+    end
 
+    GitOps --"Apply / mutate"--&gt; K8sAPI
+    Tenant --"Apply / mutate"--&gt; K8sAPI
+    K8sAPI --"Enforced by"--&gt; VAP
+    Prov --"Tenant onboarding"--&gt; K8sAPI
+    Ctrl --"Lifecycle orchestration"--&gt; K8sAPI
+    Ctrl --"Manages"--&gt; Bao
+    Ctrl --"Creates"--&gt; Jobs
+    Ctrl --"Reconciles"--&gt; Managed
+    Edge --"Ingress"--&gt; Bao
+    Bao --"Seal / TLS / identity"--&gt; Trust
+    Jobs --"Backup / restore"--&gt; Storage
+
+    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
     classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
     classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
     classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
     classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
 
-    class Op process;
-    class OpSA security;
-    class Bao write;
-    class Secret,PVC security;
-    class S3,K8sAPI read;</code></pre>
-<h2 id="2-asset-identification">2. Asset Identification<a class="headerlink" href="#2-asset-identification" title="Permanent link">&para;</a></h2>
+    class GitOps,Tenant git;
+    class K8sAPI,Storage,Trust read;
+    class Bao,Jobs,Managed,Edge write;
+    class VAP security;
+    class Prov,Ctrl process;</code></pre>
+<h2 id="3-asset-identification">3. Asset Identification<a class="headerlink" href="#3-asset-identification" title="Permanent link">&para;</a></h2>
+<h3 id="always-relevant-assets">Always-Relevant Assets<a class="headerlink" href="#always-relevant-assets" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -4629,122 +4761,237 @@
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>Root Token</strong></td>
+<td style="text-align: left;"><strong>Admission Policies and Bindings</strong></td>
 <td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>Critical</strong></td>
-<td style="text-align: left;"><code>Secret</code></td>
-<td style="text-align: left;">Grants full administrative access to OpenBao.</td>
+<td style="text-align: left;">Kubernetes API</td>
+<td style="text-align: left;">Enforce the operator's API-level safety model before objects persist.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Unseal Keys</strong></td>
+<td style="text-align: left;"><strong>Provisioner and Controller Identities</strong></td>
+<td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>Critical</strong></td>
+<td style="text-align: left;"><code>ServiceAccount</code>, RBAC</td>
+<td style="text-align: left;">Long-running operator identities that define namespace onboarding and lifecycle authority.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Tenant RBAC and Secret Allowlists</strong></td>
 <td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>High</strong></td>
-<td style="text-align: left;"><code>Secret</code></td>
-<td style="text-align: left;">Static keys used to decrypt the vault master key.</td>
+<td style="text-align: left;"><code>Role</code>, <code>RoleBinding</code></td>
+<td style="text-align: left;">Define tenant namespace access and name-scoped Secret reachability.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Raft Data</strong></td>
 <td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>High</strong></td>
 <td style="text-align: left;"><code>PVC</code></td>
-<td style="text-align: left;">Encrypted persistent storage containing all vault data.</td>
+<td style="text-align: left;">Encrypted persistent state containing OpenBao data.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Snapshots</strong></td>
 <td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>High</strong></td>
-<td style="text-align: left;"><code>S3/GCS</code></td>
-<td style="text-align: left;">Encrypted backups of the Raft data.</td>
+<td style="text-align: left;"><code>S3/GCS/Azure</code></td>
+<td style="text-align: left;">Encrypted backup artifacts of the Raft state.</td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>CA Key</strong></td>
-<td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>High</strong></td>
-<td style="text-align: left;"><code>Secret</code></td>
-<td style="text-align: left;">Private key for the Cluster Root CA.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Configuration</strong></td>
+<td style="text-align: left;"><strong>Operator-Managed Configuration</strong></td>
 <td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2"/></svg></span> Medium</td>
-<td style="text-align: left;"><code>ConfigMap</code></td>
-<td style="text-align: left;">HCL configuration files.</td>
+<td style="text-align: left;"><code>ConfigMap</code>, CR spec</td>
+<td style="text-align: left;">HCL configuration and rendered lifecycle settings.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Generated Job Identity</strong></td>
+<td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 9h-2V7h2m0 10h-2v-6h2m-1-9A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2"/></svg></span> Medium</td>
+<td style="text-align: left;"><code>ServiceAccount</code>, Pod metadata</td>
+<td style="text-align: left;">Backup, restore, and upgrade identity contract, separate from the main OpenBao Pods.</td>
 </tr>
 </tbody>
 </table>
-<h2 id="3-stride-analysis">3. STRIDE Analysis<a class="headerlink" href="#3-stride-analysis" title="Permanent link">&para;</a></h2>
+<h3 id="conditional-assets">Conditional Assets<a class="headerlink" href="#conditional-assets" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Asset</th>
+<th style="text-align: left;">Risk Level</th>
+<th style="text-align: left;">Location</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Root Token Secret</strong></td>
+<td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>Critical</strong></td>
+<td style="text-align: left;"><code>Secret</code></td>
+<td style="text-align: left;">Present only when bootstrap mode persists the initial root token. Hardened self-init avoids this path.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Static Unseal Keys</strong></td>
+<td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>High</strong></td>
+<td style="text-align: left;"><code>Secret</code></td>
+<td style="text-align: left;">Present only when static unseal is used. Hardened production posture avoids this path.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Operator-Managed CA Key</strong></td>
+<td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>High</strong></td>
+<td style="text-align: left;"><code>Secret</code></td>
+<td style="text-align: left;">Present only in <code>OperatorManaged</code> TLS mode.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>External TLS Secrets</strong></td>
+<td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>High</strong></td>
+<td style="text-align: left;"><code>Secret</code></td>
+<td style="text-align: left;">Present only when <code>External</code> TLS is used.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Transit / Cloud / HSM Credentials</strong></td>
+<td style="text-align: left;"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 14h-2V9h2m0 9h-2v-2h2M1 21h22L12 2z"/></svg></span> <strong>High</strong></td>
+<td style="text-align: left;"><code>Secret</code> or workload identity</td>
+<td style="text-align: left;">Seal and PKI credentials depend on the selected unseal and identity mode.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4-stride-analysis">4. STRIDE Analysis<a class="headerlink" href="#4-stride-analysis" title="Permanent link">&para;</a></h2>
 <details class="failure">
-<summary>Spoofing (Identity)</summary>
-<p><strong>Threat:</strong> A rogue pod attempts to join the Raft cluster.</p>
-<div class="admonition success">
-<p class="admonition-title">Mitigation: mTLS</p>
-<p>Pods join using mTLS and certificate validation against the configured trust source.
-In <code>OperatorManaged</code> mode this trust source is the operator-managed CA, while <code>External</code> and <code>ACME</code> use their configured PKI flow.</p>
-</div>
-<p><strong>Threat:</strong> An attacker spoofs external endpoints.</p>
-<div class="admonition success">
-<p class="admonition-title">Mitigation: Network Policy</p>
-<p>Default-deny ingress policies enforce cluster isolation. For production, run with TLS enabled and a trusted certificate mode (<code>OperatorManaged</code>, <code>External</code>, or <code>ACME</code>).</p>
-</div>
-</details>
-<details class="warning">
-<summary>Tampering (Data Integrity)</summary>
-<p><strong>Threat:</strong> User manually edits the StatefulSet (e.g., changes image).</p>
-<div class="admonition success">
-<p class="admonition-title">Mitigation: Reconciliation</p>
-<p>The Operator watches for changes and immediately reverts drift to the desired state defined in the CRD.</p>
-</div>
-<p><strong>Threat:</strong> Malicious tenant points backups to unauthorized storage.</p>
-<div class="admonition success">
-<p class="admonition-title">Mitigation: Policy</p>
-<p>Use Admission Policies (ValidatingAdmissionPolicy) to restrict allowed backup targets.</p>
-</div>
-</details>
-<details class="danger">
-<summary>Repudiation (Audit Logs)</summary>
-<p><strong>Threat:</strong> Lack of audit trail for critical actions (step-down, backup).</p>
-<div class="admonition success">
-<p class="admonition-title">Mitigation: Structured Auditing</p>
-<p>The Operator emits structured JSON logs with <code>audit=true</code> for high-value control-plane operations (startup gating, upgrades, backups, restore, and lock transitions).</p>
-</div>
-</details>
-<details class="failure">
-<summary>Information Disclosure (Privacy)</summary>
-<p><strong>Threat:</strong> TLS keys or tokens exposed in logs.</p>
-<div class="admonition success">
-<p class="admonition-title">Mitigation: Redaction</p>
-<p>Strict policy against logging secrets. Use <code>crypto/rand</code> for generation. OpenBao telemetry is used instead of debug logs.</p>
-</div>
-</details>
-<details class="danger">
-<summary>Denial of Service (Availability)</summary>
-<p><strong>Threat:</strong> Misconfigured CR causing hot reconcile loops.</p>
-<div class="admonition success">
-<p class="admonition-title">Mitigation: Rate Limiting</p>
-<p>The controller utilizes <code>MaxConcurrentReconciles</code> and exponential backoff to preventing API saturation.</p>
-</div>
-</details>
-<details class="warning">
-<summary>Elevation of Privilege (Authorization)</summary>
-<p><strong>Threat:</strong> Attacker compromises the Operator Pod.</p>
-<div class="admonition success">
-<p class="admonition-title">Mitigation: Least Privilege</p>
+<summary>Spoofing</summary>
+<p><strong>Threats</strong></p>
 <ul>
-<li><strong>Non-Root:</strong> Operator runs as non-root.</li>
-<li><strong>Scoped Secret Access:</strong> Operator cannot enumerate Secrets (<code>list</code>/<code>watch</code>); read/write access is constrained to allowlisted Secret names.</li>
-<li><strong>Split RBAC:</strong> Separated ServiceAccounts for Provisioning vs. Management.</li>
+<li>A client or GitOps render path spoofs the operator identity by drifting <code>ServiceAccount</code> names, policy subjects, or <code>RoleBinding</code> subjects.</li>
+<li>A workload or edge path spoofs cluster identity at the TLS boundary.</li>
+<li>Backup, restore, or upgrade jobs inherit the wrong identity path.</li>
+</ul>
+<div class="admonition success">
+<p class="admonition-title">Primary Mitigations</p>
+<ul>
+<li>Split Provisioner and Controller identities.</li>
+<li>Validate rendered install identities for Helm and raw-manifest overlays.</li>
+<li>Validate TLS SANs and trust sources before the cluster becomes ready.</li>
+<li>Use separate Job <code>ServiceAccount</code> objects, identity checks, and Job-specific network controls.</li>
 </ul>
 </div>
 </details>
-<h2 id="4-secrets-management">4. Secrets Management<a class="headerlink" href="#4-secrets-management" title="Permanent link">&para;</a></h2>
-<div class="admonition danger">
-<p class="admonition-title">Critical Requirements</p>
-<ol>
-<li><strong>Never Log Secrets:</strong> Root tokens, unseal keys, and CA keys must NEVER appear in stdout/stderr.</li>
-<li><strong>Unique Names:</strong> Secrets must include the cluster name to prevent collisions.</li>
-<li><strong>Strict RBAC:</strong> Only Cluster Admins should have access to the Root Token Secret.</li>
-</ol>
+<details class="warning">
+<summary>Tampering</summary>
+<p><strong>Threats</strong></p>
+<ul>
+<li>A user, GitOps controller, or compromised namespace actor directly mutates operator-managed resources.</li>
+<li>A compromised Provisioner or tenant workflow broadens tenant RBAC or tenant guardrails.</li>
+<li>A tenant or operator steers backup or restore jobs toward unintended endpoints or credentials.</li>
+</ul>
+<div class="admonition success">
+<p class="admonition-title">Primary Mitigations</p>
+<ul>
+<li>Lock operator-managed resources with admission policy.</li>
+<li>Restrict controller writes for RBAC, <code>ServiceAccount</code>, and Secret objects.</li>
+<li>Restrict Provisioner namespace mutation and tenant-governance writes.</li>
+<li>Keep backup and restore credentials name-scoped and separately validated.</li>
+</ul>
 </div>
+<div class="admonition note">
+<p class="admonition-title">PVC Posture</p>
+<p>Operator-managed PVCs are intentionally CR-driven and status-observed rather than fully admission-locked. Kubernetes storage controllers and CSI components also mutate PVCs during normal lifecycle.</p>
+</div>
+</details>
+<details class="note">
+<summary>Repudiation</summary>
+<p><strong>Threats</strong></p>
+<ul>
+<li>High-value control-plane actions cannot be attributed later.</li>
+<li>Break-glass changes happen without a clear audit boundary.</li>
+</ul>
+<div class="admonition success">
+<p class="admonition-title">Primary Mitigations</p>
+<ul>
+<li>Emit structured operator audit logs for startup gating, upgrades, backups, restore, and operation-lock transitions.</li>
+<li>Use Kubernetes API audit logs and admission denials as the primary mutation trail.</li>
+<li>Keep maintenance mode explicit and break-glass groups narrow by default.</li>
+</ul>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Audit Boundary</p>
+<p>Operator audit logs complement Kubernetes API audit logs. They do not replace cluster-level API auditing.</p>
+</div>
+</details>
+<details class="danger">
+<summary>Information Disclosure</summary>
+<p><strong>Threats</strong></p>
+<ul>
+<li>Secrets, credentials, or keys are exposed through logs or broad namespace access.</li>
+<li>TLS or certificate handling leaks sensitive material.</li>
+<li>Backup and restore credentials leak across workloads.</li>
+</ul>
+<div class="admonition success">
+<p class="admonition-title">Primary Mitigations</p>
+<ul>
+<li>Never log secrets.</li>
+<li>Keep Secret access name-scoped without normal Secret enumeration.</li>
+<li>Use separate writer and reader roles for operator-managed Secrets.</li>
+<li>Keep ACME private keys in the OpenBao process instead of Kubernetes Secrets.</li>
+<li>Use separate workload identities for backup and restore Jobs.</li>
+</ul>
+</div>
+</details>
+<details class="failure">
+<summary>Denial of Service</summary>
+<p><strong>Threats</strong></p>
+<ul>
+<li>Misconfiguration or tampering causes reconcile churn or blocks convergence.</li>
+<li>Day-2 operations collide or force unsafe concurrent mutations.</li>
+<li>Voluntary disruption or PDB tampering breaks quorum.</li>
+<li>Required admission policies disappear after startup.</li>
+</ul>
+<div class="admonition success">
+<p class="admonition-title">Primary Mitigations</p>
+<ul>
+<li>Use controller rate limiting and bounded concurrency.</li>
+<li>Validate objects at admission before invalid state persists.</li>
+<li>Use explicit readiness conditions for API-server, Gateway, ACME, backup, and restore assumptions.</li>
+<li>Use a shared operation lock for disruptive workflows.</li>
+<li>Manage <code>PodDisruptionBudget</code> objects and lock them against drift.</li>
+<li>Re-check admission dependencies at runtime and pause privileged reconciliation when they disappear.</li>
+</ul>
+</div>
+</details>
+<details class="danger">
+<summary>Elevation of Privilege</summary>
+<p><strong>Threats</strong></p>
+<ul>
+<li>A compromised Controller broadens tenant privileges or writes to unrelated Secrets or <code>ServiceAccount</code> objects.</li>
+<li>A compromised Provisioner mints broader tenant access or mutates protected namespaces.</li>
+<li>Unsafe mode or break-glass use weakens the API-level defense-in-depth boundary.</li>
+</ul>
+<div class="admonition success">
+<p class="admonition-title">Primary Mitigations</p>
+<ul>
+<li>Split long-running identities and restrict controller writes.</li>
+<li>Keep Secret access name-scoped and allowlisted.</li>
+<li>Restrict Provisioner RBAC, namespace mutation, and tenant-governance writes.</li>
+<li>Keep unsafe mode explicitly non-production and break-glass scoped.</li>
+</ul>
+</div>
+</details>
+<h2 id="5-accepted-residual-risks">5. Accepted Residual Risks<a class="headerlink" href="#5-accepted-residual-risks" title="Permanent link">&para;</a></h2>
+<div class="admonition warning">
+<p class="admonition-title">Accepted Posture</p>
+<ul>
+<li>PVCs are intentionally soft-governed rather than fully admission-locked because Kubernetes and CSI controllers also update them.</li>
+<li><code>UserAccessBootstrap</code> is best-effort signaling. The operator does not try to prove that arbitrary self-init requests create a usable human authentication path.</li>
+<li>Cloud KMS and external identity integrations are surfaced through conditions and validation, but still depend on external systems outside the operator trust boundary.</li>
+<li><code>unsafe mode</code> intentionally weakens the API-level safety model and is not a supported Hardened production posture.</li>
+</ul>
+</div>
+<h2 id="6-see-also">6. See Also<a class="headerlink" href="#6-see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../../architecture/operator-invariants/">Operator Invariants</a></li>
+<li><a href="../../infrastructure/admission-policies/">Admission Policies</a></li>
+<li><a href="../../infrastructure/rbac/">RBAC Architecture</a></li>
+<li><a href="../../../reference/status-and-events/">Status Conditions and Events</a></li>
+</ul>
 
 
 
 
 
 
+
+  
+  
 
 
 

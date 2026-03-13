@@ -9698,7 +9698,7 @@ See: <a href="https://openbao.org/docs/configuration/self-init/">https://openbao
 </tr>
 <tr>
 <td><code>audience</code> <em>string</em></td>
-<td>Audience defaults to "openbao-internal" if unset.<br />This value is written to the JWT auth role AND used in the TokenRequest.</td>
+<td>Audience, if set, must match the operator installation audience used for<br />projected OpenBao auth tokens.<br />This field does not create a per-cluster TokenRequest audience override.</td>
 <td></td>
 <td>Optional: {} <br /></td>
 </tr>

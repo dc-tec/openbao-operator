@@ -4642,7 +4642,7 @@
 </table>
 <div class="admonition note">
 <p class="admonition-title">Volume Mounts</p>
-<p>Since the root filesystem is read-only, all mutable data (logs, storage, tmp) is written to explicit, size-limited volume mounts.</p>
+<p>Since the root filesystem is read-only, all mutable data (logs, storage, tmp) is written to explicit writable volume mounts. Backup and restore jobs also run with explicit resource requests and limits.</p>
 </div>
 <h2 id="resource-guardrails">Resource Guardrails<a class="headerlink" href="#resource-guardrails" title="Permanent link">&para;</a></h2>
 <p>The Operator places default resource limits on ephemeral jobs to protect the node from "noisy neighbor" resource exhaustion.</p>

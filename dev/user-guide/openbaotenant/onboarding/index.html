@@ -4644,6 +4644,9 @@
 <li>MUST match metadata.namespace.</li>
 </ol>
 </li>
+</ol>
+<p>Self-service onboarding may not set <code>spec.quota</code> or <code>spec.limitRange</code>. The operator-owned tenant guardrails use the default values unless a cluster administrator creates the <code>OpenBaoTenant</code> from the operator namespace.</p>
+<ol>
 <li>
 <p>Apply the resource:</p>
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>my-tenant.yaml
@@ -4661,17 +4664,17 @@
 <h3 id="centralized-admin-onboarding">Steps<a class="headerlink" href="#centralized-admin-onboarding" title="Permanent link">&para;</a></h3>
 <ol>
 <li>
-<p>As a cluster administrator, create an <code>OpenBaoTenant</code> resource in the <strong>operator's namespace</strong> (typically <code>openbao-operator-system</code>):</p>
+<p>As a cluster administrator, create an <code>OpenBaoTenant</code> resource in the <strong>operator's namespace</strong>:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoTenant</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-b-authorization</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-system</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;operator-namespace&gt;</span><span class="w"> </span><span class="c1"># (1)!</span>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">targetNamespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-b-prod</span><span class="w">      </span><span class="c1"># (2)!</span>
 </span></code></pre></div>
 <ol>
-<li>Trusted namespace.</li>
+<li>Rendered operator namespace. Default raw-manifest and Helm installs use <code>openbao-operator-system</code>.</li>
 <li>Can be any namespace.</li>
 </ol>
 </li>
@@ -4679,6 +4682,7 @@
 <p>Since the request originates from the trusted operator namespace, the controller allows cross-namespace provisioning.</p>
 </li>
 </ol>
+<p>This is also the supported path for custom tenant guardrails. Cluster administrators may set <code>spec.quota</code> and <code>spec.limitRange</code> when they need tighter or larger defaults for a specific namespace.</p>
 </div>
 </div>
 </div>
@@ -4696,7 +4700,7 @@
 <h2 id="4-how-it-works-security-model">4. How It Works (Security Model)<a class="headerlink" href="#4-how-it-works-security-model" title="Permanent link">&para;</a></h2>
 <p>The operator uses a <strong>Trust-But-Verify</strong> approach:</p>
 <ol>
-<li><strong>Trust</strong>: The Operator's own namespace (<code>openbao-operator-system</code>) is trusted. Resources created there can target <em>any</em> namespace.</li>
+<li><strong>Trust</strong>: The operator's rendered namespace is trusted. Resources created there can target <em>any</em> namespace.</li>
 <li><strong>Verify</strong>: Resources created in user namespaces are verified. They must target their own namespace (<code>metadata.namespace == spec.targetNamespace</code>).</li>
 <li><strong>Isolation</strong>: The Provisioner uses a delegated ServiceAccount with minimal permissions. It cannot list all namespaces in the cluster; it only acts on namespaces explicitly discovered via valid <code>OpenBaoTenant</code> CRs.</li>
 </ol>

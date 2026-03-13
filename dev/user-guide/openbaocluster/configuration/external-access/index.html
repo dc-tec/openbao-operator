@@ -4693,7 +4693,7 @@ uses it for Raft <code>retry_join</code> and probe verification.</p>
 - Secret <code>&lt;name&gt;-tls-server</code>: Keys <code>tls.crt</code>, <code>tls.key</code>, <code>ca.crt</code></p>
 </div>
 <div class="tabbed-block">
-<p><strong>Default:</strong> The Operator manages an internal CA and rotates certificates automatically. Good for internal use or testing.</p>
+<p><strong>Default:</strong> The Operator manages an internal CA and rotates certificates automatically. Use this for development or internal evaluation, not for Hardened production.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>

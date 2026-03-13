@@ -4781,6 +4781,10 @@
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>Install the operator using the official Helm chart:</p>
+<div class="admonition note">
+<p class="admonition-title">Rendered operator namespace</p>
+<p>The examples below use the default release namespace <code>openbao-operator-system</code>. If you install the chart into another namespace, replace it consistently in the commands and later verification steps.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>openbao-operator<span class="w"> </span>oci://ghcr.io/dc-tec/charts/openbao-operator<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--namespace<span class="w"> </span>openbao-operator-system<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--create-namespace
@@ -4943,12 +4947,14 @@ You can optionally force the platform mode to ensure compatibility with Security
 </div>
 <h2 id="verify-installation">Verify Installation<a class="headerlink" href="#verify-installation" title="Permanent link">&para;</a></h2>
 <p>Check that the operator pods are running:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>openbao-operator-system
-</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code>```bash
+kubectl get pods -n &lt;operator-namespace&gt;
+```
+</code></pre></div>
 <p>Expected output (multi-tenant mode):</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>NAME                                              READY   STATUS    RESTARTS   AGE
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>openbao-operator-controller-xxxxxxxxxx-xxxxx      1/1     Running   0          1m
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>openbao-operator-provisioner-xxxxxxxxxx-xxxxx     1/1     Running   0          1m
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    &lt;controller-pod&gt;      1/1     Running   0          1m
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    &lt;provisioner-pod&gt;     1/1     Running   0          1m
 </span></code></pre></div>
 <div class="admonition success">
 <p class="admonition-title">Ready</p>
@@ -4972,6 +4978,7 @@ You can optionally force the platform mode to ensure compatibility with Security
 <h3 id="yaml-manifest-upgrades">YAML Manifest Upgrades<a class="headerlink" href="#yaml-manifest-upgrades" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
 </span></code></pre></div>
+<p>For custom raw-manifest installs, use your rendered namespace, ServiceAccount names, and policy names rather than assuming the repository defaults.</p>
 <h2 id="uninstallation">Uninstallation<a class="headerlink" href="#uninstallation" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5.12 5h13.75l-.94-1h-12zm15.42.23c.29.34.46.77.46 1.27V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6.5c0-.5.17-.93.46-1.27l1.38-1.68C5.12 3.21 5.53 3 6 3h12c.47 0 .88.21 1.15.55zM6 18h6v-3H6z"/></svg></span> Helm</label><label for="__tabbed_2_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 0H8C6.9 0 6 .9 6 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6zm4 18H8V2h7v5h5zM4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm6 6v2h8v-2zm0 4v2h5v-2z"/></svg></span> YAML Manifests</label></div>
 <div class="tabbed-content">
