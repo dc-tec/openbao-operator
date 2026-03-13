@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openbao-jwt-settings
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  OPENBAO_JWT_AUDIENCE: "openbao-internal"

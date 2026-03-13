@@ -46,6 +46,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: OPERATOR_VERSION
               value: "0.0.0"
+            - name: OPENBAO_JWT_AUDIENCE
+              value: "openbao-internal"
           ports: []
           securityContext:
             readOnlyRootFilesystem: true

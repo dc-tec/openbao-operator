@@ -5,6 +5,7 @@ package infra
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -489,6 +490,30 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 		if !strings.Contains(content, snippet) {
 			t.Errorf("expected ConfigMap content to contain %q, got:\n%s", snippet, content)
 		}
+	}
+}
+
+func TestEnsureSelfInitConfigMap_RejectsBootstrapAudienceMismatch(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+			Enabled:  true,
+			Audience: "custom-audience",
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "https://kubernetes.default.svc", []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"}, "")
+
+	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
+	if err == nil {
+		t.Fatal("ensureSelfInitConfigMap() error = nil, want mismatch error")
+	}
+	if !errors.Is(err, ErrOIDCBootstrapAudienceMismatch) {
+		t.Fatalf("ensureSelfInitConfigMap() error = %v, want ErrOIDCBootstrapAudienceMismatch", err)
 	}
 }
 

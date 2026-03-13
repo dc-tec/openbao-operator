@@ -73,6 +73,8 @@ spec:
               value: {{ include "openbao-operator.controllerServiceAccountName" . }}
             - name: OPERATOR_VERSION
               value: {{ include "openbao-operator.operatorVersion" . | quote }}
+            - name: OPENBAO_JWT_AUDIENCE
+              value: {{ .Values.serviceAccountToken.openBaoAudience | quote }}
             {{- if not .Values.admissionPolicies.enabled }}
             - name: OPENBAO_UNSAFE_ADMISSION_DISABLED
               value: "true"
@@ -140,7 +142,7 @@ spec:
               - serviceAccountToken:
                   path: openbao-token
                   expirationSeconds: 3600
-                  audience: openbao-internal
+                  audience: {{ .Values.serviceAccountToken.openBaoAudience | quote }}
             defaultMode: 292
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:

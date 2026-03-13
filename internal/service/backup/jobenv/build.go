@@ -6,9 +6,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
+	adapterauth "github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storageenv"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -134,12 +135,15 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts Options, tokenFi
 
 // OpenBaoJWTAudience returns the audience value used for projected OpenBao JWT tokens.
 func OpenBaoJWTAudience() string {
-	return auth.OpenBaoJWTAudience()
+	return adapterauth.OpenBaoJWTAudience()
 }
 
 // EffectiveBackupJWTRole returns the configured JWT role or defaults it
 // when OIDC is enabled and the role is empty.
 func EffectiveBackupJWTRole(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
-	return storageenv.EffectiveJWTRole(cluster.Spec.Backup.JWTAuthRole, oidcEnabled, auth.RoleNameBackup)
+	return storageenv.EffectiveJWTRole(
+		cluster.Spec.Backup.JWTAuthRole,
+		portauth.OperatorJWTBootstrapEnabled(cluster),
+		portauth.RoleNameBackup,
+	)
 }

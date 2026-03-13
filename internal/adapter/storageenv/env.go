@@ -6,6 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 const (
@@ -40,13 +41,7 @@ func EffectiveProvider(provider string) string {
 
 // EffectiveJWTRole returns the configured role or a default when OIDC is enabled.
 func EffectiveJWTRole(configuredRole string, oidcEnabled bool, defaultRole string) string {
-	if configuredRole != "" {
-		return configuredRole
-	}
-	if oidcEnabled {
-		return defaultRole
-	}
-	return ""
+	return portauth.EffectiveJWTRole(configuredRole, oidcEnabled, defaultRole)
 }
 
 // AppendProviderEnvVars appends provider-specific BACKUP_* env vars.

@@ -20,6 +20,7 @@ resources:
   - ../manager
   - ../policy
   - maintenance_break_glass_settings.yaml
+  - openbao_jwt_settings.yaml
   # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
   #- ../prometheus
   # [VICTORIAMETRICS] To enable VictoriaMetrics VMServiceScrape resources, uncomment:
@@ -207,6 +208,20 @@ patchesJson6902:
     # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
     # The following replacements add the cert-manager CA injection annotations.
 replacements:
+  - source:
+      version: v1
+      kind: ConfigMap
+      name: openbao-operator-openbao-jwt-settings
+      fieldPath: data.OPENBAO_JWT_AUDIENCE
+    targets:
+      - select:
+          group: apps
+          version: v1
+          kind: Deployment
+          name: openbao-operator-controller
+        fieldPaths:
+          - spec.template.spec.containers.[name=manager].env.[name=OPENBAO_JWT_AUDIENCE].value
+          - spec.template.spec.volumes.[name=openbao-token].projected.sources.0.serviceAccountToken.audience
   - source:
       version: v1
       kind: ServiceAccount

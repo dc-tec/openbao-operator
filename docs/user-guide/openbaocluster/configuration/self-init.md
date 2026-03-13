@@ -84,7 +84,7 @@ spec:
     oidc:
       enabled: true
       # issuer: "https://..." (optional override)
-      # audience: "openbao-internal" (optional override)
+      # audience: "openbao-internal" (must match the operator installation audience if set)
 ```
 
 !!! note "OIDC prerequisites"
@@ -93,9 +93,15 @@ spec:
     If you customized the operator namespace or `namePrefix`, also ensure any manually configured JWT role in OpenBao binds to the rendered controller ServiceAccount identity. See [Operator Authentication](../../operator/authn.md#custom-install-checklist).
 
 !!! note "JWT audience"
-    The operator uses `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`) when creating JWT roles.
-    Set the same value in any manually managed roles and pass the env var to the operator
-    (`controller.extraEnv` and `provisioner.extraEnv` in Helm).
+    The operator uses an installation-scoped JWT audience from `OPENBAO_JWT_AUDIENCE`
+    (default: `openbao-internal`) when creating JWT roles. If you set
+    `spec.selfInit.oidc.audience`, it must match that installation audience.
+    Configure the audience on the operator installation:
+
+    - Helm: `serviceAccountToken.openBaoAudience`
+    - Raw manifests: `config/default/openbao_jwt_settings.yaml`
+
+    Keep the same value in any manually managed OpenBao roles.
 
 ### Request Structure
 

@@ -21,6 +21,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
@@ -197,10 +198,7 @@ func (r *infraReconciler) oidcBootstrapConfigurationError(err error) error {
 }
 
 func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	return cluster != nil &&
-		cluster.Spec.SelfInit != nil &&
-		cluster.Spec.SelfInit.OIDC != nil &&
-		cluster.Spec.SelfInit.OIDC.Enabled
+	return portauth.OperatorJWTBootstrapEnabled(cluster)
 }
 
 func (r *infraReconciler) oidcDiscoveryStatusCode(err error) (int, bool) {
@@ -572,6 +570,9 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		)
 	}
 	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
+		if errors.Is(err, inframanager.ErrOIDCBootstrapAudienceMismatch) {
+			return recon.Result{}, operatorerrors.WithReason(r.reasons.oidcBootstrapConfigurationReason(), err)
+		}
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			return recon.Result{}, operatorerrors.WithReason(r.reasons.gatewayAPIMissingReason(), err)
 		}

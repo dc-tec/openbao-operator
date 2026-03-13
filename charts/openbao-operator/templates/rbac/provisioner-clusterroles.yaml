@@ -19,13 +19,6 @@ rules:
       - patch
 
   - apiGroups:
-      - ""
-    resources:
-      - serviceaccounts
-    verbs:
-      - get
-
-  - apiGroups:
       - openbao.org
     resources:
       - openbaotenants

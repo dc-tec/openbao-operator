@@ -24,6 +24,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -224,15 +225,12 @@ func buildUpgradeExecutorJob(
 		}
 	}
 
-	// Get effective JWT role - use configured role or default to auto-created role if OIDC is enabled
+	// Get the effective JWT role from the shared operator bootstrap contract.
 	jwtRole := ""
 	if upgradeCfg != nil {
 		jwtRole = strings.TrimSpace(upgradeCfg.JWTAuthRole)
 	}
-	if jwtRole == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		// Operator will auto-create the upgrade role with name auth.RoleNameUpgrade
-		jwtRole = auth.RoleNameUpgrade
-	}
+	jwtRole = portauth.EffectiveJWTRole(jwtRole, portauth.OperatorJWTBootstrapEnabled(cluster), portauth.RoleNameUpgrade)
 	if jwtRole == "" {
 		return nil, fmt.Errorf("upgrade Jobs require JWT auth: Configure JWT auth and set the role name in spec.upgrade.jwtAuthRole")
 	}

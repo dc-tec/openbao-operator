@@ -191,6 +191,25 @@ func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
 	}
 }
 
+func TestVAP_OpenBaoCluster_RejectsOIDCBootstrapWithoutSelfInitEnabled(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-oidc-without-self-init")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: false,
+		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+			Enabled: true,
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "spec.selfInit.oidc.enabled requires spec.selfInit.enabled to be true") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
 func TestCRD_OpenBaoCluster_RejectsHAACMEWithoutSharedCache(t *testing.T) {
 	namespace := newTestNamespace(t)
 

@@ -509,6 +509,12 @@
           "type": "string",
           "description": "Audience for the projected Kubernetes API ServiceAccount token (`--api-audiences`)",
           "default": ""
+        },
+        "openBaoAudience": {
+          "type": "string",
+          "description": "Audience for projected OpenBao auth tokens mounted into the controller and executor Jobs",
+          "minLength": 1,
+          "default": "openbao-internal"
         }
       }
     },
