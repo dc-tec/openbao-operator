@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/authn/">
       
       
-        <link rel="prev" href="../installation/">
+        <link rel="prev" href="../identity-and-access/">
       
       
         <link rel="next" href="../authz/">
@@ -490,6 +490,34 @@
     
   
     Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../identity-and-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identity & Access
   
 
     
@@ -4774,6 +4802,8 @@ Initialization</strong>. This ensures no root token is ever persisted to a Kuber
 </div>
 <h2 id="custom-install-checklist">Custom Install Checklist<a class="headerlink" href="#custom-install-checklist" title="Permanent link">&para;</a></h2>
 <p>Use this checklist when you install the operator with raw manifests, a custom namespace, or a <code>namePrefix</code>.</p>
+<p>Start from the supported install path in <a href="../installation/#install-profiles">Operator Installation</a>, then use this checklist to validate the rendered controller identity and OpenBao-side JWT binding.</p>
+<p>For the compact bridge between install identity, Kubernetes RBAC, and OpenBao-side roles, see <a href="../identity-and-access/">Operator Identity And Access</a>.</p>
 <ol>
 <li>Confirm the controller ServiceAccount name and namespace from the rendered manifest.</li>
 <li>Confirm the controller Deployment still mounts the projected token used for OpenBao auth.</li>

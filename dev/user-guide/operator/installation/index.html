@@ -16,7 +16,7 @@
         <link rel="prev" href="../../deployment-decision-guide/">
       
       
-        <link rel="next" href="../authn/">
+        <link rel="next" href="../identity-and-access/">
       
       
         
@@ -553,6 +553,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#install-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -576,6 +587,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#single-tenant-with-custom-helm-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-Tenant With Custom Helm Identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#artifact-hub" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -591,6 +613,56 @@
     <span class="md-ellipsis">
       
         Full Values Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#render-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Render Verification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Render Verification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-tenant-with-custom-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Tenant With Custom Identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-tenant-raw-manifests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-Tenant Raw Manifests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-tenant-with-custom-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-Tenant With Custom Identity
       
     </span>
   </a>
@@ -678,6 +750,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../identity-and-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identity & Access
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -4612,6 +4712,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#install-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#installation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4635,6 +4746,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#single-tenant-with-custom-helm-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-Tenant With Custom Helm Identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#artifact-hub" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4650,6 +4772,56 @@
     <span class="md-ellipsis">
       
         Full Values Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#render-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Render Verification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Render Verification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-tenant-with-custom-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-Tenant With Custom Identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-tenant-raw-manifests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-Tenant Raw Manifests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#single-tenant-with-custom-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-Tenant With Custom Identity
       
     </span>
   </a>
@@ -4776,6 +4948,67 @@
 </ul>
 <p>See <a href="../single-tenant-mode/">Single-Tenant Mode</a> for single-tenant deployments.</p>
 </div>
+<h2 id="install-profiles">Install Profiles<a class="headerlink" href="#install-profiles" title="Permanent link">&para;</a></h2>
+<p>Use this table to choose the supported install path before you start changing values or overlays.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Intent</th>
+<th style="text-align: left;">Recommended path</th>
+<th style="text-align: left;">Change these settings</th>
+<th style="text-align: left;">Verify these outputs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Default shared production install</td>
+<td style="text-align: left;">Helm, multi-tenant mode</td>
+<td style="text-align: left;">release namespace, image tag, controller/provisioner sizing</td>
+<td style="text-align: left;">controller and provisioner pods in the rendered operator namespace</td>
+</tr>
+<tr>
+<td style="text-align: left;">Dedicated team namespace</td>
+<td style="text-align: left;">Helm, <code>tenancy.mode=single</code></td>
+<td style="text-align: left;"><code>tenancy.targetNamespace</code>, optional release namespace</td>
+<td style="text-align: left;">only the controller pod runs; <code>WATCH_NAMESPACE</code> matches the target namespace</td>
+</tr>
+<tr>
+<td style="text-align: left;">Dedicated team namespace with custom Helm identity</td>
+<td style="text-align: left;">Helm, <code>tenancy.mode=single</code> plus custom release name or <code>fullnameOverride</code></td>
+<td style="text-align: left;">release name or <code>fullnameOverride</code>, <code>tenancy.targetNamespace</code>, optional release namespace</td>
+<td style="text-align: left;">rendered controller <code>ServiceAccount</code> name, single-tenant <code>RoleBinding</code> subject, admission-policy identity variables, JWT audience</td>
+</tr>
+<tr>
+<td style="text-align: left;">Raw multi-tenant install with default identity</td>
+<td style="text-align: left;"><code>config/default</code></td>
+<td style="text-align: left;">operator namespace only if you want to fork the default base</td>
+<td style="text-align: left;">rendered namespace, controller and provisioner ServiceAccount names, admission policies</td>
+</tr>
+<tr>
+<td style="text-align: left;">Raw multi-tenant install with custom identity</td>
+<td style="text-align: left;"><code>config/overlays/custom-identity</code></td>
+<td style="text-align: left;"><code>namespace</code>, optional <code>namePrefix</code></td>
+<td style="text-align: left;">rendered ServiceAccount names, RoleBinding subjects, admission-policy identity variables, JWT audience</td>
+</tr>
+<tr>
+<td style="text-align: left;">Raw single-tenant install</td>
+<td style="text-align: left;"><code>config/overlays/single-tenant</code></td>
+<td style="text-align: left;">operator namespace in the overlay, target namespace in <code>target_namespace_config.yaml</code></td>
+<td style="text-align: left;">rendered operator namespace, <code>WATCH_NAMESPACE</code>, single-tenant RoleBinding subject</td>
+</tr>
+<tr>
+<td style="text-align: left;">Raw single-tenant install with custom identity</td>
+<td style="text-align: left;"><code>config/overlays/single-tenant-custom-identity</code></td>
+<td style="text-align: left;"><code>namespace</code>, optional <code>namePrefix</code>, target namespace in <code>target_namespace_config.yaml</code></td>
+<td style="text-align: left;">rendered operator namespace, controller <code>ServiceAccount</code> name, <code>WATCH_NAMESPACE</code>, single-tenant <code>RoleBinding</code> subject, admission-policy identity variables</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Single-Tenant Customization Boundary</p>
+<p>Use <code>config/overlays/single-tenant</code> when you only need a custom operator namespace or target namespace.
+Use <code>config/overlays/single-tenant-custom-identity</code> when you also need a custom operator identity, such as an extra <code>namePrefix</code>.</p>
+</div>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5.12 5h13.75l-.94-1h-12zm15.42.23c.29.34.46.77.46 1.27V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6.5c0-.5.17-.93.46-1.27l1.38-1.68C5.12 3.21 5.53 3 6 3h12c.47 0 .88.21 1.15.55zM6 18h6v-3H6z"/></svg></span> Helm (Recommended)</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M15.34 13.16c1.32 0 3.22-.27 3.22-1.84q.015-.18-.03-.36l-.78-3.4c-.18-.75-.34-1.09-1.66-1.75-1.02-.52-3.24-1.38-3.9-1.38-.61 0-.79.79-1.52.79-.7 0-1.22-.59-1.88-.59-.63 0-1.04.43-1.36 1.31 0 0-.88 2.5-1 2.86-.01.07-.02.13-.02.2 0 .97 3.82 4.15 8.93 4.15m3.43-1.19c.18.86.18.95.18 1.04 0 1.5-1.66 2.31-3.83 2.31-4.92 0-9.23-2.88-9.23-4.78 0-.27.06-.53.16-.77-1.77.08-4.05.4-4.05 2.42 0 3.32 7.84 7.39 14.05 7.39 4.76 0 5.95-2.15 5.95-3.85 0-1.34-1.15-2.86-3.23-3.76"/></svg></span> OpenShift</label><label for="__tabbed_1_3"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 0H8C6.9 0 6 .9 6 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6zm4 18H8V2h7v5h5zM4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm6 6v2h8v-2zm0 4v2h5v-2z"/></svg></span> YAML Manifests</label><label for="__tabbed_1_4"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M15 4v2h3v12h-3v2h5V4M4 4v16h5v-2H6V6h3V4z"/></svg></span> Developer (Source)</label></div>
 <div class="tabbed-content">
@@ -4802,6 +5035,26 @@
 <li>Run multiple replicas for high availability.</li>
 <li>Adjust resource limits based on cluster size.</li>
 </ol>
+<h3 id="single-tenant-with-custom-helm-identity">Single-Tenant With Custom Helm Identity<a class="headerlink" href="#single-tenant-with-custom-helm-identity" title="Permanent link">&para;</a></h3>
+<p>Helm already supports the equivalent of the raw-manifest custom-identity overlays through the release name and <code>fullnameOverride</code>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>helm<span class="w"> </span>install<span class="w"> </span>team-bao<span class="w"> </span>oci://ghcr.io/dc-tec/charts/openbao-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--namespace<span class="w"> </span>platform-operators<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--set<span class="w"> </span>tenancy.mode<span class="o">=</span>single<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--set<span class="w"> </span>tenancy.targetNamespace<span class="o">=</span>openbao<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">fullnameOverride</span><span class="o">=</span>team-bao-operator
+</span></code></pre></div>
+<p>Confirm with <code>helm template</code> or <code>helm get manifest</code> that:</p>
+<ol>
+<li>the controller <code>ServiceAccount</code> name matches the rendered Helm fullname</li>
+<li>the single-tenant <code>RoleBinding</code> subject points at that rendered controller <code>ServiceAccount</code></li>
+<li>admission-policy variables reference the same rendered operator namespace and controller <code>ServiceAccount</code> name</li>
+<li><code>OPENBAO_JWT_AUDIENCE</code> on the controller still matches the projected <code>openbao-token</code> audience</li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The chart does not expose per-component custom <code>ServiceAccount</code> names. Use the release name or <code>fullnameOverride</code> to customize the operator identity while keeping the rendered RBAC and admission-policy references aligned.</p>
+</div>
 <h3 id="artifact-hub">Artifact Hub<a class="headerlink" href="#artifact-hub" title="Permanent link">&para;</a></h3>
 <p>Discover package metadata and install snippets on Artifact Hub:</p>
 <ul>
@@ -4897,10 +5150,10 @@
 <div class="tabbed-block">
 <p>For Red Hat OpenShift clusters, the operator defaults to platform auto-detection.
 You can optionally force the platform mode to ensure compatibility with Security Context Constraints (SCC):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>helm<span class="w"> </span>install<span class="w"> </span>openbao-operator<span class="w"> </span>oci://ghcr.io/dc-tec/charts/openbao-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--namespace<span class="w"> </span>openbao-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">platform</span><span class="o">=</span>openshift
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>helm<span class="w"> </span>install<span class="w"> </span>openbao-operator<span class="w"> </span>oci://ghcr.io/dc-tec/charts/openbao-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--namespace<span class="w"> </span>openbao-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">platform</span><span class="o">=</span>openshift
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">What this does</p>
@@ -4909,7 +5162,7 @@ You can optionally force the platform mode to ensure compatibility with Security
 </div>
 <div class="tabbed-block">
 <p>Apply the installer manifest directly from the GitHub Release:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -4920,6 +5173,7 @@ You can optionally force the platform mode to ensure compatibility with Security
 <li><code>config/default</code>: default multi-tenant install</li>
 <li><code>config/overlays/custom-identity</code>: multi-tenant install with custom operator namespace or <code>namePrefix</code></li>
 <li><code>config/overlays/single-tenant</code>: direct single-tenant install without the provisioner</li>
+<li><code>config/overlays/single-tenant-custom-identity</code>: direct single-tenant install without the provisioner plus custom operator identity support</li>
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">Custom Namespace Or Prefix</p>
@@ -4929,6 +5183,10 @@ You can optionally force the platform mode to ensure compatibility with Security
 <p class="admonition-title">Single-Tenant Raw Manifests</p>
 <p>For direct single-tenant installs, start from <code>config/overlays/single-tenant</code>. That overlay owns the operator namespace and target namespace wiring instead of relying on manual <code>WATCH_NAMESPACE</code> patches.</p>
 </div>
+<div class="admonition tip">
+<p class="admonition-title">Single-Tenant With Custom Identity</p>
+<p>If you need single-tenant mode and a custom operator identity, such as an extra <code>namePrefix</code>, start from <code>config/overlays/single-tenant-custom-identity</code>. That overlay keeps the single-tenant namespace wiring and the controller admission-policy identity rewrites aligned in one supported path.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Operator JWT Auth</p>
 <p>If you use custom raw-manifest identities together with manual OpenBao JWT configuration or self-init OIDC bootstrap, verify the rendered controller ServiceAccount name and namespace first. See <a href="../authn/#custom-install-checklist">Operator Authentication</a>.</p>
@@ -4936,15 +5194,54 @@ You can optionally force the platform mode to ensure compatibility with Security
 </div>
 <div class="tabbed-block">
 <p>For local development and contribution:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Install CRDs</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>install
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Deploy operator (uses Kustomize)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>make<span class="w"> </span>deploy<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:dev
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Install CRDs</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>install
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Deploy operator (uses Kustomize)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>make<span class="w"> </span>deploy<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:dev
 </span></code></pre></div>
 </div>
 </div>
 </div>
+<h2 id="render-verification">Render Verification<a class="headerlink" href="#render-verification" title="Permanent link">&para;</a></h2>
+<p>Use this checklist for raw-manifest installs before you apply the manifests.</p>
+<h3 id="multi-tenant-with-custom-identity">Multi-Tenant With Custom Identity<a class="headerlink" href="#multi-tenant-with-custom-identity" title="Permanent link">&para;</a></h3>
+<p>Render the overlay:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>kustomize<span class="w"> </span>config/overlays/custom-identity
+</span></code></pre></div>
+<p>Confirm:</p>
+<ol>
+<li>the rendered operator namespace is the namespace you expect</li>
+<li>the controller and provisioner <code>ServiceAccount</code> names match your intended install identity</li>
+<li><code>RoleBinding</code> and <code>ClusterRoleBinding</code> subjects point at those rendered ServiceAccounts</li>
+<li>admission-policy variables reference the same rendered namespace and ServiceAccount names</li>
+<li><code>OPENBAO_JWT_AUDIENCE</code> on the controller matches the projected <code>openbao-token</code> audience</li>
+</ol>
+<p>See <a href="../authn/#custom-install-checklist">Operator Authentication</a> for the OpenBao-side JWT binding checks.</p>
+<h3 id="single-tenant-raw-manifests">Single-Tenant Raw Manifests<a class="headerlink" href="#single-tenant-raw-manifests" title="Permanent link">&para;</a></h3>
+<p>Render the overlay:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>kustomize<span class="w"> </span>config/overlays/single-tenant
+</span></code></pre></div>
+<p>Confirm:</p>
+<ol>
+<li>the rendered operator namespace matches <code>config/overlays/single-tenant/kustomization.yaml</code></li>
+<li><code>WATCH_NAMESPACE</code> on the controller matches <code>config/overlays/single-tenant/target_namespace_config.yaml</code></li>
+<li>the single-tenant <code>RoleBinding</code> namespace matches the same target namespace</li>
+<li>the controller <code>ServiceAccount</code> subject in that <code>RoleBinding</code> points at the rendered operator namespace</li>
+</ol>
+<p>If you customize the single-tenant overlay beyond those supported fields, treat the render output as the source of truth.</p>
+<h3 id="single-tenant-with-custom-identity">Single-Tenant With Custom Identity<a class="headerlink" href="#single-tenant-with-custom-identity" title="Permanent link">&para;</a></h3>
+<p>Render the overlay:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>kustomize<span class="w"> </span>config/overlays/single-tenant-custom-identity
+</span></code></pre></div>
+<p>Confirm:</p>
+<ol>
+<li>the rendered operator namespace matches <code>config/overlays/single-tenant-custom-identity/kustomization.yaml</code></li>
+<li>the rendered controller <code>ServiceAccount</code> name matches the same overlay after any <code>namePrefix</code></li>
+<li><code>WATCH_NAMESPACE</code> on the controller matches <code>config/overlays/single-tenant-custom-identity/target_namespace_config.yaml</code></li>
+<li>the single-tenant <code>RoleBinding</code> subject points at the rendered controller <code>ServiceAccount</code></li>
+<li>controller admission-policy variables reference the same rendered namespace and <code>ServiceAccount</code> name</li>
+</ol>
 <h2 id="verify-installation">Verify Installation<a class="headerlink" href="#verify-installation" title="Permanent link">&para;</a></h2>
 <p>Check that the operator pods are running:</p>
 <div class="language-text highlight"><pre><span></span><code>```bash
@@ -4952,9 +5249,9 @@ kubectl get pods -n &lt;operator-namespace&gt;
 ```
 </code></pre></div>
 <p>Expected output (multi-tenant mode):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>NAME                                              READY   STATUS    RESTARTS   AGE
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    &lt;controller-pod&gt;      1/1     Running   0          1m
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    &lt;provisioner-pod&gt;     1/1     Running   0          1m
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>NAME                                              READY   STATUS    RESTARTS   AGE
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    &lt;controller-pod&gt;      1/1     Running   0          1m
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    &lt;provisioner-pod&gt;     1/1     Running   0          1m
 </span></code></pre></div>
 <div class="admonition success">
 <p class="admonition-title">Ready</p>
@@ -4967,33 +5264,33 @@ kubectl get pods -n &lt;operator-namespace&gt;
 <p>Helm does not automatically upgrade CRDs. For releases with CRD changes:</p>
 <ol>
 <li>Apply CRDs from the release assets first:
-    <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
+    <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
 </span></code></pre></div></li>
 <li>Then upgrade the Helm release:
-    <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>openbao-operator<span class="w"> </span>oci://ghcr.io/dc-tec/charts/openbao-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--namespace<span class="w"> </span>openbao-operator-system
+    <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>openbao-operator<span class="w"> </span>oci://ghcr.io/dc-tec/charts/openbao-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>--namespace<span class="w"> </span>openbao-operator-system
 </span></code></pre></div></li>
 </ol>
 </div>
 <h3 id="yaml-manifest-upgrades">YAML Manifest Upgrades<a class="headerlink" href="#yaml-manifest-upgrades" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
 </span></code></pre></div>
 <p>For custom raw-manifest installs, use your rendered namespace, ServiceAccount names, and policy names rather than assuming the repository defaults.</p>
 <h2 id="uninstallation">Uninstallation<a class="headerlink" href="#uninstallation" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M5.12 5h13.75l-.94-1h-12zm15.42.23c.29.34.46.77.46 1.27V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6.5c0-.5.17-.93.46-1.27l1.38-1.68C5.12 3.21 5.53 3 6 3h12c.47 0 .88.21 1.15.55zM6 18h6v-3H6z"/></svg></span> Helm</label><label for="__tabbed_2_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 0H8C6.9 0 6 .9 6 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6zm4 18H8V2h7v5h5zM4 4v18h16v2H4c-1.1 0-2-.9-2-2V4zm6 6v2h8v-2zm0 4v2h5v-2z"/></svg></span> YAML Manifests</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>openbao-operator<span class="w"> </span>--namespace<span class="w"> </span>openbao-operator-system
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>openbao-operator<span class="w"> </span>--namespace<span class="w"> </span>openbao-operator-system
 </span></code></pre></div>
 <div class="admonition danger">
 <p class="admonition-title">CRDs Retained</p>
 <p>Helm does not delete CRDs by design. To fully remove:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>openbaoclusters.openbao.org<span class="w"> </span>openbaorestores.openbao.org<span class="w"> </span>openbaotenants.openbao.org
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>openbaoclusters.openbao.org<span class="w"> </span>openbaorestores.openbao.org<span class="w"> </span>openbaotenants.openbao.org
 </span></code></pre></div></p>
 </div>
 </div>
 <div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml
 </span></code></pre></div>
 </div>
 </div>

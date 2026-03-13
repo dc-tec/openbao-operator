@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/security/multi-tenancy/tenant-isolation/">
+        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/identity-and-access/">
       
       
-        <link rel="prev" href="../">
+        <link rel="prev" href="../installation/">
       
       
-        <link rel="next" href="../../../contributing/">
+        <link rel="next" href="../authn/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Tenant Isolation - OpenBao Operator</title>
+        <title>Identity & Access - OpenBao Operator</title>
       
     
     
@@ -71,17 +71,17 @@
   
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Tenant Isolation">
+  <meta property="og:title" content="Identity &amp; Access">
   
     <meta property="og:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
   
-  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/security/multi-tenancy/tenant-isolation/">
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/identity-and-access/">
   
     <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
   
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Tenant Isolation">
+  <meta name="twitter:title" content="Identity &amp; Access">
   
     <meta name="twitter:description" content="Kubernetes operator for OpenBao with secure lifecycle management, backup/restore, upgrades, and multi-tenancy controls.">
   
@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tenant-isolation-namespace-provisioner" class="md-skip">
+        <a href="#operator-identity-and-access" class="md-skip">
           Skip to content
         </a>
       
@@ -149,7 +149,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Tenant Isolation
+              Identity & Access
             
           </span>
         </div>
@@ -318,8 +318,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -330,13 +332,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -357,7 +357,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -375,7 +375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/" class="md-nav__link">
+      <a href="../../" class="md-nav__link">
         
   
   
@@ -403,7 +403,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/deployment-decision-guide/" class="md-nav__link">
+      <a href="../../deployment-decision-guide/" class="md-nav__link">
         
   
   
@@ -428,6 +428,8 @@
                 
   
   
+    
+  
   
   
     
@@ -437,13 +439,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-          
-        
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_3" checked>
         
           
           <label class="md-nav__link" for="__nav_2_3" id="__nav_2_3_label" tabindex="0">
@@ -464,7 +464,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -482,7 +482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/operator/installation/" class="md-nav__link">
+      <a href="../installation/" class="md-nav__link">
         
   
   
@@ -507,10 +507,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../user-guide/operator/identity-and-access/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identity & Access
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -526,6 +553,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#identity-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity Map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#install-sensitive-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install-Sensitive Checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-failure-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Failure Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -538,7 +629,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/operator/authn/" class="md-nav__link">
+      <a href="../authn/" class="md-nav__link">
         
   
   
@@ -566,7 +657,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/operator/authz/" class="md-nav__link">
+      <a href="../authz/" class="md-nav__link">
         
   
   
@@ -594,7 +685,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/operator/single-tenant-mode/" class="md-nav__link">
+      <a href="../single-tenant-mode/" class="md-nav__link">
         
   
   
@@ -681,7 +772,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaotenant/overview/" class="md-nav__link">
+      <a href="../../openbaotenant/overview/" class="md-nav__link">
         
   
   
@@ -709,7 +800,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaotenant/onboarding/" class="md-nav__link">
+      <a href="../../openbaotenant/onboarding/" class="md-nav__link">
         
   
   
@@ -737,7 +828,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaotenant/multi-tenancy/" class="md-nav__link">
+      <a href="../../openbaotenant/multi-tenancy/" class="md-nav__link">
         
   
   
@@ -824,7 +915,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/overview/" class="md-nav__link">
+      <a href="../../openbaocluster/overview/" class="md-nav__link">
         
   
   
@@ -852,7 +943,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/getting-started/" class="md-nav__link">
+      <a href="../../openbaocluster/getting-started/" class="md-nav__link">
         
   
   
@@ -880,7 +971,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/next-steps/" class="md-nav__link">
+      <a href="../../openbaocluster/next-steps/" class="md-nav__link">
         
   
   
@@ -959,7 +1050,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recipes/" class="md-nav__link">
+      <a href="../../openbaocluster/recipes/" class="md-nav__link">
         
   
   
@@ -987,7 +1078,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recipes/development-self-init-userpass/" class="md-nav__link">
+      <a href="../../openbaocluster/recipes/development-self-init-userpass/" class="md-nav__link">
         
   
   
@@ -1015,7 +1106,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recipes/scheduled-backups-s3-compatible/" class="md-nav__link">
+      <a href="../../openbaocluster/recipes/scheduled-backups-s3-compatible/" class="md-nav__link">
         
   
   
@@ -1043,7 +1134,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recipes/hardened-transit-external-tls/" class="md-nav__link">
+      <a href="../../openbaocluster/recipes/hardened-transit-external-tls/" class="md-nav__link">
         
   
   
@@ -1071,7 +1162,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recipes/hardened-transit-acme-tls/" class="md-nav__link">
+      <a href="../../openbaocluster/recipes/hardened-transit-acme-tls/" class="md-nav__link">
         
   
   
@@ -1158,7 +1249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/security-profiles/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/security-profiles/" class="md-nav__link">
         
   
   
@@ -1186,7 +1277,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/self-init/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/self-init/" class="md-nav__link">
         
   
   
@@ -1214,7 +1305,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/server/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/server/" class="md-nav__link">
         
   
   
@@ -1242,7 +1333,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/external-access/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/external-access/" class="md-nav__link">
         
   
   
@@ -1270,7 +1361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/network/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/network/" class="md-nav__link">
         
   
   
@@ -1298,7 +1389,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/air-gapped/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/air-gapped/" class="md-nav__link">
         
   
   
@@ -1326,7 +1417,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/resources-storage/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/resources-storage/" class="md-nav__link">
         
   
   
@@ -1354,7 +1445,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/gateway-api/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/gateway-api/" class="md-nav__link">
         
   
   
@@ -1382,7 +1473,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/configuration/observability/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/observability/" class="md-nav__link">
         
   
   
@@ -1469,7 +1560,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/operations/upgrades/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/upgrades/" class="md-nav__link">
         
   
   
@@ -1497,7 +1588,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/operations/backups/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/backups/" class="md-nav__link">
         
   
   
@@ -1525,7 +1616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/operations/maintenance/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/maintenance/" class="md-nav__link">
         
   
   
@@ -1553,7 +1644,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/operations/pausing/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/pausing/" class="md-nav__link">
         
   
   
@@ -1581,7 +1672,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/operations/deletion/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/deletion/" class="md-nav__link">
         
   
   
@@ -1609,7 +1700,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/operations/troubleshooting/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1637,7 +1728,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/operations/production-checklist/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/production-checklist/" class="md-nav__link">
         
   
   
@@ -1673,7 +1764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/security-considerations/" class="md-nav__link">
+      <a href="../../openbaocluster/security-considerations/" class="md-nav__link">
         
   
   
@@ -1752,7 +1843,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recovery/safe-mode/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/safe-mode/" class="md-nav__link">
         
   
   
@@ -1780,7 +1871,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recovery/no-leader/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/no-leader/" class="md-nav__link">
         
   
   
@@ -1808,7 +1899,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recovery/sealed-cluster/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/sealed-cluster/" class="md-nav__link">
         
   
   
@@ -1836,7 +1927,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaocluster/recovery/failed-rollback/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/failed-rollback/" class="md-nav__link">
         
   
   
@@ -1931,7 +2022,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaorestore/overview/" class="md-nav__link">
+      <a href="../../openbaorestore/overview/" class="md-nav__link">
         
   
   
@@ -1959,7 +2050,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaorestore/restore/" class="md-nav__link">
+      <a href="../../openbaorestore/restore/" class="md-nav__link">
         
   
   
@@ -1987,7 +2078,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaorestore/recipes/restore-from-s3-compatible-snapshot/" class="md-nav__link">
+      <a href="../../openbaorestore/recipes/restore-from-s3-compatible-snapshot/" class="md-nav__link">
         
   
   
@@ -2015,7 +2106,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../user-guide/openbaorestore/recovery-restore-after-upgrade/" class="md-nav__link">
+      <a href="../../openbaorestore/recovery-restore-after-upgrade/" class="md-nav__link">
         
   
   
@@ -2682,8 +2773,6 @@
       
   
   
-    
-  
   
   
     
@@ -2696,11 +2785,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
@@ -2721,7 +2812,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2739,7 +2830,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../" class="md-nav__link">
+      <a href="../../../security/" class="md-nav__link">
         
   
   
@@ -2818,7 +2909,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../fundamentals/" class="md-nav__link">
+      <a href="../../../security/fundamentals/" class="md-nav__link">
         
   
   
@@ -2846,7 +2937,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../fundamentals/threat-model/" class="md-nav__link">
+      <a href="../../../security/fundamentals/threat-model/" class="md-nav__link">
         
   
   
@@ -2874,7 +2965,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../fundamentals/profiles/" class="md-nav__link">
+      <a href="../../../security/fundamentals/profiles/" class="md-nav__link">
         
   
   
@@ -2902,7 +2993,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../fundamentals/secrets-management/" class="md-nav__link">
+      <a href="../../../security/fundamentals/secrets-management/" class="md-nav__link">
         
   
   
@@ -2989,7 +3080,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../infrastructure/" class="md-nav__link">
+      <a href="../../../security/infrastructure/" class="md-nav__link">
         
   
   
@@ -3017,7 +3108,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../infrastructure/rbac/" class="md-nav__link">
+      <a href="../../../security/infrastructure/rbac/" class="md-nav__link">
         
   
   
@@ -3045,7 +3136,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../infrastructure/admission-policies/" class="md-nav__link">
+      <a href="../../../security/infrastructure/admission-policies/" class="md-nav__link">
         
   
   
@@ -3073,7 +3164,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../infrastructure/network-security/" class="md-nav__link">
+      <a href="../../../security/infrastructure/network-security/" class="md-nav__link">
         
   
   
@@ -3160,7 +3251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workload/" class="md-nav__link">
+      <a href="../../../security/workload/" class="md-nav__link">
         
   
   
@@ -3188,7 +3279,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workload/workload-security/" class="md-nav__link">
+      <a href="../../../security/workload/workload-security/" class="md-nav__link">
         
   
   
@@ -3216,7 +3307,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workload/tls/" class="md-nav__link">
+      <a href="../../../security/workload/tls/" class="md-nav__link">
         
   
   
@@ -3244,7 +3335,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workload/supply-chain/" class="md-nav__link">
+      <a href="../../../security/workload/supply-chain/" class="md-nav__link">
         
   
   
@@ -3277,8 +3368,6 @@
                 
   
   
-    
-  
   
   
     
@@ -3288,11 +3377,13 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" checked>
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_5" >
         
           
           <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
@@ -3313,7 +3404,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3331,7 +3422,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../../security/multi-tenancy/" class="md-nav__link">
         
   
   
@@ -3356,37 +3447,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Tenant Isolation
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../../security/multi-tenancy/tenant-isolation/" class="md-nav__link">
         
   
   
@@ -3402,70 +3466,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#governance-models" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Governance Models
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#provisioning-flow" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Provisioning Flow
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#security-guarantees" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Security Guarantees
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#threat-mitigation-checklist" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Threat Mitigation Checklist
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -4540,10 +4540,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#governance-models" class="md-nav__link">
+  <a href="#identity-map" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Governance Models
+        Identity Map
       
     </span>
   </a>
@@ -4551,10 +4551,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#provisioning-flow" class="md-nav__link">
+  <a href="#install-sensitive-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provisioning Flow
+        Install-Sensitive Checks
       
     </span>
   </a>
@@ -4562,10 +4562,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#security-guarantees" class="md-nav__link">
+  <a href="#common-failure-modes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Guarantees
+        Common Failure Modes
       
     </span>
   </a>
@@ -4573,10 +4573,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#threat-mitigation-checklist" class="md-nav__link">
+  <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Threat Mitigation Checklist
+        See Also
       
     </span>
   </a>
@@ -4603,160 +4603,120 @@
   
 
 
-<h1 id="tenant-isolation-namespace-provisioner">Tenant Isolation (Namespace Provisioner)<a class="headerlink" href="#tenant-isolation-namespace-provisioner" title="Permanent link">&para;</a></h1>
-<div class="admonition abstract">
-<p class="admonition-title">Governance Engine</p>
-<p>The <strong>Provisioner</strong> controller is the enforcement engine for multi-tenancy. It watches for <code>OpenBaoTenant</code> requests and responsibly "onboards" namespaces by creating strict, limited RBAC bindings for the workload controller.</p>
-</div>
-<h2 id="governance-models">Governance Models<a class="headerlink" href="#governance-models" title="Permanent link">&para;</a></h2>
-<p>The Operator supports two distinct onboarding models depending on your organization's trust level:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m21.1 12.5 1.4 1.41-6.53 6.59L12.5 17l1.4-1.41 2.07 2.08zM10 17l3 3H3v-2c0-2.21 3.58-4 8-4l1.89.11zm1-13a4 4 0 0 1 4 4 4 4 0 0 1-4 4 4 4 0 0 1-4-4 4 4 0 0 1 4-4"/></svg></span> Self-Service (Recommended)</label><label for="__tabbed_1_2"><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 12h7c-.53 4.11-3.28 7.78-7 8.92zH5V6.3l7-3.11M12 1 3 5v6c0 5.55 3.84 10.73 9 12 5.16-1.27 9-6.45 9-12V5z"/></svg></span> Centralized Admin</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p>Ideal for autonomous platform teams where reliability is the main goal.</p>
+<h1 id="operator-identity-and-access">Operator Identity And Access<a class="headerlink" href="#operator-identity-and-access" title="Permanent link">&para;</a></h1>
+<p>This page bridges the operator's Kubernetes identities, OpenBao authentication, and authorization boundaries.</p>
+<p>Use it together with:</p>
 <ul>
-<li><strong>Mechanism:</strong> Namespace admins create an <code>OpenBaoTenant</code> CR in their <em>own</em> namespace.</li>
-<li><strong>Constraint:</strong> <code>spec.targetNamespace</code> <strong>MUST</strong> match <code>metadata.namespace</code>.</li>
-<li><strong>Constraint:</strong> <code>spec.quota</code> and <code>spec.limitRange</code> are not available in self-service mode.</li>
-<li><strong>Security:</strong> Prevents users from provisioning RBAC in namespaces they do not own.</li>
+<li><a href="../installation/">Installation</a> for render-time identity checks</li>
+<li><a href="../authn/">Authentication</a> for the JWT audience and binding contract</li>
+<li><a href="../authz/">Authorization</a> for the OpenBao-side policies and roles</li>
+<li><a href="../../../security/infrastructure/rbac/">RBAC Architecture</a> for Kubernetes permission boundaries</li>
 </ul>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoTenant</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-tenant</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span><span class="w"> </span><span class="c1"># &lt;--- Source</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">targetNamespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span><span class="w"> </span><span class="c1"># &lt;--- MUST Match Source</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Ideal for strict compliance environments where only a central platform team can vend database-as-a-service.</p>
-<ul>
-<li><strong>Mechanism:</strong> Cluster admins create an <code>OpenBaoTenant</code> CR in the <em>Operator's</em> namespace.</li>
-<li><strong>Capability:</strong> Can target <em>any</em> namespace.</li>
-<li><strong>Security:</strong> Rely on Kubernetes RBAC to prevent normal users from creating CRs in the operator namespace.</li>
-</ul>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao.org/v1alpha1</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenBaoTenant</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-onboarding</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;operator-namespace&gt;</span><span class="w"> </span><span class="c1"># &lt;--- Rendered operator namespace</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">targetNamespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span><span class="w"> </span><span class="c1"># &lt;--- Target Any Namespace</span>
-</span></code></pre></div>
-<p>The rendered operator namespace defaults to <code>openbao-operator-system</code> for the standard raw-manifest and Helm installs.</p>
-</div>
-</div>
-</div>
-<h2 id="provisioning-flow">Provisioning Flow<a class="headerlink" href="#provisioning-flow" title="Permanent link">&para;</a></h2>
-<p>This diagram illustrates how the <strong>Provisioner</strong> (Cluster Scope) safely grants permission to the <strong>Controller</strong> (Namespace Scope) without ever possessing those permissions itself.</p>
-<pre class="mermaid"><code>flowchart TD
-    User("User / Admin")
-
-    subgraph OperatorNS["Operator Namespace"]
-        OBT["OpenBaoTenant CR"]
-        Prov{{"Provisioner"}}
-        Ctrl[["Controller SA"]]
-    end
-
-    subgraph TenantNS["Tenant Namespace"]
-        TRole[("Tenant Role")]
-        TRB[("RoleBinding")]
-        Workload["OpenBao Cluster"]
-    end
-
-    %% Flow
-    User -- 1. Request --&gt; OBT
-    OBT -- 2. Trigger --&gt; Prov
-    Prov -- 3. Create --&gt; TRole
-    Prov -- 4. Bind --&gt; TRB
-    TRB -.-&gt;|5. Grant Access| Ctrl
-    Ctrl ==&gt;|6. Reconcile| Workload
-
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-
-    class User,OBT read;
-    class Prov process;
-    class Ctrl,TRole,TRB security;
-    class Workload write;</code></pre>
+<h2 id="identity-map">Identity Map<a class="headerlink" href="#identity-map" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Actor</th>
+<th style="text-align: left;">Kubernetes identity</th>
+<th style="text-align: left;">OpenBao auth</th>
+<th style="text-align: left;">Primary authorization surface</th>
+<th style="text-align: left;">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Provisioner</strong></td>
+<td style="text-align: left;">Provisioner <code>ServiceAccount</code> in the operator namespace</td>
+<td style="text-align: left;">None</td>
+<td style="text-align: left;">Kubernetes RBAC only</td>
+<td style="text-align: left;">Day 0 onboarding only. Writes tenant guardrails and tenant-scoped RBAC, but does not authenticate to OpenBao.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Controller</strong></td>
+<td style="text-align: left;">Controller <code>ServiceAccount</code> in the operator namespace</td>
+<td style="text-align: left;">Projected JWT token -&gt; <code>openbao-operator</code> role/policy</td>
+<td style="text-align: left;">Kubernetes RBAC plus OpenBao maintenance policy</td>
+<td style="text-align: left;">Long-running control-plane identity. Its rendered name, namespace, and JWT audience must stay internally consistent across manifests, RBAC, and OpenBao role binding.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Main OpenBao Pods</strong></td>
+<td style="text-align: left;">Per-cluster <code>ServiceAccount</code> in the tenant namespace</td>
+<td style="text-align: left;">OpenBao server process auth and configured seal/unseal integration</td>
+<td style="text-align: left;">Kubernetes workload identity plus OpenBao runtime configuration</td>
+<td style="text-align: left;">Distinct from operator identities. Used for pod lifecycle, service registration, and OpenBao runtime concerns such as cloud or transit unseal.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Backup Job</strong></td>
+<td style="text-align: left;">Generated backup <code>ServiceAccount</code> in the tenant namespace</td>
+<td style="text-align: left;">Projected JWT token or explicit backup token Secret</td>
+<td style="text-align: left;">OpenBao snapshot policy plus backup-target credentials</td>
+<td style="text-align: left;">Day-2 executor identity. Separate from the main StatefulSet identity and evaluated through <code>BackupConfigurationReady</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Restore Job</strong></td>
+<td style="text-align: left;">Generated restore <code>ServiceAccount</code> in the tenant namespace</td>
+<td style="text-align: left;">Projected JWT token or explicit restore token Secret</td>
+<td style="text-align: left;">OpenBao restore policy plus restore-source credentials</td>
+<td style="text-align: left;">Destructive executor identity. Separate from the main StatefulSet identity and evaluated through <code>RestoreConfigurationReady</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Upgrade Job</strong></td>
+<td style="text-align: left;">Generated upgrade <code>ServiceAccount</code> in the tenant namespace</td>
+<td style="text-align: left;">Projected JWT token</td>
+<td style="text-align: left;">OpenBao upgrade policy</td>
+<td style="text-align: left;">Used for rolling and blue/green upgrade orchestration. Does not inherit the controller identity.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="install-sensitive-checks">Install-Sensitive Checks<a class="headerlink" href="#install-sensitive-checks" title="Permanent link">&para;</a></h2>
+<p>Use these checks when you install the operator with raw manifests, a custom namespace, or a <code>namePrefix</code>.</p>
 <ol>
-<li><strong>Request:</strong> User creates <code>OpenBaoTenant</code>.</li>
-<li><strong>Verify:</strong> Provisioner checks if the request is valid (Self-Service constraint).</li>
-<li><strong>Create:</strong> Provisioner creates a <code>Role</code> in the target namespace (permissions to manage StatefulSets, Services, etc.).</li>
-<li><strong>Bind:</strong> Provisioner creates a <code>RoleBinding</code>, connecting the <strong>Controller ServiceAccount</strong> to that <strong>Role</strong>.<ul>
-<li><em>Note:</em> The Provisioner does not grant <em>itself</em> access. It performs a <strong>Blind Write</strong>.</li>
-</ul>
-</li>
-<li><strong>Reconcile:</strong> The Controller now has permission to manage resources in that namespace.</li>
+<li>Confirm the rendered controller <code>ServiceAccount</code> name and namespace.</li>
+<li>Confirm the controller <code>Deployment</code> still mounts the projected <code>openbao-token</code>.</li>
+<li>Confirm RoleBinding and admission-policy subjects point at the same rendered controller identity.</li>
+<li>Confirm the operator installation audience <code>OPENBAO_JWT_AUDIENCE</code> matches the projected <code>openbao-token</code> audience.</li>
+<li>Confirm the OpenBao JWT role binds to the same rendered controller identity.</li>
 </ol>
-<h2 id="security-guarantees">Security Guarantees<a class="headerlink" href="#security-guarantees" title="Permanent link">&para;</a></h2>
-<p>With admission policies enabled (default), the architecture provides the following security properties:</p>
+<p>For the render steps themselves, use <a href="../installation/#render-verification">Installation</a>.</p>
+<h2 id="common-failure-modes">Common Failure Modes<a class="headerlink" href="#common-failure-modes" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th style="text-align: left;">Property</th>
-<th style="text-align: left;">Description</th>
+<th style="text-align: left;">Symptom</th>
+<th style="text-align: left;">Most likely boundary</th>
+<th style="text-align: left;">What to verify</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>No Topology Discovery</strong></td>
-<td style="text-align: left;">The Controller cannot <code>list</code> namespaces. It literally does not know other tenants exist.</td>
+<td style="text-align: left;"><code>permission denied</code> when the controller talks to OpenBao</td>
+<td style="text-align: left;">Controller JWT auth or OpenBao role binding</td>
+<td style="text-align: left;"><a href="../authn/#troubleshooting">Authentication</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>No Cross-Talk</strong></td>
-<td style="text-align: left;">Namespace A's RoleBinding does not grant access to Namespace B.</td>
+<td style="text-align: left;">Custom raw-manifest install fails after namespace or prefix changes</td>
+<td style="text-align: left;">Rendered identity drift</td>
+<td style="text-align: left;"><a href="../installation/#render-verification">Installation</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Privilege Separation</strong></td>
-<td style="text-align: left;">The component that <em>grants</em> access (Provisioner) cannot <em>use</em> access. The component that <em>uses</em> access (Controller) cannot <em>grant</em> access.</td>
+<td style="text-align: left;">Backup or restore auth fails while the main cluster is healthy</td>
+<td style="text-align: left;">Executor Job identity drift</td>
+<td style="text-align: left;"><a href="../authz/">Authorization</a>, <a href="../../openbaocluster/operations/backups/">Backups</a>, <a href="../../openbaorestore/restore/">Restore</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><strong>Namespace Hardening</strong></td>
-<td style="text-align: left;">The Provisioner automatically labels tenant namespaces with <code>pod-security: restricted</code>, preventing insecure workloads.</td>
+<td style="text-align: left;">Tenant onboarding works, but controller access does not</td>
+<td style="text-align: left;">Kubernetes RBAC / RoleBinding introduction</td>
+<td style="text-align: left;"><a href="../../../security/infrastructure/rbac/">RBAC Architecture</a></td>
 </tr>
 </tbody>
 </table>
-<div class="admonition warning">
-<p class="admonition-title">Unsafe Mode Caveat</p>
-<p>If admission policies are intentionally disabled (unsafe mode), defense-in-depth guardrails are reduced.
-Keep admission enforcement enabled in multi-tenant production deployments.</p>
-</div>
-<h2 id="threat-mitigation-checklist">Threat Mitigation Checklist<a class="headerlink" href="#threat-mitigation-checklist" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th style="text-align: left;">Threat</th>
-<th style="text-align: left;">Mitigation Strategy</th>
-<th style="text-align: left;">Control</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align: left;"><strong>Tenant A reads Tenant B's Keys</strong></td>
-<td style="text-align: left;"><strong>RBAC Scoping</strong></td>
-<td style="text-align: left;">Controller has no cluster-wide Secret access.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Tenant A DoS attack on Node</strong></td>
-<td style="text-align: left;"><strong>Resource Quotas</strong></td>
-<td style="text-align: left;">Operator-managed namespace guardrails (<code>ResourceQuota</code> / <code>LimitRange</code>) + Controller Rate Limiting. Custom values are reserved for centrally managed onboarding.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Tenant A attacks Tenant B's Pods</strong></td>
-<td style="text-align: left;"><strong>Network Isolation</strong></td>
-<td style="text-align: left;">Default Deny NetworkPolicy.</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>Tenant A spoofs Admin</strong></td>
-<td style="text-align: left;"><strong>Role Restrictions</strong></td>
-<td style="text-align: left;">Self-Service mode enforces <code>targetNamespace == namespace</code>.</td>
-</tr>
-</tbody>
-</table>
+<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../installation/">Installation</a></li>
+<li><a href="../authn/">Authentication</a></li>
+<li><a href="../authz/">Authorization</a></li>
+<li><a href="../../../security/infrastructure/rbac/">RBAC Architecture</a></li>
+</ul>
 
 
 
