@@ -463,6 +463,17 @@
           "description": "Enable ValidatingAdmissionPolicies for resource protection. Setting this to false is treated as UNSAFE MODE (operator runs without admission guardrails).",
           "default": true
         },
+        "maintenanceBreakGlassGroups": {
+          "type": "array",
+          "description": "Groups allowed to bypass managed-resource mutation locks when the target resource is explicitly marked for maintenance",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": [
+            "system:masters"
+          ]
+        },
         "provisionerRBAC": {
           "type": "object",
           "description": "Provisioner RBAC ValidatingAdmissionPolicy configuration (multi-tenant mode)",
