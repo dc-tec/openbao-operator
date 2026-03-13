@@ -621,6 +621,7 @@ security-scan-fs: ## Run the Trivy filesystem scan used by CI.
 		--skip-files config/rbac/provisioner_minimal_role.yaml \
 		--skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml \
 		--skip-files config/rbac/single_tenant_clusterrole.yaml \
+		--skip-files config/overlays/single-tenant/single_tenant_clusterrole.yaml \
 		--skip-files dist/install.yaml \
 		--skip-dirs test/manifests \
 		--skip-dirs vendor \

@@ -3200,9 +3200,9 @@ spec:
                 || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) &&
                 has(self.tls.acme.sharedCache))
             - message: spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true
-              rule: self.unseal.type != 'ocikms' || !has(self.unseal.credentialsSecretRef)
+              rule: '!has(self.unseal) || self.unseal.type != ''ocikms'' || !has(self.unseal.credentialsSecretRef)
                 || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey)
-                && self.unseal.ocikms.authTypeAPIKey == true)
+                && self.unseal.ocikms.authTypeAPIKey == true)'
           status:
             description: Status defines the observed state of OpenBaoCluster.
             properties:
