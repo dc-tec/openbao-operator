@@ -30,4 +30,5 @@ func TestEnsureBackupServiceAccount_WithWorkloadIdentityAnnotations(t *testing.T
 	}, &sa)
 	require.NoError(t, err)
 	require.Equal(t, "arn:aws:iam::123456789012:role/openbao-backup", sa.Annotations["eks.amazonaws.com/role-arn"])
+	require.Equal(t, "backup", sa.Labels["openbao.org/service-account-role"])
 }

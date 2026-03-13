@@ -26,7 +26,7 @@ type ControllerRuntime struct {
 	Scheme            *runtime.Scheme
 	RestConfig        *rest.Config
 	OperatorNamespace string
-	AdmissionStatus   *admission.Status
+	AdmissionTracker  *admission.Tracker
 	Recorder          events.EventRecorder
 	Platform          string
 	// SingleTenantMode indicates the controller is running in single-tenant mode.

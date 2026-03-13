@@ -48,7 +48,7 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	}
 
 	// Verify labels
-	expectedLabels := infraLabels(cluster)
+	expectedLabels := serviceAccountLabels(cluster)
 	for key, expectedVal := range expectedLabels {
 		if sa.Labels[key] != expectedVal {
 			t.Errorf("expected ServiceAccount label %s=%s, got %s", key, expectedVal, sa.Labels[key])
@@ -102,7 +102,7 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	}
 
 	// Verify labels are still correct (SSA maintains desired state)
-	expectedLabels := infraLabels(cluster)
+	expectedLabels := serviceAccountLabels(cluster)
 	for key, expectedVal := range expectedLabels {
 		if sa2.Labels[key] != expectedVal {
 			t.Errorf("expected ServiceAccount label %s=%s after idempotent apply, got %s", key, expectedVal, sa2.Labels[key])

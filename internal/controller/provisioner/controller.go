@@ -30,6 +30,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
 	operatorpredicates "github.com/dc-tec/openbao-operator/internal/platform/predicates"
@@ -56,6 +57,7 @@ type NamespaceProvisionerReconciler struct {
 	Recorder          events.EventRecorder
 	Provisioner       *provisioner.Manager
 	OperatorNamespace string
+	AdmissionTracker  *admission.Tracker
 }
 
 // Reconcile is part of the main Kubernetes reconciliation loop which watches

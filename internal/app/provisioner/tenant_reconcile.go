@@ -32,6 +32,7 @@ const (
 type TenantRuntime struct {
 	Client                   client.Client
 	APIReader                client.Reader
+	AdmissionTracker         *admission.Tracker
 	Recorder                 events.EventRecorder
 	Provisioner              *provisionermanager.Manager
 	OperatorNamespace        string
@@ -209,10 +210,6 @@ func ensureAdmissionDependenciesReady(
 ) (bool, recon.Result) {
 	// Fail-closed privileged actions when admission policies are not ready.
 	if admission.UnsafeAdmissionDisabled() {
-		admission.SetAdmissionDependenciesReady(true)
-		return true, recon.Result{}
-	}
-	if admission.AdmissionDependenciesReady() {
 		return true, recon.Result{}
 	}
 
@@ -222,21 +219,18 @@ func ensureAdmissionDependenciesReady(
 	}
 
 	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	status, err := admission.CheckDependencies(
+	status, err := admission.RefreshStatus(
 		checkCtx,
+		runtime.AdmissionTracker,
 		reader,
-		admission.DefaultDependencies(),
-		admission.DefaultNamePrefixes(),
 	)
 	cancel()
 	if err != nil {
-		admission.SetAdmissionDependenciesReady(false)
 		logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "error", err)
 		runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked until admission dependencies are ready: %v", err))
 		return false, recon.Result{RequeueAfter: admissionDependencyRequeueAfter}
 	}
 
-	admission.SetAdmissionDependenciesReady(status.OverallReady)
 	if status.OverallReady {
 		return true, recon.Result{}
 	}

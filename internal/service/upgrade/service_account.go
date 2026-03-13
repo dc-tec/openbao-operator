@@ -34,11 +34,12 @@ func EnsureUpgradeServiceAccount(ctx context.Context, c client.Client, cluster *
 			Name:      saName,
 			Namespace: cluster.Namespace,
 			Labels: map[string]string{
-				constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
-				constants.LabelAppInstance:      cluster.Name,
-				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
-				constants.LabelOpenBaoCluster:   cluster.Name,
-				constants.LabelOpenBaoComponent: "upgrade",
+				constants.LabelAppName:                   constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:               cluster.Name,
+				constants.LabelAppManagedBy:              constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:            cluster.Name,
+				constants.LabelOpenBaoComponent:          "upgrade",
+				constants.LabelOpenBaoServiceAccountRole: constants.ServiceAccountRoleUpgrade,
 			},
 		},
 	}

@@ -64,13 +64,8 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			Verbs:     cloneStrings(verbsManage),
 		},
 		{
-			APIGroups: []string{"apps"},
-			Resources: []string{"deployments"},
-			Verbs:     cloneStrings(verbsManage),
-		},
-		{
 			APIGroups: []string{""},
-			Resources: []string{"services", "configmaps", "serviceaccounts", "resourcequotas", "limitranges"},
+			Resources: []string{"services", "configmaps", "serviceaccounts"},
 			Verbs:     cloneStrings(verbsManage),
 		},
 		{

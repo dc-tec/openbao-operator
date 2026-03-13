@@ -30,6 +30,8 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
@@ -41,6 +43,7 @@ import (
 type OpenBaoRestoreReconciler struct {
 	client.Client
 	Scheme                *runtime.Scheme
+	AdmissionTracker      *admission.Tracker
 	RestoreManager        *restore.Manager
 	Recorder              events.EventRecorder
 	OperatorImageVerifier imageverify.Verifier
@@ -90,6 +93,9 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if r.RestoreManager == nil {
 		return ctrl.Result{}, fmt.Errorf("restore manager is not configured")
 	}
+	if result, blocked := r.pauseForAdmissionDependencyLoss(ctx, logger); blocked {
+		return result, nil
+	}
 
 	appResult, appErr := appopenbaorestore.ReconcileOpenBaoRestore(
 		ctx,
@@ -106,6 +112,24 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	return result, nil
+}
+
+func (r *OpenBaoRestoreReconciler) pauseForAdmissionDependencyLoss(ctx context.Context, logger logr.Logger) (ctrl.Result, bool) {
+	if admission.UnsafeAdmissionDisabled() {
+		return ctrl.Result{}, false
+	}
+
+	status, err := admission.RefreshStatus(ctx, r.AdmissionTracker, r.Client)
+	if err != nil {
+		logger.Info("Admission policy dependency refresh failed; pausing restore reconciliation", "error", err)
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}, true
+	}
+	if status != nil && !status.OverallReady {
+		logger.Info("Admission policy dependencies not ready; pausing restore reconciliation", "summary", status.SummaryMessage())
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}, true
+	}
+
+	return ctrl.Result{}, false
 }
 
 // SetupWithManager sets up the controller with the Manager.

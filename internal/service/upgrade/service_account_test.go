@@ -208,6 +208,9 @@ func TestEnsureUpgradeServiceAccountSuccess(t *testing.T) {
 			if sa.Labels[constants.LabelOpenBaoComponent] != "upgrade" {
 				t.Fatalf("label %q=%q, want %q", constants.LabelOpenBaoComponent, sa.Labels[constants.LabelOpenBaoComponent], "upgrade")
 			}
+			if sa.Labels[constants.LabelOpenBaoServiceAccountRole] != constants.ServiceAccountRoleUpgrade {
+				t.Fatalf("label %q=%q, want %q", constants.LabelOpenBaoServiceAccountRole, sa.Labels[constants.LabelOpenBaoServiceAccountRole], constants.ServiceAccountRoleUpgrade)
+			}
 
 			if capturedOptions.FieldManager != tt.wantFieldOwner {
 				t.Fatalf("FieldManager=%q, want %q", capturedOptions.FieldManager, tt.wantFieldOwner)

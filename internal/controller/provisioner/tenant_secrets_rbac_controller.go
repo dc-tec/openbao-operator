@@ -25,10 +25,11 @@ import (
 // via OpenBaoTenant, maintains the per-namespace Secret reader/writer Roles and RoleBindings.
 type TenantSecretsRBACReconciler struct {
 	client.Client
-	APIReader   client.Reader
-	Scheme      *runtime.Scheme
-	Recorder    events.EventRecorder
-	Provisioner *provisioner.Manager
+	AdmissionTracker *admission.Tracker
+	APIReader        client.Reader
+	Scheme           *runtime.Scheme
+	Recorder         events.EventRecorder
+	Provisioner      *provisioner.Manager
 }
 
 func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -51,28 +52,24 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// SECURITY: If admission policies are not ready, do not create/update tenant Secret RBAC allowlists.
 	if admission.UnsafeAdmissionDisabled() {
 		// UNSAFE MODE: Caller explicitly disabled admission policies; proceed without fail-closed gating.
-		admission.SetAdmissionDependenciesReady(true)
-	} else if !admission.AdmissionDependenciesReady() {
+	} else {
 		reader := r.APIReader
 		if reader == nil {
 			reader = r.Client
 		}
 
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		status, err := admission.CheckDependencies(
+		status, err := admission.RefreshStatus(
 			checkCtx,
+			r.AdmissionTracker,
 			reader,
-			admission.DefaultDependencies(),
-			admission.DefaultNamePrefixes(),
 		)
 		cancel()
 		if err != nil {
-			admission.SetAdmissionDependenciesReady(false)
 			logger.Info("Admission policy dependencies not ready; delaying tenant Secret RBAC sync", "error", err)
 			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 		}
 
-		admission.SetAdmissionDependenciesReady(status.OverallReady)
 		if !status.OverallReady {
 			logger.Info("Admission policy dependencies not ready; delaying tenant Secret RBAC sync", "summary", status.SummaryMessage())
 			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil

@@ -13,6 +13,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -549,6 +550,77 @@ func TestVAP_OpenBaoTenant_RejectsCrossNamespaceSelfService(t *testing.T) {
 	}
 
 	t.Fatalf("expected VAP to deny cross-namespace OpenBaoTenant create after retries")
+}
+
+func TestVAP_OpenBaoTenant_RejectsSelfServiceQuotaCustomization(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+
+	for attempt := 0; attempt < 25; attempt++ {
+		tenant := &openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("tenant-self-service-quota-%d", attempt),
+				Namespace: namespace,
+			},
+			Spec: openbaov1alpha1.OpenBaoTenantSpec{
+				TargetNamespace: namespace,
+				Quota: &corev1.ResourceQuotaSpec{
+					Hard: corev1.ResourceList{
+						corev1.ResourcePods: resource.MustParse("5"),
+					},
+				},
+			},
+		}
+
+		err := k8sClient.Create(ctx, tenant)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, tenant)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "may not customize spec.quota or spec.limitRange") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny self-service OpenBaoTenant quota customization after retries")
+}
+
+func TestVAP_OpenBaoTenant_AllowsAdminQuotaCustomization(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	operatorNamespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "openbao-operator-system",
+		},
+	}
+	if err := k8sClient.Create(ctx, operatorNamespace); err != nil && !apierrors.IsAlreadyExists(err) {
+		t.Fatalf("create operator namespace: %v", err)
+	}
+
+	targetNamespace := newTestNamespace(t)
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tenant-admin-quota",
+			Namespace: operatorNamespace.Name,
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: targetNamespace,
+			Quota: &corev1.ResourceQuotaSpec{
+				Hard: corev1.ResourceList{
+					corev1.ResourcePods: resource.MustParse("5"),
+				},
+			},
+		},
+	}
+
+	if err := k8sClient.Create(ctx, tenant); err != nil {
+		t.Fatalf("expected operator-namespace OpenBaoTenant with quota override to succeed, got: %v", err)
+	}
 }
 
 func TestVAP_OpenBaoTenant_RejectsTargetNamespaceMutation(t *testing.T) {

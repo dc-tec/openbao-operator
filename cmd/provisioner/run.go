@@ -149,6 +149,12 @@ func Run(args []string) {
 	}
 
 	// Admission policy dependency check (release-critical security boundary).
+	admissionTracker := admission.NewTracker(
+		mgr.GetAPIReader(),
+		admission.DefaultDependencies(),
+		admission.DefaultNamePrefixes(),
+		30*time.Second,
+	)
 	if admission.UnsafeAdmissionDisabled() {
 		setupLog.Info(
 			"UNSAFE MODE: admission policy enforcement disabled; " +
@@ -159,6 +165,7 @@ func Run(args []string) {
 			"admission_enforcement": admissionEnforcement,
 		})
 		admission.SetAdmissionDependenciesReady(true)
+		admissionTracker.MarkReadyForUnsafeMode()
 	} else {
 		switch admissionEnforcement {
 		case entrypoint.AdmissionEnforcementFail:
@@ -189,6 +196,7 @@ func Run(args []string) {
 				)
 				os.Exit(1)
 			}
+			admissionTracker.Set(status)
 			setupLog.Info("Admission policy dependencies ready")
 			logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
 				"component":             "provisioner",
@@ -237,6 +245,7 @@ func Run(args []string) {
 				status.OverallReady = false
 			}
 			admission.SetAdmissionDependenciesReady(status.OverallReady)
+			admissionTracker.Set(status)
 			if status.OverallReady {
 				setupLog.Info("Admission policy dependencies ready")
 				logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
@@ -280,6 +289,7 @@ func Run(args []string) {
 		Recorder:          mgr.GetEventRecorder("namespace-provisioner"),
 		Provisioner:       provisionerMgr,
 		OperatorNamespace: operatorNS,
+		AdmissionTracker:  admissionTracker,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NamespaceProvisioner")
 		os.Exit(1)
@@ -289,11 +299,12 @@ func Run(args []string) {
 	// This reconciler maintains per-namespace Secret allowlists for the controller ServiceAccount
 	// to reduce Secret blast radius in tenant namespaces.
 	if err := (&provisionercontroller.TenantSecretsRBACReconciler{
-		Client:      mgr.GetClient(),
-		APIReader:   mgr.GetAPIReader(),
-		Scheme:      mgr.GetScheme(),
-		Recorder:    mgr.GetEventRecorder("namespace-provisioner-tenant-secrets"),
-		Provisioner: provisionerMgr,
+		Client:           mgr.GetClient(),
+		AdmissionTracker: admissionTracker,
+		APIReader:        mgr.GetAPIReader(),
+		Scheme:           mgr.GetScheme(),
+		Recorder:         mgr.GetEventRecorder("namespace-provisioner-tenant-secrets"),
+		Provisioner:      provisionerMgr,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TenantSecretsRBAC")
 		os.Exit(1)

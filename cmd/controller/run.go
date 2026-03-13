@@ -424,6 +424,12 @@ func Run(args []string) {
 
 	// Admission policy dependency check (release-critical security boundary).
 	var admissionStatus admission.Status
+	admissionTracker := admission.NewTracker(
+		mgr.GetAPIReader(),
+		admission.DefaultDependencies(),
+		admission.DefaultNamePrefixes(),
+		30*time.Second,
+	)
 	if admission.UnsafeAdmissionDisabled() {
 		setupLog.Info("UNSAFE MODE: admission policy enforcement disabled; skipping dependency checks")
 		logging.LogAuditEvent(setupLog, logging.EventAdmissionUnsafeModeEnabled, map[string]string{
@@ -432,6 +438,7 @@ func Run(args []string) {
 		})
 		admissionStatus.OverallReady = true
 		admission.SetAdmissionDependenciesReady(true)
+		admissionTracker.MarkReadyForUnsafeMode()
 	} else {
 		switch admissionEnforcement {
 		case entrypoint.AdmissionEnforcementFail:
@@ -478,6 +485,7 @@ func Run(args []string) {
 			}
 		}
 		admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
+		admissionTracker.Set(admissionStatus)
 		if admissionStatus.OverallReady {
 			setupLog.Info("Admission policy dependencies ready")
 			logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
@@ -502,7 +510,7 @@ func Run(args []string) {
 			Scheme:            mgr.GetScheme(),
 			RestConfig:        mgr.GetConfig(),
 			OperatorNamespace: operatorNamespace,
-			AdmissionStatus:   &admissionStatus,
+			AdmissionTracker:  admissionTracker,
 			Recorder:          mgr.GetEventRecorder(controllerNameOpenBaoCluster),
 			Platform:          platform,
 			SingleTenantMode:  singleTenantMode,
@@ -532,9 +540,10 @@ func Run(args []string) {
 
 	// Set up OpenBaoRestore controller
 	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorder(controllerNameOpenBaoRestore),
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		AdmissionTracker: admissionTracker,
+		Recorder:         mgr.GetEventRecorder(controllerNameOpenBaoRestore),
 		RestoreManager: restore.NewManager(
 			mgr.GetClient(),
 			mgr.GetScheme(),

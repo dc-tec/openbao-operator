@@ -32,6 +32,7 @@ func TestGenerateTenantResourceQuota(t *testing.T) {
 						"app.kubernetes.io/name":       "openbao-operator",
 						"app.kubernetes.io/component":  "provisioner",
 						"app.kubernetes.io/managed-by": "openbao-operator",
+						"openbao.org/component":        "provisioner",
 					},
 				},
 				Spec: corev1.ResourceQuotaSpec{
@@ -64,6 +65,7 @@ func TestGenerateTenantResourceQuota(t *testing.T) {
 						"app.kubernetes.io/name":       "openbao-operator",
 						"app.kubernetes.io/component":  "provisioner",
 						"app.kubernetes.io/managed-by": "openbao-operator",
+						"openbao.org/component":        "provisioner",
 					},
 				},
 				Spec: corev1.ResourceQuotaSpec{
@@ -108,6 +110,7 @@ func TestGenerateTenantLimitRange(t *testing.T) {
 						"app.kubernetes.io/name":       "openbao-operator",
 						"app.kubernetes.io/component":  "provisioner",
 						"app.kubernetes.io/managed-by": "openbao-operator",
+						"openbao.org/component":        "provisioner",
 					},
 				},
 				Spec: corev1.LimitRangeSpec{
@@ -151,6 +154,7 @@ func TestGenerateTenantLimitRange(t *testing.T) {
 						"app.kubernetes.io/name":       "openbao-operator",
 						"app.kubernetes.io/component":  "provisioner",
 						"app.kubernetes.io/managed-by": "openbao-operator",
+						"openbao.org/component":        "provisioner",
 					},
 				},
 				Spec: corev1.LimitRangeSpec{

@@ -30,6 +30,15 @@ spec:
         object.spec.targetNamespace == '' ||
         object.spec.targetNamespace == object.metadata.namespace
       message: "OpenBaoTenant can only target its own namespace (self-service mode). Create the OpenBaoTenant in the operator namespace for cross-namespace targeting."
+    # Self-Service Constraint: quota and limit-range overrides are reserved for
+    # centrally managed onboarding from the operator namespace.
+    - expression: >-
+        object.metadata.namespace == variables.operator_namespace ||
+        (
+          !has(object.spec.quota) &&
+          !has(object.spec.limitRange)
+        )
+      message: "Self-service OpenBaoTenant requests may not customize spec.quota or spec.limitRange. Create the OpenBaoTenant in the operator namespace for centrally managed tenant guardrail overrides."
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

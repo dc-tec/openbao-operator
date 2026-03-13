@@ -73,7 +73,14 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 	// 2. Compute and set all conditions (pure logic).
 	now := metav1.Now()
-	applyAllConditions(cluster, state, r.AdmissionStatus, now)
+	admissionStatus, refreshErr := r.ensureAdmissionStatusFresh(ctx)
+	if refreshErr != nil {
+		logger.Info("Failed to refresh admission dependency status during status reconciliation", "error", refreshErr)
+	}
+	if admissionStatus == nil {
+		admissionStatus = r.currentAdmissionStatus()
+	}
+	applyAllConditions(cluster, state, admissionStatus, now)
 
 	// 3. Update status fields (computed locally).
 	cluster.Status.ReadyReplicas = state.ReadyReplicas

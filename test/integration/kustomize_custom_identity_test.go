@@ -44,7 +44,10 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 	controller := mustFindObject(t, objs, "apps/v1", "Deployment", "demo-openbao-operator-controller")
 	provisioner := mustFindObject(t, objs, "apps/v1", "Deployment", "demo-openbao-operator-provisioner")
 	controllerPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-controller-rbac")
+	controllerServiceAccountPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-controller-serviceaccounts")
+	controllerSecretPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-controller-secret-writes")
 	provisionerPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-provisioner-rbac")
+	tenantGovernancePolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-provisioner-tenant-governance")
 	tenantPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-validate-openbao-tenant")
 
 	if got := envVarValue(t, controller, "OPERATOR_SERVICE_ACCOUNT_NAME"); got != "demo-openbao-operator-controller" {
@@ -60,8 +63,26 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 	if got := policyVariableExpression(t, controllerPolicy, "controller_serviceaccount_name"); got != "'demo-openbao-operator-controller'" {
 		t.Fatalf("controller policy controller_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-controller'")
 	}
+	if got := policyVariableExpression(t, controllerServiceAccountPolicy, "operator_namespace"); got != "'custom-operator'" {
+		t.Fatalf("controller serviceaccount policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	}
+	if got := policyVariableExpression(t, controllerServiceAccountPolicy, "controller_serviceaccount_name"); got != "'demo-openbao-operator-controller'" {
+		t.Fatalf("controller serviceaccount policy controller_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-controller'")
+	}
+	if got := policyVariableExpression(t, controllerSecretPolicy, "operator_namespace"); got != "'custom-operator'" {
+		t.Fatalf("controller secret policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	}
+	if got := policyVariableExpression(t, controllerSecretPolicy, "controller_serviceaccount_name"); got != "'demo-openbao-operator-controller'" {
+		t.Fatalf("controller secret policy controller_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-controller'")
+	}
 	if got := policyVariableExpression(t, provisionerPolicy, "provisioner_serviceaccount_name"); got != "'demo-openbao-operator-provisioner'" {
 		t.Fatalf("provisioner policy provisioner_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-provisioner'")
+	}
+	if got := policyVariableExpression(t, tenantGovernancePolicy, "operator_namespace"); got != "'custom-operator'" {
+		t.Fatalf("tenant governance policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	}
+	if got := policyVariableExpression(t, tenantGovernancePolicy, "provisioner_serviceaccount_name"); got != "'demo-openbao-operator-provisioner'" {
+		t.Fatalf("tenant governance policy provisioner_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-provisioner'")
 	}
 	if got := policyVariableExpression(t, tenantPolicy, "operator_namespace"); got != "'custom-operator'" {
 		t.Fatalf("tenant policy operator_namespace=%q, want %q", got, "'custom-operator'")

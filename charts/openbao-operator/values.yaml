@@ -287,6 +287,10 @@ admissionPolicies:
       - aws-
       - aks-
       - azure-
+  # -- Kubernetes groups allowed to bypass managed-resource mutation locks when
+  # -- a cluster explicitly enables maintenance mode.
+  maintenanceBreakGlassGroups:
+    - system:masters
 
 # -- Projected ServiceAccount token configuration for operator pods
 # The controller/provisioner disable default token automount and instead mount

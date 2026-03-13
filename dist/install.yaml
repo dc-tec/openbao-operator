@@ -3198,9 +3198,9 @@ spec:
                 || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) &&
                 has(self.tls.acme.sharedCache))
             - message: spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true
-              rule: self.unseal.type != 'ocikms' || !has(self.unseal.credentialsSecretRef)
+              rule: '!has(self.unseal) || self.unseal.type != ''ocikms'' || !has(self.unseal.credentialsSecretRef)
                 || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey)
-                && self.unseal.ocikms.authTypeAPIKey == true)
+                && self.unseal.ocikms.authTypeAPIKey == true)'
           status:
             description: Status defines the observed state of OpenBaoCluster.
             properties:
@@ -4594,10 +4594,31 @@ rules:
   - ""
   resources:
   - resourcequotas
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - openbao-operator-tenant-quota
+  resources:
+  - resourcequotas
+  verbs:
+  - get
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - limitranges
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resourceNames:
+  - openbao-operator-tenant-limits
+  resources:
   - limitranges
   verbs:
   - get
-  - create
   - patch
 - apiGroups:
   - rbac.authorization.k8s.io
@@ -5182,6 +5203,27 @@ spec:
       resources:
       - jobs
     - apiGroups:
+      - policy
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - poddisruptionbudgets
+    - apiGroups:
+      - rbac.authorization.k8s.io
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - roles
+      - rolebindings
+    - apiGroups:
       - networking.k8s.io
       apiVersions:
       - v1
@@ -5214,10 +5256,11 @@ spec:
       resources:
       - tlsroutes
   validations:
-  - expression: '!variables.is_managed || variables.is_operator_controller || (variables.is_kube_controller_manager
-      && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
-      (variables.is_system_controller && request.operation == "DELETE") || (variables.is_garbage_collector_sa
-      && (request.operation == "DELETE" || request.operation == "UPDATE")) || (variables.is_system_controller
+  - expression: '!variables.is_managed || variables.is_operator_controller || variables.is_operator_provisioner
+      || (variables.is_kube_controller_manager && (request.operation == "DELETE" ||
+      request.resource.resource == "pods")) || (variables.is_system_controller &&
+      request.operation == "DELETE") || (variables.is_garbage_collector_sa && (request.operation
+      == "DELETE" || request.operation == "UPDATE")) || (variables.is_system_controller
       && request.resource.resource == "pods") || (variables.is_system_controller &&
       variables.is_endpoints_controller_request) || (variables.is_kube_system_controller
       && request.resource.resource == "pods" && (request.operation == "CREATE" ||
@@ -5234,9 +5277,14 @@ spec:
     name: operator_namespace
   - expression: '''openbao-operator-controller'''
     name: controller_serviceaccount_name
+  - expression: '''openbao-operator-provisioner'''
+    name: provisioner_serviceaccount_name
   - expression: '''system:serviceaccount:'' + variables.operator_namespace + '':''
       + variables.controller_serviceaccount_name'
     name: controller_principal
+  - expression: '''system:serviceaccount:'' + variables.operator_namespace + '':''
+      + variables.provisioner_serviceaccount_name'
+    name: provisioner_principal
   - expression: |-
       request.operation == "DELETE" ?
 
@@ -5276,6 +5324,8 @@ spec:
     name: is_managed
   - expression: request.userInfo.username == variables.controller_principal
     name: is_operator_controller
+  - expression: request.userInfo.username == variables.provisioner_principal
+    name: is_operator_provisioner
   - expression: request.userInfo.username == "system:kube-controller-manager" || request.userInfo.username
       == "system:serviceaccount:kube-system:kube-controller-manager"
     name: is_kube_controller_manager
@@ -5419,7 +5469,12 @@ spec:
             ("openbao.org/maintenance" in oldObject.metadata.annotations) &&
             oldObject.metadata.annotations["openbao.org/maintenance"] == "true"))
     name: maintenance_enabled
-  - expression: request.userInfo.groups.exists(g, g == "system:masters")
+  - expression: '["system:masters"]'
+    name: break_glass_admin_groups
+  - expression: |-
+      variables.break_glass_admin_groups.exists(group,
+
+        request.userInfo.groups.exists(g, g == group))
     name: is_break_glass_admin
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -5547,6 +5602,205 @@ spec:
           (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels) && ("openbao.org/component" in oldObject.metadata.labels) ?
             oldObject.metadata.labels["openbao.org/component"] : ""))
     name: component_label
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-operator-openbao-restrict-controller-secret-writes
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - secrets
+  validations:
+  - expression: |-
+      !variables.is_controller || (
+
+        variables.has_required_labels &&
+        variables.has_allowed_name
+      )
+    message: The controller can only create, update, or delete operator-managed Secret
+      objects with the fixed cluster-scoped names and labels.
+  variables:
+  - expression: '''openbao-operator-system'''
+    name: operator_namespace
+  - expression: '''openbao-operator-controller'''
+    name: controller_serviceaccount_name
+  - expression: '''system:serviceaccount:'' + variables.operator_namespace + '':''
+      + variables.controller_serviceaccount_name'
+    name: controller_principal
+  - expression: request.userInfo.username == variables.controller_principal
+    name: is_controller
+  - expression: |-
+      request.operation == "DELETE" ?
+
+        ((
+          oldObject != null &&
+          has(oldObject.metadata) &&
+          oldObject.metadata.name != ''
+        ) ? oldObject.metadata.name : request.name) :
+        ((
+          object != null &&
+          has(object.metadata) &&
+          object.metadata.name != ''
+        ) ? object.metadata.name : request.name)
+    name: secret_name
+  - expression: |-
+      request.operation == "DELETE" ?
+
+        ((
+          oldObject != null &&
+          has(oldObject.metadata) &&
+          has(oldObject.metadata.labels)
+        ) ? oldObject.metadata.labels : {}) :
+        ((
+          object != null &&
+          has(object.metadata) &&
+          has(object.metadata.labels)
+        ) ? object.metadata.labels : {})
+    name: secret_labels
+  - expression: |-
+      ("openbao.org/cluster" in variables.secret_labels) ?
+
+        variables.secret_labels["openbao.org/cluster"] : ""
+    name: cluster_name
+  - expression: |-
+      variables.cluster_name != "" && ("app.kubernetes.io/managed-by" in variables.secret_labels) && variables.secret_labels["app.kubernetes.io/managed-by"] == "openbao-operator" && (
+
+        !("app.kubernetes.io/name" in variables.secret_labels) ||
+        variables.secret_labels["app.kubernetes.io/name"] == "openbao"
+      ) && (
+
+        !("app.kubernetes.io/instance" in variables.secret_labels) ||
+        variables.secret_labels["app.kubernetes.io/instance"] == variables.cluster_name
+      )
+    name: has_required_labels
+  - expression: |-
+      variables.cluster_name != "" && variables.secret_name in [
+
+        variables.cluster_name + "-tls-ca",
+        variables.cluster_name + "-tls-server",
+        variables.cluster_name + "-root-token",
+        variables.cluster_name + "-unseal-key"
+      ]
+    name: has_allowed_name
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-operator-openbao-restrict-controller-serviceaccounts
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - serviceaccounts
+  validations:
+  - expression: |-
+      !variables.is_controller || (
+
+        variables.has_required_labels &&
+        variables.has_allowed_name
+      )
+    message: The controller can only create, update, or delete operator-managed ServiceAccounts
+      for the main OpenBao workload or the fixed backup, restore, and upgrade ServiceAccount
+      names.
+  variables:
+  - expression: '''openbao-operator-system'''
+    name: operator_namespace
+  - expression: '''openbao-operator-controller'''
+    name: controller_serviceaccount_name
+  - expression: '''system:serviceaccount:'' + variables.operator_namespace + '':''
+      + variables.controller_serviceaccount_name'
+    name: controller_principal
+  - expression: request.userInfo.username == variables.controller_principal
+    name: is_controller
+  - expression: |-
+      request.operation == "DELETE" ?
+
+        ((
+          oldObject != null &&
+          has(oldObject.metadata) &&
+          oldObject.metadata.name != ''
+        ) ? oldObject.metadata.name : request.name) :
+        ((
+          object != null &&
+          has(object.metadata) &&
+          object.metadata.name != ''
+        ) ? object.metadata.name : request.name)
+    name: serviceaccount_name
+  - expression: |-
+      request.operation == "DELETE" ?
+
+        ((
+          oldObject != null &&
+          has(oldObject.metadata) &&
+          has(oldObject.metadata.labels)
+        ) ? oldObject.metadata.labels : {}) :
+        ((
+          object != null &&
+          has(object.metadata) &&
+          has(object.metadata.labels)
+        ) ? object.metadata.labels : {})
+    name: serviceaccount_labels
+  - expression: |-
+      ("openbao.org/cluster" in variables.serviceaccount_labels) ?
+
+        variables.serviceaccount_labels["openbao.org/cluster"] : ""
+    name: cluster_name
+  - expression: |-
+      ("openbao.org/service-account-role" in variables.serviceaccount_labels) ?
+
+        variables.serviceaccount_labels["openbao.org/service-account-role"] : ""
+    name: serviceaccount_role
+  - expression: |-
+      ("openbao.org/component" in variables.serviceaccount_labels) ?
+
+        variables.serviceaccount_labels["openbao.org/component"] : ""
+    name: component_label
+  - expression: |-
+      variables.cluster_name != "" && variables.serviceaccount_role in ["main", "backup", "restore", "upgrade"] && ("app.kubernetes.io/managed-by" in variables.serviceaccount_labels) && variables.serviceaccount_labels["app.kubernetes.io/managed-by"] == "openbao-operator" && (
+
+        !("app.kubernetes.io/name" in variables.serviceaccount_labels) ||
+        variables.serviceaccount_labels["app.kubernetes.io/name"] == "openbao"
+      ) && (
+
+        !("app.kubernetes.io/instance" in variables.serviceaccount_labels) ||
+        variables.serviceaccount_labels["app.kubernetes.io/instance"] == variables.cluster_name
+      ) && (
+
+        (variables.serviceaccount_role == "main" && variables.component_label == "") ||
+        (variables.serviceaccount_role == "backup" && variables.component_label == "backup") ||
+        (variables.serviceaccount_role == "restore" && variables.component_label == "restore") ||
+        (variables.serviceaccount_role == "upgrade" && variables.component_label == "upgrade")
+      )
+    name: has_required_labels
+  - expression: |-
+      variables.cluster_name != "" && (
+
+        (variables.serviceaccount_role == "main" && variables.serviceaccount_name != "") ||
+        (variables.serviceaccount_role == "backup" && variables.serviceaccount_name == variables.cluster_name + "-backup-serviceaccount") ||
+        (variables.serviceaccount_role == "restore" && variables.serviceaccount_name == variables.cluster_name + "-restore-serviceaccount") ||
+        (variables.serviceaccount_role == "upgrade" && variables.serviceaccount_name == variables.cluster_name + "-upgrade-serviceaccount")
+      )
+    name: has_allowed_name
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
@@ -5692,8 +5946,8 @@ spec:
             rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'apps' &&
             rule.resources != null &&
-            rule.resources.size() > 0 &&
-            rule.resources.all(r, r in ['statefulsets', 'deployments']) &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'statefulsets' &&
             rule.verbs != null &&
             rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
           ) ||
@@ -5704,7 +5958,7 @@ spec:
             (
               (
                 rule.resources.size() > 0 &&
-                rule.resources.all(r, r in ['services', 'configmaps', 'serviceaccounts', 'resourcequotas', 'limitranges', 'persistentvolumeclaims']) &&
+                rule.resources.all(r, r in ['services', 'configmaps', 'serviceaccounts', 'persistentvolumeclaims']) &&
                 rule.verbs != null &&
                 rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
               ) ||
@@ -5989,6 +6243,112 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
+  name: openbao-operator-openbao-restrict-provisioner-tenant-governance
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - resourcequotas
+      - limitranges
+  validations:
+  - expression: '!variables.is_provisioner || !variables.is_system_namespace'
+    message: The Provisioner may not manage tenant ResourceQuota or LimitRange guardrails
+      in system namespaces.
+  - expression: '!variables.is_provisioner || variables.is_guardrail_request'
+    message: The Provisioner can only manage the operator tenant ResourceQuota and
+      LimitRange guardrail objects.
+  - expression: '!variables.is_provisioner || variables.has_required_labels'
+    message: The Provisioner must label tenant ResourceQuota and LimitRange guardrails
+      as operator-managed.
+  - expression: |-
+      !variables.is_guardrail_request || variables.is_provisioner || (
+
+        request.operation == 'DELETE' &&
+        (
+          variables.is_kube_controller_manager ||
+          variables.is_system_controller ||
+          variables.is_garbage_collector_sa ||
+          variables.is_kube_system_controller
+        )
+      )
+    message: Direct modification of the operator-managed tenant ResourceQuota and
+      LimitRange guardrails is prohibited; update the parent OpenBaoTenant instead.
+  variables:
+  - expression: '''openbao-operator-system'''
+    name: operator_namespace
+  - expression: '''openbao-operator-provisioner'''
+    name: provisioner_serviceaccount_name
+  - expression: '''system:serviceaccount:'' + variables.operator_namespace + '':''
+      + variables.provisioner_serviceaccount_name'
+    name: provisioner_principal
+  - expression: request.userInfo.username == variables.provisioner_principal
+    name: is_provisioner
+  - expression: request.userInfo.username == "system:kube-controller-manager" || request.userInfo.username
+      == "system:serviceaccount:kube-system:kube-controller-manager"
+    name: is_kube_controller_manager
+  - expression: request.userInfo.username.startsWith("system:controller:")
+    name: is_system_controller
+  - expression: |-
+      request.userInfo.username in [
+
+        "system:serviceaccount:kube-system:generic-garbage-collector",
+        "system:serviceaccount:kube-system:resourcequota-controller"
+      ]
+    name: is_garbage_collector_sa
+  - expression: request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system")
+      || request.userInfo.username.startsWith("system:serviceaccount:kube-system:")
+    name: is_kube_system_controller
+  - expression: request.namespace == variables.operator_namespace || request.namespace.startsWith('kube-')
+      || request.namespace == 'openshift' || request.namespace.startsWith('openshift-')
+      || request.namespace.startsWith('gke-') || request.namespace.startsWith('eks-')
+      || request.namespace.startsWith('aws-') || request.namespace.startsWith('aks-')
+      || request.namespace.startsWith('azure-')
+    name: is_system_namespace
+  - expression: |-
+      request.operation == 'DELETE' ?
+
+        request.name :
+        (
+          object != null &&
+          has(object.metadata) &&
+          object.metadata.name != ''
+        ) ? object.metadata.name : request.name
+    name: resource_name
+  - expression: |-
+      (request.resource.resource == 'resourcequotas' &&
+
+        variables.resource_name == 'openbao-operator-tenant-quota') ||
+      (request.resource.resource == 'limitranges' &&
+
+        variables.resource_name == 'openbao-operator-tenant-limits')
+    name: is_guardrail_request
+  - expression: |-
+      request.operation == 'DELETE' || (
+
+        object != null &&
+        has(object.metadata) &&
+        has(object.metadata.labels) &&
+        ("app.kubernetes.io/name" in object.metadata.labels) &&
+        object.metadata.labels["app.kubernetes.io/name"] == "openbao-operator" &&
+        ("app.kubernetes.io/component" in object.metadata.labels) &&
+        object.metadata.labels["app.kubernetes.io/component"] == "provisioner" &&
+        ("app.kubernetes.io/managed-by" in object.metadata.labels) &&
+        object.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator"
+      )
+    name: has_required_labels
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
   name: openbao-operator-openbao-validate-openbao-tenant
 spec:
   failurePolicy: Fail
@@ -6010,6 +6370,15 @@ spec:
       || object.spec.targetNamespace == '' || object.spec.targetNamespace == object.metadata.namespace
     message: OpenBaoTenant can only target its own namespace (self-service mode).
       Create the OpenBaoTenant in the operator namespace for cross-namespace targeting.
+  - expression: |-
+      object.metadata.namespace == variables.operator_namespace || (
+
+        !has(object.spec.quota) &&
+        !has(object.spec.limitRange)
+      )
+    message: Self-service OpenBaoTenant requests may not customize spec.quota or spec.limitRange.
+      Create the OpenBaoTenant in the operator namespace for centrally managed tenant
+      guardrail overrides.
   variables:
   - expression: '''openbao-operator-system'''
     name: operator_namespace
@@ -6433,6 +6802,48 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
+  name: openbao-operator-openbao-restrict-controller-secret-writes-binding
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - secrets
+  policyName: openbao-operator-openbao-restrict-controller-secret-writes
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-openbao-restrict-controller-serviceaccounts-binding
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - serviceaccounts
+  policyName: openbao-operator-openbao-restrict-controller-serviceaccounts
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
   name: openbao-operator-openbao-restrict-provisioner-namespace-mutations-binding
 spec:
   matchResources:
@@ -6468,6 +6879,28 @@ spec:
       - roles
       - rolebindings
   policyName: openbao-operator-openbao-restrict-provisioner-rbac
+  validationActions:
+  - Deny
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-operator-openbao-restrict-provisioner-tenant-governance-binding
+spec:
+  matchResources:
+    resourceRules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - resourcequotas
+      - limitranges
+  policyName: openbao-operator-openbao-restrict-provisioner-tenant-governance
   validationActions:
   - Deny
 ---

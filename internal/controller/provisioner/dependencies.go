@@ -9,6 +9,7 @@ func (r *NamespaceProvisionerReconciler) tenantRuntime() appprovisioner.TenantRu
 	return appprovisioner.TenantRuntime{
 		Client:                   r.Client,
 		APIReader:                r.APIReader,
+		AdmissionTracker:         r.AdmissionTracker,
 		Recorder:                 r.Recorder,
 		Provisioner:              r.Provisioner,
 		OperatorNamespace:        r.OperatorNamespace,

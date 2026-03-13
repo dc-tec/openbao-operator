@@ -18,19 +18,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 16, // Expected number of PolicyRules
+			wantRules: 15, // Expected number of PolicyRules
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  TenantRoleName,
-			wantRules: 16,
+			wantRules: 15,
 		},
 		{
 			name:      "namespace with special characters",
 			namespace: "my-namespace-123",
 			wantName:  TenantRoleName,
-			wantRules: 16,
+			wantRules: 15,
 		},
 	}
 
@@ -56,9 +56,10 @@ func TestGenerateTenantRole(t *testing.T) {
 
 			// Verify labels
 			expectedLabels := map[string]string{
-				constants.LabelAppName:      constants.LabelValueAppNameOpenBaoOperator,
-				constants.LabelAppComponent: "provisioner",
-				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelAppName:          constants.LabelValueAppNameOpenBaoOperator,
+				constants.LabelAppComponent:     "provisioner",
+				constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoComponent: "provisioner",
 			}
 			for k, v := range expectedLabels {
 				if role.Labels[k] != v {
@@ -69,9 +70,9 @@ func TestGenerateTenantRole(t *testing.T) {
 			// Verify key rules exist
 			hasOpenBaoClusterRule := false
 			hasStatefulSetRule := false
-			hasDeploymentRule := false
 			hasPodRule := false
 			hasEventsK8sRule := false
+			hasQuotaOrLimitRangeRule := false
 
 			for _, rule := range role.Rules {
 				// Check for OpenBaoCluster rule (uses commonVerbs, not "*")
@@ -90,15 +91,6 @@ func TestGenerateTenantRole(t *testing.T) {
 					hasStatefulSetRule = true
 				}
 
-				// Check for Deployment rule (used for controller-managed Deployments where enabled)
-				if contains(rule.APIGroups, "apps") &&
-					contains(rule.Resources, "deployments") &&
-					contains(rule.Verbs, "get") &&
-					contains(rule.Verbs, "create") &&
-					contains(rule.Verbs, "delete") {
-					hasDeploymentRule = true
-				}
-
 				// Check for Pod rule (includes delete for cleanup)
 				if contains(rule.APIGroups, "") &&
 					contains(rule.Resources, "pods") &&
@@ -115,6 +107,10 @@ func TestGenerateTenantRole(t *testing.T) {
 					contains(rule.Verbs, "patch") {
 					hasEventsK8sRule = true
 				}
+
+				if contains(rule.Resources, "resourcequotas") || contains(rule.Resources, "limitranges") {
+					hasQuotaOrLimitRangeRule = true
+				}
 			}
 
 			if !hasOpenBaoClusterRule {
@@ -123,14 +119,14 @@ func TestGenerateTenantRole(t *testing.T) {
 			if !hasStatefulSetRule {
 				t.Error("GenerateTenantRole() missing StatefulSet rule")
 			}
-			if !hasDeploymentRule {
-				t.Error("GenerateTenantRole() missing Deployment rule")
-			}
 			if !hasPodRule {
 				t.Error("GenerateTenantRole() missing Pod rule")
 			}
 			if !hasEventsK8sRule {
 				t.Error("GenerateTenantRole() missing events.k8s.io Events rule")
+			}
+			if hasQuotaOrLimitRangeRule {
+				t.Error("GenerateTenantRole() unexpectedly includes ResourceQuota/LimitRange permissions")
 			}
 		})
 	}

@@ -45,7 +45,10 @@ const (
 	dependencyOpenBaoEnforceManagedImageDigests         = "openbao-enforce-managed-image-digests"
 	dependencyOpenBaoRestrictProvisionerRBAC            = "openbao-restrict-provisioner-rbac"
 	dependencyOpenBaoRestrictProvisionerNamespace       = "openbao-restrict-provisioner-namespace-mutations"
+	dependencyOpenBaoRestrictProvisionerTenantGuardrail = "openbao-restrict-provisioner-tenant-governance"
 	dependencyOpenBaoRestrictControllerRBAC             = "openbao-restrict-controller-rbac"
+	dependencyOpenBaoRestrictControllerServiceAccounts  = "openbao-restrict-controller-serviceaccounts"
+	dependencyOpenBaoRestrictControllerSecretWrites     = "openbao-restrict-controller-secret-writes"
 	dependencyBindingValidateOpenBaoCluster             = "openbao-validate-openbaocluster-binding"
 	dependencyBindingValidateOpenBaoTenant              = "openbao-validate-openbao-tenant-binding"
 	dependencyBindingValidateOpenBaoRestore             = "openbao-validate-openbaorestore-binding"
@@ -54,7 +57,10 @@ const (
 	dependencyBindingEnforceManagedImageDigests         = "openbao-enforce-managed-image-digests-binding"
 	dependencyBindingRestrictProvisionerRBAC            = "openbao-restrict-provisioner-rbac-binding"
 	dependencyBindingRestrictProvisionerNamespace       = "openbao-restrict-provisioner-namespace-mutations-binding"
+	dependencyBindingRestrictProvisionerTenantGuardrail = "openbao-restrict-provisioner-tenant-governance-binding"
 	dependencyBindingRestrictControllerRBAC             = "openbao-restrict-controller-rbac-binding"
+	dependencyBindingRestrictControllerServiceAccounts  = "openbao-restrict-controller-serviceaccounts-binding"
+	dependencyBindingRestrictControllerSecretWrites     = "openbao-restrict-controller-secret-writes-binding"
 )
 
 // DefaultNamePrefixes returns the resource name prefixes to try when resolving
@@ -128,9 +134,24 @@ func DefaultDependencies() []Dependency {
 			BindingName: dependencyBindingRestrictProvisionerNamespace,
 		},
 		{
+			Name:        dependencyOpenBaoRestrictProvisionerTenantGuardrail,
+			PolicyName:  dependencyOpenBaoRestrictProvisionerTenantGuardrail,
+			BindingName: dependencyBindingRestrictProvisionerTenantGuardrail,
+		},
+		{
 			Name:        dependencyOpenBaoRestrictControllerRBAC,
 			PolicyName:  dependencyOpenBaoRestrictControllerRBAC,
 			BindingName: dependencyBindingRestrictControllerRBAC,
+		},
+		{
+			Name:        dependencyOpenBaoRestrictControllerServiceAccounts,
+			PolicyName:  dependencyOpenBaoRestrictControllerServiceAccounts,
+			BindingName: dependencyBindingRestrictControllerServiceAccounts,
+		},
+		{
+			Name:        dependencyOpenBaoRestrictControllerSecretWrites,
+			PolicyName:  dependencyOpenBaoRestrictControllerSecretWrites,
+			BindingName: dependencyBindingRestrictControllerSecretWrites,
 		},
 		{
 			Name:        dependencyOpenBaoLockManagedResourceMutations,

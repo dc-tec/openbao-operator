@@ -14,10 +14,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/service/restore"
 )
 
+func setAdmissionReady(t *testing.T) {
+	t.Helper()
+	admission.SetAdmissionDependenciesReady(true)
+	t.Cleanup(func() {
+		admission.SetAdmissionDependenciesReady(false)
+	})
+}
+
 func TestOpenBaoRestoreReconciler_Reconcile(t *testing.T) {
+	setAdmissionReady(t)
+
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
@@ -80,6 +91,8 @@ func TestOpenBaoRestoreReconciler_Reconcile(t *testing.T) {
 }
 
 func TestOpenBaoRestoreReconciler_Reconcile_NotFound(t *testing.T) {
+	setAdmissionReady(t)
+
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)

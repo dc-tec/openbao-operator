@@ -61,7 +61,11 @@ func isDefaultIntegrationPolicyNameAllowed(policyName string) bool {
 		"openbao-validate-openbaocluster",
 		"openbao-validate-openbaorestore",
 		"openbao-validate-openbao-tenant",
+		"openbao-lock-managed-resource-mutations",
 		"openbao-restrict-provisioner-rbac",
+		"openbao-restrict-provisioner-tenant-governance",
+		"openbao-restrict-controller-serviceaccounts",
+		"openbao-restrict-controller-secret-writes",
 	}
 	for _, suffix := range allowedSuffixes {
 		if strings.HasSuffix(policyName, suffix) {
