@@ -36,6 +36,18 @@ tenancy:
   targetNamespace: openbao-system
 ```
 
+### Single-tenant mode with custom Helm identity
+
+Use the release name or `fullnameOverride` when you want a custom operator identity. The chart keeps the controller `ServiceAccount`, single-tenant `RoleBinding`, and admission-policy references aligned from the rendered fullname.
+
+```yaml
+fullnameOverride: team-bao-operator
+
+tenancy:
+  mode: single
+  targetNamespace: openbao-system
+```
+
 Apply with:
 
 ```bash

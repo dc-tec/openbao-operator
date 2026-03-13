@@ -95,6 +95,9 @@ graph LR
     !!! note "Provisioner Excluded"
         In single-tenant mode, the Provisioner deployment, its ServiceAccounts, and related RBAC are automatically excluded.
 
+    !!! tip "Custom Helm Identity"
+        If you want a custom operator identity with Helm, use a custom release name or `fullnameOverride`. That changes the rendered controller `ServiceAccount`, the single-tenant `RoleBinding` subject, and the admission-policy identity references together.
+
 === ":material-file-document-multiple-outline: YAML Manifests"
 
     For manual deployment without Helm:

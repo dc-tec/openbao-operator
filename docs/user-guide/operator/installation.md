@@ -27,6 +27,7 @@ Use this table to choose the supported install path before you start changing va
 | :--- | :--- | :--- | :--- |
 | Default shared production install | Helm, multi-tenant mode | release namespace, image tag, controller/provisioner sizing | controller and provisioner pods in the rendered operator namespace |
 | Dedicated team namespace | Helm, `tenancy.mode=single` | `tenancy.targetNamespace`, optional release namespace | only the controller pod runs; `WATCH_NAMESPACE` matches the target namespace |
+| Dedicated team namespace with custom Helm identity | Helm, `tenancy.mode=single` plus custom release name or `fullnameOverride` | release name or `fullnameOverride`, `tenancy.targetNamespace`, optional release namespace | rendered controller `ServiceAccount` name, single-tenant `RoleBinding` subject, admission-policy identity variables, JWT audience |
 | Raw multi-tenant install with default identity | `config/default` | operator namespace only if you want to fork the default base | rendered namespace, controller and provisioner ServiceAccount names, admission policies |
 | Raw multi-tenant install with custom identity | `config/overlays/custom-identity` | `namespace`, optional `namePrefix` | rendered ServiceAccount names, RoleBinding subjects, admission-policy identity variables, JWT audience |
 | Raw single-tenant install | `config/overlays/single-tenant` | operator namespace in the overlay, target namespace in `target_namespace_config.yaml` | rendered operator namespace, `WATCH_NAMESPACE`, single-tenant RoleBinding subject |
@@ -65,6 +66,29 @@ Use this table to choose the supported install path before you start changing va
     1. Pin to a specific version for production deployments.
     2. Run multiple replicas for high availability.
     3. Adjust resource limits based on cluster size.
+
+    ### Single-Tenant With Custom Helm Identity
+
+    Helm already supports the equivalent of the raw-manifest custom-identity overlays through the release name and `fullnameOverride`.
+
+    ```bash
+    helm install team-bao oci://ghcr.io/dc-tec/charts/openbao-operator \
+      --namespace platform-operators \
+      --create-namespace \
+      --set tenancy.mode=single \
+      --set tenancy.targetNamespace=openbao \
+      --set fullnameOverride=team-bao-operator
+    ```
+
+    Confirm with `helm template` or `helm get manifest` that:
+
+    1. the controller `ServiceAccount` name matches the rendered Helm fullname
+    2. the single-tenant `RoleBinding` subject points at that rendered controller `ServiceAccount`
+    3. admission-policy variables reference the same rendered operator namespace and controller `ServiceAccount` name
+    4. `OPENBAO_JWT_AUDIENCE` on the controller still matches the projected `openbao-token` audience
+
+    !!! note
+        The chart does not expose per-component custom `ServiceAccount` names. Use the release name or `fullnameOverride` to customize the operator identity while keeping the rendered RBAC and admission-policy references aligned.
 
     ### Artifact Hub
 
