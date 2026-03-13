@@ -61,7 +61,11 @@ func isDefaultIntegrationPolicyNameAllowed(policyName string) bool {
 		"openbao-validate-openbaocluster",
 		"openbao-validate-openbaorestore",
 		"openbao-validate-openbao-tenant",
+		"openbao-lock-managed-resource-mutations",
 		"openbao-restrict-provisioner-rbac",
+		"openbao-restrict-provisioner-tenant-governance",
+		"openbao-restrict-controller-serviceaccounts",
+		"openbao-restrict-controller-secret-writes",
 	}
 	for _, suffix := range allowedSuffixes {
 		if strings.HasSuffix(policyName, suffix) {
@@ -108,6 +112,12 @@ func newImpersonatedClient(t *testing.T, username string) client.Client {
 		t.Fatalf("create impersonated client: %v", err)
 	}
 	return c
+}
+
+func newControllerClient(t *testing.T) client.Client {
+	t.Helper()
+
+	return newPrivilegedImpersonatedClient(t, controllerUsername)
 }
 
 func kustomizeBuild(t *testing.T, dir string) []byte {

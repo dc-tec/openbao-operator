@@ -2,7 +2,7 @@
 
 !!! abstract "Encryption in Transit"
     When `spec.tls.enabled=true`, the Operator configures TLS for internal and external communication using one of three modes: **Operator Managed**, **External**, or **ACME**.
-    In production, keep TLS enabled and use a trusted certificate source.
+    In production, keep TLS enabled, prefer TLS passthrough at the edge, and use a trusted certificate source.
 
 ## Certificate Rotation Flow
 
@@ -39,6 +39,7 @@ sequenceDiagram
     -   **Strict Identity:** Certificates use strict **SANs** (Subject Alternative Names) matching the Service and Pod DNS.
     -   **Rotation:** Automatically rotates certificates before expiry (configurable via `spec.tls.rotationPeriod`).
     -   **Gateway Support:** Automatically manages a CA ConfigMap for ingress controllers.
+    -   **Security Posture:** Suitable for development or internal evaluation. It is not a supported Hardened production mode.
 
     ```yaml
     spec:
@@ -89,7 +90,13 @@ sequenceDiagram
 | **Generator** | Operator (Internal CA) | External (e.g., cert-manager) | OpenBao (Built-in) |
 | **Rotation** | Automatic | External responsibility | Automatic |
 | **Private Key** | Kubernetes Secret | Kubernetes Secret | **In-Memory** (Secure) |
-| **Best For** | Development, Simple Prod | Enterprise PKI Integration | Zero Trust, Public Facing |
+| **Best For** | Development, local evaluation | Enterprise PKI integration, internal or external production | Public-facing production with native ACME |
+
+## Exposure Guidance
+
+- Prefer **TLS passthrough** when exposing OpenBao through Gateway API or another edge proxy.
+- Use **edge termination** only when you explicitly need policy enforcement or certificate management at the edge.
+- `OperatorManaged` TLS is not a supported production path for the `Hardened` profile.
 
 ## See Also
 

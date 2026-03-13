@@ -40,6 +40,22 @@ graph TD
 
 ---
 
+## Check Conditions First
+
+Inspect the operator-visible conditions before drilling into pod logs:
+
+```sh
+kubectl -n security get openbaocluster prod-cluster \
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+```
+
+Focus on:
+
+- `OpenBaoSealed`
+- `CloudUnsealIdentityReady` for cloud KMS backends
+- `TLSReady` if the cluster cannot complete secure startup
+- `GatewayIntegrationReady` only if self-reachability or ACME traffic depends on Gateway exposure
+
 ## Diagnostics by Mode
 
 Identify your unseal mode in the `OpenBaoCluster` configuration:
@@ -47,7 +63,7 @@ Identify your unseal mode in the `OpenBaoCluster` configuration:
 ```yaml
 spec:
   unseal:
-    type: awskms # or static, gcpckms, etc.
+    type: awskms # or static, transit, gcpckms, azurekeyvault, ocikms, kmip, pkcs11
 ```
 
 === "Static (Default)"
@@ -72,9 +88,27 @@ spec:
     kubectl -n security create secret generic prod-cluster-unseal-key --from-literal=bao-root=YOUR_UNSEAL_KEY
     ```
 
+=== "Transit"
+
+    In **Transit** mode, OpenBao connects to another Bao cluster for unseal operations.
+
+    Check first:
+
+    - the credentials Secret referenced by `spec.unseal.credentialsSecretRef`
+    - the transit CA / client cert material if you use custom TLS
+    - connectivity from the cluster to the transit endpoint
+
+    Common failures:
+
+    | Signal | Root Cause | Fix |
+    | :--- | :--- | :--- |
+    | `permission denied` / auth failures | Transit token or auth path is wrong. | Replace the credentials Secret and verify transit policy/capabilities. |
+    | `x509` or `certificate signed by unknown authority` | Transit CA or client mTLS files do not match the endpoint. | Reconcile the Secret contents and referenced TLS file paths. |
+    | `context deadline exceeded` | Network or DNS path to the transit endpoint is blocked. | Check `spec.network.egressRules`, DNS, and the remote endpoint health. |
+
 === "Auto-Unseal (Cloud KMS)"
 
-    In **Auto-Unseal** mode, OpenBao connects to a remote KMS (AWS, GCP, Azure, OCI). failures are usually due to **Identity** or **Network**.
+    In **Auto-Unseal** mode, OpenBao connects to a remote cloud KMS (AWS, GCP, Azure, OCI). Failures are usually due to **Identity** or **Network**.
 
     **1. Check OpenBao Logs**
     
@@ -91,6 +125,18 @@ spec:
     | `403 Forbidden` / `AccessDeniedPath` | The IAM Role / ServiceAccount lacks permission to `Decrypt`. | Grant `kms:Decrypt` (AWS) or `cloudkms.cryptoKeyVersions.useToDecrypt` (GCP) to the role. |
     | `context deadline exceeded` | Network connectivity to the KMS endpoint is blocked. | Check NetworkPolicies (`egress`), Istio Sidecars, or Firewall rules blocking HTTPS (443). |
     | `Internal (500)` | The Cloud Provider is experiencing an outage. | Check configured Region status. |
+
+=== "KMIP / HSM"
+
+    In **KMIP** or **PKCS#11** mode, treat failures as external trust or device-access problems first.
+
+    Check first:
+
+    - referenced client certificate / key / CA material
+    - library or device mount paths for `pkcs11`
+    - network reachability to the KMIP endpoint
+
+    These paths do not use `CloudUnsealIdentityReady`; rely on pod logs and the rendered seal configuration when diagnosing failures.
 
 === "Manual (Emergency)"
 

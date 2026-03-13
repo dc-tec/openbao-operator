@@ -27,7 +27,7 @@ func (m *Manager) ensureServiceAccount(ctx context.Context, _ logr.Logger, clust
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        saName,
 			Namespace:   cluster.Namespace,
-			Labels:      infraLabels(cluster),
+			Labels:      serviceAccountLabels(cluster),
 			Annotations: nil,
 		},
 	}
@@ -41,6 +41,12 @@ func (m *Manager) ensureServiceAccount(ctx context.Context, _ logr.Logger, clust
 	}
 
 	return nil
+}
+
+func serviceAccountLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
+	labels := infraLabels(cluster)
+	labels[constants.LabelOpenBaoServiceAccountRole] = constants.ServiceAccountRoleMain
+	return labels
 }
 
 // ensureRBAC creates a Role and RoleBinding for the OpenBaoCluster service account.

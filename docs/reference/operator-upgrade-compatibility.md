@@ -32,7 +32,7 @@ Use the release assets:
 ```bash
 kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
 helm upgrade openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --namespace openbao-operator-system
+  --namespace <operator-namespace>
 ```
 
 This matches the operator installation guidance in [Installation](../user-guide/operator/installation.md#upgrading).

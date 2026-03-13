@@ -1,7 +1,7 @@
 # Network Security
 
 !!! abstract "Core Concept"
-    The Operator enforces a **Default Deny** network posture for every OpenBao cluster. This means the OpenBao pods start in total isolation, and the Operator explicitly whitelists only the traffic required for clustering, monitoring, and management.
+    The Operator enforces a **Default Deny** network posture for every OpenBao cluster. OpenBao Pods and day-2 Jobs start from explicit allowlists, and the operator only opens the traffic required for clustering, management, and configured integrations.
 
 ## Network Perimeter
 
@@ -22,7 +22,9 @@ flowchart TB
 
     %% Ingress Rules
     Operator --"Ingress (8200)"--> Yield
-    Peer --"Ingress (8200/8201)"--> Yield
+    Peer --"Ingress (8201)"--> Yield
+    Ingress["Gateway / Trusted Ingress Peer"] --"Ingress (8200 passthrough or edge-terminated traffic)"--> Yield
+    Jobs["Backup / Restore Job"] --> Yield
 
     %% Egress Rules
     Yield --"Egress (443)"--> K8sAPI
@@ -44,13 +46,16 @@ flowchart TB
 
     | Source | Port | Reason |
     | :--- | :--- | :--- |
-    | **Operator** | `8200` (HTTP) | Required for liveness probes, initialization checks, and status updates. |
+    | **Operator** | `8200` | Required for probes, initialization checks, and status updates. |
     | **Raft Peers** | `8201` (TCP) | Required for Raft consensus and replication between pods in the StatefulSet. |
-    | **Gateway** | `8200` (HTTP) | (Optional) Allowed only if `spec.gateway` is enabled, permitting traffic from the Gateway API namespace. |
+    | **Gateway / trusted ingress peer** | `8200` | Allowed only if `spec.gateway` is enabled or `spec.network.trustedIngressPeers` is set. Prefer passthrough; edge termination is optional. |
     | **Kube System** | Any | Required for some CNI/DNS health checks from the system namespace. |
 
     !!! warning "Custom Ingress"
-        You can allow additional traffic (e.g., from your application namespaces) via `spec.network.ingressRules`. These rules are **additive** and cannot disable the core operator rules.
+        You can allow additional traffic via:
+
+        - `spec.network.ingressRules` for explicit additive peer rules
+        - `spec.network.trustedIngressPeers` for user-managed ingress or passthrough proxies
 
 === ":material-logout: Egress (Outgoing)"
 
@@ -62,8 +67,16 @@ flowchart TB
     | **CoreDNS** | `53` (UDP/TCP) | Required for resolving external services and peer addresses. |
     | **Raft Peers** | `8201` (TCP) | Required for replication traffic. |
 
-    !!! note "Backup Jobs"
-        Backup and Restore jobs are **excluded** from this restrictive policy. They run as separate pods that need broad access to reach external object storage (S3, GCS, Azure).
+    !!! note "Backup and Restore Jobs"
+        Backup and restore use a separate Job NetworkPolicy, not the main workload policy. In Hardened clusters, they also require explicit `spec.network.egressRules` to reach object storage or external identity systems.
+
+## Security Checkpoints
+
+Use these conditions when network behavior is not clear from the manifests alone:
+
+- `APIServerNetworkReady` for Kubernetes API reachability assumptions
+- `GatewayIntegrationReady` for Gateway listener/controller compatibility
+- `BackupConfigurationReady` and `RestoreConfigurationReady` for day-2 Job egress and identity assumptions
 
 ## Controller Network Security
 

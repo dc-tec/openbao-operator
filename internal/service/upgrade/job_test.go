@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
@@ -146,8 +146,8 @@ func TestBuildUpgradeExecutorJob_AllowsOIDCWithoutUpgradeConfig(t *testing.T) {
 	for _, env := range job.Spec.Template.Spec.Containers[0].Env {
 		if env.Name == constants.EnvUpgradeJWTAuthRole {
 			foundRole = true
-			if env.Value != auth.RoleNameUpgrade {
-				t.Fatalf("UPGRADE_JWT_AUTH_ROLE = %q, want %q", env.Value, auth.RoleNameUpgrade)
+			if env.Value != portauth.RoleNameUpgrade {
+				t.Fatalf("UPGRADE_JWT_AUTH_ROLE = %q, want %q", env.Value, portauth.RoleNameUpgrade)
 			}
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storageenv"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
@@ -374,6 +375,9 @@ func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *
 }
 
 func effectiveRestoreJWTRole(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) string {
-	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
-	return storageenv.EffectiveJWTRole(restore.Spec.JWTAuthRole, oidcEnabled, auth.RoleNameRestore)
+	return storageenv.EffectiveJWTRole(
+		restore.Spec.JWTAuthRole,
+		portauth.OperatorJWTBootstrapEnabled(cluster),
+		portauth.RoleNameRestore,
+	)
 }

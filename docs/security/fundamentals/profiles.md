@@ -8,7 +8,7 @@
 | Feature | :material-shield-check: Hardened (Production) | :material-test-tube: Development (Testing) |
 | :--- | :--- | :--- |
 | **Root Token** | Auto-revoked (not stored in a Secret) | Stored in a Secret when self-init is disabled |
-| **Unseal Keys** | External KMS required | Defaults to static key stored in a Secret |
+| **Unseal Keys** | Non-static external root of trust required | Defaults to static key stored in a Secret |
 | **TLS** | External / ACME required | Operator-managed allowed |
 | **Replicas** | Minimum 3 (HA Required) | Any (1+) |
 | **Self-Init** | Required (`enabled=true`) | Optional |
@@ -26,7 +26,7 @@
     To use this profile, your `OpenBaoCluster` must meet these requirements:
 
     1.  **High Availability:** You must set `spec.replicas` to at least `3` for Raft quorum.
-    2.  **External KMS:** You must provide a KMS key (AWS, GCP, Azure, or Vault Transit) for auto-unseal.
+    2.  **External Root of Trust:** You must use a non-static unseal backend such as `transit`, `awskms`, `gcpckms`, `azurekeyvault`, `ocikms`, `kmip`, or `pkcs11`.
     3.  **Valid TLS:** You must provide valid TLS certificates. `OperatorManaged` TLS is rejected for `Hardened` clusters by admission policy.
     4.  **Self-Initialization:** You must enable self-init. Manual bootstrap is not a supported production path because it persists a root token Secret.
     5.  **Image Verification Guardrails:** You cannot set `spec.imageVerification.enabled=false`, `spec.operatorImageVerification.enabled=false`, or use `failurePolicy: Warn`.
@@ -45,7 +45,7 @@
       selfInit:
         enabled: true
       unseal:
-        type: awskms # or gcpckms, azurekeyvault, transit
+        type: awskms # or transit, gcpckms, azurekeyvault, ocikms, kmip, pkcs11
     ```
 
     If image verification blocks are omitted in `Hardened`, the operator still treats verification as enabled.

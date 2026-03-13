@@ -1,6 +1,6 @@
 # Multi-Tenancy Security
 
-Running multiple `OpenBaoCluster` resources in a shared Kubernetes cluster requires strict isolation layers. This guide outlines how to secure tenants using RBAC, Network Policies, and Resource Quotas.
+Running multiple `OpenBaoCluster` resources in a shared Kubernetes cluster requires strict isolation layers. This guide outlines how to secure tenants using the operator's built-in RBAC, admission policies, NetworkPolicies, and default tenant guardrails.
 
 !!! success "Recommended Production Architecture"
     Multi-tenant mode is the recommended production operating model for OpenBao Operator. It combines tenant onboarding guardrails, namespace introduction, and workload isolation in one control-plane model.
@@ -55,7 +55,11 @@ Configure isolation across four key layers:
 
 === ":material-security: 1. Identity (RBAC)"
 
-    The most critical layer is Identity. You must prevent tenants from accessing the "Keys to the Kingdom" (Root Tokens and Unseal Keys).
+    The most critical layer is identity. The operator's built-in control plane already starts from:
+
+    - editor roles without Secret read access
+    - dedicated Secret reader/writer allowlist Roles
+    - admission policies that constrain Provisioner and Controller RBAC mutation
 
     ### Tenant Roles
     Use the provided ClusterRoles to granularly grant permissions.
@@ -66,11 +70,9 @@ Configure isolation across four key layers:
     | `openbaocluster-editor-role` | Namespace | Manage Clusters, **CANNOT** read Secrets. |
     | `openbaotenant-editor-role` | Namespace | Self-service onboarding via `OpenBaoTenant`. |
 
-    ### Blocking Secret Access
-    !!! danger "Critical Restriction"
-        Tenants with `get secrets` permission can read the **Root Token** and **Unseal Key**, effectively becoming admins of their OpenBao cluster.
-
-    Use a **Policy Engine** (Kyverno/Gatekeeper) to enforce this restriction.
+    ### Supplemental Policy Engines
+    !!! note "Optional Additional Guardrail"
+        Kyverno or Gatekeeper can still be useful as cluster-wide supplemental controls, but they are not the primary secret-isolation mechanism. The primary controls are the built-in RBAC and admission model above.
 
     ```yaml title="Kyverno Policy: Block Sensitive Secrets"
     apiVersion: kyverno.io/v1
@@ -90,24 +92,26 @@ Configure isolation across four key layers:
                     - "*-root-token"
                     - "*-unseal-key"
           exclude:
-            any:
-              - subjects:
-                  - kind: ServiceAccount
-                    name: openbao-operator-controller
-                    namespace: openbao-operator-system
+                any:
+                  - subjects:
+                      - kind: ServiceAccount
+                    name: <rendered-controller-serviceaccount>
+                    namespace: <operator-namespace>
           validate:
             message: "Access to OpenBao root token and unseal key is restricted."
             deny: {}
     ```
 
+    Use the rendered operator ServiceAccount name and namespace for custom raw-manifest installs.
+
 === ":material-server-network-outline: 2. Network"
 
-    By default, the Operator creates a `NetworkPolicy` that implements a **Default Deny** posture for Ingress.
+    By default, the Operator creates OpenBao workload NetworkPolicies that implement a **Default Deny** posture for ingress.
 
     ### Default Behavior
-    - **Ingress**: Only allows traffic from within the cluster (OpenBao-to-OpenBao) and the generic Ingress Controller.
-    - **Egress**: Allows DNS, API Server, and cluster-internal traffic.
-    - **Backup Jobs**: Excluded from default policy to allow S3 access.
+    - **Ingress**: Allows operator traffic, Raft peer traffic, and configured Gateway or trusted-ingress paths.
+    - **Egress**: Allows DNS, Kubernetes API, and cluster-internal traffic.
+    - **Backup / Restore Jobs**: Use a separate Job NetworkPolicy and their own identity and egress contract.
 
     ### Custom Restrictions
     If you need strict egress control for backup jobs, apply a dedicated policy.
@@ -134,22 +138,9 @@ Configure isolation across four key layers:
     Prevent "Noisy Neighbor" issues where one tenant consumes all cluster resources.
 
     ### Resource Quotas
-    Limit the number of nodes and storage a tenant can provision by configuring the `OpenBaoTenant` Custom Resource.
+    The operator applies default tenant `ResourceQuota` and `LimitRange` guardrails during onboarding. Self-service `OpenBaoTenant` requests cannot weaken those defaults. Custom values are reserved for centrally managed onboarding from the operator namespace.
 
-    ```yaml
-    apiVersion: openbao.org/v1alpha1
-    kind: OpenBaoTenant
-    metadata:
-      name: tenant-a
-    spec:
-      targetNamespace: tenant-a
-      quota:
-        hard:
-          pods: "10"
-          requests.storage: "100Gi"
-          requests.cpu: "4"
-          requests.memory: "8Gi"
-    ```
+    Platform-admin onboarding can still provide custom tenant guardrails from the operator namespace when stricter or larger defaults are needed.
 
     ### S3 Bucket Isolation
     When using shared object storage for backups, ensure each tenant uses a unique **Prefix** and has credentials scoped *only* to that prefix.

@@ -68,7 +68,7 @@ flowchart TB
     | :--- | :--- | :--- |
     | `Namespace` | `get`, `update`, `patch` | Enforce Pod Security Standards labels during onboarding. **No `list`** (prevents discovery). Admission policy restricts Namespace updates to the three PSS label keys and blocks system namespaces. |
     | `OpenBaoTenant` | `get`, `list`, `watch` | Watch for new tenant requests. |
-    | `ResourceQuota`, `LimitRange` | `get`, `create`, `patch` | Apply default quota/limits during onboarding (Server-Side Apply). **No `list`** (prevents discovery). |
+    | `ResourceQuota`, `LimitRange` | `create`, `get`, `patch` | Apply the fixed tenant guardrail quota/limits during onboarding (Server-Side Apply). `get`/`patch` are name-scoped to the operator-managed objects. **No `list`** (prevents discovery). |
     | `Role / RoleBinding` | `create`, `get`, `patch`, `delete` | Create and reconcile the tenant template RBAC objects (Server-Side Apply). Delete/patch are name-scoped; CREATE is guarded by admission policy. No `list`/`watch` (prevents discovery). |
     | `Role` | `bind`, `escalate` | Required by Kubernetes RBAC to create RoleBindings to specific, operator-defined Roles without holding tenant permissions directly. Guarded by admission policy. |
 
@@ -97,14 +97,17 @@ flowchart TB
     | `ConfigMap` | `*` | Manage configuration and TLS metadata. |
     | `Job` | `*` | Run snapshots and upgrades. |
     | `Gateway` ... | `*` | (Optional) Manage Gateway API resources if enabled. |
+    | `ServiceAccount` | *(restricted)* | Create the main OpenBao ServiceAccount plus backup, restore, and upgrade executor ServiceAccounts. Admission policy restricts writes to operator-managed ServiceAccount shapes and names. |
     | `Role / RoleBinding` | *(restricted)* | Create minimal per-cluster pod discovery RBAC for OpenBao service accounts. Admission policy restricts RBAC writes to a narrow, allowlisted pattern (prevents RBAC self-escalation). |
+    
+    The Controller tenant Role does not manage `ResourceQuota` or `LimitRange`. Those namespace guardrails remain provisioner-owned Day 0 resources.
 
 ## Security Guarantees
 
 1. **No Secret Enumeration:** Neither ServiceAccount has `list` permissions on Secrets cluster-wide.
 2. **No Topology Discovery:** Neither ServiceAccount has `list` permissions on Namespaces (Provisioner knows only what you tell it via CRs).
 3. **Privilege Separation:** The account that *writes* the permissions (Provisioner) cannot *use* them, and the account that *uses* them (Controller) cannot *change* them. Admission policies provide defense-in-depth by constraining both RBAC writes and Namespace mutations.
-4. **Name-Scoped Secrets:** Tenant Secret access is restricted to explicit Secret name allowlists and enforced by admission policy (no Secrets wildcards or enumeration).
+4. **Blind Create, Name-Scoped Mutate:** Tenant Secret writer roles use Kubernetes' blind-create pattern for `create` plus name-scoped `get`/`patch`/`update`/`delete` for fixed Secret names. Admission policy constrains operator-managed Secret writes so this does not expand into arbitrary tenant Secret mutation.
 
 ## See Also
 

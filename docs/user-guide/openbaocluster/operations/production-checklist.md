@@ -9,7 +9,7 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
 
     - [ ] **Hardened Profile**: Set `spec.profile: Hardened` to enforce secure defaults.
         - [Learn more](../configuration/security-profiles.md)
-    - [ ] **External Unseal**: Use Transit or Cloud KMS. Do **NOT** use auto-unseal with Kubernetes Secrets in production.
+    - [ ] **External Root of Trust**: Use a non-static external seal such as `transit`, cloud KMS, `ocikms`, `kmip`, or `pkcs11`. Do **NOT** use static unseal keys in Kubernetes Secrets for production.
         - [Learn more](../configuration/self-init.md)
     - [ ] **Etcd Encryption**: Ensure your Kubernetes cluster enables encryption at rest for Secrets (where unseal keys might be stored).
     - [ ] **TLS Mode**: Use `ACME` (Let's Encrypt) or `External` (Custom CA). Avoid `OperatorManaged` for public-facing endpoints.
@@ -22,7 +22,18 @@ Before deploying OpenBao Operator in production, complete this checklist to ensu
 !!! warning "Admission Control"
     Without these policies, tenant isolation cannot be guaranteed.
 
-    - [ ] **ValidatingAdmissionPolicies**: Verify that `openbao-validate-openbaocluster` and `openbao-restrict-provisioner-rbac` are installed and Enforced.
+    - [ ] **ValidatingAdmissionPolicies**: Verify that the full required dependency set is installed and enforced, including:
+        - `openbao-validate-openbaocluster`
+        - `openbao-validate-openbao-tenant`
+        - `openbao-validate-openbaorestore`
+        - `openbao-lock-controller-statefulset-mutations`
+        - `openbao-lock-managed-resource-mutations`
+        - `openbao-enforce-managed-image-digests`
+        - `openbao-restrict-provisioner-rbac`
+        - `openbao-restrict-provisioner-namespace-mutations`
+        - `openbao-restrict-provisioner-tenant-governance`
+        - `openbao-restrict-controller-rbac`
+        - `openbao-restrict-controller-secret-writes`
         - [Learn more](../../../security/infrastructure/admission-policies.md)
 
 ## Reliability & Scale
@@ -68,4 +79,9 @@ kubectl describe openbaocluster <name> -n <namespace>
 
 - [ ] Condition `ProductionReady` is **True**.
 - [ ] Condition `Available` is **True**.
+- [ ] Relevant integration conditions are healthy for your topology:
+    - `CloudUnsealIdentityReady`
+    - `GatewayIntegrationReady`
+    - `APIServerNetworkReady`
+    - `BackupConfigurationReady`
 - [ ] `Status.Phase` is **Running**.

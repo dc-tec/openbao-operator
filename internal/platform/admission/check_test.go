@@ -45,9 +45,24 @@ func TestDefaultDependencies(t *testing.T) {
 			BindingName: dependencyBindingRestrictProvisionerNamespace,
 		},
 		{
+			Name:        dependencyOpenBaoRestrictProvisionerTenantGuardrail,
+			PolicyName:  dependencyOpenBaoRestrictProvisionerTenantGuardrail,
+			BindingName: dependencyBindingRestrictProvisionerTenantGuardrail,
+		},
+		{
 			Name:        dependencyOpenBaoRestrictControllerRBAC,
 			PolicyName:  dependencyOpenBaoRestrictControllerRBAC,
 			BindingName: dependencyBindingRestrictControllerRBAC,
+		},
+		{
+			Name:        dependencyOpenBaoRestrictControllerServiceAccounts,
+			PolicyName:  dependencyOpenBaoRestrictControllerServiceAccounts,
+			BindingName: dependencyBindingRestrictControllerServiceAccounts,
+		},
+		{
+			Name:        dependencyOpenBaoRestrictControllerSecretWrites,
+			PolicyName:  dependencyOpenBaoRestrictControllerSecretWrites,
+			BindingName: dependencyBindingRestrictControllerSecretWrites,
 		},
 		{
 			Name:        dependencyOpenBaoLockManagedResourceMutations,

@@ -38,7 +38,8 @@ func TestInfraNetwork_HeadlessService_IsIdempotent(t *testing.T) {
 	}
 	createTLSSecret(t, namespace, cluster.Name)
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
@@ -78,7 +79,8 @@ func TestInfraNetwork_ExternalService_CreatesAndDeletes(t *testing.T) {
 	}
 	createTLSSecret(t, namespace, cluster.Name)
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -128,7 +130,8 @@ func TestInfraNetwork_Ingress_CreatesAndDeletes(t *testing.T) {
 	}
 	createTLSSecret(t, namespace, cluster.Name)
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -171,7 +174,8 @@ func TestInfraNetwork_HTTPRoute_CreatesAndDeletes(t *testing.T) {
 	}
 	createTLSSecret(t, namespace, cluster.Name)
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -224,7 +228,8 @@ func TestInfraNetwork_GatewayCAConfigMap_CreatesUpdatesAndDeletes(t *testing.T) 
 	ca1 := []byte("ca-1")
 	createCASecret(t, namespace, cluster.Name, ca1)
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -334,7 +339,8 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 		}
 	})
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -419,7 +425,8 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 	createTLSSecret(t, namespace, cluster.Name)
 	createCASecret(t, namespace, cluster.Name, []byte("ca-1"))
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -498,7 +505,8 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	createTLSSecret(t, namespace, cluster.Name)
 	createCASecret(t, namespace, cluster.Name, []byte("ca-1"))
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)

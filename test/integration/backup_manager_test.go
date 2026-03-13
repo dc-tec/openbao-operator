@@ -65,7 +65,8 @@ func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 		t.Fatalf("get cluster after trigger: %v", err)
 	}
 
-	mgr := backup.NewManager(k8sClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := backup.NewManager(controllerClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	result, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -185,7 +186,8 @@ func TestBackupManager_RestoreInProgress_ReleasesStaleBackupLock(t *testing.T) {
 		t.Fatalf("get cluster: %v", err)
 	}
 
-	mgr := backup.NewManager(k8sClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := backup.NewManager(controllerClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	result, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -262,7 +264,8 @@ func TestBackupManager_ManualTrigger_BlockedByOperationLock(t *testing.T) {
 		t.Fatalf("get cluster after trigger: %v", err)
 	}
 
-	mgr := backup.NewManager(k8sClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := backup.NewManager(controllerClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	result, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -320,7 +323,8 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 		t.Fatalf("get cluster: %v", err)
 	}
 
-	mgr := backup.NewManager(k8sClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := backup.NewManager(controllerClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	firstResult, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("first reconcile: %v", err)

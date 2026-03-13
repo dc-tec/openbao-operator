@@ -104,8 +104,8 @@ spec:
               rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'apps' &&
               rule.resources != null &&
-              rule.resources.size() > 0 &&
-              rule.resources.all(r, r in ['statefulsets', 'deployments']) &&
+              rule.resources.size() == 1 &&
+              rule.resources[0] == 'statefulsets' &&
               rule.verbs != null &&
               rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
             ) ||
@@ -116,7 +116,7 @@ spec:
               (
                 (
                   rule.resources.size() > 0 &&
-                  rule.resources.all(r, r in ['services', 'configmaps', 'serviceaccounts', 'resourcequotas', 'limitranges', 'persistentvolumeclaims']) &&
+                  rule.resources.all(r, r in ['services', 'configmaps', 'serviceaccounts', 'persistentvolumeclaims']) &&
                   rule.verbs != null &&
                   rule.verbs.all(v, v in ['create', 'delete', 'get', 'list', 'patch', 'update', 'watch'])
                 ) ||

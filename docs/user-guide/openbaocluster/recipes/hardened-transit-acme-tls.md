@@ -42,6 +42,7 @@ Replace these values before applying the manifests:
 | `<external-host>` | `bao-acme.example.com` | External DNS name for clients and ACME validation |
 | `<ingress-namespace>` | `default` | Namespace of the ingress controller that forwards traffic to OpenBao |
 | `<transit-namespace>` | `openbao-infra` | Namespace hosting the Transit and ACME provider |
+| `<operator-namespace>` | `openbao-operator-system` | Rendered operator namespace used for centralized tenant onboarding |
 
 ## Step 1: Create the tenant namespace
 
@@ -59,7 +60,7 @@ apiVersion: openbao.org/v1alpha1
 kind: OpenBaoTenant
 metadata:
   name: <cluster-name>-tenant
-  namespace: openbao-operator-system
+  namespace: <operator-namespace>
 spec:
   targetNamespace: <namespace>
 ---
@@ -73,7 +74,7 @@ metadata:
 Verify that the tenant is provisioned:
 
 ```bash
-kubectl -n openbao-operator-system describe openbaotenant <cluster-name>-tenant
+kubectl -n <operator-namespace> describe openbaotenant <cluster-name>-tenant
 ```
 
 The steady-state expectation is `Provisioned=True` on the `OpenBaoTenant`.

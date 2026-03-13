@@ -79,7 +79,8 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 		t.Fatalf("create pod: %v", err)
 	}
 
-	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	infraMgr := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	manager := bluegreen.NewManager(
 		k8sClient,
 		k8sScheme,
@@ -258,7 +259,8 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 		t.Fatalf("expected green pod to be Ready in test setup")
 	}
 
-	infraMgr := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	infraMgr := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, infraMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaotest.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {

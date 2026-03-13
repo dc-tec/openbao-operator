@@ -120,7 +120,7 @@ kubectl -n security exec -ti prod-cluster-0 -- \
 1. **Scale Down**: Stop the operator to prevent it from interfering.
 
     ```sh
-    kubectl -n openbao-operator-system scale deploy openbao-operator-controller-manager --replicas=0
+    kubectl -n <operator-namespace> scale deploy <controller-deployment> --replicas=0
     ```
 
 2. **Identify Survivor**: Choose the pod with the most up-to-date data (usually the one with the largest `raft/raft.db` file, or the last known leader).
@@ -156,8 +156,10 @@ kubectl -n security exec -ti prod-cluster-0 -- \
 7. **Resume Operator**:
 
     ```sh
-    kubectl -n openbao-operator-system scale deploy openbao-operator-controller-manager --replicas=1
+    kubectl -n <operator-namespace> scale deploy <controller-deployment> --replicas=1
     ```
+
+    For custom raw-manifest installs, use the rendered operator namespace and controller deployment name from your install manifests.
 
 ---
 

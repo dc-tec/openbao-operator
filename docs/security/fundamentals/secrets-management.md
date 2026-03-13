@@ -41,7 +41,7 @@ The Operator manages the lifecycle of several critical secrets, from the Root To
 
     !!! note "Main Pod Identity Contract"
         When `spec.unseal.credentialsSecretRef` is omitted for a cloud KMS backend, the identity contract applies to the main OpenBao Pods, not to backup or restore Jobs.
-        Check the `CloudUnsealIdentityReady` condition to see which auth path the operator believes the Pods will use.
+        Check the `CloudUnsealIdentityReady` condition to see which auth path the operator believes the Pods will use. `AmbientIdentityAssumed` means the operator classified the configuration as an ambient/default-chain path; it does not prove that the cloud-side identity binding is valid.
 
     !!! note "Separate Job Identity Contract"
         Backup and restore workloads use separate generated ServiceAccounts and do not inherit the main OpenBao Pod identity automatically.

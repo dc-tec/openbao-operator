@@ -37,6 +37,7 @@ Replace these values before applying the manifests:
 | `<gateway-name>` | `traefik-gateway` | Existing passthrough-capable Gateway for optional external access |
 | `<gateway-namespace>` | `default` | Namespace of the Gateway |
 | `<external-host>` | `bao-demo.example.com` | External hostname for optional Gateway exposure |
+| `<operator-namespace>` | `openbao-operator-system` | Rendered operator namespace used for centralized tenant onboarding |
 
 ## Step 1: Create the tenant namespace
 
@@ -54,7 +55,7 @@ apiVersion: openbao.org/v1alpha1
 kind: OpenBaoTenant
 metadata:
   name: <cluster-name>-tenant
-  namespace: openbao-operator-system
+  namespace: <operator-namespace>
 spec:
   targetNamespace: <namespace>
 ---
@@ -68,7 +69,7 @@ metadata:
 Verify that the tenant is provisioned:
 
 ```bash
-kubectl -n openbao-operator-system describe openbaotenant <cluster-name>-tenant
+kubectl -n <operator-namespace> describe openbaotenant <cluster-name>-tenant
 ```
 
 ## Step 2: Apply the OpenBaoCluster

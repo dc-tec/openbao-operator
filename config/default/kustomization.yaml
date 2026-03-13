@@ -19,6 +19,8 @@ resources:
   - ../rbac
   - ../manager
   - ../policy
+  - maintenance_break_glass_settings.yaml
+  - openbao_jwt_settings.yaml
   # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
   #- ../prometheus
   # [VICTORIAMETRICS] To enable VictoriaMetrics VMServiceScrape resources, uncomment:
@@ -158,6 +160,30 @@ patchesJson6902:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-controller-serviceaccounts
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-restrict-controller-serviceaccounts-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-controller-secret-writes
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-restrict-controller-secret-writes-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
       name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
     path: policy_strip_namespace_patch.yaml
   - target:
@@ -166,10 +192,36 @@ patchesJson6902:
       kind: ValidatingAdmissionPolicyBinding
       name: openbao-operator-openbao-restrict-provisioner-namespace-mutations-binding
     path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-provisioner-tenant-governance
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-restrict-provisioner-tenant-governance-binding
+    path: policy_strip_namespace_patch.yaml
 
     # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
     # The following replacements add the cert-manager CA injection annotations.
 replacements:
+  - source:
+      version: v1
+      kind: ConfigMap
+      name: openbao-operator-openbao-jwt-settings
+      fieldPath: data.OPENBAO_JWT_AUDIENCE
+    targets:
+      - select:
+          group: apps
+          version: v1
+          kind: Deployment
+          name: openbao-operator-controller
+        fieldPaths:
+          - spec.template.spec.containers.[name=manager].env.[name=OPENBAO_JWT_AUDIENCE].value
+          - spec.template.spec.volumes.[name=openbao-token].projected.sources.0.serviceAccountToken.audience
   - source:
       version: v1
       kind: ServiceAccount
@@ -215,6 +267,26 @@ replacements:
           version: v1
           kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-controller-rbac
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-serviceaccounts
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-secret-writes
         fieldPaths:
           - spec.variables.[name=controller_serviceaccount_name].expression
         options:
@@ -270,6 +342,26 @@ replacements:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-serviceaccounts
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-secret-writes
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
         fieldPaths:
           - spec.variables.[name=operator_namespace].expression
@@ -281,6 +373,16 @@ replacements:
           version: v1
           kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-provisioner-rbac
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-tenant-governance
         fieldPaths:
           - spec.variables.[name=operator_namespace].expression
         options:
@@ -322,6 +424,29 @@ replacements:
         options:
           delimiter: "'"
           index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-tenant-governance
+        fieldPaths:
+          - spec.variables.[name=provisioner_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+  - source:
+      version: v1
+      kind: ConfigMap
+      name: maintenance-break-glass-settings
+      fieldPath: data.BREAK_GLASS_GROUPS_JSON
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-managed-resource-mutations
+        fieldPaths:
+          - spec.variables.[name=break_glass_admin_groups].expression
   - source:
       group: admissionregistration.k8s.io
       version: v1
@@ -382,6 +507,34 @@ replacements:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-controller-serviceaccounts
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-openbao-restrict-controller-serviceaccounts-binding
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-controller-secret-writes
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-openbao-restrict-controller-secret-writes-binding
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
       name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
       fieldPath: metadata.name
     targets:
@@ -404,6 +557,20 @@ replacements:
           version: v1
           kind: ValidatingAdmissionPolicyBinding
           name: openbao-operator-openbao-restrict-provisioner-rbac-binding
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-provisioner-tenant-governance
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-openbao-restrict-provisioner-tenant-governance-binding
         fieldPaths:
           - spec.policyName
   - source:

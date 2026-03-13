@@ -31,8 +31,8 @@ import (
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
@@ -2457,7 +2457,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					Upgrade: &openbaov1alpha1.UpgradeConfig{
 						Strategy:    openbaov1alpha1.UpdateStrategyBlueGreen,
 						Image:       upgradeExecutorImage,
-						JWTAuthRole: auth.RoleNameUpgrade,
+						JWTAuthRole: portauth.RoleNameUpgrade,
 						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 							AutoPromote:    autoPromote,
 							MaxJobFailures: &maxFailures,
@@ -2607,7 +2607,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: rollbackFailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				original := updated.DeepCopy()
-				updated.Spec.Upgrade.JWTAuthRole = auth.RoleNameUpgrade
+				updated.Spec.Upgrade.JWTAuthRole = portauth.RoleNameUpgrade
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 

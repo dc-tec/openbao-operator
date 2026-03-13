@@ -43,6 +43,13 @@ Follow the guidance in `status.breakGlass.message` and `status.breakGlass.steps`
 
 Use these checks first:
 
+- Check operator-visible readiness before manual repair:
+
+  ```sh
+  kubectl -n security get openbaocluster prod-cluster \
+    -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+  ```
+
 - Inspect the last failed rollback Job:
 
   ```sh
@@ -72,6 +79,7 @@ spec:
 ```
 
 See the [Cluster Maintenance Guide](../operations/maintenance.md) for the broader maintenance workflow.
+By default, the managed-resource mutation lock allows this maintenance-mode bypass only for callers in the Kubernetes group `system:masters` unless you configured different break-glass groups at install time.
 
 If you need a deeper recovery workflow, continue with [Failed Rollback Recovery](failed-rollback.md).
 

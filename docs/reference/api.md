@@ -1245,7 +1245,7 @@ description: Generated API reference for OpenBao Operator CRDs from api/v1alpha1
     | Field | Description | Default | Validation |
     | --- | --- | --- | --- |
     | `enabled` _boolean_ | Enabled triggers the bootstrap logic. |  |  |
-    | `audience` _string_ | Audience defaults to "openbao-internal" if unset.<br />This value is written to the JWT auth role AND used in the TokenRequest. |  | Optional: \{\} <br /> |
+    | `audience` _string_ | Audience, if set, must match the operator installation audience used for<br />projected OpenBao auth tokens.<br />This field does not create a per-cluster TokenRequest audience override. |  | Optional: \{\} <br /> |
     | `issuer` _string_ | Issuer overrides the auto-discovered K8s issuer URL.<br />Critical for scenarios where OpenBao sees a different K8s URL than the Operator. |  | Optional: \{\} <br /> |
 
 

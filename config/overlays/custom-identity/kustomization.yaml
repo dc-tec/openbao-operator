@@ -62,6 +62,26 @@ replacements:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-serviceaccounts
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-secret-writes
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-provisioner-rbac
         fieldPaths:
           - spec.variables.[name=controller_serviceaccount_name].expression
@@ -108,6 +128,26 @@ replacements:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-serviceaccounts
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-secret-writes
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
         fieldPaths:
           - spec.variables.[name=operator_namespace].expression
@@ -119,6 +159,16 @@ replacements:
           version: v1
           kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-provisioner-rbac
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-tenant-governance
         fieldPaths:
           - spec.variables.[name=operator_namespace].expression
         options:
@@ -160,3 +210,26 @@ replacements:
         options:
           delimiter: "'"
           index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-tenant-governance
+        fieldPaths:
+          - spec.variables.[name=provisioner_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+  - source:
+      version: v1
+      kind: ConfigMap
+      name: maintenance-break-glass-settings
+      fieldPath: data.BREAK_GLASS_GROUPS_JSON
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-managed-resource-mutations
+        fieldPaths:
+          - spec.variables.[name=break_glass_admin_groups].expression

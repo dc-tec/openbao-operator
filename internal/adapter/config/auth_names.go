@@ -10,6 +10,4 @@ const (
 	authPolicyNameBackup   = "openbao-operator-backup"
 	authPolicyNameUpgrade  = "openbao-operator-upgrade"
 	authPolicyNameRestore  = "openbao-operator-restore"
-
-	authTokenAudienceOpenBaoInternal = "openbao-internal"
 )

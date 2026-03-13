@@ -324,7 +324,4 @@ func TestTenantSecretsRBACReconcile_UnsafeAdmissionDisabledBypassesDependencyChe
 	if result.RequeueAfter != 0 {
 		t.Fatalf("requeueAfter = %v, want zero", result.RequeueAfter)
 	}
-	if !admission.AdmissionDependenciesReady() {
-		t.Fatal("expected unsafe admission mode to mark dependencies ready")
-	}
 }

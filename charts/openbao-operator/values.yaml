@@ -287,6 +287,10 @@ admissionPolicies:
       - aws-
       - aks-
       - azure-
+  # -- Kubernetes groups allowed to bypass managed-resource mutation locks when
+  # -- a cluster explicitly enables maintenance mode.
+  maintenanceBreakGlassGroups:
+    - system:masters
 
 # -- Projected ServiceAccount token configuration for operator pods
 # The controller/provisioner disable default token automount and instead mount
@@ -300,6 +304,9 @@ serviceAccountToken:
   # API server (`--api-audiences`). An incorrect value typically results in 401s for
   # in-cluster API calls.
   kubernetesAudience: ""
+  # -- Audience to use for projected OpenBao auth tokens mounted into the controller
+  # -- and executor Jobs. This must match the OpenBao JWT role `bound_audiences`.
+  openBaoAudience: "openbao-internal"
 
 # -- NetworkPolicy configuration for operator pods
 networkPolicy:

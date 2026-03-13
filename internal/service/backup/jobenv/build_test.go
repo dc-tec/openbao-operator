@@ -8,8 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -34,27 +34,27 @@ func TestEffectiveBackupJWTRole(t *testing.T) {
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Backup:   &openbaov1alpha1.BackupSchedule{JWTAuthRole: "custom-role"},
-					SelfInit: &openbaov1alpha1.SelfInitConfig{OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true, OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}},
 				},
 			},
 			want: "custom-role",
 		},
 		{
-			name: "oidc enabled defaults role",
+			name: "self init oidc enabled defaults role",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Backup:   &openbaov1alpha1.BackupSchedule{},
-					SelfInit: &openbaov1alpha1.SelfInitConfig{OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true, OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}},
 				},
 			},
-			want: auth.RoleNameBackup,
+			want: portauth.RoleNameBackup,
 		},
 		{
-			name: "oidc disabled leaves empty role",
+			name: "oidc without self init leaves empty role",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Backup:   &openbaov1alpha1.BackupSchedule{},
-					SelfInit: &openbaov1alpha1.SelfInitConfig{OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: false}},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: false, OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}},
 				},
 			},
 			want: "",
@@ -152,7 +152,7 @@ func TestBuildEnvVars_OIDCDefaultsJWTAuthRole(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster-b", Namespace: "tenant-ns"},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 1,
-			SelfInit: &openbaov1alpha1.SelfInitConfig{OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}},
+			SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true, OIDC: &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true}},
 			Backup: &openbaov1alpha1.BackupSchedule{
 				Target:         openbaov1alpha1.BackupTarget{Bucket: "backups"},
 				TokenSecretRef: &corev1.LocalObjectReference{Name: "backup-token"},
@@ -163,8 +163,8 @@ func TestBuildEnvVars_OIDCDefaultsJWTAuthRole(t *testing.T) {
 	env := BuildEnvVars(cluster, Options{}, "/tmp/token")
 	got := envMap(env)
 
-	if got[constants.EnvBackupJWTAuthRole] != auth.RoleNameBackup {
-		t.Fatalf("EnvBackupJWTAuthRole=%q, want %q", got[constants.EnvBackupJWTAuthRole], auth.RoleNameBackup)
+	if got[constants.EnvBackupJWTAuthRole] != portauth.RoleNameBackup {
+		t.Fatalf("EnvBackupJWTAuthRole=%q, want %q", got[constants.EnvBackupJWTAuthRole], portauth.RoleNameBackup)
 	}
 	if got[constants.EnvBackupAuthMethod] != "jwt" {
 		t.Fatalf("EnvBackupAuthMethod=%q, want jwt", got[constants.EnvBackupAuthMethod])

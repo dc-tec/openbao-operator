@@ -1,0 +1,133 @@
+{{- if .Values.admissionPolicies.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-tenant-governance
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["resourcequotas", "limitranges"]
+  variables:
+    - name: operator_namespace
+      expression: >-
+        '{{ .Release.Namespace }}'
+    - name: provisioner_serviceaccount_name
+      expression: >-
+        'openbao-operator-provisioner'
+    - name: provisioner_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.provisioner_serviceaccount_name
+    - name: is_provisioner
+      expression: >-
+        request.userInfo.username == variables.provisioner_principal
+    - name: is_kube_controller_manager
+      expression: >-
+        request.userInfo.username == "system:kube-controller-manager" ||
+        request.userInfo.username == "system:serviceaccount:kube-system:kube-controller-manager"
+    - name: is_system_controller
+      expression: >-
+        request.userInfo.username.startsWith("system:controller:")
+    - name: is_garbage_collector_sa
+      expression: >-
+        request.userInfo.username in [
+          "system:serviceaccount:kube-system:generic-garbage-collector",
+          "system:serviceaccount:kube-system:resourcequota-controller"
+        ]
+    - name: is_kube_system_controller
+      expression: >-
+        request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system") ||
+        request.userInfo.username.startsWith("system:serviceaccount:kube-system:")
+    - name: is_system_namespace
+      expression: >-
+        request.namespace == variables.operator_namespace ||
+        request.namespace.startsWith('kube-') ||
+        request.namespace == 'openshift' ||
+        request.namespace.startsWith('openshift-') ||
+        request.namespace.startsWith('gke-') ||
+        request.namespace.startsWith('eks-') ||
+        request.namespace.startsWith('aws-') ||
+        request.namespace.startsWith('aks-') ||
+        request.namespace.startsWith('azure-')
+    - name: resource_name
+      expression: >-
+        request.operation == 'DELETE' ?
+          request.name :
+          (
+            object != null &&
+            has(object.metadata) &&
+            object.metadata.name != ''
+          ) ? object.metadata.name : request.name
+    - name: is_guardrail_request
+      expression: >-
+        (request.resource.resource == 'resourcequotas' &&
+          variables.resource_name == 'openbao-operator-tenant-quota') ||
+        (request.resource.resource == 'limitranges' &&
+          variables.resource_name == 'openbao-operator-tenant-limits')
+    - name: has_required_labels
+      expression: >-
+        request.operation == 'DELETE' ||
+        (
+          object != null &&
+          has(object.metadata) &&
+          has(object.metadata.labels) &&
+          ("app.kubernetes.io/name" in object.metadata.labels) &&
+          object.metadata.labels["app.kubernetes.io/name"] == "openbao-operator" &&
+          ("app.kubernetes.io/component" in object.metadata.labels) &&
+          object.metadata.labels["app.kubernetes.io/component"] == "provisioner" &&
+          ("app.kubernetes.io/managed-by" in object.metadata.labels) &&
+          object.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator"
+        )
+  validations:
+    # Rule 0: The Provisioner must not manage tenant guardrails in system namespaces.
+    - expression: >-
+        !variables.is_provisioner || !variables.is_system_namespace
+      message: "The Provisioner may not manage tenant ResourceQuota or LimitRange guardrails in system namespaces."
+
+    # Rule 1: The Provisioner may only manage the fixed tenant governance objects.
+    - expression: >-
+        !variables.is_provisioner || variables.is_guardrail_request
+      message: "The Provisioner can only manage the operator tenant ResourceQuota and LimitRange guardrail objects."
+
+    # Rule 2: Provisioner-managed tenant guardrails must carry the expected operator labels.
+    - expression: >-
+        !variables.is_provisioner || variables.has_required_labels
+      message: "The Provisioner must label tenant ResourceQuota and LimitRange guardrails as operator-managed."
+
+    # Rule 3: The fixed tenant guardrail objects are controller-owned and may only
+    # be changed by the Provisioner or Kubernetes system controllers during cleanup.
+    - expression: >-
+        !variables.is_guardrail_request ||
+        variables.is_provisioner ||
+        (
+          request.operation == 'DELETE' &&
+          (
+            variables.is_kube_controller_manager ||
+            variables.is_system_controller ||
+            variables.is_garbage_collector_sa ||
+            variables.is_kube_system_controller
+          )
+        )
+      message: "Direct modification of the operator-managed tenant ResourceQuota and LimitRange guardrails is prohibited; update the parent OpenBaoTenant instead."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-tenant-governance-binding
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "openbao-operator.fullname" . }}-openbao-restrict-provisioner-tenant-governance
+  validationActions: [Deny]
+  matchResources:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["resourcequotas", "limitranges"]
+{{- end }}

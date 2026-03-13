@@ -19,13 +19,6 @@ rules:
       - patch
 
   - apiGroups:
-      - ""
-    resources:
-      - serviceaccounts
-    verbs:
-      - get
-
-  - apiGroups:
       - openbao.org
     resources:
       - openbaotenants
@@ -59,10 +52,31 @@ rules:
       - ""
     resources:
       - resourcequotas
-      - limitranges
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+    resourceNames:
+      - openbao-operator-tenant-quota
     verbs:
       - get
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - limitranges
+    verbs:
       - create
+  - apiGroups:
+      - ""
+    resources:
+      - limitranges
+    resourceNames:
+      - openbao-operator-tenant-limits
+    verbs:
+      - get
       - patch
 
   - apiGroups:

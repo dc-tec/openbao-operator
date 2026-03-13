@@ -23,18 +23,7 @@ rules:
       - update
       - patch
 
-  # 2. ServiceAccount Access (get only - no list/watch)
-  # SECURITY: The Provisioner only needs to get specific ServiceAccounts in the operator
-  # namespace during initialization. Cache is disabled for ServiceAccounts to prevent
-  # requiring cluster-wide list/watch permissions.
-  - apiGroups:
-      - ""
-    resources:
-      - serviceaccounts
-    verbs:
-      - get
-
-  # 4. OpenBaoTenant CRD Management
+  # 2. OpenBaoTenant CRD Management
   # Required to watch and manage OpenBaoTenant resources which declare target namespaces.
   - apiGroups:
       - openbao.org
@@ -49,7 +38,7 @@ rules:
       - update
       - patch
 
-  # 4b. OpenBaoCluster read-only access
+  # 2b. OpenBaoCluster read-only access
   # Required for the tenant secrets RBAC sync controller to build per-namespace Secret allowlists.
   - apiGroups:
       - openbao.org
@@ -60,7 +49,7 @@ rules:
       - list
       - watch
 
-  # 4c. Admission policy dependency checks (get only)
+  # 2c. Admission policy dependency checks (get only)
   # Required for fail-closed startup validation that ValidatingAdmissionPolicies are present and enforced.
   - apiGroups:
       - admissionregistration.k8s.io
@@ -70,19 +59,40 @@ rules:
     verbs:
       - get
 
-  # 4d. Tenant quota/limits management (namespaced)
+  # 2d. Tenant quota/limits management (namespaced)
   # NOTE: Server-Side Apply may create objects when they don't exist yet, which requires 'create' permission.
   - apiGroups:
       - ""
     resources:
       - resourcequotas
-      - limitranges
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - resourcequotas
+    resourceNames:
+      - openbao-operator-tenant-quota
     verbs:
       - get
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - limitranges
+    verbs:
       - create
+  - apiGroups:
+      - ""
+    resources:
+      - limitranges
+    resourceNames:
+      - openbao-operator-tenant-limits
+    verbs:
+      - get
       - patch
 
-  # 5. Tenant onboarding resources (Server-Side Apply)
+  # 3. Tenant onboarding resources (Server-Side Apply)
   # SECURITY: The Provisioner uses Server-Side Apply (PATCH) against fixed resource names.
   # NOTE: Server-Side Apply may create objects when they don't exist yet, which requires 'create' permission.
   # Admission policy enforcement restricts which RBAC objects can be created and what they may contain.

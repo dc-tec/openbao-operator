@@ -73,6 +73,10 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, nil
 	}
 
+	if result, blocked := r.parent.pauseForAdmissionDependencyLoss(ctx, logger, controllerNameWorkload); blocked {
+		return result, nil
+	}
+
 	result, err = r.reconcileCluster(ctx, logger, cluster, recordError)
 	return result, err
 }
@@ -176,6 +180,10 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 
 	if !cluster.DeletionTimestamp.IsZero() || cluster.Spec.Paused || cluster.Spec.Profile == "" {
 		return ctrl.Result{}, nil
+	}
+
+	if result, blocked := r.parent.pauseForAdmissionDependencyLoss(ctx, logger, controllerNameAdminOps); blocked {
+		return result, nil
 	}
 
 	original := cluster.DeepCopy()

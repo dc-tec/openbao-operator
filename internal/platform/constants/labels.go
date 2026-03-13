@@ -7,12 +7,13 @@ const (
 	LabelAppManagedBy = "app.kubernetes.io/managed-by"
 	LabelAppComponent = "app.kubernetes.io/component"
 
-	LabelOpenBaoCluster    = "openbao.org/cluster"
-	LabelOpenBaoComponent  = "openbao.org/component"
-	LabelOpenBaoBackupType = "openbao.org/backup-type"
-	LabelOpenBaoTenant     = "openbao.org/tenant"
-	LabelOpenBaoRevision   = "openbao.org/revision"
-	LabelOpenBaoProfile    = "openbao.org/profile"
+	LabelOpenBaoCluster            = "openbao.org/cluster"
+	LabelOpenBaoComponent          = "openbao.org/component"
+	LabelOpenBaoBackupType         = "openbao.org/backup-type"
+	LabelOpenBaoTenant             = "openbao.org/tenant"
+	LabelOpenBaoRevision           = "openbao.org/revision"
+	LabelOpenBaoProfile            = "openbao.org/profile"
+	LabelOpenBaoServiceAccountRole = "openbao.org/service-account-role"
 	// LabelOpenBaoDigestEnforcement indicates whether digest-only image refs are required.
 	LabelOpenBaoDigestEnforcement = "openbao.org/digest-enforcement"
 )
@@ -29,6 +30,14 @@ const (
 	// Component label values for operator pods.
 	LabelValueAppComponentController  = "controller"
 	LabelValueAppComponentProvisioner = "provisioner"
+)
+
+// ServiceAccount role label values for operator-managed ServiceAccounts.
+const (
+	ServiceAccountRoleMain    = "main"
+	ServiceAccountRoleBackup  = "backup"
+	ServiceAccountRoleRestore = "restore"
+	ServiceAccountRoleUpgrade = "upgrade"
 )
 
 // Backup type values for the openbao.org/backup-type label.

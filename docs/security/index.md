@@ -4,11 +4,11 @@ description: Security overview for OpenBao Operator covering zero-trust model, R
 
 # Security: OpenBao Operator
 
-This section provides a comprehensive security overview for the OpenBao Operator, covering the security model, RBAC architecture, and threat analysis.
+This section provides a security overview for OpenBao Operator, covering the trust model, RBAC and admission boundaries, workload hardening, and tenant isolation.
 
 ## Security Model Overview
 
-The security model relies on a **Supervisor Pattern**, where the operator orchestrates security-critical configuration (TLS, unseal keys, network policies) from the outside, while delegating data plane security to OpenBao itself.
+The security model relies on a **Supervisor Pattern**. The operator manages lifecycle, guardrails, and integration points around OpenBao, while OpenBao remains responsible for data-plane consistency, seal semantics, and runtime cryptography.
 
 ### Secure by Default
 
@@ -19,6 +19,19 @@ The Operator enforces a "Secure by Default" posture:
 - **Network Isolation:** Automatic NetworkPolicies enforce default-deny ingress
 - **Least-Privilege RBAC:** Split-controller design with minimal permissions
 - **Supply Chain Security:** Optional Cosign image verification
+
+## Security Conditions To Watch
+
+These conditions are the fastest operator-visible checks for security posture and integration drift:
+
+- `ProductionReady`
+- `CloudUnsealIdentityReady`
+- `BackupConfigurationReady`
+- `RestoreConfigurationReady`
+- `GatewayIntegrationReady`
+- `APIServerNetworkReady`
+
+Use [Status Conditions and Events](../reference/status-and-events.md) for the full reason list.
 
 ### Tenancy Security Models
 

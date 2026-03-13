@@ -55,7 +55,8 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
 
-	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}
@@ -171,7 +172,8 @@ func TestRestoreManager_GCSProvider(t *testing.T) {
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
 
-	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}
@@ -290,7 +292,8 @@ func TestRestoreManager_AzureProvider(t *testing.T) {
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
 
-	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}
@@ -407,7 +410,8 @@ func TestRestoreManager_ValidatingLockContention_RequeuesWithWaitingMessage(t *t
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
 
-	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	latest := &openbaov1alpha1.OpenBaoRestore{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
 		t.Fatalf("get restore: %v", err)
@@ -484,7 +488,8 @@ func TestRestoreManager_RunningLockTaken_FailsDeterministically(t *testing.T) {
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
 
-	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	latest := &openbaov1alpha1.OpenBaoRestore{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
 		t.Fatalf("get restore: %v", err)
@@ -563,7 +568,8 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
 
-	mgr := restore.NewManager(k8sClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	controllerClient := newControllerClient(t)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 	latest := &openbaov1alpha1.OpenBaoRestore{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
 		t.Fatalf("get restore: %v", err)

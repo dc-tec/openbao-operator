@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclwrite"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 type hclInitialize struct {
@@ -118,6 +119,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	initBlock := buildInitializeBlock("operator-bootstrap")
 	initBody := initBlock.Body()
 	jwtAudiences := jwtAuthAudiences(config)
+	bootstrapEnabled := portauth.OperatorJWTBootstrapEnabled(cluster)
 
 	// 1. Enable JWT Auth
 	{
@@ -165,10 +167,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 
 	// 5. Auto-create backup policy and role if backup is configured (and OIDC enabled)
 	if cluster.Spec.Backup != nil {
-		roleName := cluster.Spec.Backup.JWTAuthRole
-		if roleName == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-			roleName = authRoleNameBackup
-		}
+		roleName := portauth.EffectiveJWTRole(cluster.Spec.Backup.JWTAuthRole, bootstrapEnabled, authRoleNameBackup)
 		// Only create if we have a role name (either explicit or defaulted)
 		if roleName != "" {
 			{
@@ -200,9 +199,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	if cluster.Spec.Upgrade != nil {
 		roleName = cluster.Spec.Upgrade.JWTAuthRole
 	}
-	if roleName == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		roleName = authRoleNameUpgrade
-	}
+	roleName = portauth.EffectiveJWTRole(roleName, bootstrapEnabled, authRoleNameUpgrade)
 	if roleName != "" {
 		{
 			req := buildInitializeRequestBlock(reqCreateUpgradePolicy, opUpdate, fmt.Sprintf("%s%s", pathSysPoliciesACLPrefix, authPolicyNameUpgrade), false)
@@ -232,9 +229,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	if cluster.Spec.Restore != nil {
 		restoreRoleName = strings.TrimSpace(cluster.Spec.Restore.JWTAuthRole)
 	}
-	if restoreRoleName == "" && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		restoreRoleName = authRoleNameRestore
-	}
+	restoreRoleName = portauth.EffectiveJWTRole(restoreRoleName, bootstrapEnabled, authRoleNameRestore)
 	if restoreRoleName != "" {
 		{
 			req := buildInitializeRequestBlock(reqCreateRestorePolicy, opUpdate, fmt.Sprintf("%s%s", pathSysPoliciesACLPrefix, authPolicyNameRestore), false)
@@ -264,7 +259,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 func jwtAuthAudiences(config OperatorBootstrapConfig) []string {
 	audience := strings.TrimSpace(config.JWTAuthAudience)
 	if audience == "" {
-		audience = authTokenAudienceOpenBaoInternal
+		audience = portauth.TokenAudienceOpenBaoInternal
 	}
 	return []string{audience}
 }

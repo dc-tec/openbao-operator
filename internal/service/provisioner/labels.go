@@ -1,19 +1,16 @@
 package provisioner
 
-const (
-	labelAppName      = "app.kubernetes.io/name"
-	labelAppComponent = "app.kubernetes.io/component"
-	labelAppManagedBy = "app.kubernetes.io/managed-by"
+import "github.com/dc-tec/openbao-operator/internal/platform/constants"
 
-	labelValueAppNameOpenBaoOperator      = "openbao-operator"
-	labelValueAppComponentProvisioner     = "provisioner"
-	labelValueAppManagedByOpenBaoOperator = "openbao-operator"
+const (
+	labelValueOpenBaoComponentProvisioner = "provisioner"
 )
 
 func provisionerManagedLabels() map[string]string {
 	return map[string]string{
-		labelAppName:      labelValueAppNameOpenBaoOperator,
-		labelAppComponent: labelValueAppComponentProvisioner,
-		labelAppManagedBy: labelValueAppManagedByOpenBaoOperator,
+		constants.LabelAppName:          constants.LabelValueAppNameOpenBaoOperator,
+		constants.LabelAppComponent:     constants.LabelValueAppComponentProvisioner,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoComponent: labelValueOpenBaoComponentProvisioner,
 	}
 }

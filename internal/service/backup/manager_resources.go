@@ -32,6 +32,12 @@ func backupLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
 	}
 }
 
+func backupServiceAccountLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
+	labels := backupLabels(cluster)
+	labels[constants.LabelOpenBaoServiceAccountRole] = constants.ServiceAccountRoleBackup
+	return labels
+}
+
 // backupServiceAccountName returns the name for the backup ServiceAccount.
 func backupServiceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + constants.SuffixBackupServiceAccount

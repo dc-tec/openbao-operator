@@ -34,7 +34,7 @@ func EnsureRestoreServiceAccount(
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        saName,
 			Namespace:   cluster.Namespace,
-			Labels:      restoreLabels(cluster),
+			Labels:      restoreServiceAccountLabels(cluster),
 			Annotations: workloadidentity.ServiceAccountAnnotations(target),
 		},
 	}
@@ -119,4 +119,10 @@ func restoreLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
 		constants.LabelOpenBaoCluster:   cluster.Name,
 		constants.LabelOpenBaoComponent: ComponentRestore,
 	}
+}
+
+func restoreServiceAccountLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
+	labels := restoreLabels(cluster)
+	labels[constants.LabelOpenBaoServiceAccountRole] = constants.ServiceAccountRoleRestore
+	return labels
 }

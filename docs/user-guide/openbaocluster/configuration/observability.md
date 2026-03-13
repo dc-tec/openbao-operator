@@ -6,6 +6,12 @@ The OpenBao Operator exposes comprehensive metrics, structured logs, and health 
 
 The OpenBao Operator exposes Prometheus metrics on port `8443` by default (configurable via Helm values or Kustomize overlays). The endpoint is served over HTTPS and is protected via Kubernetes authentication and authorization (RBAC).
 
+Use these placeholders in the examples below:
+
+- `<operator-namespace>`: namespace where the operator is installed
+- `<controller-metrics-service>`: rendered controller metrics Service name
+- `<provisioner-metrics-service>`: rendered provisioner metrics Service name when multi-tenant mode is enabled
+
 ### Enabling Metrics Scraping
 
 !!! note "RBAC-protected endpoint"
@@ -57,7 +63,7 @@ The OpenBao Operator exposes Prometheus metrics on port `8443` by default (confi
     spec:
       namespaceSelector:
         matchNames:
-          - openbao-operator-system
+          - <operator-namespace>
       selector:
         matchLabels:
           app.kubernetes.io/name: openbao-operator
@@ -128,7 +134,7 @@ The OpenBao Operator exposes Prometheus metrics on port `8443` by default (confi
     spec:
       namespaceSelector:
         matchNames:
-          - openbao-operator-system
+          - <operator-namespace>
       selector:
         matchLabels:
           app.kubernetes.io/name: openbao-operator
@@ -166,7 +172,7 @@ The OpenBao Operator exposes Prometheus metrics on port `8443` by default (confi
 
     ```yaml
     scrape_configs:
-      - job_name: openbao-operator-controller
+      - job_name: <controller-metrics-job>
         scheme: https
         metrics_path: /metrics
         bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
@@ -176,7 +182,7 @@ The OpenBao Operator exposes Prometheus metrics on port `8443` by default (confi
           - targets:
               - <controller-metrics-service>.<operator-namespace>.svc:8443
 
-      - job_name: openbao-operator-provisioner
+      - job_name: <provisioner-metrics-job>
         scheme: https
         metrics_path: /metrics
         bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
@@ -382,7 +388,7 @@ controller:
 === "Loki (LogQL)"
 
     ```logql
-    {namespace="openbao-operator-system"}
+    {namespace="<operator-namespace>"}
     | json
     | cluster_name="prod-cluster"
     | level="error"

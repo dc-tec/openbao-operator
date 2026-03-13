@@ -18,6 +18,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 // usesStaticSeal returns true if the cluster is configured to use the static seal
@@ -160,6 +161,10 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 	// TIGHTENED: No discovery logic here. Use the struct fields.
 	var bootstrapConfig *configbuilder.OperatorBootstrapConfig
 	if shouldBootstrapJWTAuth(cluster) {
+		operatorAudience := auth.OpenBaoJWTAudience()
+		if err := validateBootstrapAudience(cluster, operatorAudience); err != nil {
+			return err
+		}
 		if m.oidcIssuer == "" {
 			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC issuer could not be determined. Ensure the operator ServiceAccount can GET %q and %q on the Kubernetes API server (nonResourceURLs RBAC); optionally set spec.selfInit.oidc.issuer to override the issuer string", "/.well-known/openid-configuration", "/openid/v1/jwks")
 		}
@@ -178,13 +183,10 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 
 		// Allow overrides from Spec
 		issuer := m.oidcIssuer
-		audience := auth.OpenBaoJWTAudience()
 		if cluster.Spec.SelfInit.OIDC.Issuer != "" {
 			issuer = cluster.Spec.SelfInit.OIDC.Issuer
 		}
-		if cluster.Spec.SelfInit.OIDC.Audience != "" {
-			audience = cluster.Spec.SelfInit.OIDC.Audience
-		}
+		audience := portauth.EffectiveBootstrapAudience(cluster, operatorAudience)
 
 		bootstrapConfig = &configbuilder.OperatorBootstrapConfig{
 			OIDCIssuerURL:   issuer,
@@ -247,16 +249,5 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 }
 
 func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	if cluster == nil {
-		return false
-	}
-
-	// Bootstrap is opt-in via spec.selfInit.oidc.enabled
-	// Users must explicitly enable bootstrap to have the operator automatically
-	// configure JWT auth, OIDC, and operator/backup/upgrade policies and roles.
-	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		return true
-	}
-
-	return false
+	return portauth.OperatorJWTBootstrapEnabled(cluster)
 }

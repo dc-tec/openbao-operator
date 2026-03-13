@@ -27,7 +27,7 @@ func EnsureBackupServiceAccount(ctx context.Context, c client.Client, scheme *ru
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        saName,
 			Namespace:   cluster.Namespace,
-			Labels:      backupLabels(cluster),
+			Labels:      backupServiceAccountLabels(cluster),
 			Annotations: workloadidentity.ServiceAccountAnnotations(cluster.Spec.Backup.Target),
 		},
 	}

@@ -27,6 +27,8 @@ Before creating an `OpenBaoCluster`, the target namespace must be provisioned wi
         1.  Your namespace.
         2.  MUST match metadata.namespace.
 
+    Self-service onboarding may not set `spec.quota` or `spec.limitRange`. The operator-owned tenant guardrails use the default values unless a cluster administrator creates the `OpenBaoTenant` from the operator namespace.
+
     2. Apply the resource:
 
         ```sh
@@ -45,22 +47,24 @@ Before creating an `OpenBaoCluster`, the target namespace must be provisioned wi
 
     ### Steps {: #centralized-admin-onboarding }
 
-    1. As a cluster administrator, create an `OpenBaoTenant` resource in the **operator's namespace** (typically `openbao-operator-system`):
+    1. As a cluster administrator, create an `OpenBaoTenant` resource in the **operator's namespace**:
 
         ```yaml
         apiVersion: openbao.org/v1alpha1
         kind: OpenBaoTenant
         metadata:
           name: team-b-authorization
-          namespace: openbao-operator-system # (1)!
+          namespace: <operator-namespace> # (1)!
         spec:
           targetNamespace: team-b-prod      # (2)!
         ```
 
-        1.  Trusted namespace.
+        1.  Rendered operator namespace. Default raw-manifest and Helm installs use `openbao-operator-system`.
         2.  Can be any namespace.
 
     2. Since the request originates from the trusted operator namespace, the controller allows cross-namespace provisioning.
+
+    This is also the supported path for custom tenant guardrails. Cluster administrators may set `spec.quota` and `spec.limitRange` when they need tighter or larger defaults for a specific namespace.
 
 ## 3. Verifying Provisioning
 
@@ -81,7 +85,7 @@ Look for:
 
 The operator uses a **Trust-But-Verify** approach:
 
-1. **Trust**: The Operator's own namespace (`openbao-operator-system`) is trusted. Resources created there can target *any* namespace.
+1. **Trust**: The operator's rendered namespace is trusted. Resources created there can target *any* namespace.
 2. **Verify**: Resources created in user namespaces are verified. They must target their own namespace (`metadata.namespace == spec.targetNamespace`).
 3. **Isolation**: The Provisioner uses a delegated ServiceAccount with minimal permissions. It cannot list all namespaces in the cluster; it only acts on namespaces explicitly discovered via valid `OpenBaoTenant` CRs.
 

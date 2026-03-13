@@ -33,7 +33,7 @@ In single-tenant mode, the Controller directly manages resources in a single nam
 
 ```mermaid
 graph LR
-    subgraph OperatorNS["openbao-operator-system"]
+    subgraph OperatorNS["<operator-namespace>"]
         Controller["Controller"]
     end
     
@@ -68,6 +68,9 @@ graph LR
 === ":material-package: Helm (Recommended)"
 
     Deploy with tenancy mode set to `single`:
+
+    !!! note "Rendered operator namespace"
+        The examples below use the default release namespace `openbao-operator-system`. Replace it if you install the operator into another namespace.
 
     ```bash
     helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
@@ -141,14 +144,14 @@ graph LR
 ## Verify Installation
 
 ```bash
-kubectl get pods -n openbao-operator-system
+kubectl get pods -n <operator-namespace>
 ```
 
 Expected output (single-tenant mode):
 
 ```
 NAME                                              READY   STATUS    RESTARTS   AGE
-openbao-operator-controller-xxxxxxxxxx-xxxxx      1/1     Running   0          1m
+<controller-pod>      1/1     Running   0          1m
 ```
 
 !!! success "Ready"
@@ -207,7 +210,7 @@ openbao-operator-controller-xxxxxxxxxx-xxxxx      1/1     Running   0          1
         kind: OpenBaoTenant
         metadata:
           name: openbao-tenant
-          namespace: openbao-operator-system
+          namespace: <operator-namespace>
         spec:
           targetNamespace: openbao
         ```
@@ -215,7 +218,7 @@ openbao-operator-controller-xxxxxxxxxx-xxxxx      1/1     Running   0          1
     3. **Cleanup manual RoleBindings**
 
         ```bash
-        kubectl delete rolebinding openbao-operator-controller -n openbao
+        kubectl delete rolebinding <rendered-single-tenant-rolebinding> -n openbao
         ```
 
 ## Next Steps

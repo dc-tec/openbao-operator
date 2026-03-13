@@ -45,4 +45,5 @@ func TestEnsureRestoreServiceAccount_WithWorkloadIdentityAnnotations(t *testing.
 	}, &sa)
 	require.NoError(t, err)
 	require.Equal(t, "backup@project.iam.gserviceaccount.com", sa.Annotations["iam.gke.io/gcp-service-account"])
+	require.Equal(t, "restore", sa.Labels["openbao.org/service-account-role"])
 }

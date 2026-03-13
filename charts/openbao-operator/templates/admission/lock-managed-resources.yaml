@@ -25,6 +25,14 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["jobs"]
+      - apiGroups: ["policy"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["poddisruptionbudgets"]
+      - apiGroups: ["rbac.authorization.k8s.io"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["roles", "rolebindings"]
       - apiGroups: ["networking.k8s.io"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
@@ -44,9 +52,15 @@ spec:
     - name: controller_serviceaccount_name
       expression: >-
         '{{ include "openbao-operator.controllerServiceAccountName" . }}'
+    - name: provisioner_serviceaccount_name
+      expression: >-
+        'openbao-operator-provisioner'
     - name: controller_principal
       expression: >-
         'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name
+    - name: provisioner_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.provisioner_serviceaccount_name
     - name: is_openbao_managed_by_operator
       expression: >-
         request.operation == "DELETE" ?
@@ -86,6 +100,9 @@ spec:
     - name: is_operator_controller
       expression: >-
         request.userInfo.username == variables.controller_principal
+    - name: is_operator_provisioner
+      expression: >-
+        request.userInfo.username == variables.provisioner_principal
     - name: is_kube_controller_manager
       expression: >-
         request.userInfo.username == "system:kube-controller-manager" ||
@@ -245,13 +262,18 @@ spec:
               has(oldObject.metadata.annotations) &&
               ("openbao.org/maintenance" in oldObject.metadata.annotations) &&
               oldObject.metadata.annotations["openbao.org/maintenance"] == "true"))
+    - name: break_glass_admin_groups
+      expression: >-
+        {{ toJson .Values.admissionPolicies.maintenanceBreakGlassGroups }}
     - name: is_break_glass_admin
       expression: >-
-        request.userInfo.groups.exists(g, g == "system:masters")
+        variables.break_glass_admin_groups.exists(group,
+          request.userInfo.groups.exists(g, g == group))
   validations:
     - expression: >-
         !variables.is_managed ||
         variables.is_operator_controller ||
+        variables.is_operator_provisioner ||
         (variables.is_kube_controller_manager && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
         (variables.is_system_controller && request.operation == "DELETE") ||
         (variables.is_garbage_collector_sa && (request.operation == "DELETE" || request.operation == "UPDATE")) ||

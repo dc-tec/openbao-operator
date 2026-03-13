@@ -27,7 +27,8 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 		status.Initialized = true
 	})
 
-	manager := infra.NewManager(k8sClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newControllerClient(t)
+	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
@@ -63,6 +64,7 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 	if drifted.Annotations == nil {
 		drifted.Annotations = map[string]string{}
 	}
+	drifted.Annotations["openbao.org/maintenance"] = "true"
 	drifted.Annotations["example.com/external-annotation"] = "true"
 	drifted.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
 	drifted.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
@@ -81,7 +83,8 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 		t.Fatalf("expected StatefulSet to have %q container", constants.ContainerBao)
 	}
 
-	if err := k8sClient.Patch(ctx, drifted, client.MergeFrom(original)); err != nil {
+	breakGlassClient := newPrivilegedImpersonatedClient(t, controllerUsername)
+	if err := breakGlassClient.Patch(ctx, drifted, client.MergeFrom(original)); err != nil {
 		t.Fatalf("patch drifted StatefulSet: %v", err)
 	}
 

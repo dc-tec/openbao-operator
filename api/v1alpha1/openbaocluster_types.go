@@ -2485,8 +2485,9 @@ type SelfInitOIDCConfig struct {
 	// Enabled triggers the bootstrap logic.
 	Enabled bool `json:"enabled"`
 
-	// Audience defaults to "openbao-internal" if unset.
-	// This value is written to the JWT auth role AND used in the TokenRequest.
+	// Audience, if set, must match the operator installation audience used for
+	// projected OpenBao auth tokens.
+	// This field does not create a per-cluster TokenRequest audience override.
 	// +optional
 	Audience string `json:"audience,omitempty"`
 

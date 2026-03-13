@@ -1,0 +1,13 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-restrict-provisioner-tenant-governance-binding
+spec:
+  policyName: openbao-restrict-provisioner-tenant-governance
+  validationActions: [Deny]
+  matchResources:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["resourcequotas", "limitranges"]

@@ -71,6 +71,9 @@ Use these condition sets as the fastest contract checks for common workflows:
 | :--- | :--- | :--- |
 | `RestoreComplete` | Restore terminal state | `RestoreSucceeded`, `RestoreFailed`, `AuthenticationRequired` |
 | `RestoreConfigurationReady` | Operator-known restore prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired` |
+
+!!! note "Ambient identity reasons"
+    `AmbientIdentityAssumed` means the operator classified the configuration as relying on a provider default chain or other ambient identity path. It does not prove that the cloud-side identity binding is correct.
 | `OperationLockOverride` | Break-glass lock override occurred | `OperationLockOverridden` |
 
 ## OpenBaoTenant Conditions

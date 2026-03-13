@@ -13,6 +13,7 @@ The Operator supports two distinct onboarding models depending on your organizat
 
     -   **Mechanism:** Namespace admins create an `OpenBaoTenant` CR in their *own* namespace.
     -   **Constraint:** `spec.targetNamespace` **MUST** match `metadata.namespace`.
+    -   **Constraint:** `spec.quota` and `spec.limitRange` are not available in self-service mode.
     -   **Security:** Prevents users from provisioning RBAC in namespaces they do not own.
 
     ```yaml
@@ -38,10 +39,12 @@ The Operator supports two distinct onboarding models depending on your organizat
     kind: OpenBaoTenant
     metadata:
       name: team-a-onboarding
-      namespace: openbao-operator-system # <--- Admin Namespace
+      namespace: <operator-namespace> # <--- Rendered operator namespace
     spec:
       targetNamespace: team-a # <--- Target Any Namespace
     ```
+
+    The rendered operator namespace defaults to `openbao-operator-system` for the standard raw-manifest and Helm installs.
 
 ## Provisioning Flow
 
@@ -109,6 +112,6 @@ With admission policies enabled (default), the architecture provides the followi
 | Threat | Mitigation Strategy | Control |
 | :--- | :--- | :--- |
 | **Tenant A reads Tenant B's Keys** | **RBAC Scoping** | Controller has no cluster-wide Secret access. |
-| **Tenant A DoS attack on Node** | **Resource Quotas** | Namespace Quotas (Configurable via `OpenBaoTenant`) + Controller Rate Limiting. |
+| **Tenant A DoS attack on Node** | **Resource Quotas** | Operator-managed namespace guardrails (`ResourceQuota` / `LimitRange`) + Controller Rate Limiting. Custom values are reserved for centrally managed onboarding. |
 | **Tenant A attacks Tenant B's Pods** | **Network Isolation** | Default Deny NetworkPolicy. |
 | **Tenant A spoofs Admin** | **Role Restrictions** | Self-Service mode enforces `targetNamespace == namespace`. |

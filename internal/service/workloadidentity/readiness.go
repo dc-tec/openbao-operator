@@ -12,9 +12,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storageenv"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 type Operation string
@@ -47,14 +47,13 @@ type Input struct {
 
 func EvaluateBackupReadiness(ctx context.Context, reader client.Reader, cluster *openbaov1alpha1.OpenBaoCluster) (Readiness, error) {
 	backupCfg := cluster.Spec.Backup
-	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
 
 	return EvaluateExecutionReadiness(ctx, reader, Input{
 		Operation:          OperationBackup,
 		Cluster:            cluster,
 		Namespace:          cluster.Namespace,
 		ServiceAccountName: cluster.Name + constants.SuffixBackupServiceAccount,
-		JWTAuthRole:        storageenv.EffectiveJWTRole(backupCfg.JWTAuthRole, oidcEnabled, auth.RoleNameBackup),
+		JWTAuthRole:        storageenv.EffectiveJWTRole(backupCfg.JWTAuthRole, portauth.OperatorJWTBootstrapEnabled(cluster), portauth.RoleNameBackup),
 		TokenSecretRef:     backupCfg.TokenSecretRef,
 		Target:             backupCfg.Target,
 		RequireEgressRules: cluster.Spec.Profile == openbaov1alpha1.ProfileHardened,
@@ -63,14 +62,12 @@ func EvaluateBackupReadiness(ctx context.Context, reader client.Reader, cluster 
 }
 
 func EvaluateRestoreReadiness(ctx context.Context, reader client.Reader, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (Readiness, error) {
-	oidcEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled
-
 	return EvaluateExecutionReadiness(ctx, reader, Input{
 		Operation:          OperationRestore,
 		Cluster:            cluster,
 		Namespace:          restore.Namespace,
 		ServiceAccountName: cluster.Name + constants.SuffixRestoreServiceAccount,
-		JWTAuthRole:        storageenv.EffectiveJWTRole(restore.Spec.JWTAuthRole, oidcEnabled, auth.RoleNameRestore),
+		JWTAuthRole:        storageenv.EffectiveJWTRole(restore.Spec.JWTAuthRole, portauth.OperatorJWTBootstrapEnabled(cluster), portauth.RoleNameRestore),
 		TokenSecretRef:     restore.Spec.TokenSecretRef,
 		Target:             restore.Spec.Source.Target,
 		RequireEgressRules: cluster.Spec.Profile == openbaov1alpha1.ProfileHardened,

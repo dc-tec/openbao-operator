@@ -123,9 +123,8 @@ func BuildAutopilotConfig(cluster *openbaov1alpha1.OpenBaoCluster) portopenbao.A
 // ReconcileAutopilotConfig reconciles Raft Autopilot configuration for an initialized cluster.
 // This is called during Day 2 operations (e.g., when replicas or autopilot config changes).
 // It handles authentication via root token (non-SelfInit) or JWT (SelfInit).
-// For JWT authentication, it uses a hybrid approach:
-// 1. Try reading from projected volume (if operator pod has it mounted)
-// 2. Fallback to TokenRequest API if projected volume is not available
+// For JWT authentication, it reads the install-scoped projected token from the
+// controller Pod's `openbao-token` volume. There is no TokenRequest fallback.
 func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	// Only reconcile if cluster is initialized
 	if !cluster.Status.Initialized {
@@ -260,7 +259,7 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 		return nil, fmt.Errorf("client factory provider returned nil factory for cluster %s", clusterKey)
 	}
 
-	// Get JWT Token (Hybrid: Projected Volume -> TokenRequest)
+	// Get the projected JWT token mounted for OpenBao auth.
 	jwtToken, err := m.getJWTToken(logger)
 	if err != nil {
 		return nil, err

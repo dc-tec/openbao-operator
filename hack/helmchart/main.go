@@ -175,6 +175,8 @@ var policyFileMapping = map[string]string{
 	"openbao-lock-controller-statefulset-mutations-binding.yaml":    "validating-policies.yaml", // merged
 	"openbao-restrict-provisioner-rbac.yaml":                        "provisioner-rbac.yaml",
 	"openbao-restrict-provisioner-rbac-binding.yaml":                "provisioner-rbac.yaml", // merged
+	"openbao-restrict-provisioner-tenant-governance.yaml":           "provisioner-tenant-governance.yaml",
+	"openbao-restrict-provisioner-tenant-governance-binding.yaml":   "provisioner-tenant-governance.yaml", // merged
 	"openbao-validate-openbaocluster.yaml":                          "validate-openbaocluster.yaml",
 	"openbao-validate-openbaocluster-binding.yaml":                  "validate-openbaocluster.yaml", // merged
 	"openbao-validate-openbaorestore.yaml":                          "validate-openbaorestore.yaml",
@@ -183,6 +185,10 @@ var policyFileMapping = map[string]string{
 	"openbao-validate-openbao-tenant-binding.yaml":                  "validate-openbao-tenant.yaml", // merged
 	"openbao-restrict-controller-rbac-binding.yaml":                 "controller-rbac.yaml",         // merged
 	"openbao-restrict-controller-rbac.yaml":                         "controller-rbac.yaml",
+	"openbao-restrict-controller-serviceaccounts.yaml":              "controller-serviceaccounts.yaml",
+	"openbao-restrict-controller-serviceaccounts-binding.yaml":      "controller-serviceaccounts.yaml", // merged
+	"openbao-restrict-controller-secret-writes.yaml":                "controller-secret-writes.yaml",
+	"openbao-restrict-controller-secret-writes-binding.yaml":        "controller-secret-writes.yaml", // merged
 	"openbao-restrict-provisioner-namespace-mutations.yaml":         "provisioner-namespace-mutations.yaml",
 	"openbao-restrict-provisioner-namespace-mutations-binding.yaml": "provisioner-namespace-mutations.yaml", // merged
 }
@@ -316,6 +322,11 @@ func transformPolicyToHelm(content string) string {
 	content = strings.ReplaceAll(content,
 		`'openbao-operator-controller'`,
 		`'{{ include "openbao-operator.controllerServiceAccountName" . }}'`)
+
+	// Replace the default maintenance break-glass admin group list with the Helm values-driven list.
+	content = strings.ReplaceAll(content,
+		`["system:masters"]`,
+		`{{ toJson .Values.admissionPolicies.maintenanceBreakGlassGroups }}`)
 
 	return content
 }

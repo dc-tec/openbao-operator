@@ -31,6 +31,13 @@ sequenceDiagram
 3. **Audience Binding:** Tokens are scoped to `openbao-internal`, preventing them from being replayable against the Kubernetes API or other services.
 4. **Least Privilege:** The `openbao-operator` role grants only the specific permissions needed for operator tasks (e.g., `sys/storage/raft/autopilot`), not full admin access.
 
+!!! note "Installation-scoped JWT audience"
+    The OpenBao JWT audience is an operator installation setting, not a per-cluster override.
+    Configure it through `OPENBAO_JWT_AUDIENCE`:
+
+    - Helm: `serviceAccountToken.openBaoAudience`
+    - Raw manifests: `config/default/openbao_jwt_settings.yaml`
+
 ## Self-Initialization Integration
 
 When using **Self-Initialization** (`spec.selfInit.enabled: true`), the relationship is bootstrapped automatically:
@@ -54,7 +61,7 @@ Use this checklist when you install the operator with raw manifests, a custom na
 2. Confirm the controller Deployment still mounts the projected token used for OpenBao auth.
 3. Confirm the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks` from the Kubernetes API server.
 4. Confirm the JWT role in OpenBao binds to the rendered controller ServiceAccount name and namespace, not the default examples.
-5. Confirm the JWT audience in OpenBao matches `OPENBAO_JWT_AUDIENCE` on the operator.
+5. Confirm the JWT audience in OpenBao matches `OPENBAO_JWT_AUDIENCE` on the operator and the controller projected `openbao-token` audience.
 
 !!! warning "Custom Identity Installs"
     `spec.selfInit.oidc.enabled: true` does not infer your custom operator identity from the OpenBao side. If you manually configure JWT auth, the role binding in OpenBao must match the rendered controller ServiceAccount name and namespace exactly.
@@ -75,8 +82,7 @@ bao write auth/jwt-operator/role/openbao-operator \
     role_type="jwt" \
     bound_audiences="openbao-internal" \
     user_claim="sub" \
-    bound_service_account_names="demo-openbao-operator-controller" \
-    bound_service_account_namespaces="platform-security" \
+    bound_subject="system:serviceaccount:platform-security:demo-openbao-operator-controller" \
     token_policies="openbao-operator" \
     token_ttl="1h"
 ```
@@ -102,7 +108,7 @@ failed to create authenticated OpenBao client: ... permission denied
 **Check the following:**
 
 1. **Projected Volume Mounted:** Ensure the operator Deployment has the projected volume mounted at `/var/run/secrets/tokens/openbao-token`.
-2. **Audience Matching:** The `aud` (audience) in the mounted token must match the `bound_audiences` in the OpenBao JWT role. The default is `openbao-internal`.
+2. **Audience Matching:** The `aud` (audience) in the mounted token must match the `bound_audiences` in the OpenBao JWT role. The default is `openbao-internal`, but the real source of truth is the operator installation setting `OPENBAO_JWT_AUDIENCE`.
 3. **Self-Init Status:** If the cluster was manually initialized, you must manually create the `openbao-operator` role and binding.
 4. **OIDC Discovery RBAC:** Ensure the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks`.
 5. **Rendered Identity Match:** If you customized the raw-manifest install namespace or `namePrefix`, ensure the JWT role binds to the rendered controller ServiceAccount name and namespace rather than the defaults.
@@ -128,11 +134,14 @@ bao write auth/jwt-operator/config \
 
 # Create Operator Policy
 bao policy write openbao-operator - <<EOF
-path "sys/storage/raft/autopilot/*" {
-  capabilities = ["read", "update"]
-}
 path "sys/health" {
   capabilities = ["read"]
+}
+path "sys/step-down" {
+  capabilities = ["sudo", "update"]
+}
+path "sys/storage/raft/autopilot/configuration" {
+  capabilities = ["read", "update"]
 }
 EOF
 
@@ -141,8 +150,7 @@ bao write auth/jwt-operator/role/openbao-operator \
     role_type="jwt" \
     bound_audiences="openbao-internal" \
     user_claim="sub" \
-    bound_service_account_names="openbao-operator-controller" \
-    bound_service_account_namespaces="openbao-operator-system" \
+    bound_subject="system:serviceaccount:openbao-operator-system:openbao-operator-controller" \
     token_policies="openbao-operator" \
     token_ttl="1h"
 ```

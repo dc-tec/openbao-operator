@@ -21,6 +21,13 @@ Expected signals:
 - `status.blueGreen.phase=RollingBack`
 - `status.blueGreen.lastJobFailure=<rollback-job-name>`
 
+Check the current conditions as well:
+
+```sh
+kubectl -n security get openbaocluster prod-cluster \
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+```
+
 ## 2. Inspect the Rollback Job
 
 Inspect the Job recorded in `status.blueGreen.lastJobFailure` first. If that field is empty, list upgrade Jobs for the cluster.
@@ -47,6 +54,7 @@ spec:
 ```
 
 See the [Cluster Maintenance Guide](../operations/maintenance.md) for the broader maintenance workflow.
+By default, the managed-resource mutation lock allows maintenance-mode bypass only for callers in the Kubernetes group `system:masters` unless you configured different break-glass groups at install time.
 
 Check for these classes of failure:
 
