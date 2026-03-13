@@ -1,0 +1,288 @@
+namespace: openbao-operator-system
+
+resources:
+  - ../custom-identity
+  - single_tenant_clusterrole.yaml
+  - operator_namespace.yaml
+  - target_namespace_config.yaml
+  - target_namespace_rolebinding.yaml
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: openbao-operator-controller
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: WATCH_NAMESPACE
+          value: openbao
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      labelSelector: app.kubernetes.io/component=provisioner
+    patch: |-
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: provisioner
+  - target:
+      version: v1
+      kind: Service
+      labelSelector: app.kubernetes.io/component=provisioner
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: provisioner-metrics-service
+  - target:
+      version: v1
+      kind: ServiceAccount
+      labelSelector: app.kubernetes.io/component=provisioner
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: provisioner
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: ClusterRole
+      labelSelector: app.kubernetes.io/component=provisioner
+    patch: |-
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: provisioner-role
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: ClusterRoleBinding
+      labelSelector: app.kubernetes.io/component=provisioner
+    patch: |-
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: provisioner-rolebinding
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: RoleBinding
+      labelSelector: app.kubernetes.io/component=provisioner
+    patch: |-
+      $patch: delete
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: provisioner-leader-election-rolebinding
+
+replacements:
+  - source:
+      version: v1
+      kind: ConfigMap
+      name: single-tenant-settings
+      fieldPath: data.WATCH_NAMESPACE
+    targets:
+      - select:
+          kind: RoleBinding
+          name: openbao-operator-single-tenant
+        fieldPaths:
+          - metadata.namespace
+      - select:
+          group: apps
+          version: v1
+          kind: Deployment
+          name: openbao-operator-controller
+        fieldPaths:
+          - spec.template.spec.containers.[name=manager].env.[name=WATCH_NAMESPACE].value
+  - source:
+      version: v1
+      kind: ServiceAccount
+      name: openbao-operator-controller
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: apps
+          version: v1
+          kind: Deployment
+          name: openbao-operator-controller
+        fieldPaths:
+          - spec.template.spec.containers.[name=manager].env.[name=OPERATOR_SERVICE_ACCOUNT_NAME].value
+      - select:
+          group: rbac.authorization.k8s.io
+          version: v1
+          kind: RoleBinding
+          name: openbao-operator-single-tenant
+        fieldPaths:
+          - subjects.0.name
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-controller-statefulset-mutations
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-managed-resource-mutations
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-rbac
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-serviceaccounts
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-secret-writes
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-rbac
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+  - source:
+      version: v1
+      kind: ServiceAccount
+      name: openbao-operator-controller
+      fieldPath: metadata.namespace
+    targets:
+      - select:
+          group: rbac.authorization.k8s.io
+          version: v1
+          kind: RoleBinding
+          name: openbao-operator-single-tenant
+        fieldPaths:
+          - subjects.0.namespace
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-controller-statefulset-mutations
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-managed-resource-mutations
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-rbac
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-serviceaccounts
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-controller-secret-writes
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-rbac
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-provisioner-tenant-governance
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-validate-openbao-tenant
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1

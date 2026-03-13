@@ -19,6 +19,23 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
 
     See [Single-Tenant Mode](single-tenant-mode.md) for single-tenant deployments.
 
+## Install Profiles
+
+Use this table to choose the supported install path before you start changing values or overlays.
+
+| Intent | Recommended path | Change these settings | Verify these outputs |
+| :--- | :--- | :--- | :--- |
+| Default shared production install | Helm, multi-tenant mode | release namespace, image tag, controller/provisioner sizing | controller and provisioner pods in the rendered operator namespace |
+| Dedicated team namespace | Helm, `tenancy.mode=single` | `tenancy.targetNamespace`, optional release namespace | only the controller pod runs; `WATCH_NAMESPACE` matches the target namespace |
+| Raw multi-tenant install with default identity | `config/default` | operator namespace only if you want to fork the default base | rendered namespace, controller and provisioner ServiceAccount names, admission policies |
+| Raw multi-tenant install with custom identity | `config/overlays/custom-identity` | `namespace`, optional `namePrefix` | rendered ServiceAccount names, RoleBinding subjects, admission-policy identity variables, JWT audience |
+| Raw single-tenant install | `config/overlays/single-tenant` | operator namespace in the overlay, target namespace in `target_namespace_config.yaml` | rendered operator namespace, `WATCH_NAMESPACE`, single-tenant RoleBinding subject |
+| Raw single-tenant install with custom identity | `config/overlays/single-tenant-custom-identity` | `namespace`, optional `namePrefix`, target namespace in `target_namespace_config.yaml` | rendered operator namespace, controller `ServiceAccount` name, `WATCH_NAMESPACE`, single-tenant `RoleBinding` subject, admission-policy identity variables |
+
+!!! note "Single-Tenant Customization Boundary"
+    Use `config/overlays/single-tenant` when you only need a custom operator namespace or target namespace.
+    Use `config/overlays/single-tenant-custom-identity` when you also need a custom operator identity, such as an extra `namePrefix`.
+
 ## Installation
 
 === ":material-package: Helm (Recommended)"
@@ -112,12 +129,16 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
     - `config/default`: default multi-tenant install
     - `config/overlays/custom-identity`: multi-tenant install with custom operator namespace or `namePrefix`
     - `config/overlays/single-tenant`: direct single-tenant install without the provisioner
+    - `config/overlays/single-tenant-custom-identity`: direct single-tenant install without the provisioner plus custom operator identity support
 
     !!! tip "Custom Namespace Or Prefix"
         For raw-manifest installs with a custom operator namespace or extra name prefix, start from `config/overlays/custom-identity`. Set `namespace` there and optionally add `namePrefix`. The controller and provisioner ServiceAccount identities, RoleBinding subjects, and admission-policy identity checks follow the installed ServiceAccounts automatically.
 
     !!! tip "Single-Tenant Raw Manifests"
         For direct single-tenant installs, start from `config/overlays/single-tenant`. That overlay owns the operator namespace and target namespace wiring instead of relying on manual `WATCH_NAMESPACE` patches.
+
+    !!! tip "Single-Tenant With Custom Identity"
+        If you need single-tenant mode and a custom operator identity, such as an extra `namePrefix`, start from `config/overlays/single-tenant-custom-identity`. That overlay keeps the single-tenant namespace wiring and the controller admission-policy identity rewrites aligned in one supported path.
 
     !!! note "Operator JWT Auth"
         If you use custom raw-manifest identities together with manual OpenBao JWT configuration or self-init OIDC bootstrap, verify the rendered controller ServiceAccount name and namespace first. See [Operator Authentication](authn.md#custom-install-checklist).
@@ -133,6 +154,61 @@ This guide covers deploying the OpenBao Operator to your Kubernetes cluster.
     # Deploy operator (uses Kustomize)
     make deploy IMG=ghcr.io/dc-tec/openbao-operator:dev
     ```
+
+## Render Verification
+
+Use this checklist for raw-manifest installs before you apply the manifests.
+
+### Multi-Tenant With Custom Identity
+
+Render the overlay:
+
+```bash
+kubectl kustomize config/overlays/custom-identity
+```
+
+Confirm:
+
+1. the rendered operator namespace is the namespace you expect
+2. the controller and provisioner `ServiceAccount` names match your intended install identity
+3. `RoleBinding` and `ClusterRoleBinding` subjects point at those rendered ServiceAccounts
+4. admission-policy variables reference the same rendered namespace and ServiceAccount names
+5. `OPENBAO_JWT_AUDIENCE` on the controller matches the projected `openbao-token` audience
+
+See [Operator Authentication](authn.md#custom-install-checklist) for the OpenBao-side JWT binding checks.
+
+### Single-Tenant Raw Manifests
+
+Render the overlay:
+
+```bash
+kubectl kustomize config/overlays/single-tenant
+```
+
+Confirm:
+
+1. the rendered operator namespace matches `config/overlays/single-tenant/kustomization.yaml`
+2. `WATCH_NAMESPACE` on the controller matches `config/overlays/single-tenant/target_namespace_config.yaml`
+3. the single-tenant `RoleBinding` namespace matches the same target namespace
+4. the controller `ServiceAccount` subject in that `RoleBinding` points at the rendered operator namespace
+
+If you customize the single-tenant overlay beyond those supported fields, treat the render output as the source of truth.
+
+### Single-Tenant With Custom Identity
+
+Render the overlay:
+
+```bash
+kubectl kustomize config/overlays/single-tenant-custom-identity
+```
+
+Confirm:
+
+1. the rendered operator namespace matches `config/overlays/single-tenant-custom-identity/kustomization.yaml`
+2. the rendered controller `ServiceAccount` name matches the same overlay after any `namePrefix`
+3. `WATCH_NAMESPACE` on the controller matches `config/overlays/single-tenant-custom-identity/target_namespace_config.yaml`
+4. the single-tenant `RoleBinding` subject points at the rendered controller `ServiceAccount`
+5. controller admission-policy variables reference the same rendered namespace and `ServiceAccount` name
 
 ## Verify Installation
 

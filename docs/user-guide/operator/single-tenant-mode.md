@@ -117,6 +117,9 @@ graph LR
 
     To change the operator namespace, edit the `namespace` field in `config/overlays/single-tenant/kustomization.yaml`.
 
+    !!! note "Single-Tenant With Custom Identity"
+        If you also need a custom operator identity, such as an extra `namePrefix`, use `config/overlays/single-tenant-custom-identity` instead of extending `config/overlays/single-tenant` manually.
+
     **3. Customize the target namespace (optional)**
 
     By default the overlay targets the `openbao` namespace. To change it, edit `config/overlays/single-tenant/target_namespace_config.yaml` before applying:
@@ -133,6 +136,20 @@ graph LR
     ```
 
     The overlay wires this value into both the target namespace `RoleBinding` and the controller `WATCH_NAMESPACE` environment variable.
+
+    Before you apply the overlay, render it once:
+
+    ```bash
+    kubectl kustomize config/overlays/single-tenant
+    ```
+
+    Confirm that:
+
+    1. the controller `ServiceAccount` subject points at the rendered operator namespace
+    2. the single-tenant `RoleBinding` namespace matches the target namespace
+    3. `WATCH_NAMESPACE` on the controller matches the same target namespace
+
+    If you also need a custom operator identity, render `config/overlays/single-tenant-custom-identity` and confirm the controller admission-policy variables reference the same rendered `ServiceAccount` name and operator namespace.
 
     !!! note "Target Namespace Creation"
         The single-tenant overlay does not create the target namespace. Create it before applying the overlay:
