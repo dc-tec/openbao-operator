@@ -12,11 +12,20 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"net/url"
 	"time"
 
 	"k8s.io/client-go/rest"
 
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+)
+
+const (
+	defaultKubernetesOIDCDiscoveryBaseURL = "https://kubernetes.default.svc"
+	oidcWellKnownConfigurationPath        = "/.well-known/openid-configuration"
+	kubernetesOIDCJWKSPath                = "/openid/v1/jwks"
+	legacyOIDCJWKSPath                    = "/.well-known/jwks.json"
+	publicKeyPEMBlockType                 = "PUBLIC KEY"
 )
 
 // HTTPStatusError represents a non-200 response when calling an HTTP endpoint.
@@ -54,9 +63,9 @@ func (e *HTTPStatusError) HTTPStatusCode() int {
 // profile clusters without OIDC, but Hardened profile requires OIDC.
 func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*portauth.OIDCConfig, error) {
 	if baseURL == "" {
-		baseURL = "https://kubernetes.default.svc"
+		baseURL = defaultKubernetesOIDCDiscoveryBaseURL
 	}
-	wellKnownURL := baseURL + "/.well-known/openid-configuration"
+	wellKnownURL := baseURL + oidcWellKnownConfigurationPath
 
 	transport, err := rest.TransportFor(cfg)
 	if err != nil {
@@ -101,6 +110,11 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*por
 	var jwksKeys []string
 	if oidcConfig.JWKSURI != "" {
 		keys, err := FetchJWKSKeys(ctx, cfg, oidcConfig.JWKSURI)
+		if err != nil {
+			if fallbackURL, ok := kubernetesJWKSFallbackURL(baseURL, oidcConfig.JWKSURI); ok {
+				keys, err = FetchJWKSKeys(ctx, cfg, fallbackURL)
+			}
+		}
 		if err != nil {
 			// Log but don't fail - JWKS keys are optional for some configurations
 			return &portauth.OIDCConfig{
@@ -178,6 +192,37 @@ func FetchJWKSKeys(ctx context.Context, cfg *rest.Config, jwksURL string) ([]str
 	return keys, nil
 }
 
+func kubernetesJWKSFallbackURL(baseURL, jwksURL string) (string, bool) {
+	if baseURL == "" || jwksURL == "" {
+		return "", false
+	}
+
+	base, err := url.Parse(baseURL)
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return "", false
+	}
+
+	jwks, err := url.Parse(jwksURL)
+	if err != nil || jwks.Scheme == "" || jwks.Host == "" {
+		return "", false
+	}
+
+	if jwks.Host == base.Host && jwks.Scheme == base.Scheme {
+		return "", false
+	}
+
+	switch jwks.Path {
+	case kubernetesOIDCJWKSPath, legacyOIDCJWKSPath:
+	default:
+		return "", false
+	}
+
+	return base.ResolveReference(&url.URL{
+		Path:     jwks.Path,
+		RawQuery: jwks.RawQuery,
+	}).String(), true
+}
+
 func pemPublicKeysFromJWKS(jwks jwksDocument) ([]string, error) {
 	var pemKeys []string
 	seen := make(map[string]struct{}, len(jwks.Keys))
@@ -199,7 +244,7 @@ func pemPublicKeysFromJWKS(jwks jwksDocument) ([]string, error) {
 				return nil, fmt.Errorf("failed to marshal jwk x5c public key: %w", err)
 			}
 
-			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: publicKeyPEMBlockType, Bytes: pubDER}))
 			if _, ok := seen[pemKey]; ok {
 				continue
 			}
@@ -237,7 +282,7 @@ func pemPublicKeysFromJWKS(jwks jwksDocument) ([]string, error) {
 				return nil, fmt.Errorf("failed to marshal rsa public key: %w", err)
 			}
 
-			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: publicKeyPEMBlockType, Bytes: pubDER}))
 			if _, ok := seen[pemKey]; ok {
 				continue
 			}
@@ -276,7 +321,7 @@ func pemPublicKeysFromJWKS(jwks jwksDocument) ([]string, error) {
 				return nil, fmt.Errorf("failed to marshal ec public key: %w", err)
 			}
 
-			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER}))
+			pemKey := string(pem.EncodeToMemory(&pem.Block{Type: publicKeyPEMBlockType, Bytes: pubDER}))
 			if _, ok := seen[pemKey]; ok {
 				continue
 			}

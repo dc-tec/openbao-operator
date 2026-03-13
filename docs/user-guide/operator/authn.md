@@ -119,6 +119,10 @@ failed to create authenticated OpenBao client: ... permission denied
 
 If OIDC discovery or operator identity bootstrap is miswired, the cluster surfaces `OIDCBootstrapConfigurationInvalid`.
 
+On managed control planes, the discovery document may return a JWKS URL on a hostname that is not directly
+reachable from cluster Pods. The operator retries standard Kubernetes JWKS paths (`/openid/v1/jwks` and
+`/.well-known/jwks.json`) through the same Kubernetes API service endpoint used for discovery before failing.
+
 If the operator cannot recognize a human login path from `spec.selfInit.requests`, the cluster surfaces `UserAccessBootstrap=Unknown` with reason `UserAccessUnverified`. This is a warning signal, not a hard block.
 
 ### Manual Role Configuration

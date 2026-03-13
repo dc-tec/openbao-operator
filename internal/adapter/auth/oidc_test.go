@@ -83,7 +83,7 @@ func TestFetchJWKSKeys(t *testing.T) {
 
 	// Create a test server that returns JWKS
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/.well-known/jwks.json" {
+		if r.URL.Path != legacyOIDCJWKSPath {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -109,7 +109,7 @@ func TestFetchJWKSKeys(t *testing.T) {
 		Host: server.URL,
 	}
 
-	keys, err := FetchJWKSKeys(context.Background(), cfg, server.URL+"/.well-known/jwks.json")
+	keys, err := FetchJWKSKeys(context.Background(), cfg, server.URL+legacyOIDCJWKSPath)
 	if err != nil {
 		t.Fatalf("FetchJWKSKeys() error = %v", err)
 	}
@@ -191,7 +191,7 @@ func TestDiscoverConfig(t *testing.T) {
 				}
 
 				jwksServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.URL.Path != "/.well-known/jwks.json" {
+					if r.URL.Path != legacyOIDCJWKSPath {
 						w.WriteHeader(http.StatusNotFound)
 						return
 					}
@@ -213,7 +213,7 @@ func TestDiscoverConfig(t *testing.T) {
 
 			// Create a test server for OIDC discovery
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/.well-known/openid-configuration" {
+				if r.URL.Path != oidcWellKnownConfigurationPath {
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
@@ -225,7 +225,7 @@ func TestDiscoverConfig(t *testing.T) {
 
 				jwksURI := tt.jwksURI
 				if jwksURI == "" && tt.wantJWKS && jwksServer != nil {
-					jwksURI = jwksServer.URL + "/.well-known/jwks.json"
+					jwksURI = jwksServer.URL + legacyOIDCJWKSPath
 				}
 
 				config := map[string]interface{}{
@@ -271,6 +271,102 @@ func TestDiscoverConfig(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDiscoverConfig_FallsBackToDiscoveryBaseForStandardJWKSPath(t *testing.T) {
+	t.Helper()
+
+	cert := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test-ca"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate rsa key: %v", err)
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case oidcWellKnownConfigurationPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":   "https://issuer.example.internal",
+				"jwks_uri": "https://unreachable.example.internal/openid/v1/jwks",
+			})
+		case kubernetesOIDCJWKSPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jwksDocument{
+				Keys: []jwkKey{
+					{
+						Kty: "RSA",
+						X5c: []string{base64.StdEncoding.EncodeToString(certDER)},
+					},
+				},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &rest.Config{Host: server.URL}
+	config, err := DiscoverConfig(context.Background(), cfg, server.URL)
+	if err != nil {
+		t.Fatalf("DiscoverConfig() error = %v, want nil", err)
+	}
+	if config == nil {
+		t.Fatal("DiscoverConfig() returned nil config")
+	}
+	if config.IssuerURL != "https://issuer.example.internal" {
+		t.Fatalf("DiscoverConfig() IssuerURL = %q, want %q", config.IssuerURL, "https://issuer.example.internal")
+	}
+	if len(config.JWKSKeys) == 0 {
+		t.Fatal("DiscoverConfig() expected JWKS keys from fallback path, got none")
+	}
+}
+
+func TestDiscoverConfig_DoesNotRewriteCustomJWKSPath(t *testing.T) {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case oidcWellKnownConfigurationPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":   "https://issuer.example.internal",
+				"jwks_uri": "https://unreachable.example.internal/custom/jwks",
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &rest.Config{Host: server.URL}
+	config, err := DiscoverConfig(context.Background(), cfg, server.URL)
+	if err == nil {
+		t.Fatal("DiscoverConfig() expected error for unreachable custom jwks_uri, got nil")
+	}
+	if config == nil {
+		t.Fatal("DiscoverConfig() expected partial config on JWKS fetch error, got nil")
+	}
+	if config.IssuerURL != "https://issuer.example.internal" {
+		t.Fatalf("DiscoverConfig() IssuerURL = %q, want %q", config.IssuerURL, "https://issuer.example.internal")
+	}
+	if len(config.JWKSKeys) != 0 {
+		t.Fatalf("DiscoverConfig() JWKSKeys = %d, want 0", len(config.JWKSKeys))
+	}
+	if !strings.Contains(err.Error(), "failed to fetch JWKS keys") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
