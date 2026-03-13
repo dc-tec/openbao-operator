@@ -108,6 +108,15 @@ kubectl -n <namespace> get openbaocluster <cluster-name> \
   -o jsonpath='{.status.backup.nextScheduledBackup}{"\n"}'
 ```
 
+Check the backup configuration condition:
+
+```bash
+kubectl -n <namespace> get openbaocluster <cluster-name> \
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\n"}{end}'
+```
+
+The important checkpoint is `BackupConfigurationReady=True`.
+
 Watch backup Jobs:
 
 ```bash
@@ -140,6 +149,7 @@ This is the manual backup path exercised by the E2E suite.
 
 - The backup Job cannot reach object storage: verify the endpoint URL and network policy or egress settings.
 - Authentication fails: verify the Secret keys and credentials.
+- `BackupConfigurationReady=False`: inspect the reason first. `CredentialsSecretMissing`, `AuthenticationRequired`, and `NetworkEgressRulesRequired` are the most common setup failures.
 - The backup Job never starts: confirm `spec.selfInit.oidc.enabled: true` or set an explicit static `tokenSecretRef`.
 - Backups are skipped while another long-running operation is active: wait for upgrade or restore activity to finish and retry.
 

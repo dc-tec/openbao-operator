@@ -115,6 +115,15 @@ Watch the `OpenBaoRestore` resource:
 kubectl -n <namespace> get openbaorestore <restore-name> -w
 ```
 
+Inspect the restore conditions:
+
+```bash
+kubectl -n <namespace> get openbaorestore <restore-name> \
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\n"}{end}'
+```
+
+Before the restore Job starts, the important checkpoint is `RestoreConfigurationReady=True`. After success, expect `RestoreComplete=True` with reason `RestoreSucceeded`.
+
 Then inspect the final phase and message:
 
 ```bash
@@ -142,6 +151,7 @@ If you restored a snapshot taken from the same Development cluster, verify acces
 
 - `Failed` with object storage errors: verify the endpoint, bucket, Secret, and object key.
 - `Failed` because another operation holds the lock: wait for backup or upgrade activity to finish, or follow the documented break-glass restore flow.
+- `RestoreConfigurationReady=False`: inspect the reason first. `CredentialsSecretMissing`, `AuthenticationRequired`, and `NetworkEgressRulesRequired` are the most common setup failures.
 - The restored cluster is sealed or degraded afterward: the snapshot may contain a different runtime state; inspect cluster conditions and pod logs before retrying.
 - The restored auth methods differ from the current cluster: the snapshot state wins.
 

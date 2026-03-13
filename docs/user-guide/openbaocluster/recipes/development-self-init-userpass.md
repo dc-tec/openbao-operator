@@ -206,10 +206,14 @@ kubectl -n <namespace> get openbaocluster <cluster-name> \
 The steady-state expectation is:
 
 - `Available=True`
+- `TLSReady=True`
+- `UserAccessBootstrap=True`
 - `OpenBaoInitialized=True`
 - `OpenBaoSealed=False`
 
 `ProductionReady` is not the goal for a `Development` cluster.
+
+If you enabled optional Gateway exposure, also expect `GatewayIntegrationReady=True`.
 
 Confirm that no root token Secret was created:
 
@@ -253,6 +257,7 @@ curl -sS -k \
 
 - Pods fail with AppArmor errors on local clusters: set `spec.workloadHardening.appArmorEnabled: false`.
 - `OpenBaoInitialized=False`: check the `selfInit.requests` paths and data for syntax errors.
+- `UserAccessBootstrap=Unknown`: verify that the JWT or `userpass` bootstrap requests were applied as intended.
 - A root token Secret exists: `spec.selfInit.enabled` was omitted or rejected.
 - The demo UI login fails: confirm `auth/userpass` was enabled and the `demo-admin` user request was applied.
 

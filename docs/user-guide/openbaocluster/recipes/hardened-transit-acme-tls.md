@@ -76,6 +76,8 @@ Verify that the tenant is provisioned:
 kubectl -n openbao-operator-system describe openbaotenant <cluster-name>-tenant
 ```
 
+The steady-state expectation is `Provisioned=True` on the `OpenBaoTenant`.
+
 ## Step 2: Create the Transit and ACME trust Secret
 
 Create the Secret referenced by `spec.unseal.credentialsSecretRef`:
@@ -233,9 +235,13 @@ kubectl -n <namespace> get openbaocluster <cluster-name> \
 The steady-state expectation is:
 
 - `Available=True`
+- `ACMEIntegrationReady=True`
+- `ACMECacheReady=True`
+- `UserAccessBootstrap=True`
 - `ProductionReady=True`
 - `OpenBaoInitialized=True`
 - `OpenBaoSealed=False`
+- `APIServerNetworkReady=True` or `Unknown` with reason `APIServerEndpointIPsRecommended`
 
 Verify that the dedicated ACME Service exists:
 
@@ -250,6 +256,9 @@ kubectl -n <namespace> get secret <cluster-name>-tls-server
 ```
 
 This should return `NotFound`.
+
+!!! note "User-managed passthrough"
+    This recipe uses a user-managed passthrough route instead of `spec.gateway`, so `GatewayIntegrationReady` is not the primary checkpoint here. For ACME, the important operator-owned conditions are `ACMEIntegrationReady` and `ACMECacheReady`.
 
 ### Verify JWT admin login
 
@@ -275,6 +284,7 @@ curl -sS -k \
 
 - `Degraded=True` with `ACMEGatewayNotConfiguredForPassthrough`: your exposure layer is terminating TLS instead of passing it through.
 - `Degraded=True` with `ACMEDomainNotResolvable`: the configured hostname does not resolve from inside the cluster.
+- `UserAccessBootstrap=Unknown`: `spec.selfInit.requests` did not give the operator a recognizable human login path.
 - Transit connection failures: verify the Secret keys, Transit token policy, and the CA bundle used by `tlsCACert`.
 - Raft join or probe verification errors with a private ACME CA: verify that `pki-ca.crt` is present in the same Secret and mounted alongside `acmeCARoot`.
 

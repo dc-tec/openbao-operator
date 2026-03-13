@@ -73,6 +73,8 @@ Verify that the tenant is provisioned:
 kubectl -n openbao-operator-system describe openbaotenant <cluster-name>-tenant
 ```
 
+The steady-state expectation is `Provisioned=True` on the `OpenBaoTenant`.
+
 ## Step 2: Create the Transit credential Secret
 
 Create the Secret referenced by `spec.unseal.credentialsSecretRef`:
@@ -286,9 +288,11 @@ kubectl -n <namespace> get openbaocluster <cluster-name> \
 The steady-state expectation is:
 
 - `Available=True`
-- `ProductionReady=True`
 - `TLSReady=True`
+- `UserAccessBootstrap=True`
+- `ProductionReady=True`
 - `OpenBaoInitialized=True`
+- `APIServerNetworkReady=True` or `Unknown` with reason `APIServerEndpointIPsRecommended`
 
 Confirm that no root token Secret was created:
 
@@ -297,6 +301,9 @@ kubectl -n <namespace> get secret <cluster-name>-root-token
 ```
 
 This should return `NotFound`.
+
+!!! note "User-managed passthrough"
+    This recipe uses a user-managed Traefik TCP passthrough route, not `spec.gateway`. The important exposure contract here is the `trustedIngressPeers` rule plus successful end-to-end traffic, not `GatewayIntegrationReady`.
 
 ### Verify JWT admin login
 
@@ -324,6 +331,7 @@ curl -sS -k \
 ## Common Failures
 
 - `TLSReady=False` with `TLSSecretMissing`: the external TLS Secrets are missing or not Ready yet.
+- `UserAccessBootstrap=Unknown`: `spec.selfInit.requests` did not give the operator a recognizable human login path.
 - `ProductionReady=False` with `RootTokenStored`: `selfInit.enabled` is not set to `true`.
 - `ProductionReady=False` with `OperatorManagedTLS`: `tls.mode` is not `External` or `ACME`.
 - Transit connection failures: verify the Secret keys, Transit token policy, and the CA bundle used by `tlsCACert`.
