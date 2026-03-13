@@ -220,6 +220,7 @@ func TestCheckPreconditions(t *testing.T) {
 				cluster.Spec.Backup.JWTAuthRole = ""
 				cluster.Spec.Backup.TokenSecretRef = nil
 				cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+					Enabled: true,
 					OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
 						Enabled: true,
 					},

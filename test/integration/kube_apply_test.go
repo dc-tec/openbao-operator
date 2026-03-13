@@ -114,6 +114,12 @@ func newImpersonatedClient(t *testing.T, username string) client.Client {
 	return c
 }
 
+func newControllerClient(t *testing.T) client.Client {
+	t.Helper()
+
+	return newPrivilegedImpersonatedClient(t, controllerUsername)
+}
+
 func kustomizeBuild(t *testing.T, dir string) []byte {
 	t.Helper()
 

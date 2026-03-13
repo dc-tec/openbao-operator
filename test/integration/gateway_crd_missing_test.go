@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -30,7 +31,7 @@ import (
 func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.T) {
 	ctx := context.Background()
 
-	k8sClient, scheme := startIsolatedEnv(t, isolatedEnvOptions{
+	k8sClient, scheme, envCfg := startIsolatedEnv(t, isolatedEnvOptions{
 		crdDirs: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
 		},
@@ -51,7 +52,8 @@ func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.
 	}
 	createTLSSecretForClient(t, ctx, k8sClient, namespace, cluster.Name)
 
-	mgr := infra.NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
+	mgr := infra.NewManager(controllerClient, scheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
 	if err == nil {
@@ -65,7 +67,7 @@ func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.
 func TestInfraNetwork_GatewayAPICRDsMissing_TLSPassthroughMode_IsDegraded(t *testing.T) {
 	ctx := context.Background()
 
-	k8sClient, scheme := startIsolatedEnv(t, isolatedEnvOptions{
+	k8sClient, scheme, envCfg := startIsolatedEnv(t, isolatedEnvOptions{
 		crdDirs: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
 		},
@@ -87,7 +89,8 @@ func TestInfraNetwork_GatewayAPICRDsMissing_TLSPassthroughMode_IsDegraded(t *tes
 	}
 	createTLSSecretForClient(t, ctx, k8sClient, namespace, cluster.Name)
 
-	mgr := infra.NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
+	mgr := infra.NewManager(controllerClient, scheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
 	if err == nil {
@@ -103,7 +106,7 @@ func TestInfraNetwork_GatewayAPIBackendTLSPolicyCRDMissing_IsDegraded(t *testing
 
 	gatewayCRDsWithoutBackendTLS := copyGatewayCRDsExcluding(t, []string{"backendtlspolicies"})
 
-	k8sClient, scheme := startIsolatedEnv(t, isolatedEnvOptions{
+	k8sClient, scheme, envCfg := startIsolatedEnv(t, isolatedEnvOptions{
 		crdDirs: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
 			gatewayCRDsWithoutBackendTLS,
@@ -129,7 +132,8 @@ func TestInfraNetwork_GatewayAPIBackendTLSPolicyCRDMissing_IsDegraded(t *testing
 	createTLSSecretForClient(t, ctx, k8sClient, namespace, cluster.Name)
 	createCASecretForClient(t, ctx, k8sClient, namespace, cluster.Name, []byte("ca-1"))
 
-	mgr := infra.NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
+	mgr := infra.NewManager(controllerClient, scheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
 	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
 	if err == nil {
@@ -144,7 +148,7 @@ type isolatedEnvOptions struct {
 	crdDirs []string
 }
 
-func startIsolatedEnv(t *testing.T, opts isolatedEnvOptions) (client.Client, *runtime.Scheme) {
+func startIsolatedEnv(t *testing.T, opts isolatedEnvOptions) (client.Client, *runtime.Scheme, *rest.Config) {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
@@ -180,7 +184,23 @@ func startIsolatedEnv(t *testing.T, opts isolatedEnvOptions) (client.Client, *ru
 
 	seedKubernetesServiceForClient(t, context.Background(), k8sClient)
 
-	return k8sClient, scheme
+	return k8sClient, scheme, cfg
+}
+
+func newPrivilegedImpersonatedClientForConfig(t *testing.T, baseCfg *rest.Config, scheme *runtime.Scheme, username string) client.Client {
+	t.Helper()
+
+	impersonated := rest.CopyConfig(baseCfg)
+	impersonated.Impersonate = rest.ImpersonationConfig{
+		UserName: username,
+		Groups:   []string{"system:masters"},
+	}
+
+	c, err := client.New(impersonated, client.Options{Scheme: scheme})
+	if err != nil {
+		t.Fatalf("create privileged impersonated client: %v", err)
+	}
+	return c
 }
 
 func seedKubernetesServiceForClient(t *testing.T, ctx context.Context, c client.Client) {
