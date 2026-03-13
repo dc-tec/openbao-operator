@@ -48,8 +48,12 @@ const (
 
 // OIDCConfig contains discovered issuer and key material for JWT bootstrap.
 type OIDCConfig struct {
-	IssuerURL string
-	JWKSKeys  []string
+	IssuerURL          string
+	OIDCDiscoveryURL   string
+	OIDCDiscoveryCAPEM string
+	JWKSURL            string
+	JWKSCAPEM          string
+	JWKSKeys           []string
 }
 
 // InfraReasonPolicy configures infra-related error reason values.
@@ -144,6 +148,10 @@ type InfraKubernetesRuntime struct {
 type InfraOIDCRuntime struct {
 	RestConfig          *rest.Config
 	OIDCIssuer          string
+	OIDCDiscoveryURL    string
+	OIDCDiscoveryCAPEM  string
+	OIDCJWKSURL         string
+	OIDCJWKSCAPEM       string
 	OIDCJWTKeys         []string
 	DiscoverOIDCConfig  discoverOIDCConfigFunc
 	DiscoveryStatusCode oidcDiscoveryStatusCodeFunc
@@ -239,21 +247,27 @@ func (r *infraReconciler) oidcDiscoveryError(err error) error {
 	return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
 }
 
-func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, []string, error) {
-	effectiveIssuer := r.deps.OIDC.OIDCIssuer
-	effectiveKeys := r.deps.OIDC.OIDCJWTKeys
+func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (*OIDCConfig, error) {
+	effective := &OIDCConfig{
+		IssuerURL:          r.deps.OIDC.OIDCIssuer,
+		OIDCDiscoveryURL:   r.deps.OIDC.OIDCDiscoveryURL,
+		OIDCDiscoveryCAPEM: r.deps.OIDC.OIDCDiscoveryCAPEM,
+		JWKSURL:            r.deps.OIDC.OIDCJWKSURL,
+		JWKSCAPEM:          r.deps.OIDC.OIDCJWKSCAPEM,
+		JWKSKeys:           append([]string(nil), r.deps.OIDC.OIDCJWTKeys...),
+	}
 
-	if !shouldBootstrapJWTAuth(cluster) || (strings.TrimSpace(effectiveIssuer) != "" && len(effectiveKeys) > 0) {
-		return effectiveIssuer, effectiveKeys, nil
+	if !shouldBootstrapJWTAuth(cluster) || (strings.TrimSpace(effective.IssuerURL) != "" && (strings.TrimSpace(effective.OIDCDiscoveryURL) != "" || strings.TrimSpace(effective.JWKSURL) != "" || len(effective.JWKSKeys) > 0)) {
+		return effective, nil
 	}
 
 	if r.deps.OIDC.RestConfig == nil {
-		return "", nil, r.oidcBootstrapConfigurationError(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
+		return nil, r.oidcBootstrapConfigurationError(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
 	}
 
 	discover := r.deps.OIDC.DiscoverOIDCConfig
 	if discover == nil {
-		return "", nil, r.oidcBootstrapConfigurationError(fmt.Errorf("OIDC discovery function is not configured"))
+		return nil, r.oidcBootstrapConfigurationError(fmt.Errorf("OIDC discovery function is not configured"))
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -261,16 +275,16 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 
 	discovered, err := discover(discoveryCtx, r.deps.OIDC.RestConfig)
 	if err != nil {
-		return "", nil, r.oidcDiscoveryError(err)
+		return nil, r.oidcDiscoveryError(err)
 	}
 	if discovered == nil || strings.TrimSpace(discovered.IssuerURL) == "" {
-		return "", nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned empty issuer"))
+		return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned empty issuer"))
 	}
-	if len(discovered.JWKSKeys) == 0 {
-		return "", nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned no JWKS keys"))
+	if strings.TrimSpace(discovered.OIDCDiscoveryURL) == "" && strings.TrimSpace(discovered.JWKSURL) == "" && len(discovered.JWKSKeys) == 0 {
+		return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned no JWT validation material"))
 	}
 
-	return discovered.IssuerURL, discovered.JWKSKeys, nil
+	return discovered, nil
 }
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -545,7 +559,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		}
 	}
 
-	effectiveIssuer, effectiveKeys, err := r.resolveOIDC(ctx, cluster)
+	effectiveOIDC, err := r.resolveOIDC(ctx, cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -554,20 +568,36 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		r.deps.Kubernetes.Client,
 		r.deps.Kubernetes.Scheme,
 		r.deps.Kubernetes.OperatorNamespace,
-		effectiveIssuer,
-		effectiveKeys,
+		effectiveOIDC.IssuerURL,
+		effectiveOIDC.JWKSKeys,
 		r.deps.Kubernetes.Platform,
 	)
+	manager.SetOIDCConfig(&portauth.OIDCConfig{
+		IssuerURL:          effectiveOIDC.IssuerURL,
+		OIDCDiscoveryURL:   effectiveOIDC.OIDCDiscoveryURL,
+		OIDCDiscoveryCAPEM: effectiveOIDC.OIDCDiscoveryCAPEM,
+		JWKSURL:            effectiveOIDC.JWKSURL,
+		JWKSCAPEM:          effectiveOIDC.JWKSCAPEM,
+		JWKSKeys:           effectiveOIDC.JWKSKeys,
+	})
 	if r.deps.Kubernetes.APIReader != nil {
 		manager = inframanager.NewManagerWithReader(
 			r.deps.Kubernetes.Client,
 			r.deps.Kubernetes.APIReader,
 			r.deps.Kubernetes.Scheme,
 			r.deps.Kubernetes.OperatorNamespace,
-			effectiveIssuer,
-			effectiveKeys,
+			effectiveOIDC.IssuerURL,
+			effectiveOIDC.JWKSKeys,
 			r.deps.Kubernetes.Platform,
 		)
+		manager.SetOIDCConfig(&portauth.OIDCConfig{
+			IssuerURL:          effectiveOIDC.IssuerURL,
+			OIDCDiscoveryURL:   effectiveOIDC.OIDCDiscoveryURL,
+			OIDCDiscoveryCAPEM: effectiveOIDC.OIDCDiscoveryCAPEM,
+			JWKSURL:            effectiveOIDC.JWKSURL,
+			JWKSCAPEM:          effectiveOIDC.JWKSCAPEM,
+			JWKSKeys:           effectiveOIDC.JWKSKeys,
+		})
 	}
 	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
 		if errors.Is(err, inframanager.ErrOIDCBootstrapAudienceMismatch) {

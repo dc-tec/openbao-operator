@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -44,11 +45,53 @@ path "sys/storage/raft/demote" { capabilities = ["update"] }`
 
 // OperatorBootstrapConfig holds configuration for operator bootstrap.
 type OperatorBootstrapConfig struct {
-	OIDCIssuerURL   string
-	JWTKeysPEM      []string
-	OperatorNS      string
-	OperatorSA      string
-	JWTAuthAudience string
+	OIDCIssuerURL      string
+	OIDCDiscoveryURL   string
+	OIDCDiscoveryCAPEM string
+	OIDCJWKSURL        string
+	OIDCJWKSCAPEM      string
+	JWTKeysPEM         []string
+	OperatorNS         string
+	OperatorSA         string
+	JWTAuthAudience    string
+}
+
+func shouldUseDynamicOIDCDiscovery(config OperatorBootstrapConfig) bool {
+	if strings.TrimSpace(config.OIDCDiscoveryURL) == "" {
+		return false
+	}
+
+	if strings.TrimSpace(config.OIDCDiscoveryCAPEM) != "" && len(config.JWTKeysPEM) > 0 {
+		return false
+	}
+
+	return true
+}
+
+func shouldUseDynamicJWKS(config OperatorBootstrapConfig) bool {
+	jwksURL := strings.TrimSpace(config.OIDCJWKSURL)
+	if jwksURL == "" {
+		return false
+	}
+	if strings.TrimSpace(config.OIDCJWKSCAPEM) != "" {
+		return true
+	}
+
+	issuerURL := strings.TrimSpace(config.OIDCIssuerURL)
+	if issuerURL == "" {
+		return false
+	}
+
+	jwks, err := url.Parse(jwksURL)
+	if err != nil || jwks.Scheme == "" || jwks.Host == "" {
+		return false
+	}
+	issuer, err := url.Parse(issuerURL)
+	if err != nil || issuer.Scheme == "" || issuer.Host == "" {
+		return false
+	}
+
+	return strings.EqualFold(jwks.Scheme, issuer.Scheme) && strings.EqualFold(jwks.Host, issuer.Host)
 }
 
 // InfrastructureDetails captures the pieces of topology information required to
@@ -261,8 +304,8 @@ func RenderOperatorBootstrapHCL(config OperatorBootstrapConfig) ([]byte, error) 
 	if strings.TrimSpace(config.OIDCIssuerURL) == "" {
 		return nil, fmt.Errorf("OIDC issuer URL is required to render operator bootstrap")
 	}
-	if len(config.JWTKeysPEM) == 0 {
-		return nil, fmt.Errorf("at least one JWT public key is required to render operator bootstrap")
+	if strings.TrimSpace(config.OIDCDiscoveryURL) == "" && strings.TrimSpace(config.OIDCJWKSURL) == "" && len(config.JWTKeysPEM) == 0 {
+		return nil, fmt.Errorf("an OIDC discovery URL, a JWKS URL, or at least one JWT public key is required to render operator bootstrap")
 	}
 	if strings.TrimSpace(config.OperatorNS) == "" {
 		return nil, fmt.Errorf("operator namespace is required to render operator bootstrap")
@@ -289,8 +332,8 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 		if strings.TrimSpace(bootstrapConfig.OIDCIssuerURL) == "" {
 			return nil, fmt.Errorf("OIDC issuer URL is required to render operator bootstrap")
 		}
-		if len(bootstrapConfig.JWTKeysPEM) == 0 {
-			return nil, fmt.Errorf("at least one JWT public key is required to render operator bootstrap")
+		if strings.TrimSpace(bootstrapConfig.OIDCDiscoveryURL) == "" && strings.TrimSpace(bootstrapConfig.OIDCJWKSURL) == "" && len(bootstrapConfig.JWTKeysPEM) == 0 {
+			return nil, fmt.Errorf("an OIDC discovery URL, a JWKS URL, or at least one JWT public key is required to render operator bootstrap")
 		}
 		if strings.TrimSpace(bootstrapConfig.OperatorNS) == "" {
 			return nil, fmt.Errorf("operator namespace is required to render operator bootstrap")

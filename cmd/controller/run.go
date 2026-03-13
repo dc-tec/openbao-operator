@@ -414,6 +414,9 @@ func Run(args []string) {
 		}
 	} else {
 		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", oidcConfig.IssuerURL)
+		if oidcConfig.JWKSURL != "" {
+			setupLog.Info("Selected OIDC JWKS URL for operator bootstrap", "jwksURL", oidcConfig.JWKSURL)
+		}
 		if len(oidcConfig.JWKSKeys) > 0 {
 			setupLog.Info("Fetched OIDC JWKS public keys", "count", len(oidcConfig.JWKSKeys))
 		}
@@ -517,6 +520,10 @@ func Run(args []string) {
 		},
 		OIDCRuntime: openbaoclustercontroller.OIDCRuntime{
 			OIDCIssuer:         oidcConfig.IssuerURL,
+			OIDCDiscoveryURL:   oidcConfig.OIDCDiscoveryURL,
+			OIDCDiscoveryCAPEM: oidcConfig.OIDCDiscoveryCAPEM,
+			OIDCJWKSURL:        oidcConfig.JWKSURL,
+			OIDCJWKSCAPEM:      oidcConfig.JWKSCAPEM,
 			OIDCJWTKeys:        oidcConfig.JWKSKeys,
 			DiscoverOIDCConfig: auth.DiscoverConfig,
 			OIDCStatusCode:     portauth.DiscoveryStatusCode,

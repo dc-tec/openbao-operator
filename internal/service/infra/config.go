@@ -168,8 +168,8 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		if m.oidcIssuer == "" {
 			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC issuer could not be determined. Ensure the operator ServiceAccount can GET %q and %q on the Kubernetes API server (nonResourceURLs RBAC); optionally set spec.selfInit.oidc.issuer to override the issuer string", "/.well-known/openid-configuration", "/openid/v1/jwks")
 		}
-		if len(m.oidcJWTKeys) == 0 {
-			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC JWKS public keys could not be determined. Ensure the operator ServiceAccount can GET %q on the Kubernetes API server (nonResourceURLs RBAC)", "/openid/v1/jwks")
+		if strings.TrimSpace(m.oidcDiscoveryURL) == "" && strings.TrimSpace(m.oidcJWKSURL) == "" && len(m.oidcJWTKeys) == 0 {
+			return fmt.Errorf("cannot configure OpenBao JWT auth: OIDC validation material could not be determined. Ensure the operator ServiceAccount can GET %q and %q on the Kubernetes API server (nonResourceURLs RBAC)", "/.well-known/openid-configuration", "/openid/v1/jwks")
 		}
 
 		operatorNS := m.operatorNamespace
@@ -189,11 +189,15 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		audience := portauth.EffectiveBootstrapAudience(cluster, operatorAudience)
 
 		bootstrapConfig = &configbuilder.OperatorBootstrapConfig{
-			OIDCIssuerURL:   issuer,
-			JWTKeysPEM:      m.oidcJWTKeys,
-			OperatorNS:      operatorNS,
-			OperatorSA:      operatorSA,
-			JWTAuthAudience: audience,
+			OIDCIssuerURL:      issuer,
+			OIDCDiscoveryURL:   m.oidcDiscoveryURL,
+			OIDCDiscoveryCAPEM: m.oidcDiscoveryCAPEM,
+			OIDCJWKSURL:        m.oidcJWKSURL,
+			OIDCJWKSCAPEM:      m.oidcJWKSCAPEM,
+			JWTKeysPEM:         m.oidcJWTKeys,
+			OperatorNS:         operatorNS,
+			OperatorSA:         operatorSA,
+			JWTAuthAudience:    audience,
 		}
 	}
 

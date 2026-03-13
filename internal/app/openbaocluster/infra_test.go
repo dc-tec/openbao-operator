@@ -194,17 +194,17 @@ func TestInfraReconciler_ResolveOIDC_LazyDiscoveryForSelfInit(t *testing.T) {
 				called++
 				return &OIDCConfig{
 					IssuerURL: "https://issuer.example",
-					JWKSKeys:  []string{"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw==\n-----END PUBLIC KEY-----\n"},
+					JWKSURL:   "https://issuer.example/keys",
 				}, nil
 			},
 		},
 	}}
 
-	issuer, keys, err := r.resolveOIDC(context.Background(), cluster)
+	oidc, err := r.resolveOIDC(context.Background(), cluster)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, called)
-	assert.Equal(t, "https://issuer.example", issuer)
-	assert.Len(t, keys, 1)
+	assert.Equal(t, "https://issuer.example", oidc.IssuerURL)
+	assert.Equal(t, "https://issuer.example/keys", oidc.JWKSURL)
 }
 
 func TestInfraReconciler_ResolveTargetMainImage_BlueGreenPrefersActivePods(t *testing.T) {
@@ -416,7 +416,7 @@ func TestInfraReconciler_ResolveOIDC_MissingRestConfigReturnsBootstrapReason(t *
 		},
 	}
 
-	_, _, err := r.resolveOIDC(context.Background(), cluster)
+	_, err := r.resolveOIDC(context.Background(), cluster)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -460,7 +460,7 @@ func TestInfraReconciler_ResolveOIDC_ForbiddenDiscoveryReturnsBootstrapReason(t 
 		},
 	}
 
-	_, _, err := r.resolveOIDC(context.Background(), cluster)
+	_, err := r.resolveOIDC(context.Background(), cluster)
 	if err == nil {
 		t.Fatal("expected error")
 	}
