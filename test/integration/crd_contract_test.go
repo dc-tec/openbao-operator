@@ -380,6 +380,44 @@ func TestVAP_OpenBaoCluster_RejectsTransitClientCertWithoutKey(t *testing.T) {
 	}
 }
 
+func TestVAP_OpenBaoCluster_AllowsHardenedOfficialImageVerificationDefaults(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-hardened-image-verification-defaults")
+	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "health-check",
+				Operation: openbaov1alpha1.SelfInitOperationRead,
+				Path:      "sys/health",
+			},
+		},
+	}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "awskms",
+		AWSKMS: &openbaov1alpha1.AWSKMSSealConfig{
+			Region:   "eu-central-1",
+			KMSKeyID: "alias/openbao-unseal",
+		},
+	}
+	cluster.Spec.ImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+		Enabled:       true,
+		FailurePolicy: "Block",
+	}
+	cluster.Spec.OperatorImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+		Enabled:       true,
+		FailurePolicy: "Block",
+	}
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected Hardened OpenBaoCluster with enabled official image verification defaults to succeed, got: %v", err)
+	}
+}
+
 func TestVAP_OpenBaoCluster_RejectsDisabledInitContainerOverride(t *testing.T) {
 	ensureDefaultAdmissionPoliciesApplied(t)
 	namespace := newTestNamespace(t)

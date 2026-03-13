@@ -86,9 +86,10 @@ flowchart LR
     - :material-check: **Secure Network**: If backups are enabled, explicit egress rules are required (fail-closed networking).
     - :material-check: **Supply Chain Guardrails**: `spec.imageVerification` and `spec.operatorImageVerification` cannot be disabled and cannot use `failurePolicy: Warn`.
 
-    If verification blocks are omitted in Hardened, verification is still applied. For official release image
-    repositories/tags, default GitHub keyless identity values are used. For mirrored/private registries, provide
-    explicit `publicKey` or keyless identity fields in the verification config.
+    If verification blocks are omitted in Hardened, or are present with `enabled: true` but no explicit trust
+    material, verification is still applied. For official release image repositories/tags, default GitHub keyless
+    identity values are used. For mirrored/private registries, provide explicit `publicKey` or keyless identity
+    fields in the verification config.
 
     ### Benefits
 
