@@ -91,6 +91,8 @@ Use `dnsEndpointIPs` when:
 - The resolver runs on the node, host network, or another topology outside the DNS namespace pod model.
 - `dnsNamespace` is correct but OpenBao still cannot resolve names under strict NetworkPolicy enforcement.
 
+These resolver settings also matter for backup and restore Jobs. Those Jobs use separate NetworkPolicies from the main StatefulSet.
+
 ## Custom Rules (Advanced)
 
 You can append **additional** rules to the default policy to allow integrations like backups or monitoring.
@@ -209,3 +211,10 @@ Use `APIServerNetworkReady` to interpret Kubernetes API egress behavior:
   The service VIP path is configured, but post-DNAT endpoint IPs may still be required in your environment.
 - `True` with reason `APIServerNetworkReady`:
   The operator has a concrete service-VIP plus endpoint-IP contract for Kubernetes API egress.
+
+Also watch these related conditions when NetworkPolicy is involved:
+
+- `BackupConfigurationReady=False` with `NetworkEgressRulesRequired`: backup Jobs need explicit storage egress rules.
+- `RestoreConfigurationReady=False` with `NetworkEgressRulesRequired`: restore Jobs need explicit storage egress rules.
+
+For user-managed passthrough exposure, prefer `trustedIngressPeers` over raw `ingressRules` when the source is an ingress controller or Gateway data plane.

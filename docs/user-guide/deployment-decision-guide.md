@@ -26,6 +26,7 @@ Use this guide to choose the default operating path for OpenBao Operator. Start 
 | **Security profile** | **Hardened** | Use **Development** only for local testing, CI, or short-lived evaluation environments. | Development relaxes bootstrap and transport guardrails and is highly discouraged for production. | [Security Profiles](openbaocluster/configuration/security-profiles.md) |
 | **Bootstrap flow** | **Self-Init** | Use manual bootstrap only for compatibility or controlled break-glass workflows. | Manual bootstrap stores a root token Secret and is not a supported production path. | [Self-Initialization](openbaocluster/configuration/self-init.md) |
 | **TLS mode** | **External** or **ACME** | Use `OperatorManaged` only in non-Hardened environments where internal PKI convenience matters more than production trust requirements. | `OperatorManaged` TLS is rejected for Hardened clusters and is not a production path there. | [TLS & Identity](../security/workload/tls.md) |
+| **Installation path** | **Helm** | Use raw manifests when you need install-time identity customization, local overlay control, or source-based rendering. | Helm is easier to keep consistent. Raw manifests require you to choose the right overlay and verify rendered identities. | [Operator Installation](operator/installation.md) |
 | **Admission posture** | **Admission policies enabled** | Disable admission policies only for development or break-glass recovery. | Disabling them enters unsafe mode and removes part of the normal safety model. | [Admission Policies](../security/infrastructure/admission-policies.md) |
 | **Upgrade strategy** | **RollingUpdate** | Use **BlueGreen** when you need parallel validation, manual promotion, or stronger cutover boundaries. | Blue/green uses more resources and adds operational complexity. | [Cluster Upgrades](openbaocluster/operations/upgrades.md) |
 | **Platform mode** | **Auto-detection** | Use explicit OpenShift mode when the target cluster is OpenShift or when SCC-compatible rendering must be explicit. | Explicit platform selection gives you predictable rendering, but you still need target-cluster validation for the exact SCC and platform behavior you rely on. | [Operator Installation](operator/installation.md) |
@@ -74,6 +75,19 @@ Before calling a deployment production-ready, verify these choices:
 4. Admission policies are installed and enforced.
 5. Backups are configured and tested.
 6. Upgrade validation is done in staging, with `RollingUpdate` as the default strategy unless you need blue/green cutover control.
+
+## Status Checkpoints
+
+Use these condition checkpoints before calling a path ready:
+
+| Path | Minimum checkpoint |
+| :--- | :--- |
+| Hardened with External TLS | `Available=True`, `TLSReady=True`, `UserAccessBootstrap=True`, `ProductionReady=True` |
+| Hardened with ACME | `Available=True`, `ACMEIntegrationReady=True`, `ACMECacheReady=True`, `UserAccessBootstrap=True`, `ProductionReady=True` |
+| Gateway exposure | `GatewayIntegrationReady=True` |
+| Strict NetworkPolicy clusters | `APIServerNetworkReady=True` or `Unknown` with `APIServerEndpointIPsRecommended` after you confirm the service-VIP path works in your CNI |
+| Scheduled backups | `BackupConfigurationReady=True` |
+| Restore before execution | `RestoreConfigurationReady=True` |
 
 ## See Also
 

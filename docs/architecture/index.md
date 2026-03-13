@@ -54,6 +54,8 @@ This document provides a comprehensive overview of the OpenBao Operator's archit
 
 The OpenBao Operator uses a **Supervisor Pattern**. It delegates data-plane consistency and snapshot semantics to OpenBao while managing lifecycle orchestration, policy guardrails, infrastructure integration, and safe version upgrades around it.
 
+`OpenBaoCluster` is an operator-owned lifecycle contract. It is not a generic import API for arbitrary unmanaged OpenBao clusters.
+
 ### 1.1 Tenancy Models
 
 The operator supports two architectural modes:
@@ -165,6 +167,8 @@ make lint-ast
     - **Storage**: Default StorageClass available.
     - **Network**: Working DNS for StatefulSet identity.
     - **Version**: OpenBao v2.4.0+ (required for static auto-unseal).
+    - **API Egress**: Kubernetes API reachability under NetworkPolicy is environment-specific and may require explicit endpoint IPs.
+    - **Exposure**: Gateway and ACME compatibility depends on the selected controller and external passthrough path.
 
 ## Cross-Cutting Concerns
 
@@ -222,3 +226,12 @@ status:
 2. Current Raft leader.
 3. Number of ready pods.
 4. Standard Kubernetes conditions.
+
+The most important operator-owned conditions for day-1 and day-2 validation are:
+
+- `ProductionReady` for Hardened posture
+- `TLSReady` for TLS asset validation
+- `APIServerNetworkReady` for Kubernetes API egress under NetworkPolicy
+- `GatewayIntegrationReady` for `spec.gateway`
+- `ACMEIntegrationReady` and `ACMECacheReady` for ACME deployments
+- `BackupConfigurationReady` and `RestoreConfigurationReady` for day-2 jobs

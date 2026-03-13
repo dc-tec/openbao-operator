@@ -39,6 +39,9 @@ When using **Self-Initialization** (`spec.selfInit.enabled: true`), the relation
 2. **Role Creation:** It creates a policy and role named `openbao-operator`.
 3. **Binding:** This role is bound to the operator's ServiceAccount in the operator's namespace.
 
+!!! note "Operator Auth vs Human Auth"
+    `spec.selfInit.oidc.enabled: true` bootstraps operator authentication only. It does not create a human login path by itself. Watch `UserAccessBootstrap` on the cluster if you rely on `spec.selfInit.requests` to create JWT, OIDC, `userpass`, or other operator-facing auth mounts.
+
 !!! success "Recommended Configuration"
     For production environments, we strongly recommend using **Hardened Profile** with **Self
     Initialization**. This ensures no root token is ever persisted to a Kubernetes Secret.
@@ -105,6 +108,8 @@ failed to create authenticated OpenBao client: ... permission denied
 5. **Rendered Identity Match:** If you customized the raw-manifest install namespace or `namePrefix`, ensure the JWT role binds to the rendered controller ServiceAccount name and namespace rather than the defaults.
 
 If OIDC discovery or operator identity bootstrap is miswired, the cluster surfaces `OIDCBootstrapConfigurationInvalid`.
+
+If the operator cannot recognize a human login path from `spec.selfInit.requests`, the cluster surfaces `UserAccessBootstrap=Unknown` with reason `UserAccessUnverified`. This is a warning signal, not a hard block.
 
 ### Manual Role Configuration
 

@@ -34,6 +34,7 @@ Condition types defined in `api/v1alpha1`:
 | `Available` | Workload availability from ready replicas | `AllReplicasReady`, `NoReplicasReady`, `NotReady`, `Paused` |
 | `APIServerNetworkReady` | Operator-known Kubernetes API egress contract for operator-managed NetworkPolicies | `APIServerNetworkReady`, `APIServerEndpointIPsRecommended`, `APIServerNetworkConfigurationInvalid`, `Paused` |
 | `TLSReady` | TLS asset readiness | `Ready`, `Disabled`, `TLSSecretMissing`, `TLSSecretInvalid`, `Unknown`, `Paused` |
+| `UserAccessBootstrap` | Best-effort check that `spec.selfInit.requests` appears to create a human login path in addition to operator bootstrap auth | `UserAccessConfigured`, `UserAccessUnverified`, `Disabled`, `Paused` |
 | `ACMEIntegrationReady` | Operator-known ACME prerequisites such as Gateway passthrough, private ACME trust, and supported self-reachability checks | `ACMEIntegrationReady`, `GatewayAPIMissing`, `ACMEGatewayNotConfiguredForPassthrough`, `ACMEDomainNotResolvable`, `PrerequisitesMissing`, `Unknown`, `Paused` |
 | `ACMECacheReady` | Shared ACME cache readiness for HA or blue/green ACME topologies | `ACMECacheReady`, `ACMECacheNotConfigured`, `ACMECacheMissing`, `ACMECachePending`, `ACMECacheInvalidAccessMode` |
 | `GatewayIntegrationReady` | Operator-known Gateway API prerequisites and controller support for `spec.gateway` | `GatewayIntegrationReady`, `GatewayAPIMissing`, `GatewayReferenceMissing`, `GatewayClassMissing`, `GatewayClassPending`, `GatewayClassNotAccepted`, `GatewayVersionUnsupported`, `GatewayFeatureUnsupported`, `GatewayCapabilitiesUnknown`, `GatewayNotProgrammed`, `GatewayProgrammingPending`, `GatewayListenerIncompatible`, `Paused` |
@@ -50,6 +51,19 @@ Condition types defined in `api/v1alpha1`:
 | `OpenBaoSealed` | OpenBao seal state observed from registration labels | `Sealed`, `Unsealed`, `Unknown` |
 | `OpenBaoLeader` | Leader discovery from registration labels | `LeaderFound`, `LeaderUnknown`, `MultipleLeaders` |
 | `NodeSecurityCapabilityMismatch` | Node capability mismatch for enabled hardening | `Ready`, `AppArmorUnsupported` |
+
+## Workflow Checkpoints
+
+Use these condition sets as the fastest contract checks for common workflows:
+
+| Workflow | Conditions to watch |
+| :--- | :--- |
+| Hardened with External TLS | `Available`, `TLSReady`, `UserAccessBootstrap`, `ProductionReady` |
+| Hardened with ACME | `Available`, `ACMEIntegrationReady`, `ACMECacheReady`, `UserAccessBootstrap`, `ProductionReady` |
+| Gateway exposure | `GatewayIntegrationReady` |
+| Strict NetworkPolicy environments | `APIServerNetworkReady` |
+| Scheduled backups | `BackupConfigurationReady` |
+| Restore execution | `RestoreConfigurationReady`, then `RestoreComplete` |
 
 ## OpenBaoRestore Conditions
 

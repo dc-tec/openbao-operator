@@ -48,6 +48,14 @@ The operator now reports a dedicated `GatewayIntegrationReady` condition for `sp
 
 If the Gateway controller does not publish feature support, the condition stays `Unknown` instead of assuming compatibility.
 
+## Readiness Checkpoints
+
+Use these conditions to validate Gateway exposure:
+
+- `GatewayIntegrationReady=True`: the operator could verify the referenced `Gateway`, `GatewayClass`, listener mode, and controller support for the configured path.
+- `GatewayIntegrationReady=Unknown`: the controller has not reported enough status yet, the controller does not publish supported features, or the operator cannot verify the Gateway capabilities from the available status.
+- `ProductionReady=True`: for Hardened clusters, treat this as the final confirmation only after the relevant Gateway or ACME conditions are also green.
+
 === "TLS Passthrough (Recommended)"
     **Best for:** Default OpenBao deployments, end-to-end TLS, ACME, client certificate auth, and keeping OpenBao as the TLS endpoint.
 
@@ -170,6 +178,8 @@ When `GatewayIntegrationReady=False`, inspect the condition reason first. Common
 - `GatewayListenerIncompatible`
 
 When `GatewayIntegrationReady=Unknown`, the controller has not yet reported enough status for the operator to verify compatibility, or it does not publish `status.supportedFeatures`.
+
+For ACME clusters, also check `ACMEIntegrationReady` and `ACMECacheReady`. Gateway readiness alone is not enough for ACME issuance.
 
 ## Blue/Green Upgrade Integration
 

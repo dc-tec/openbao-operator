@@ -6,6 +6,9 @@ description: Cross-cutting invariants preserved by OpenBao Operator across ident
 
 This page defines the cross-cutting guarantees OpenBao Operator tries to preserve. Use it as the conceptual anchor for architecture, security, and lifecycle discussions.
 
+!!! note "Lifecycle Contract"
+    `OpenBaoCluster` is an operator-owned lifecycle contract. It is not a generic import API for arbitrary unmanaged OpenBao clusters.
+
 !!! note "Stable Intent"
     These invariants describe what the operator is trying to preserve across releases. Implementation details may change, but weakening an invariant should be treated as a deliberate contract change.
 
@@ -14,6 +17,7 @@ This page defines the cross-cutting guarantees OpenBao Operator tries to preserv
 | Invariant | Why it exists | Primary enforcement | Reference |
 | :--- | :--- | :--- | :--- |
 | **Provisioner and Controller identities remain separated** | Prevent one long-running identity from both minting and consuming tenant access. | Split ServiceAccounts, RBAC boundaries, admission policies. | [RBAC Architecture](../security/infrastructure/rbac.md) |
+| **Rendered operator identities stay internally consistent** | Prevent raw-manifest installs from drifting between ServiceAccounts, RoleBindings, and admission policy subjects. | Helm values, raw-manifest overlays, admission-policy variables, install-time render tests. | [Operator Installation](../user-guide/operator/installation.md) |
 | **Tenant namespace access is introduced explicitly, not discovered** | Keep tenant onboarding intentional and prevent broad namespace discovery. | `OpenBaoTenant` onboarding flow, RoleBinding introduction, no namespace list for Controller. | [Tenant Isolation](../security/multi-tenancy/tenant-isolation.md) |
 | **Secret access is name-scoped and non-enumerating** | Prevent broad tenant secret exposure and reduce blast radius. | Allowlisted Secret roles, no Secret list/watch in the normal model, admission policy restrictions. | [RBAC Architecture](../security/infrastructure/rbac.md) |
 | **Admission enforcement is part of the normal safety model** | Keep API-level guardrails active before invalid or unsafe objects persist. | `ValidatingAdmissionPolicy` inventory, fail-closed startup, optional enforcement canary. | [Admission Policies](../security/infrastructure/admission-policies.md) |
@@ -27,6 +31,13 @@ This page defines the cross-cutting guarantees OpenBao Operator tries to preserv
 | **Self-init is the supported production bootstrap path** | Keep production bootstrap declarative and avoid storing the initial root token in a Secret. | Hardened profile requirements, validation policy, `ProductionReady` evaluation. | [Self-Initialization](../user-guide/openbaocluster/configuration/self-init.md) |
 | **Operator-owned configuration stays operator-owned** | Preserve correctness for networking, storage, seal configuration, and listener identity. | Managed configuration rendering and admission ownership rules. | [Admission Policies](../security/infrastructure/admission-policies.md) |
 | **`ProductionReady` means Hardened posture checks passed** | Keep status conditions narrowly scoped and avoid implying support or API stability guarantees. | Status condition evaluation and warning reasons. | [Status Conditions and Events](../reference/status-and-events.md) |
+
+## Integration Invariants
+
+| Invariant | Why it exists | Primary enforcement | Reference |
+| :--- | :--- | :--- | :--- |
+| **Gateway, ACME, and API-server assumptions surface as explicit conditions** | Turn environment and controller assumptions into operator-visible contracts before they become late runtime failures. | `GatewayIntegrationReady`, `ACMEIntegrationReady`, `ACMECacheReady`, and `APIServerNetworkReady`. | [Status Conditions and Events](../reference/status-and-events.md) |
+| **Backup and restore identity remains separate from main workload identity** | Prevent day-2 Jobs from silently inheriting the wrong auth path or egress assumptions from the main StatefulSet. | Generated Job ServiceAccounts, backup and restore readiness evaluation, explicit status reasons. | [Backup Operations](../user-guide/openbaocluster/operations/backups.md) |
 
 ## Lifecycle Safety Invariants
 
