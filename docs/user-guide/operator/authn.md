@@ -57,6 +57,10 @@ When using **Self-Initialization** (`spec.selfInit.enabled: true`), the relation
 
 Use this checklist when you install the operator with raw manifests, a custom namespace, or a `namePrefix`.
 
+Start from the supported install path in [Operator Installation](installation.md#install-profiles), then use this checklist to validate the rendered controller identity and OpenBao-side JWT binding.
+
+For the compact bridge between install identity, Kubernetes RBAC, and OpenBao-side roles, see [Operator Identity And Access](identity-and-access.md).
+
 1. Confirm the controller ServiceAccount name and namespace from the rendered manifest.
 2. Confirm the controller Deployment still mounts the projected token used for OpenBao auth.
 3. Confirm the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks` from the Kubernetes API server.

@@ -96,6 +96,7 @@ nav:
               - Deployment Decision Guide: user-guide/deployment-decision-guide.md
               - Operator:
                       - Installation: user-guide/operator/installation.md
+                      - Identity & Access: user-guide/operator/identity-and-access.md
                       - Authentication: user-guide/operator/authn.md
                       - Authorization: user-guide/operator/authz.md
                       - Single-Tenant Mode: user-guide/operator/single-tenant-mode.md
