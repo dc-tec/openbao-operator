@@ -2,8 +2,11 @@
 
 Use cluster upgrades to move OpenBao to a newer semantic version while preserving Raft safety. The OpenBao Operator supports two strategies:
 
-- **Rolling Update** for lower resource usage and a smaller steady-state footprint.
-- **Blue/Green** for controlled cutover and rollback boundaries.
+- **Rolling Update** as the default recommended strategy for routine production upgrades.
+- **Blue/Green** for staged promotion, controlled cutover, and stronger rollback boundaries.
+
+!!! tip "Default Recommendation"
+    Use `RollingUpdate` for the default production path. Choose `BlueGreen` when you need parallel validation, manual promotion, or stronger isolation before cutover.
 
 ## Prerequisites
 
@@ -61,8 +64,8 @@ Before you patch `spec.version`, verify the following:
 
 Patch `spec.version` to the target release. The strategy configured in `spec.upgrade.strategy` determines how the operator applies the change.
 
-=== "Rolling Update (Default)"
-    **Best for:** Standard upgrades, Dev/Test environments, Minimizing resource usage.
+=== "Rolling Update (Default Recommended)"
+    **Best for:** The default production path, routine version upgrades, and minimizing resource usage.
 
     The Operator updates pods one by one, ensuring the active leader steps down gracefully before termination to maintain availability.
 
@@ -93,8 +96,8 @@ Patch `spec.version` to the target release. The strategy configured in `spec.upg
               retry: "2026-03-10T12:00:00Z"
         ```
 
-=== "Blue/Green (Zero Downtime)"
-    **Best for:** Production-critical paths and major version upgrades where controlled cutover is required.
+=== "Blue/Green (Controlled Cutover)"
+    **Best for:** Major changes, staged validation, and production paths where controlled cutover is required.
 
     The OpenBao Operator creates a **parallel** Green revision, syncs and validates it, promotes Green to voters, then shifts traffic during `Cleanup`.
 
@@ -250,12 +253,13 @@ Use the recovery runbooks for that workflow:
 
 ### Gateway API and Blue/Green upgrades
 
-When using **Gateway API**, the OpenBao Operator creates an `HTTPRoute` that targets the cluster's main external Service (`<cluster>-public`). During `Cleanup`, it updates that Service selector to the Green revision.
+When using **Gateway API**, the OpenBao Operator keeps the generated Gateway route targeting the cluster's main external Service (`<cluster>-public`). This is a `TLSRoute` when `spec.gateway.tlsPassthrough=true`, or an `HTTPRoute` when Gateway TLS termination is used. During `Cleanup`, it updates that Service selector to the Green revision.
 
 ```yaml
 spec:
   gateway:
     enabled: true
+    tlsPassthrough: true
     hostname: bao.example.com
     gatewayRef:
       name: main-gateway

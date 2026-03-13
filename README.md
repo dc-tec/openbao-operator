@@ -3,7 +3,7 @@
 <img src="docs/assets/repo_logo.png" alt="OpenBao Operator" width="520" />
 
 
-**Enterprise-grade management for OpenBao on Kubernetes.**
+**Secure lifecycle management for OpenBao on Kubernetes.**
 
 [![CI](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/dc-tec/openbao-operator/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/dc-tec/openbao-operator?filename=go.mod&label=Go&logo=go&logoColor=white)](https://github.com/dc-tec/openbao-operator/blob/main/go.mod)
@@ -16,7 +16,7 @@
 </div>
 
 > [!WARNING]
-> **Pre-1.0 Status**: This operator is actively seeking feedback and may introduce breaking changes to APIs and defaults before `1.0.0`. Validate thoroughly before production use.
+> **Pre-GA Release**: OpenBao Operator is intended for real deployments, but the CRD API remains `v1alpha1`, minor releases may introduce breaking changes, and support is best-effort for the latest stable line only. For production, use the `Hardened` profile, keep admission enforcement enabled, pin explicit versions, and validate upgrades in staging.
 
 ---
 
@@ -33,14 +33,21 @@ Full documentation is available at **[dc-tec.github.io/openbao-operator](https:/
 | [![Security](https://img.shields.io/badge/Security-000000?style=for-the-badge&logo=imou&logoColor=white)](https://dc-tec.github.io/openbao-operator/latest/security/) | [![Contributing](https://img.shields.io/badge/Contributing-181717?style=for-the-badge&logo=github&logoColor=white)](https://dc-tec.github.io/openbao-operator/latest/contributing/) |
 | **Threat Model, Hardening, RBAC** | **Dev Setup, Coding Standards, Release** |
 | [![Compatibility](https://img.shields.io/badge/Compatibility-10b981?style=for-the-badge&logo=kubernetes&logoColor=white)](https://dc-tec.github.io/openbao-operator/latest/reference/compatibility/) | [![Samples](https://img.shields.io/badge/Samples-9333ea?style=for-the-badge&logo=yaml&logoColor=white)](config/samples/) |
-| **Supported K8s/OpenBao Versions** | **Ready-to-apply Example Manifests** |
+| **Validated K8s/OpenBao Versions** | **Ready-to-apply Example Manifests** |
+
+Recommended entry points:
+
+- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/latest/user-guide/deployment-decision-guide/)
+- [Operator Invariants](https://dc-tec.github.io/openbao-operator/latest/architecture/operator-invariants/)
+- [Production Checklist](https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/production-checklist/)
 
 ## Compatibility
 
 For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openbao-operator/latest/reference/compatibility/).
 
-- **Kubernetes**: `v1.33+` (tested: `v1.33`–`v1.35`)
-- **OpenBao**: >= `2.4.x` (tested: `2.5.0` (and tests upgrades from `2.4.4` to `2.5.0`))
+- **Kubernetes**: validated in CI on `v1.33`–`v1.35`
+- **OpenBao**: validated in CI on `2.5.0`, with config compatibility checks for `2.4.4` and upgrade coverage from `2.4.4` to `2.5.0`
+- **Support posture**: best-effort support for the latest stable release line
 
 ## CRDs (API Surface)
 
@@ -56,8 +63,8 @@ For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openba
 - **TLS, Your Way**: Operator-managed TLS with rotation, external TLS, and ACME mode where OpenBao owns certificates (with ACME challenge Service support).
 - **Streaming Raft Backups**: Snapshot streaming to S3/GCS/Azure with retention controls (no local staging).
 - **Declarative Restores**: Restore workflows via `OpenBaoRestore` with operation locking and safe overrides.
-- **Safe Upgrades**: Rolling and blue/green upgrade strategies, including pre-upgrade snapshots.
-- **Multi-Tenancy**: Namespace-scoped tenancy model with policy enforcement via `OpenBaoTenant`.
+- **Safe Upgrades**: Rolling and blue/green upgrade strategies, including pre-upgrade snapshots. `RollingUpdate` is the default recommended strategy.
+- **Multi-Tenancy**: Namespace-scoped tenancy model with policy enforcement via `OpenBaoTenant`. Multi-tenant mode is the default and recommended production operating model.
 
 ## Security Model
 
@@ -107,12 +114,22 @@ kubectl -n openbao-demo get secret my-cluster-root-token -o jsonpath='{.data.tok
 
 ### Option B: Production (Hardened Profile)
 
-The `Hardened` profile is the recommended production posture and enforces:
+The default production path is:
+
+- Multi-tenant mode
+- `Hardened` profile
+- `spec.selfInit.enabled: true`
+- `spec.tls.mode: External` or `ACME`
+- `spec.upgrade.strategy: RollingUpdate`
+- Admission policies enabled
+
+The `Hardened` profile enforces:
 - External/ACME TLS (`spec.tls.mode`)
 - External unseal (`spec.unseal.type`)
 - Self-init enabled (`spec.selfInit.enabled: true`)
 
 Start with:
+- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/latest/user-guide/deployment-decision-guide/)
 - [Security Profiles](https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/security-profiles/)
 - [Production Checklist](https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/production-checklist/)
 - Production samples in `config/samples/production/`

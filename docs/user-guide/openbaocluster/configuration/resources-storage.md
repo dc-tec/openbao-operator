@@ -108,7 +108,7 @@ The Operator enforces a **Zero Trust** network model using a default `NetworkPol
 | Egress | Within Cluster | 8200-8201 | Raft Replication. |
 
 !!! tip "Customization"
-    You can append custom rules via `spec.network.ingressRules` and `spec.network.egressRules`. The Operator's default rules cannot be disabled. See [Network Configuration](network.md) for details.
+    You can append custom rules via `spec.network.egressRules` and `spec.network.ingressRules`. For user-managed ingress controllers or passthrough proxies, prefer `spec.network.trustedIngressPeers`. The Operator's default rules cannot be disabled. See [Network Configuration](network.md) for details.
 
 !!! warning "Backup Jobs"
     Backup job pods (`openbao.org/component=backup`) are **excluded** from this NetworkPolicy to ensure they can access external Object Storage (S3/GCS/Azure). You may need to create a dedicated NetworkPolicy for backup jobs if you require strict egress filtering.

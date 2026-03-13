@@ -296,7 +296,7 @@ Stable/prerelease releases enforce provenance before publish. Verification must 
     IMAGE="ghcr.io/dc-tec/openbao-operator@sha256:<digest>"
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/X.Y.Z" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       "${IMAGE}"
     ```
@@ -310,7 +310,7 @@ Stable/prerelease releases enforce provenance before publish. Verification must 
       "oci://${IMAGE}" \
       --repo dc-tec/openbao-operator \
       --signer-workflow dc-tec/openbao-operator/.github/workflows/reusable-build.yml \
-      --source-ref refs/tags/0.1.0 \
+      --source-ref refs/tags/X.Y.Z \
       --cert-oidc-issuer https://token.actions.githubusercontent.com \
       --deny-self-hosted-runners
     ```
@@ -323,7 +323,7 @@ Stable/prerelease releases enforce provenance before publish. Verification must 
 
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/X.Y.Z" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       "${CHART}"
 
@@ -331,7 +331,7 @@ Stable/prerelease releases enforce provenance before publish. Verification must 
       "oci://${CHART}" \
       --repo dc-tec/openbao-operator \
       --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
-      --source-ref refs/tags/0.1.0 \
+      --source-ref refs/tags/X.Y.Z \
       --cert-oidc-issuer https://token.actions.githubusercontent.com \
       --deny-self-hosted-runners
     ```
@@ -344,7 +344,7 @@ Stable/prerelease releases enforce provenance before publish. Verification must 
     cosign verify-blob \
       --new-bundle-format=true \
       --bundle checksums.txt.bundle \
-      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/X.Y.Z" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       checksums.txt
 
@@ -352,7 +352,7 @@ Stable/prerelease releases enforce provenance before publish. Verification must 
       checksums.txt \
       --repo dc-tec/openbao-operator \
       --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
-      --source-ref refs/tags/0.1.0 \
+      --source-ref refs/tags/X.Y.Z \
       --cert-oidc-issuer https://token.actions.githubusercontent.com \
       --deny-self-hosted-runners
     ```

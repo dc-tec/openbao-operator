@@ -6,8 +6,8 @@ description: OpenBao Operator is a Kubernetes operator for secure OpenBao lifecy
 
 OpenBao Operator is a Kubernetes operator for [OpenBao](https://openbao.org), focused on secure lifecycle management: install, upgrades, backup/restore, and multi-tenant operations.
 
-!!! warning "Experimental Status"
-    This operator is currently in an **experimental phase** and is actively seeking feedback. It is **not** recommended for production environments at this time.
+!!! note "Pre-GA Release"
+    OpenBao Operator is pre-GA and intended for real deployments, but the CRD API remains `v1alpha1`, minor releases may introduce breaking changes, and support is best-effort for the latest stable line only. For production, use the `Hardened` profile, keep admission enforcement enabled, pin explicit versions, and validate upgrades in staging.
 
 <div class="grid cards" markdown>
 

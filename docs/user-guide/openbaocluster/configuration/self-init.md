@@ -90,6 +90,7 @@ spec:
 !!! note "OIDC prerequisites"
     The operator must be able to discover the Kubernetes OIDC issuer and JWKS keys from the Kubernetes API server.
     Ensure the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks` (RBAC `nonResourceURLs`).
+    If you customized the operator namespace or `namePrefix`, also ensure any manually configured JWT role in OpenBao binds to the rendered controller ServiceAccount identity. See [Operator Authentication](../../operator/authn.md#custom-install-checklist).
 
 !!! note "JWT audience"
     The operator uses `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`) when creating JWT roles.

@@ -54,7 +54,7 @@ sequenceDiagram
 
     Once `pod-0` is running, the InitManager takes over:
 
-    1.  **Detection:** Checks internal status. If it finds `openbao-initialized=true` label or receives `200 OK` from `/sys/health`, it assumes adoption of an existing cluster and skips to Phase 3.
+    1.  **Detection:** Checks internal status. If it finds `openbao-initialized=true` label or receives `200 OK` from `/sys/health`, it treats the cluster as already initialized and skips the init call.
     2.  **Execution:** If uninitialized, it calls `PUT /v1/sys/init`.
     3.  **Security:**
         -   The root token is stored immediately in a Secret (`<cluster>-root-token`) and is never written to logs.
@@ -79,7 +79,7 @@ sequenceDiagram
 
 - **One-Time Operation:** The InitManager is designed to be **idempotent** but typically runs only once in the cluster's lifecycle.
 - **Failure Handling:** If `sys/init` fails (network, timeout), the operator retries. The cluster remains at `replicas: 1` until success.
-- **Adoption:** You can bring an existing OpenBao cluster under management. If the operator detects it is already initialized, it simply adopts it and moves to Scale Up.
+- **Already Initialized Clusters:** If the operator detects the cluster is already initialized, it skips the init call and proceeds with the initialized-cluster path. This is recovery behavior for operator-managed clusters. It is not a generic import workflow for arbitrary unmanaged OpenBao clusters.
 
 ---
 

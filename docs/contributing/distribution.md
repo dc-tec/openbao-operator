@@ -4,7 +4,7 @@ description: Distribution strategy for OpenBao Operator.
 
 # Distribution
 
-This project uses an Artifact Hub-first distribution strategy and defers public OperatorHub publication until post-`0.1.0` maturity gates are met.
+This project uses an Artifact Hub-first distribution strategy and defers public OperatorHub publication until post-pre-GA maturity gates are met.
 
 ## Current Strategy
 

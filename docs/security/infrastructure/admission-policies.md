@@ -41,7 +41,7 @@ The Operator ships with a suite of policies to enforce "Least Privilege" and "Gi
 | :--- | :--- | :--- | :--- | :--- |
 | `openbao-lock-managed-resource-mutations` | `openbao-lock-managed-resource-mutations-binding` | Operator-managed resources (e.g. `StatefulSet`, `Service`, `Secret`, `Pod`) | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates. |
 | `openbao-lock-controller-statefulset-mutations` | `openbao-lock-controller-statefulset-mutations-binding` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
-| `openbao-validate-openbaocluster` | `openbao-validate-openbaocluster-binding` | `OpenBaoCluster` | **Validate** | Enforces spec invariants (e.g., Hardened profile requirements, TLS configs). |
+| `openbao-validate-openbaocluster` | `openbao-validate-openbaocluster-binding` | `OpenBaoCluster` | **Validate** | Enforces spec invariants such as Hardened profile requirements, self-init for production posture, and rejection of `OperatorManaged` TLS in Hardened clusters. |
 | `openbao-validate-openbao-tenant` | `openbao-validate-openbao-tenant-binding` | `OpenBaoTenant` | **Validate** | Enforces tenant spec invariants and multi-tenant guardrails. |
 | `openbao-validate-openbaorestore` | `openbao-validate-openbaorestore-binding` | `OpenBaoRestore` | **Validate** | Enforces restore spec invariants and safety checks. |
 | `openbao-enforce-managed-image-digests` | `openbao-enforce-managed-image-digests-binding` | Operator-managed `StatefulSet` / `Job` | **Block** | Denies mutable tag-based image refs for workloads marked as requiring digest enforcement (Hardened-managed workloads by default). |
@@ -86,6 +86,8 @@ The `openbao-restrict-provisioner-rbac` policy is a defense-in-depth control tha
 
 !!! warning "Unsafe mode"
     Disabling admission policies is treated as **unsafe mode**. When installing via Helm with `admissionPolicies.enabled=false`, the chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.
+
+    Unsafe mode is not a recommended production posture, even when a cluster otherwise uses the `Hardened` profile.
 
 !!! note "Optional runtime canary"
     The Provisioner supports an optional enforcement canary (`--admission-canary`) that performs a dry-run RBAC request which must be denied by the Provisioner RBAC policy. This provides stronger assurance that policy *enforcement* is active (not just policy presence/bindings).

@@ -175,7 +175,7 @@ spec:
 The operator project publishes release artifacts with a "build once, promote by digest" model:
 
 - Images are built and tested under a `build-<sha>` tag.
-- Stable/prerelease tags (for example `0.1.0`, `0.2.0-rc.1`) are promoted **by digest** (no rebuild).
+- Stable/prerelease tags (for example `X.Y.Z`, `X.Y.Z-rc.1`) are promoted **by digest** (no rebuild).
 - Image attestations are emitted by the reusable build workflow and verified before publish.
 - Images and charts are signed keylessly with Sigstore.
 - Chart digest and `checksums.txt` are attested and verified before GitHub Release publication.
@@ -190,7 +190,7 @@ The operator project publishes release artifacts with a "build once, promote by 
 
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/X.Y.Z" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       "${IMAGE}"
 
@@ -198,7 +198,7 @@ The operator project publishes release artifacts with a "build once, promote by 
       "oci://${IMAGE}" \
       --repo dc-tec/openbao-operator \
       --signer-workflow dc-tec/openbao-operator/.github/workflows/reusable-build.yml \
-      --source-ref refs/tags/0.1.0 \
+      --source-ref refs/tags/X.Y.Z \
       --cert-oidc-issuer https://token.actions.githubusercontent.com \
       --deny-self-hosted-runners
     ```
@@ -210,7 +210,7 @@ The operator project publishes release artifacts with a "build once, promote by 
 
     cosign verify \
       --new-bundle-format=true \
-      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/X.Y.Z" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       "${CHART}"
 
@@ -218,7 +218,7 @@ The operator project publishes release artifacts with a "build once, promote by 
       "oci://${CHART}" \
       --repo dc-tec/openbao-operator \
       --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
-      --source-ref refs/tags/0.1.0 \
+      --source-ref refs/tags/X.Y.Z \
       --cert-oidc-issuer https://token.actions.githubusercontent.com \
       --deny-self-hosted-runners
     ```
@@ -230,7 +230,7 @@ The operator project publishes release artifacts with a "build once, promote by 
     cosign verify-blob \
       --new-bundle-format=true \
       --bundle checksums.txt.bundle \
-      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/0.1.0" \
+      --certificate-identity "https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/X.Y.Z" \
       --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
       checksums.txt
 
@@ -238,7 +238,7 @@ The operator project publishes release artifacts with a "build once, promote by 
       checksums.txt \
       --repo dc-tec/openbao-operator \
       --signer-workflow dc-tec/openbao-operator/.github/workflows/release.yml \
-      --source-ref refs/tags/0.1.0 \
+      --source-ref refs/tags/X.Y.Z \
       --cert-oidc-issuer https://token.actions.githubusercontent.com \
       --deny-self-hosted-runners
     ```

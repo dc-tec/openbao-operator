@@ -2,7 +2,7 @@
 description: Technical architecture of OpenBao Operator, including controller design, package layering, reconciliation flow, and API model.
 ---
 
-# Architecture: OpenBao Supervisor Operator
+# Architecture: OpenBao Operator
 
 This document provides a comprehensive overview of the OpenBao Operator's architecture.
 
@@ -15,6 +15,14 @@ This document provides a comprehensive overview of the OpenBao Operator's archit
     High-level design and supervisor pattern.
 
     [:material-arrow-down: Jump to Overview](#1-architecture-overview)
+
+- :material-shield-check: **Invariants**
+
+    ---
+
+    Cross-cutting guarantees the operator tries to preserve.
+
+    [:material-arrow-right: Operator Invariants](operator-invariants.md)
 
 - :material-cogs: **Components**
 
@@ -44,7 +52,7 @@ This document provides a comprehensive overview of the OpenBao Operator's archit
 
 ## 1. Architecture Overview
 
-The OpenBao Operator adopts a **Supervisor Pattern**. It delegates data consistency to the OpenBao binary while managing the external ecosystem: PKI lifecycle, Infrastructure state, and Safe Version Upgrades.
+The OpenBao Operator uses a **Supervisor Pattern**. It delegates data-plane consistency and snapshot semantics to OpenBao while managing lifecycle orchestration, policy guardrails, infrastructure integration, and safe version upgrades around it.
 
 ### 1.1 Tenancy Models
 
@@ -103,7 +111,7 @@ The runtime code is organized into layered packages to keep controller plumbing,
 | `L4` | Services/managers | `internal/service/backup`, `internal/service/restore`, `internal/service/upgrade`, `internal/service/infra`, `internal/service/certs`, `internal/service/init`, `internal/service/provisioner`, `internal/service/opslifecycle`, `internal/service/workloadidentity` |
 | `L5` | Ports/contracts | `internal/port/auth`, `internal/port/backup`, `internal/port/blobstore`, `internal/port/imageverify`, `internal/port/infra`, `internal/port/initmanager`, `internal/port/openbao`, `internal/port/security` |
 | `L6` | Adapters/integrations | `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}` |
-| `L7` | Platform/cross-cutting | `internal/platform/{admission,constants,entrypoint,errors,logging,observability,predicates,reconcile,testutil}` |
+| `L7` | Platform/cross-cutting | `internal/platform/{admission,constants,entrypoint,errors,logging,observability,openbaotls,predicates,reconcile,testutil}` |
 
 The authoritative layer inventory lives in `.ast-grep/policy/architecture-boundaries.yml`.
 App packages stay independent from adapters, ports stay contract-only, service packages own domain behavior and may depend on focused adapters or ports, and adapters never depend upward on app or service packages.

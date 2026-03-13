@@ -75,9 +75,48 @@ spec:
 !!! warning "DNS Resolution Failure"
     If `dnsNamespace` does not match your cluster's actual DNS namespace, OpenBao pods will fail to resolve addresses (including Cloud KMS or Storage endpoints), leading to crash loops.
 
+If your cluster resolves DNS through node-local or host-networked caches instead of pod-backed DNS Services, also configure `dnsEndpointIPs`. The operator adds direct TCP/UDP port `53` egress rules for those resolver IPs in both the main workload and backup/restore Job NetworkPolicies.
+
+```yaml
+spec:
+  network:
+    dnsNamespace: "kube-system"
+    dnsEndpointIPs:
+      - "169.254.20.10" # Example: NodeLocal DNSCache
+```
+
+Use `dnsEndpointIPs` when:
+
+- DNS traffic is enforced against resolver IPs instead of pod IPs.
+- The resolver runs on the node, host network, or another topology outside the DNS namespace pod model.
+- `dnsNamespace` is correct but OpenBao still cannot resolve names under strict NetworkPolicy enforcement.
+
 ## Custom Rules (Advanced)
 
 You can append **additional** rules to the default policy to allow integrations like backups or monitoring.
+
+=== "Trusted Ingress Peers"
+    Allow a user-managed ingress controller or passthrough proxy to reach OpenBao on port `8200` without writing a full raw ingress rule.
+
+    ```yaml
+    spec:
+      network:
+        trustedIngressPeers:
+          # Example: Allow all pods in the Traefik namespace
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: traefik
+
+          # Example: Allow only specific ingress-controller pods
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: ingress-system
+            podSelector:
+              matchLabels:
+                app.kubernetes.io/name: traefik
+    ```
+
+    Use this when traffic reaches OpenBao through a user-managed TCP proxy, passthrough ingress controller, or Gateway data plane that the Operator does not manage directly.
 
 === "Egress Rules"
     Allow OpenBao to connect to external services (e.g., Transit Vault, S3, Databases).
@@ -105,7 +144,7 @@ You can append **additional** rules to the default policy to allow integrations 
     ```
 
 === "Ingress Rules"
-    Allow external monitors to scrape OpenBao metrics.
+    Add raw ingress rules when you need full control over ports and peers beyond the common ingress-controller case.
 
     ```yaml
     spec:
@@ -129,6 +168,9 @@ Configuring how OpenBao reaches the Kubernetes API server for Auth Method valida
     The Operator allow-lists the in-cluster Kubernetes service VIP (`KUBERNETES_SERVICE_HOST`) as a single-host CIDR (`/32` for IPv4, `/128` for IPv6) on port `443`.
 
     This does not require cross-namespace RBAC reads.
+
+    The status condition `APIServerNetworkReady` reports this path as `Unknown` with reason `APIServerEndpointIPsRecommended`.
+    That means the common service-VIP path is configured, but some CNIs still require explicit endpoint IPs.
 
 === "Manual CIDR"
     **Use Case:** Override the detected VIP allow-list (for example, if you want to allow a larger CIDR).
@@ -154,3 +196,16 @@ Configuring how OpenBao reaches the Kubernetes API server for Auth Method valida
         apiServerEndpointIPs:
           - "192.168.166.2" # The IP of the API Server container/node
     ```
+
+    When this field is set and valid, `APIServerNetworkReady=True`.
+
+## Troubleshooting Signal
+
+Use `APIServerNetworkReady` to interpret Kubernetes API egress behavior:
+
+- `False` with reason `APIServerNetworkConfigurationInvalid`:
+  The operator could not build a safe Kubernetes API egress allow-list.
+- `Unknown` with reason `APIServerEndpointIPsRecommended`:
+  The service VIP path is configured, but post-DNAT endpoint IPs may still be required in your environment.
+- `True` with reason `APIServerNetworkReady`:
+  The operator has a concrete service-VIP plus endpoint-IP contract for Kubernetes API egress.

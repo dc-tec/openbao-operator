@@ -2,8 +2,11 @@
 
 Running multiple `OpenBaoCluster` resources in a shared Kubernetes cluster requires strict isolation layers. This guide outlines how to secure tenants using RBAC, Network Policies, and Resource Quotas.
 
+!!! success "Recommended Production Architecture"
+    Multi-tenant mode is the recommended production operating model for OpenBao Operator. It combines tenant onboarding guardrails, namespace introduction, and workload isolation in one control-plane model.
+
 !!! note "Architecture Compatibility"
-    This guide applies to the default **Multi-Tenant** architecture. For Single-Tenant deployments, the controller manages the namespace directly without these isolation layers. See [Single-Tenant Mode](../operator/single-tenant-mode.md).
+    This guide applies to the default **Multi-Tenant** architecture. Use [Single-Tenant Mode](../operator/single-tenant-mode.md) only when you intentionally want direct namespace-scoped operator control instead of the default tenant-isolation model.
 
 ## Isolation Model
 

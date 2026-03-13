@@ -93,6 +93,7 @@ nav:
       - Home: index.md
       - User Guide:
               - Introduction: user-guide/index.md
+              - Deployment Decision Guide: user-guide/deployment-decision-guide.md
               - Operator:
                       - Installation: user-guide/operator/installation.md
                       - Authentication: user-guide/operator/authn.md
@@ -107,6 +108,9 @@ nav:
                       - Getting Started: user-guide/openbaocluster/getting-started.md
                       - Next Steps: user-guide/openbaocluster/next-steps.md
                       - Recipes:
+                              - Overview: user-guide/openbaocluster/recipes/index.md
+                              - Development + Self-Init + Userpass: user-guide/openbaocluster/recipes/development-self-init-userpass.md
+                              - Scheduled Backups to S3-Compatible Storage: user-guide/openbaocluster/recipes/scheduled-backups-s3-compatible.md
                               - Hardened + Transit + External TLS: user-guide/openbaocluster/recipes/hardened-transit-external-tls.md
                               - Hardened + Transit + ACME TLS: user-guide/openbaocluster/recipes/hardened-transit-acme-tls.md
                       - Configuration:
@@ -136,9 +140,11 @@ nav:
               - OpenBaoRestore:
                       - Overview: user-guide/openbaorestore/overview.md
                       - Restore: user-guide/openbaorestore/restore.md
+                      - Restore from S3-Compatible Snapshot: user-guide/openbaorestore/recipes/restore-from-s3-compatible-snapshot.md
                       - Restore After Partial Upgrade: user-guide/openbaorestore/recovery-restore-after-upgrade.md
       - Architecture:
               - Overview: architecture/index.md
+              - Operator Invariants: architecture/operator-invariants.md
               - Component Design: architecture/components.md
               - Components:
                       - Certificates: architecture/cert-manager.md

@@ -32,12 +32,18 @@ Condition types defined in `api/v1alpha1`:
 | Type | Meaning | Typical Reasons |
 | :--- | :--- | :--- |
 | `Available` | Workload availability from ready replicas | `AllReplicasReady`, `NoReplicasReady`, `NotReady`, `Paused` |
+| `APIServerNetworkReady` | Operator-known Kubernetes API egress contract for operator-managed NetworkPolicies | `APIServerNetworkReady`, `APIServerEndpointIPsRecommended`, `APIServerNetworkConfigurationInvalid`, `Paused` |
 | `TLSReady` | TLS asset readiness | `Ready`, `Disabled`, `TLSSecretMissing`, `TLSSecretInvalid`, `Unknown`, `Paused` |
-| `ProductionReady` | Hardened production posture validation | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored` |
+| `ACMEIntegrationReady` | Operator-known ACME prerequisites such as Gateway passthrough, private ACME trust, and supported self-reachability checks | `ACMEIntegrationReady`, `GatewayAPIMissing`, `ACMEGatewayNotConfiguredForPassthrough`, `ACMEDomainNotResolvable`, `PrerequisitesMissing`, `Unknown`, `Paused` |
+| `ACMECacheReady` | Shared ACME cache readiness for HA or blue/green ACME topologies | `ACMECacheReady`, `ACMECacheNotConfigured`, `ACMECacheMissing`, `ACMECachePending`, `ACMECacheInvalidAccessMode` |
+| `GatewayIntegrationReady` | Operator-known Gateway API prerequisites and controller support for `spec.gateway` | `GatewayIntegrationReady`, `GatewayAPIMissing`, `GatewayReferenceMissing`, `GatewayClassMissing`, `GatewayClassPending`, `GatewayClassNotAccepted`, `GatewayVersionUnsupported`, `GatewayFeatureUnsupported`, `GatewayCapabilitiesUnknown`, `GatewayNotProgrammed`, `GatewayProgrammingPending`, `GatewayListenerIncompatible`, `Paused` |
+| `BackupConfigurationReady` | Operator-known backup Job prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired`, `Unknown`, `Paused` |
+| `CloudUnsealIdentityReady` | Operator-known authentication path for cloud KMS unseal on the main OpenBao Pods | `Ready`, `CredentialsSecretMissing`, `PrerequisitesMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `Unknown`, `Paused` |
+| `ProductionReady` | Indicates whether the cluster currently meets the operator's Hardened production posture checks. This condition does not represent API stability or project support level. | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored`, Gateway/ACME readiness reasons such as `GatewayFeatureUnsupported` or `ACMEGatewayNotConfiguredForPassthrough` |
 | `Upgrading` | Upgrade state | `InProgress`, `Idle`, or upgrade failure reason |
 | `BackingUp` | Backup job state | `InProgress`, `Idle` |
 | `StorageConfigured` | Persistent storage class selection visibility | `StorageClassConfigured`, `StorageClassPending`, `StorageClassDefaulted`, `StorageClassUnset`, `StorageClassMismatch`, `StorageClassInconsistent` |
-| `Degraded` | Problem requiring attention | `BreakGlassRequired`, upgrade failure reason, workload/adminops error reason, `RootTokenStored`, `Reconciling`, `Paused` |
+| `Degraded` | Problem requiring attention | `BreakGlassRequired`, upgrade failure reason, workload/adminops error reason, `OIDCBootstrapConfigurationInvalid`, `APIServerNetworkConfigurationInvalid`, `RootTokenStored`, `Reconciling`, `Paused` |
 | `EtcdEncryptionWarning` | etcd encryption verification warning | `EtcdEncryptionUnknown` |
 | `SecurityRisk` | Relaxed security mode indicator | `DevelopmentProfile` |
 | `OpenBaoInitialized` | OpenBao initialization observed from registration labels | `Initialized`, `NotInitialized`, `Unknown` |
@@ -50,6 +56,7 @@ Condition types defined in `api/v1alpha1`:
 | Type | Meaning | Typical Reasons |
 | :--- | :--- | :--- |
 | `RestoreComplete` | Restore terminal state | `RestoreSucceeded`, `RestoreFailed`, `AuthenticationRequired` |
+| `RestoreConfigurationReady` | Operator-known restore prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired` |
 | `OperationLockOverride` | Break-glass lock override occurred | `OperationLockOverridden` |
 
 ## OpenBaoTenant Conditions
@@ -72,6 +79,7 @@ Condition types defined in `api/v1alpha1`:
 | :--- | :--- | :--- |
 | `Warning` | `ProfileNotSet` | `spec.profile` missing; reconciliation blocked. |
 | `Warning` | `DevelopmentProfile` | Development profile warning for production. |
+| `Normal` | `AmbientUnsealIdentity` | Cloud KMS unseal is relying on ambient identity or the provider default chain for the main OpenBao Pods. This note is emitted only when the operator is not using a credentials Secret or explicit inline cloud credentials. |
 | `Warning` | `StaticUnsealInUse` | Static unseal warning. |
 | `Warning` | `RootTokenStored` | Self-init is disabled and the operator stored the root token Secret. |
 | `Warning` | `ImageVerificationFailed` and related reasons | Warn-policy image verification failures. |
@@ -119,6 +127,7 @@ Condition types defined in `api/v1alpha1`:
 | `Normal` | `BackupManualTriggerAccepted` | Manual backup trigger accepted. |
 | `Normal` | `BackupSkipped` | Due or manually requested backup intentionally skipped. |
 | `Normal` | `BackupStarted` | Backup attempt started after lock acquisition. |
+| `Normal` | `BackupIdentityConfiguration` | Backup identity mode and generated ServiceAccount attachment point. |
 | `Normal` | `BackupJobCreated` | Backup Job created. |
 | `Normal` | `BackupCompleted` | Backup completed successfully. |
 | `Warning` | `BackupFailed` | Backup Job failed. |
@@ -130,6 +139,7 @@ Condition types defined in `api/v1alpha1`:
 | :--- | :--- | :--- |
 | `Normal` | `RestoreValidationStarted` | Restore validation started. |
 | `Normal` | `RestoreStarted` | Restore execution started after validation. |
+| `Normal` | `RestoreIdentityConfiguration` | Restore identity mode and generated ServiceAccount attachment point. |
 | `Normal` | `RestoreJobCreated` | Restore Job created. |
 | `Normal` | `RestoreCompleted` | Restore completed successfully. |
 | `Warning` | `RestoreFailed` | Restore failed. |

@@ -93,9 +93,17 @@ OpenBao requires an "unseal key" to decrypt its master key on startup. You must 
             type: ocikms
             ocikms:
               keyID: "ocid1.key.oc1..."
-              cryptoEndpoint: "https://<unique>.crypto.objectstorage.<region>.oci.customer-oci.com"
-              managementEndpoint: "https://<unique>.management.objectstorage.<region>.oci.customer-oci.com"
-              authType: "instance_principal" # or "user_principal"
+              cryptoEndpoint: "https://kms.<region>.oraclecloud.com"
+              managementEndpoint: "https://kms.<region>.oraclecloud.com"
+              # Default principal flow (for example instance principal):
+              # authTypeAPIKey: false
+              #
+              # Or enable API-key mode and mount OCI SDK config via spec.unseal.credentialsSecretRef:
+              # authTypeAPIKey: true
+              #
+              # The Secret must contain:
+              # - config: OCI SDK config file with a [DEFAULT] profile
+              # - the private key file referenced by key_file in that config
         ```
 
 === "On-Prem / Hybrid"
@@ -126,12 +134,11 @@ OpenBao requires an "unseal key" to decrypt its master key on startup. You must 
             type: pkcs11
             pkcs11:
               lib: "/usr/lib/libnotHSM.so" # Path to vendor library
-              slot: "0"
+              tokenLabel: "openbao-token"  # Use slot or tokenLabel
               pin: "1234"                  # User PIN
               keyLabel: "openbao-hsm-key"
-              hmacKeyLabel: "openbao-hsm-hmac-key"
-              generateKey: true            # Generate if missing
-              mechanism: "0x0000"          # Optional specific mechanism
+              mechanism: "0x0009"          # Optional specific mechanism
+              rsaOAEPHash: "sha256"        # Optional OAEP hash override
         ```
 
     === "KMIP"
@@ -142,10 +149,12 @@ OpenBao requires an "unseal key" to decrypt its master key on startup. You must 
           unseal:
             type: kmip
             kmip:
-              address: "10.0.0.5:5696"
-              certificate: "/etc/openbao/kmip/cert.pem"
-              key: "/etc/openbao/kmip/key.pem"
+              endpoint: "10.0.0.5:5696"
+              kmsKeyID: "openbao-kmip-key"
+              clientCert: "/etc/openbao/kmip/client.crt"
+              clientKey: "/etc/openbao/kmip/client.key"
               caCert: "/etc/openbao/kmip/ca.pem"
+              serverName: "kmip.internal.example"
         ```
 
 === "Development (Static)"

@@ -46,11 +46,25 @@ For private ACME CAs running inside the cluster (for example, an in-cluster PKI)
 
 !!! failure "Symptom"
     `ConditionDegraded=True` with reason `ACMEGatewayNotConfiguredForPassthrough`.
+    `GatewayIntegrationReady=False` with reason `GatewayListenerIncompatible`, `GatewayFeatureUnsupported`, or `GatewayNotProgrammed`.
 
 **Resolution:**
 
 - For `tls.mode: ACME`, use `spec.gateway.tlsPassthrough: true` (TLSRoute). TLS termination at the Gateway prevents OpenBao from completing ACME challenges.
 - Ensure the referenced Gateway has a `TLS` listener with `tls.mode: Passthrough` (controller support varies).
+- Inspect `GatewayIntegrationReady` to confirm the referenced `GatewayClass` is accepted, advertises the required route feature, and the `Gateway` is programmed.
+
+## Kubernetes API egress issues
+
+!!! failure "Symptom"
+    `APIServerNetworkReady=False` with reason `APIServerNetworkConfigurationInvalid`.
+    `Degraded=True` with reason `APIServerNetworkConfigurationInvalid`.
+
+**Resolution:**
+
+- Set `spec.network.apiServerCIDR` if the in-cluster Kubernetes service VIP cannot be discovered or you want an explicit allow-list.
+- If your CNI enforces egress on post-DNAT traffic, also set `spec.network.apiServerEndpointIPs` with the control-plane endpoint IPs.
+- If `APIServerNetworkReady=Unknown` with reason `APIServerEndpointIPsRecommended`, the common service-VIP path is configured. Only add `apiServerEndpointIPs` if Kubernetes API connectivity still fails in your environment.
 
 ## Hardened profile + AppArmor mismatch
 

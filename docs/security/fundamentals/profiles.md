@@ -21,14 +21,14 @@
 === ":material-shield-check: Hardened Profile"
 
     !!! success "Production Ready"
-        The `Hardened` profile is **MANDATORY** for production deployments. It enforces a "secure by default" posture that prevents root-token Secret creation and requires strong encryption.
+        The `Hardened` profile is **MANDATORY** for production deployments. It is the supported production posture for OpenBao Operator and enforces a secure-by-default bootstrap and runtime model.
 
     To use this profile, your `OpenBaoCluster` must meet these requirements:
 
     1.  **High Availability:** You must set `spec.replicas` to at least `3` for Raft quorum.
     2.  **External KMS:** You must provide a KMS key (AWS, GCP, Azure, or Vault Transit) for auto-unseal.
-    3.  **Valid TLS:** You must provide valid TLS certificates; insecure TLS verification skips are rejected.
-    4.  **Self-Initialization:** You must enable self-init to avoid persisting a root token Secret.
+    3.  **Valid TLS:** You must provide valid TLS certificates. `OperatorManaged` TLS is rejected for `Hardened` clusters by admission policy.
+    4.  **Self-Initialization:** You must enable self-init. Manual bootstrap is not a supported production path because it persists a root token Secret.
     5.  **Image Verification Guardrails:** You cannot set `spec.imageVerification.enabled=false`, `spec.operatorImageVerification.enabled=false`, or use `failurePolicy: Warn`.
 
     ```yaml
@@ -55,7 +55,7 @@
 === ":material-test-tube: Development Profile"
 
     !!! warning "Non-Production Only"
-        The `development` profile creates significant security risks by storing the **Root Token** in a Kubernetes Secret. This allows any user with Secret read permissions to take full control of the cluster.
+        The `Development` profile is highly discouraged for production. It creates significant security risks by allowing bootstrap and unseal material to be stored in Kubernetes Secrets.
 
     This profile is useful for:
     

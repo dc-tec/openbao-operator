@@ -6,6 +6,7 @@ OpenBao clusters can be exposed using **Gateway API** (Recommended), **Ingress**
 
 === "Gateway API (Recommended)"
     The Operator provides first-class support for [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/), offering advanced routing, portability, and cleaner multi-tenancy.
+    For OpenBao, prefer TLS passthrough so OpenBao remains the TLS endpoint.
 
     !!! tip "Full Guide"
         See the [Gateway API Guide](gateway-api.md) for complete configuration details, including TLS Passthrough and backend policies.
@@ -14,6 +15,7 @@ OpenBao clusters can be exposed using **Gateway API** (Recommended), **Ingress**
     spec:
       gateway:
         enabled: true
+        tlsPassthrough: true
         hostname: bao.example.com
         gatewayRef:
           name: main-gateway

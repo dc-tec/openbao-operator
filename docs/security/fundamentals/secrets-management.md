@@ -36,8 +36,19 @@ The Operator manages the lifecycle of several critical secrets, from the Root To
     1.  **No Operator Key:** The Operator does **NOT** generate or manage unseal keys.
     2.  **Configuration:** Configure `spec.unseal` with your provider details.
     3.  **Authentication:**
-        -   **Workload Identity (Recommended):** Use IRSA (AWS) or Workload Identity (GCP) to authenticate without static credentials.
-        -   **Credentials Secret:** Mount static credentials via `spec.unseal.credentialsSecretRef`.
+        -   **Workload Identity (Recommended):** Use IRSA (AWS), Workload Identity (GCP), Managed Identity/Azure Workload Identity, or the equivalent OCI ambient identity mode so the main OpenBao Pods do not need static cloud credentials.
+        -   **Credentials Secret:** Mount static credentials via `spec.unseal.credentialsSecretRef`. For OCI API-key mode, the Secret must contain an OCI SDK config file in key `config` plus the private key file referenced by `key_file`.
+
+    !!! note "Main Pod Identity Contract"
+        When `spec.unseal.credentialsSecretRef` is omitted for a cloud KMS backend, the identity contract applies to the main OpenBao Pods, not to backup or restore Jobs.
+        Check the `CloudUnsealIdentityReady` condition to see which auth path the operator believes the Pods will use.
+
+    !!! note "Separate Job Identity Contract"
+        Backup and restore workloads use separate generated ServiceAccounts and do not inherit the main OpenBao Pod identity automatically.
+        Check `BackupConfigurationReady` or `RestoreConfigurationReady` to see whether the operator detected:
+        - a storage credentials Secret
+        - explicit job workload identity metadata
+        - or an ambient/default credential-chain assumption
 
 ## Root Token Lifecycle
 

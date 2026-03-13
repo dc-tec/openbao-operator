@@ -3,7 +3,7 @@
 Configure the security posture of your OpenBao cluster.
 
 !!! danger "Production Readiness"
-    **Always** use the `Hardened` profile for production deployments. The `Development` profile can store a root token in a Kubernetes Secret when self-init is disabled, which is a critical security risk.
+    **Always** use the `Hardened` profile for production deployments. The `Development` profile is highly discouraged for production because it can store bootstrap material in Kubernetes Secrets.
 
 ## Profile Comparison
 
@@ -14,8 +14,9 @@ The Operator supports two distinct security profiles via `spec.profile`.
 | **Use Case** | Local Testing, POC | **Production Workloads** |
 | **Root Token** | Stored in a Secret when self-init is disabled | Auto-revoked (not stored in a Secret) |
 | **Unseal** | Static (Kubernetes Secret) | **External KMS** (AWS, GCP, Azure, etc.) |
-| **TLS** | Optional / Self-Signed | **Mandatory** (External or ACME) |
+| **TLS** | Optional / Self-Signed | **Mandatory** (`External` or `ACME`) |
 | **Image Verification** | Optional | Enforced guardrails; omitted blocks still verify |
+| **Bootstrap** | Manual bootstrap or self-init | **Self-init required** |
 | **Status** | `ConditionSecurityRisk=True` | Secure by Default |
 
 ```mermaid
@@ -45,7 +46,7 @@ flowchart LR
 ## Configuration
 
 === "Hardened (Production)"
-    The `Hardened` profile enforces strict security best practices. It is **REQUIRED** for all production environments.
+    The `Hardened` profile enforces strict security best practices. It is the supported production profile for OpenBao Operator.
 
     ```yaml
     apiVersion: openbao.org/v1alpha1
@@ -78,9 +79,9 @@ flowchart LR
 
     ### Requirements
 
-    - :material-check: **External TLS**: `spec.tls.mode` MUST be `External` or `ACME`.
+    - :material-check: **External TLS**: `spec.tls.mode` MUST be `External` or `ACME`. `OperatorManaged` TLS is rejected by `openbao-validate-openbaocluster`.
     - :material-check: **External KMS**: `spec.unseal.type` MUST use a cloud provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`).
-    - :material-check: **Self-Initialization**: `spec.selfInit.enabled` MUST be `true`.
+    - :material-check: **Self-Initialization**: `spec.selfInit.enabled` MUST be `true`. This is the supported production bootstrap path and is enforced by `openbao-validate-openbaocluster`.
     - :material-check: **High Availability**: `spec.replicas` MUST be at least `3` for Raft quorum.
     - :material-check: **Secure Network**: If backups are enabled, explicit egress rules are required (fail-closed networking).
     - :material-check: **Supply Chain Guardrails**: `spec.imageVerification` and `spec.operatorImageVerification` cannot be disabled and cannot use `failurePolicy: Warn`.
@@ -117,7 +118,7 @@ flowchart LR
     - :material-alert: **Risk Indicator**: Sets `ConditionSecurityRisk=True` on the CR status.
 
     !!! warning "Risk Acceptance"
-        By using this profile, you accept the risk of storing sensitive keys and root tokens in the cluster. Do not expose this cluster to public traffic.
+        By using this profile, you accept the risk of storing sensitive keys and root tokens in the cluster. Do not use it as a normal production posture.
 
 ## Workload Hardening (AppArmor)
 
