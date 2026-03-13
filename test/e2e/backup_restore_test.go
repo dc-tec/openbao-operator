@@ -27,6 +27,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	restoresvc "github.com/dc-tec/openbao-operator/internal/service/restore"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
@@ -441,6 +442,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
+			tenantFW.WaitForConditionReason(drCluster.Name, openbaov1alpha1.ConditionBackupConfigurationReady, metav1.ConditionTrue, "Ready")
 		})
 
 		AfterAll(func() {
@@ -561,6 +563,18 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 			_, _ = fmt.Fprintf(GinkgoWriter, "Creating OpenBaoRestore CR: %s\n", restore.Name)
 			Expect(admin.Create(ctx, restore)).To(Succeed())
+
+			By("verifying restore configuration is accepted before execution")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoRestore{}
+				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updated)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				configuration := meta.FindStatusCondition(updated.Status.Conditions, restoresvc.RestoreConfigurationConditionType)
+				g.Expect(configuration).NotTo(BeNil())
+				g.Expect(configuration.Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(configuration.Reason).To(Equal("Ready"))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoRestore{}

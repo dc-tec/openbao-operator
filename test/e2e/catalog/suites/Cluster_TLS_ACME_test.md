@@ -30,6 +30,8 @@ Recorded checkpoints:
 - checking for prerequisite resources (ConfigMap)
 - waiting for StatefulSet to be created
 - waiting for StatefulSet pods to become Ready
+- waiting for the ACME shared cache PVC to become Bound
+- verifying documented ACME readiness conditions
 - validating that the config contains ACME parameters
 - verifying the ACME-issued certificate is trusted by the PKI CA
 

@@ -171,6 +171,7 @@ Covers: _none_
 Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
 
 Recorded checkpoints:
+- verifying restore configuration is accepted before execution
 - Verifying secret persists after restore
 - Verifying restore metrics are emitted
 

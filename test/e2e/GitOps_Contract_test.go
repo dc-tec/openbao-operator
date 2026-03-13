@@ -6,14 +6,12 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -73,22 +71,16 @@ var _ = Describe("GitOps contract (Argo-like apply)", Label("gitops", "contract"
 			Namespace: f.Namespace,
 			Name:      infraBaoName,
 			Image:     openBaoImage,
-			RootToken: "placeholder",
 		}
 		Expect(e2ehelpers.EnsureInfraBao(ctx, cfg, c, infraCfg)).To(Succeed())
 
-		infraBaoRootSecret := &corev1.Secret{}
-		Expect(c.Get(ctx, types.NamespacedName{
-			Name:      infraBaoName + "-root-token",
-			Namespace: f.Namespace,
-		}, infraBaoRootSecret)).To(Succeed())
-		tokenBytes := infraBaoRootSecret.Data["token"]
-		Expect(tokenBytes).NotTo(BeEmpty(), "infra-bao root token should be present")
-		infraBaoRootToken = strings.TrimSpace(string(tokenBytes))
+		var errRead error
+		infraBaoRootToken, errRead = e2ehelpers.ReadInfraBaoRootToken(ctx, c, f.Namespace, infraBaoName)
+		Expect(errRead).NotTo(HaveOccurred())
 
 		By("configuring transit secrets engine on infra-bao")
 		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
-		result, err := e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr, infraBaoRootToken, infraBaoKeyName)
+		result, err := e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, infraBaoName, openBaoImage, infraAddr, infraBaoKeyName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao transit setup failed, logs:\n%s", result.Logs)
 
@@ -96,27 +88,18 @@ var _ = Describe("GitOps contract (Argo-like apply)", Label("gitops", "contract"
 		Expect(e2ehelpers.EnsureExternalTLSSecrets(ctx, c, f.Namespace, clusterName, 1)).To(Succeed())
 
 		By("creating transit credentials secret for the cluster (token + CA cert)")
-		infraBaoCASecret := &corev1.Secret{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoName + "-tls-ca", Namespace: f.Namespace}, infraBaoCASecret)).To(Succeed())
-		infraBaoCACert := infraBaoCASecret.Data["ca.crt"]
-		Expect(infraBaoCACert).NotTo(BeEmpty(), "infra-bao CA certificate should exist")
+		infraBaoCACert, errRead := e2ehelpers.ReadInfraBaoTLSCACert(ctx, c, f.Namespace, infraBaoName)
+		Expect(errRead).NotTo(HaveOccurred())
 
-		tokenValue := strings.TrimSpace(infraBaoRootToken)
-		tokenSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      infraBaoTokenSecretName,
-				Namespace: f.Namespace,
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-				"token":  []byte(tokenValue),
-				"ca.crt": infraBaoCACert,
-			},
-		}
-		err = c.Create(ctx, tokenSecret)
-		if err != nil && !apierrors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
+		Expect(e2ehelpers.EnsureInfraBaoSealCredentialsSecret(
+			ctx,
+			c,
+			f.Namespace,
+			infraBaoTokenSecretName,
+			infraBaoRootToken,
+			infraBaoCACert,
+			nil,
+		)).To(Succeed())
 	})
 
 	It("repeatedly applies the same manifest without spec/metadata drift", func() {

@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/test/utils"
@@ -190,6 +191,9 @@ func NewSetup(ctx context.Context, baseName string, operatorNamespace string) (*
 	if err := gatewayv1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add gateway scheme: %w", err)
 	}
+	if err := gatewayv1alpha2.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("failed to add gateway alpha2 scheme: %w", err)
+	}
 
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
@@ -227,6 +231,7 @@ func (f *Framework) InstallGatewayAPI() error {
 	cmd = exec.Command("kubectl", "wait", "--for", "condition=Established",
 		"crd/gateways.gateway.networking.k8s.io",
 		"crd/httproutes.gateway.networking.k8s.io",
+		"crd/tlsroutes.gateway.networking.k8s.io",
 		"--timeout", "5m")
 	if _, err := utils.Run(cmd); err != nil {
 		return fmt.Errorf("failed to wait for Gateway API CRDs: %w", err)
@@ -265,6 +270,31 @@ func (f *Framework) WaitForCondition(clusterName string, conditionType openbaov1
 		g.Expect(cond).NotTo(BeNil())
 		g.Expect(cond.Status).To(Equal(status))
 	}, DefaultWaitTimeout, DefaultPollInterval).Should(Succeed(), "Cluster failed to reach condition %s=%s", conditionType, status)
+}
+
+// WaitForConditionReason waits for the specified condition to have the expected status and reason.
+func (f *Framework) WaitForConditionReason(
+	clusterName string,
+	conditionType openbaov1alpha1.ConditionType,
+	status metav1.ConditionStatus,
+	reason string,
+) {
+	Eventually(func(g Gomega) {
+		cluster := &openbaov1alpha1.OpenBaoCluster{}
+		err := f.Client.Get(f.Ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)
+		g.Expect(err).NotTo(HaveOccurred())
+
+		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(conditionType))
+		g.Expect(cond).NotTo(BeNil())
+		g.Expect(cond.Status).To(Equal(status))
+		g.Expect(cond.Reason).To(Equal(reason))
+	}, DefaultWaitTimeout, DefaultPollInterval).Should(
+		Succeed(),
+		"Cluster failed to reach condition %s=%s reason=%s",
+		conditionType,
+		status,
+		reason,
+	)
 }
 
 // Cleanup deletes the tenant namespace and OpenBaoTenant, ignoring NotFound.

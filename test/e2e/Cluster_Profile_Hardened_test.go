@@ -65,44 +65,23 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 	ensureTransitTokenSecret := func() {
 		By("creating transit token secret with CA certificate for TLS verification")
-		infraBaoCASecret := &corev1.Secret{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoName + "-tls-ca", Namespace: f.Namespace}, infraBaoCASecret)).To(Succeed())
-		infraBaoCACert := infraBaoCASecret.Data["ca.crt"]
-		Expect(infraBaoCACert).NotTo(BeEmpty(), "Infra-bao CA certificate should exist")
+		infraBaoCACert, err := e2ehelpers.ReadInfraBaoTLSCACert(ctx, c, f.Namespace, infraBaoName)
+		Expect(err).NotTo(HaveOccurred())
 
-		tokenValue := strings.TrimSpace(infraBaoRootToken)
-		secretKey := types.NamespacedName{Name: infraBaoTokenSecretName, Namespace: f.Namespace}
-		existing := &corev1.Secret{}
-		err := c.Get(ctx, secretKey, existing)
-		switch {
-		case apierrors.IsNotFound(err):
-			tokenSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      infraBaoTokenSecretName,
-					Namespace: f.Namespace,
-				},
-				Type: corev1.SecretTypeOpaque,
-				Data: map[string][]byte{
-					"token":  []byte(tokenValue),
-					"ca.crt": infraBaoCACert,
-				},
-			}
-			Expect(c.Create(ctx, tokenSecret)).To(Succeed())
-		default:
-			Expect(err).NotTo(HaveOccurred())
-			original := existing.DeepCopy()
-			if existing.Data == nil {
-				existing.Data = map[string][]byte{}
-			}
-			existing.Data["token"] = []byte(tokenValue)
-			existing.Data["ca.crt"] = infraBaoCACert
-			Expect(c.Patch(ctx, existing, client.MergeFrom(original))).To(Succeed())
-		}
+		Expect(e2ehelpers.EnsureInfraBaoSealCredentialsSecret(
+			ctx,
+			c,
+			f.Namespace,
+			infraBaoTokenSecretName,
+			infraBaoRootToken,
+			infraBaoCACert,
+			nil,
+		)).To(Succeed())
 
 		Eventually(func(g Gomega) {
 			created := &corev1.Secret{}
-			g.Expect(c.Get(ctx, secretKey, created)).To(Succeed())
-			g.Expect(strings.TrimSpace(string(created.Data["token"]))).To(Equal(tokenValue))
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoTokenSecretName, Namespace: f.Namespace}, created)).To(Succeed())
+			g.Expect(strings.TrimSpace(string(created.Data["token"]))).To(Equal(strings.TrimSpace(infraBaoRootToken)))
 			g.Expect(created.Data["ca.crt"]).To(Equal(infraBaoCACert))
 		}, 10*time.Second, 1*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified transit token secret %q\n", infraBaoTokenSecretName)
@@ -133,26 +112,18 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			Namespace: f.Namespace,
 			Name:      infraBaoName,
 			Image:     openBaoImage,
-			// Placeholder; actual root token is captured from init secret below.
-			RootToken: "placeholder",
 		}
 		Expect(e2ehelpers.EnsureInfraBao(ctx, cfg, c, infraCfg)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Infra-bao instance %q is running\n", infraBaoName)
 
-		// Fetch the actual infra-bao root token captured during initialization.
-		infraBaoRootSecret := &corev1.Secret{}
-		Expect(c.Get(ctx, types.NamespacedName{
-			Name:      infraBaoName + "-root-token",
-			Namespace: f.Namespace,
-		}, infraBaoRootSecret)).To(Succeed())
-		tokenBytes := infraBaoRootSecret.Data["token"]
-		Expect(tokenBytes).NotTo(BeEmpty(), "infra-bao root token should be present")
-		infraBaoRootToken = strings.TrimSpace(string(tokenBytes))
+		var errRead error
+		infraBaoRootToken, errRead = e2ehelpers.ReadInfraBaoRootToken(ctx, c, f.Namespace, infraBaoName)
+		Expect(errRead).NotTo(HaveOccurred())
 
 		By("configuring transit secrets engine on infra-bao")
 		// Infra-bao always runs with TLS in production mode
 		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
-		result, err := e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, openBaoImage, infraAddr, infraBaoRootToken, infraBaoKeyName)
+		result, err := e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, infraBaoName, openBaoImage, infraAddr, infraBaoKeyName)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao transit setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Transit secrets engine configured with key %q\n", infraBaoKeyName)
@@ -551,6 +522,9 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Triggered reconcile for cluster %q\n", clusterName)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Cluster %q is initialized via self-init\n", clusterName)
+
+		By("verifying the documented hardened production readiness condition")
+		f.WaitForConditionReason(clusterName, openbaov1alpha1.ConditionProductionReady, metav1.ConditionTrue, "ProductionReady")
 
 		By("asserting root token and static unseal secrets do NOT exist")
 		Consistently(func() bool {
