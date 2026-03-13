@@ -10,6 +10,7 @@ listener "tcp" {
   max_request_duration            = "90s"
   tls_acme_ca_directory           = "https://acme-v02.api.letsencrypt.org/directory"
   tls_acme_domains                = ["acme-cluster-acme.default.svc"]
+  tls_acme_cache_path             = "/bao/data/certmagic"
   tls_acme_disable_http_challenge = true
 }
 seal "static" {

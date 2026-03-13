@@ -1,6 +1,7 @@
 package openbaocluster
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -10,6 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/openbaotls"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
@@ -65,7 +67,7 @@ type OpenBaoClusterReconciler struct {
 	ImageVerificationRuntime
 }
 
-func (r *OpenBaoClusterReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (portopenbao.ClusterActions, error) {
+func (r *OpenBaoClusterReconciler) clientForPod(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (portopenbao.ClusterActions, error) {
 	if r.OpenBaoClientFactory == nil {
 		return nil, fmt.Errorf("OpenBao client factory is not configured")
 	}
@@ -74,6 +76,13 @@ func (r *OpenBaoClusterReconciler) clientForPod(cluster *openbaov1alpha1.OpenBao
 	podDNS := fmt.Sprintf("%s.%s.%s.svc:8200", podName, headlessServiceName, cluster.Namespace)
 	cfg := r.SmartClientConfig
 	cfg.BaseURL = "https://" + podDNS
+	cfg.TLSServerName = portopenbao.ComputeTLSServerName(cluster)
+
+	caCert, err := openbaotls.LoadClusterTrustBundle(ctx, r.Client, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load cluster trust bundle for %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+	cfg.CACert = caCert
 
 	return r.OpenBaoClientFactory(cfg)
 }

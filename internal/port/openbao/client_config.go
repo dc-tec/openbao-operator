@@ -27,6 +27,9 @@ type ClientConfig struct {
 	// CACert is the PEM-encoded CA certificate for TLS verification.
 	// If empty, the system certificate pool is used.
 	CACert []byte
+	// TLSServerName overrides the hostname used for TLS certificate verification.
+	// When empty, the hostname from BaseURL is used.
+	TLSServerName string
 	// ConnectionTimeout is the timeout for establishing connections.
 	// Defaults to DefaultConnectionTimeout if zero.
 	ConnectionTimeout time.Duration

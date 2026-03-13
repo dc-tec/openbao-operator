@@ -4,6 +4,18 @@ package constants
 const (
 	// Error indicates a generic failure state.
 	ReasonError = "Error"
+	// ReasonAuthenticationRequired indicates an operator-managed auth path is missing.
+	ReasonAuthenticationRequired = "AuthenticationRequired"
+	// ReasonTokenSecretMissing indicates a referenced token Secret is missing.
+	ReasonTokenSecretMissing = "TokenSecretMissing"
+	// ReasonCredentialsSecretMissing indicates a referenced storage credentials Secret is missing.
+	ReasonCredentialsSecretMissing = "CredentialsSecretMissing"
+	// ReasonWorkloadIdentityConfigured indicates the operator can identify an
+	// explicit workload-identity path rather than inferring an ambient default chain.
+	ReasonWorkloadIdentityConfigured = "WorkloadIdentityConfigured"
+	// ReasonAmbientIdentityAssumed indicates the operator is relying on workload identity
+	// or the provider default credential chain rather than a static credentials Secret.
+	ReasonAmbientIdentityAssumed = "AmbientIdentityAssumed"
 
 	// ReasonNetworkEgressRulesRequired indicates the cluster requires explicit NetworkPolicy egress rules
 	// to proceed with an operation (e.g. backup/restore jobs in Hardened profile).

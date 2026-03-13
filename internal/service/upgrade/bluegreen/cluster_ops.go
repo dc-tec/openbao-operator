@@ -2,18 +2,15 @@ package bluegreen
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
@@ -39,25 +36,14 @@ func (o *openBaoClusterOps) podURL(cluster *openbaov1alpha1.OpenBaoCluster, podN
 }
 
 func (o *openBaoClusterOps) clusterCACert(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
-	for _, suffix := range []string{constants.SuffixTLSCA, constants.SuffixTLSServer} {
-		secretName := cluster.Name + suffix
-		caCert, err := upgrade.ReadCACertSecret(ctx, o.k8sClient, types.NamespacedName{
-			Namespace: cluster.Namespace,
-			Name:      secretName,
-		})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
-			if errors.Is(err, upgrade.ErrCACertMissing) {
-				return nil, fmt.Errorf("CA certificate not found in secret %s/%s", cluster.Namespace, secretName)
-			}
-			return nil, fmt.Errorf("failed to get CA secret %s/%s: %w", cluster.Namespace, secretName, err)
+	caCert, err := upgrade.LoadClusterCACert(ctx, o.k8sClient, cluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("cluster trust bundle not found: %w", err)
 		}
-		return caCert, nil
+		return nil, fmt.Errorf("failed to load cluster trust bundle: %w", err)
 	}
-
-	return nil, fmt.Errorf("no CA secret found for cluster %s/%s (tried %q and %q)", cluster.Namespace, cluster.Name, cluster.Name+constants.SuffixTLSCA, cluster.Name+constants.SuffixTLSServer)
+	return caCert, nil
 }
 
 func (o *openBaoClusterOps) FindLeaderPod(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, pods []corev1.Pod) (podName string, source string, ok bool) {
@@ -105,6 +91,7 @@ func (o *openBaoClusterOps) FindLeaderPod(ctx context.Context, logger logr.Logge
 			ClusterKey:          clusterKey,
 			BaseURL:             o.podURL(cluster, pod.Name),
 			CACert:              caCert,
+			TLSServerName:       portopenbao.ComputeTLSServerName(cluster),
 			ConnectionTimeout:   2 * time.Second,
 			RequestTimeout:      2 * time.Second,
 			SmartClientDisabled: true,

@@ -44,7 +44,7 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 		unsealType   string
 		expectEnvVar []string
 	}{
-		{name: "transit", unsealType: "transit", expectEnvVar: []string{"VAULT_TOKEN", "VAULT_CACERT"}},
+		{name: "transit", unsealType: "transit", expectEnvVar: []string{"VAULT_TOKEN"}},
 		{name: "gcpckms", unsealType: "gcpckms", expectEnvVar: []string{"GOOGLE_APPLICATION_CREDENTIALS"}},
 		{name: "awskms", unsealType: "awskms", expectEnvVar: []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"}},
 		{name: "azurekeyvault", unsealType: "azurekeyvault", expectEnvVar: []string{"AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_ENVIRONMENT", "AZURE_AD_RESOURCE"}},
@@ -123,6 +123,46 @@ func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(
 				t.Fatalf("expected no credentials-derived env vars when credentialsSecretRef is not set")
 			}
 		})
+	}
+}
+
+func TestSealWiring_TransitInlineToken_DoesNotInjectVaultTokenEnv(t *testing.T) {
+	cluster := newMinimalCluster("seal-transit-inline-token", "default")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		CredentialsSecretRef: &corev1.LocalObjectReference{
+			Name: "provider-creds",
+		},
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Token: "inline-token",
+		},
+	}
+
+	env := buildContainerEnv(cluster)
+	if hasEnvVar(env, "VAULT_TOKEN") {
+		t.Fatalf("expected VAULT_TOKEN to be absent when transit token is configured inline")
+	}
+}
+
+func TestSealWiring_OCIKMSAPIKey_WithCredentials_IncludesOCIConfigEnv(t *testing.T) {
+	cluster := newMinimalCluster("seal-ocikms-api-key", "default")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "ocikms",
+		CredentialsSecretRef: &corev1.LocalObjectReference{
+			Name: "provider-creds",
+		},
+		OCIKMS: &openbaov1alpha1.OCIKMSSealConfig{
+			AuthTypeAPIKey: boolPtr(true),
+		},
+	}
+
+	env := buildContainerEnv(cluster)
+	configEnv := findEnvVar(env, "OCI_CONFIG_FILE")
+	if configEnv == nil {
+		t.Fatal("expected OCI_CONFIG_FILE env var for ocikms api-key mode")
+	}
+	if configEnv.Value != sealCredsVolumeMountPath+"/config" {
+		t.Fatalf("OCI_CONFIG_FILE = %q, want %q", configEnv.Value, sealCredsVolumeMountPath+"/config")
 	}
 }
 

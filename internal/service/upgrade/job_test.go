@@ -6,6 +6,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
@@ -188,6 +189,44 @@ func TestBuildUpgradeExecutorJob_RequiresJWTAuthWhenOIDCDisabled(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatalf("buildUpgradeExecutorJob() expected error, got nil")
+	}
+}
+
+func TestBuildUpgradeExecutorJob_DefaultImageConfigurationError(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "")
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	_, err := buildUpgradeExecutorJob(
+		cluster,
+		"test-job",
+		ExecutorActionRollingStepDownLeader,
+		"pod-0",
+		"",
+		"",
+		"",
+		portopenbao.ClientConfig{},
+		constants.PlatformKubernetes,
+	)
+	if err == nil {
+		t.Fatal("buildUpgradeExecutorJob() error = nil, want error")
+	}
+	if reason, ok := operatorerrors.Reason(err); !ok || reason != constants.ReasonHelperImageConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %q,true", reason, ok, constants.ReasonHelperImageConfigurationInvalid)
 	}
 }
 

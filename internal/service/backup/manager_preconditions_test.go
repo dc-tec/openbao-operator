@@ -168,7 +168,7 @@ func TestCheckPreconditions(t *testing.T) {
 				cluster.Spec.SelfInit = nil
 				return nil
 			},
-			wantErr: ErrNoBackupToken.Error(),
+			wantErr: "configure jwtAuthRole or tokenSecretRef",
 		},
 		{
 			name: "fails when token secret name is empty and jwt auth is not configured",
@@ -178,7 +178,7 @@ func TestCheckPreconditions(t *testing.T) {
 				cluster.Spec.SelfInit = nil
 				return nil
 			},
-			wantErr: ErrNoBackupToken.Error(),
+			wantErr: "configure jwtAuthRole or tokenSecretRef",
 		},
 		{
 			name: "fails when token secret is missing",

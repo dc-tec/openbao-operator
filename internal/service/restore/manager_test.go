@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -26,6 +27,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/testutil/robustness"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // testLogger returns a no-op logger for testing.
@@ -886,6 +888,95 @@ func TestValidatingNoAuthentication(t *testing.T) {
 	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
 	assert.Equal(t, openbaov1alpha1.RestorePhaseFailed, updated.Status.Phase)
 	assert.Contains(t, updated.Status.Message, "authentication is required")
+	configuration := meta.FindStatusCondition(updated.Status.Conditions, RestoreConfigurationConditionType)
+	if configuration == nil {
+		t.Fatalf("expected %s condition", RestoreConfigurationConditionType)
+	}
+	assert.Equal(t, metav1.ConditionFalse, configuration.Status)
+	assert.Equal(t, constants.ReasonAuthenticationRequired, configuration.Reason)
+}
+
+func TestHandleValidating_SetsRestoreConfigurationConditionForAmbientIdentity(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, rbacv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "cluster-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true,
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:     "test-cluster",
+			JWTAuthRole: "restore-role",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Bucket:   "backups",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseRunning, updated.Status.Phase)
+	configuration := meta.FindStatusCondition(updated.Status.Conditions, RestoreConfigurationConditionType)
+	if configuration == nil {
+		t.Fatalf("expected %s condition", RestoreConfigurationConditionType)
+	}
+	assert.Equal(t, metav1.ConditionTrue, configuration.Status)
+	assert.Equal(t, constants.ReasonAmbientIdentityAssumed, configuration.Reason)
+	assert.Contains(t, configuration.Message, "generated ServiceAccount")
+}
+
+func TestRestoreJobFailedStatusMessage_AppendsFailureHint(t *testing.T) {
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-test",
+			Namespace: "default",
+		},
+		Status: batchv1.JobStatus{
+			Failed: 1,
+		},
+	}
+
+	message := restoreJobFailedStatusMessage(job, "Verify the generated ServiceAccount identity binding.")
+	assert.Contains(t, message, "kubectl logs job/restore-test -n default")
+	assert.Contains(t, message, "generated ServiceAccount identity binding")
 }
 
 // TestGetRestoreExecutorImage tests restore image resolution.
@@ -1056,7 +1147,10 @@ func TestBuildRestoreVolumes(t *testing.T) {
 				},
 			}
 
-			volumes := buildRestoreVolumes(restore, cluster)
+			tlsTrust, err := portopenbao.ResolveClientTrustBundle(cluster)
+			require.NoError(t, err)
+
+			volumes := buildRestoreVolumes(restore, cluster, tlsTrust)
 
 			volumeNames := make([]string, len(volumes))
 			for i, vol := range volumes {
@@ -1084,7 +1178,10 @@ func TestBuildRestoreVolumeMounts(t *testing.T) {
 		},
 	}
 
-	mounts := buildRestoreVolumeMounts(restore, cluster)
+	tlsTrust, err := portopenbao.ResolveClientTrustBundle(cluster)
+	require.NoError(t, err)
+
+	mounts := buildRestoreVolumeMounts(restore, cluster, tlsTrust)
 
 	assert.Len(t, mounts, 2) // TLS + JWT
 	for _, mount := range mounts {

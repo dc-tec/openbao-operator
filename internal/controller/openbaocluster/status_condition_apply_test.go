@@ -76,6 +76,7 @@ func TestBuildSealedConditionAndApplyHelpers(t *testing.T) {
 			openbaov1alpha1.ConditionDegraded,
 			openbaov1alpha1.ConditionUpgrading,
 			openbaov1alpha1.ConditionBackingUp,
+			openbaov1alpha1.ConditionUserAccessBootstrap,
 			openbaov1alpha1.ConditionStorageConfigured,
 			openbaov1alpha1.ConditionEtcdEncryptionWarning,
 			openbaov1alpha1.ConditionSecurityRisk,

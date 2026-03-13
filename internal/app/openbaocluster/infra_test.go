@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -107,8 +108,8 @@ func TestHandleScaleDownSafety(t *testing.T) {
 				WithObjects(cluster, sts).
 				Build()
 
-			// Mock OpenBao Client for victim pod
-			clientFunc := func(c *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error) {
+				// Mock OpenBao Client for victim pod
+			clientFunc := func(_ context.Context, c *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error) {
 				if tt.victimError {
 					return nil, fmt.Errorf("network error")
 				}
@@ -335,5 +336,139 @@ func TestInfraReconciler_Reconcile_BlocksInvalidVersionSelection(t *testing.T) {
 				t.Fatalf("reason = %q, want %q", reason, tt.wantReason)
 			}
 		})
+	}
+}
+
+func TestInfraReconciler_Reconcile_MapsAPIServerNetworkConfigurationError(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+			Version: "2.5.0",
+			Image:   "openbao/openbao:2.5.0",
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster).
+		WithReturnManagedFields().
+		Build()
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			Kubernetes: InfraKubernetesRuntime{
+				Client:            k8sClient,
+				Scheme:            scheme,
+				OperatorNamespace: "openbao-operator-system",
+			},
+		},
+		reasons: InfraReasonPolicy{
+			APIServerNetworkConfiguration: "APIServerNetworkConfigurationInvalid",
+		},
+	}
+
+	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+		t.Fatalf("expected permanent config error, got %v", err)
+	}
+	reason, ok := operatorerrors.Reason(err)
+	if !ok {
+		t.Fatalf("expected reasoned error, got %v", err)
+	}
+	if reason != "APIServerNetworkConfigurationInvalid" {
+		t.Fatalf("reason = %q, want APIServerNetworkConfigurationInvalid", reason)
+	}
+	if !strings.Contains(err.Error(), "spec.network.apiServerEndpointIPs") {
+		t.Fatalf("error %q does not mention apiServerEndpointIPs", err)
+	}
+}
+
+func TestInfraReconciler_ResolveOIDC_MissingRestConfigReturnsBootstrapReason(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	r := &infraReconciler{
+		reasons: InfraReasonPolicy{
+			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
+		},
+	}
+
+	_, _, err := r.resolveOIDC(context.Background(), cluster)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+		t.Fatalf("expected permanent config error, got %v", err)
+	}
+	reason, ok := operatorerrors.Reason(err)
+	if !ok || reason != "OIDCBootstrapConfigurationInvalid" {
+		t.Fatalf("reason = %q,%v want OIDCBootstrapConfigurationInvalid,true", reason, ok)
+	}
+}
+
+func TestInfraReconciler_ResolveOIDC_ForbiddenDiscoveryReturnsBootstrapReason(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			OIDC: InfraOIDCRuntime{
+				RestConfig: &rest.Config{Host: "https://kubernetes.default.svc"},
+				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
+					return nil, errors.New("forbidden")
+				},
+				DiscoveryStatusCode: func(err error) (int, bool) {
+					return http.StatusForbidden, true
+				},
+			},
+		},
+		reasons: InfraReasonPolicy{
+			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
+		},
+	}
+
+	_, _, err := r.resolveOIDC(context.Background(), cluster)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+		t.Fatalf("expected permanent config error, got %v", err)
+	}
+	reason, ok := operatorerrors.Reason(err)
+	if !ok || reason != "OIDCBootstrapConfigurationInvalid" {
+		t.Fatalf("reason = %q,%v want OIDCBootstrapConfigurationInvalid,true", reason, ok)
 	}
 }

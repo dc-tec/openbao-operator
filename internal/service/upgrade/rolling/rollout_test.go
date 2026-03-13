@@ -40,6 +40,9 @@ func TestStepDownLeader_DoesNotTimeoutFromUpgradeStart(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Upgrade: &openbaov1alpha1.UpgradeProgress{
@@ -90,6 +93,9 @@ func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Upgrade: &openbaov1alpha1.UpgradeProgress{
@@ -148,6 +154,9 @@ func TestStepDownLeader_DeletesStaleSucceededJobWhenTargetStillLeader(t *testing
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Upgrade: &openbaov1alpha1.UpgradeProgress{
@@ -233,6 +242,9 @@ func TestStepDownLeader_VerifiesTransferViaAPIWhenLabelsLag(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Upgrade: &openbaov1alpha1.UpgradeProgress{

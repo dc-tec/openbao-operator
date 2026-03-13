@@ -1,8 +1,6 @@
 package constants
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestDefaultBackupImage_WithVersion(t *testing.T) {
 	// Set the version using t.Setenv (auto-cleanup, no error checking needed)

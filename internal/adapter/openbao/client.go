@@ -91,9 +91,12 @@ func NewClient(config portopenbao.ClientConfig) (*Client, error) {
 		MinVersion: tls.VersionTLS12,
 	}
 
-	// Set ServerName to the hostname from the URL to ensure proper certificate verification.
-	// This is important when connecting to pod DNS names where the certificate SANs must match.
-	if parsedURL.Hostname() != "" {
+	// Set ServerName explicitly when the operator needs to verify against a
+	// stable TLS identity instead of the connection hostname (for example, ACME
+	// clusters and direct pod connections during day-2 operations).
+	if config.TLSServerName != "" {
+		tlsConfig.ServerName = config.TLSServerName
+	} else if parsedURL.Hostname() != "" {
 		tlsConfig.ServerName = parsedURL.Hostname()
 	}
 
@@ -162,8 +165,9 @@ func newClientWithState(config portopenbao.ClientConfig, state *clientState) (*C
 		MinVersion: tls.VersionTLS12,
 	}
 
-	// Set ServerName to the hostname from the URL to ensure proper certificate verification.
-	if parsedURL.Hostname() != "" {
+	if config.TLSServerName != "" {
+		tlsConfig.ServerName = config.TLSServerName
+	} else if parsedURL.Hostname() != "" {
 		tlsConfig.ServerName = parsedURL.Hostname()
 	}
 

@@ -22,21 +22,21 @@ const (
 // If the cluster specifies an image, it should be used instead.
 // The tag is derived from OPERATOR_VERSION env var.
 func DefaultBackupImage() (string, error) {
-	return defaultImage(EnvOperatorBackupImageRepo, DefaultBackupImageRepository)
+	return defaultImage(EnvOperatorBackupImageRepo, DefaultBackupImageRepository, "backup")
 }
 
 // DefaultUpgradeImage returns the default upgrade executor image.
 // If the cluster specifies an image, it should be used instead.
 // The tag is derived from OPERATOR_VERSION env var.
 func DefaultUpgradeImage() (string, error) {
-	return defaultImage(EnvOperatorUpgradeImageRepo, DefaultUpgradeImageRepository)
+	return defaultImage(EnvOperatorUpgradeImageRepo, DefaultUpgradeImageRepository, "upgrade")
 }
 
 // DefaultInitImage returns the default init container image.
 // If the cluster specifies an image, it should be used instead.
 // The tag is derived from OPERATOR_VERSION env var.
 func DefaultInitImage() (string, error) {
-	return defaultImage(EnvOperatorInitImageRepo, DefaultInitImageRepository)
+	return defaultImage(EnvOperatorInitImageRepo, DefaultInitImageRepository, "initContainer")
 }
 
 // GetOpenBaoImage constructs the OpenBao image reference.
@@ -54,7 +54,7 @@ func GetOpenBaoImage(specVersion string) string {
 
 // defaultImage constructs an image reference from an env var override or default repo,
 // combined with the operator version tag.
-func defaultImage(envVar, defaultRepo string) (string, error) {
+func defaultImage(envVar, defaultRepo, fieldPath string) (string, error) {
 	repo := strings.TrimSpace(os.Getenv(envVar))
 	if repo == "" {
 		repo = defaultRepo
@@ -64,5 +64,5 @@ func defaultImage(envVar, defaultRepo string) (string, error) {
 		return fmt.Sprintf("%s:%s", repo, version), nil
 	}
 	// OPERATOR_VERSION must be set in production deployments.
-	return "", fmt.Errorf("OPERATOR_VERSION environment variable is required but not set")
+	return "", fmt.Errorf("OPERATOR_VERSION environment variable is required when spec.%s.image is not set explicitly", fieldPath)
 }

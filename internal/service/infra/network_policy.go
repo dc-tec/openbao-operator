@@ -15,6 +15,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 func (m *Manager) ensureNetworkPolicy(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -25,14 +26,10 @@ func (m *Manager) ensureNetworkPolicy(ctx context.Context, logger logr.Logger, c
 	// Falling back to permissive namespace selectors violates Zero Trust principles.
 	apiServerInfo, err := m.detectAPIServerInfo(ctx, logger, cluster)
 	if err != nil {
-		return fmt.Errorf("failed to detect API server information for NetworkPolicy: %w. "+
-			"API server detection is required to enforce least-privilege egress rules. "+
-			"Consider explicitly configuring spec.network.apiServerCIDR if auto-detection fails", err)
+		return wrapAPIServerNetworkConfigurationError("primary", err)
 	}
 	if apiServerInfo == nil || (apiServerInfo.ServiceNetworkCIDR == "" && len(apiServerInfo.EndpointIPs) == 0) {
-		return fmt.Errorf("API server information is incomplete (no service CIDR or endpoint IPs detected). " +
-			"This is required to enforce least-privilege NetworkPolicy egress rules. " +
-			"Consider explicitly configuring spec.network.apiServerCIDR")
+		return wrapAPIServerNetworkConfigurationError("primary", nil)
 	}
 
 	desired, err := buildNetworkPolicy(cluster, apiServerInfo, m.operatorNamespace)
@@ -62,14 +59,10 @@ func (m *Manager) ensureJobNetworkPolicy(ctx context.Context, logger logr.Logger
 
 	apiServerInfo, err := m.detectAPIServerInfo(ctx, logger, cluster)
 	if err != nil {
-		return fmt.Errorf("failed to detect API server information for Job NetworkPolicy: %w. "+
-			"API server detection is required to enforce least-privilege egress rules. "+
-			"Consider explicitly configuring spec.network.apiServerCIDR if auto-detection fails", err)
+		return wrapAPIServerNetworkConfigurationError("job", err)
 	}
 	if apiServerInfo == nil || (apiServerInfo.ServiceNetworkCIDR == "" && len(apiServerInfo.EndpointIPs) == 0) {
-		return fmt.Errorf("API server information is incomplete (no service CIDR or endpoint IPs detected). " +
-			"This is required to enforce least-privilege NetworkPolicy egress rules. " +
-			"Consider explicitly configuring spec.network.apiServerCIDR")
+		return wrapAPIServerNetworkConfigurationError("job", nil)
 	}
 
 	desired, err := buildJobNetworkPolicy(cluster, apiServerInfo)
@@ -87,6 +80,27 @@ func (m *Manager) ensureJobNetworkPolicy(ctx context.Context, logger logr.Logger
 	}
 
 	return nil
+}
+
+func wrapAPIServerNetworkConfigurationError(policyScope string, cause error) error {
+	scope := "OpenBao"
+	if strings.TrimSpace(policyScope) == "job" {
+		scope = "job"
+	}
+
+	msg := fmt.Sprintf(
+		"%s NetworkPolicy requires explicit Kubernetes API egress targets. Configure spec.network.apiServerCIDR. "+
+			"If your CNI enforces egress on post-DNAT traffic, also configure spec.network.apiServerEndpointIPs with the control-plane endpoint IPs",
+		scope,
+	)
+	if cause != nil {
+		return operatorerrors.WrapPermanentConfig(
+			fmt.Errorf("%w: %s: %w", ErrAPIServerNetworkConfigurationInvalid, msg, cause),
+		)
+	}
+	return operatorerrors.WrapPermanentConfig(
+		fmt.Errorf("%w: %s", ErrAPIServerNetworkConfigurationInvalid, msg),
+	)
 }
 
 // apiServerInfo contains detected information about the Kubernetes API server
@@ -232,11 +246,11 @@ func buildNetworkPolicyIngressRules(
 		},
 	}
 
-	// If Gateway is enabled, allow ingress from the Gateway namespace
-	// This enables external traffic routing through Gateway/HTTPRoute or TLSRoute
-	// (for TLS passthrough). NetworkPolicies operate at L3/L4, so both HTTPRoute
-	// (with TLS termination) and TLSRoute (with TLS passthrough) work the same
-	// way from a network policy perspective - both are TCP traffic on port 8200.
+	// If Gateway is enabled, allow ingress from the Gateway resource namespace when
+	// it differs from the cluster namespace. This is a best-effort default for the
+	// common case where the Gateway data plane runs in the same namespace as the
+	// referenced Gateway object. For other topologies, users can declare explicit
+	// trusted ingress peers via spec.network.trustedIngressPeers.
 	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
 		gatewayNamespace := cluster.Spec.Gateway.GatewayRef.Namespace
 		if strings.TrimSpace(gatewayNamespace) == "" {
@@ -244,25 +258,28 @@ func buildNetworkPolicyIngressRules(
 			gatewayNamespace = cluster.Namespace
 		}
 
-		// Only add rule if Gateway is in a different namespace
-		// (if same namespace, clusterPeer already covers it)
+		// Only add a namespace-wide rule when the Gateway resource lives outside the
+		// cluster namespace. If it is colocated, clusterPeer still only covers the
+		// OpenBao pods themselves, so user-managed ingress controllers should use
+		// spec.network.trustedIngressPeers for a more precise allow-list.
 		if gatewayNamespace != cluster.Namespace {
-			gatewayPeer := networkingv1.NetworkPolicyPeer{
-				NamespaceSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"kubernetes.io/metadata.name": gatewayNamespace,
+			rules = appendIngressPeerRule(
+				rules,
+				networkingv1.NetworkPolicyPeer{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"kubernetes.io/metadata.name": gatewayNamespace,
+						},
 					},
 				},
-			}
-			rules = append(rules, networkingv1.NetworkPolicyIngressRule{
-				From: []networkingv1.NetworkPolicyPeer{gatewayPeer},
-				Ports: []networkingv1.NetworkPolicyPort{
-					{
-						Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
-						Port:     &apiPort,
-					},
-				},
-			})
+				apiPort,
+			)
+		}
+	}
+
+	if cluster.Spec.Network != nil {
+		for _, peer := range cluster.Spec.Network.TrustedIngressPeers {
+			rules = appendIngressPeerRule(rules, peer, apiPort)
 		}
 	}
 
@@ -326,6 +343,90 @@ func buildNetworkPolicyIngressRules(
 	return rules
 }
 
+func appendIngressPeerRule(
+	rules []networkingv1.NetworkPolicyIngressRule,
+	peer networkingv1.NetworkPolicyPeer,
+	apiPort intstr.IntOrString,
+) []networkingv1.NetworkPolicyIngressRule {
+	return append(rules, networkingv1.NetworkPolicyIngressRule{
+		From: []networkingv1.NetworkPolicyPeer{peer},
+		Ports: []networkingv1.NetworkPolicyPort{
+			{
+				Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+				Port:     &apiPort,
+			},
+		},
+	})
+}
+
+func dnsNamespaceForCluster(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	dnsNamespace := "kube-system"
+	if cluster != nil && cluster.Spec.Network != nil && strings.TrimSpace(cluster.Spec.Network.DNSNamespace) != "" {
+		dnsNamespace = strings.TrimSpace(cluster.Spec.Network.DNSNamespace)
+	}
+	return dnsNamespace
+}
+
+func buildDNSEgressRules(cluster *openbaov1alpha1.OpenBaoCluster) ([]networkingv1.NetworkPolicyEgressRule, error) {
+	dnsPort := intstr.FromInt(53)
+	dnsProtocolUDP := corev1.ProtocolUDP
+	dnsProtocolTCP := corev1.ProtocolTCP
+
+	ports := []networkingv1.NetworkPolicyPort{
+		{
+			Protocol: &dnsProtocolUDP,
+			Port:     &dnsPort,
+		},
+		{
+			Protocol: &dnsProtocolTCP,
+			Port:     &dnsPort,
+		},
+	}
+
+	rules := []networkingv1.NetworkPolicyEgressRule{
+		{
+			To: []networkingv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"kubernetes.io/metadata.name": dnsNamespaceForCluster(cluster),
+						},
+					},
+				},
+			},
+			Ports: ports,
+		},
+	}
+
+	if cluster == nil || cluster.Spec.Network == nil {
+		return rules, nil
+	}
+
+	for _, rawIP := range cluster.Spec.Network.DNSEndpointIPs {
+		if strings.TrimSpace(rawIP) == "" {
+			continue
+		}
+
+		cidr, err := ipToSingleHostCIDR(rawIP)
+		if err != nil {
+			return nil, fmt.Errorf("invalid spec.network.dnsEndpointIPs entry %q: %w", rawIP, err)
+		}
+
+		rules = append(rules, networkingv1.NetworkPolicyEgressRule{
+			To: []networkingv1.NetworkPolicyPeer{
+				{
+					IPBlock: &networkingv1.IPBlock{
+						CIDR: cidr,
+					},
+				},
+			},
+			Ports: ports,
+		})
+	}
+
+	return rules, nil
+}
+
 // buildNetworkPolicy constructs a NetworkPolicy for the given OpenBaoCluster.
 // The policy enforces:
 // - Default deny all ingress traffic
@@ -380,15 +481,6 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 		},
 	}
 
-	// DNS egress rule - allow UDP and TCP on port 53
-	dnsPort := intstr.FromInt(53)
-	dnsProtocolUDP := corev1.ProtocolUDP
-	dnsProtocolTCP := corev1.ProtocolTCP
-	dnsNamespace := "kube-system"
-	if cluster.Spec.Network != nil && cluster.Spec.Network.DNSNamespace != "" {
-		dnsNamespace = cluster.Spec.Network.DNSNamespace
-	}
-
 	// Kubernetes API egress ports
 	kubernetesAPIPort443 := intstr.FromInt(443)   // Service IP port
 	kubernetesAPIPort6443 := intstr.FromInt(6443) // Direct endpoint port
@@ -398,30 +490,9 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 	clusterPort := intstr.FromInt(constants.PortCluster)
 
 	// Build egress rules dynamically based on detected API server information
-	egressRules := []networkingv1.NetworkPolicyEgressRule{
-		{
-			// Allow DNS egress for service discovery
-			// DNS can be in kube-system namespace or as a system service
-			To: []networkingv1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": dnsNamespace,
-						},
-					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{
-					Protocol: &dnsProtocolUDP,
-					Port:     &dnsPort,
-				},
-				{
-					Protocol: &dnsProtocolTCP,
-					Port:     &dnsPort,
-				},
-			},
-		},
+	egressRules, err := buildDNSEgressRules(cluster)
+	if err != nil {
+		return nil, err
 	}
 
 	// Add service network CIDR rule if detected (works for all cluster types)
@@ -545,9 +616,6 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *apiServerInfo) (*networkingv1.NetworkPolicy, error) {
 	labels := infraLabels(cluster)
 
-	dnsPort := intstr.FromInt(53)
-	dnsProtocolUDP := corev1.ProtocolUDP
-	dnsProtocolTCP := corev1.ProtocolTCP
 	kubernetesAPIPort443 := intstr.FromInt(443)
 	kubernetesAPIPort6443 := intstr.FromInt(6443)
 	openBaoAPIPort := intstr.FromInt(constants.PortAPI)
@@ -558,35 +626,12 @@ func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInf
 		},
 	}
 
-	dnsNamespace := "kube-system"
-	if cluster.Spec.Network != nil && cluster.Spec.Network.DNSNamespace != "" {
-		dnsNamespace = cluster.Spec.Network.DNSNamespace
+	egressRules, err := buildDNSEgressRules(cluster)
+	if err != nil {
+		return nil, err
 	}
-
-	egressRules := []networkingv1.NetworkPolicyEgressRule{
-		{
-			// Allow DNS egress for name resolution.
-			To: []networkingv1.NetworkPolicyPeer{
-				{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": dnsNamespace,
-						},
-					},
-				},
-			},
-			Ports: []networkingv1.NetworkPolicyPort{
-				{
-					Protocol: &dnsProtocolUDP,
-					Port:     &dnsPort,
-				},
-				{
-					Protocol: &dnsProtocolTCP,
-					Port:     &dnsPort,
-				},
-			},
-		},
-		{
+	egressRules = append(egressRules,
+		networkingv1.NetworkPolicyEgressRule{
 			// Allow egress to OpenBao API (to fetch/restore snapshots, etc.).
 			To: []networkingv1.NetworkPolicyPeer{openBaoPeer},
 			Ports: []networkingv1.NetworkPolicyPort{
@@ -596,7 +641,7 @@ func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInf
 				},
 			},
 		},
-	}
+	)
 
 	// Add service network CIDR rule if detected.
 	if apiServerInfo != nil && apiServerInfo.ServiceNetworkCIDR != "" {

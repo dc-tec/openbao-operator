@@ -15,6 +15,8 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/openbaotls"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 var (
@@ -52,7 +54,17 @@ func (m *Manager) runACMEPreflight(ctx context.Context, logger logr.Logger, clus
 		}
 	}
 
+	if err := m.preflightACMETrustBundle(ctx, cluster); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// ValidateACMEPreflight exposes the ACME-specific preflight checks used by infra
+// reconciliation so other controller surfaces can report the same contract.
+func (m *Manager) ValidateACMEPreflight(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	return m.runACMEPreflight(ctx, logger, cluster)
 }
 
 func (m *Manager) preflightACMEDomainResolvability(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -66,7 +78,7 @@ func (m *Manager) preflightACMEDomainResolvability(ctx context.Context, logger l
 	}
 
 	var failures []string
-	for _, domain := range acmeDomains(cluster) {
+	for _, domain := range portopenbao.ComputeACMEDomains(cluster) {
 		resolveCtx, cancel := context.WithTimeout(ctx, acmePreflightDNSTimeout)
 		_, err := net.DefaultResolver.LookupHost(resolveCtx, domain)
 		cancel()
@@ -151,4 +163,24 @@ func (m *Manager) validateGatewayPassthroughListener(ctx context.Context, cluste
 		gw.Name,
 		cluster.Spec.Gateway.ListenerName,
 	)
+}
+
+func (m *Manager) preflightACMETrustBundle(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil || cluster.Spec.Configuration == nil || strings.TrimSpace(cluster.Spec.Configuration.ACMECARoot) == "" {
+		return nil
+	}
+
+	caBundle, err := openbaotls.LoadClusterTrustBundle(ctx, m.client, cluster)
+	if err != nil {
+		return operatorerrors.WrapPermanentPrerequisitesMissing(
+			fmt.Errorf("private ACME trust bundle is unavailable for probes and day-2 operations: %w", err),
+		)
+	}
+	if err := openbaotls.ValidateCABundle(caBundle); err != nil {
+		return operatorerrors.WrapPermanentPrerequisitesMissing(
+			fmt.Errorf("private ACME trust bundle is invalid: %w", err),
+		)
+	}
+
+	return nil
 }

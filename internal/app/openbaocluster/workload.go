@@ -178,7 +178,7 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 			var eventMsg string
 			if cluster.Status.Initialized {
 				eventMsg = "Autopilot configuration requires JWT authentication. " +
-					"Since the cluster is already initialized, SelfInit is no longer available. " +
+					"Since this operator-managed cluster is already initialized, SelfInit is no longer available. " +
 					"Manually configure JWT authentication via OpenBao API/CLI, " +
 					"or manually configure autopilot settings in spec.configuration.raft.autopilot. " +
 					"Error: %v"

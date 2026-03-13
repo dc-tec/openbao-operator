@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,6 +50,7 @@ type ExecutorConfig struct {
 
 	// TLS
 	TLSCACert          []byte
+	TLSServerName      string
 	InsecureSkipVerify bool
 
 	// Storage credentials (provider-agnostic)
@@ -105,9 +107,6 @@ func (c *ExecutorConfig) Validate() error {
 		return fmt.Errorf("invalid backup provider: %q", c.BackupProvider)
 	}
 
-	if len(c.TLSCACert) == 0 {
-		return fmt.Errorf("TLS CA certificate is required")
-	}
 	switch c.AuthMethod {
 	case constants.BackupAuthMethodJWT:
 		if c.JWTAuthRole == "" {
@@ -184,6 +183,7 @@ func loadClusterConfig(cfg *ExecutorConfig) error {
 	if cfg.StatefulSetName == "" {
 		cfg.StatefulSetName = cfg.ClusterName
 	}
+	cfg.TLSServerName = strings.TrimSpace(os.Getenv(constants.EnvTLSServerName))
 	return nil
 }
 
@@ -283,15 +283,23 @@ func loadStorageConfig(cfg *ExecutorConfig) error {
 
 // loadTLSConfig loads the TLS CA certificate from a file.
 func loadTLSConfig(cfg *ExecutorConfig) error {
-	caCertPath := constants.PathTLSCACert
-	if envPath := strings.TrimSpace(os.Getenv(constants.EnvTLSCAPath)); envPath != "" {
-		caCertPath = envPath
+	if envPath, ok := os.LookupEnv(constants.EnvTLSCAPath); ok {
+		caCertPath := strings.TrimSpace(envPath)
+		if caCertPath != "" {
+			caCert, err := os.ReadFile(caCertPath) // #nosec G304 -- Path from environment variable
+			if err != nil {
+				return fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
+			}
+			cfg.TLSCACert = caCert
+		}
+	} else {
+		caCert, err := os.ReadFile(constants.PathTLSCACert) // #nosec G304 -- Constant path
+		if err == nil {
+			cfg.TLSCACert = caCert
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to read TLS CA certificate from %q: %w", constants.PathTLSCACert, err)
+		}
 	}
-	caCert, err := os.ReadFile(caCertPath) // #nosec G304 -- Path from constant or environment variable
-	if err != nil {
-		return fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
-	}
-	cfg.TLSCACert = caCert
 
 	if skipVerifyStr := strings.TrimSpace(os.Getenv(constants.EnvBackupInsecureSkipVerify)); skipVerifyStr != "" {
 		skipVerify, err := strconv.ParseBool(skipVerifyStr)

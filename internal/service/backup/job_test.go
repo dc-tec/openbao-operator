@@ -8,6 +8,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	batchv1 "k8s.io/api/batch/v1"
@@ -174,6 +175,24 @@ func TestGetBackupExecutorImage(t *testing.T) {
 				t.Errorf("GetBackupExecutorImage() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGetBackupExecutorImage_DefaultImageConfigurationError(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "")
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Backup: &openbaov1alpha1.BackupSchedule{},
+		},
+	}
+
+	_, err := GetBackupExecutorImage(cluster)
+	if err == nil {
+		t.Fatal("GetBackupExecutorImage() error = nil, want error")
+	}
+	if reason, ok := operatorerrors.Reason(err); !ok || reason != constants.ReasonHelperImageConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %q,true", reason, ok, constants.ReasonHelperImageConfigurationInvalid)
 	}
 }
 
@@ -873,6 +892,29 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	if !strings.Contains(cluster.Status.Backup.LastFailureReason, "kubectl logs job/") {
 		t.Fatalf("LastFailureReason = %q, want log guidance", cluster.Status.Backup.LastFailureReason)
 	}
+	if !strings.Contains(cluster.Status.Backup.LastFailureReason, "generated ServiceAccount") {
+		t.Fatalf("LastFailureReason = %q, want identity guidance", cluster.Status.Backup.LastFailureReason)
+	}
+}
+
+func TestBackupJobFailureReason_AppendsFailureHint(t *testing.T) {
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "backup-demo",
+			Namespace: "default",
+		},
+		Status: batchv1.JobStatus{
+			Failed: 1,
+		},
+	}
+
+	message := backupJobFailureReason(job, "Verify the generated ServiceAccount identity binding.")
+	if !strings.Contains(message, "kubectl logs job/backup-demo -n default") {
+		t.Fatalf("message = %q, want log guidance", message)
+	}
+	if !strings.Contains(message, "generated ServiceAccount identity binding") {
+		t.Fatalf("message = %q, want appended failure hint", message)
+	}
 }
 
 func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
@@ -942,7 +984,7 @@ func TestBackupJobFailureReason_UsesJobConditionMessage(t *testing.T) {
 		},
 	}
 
-	message := backupJobFailureReason(job)
+	message := backupJobFailureReason(job, "")
 	assert.Contains(t, message, "snapshot upload failed")
 	assert.Contains(t, message, "kubectl logs job/backup-test-cluster-20250115-030000 -n default")
 }

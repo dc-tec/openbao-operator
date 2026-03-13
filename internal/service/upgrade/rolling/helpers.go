@@ -2,7 +2,6 @@ package rolling
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -10,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -71,16 +69,9 @@ func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.O
 
 // getClusterCACert retrieves the cluster's CA certificate for TLS connections.
 func (m *Manager) getClusterCACert(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
-	secretName := cluster.Name + constants.SuffixTLSCA
-	caCert, err := upgrade.ReadCACertSecret(ctx, m.client, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      secretName,
-	})
+	caCert, err := upgrade.LoadClusterCACert(ctx, m.client, cluster)
 	if err != nil {
-		if errors.Is(err, upgrade.ErrCACertMissing) {
-			return nil, fmt.Errorf("CA certificate not found in secret %s", secretName)
-		}
-		return nil, fmt.Errorf("failed to get CA secret %s: %w", secretName, err)
+		return nil, fmt.Errorf("failed to load cluster trust bundle: %w", err)
 	}
 
 	return caCert, nil
@@ -98,9 +89,10 @@ func (m *Manager) getPodURL(cluster *openbaov1alpha1.OpenBaoCluster, podName str
 func (m *Manager) newPodClient(cluster *openbaov1alpha1.OpenBaoCluster, podName string, caCert []byte) (portopenbao.ClusterActions, error) {
 	podURL := m.getPodURL(cluster, podName)
 	apiClient, err := m.clientFactory(portopenbao.ClientConfig{
-		ClusterKey: fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
-		BaseURL:    podURL,
-		CACert:     caCert,
+		ClusterKey:    fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name),
+		BaseURL:       podURL,
+		CACert:        caCert,
+		TLSServerName: portopenbao.ComputeTLSServerName(cluster),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenBao client for pod %s: %w", podName, err)

@@ -13,6 +13,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup/jobenv"
 	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
@@ -73,9 +74,21 @@ func BuildJob(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) (*batchv
 	// Build environment variables
 	env := BuildEnvVars(cluster, opts)
 
+	tlsTrust, err := portopenbao.ResolveClientTrustBundle(cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve backup TLS trust source: %w", err)
+	}
+	tlsServerName := portopenbao.ComputeTLSServerName(cluster)
+	if tlsServerName != "" {
+		env = append(env, corev1.EnvVar{Name: constants.EnvTLSServerName, Value: tlsServerName})
+	}
+	if !tlsTrust.UseSystemRoots {
+		env = append(env, corev1.EnvVar{Name: constants.EnvTLSCAPath, Value: constants.PathTLSCACert})
+	}
+
 	// Build volumes and mounts
-	volumes := BuildBackupJobVolumes(cluster)
-	volumeMounts := BuildBackupJobVolumeMounts(cluster)
+	volumes := BuildBackupJobVolumes(cluster, tlsTrust)
+	volumeMounts := BuildBackupJobVolumeMounts(cluster, tlsTrust)
 
 	// Determine backup type label
 	backupType := string(opts.JobType)
@@ -204,15 +217,16 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts JobOptions) []co
 }
 
 // BuildBackupJobVolumeMounts builds the volume mounts for a backup job.
-func BuildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.VolumeMount {
+func BuildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, tlsTrust portopenbao.TrustBundleSource) []corev1.VolumeMount {
 	mounts := []corev1.VolumeMount{}
 
-	// Mount TLS CA certificate
-	mounts = append(mounts, corev1.VolumeMount{
-		Name:      backupTLSCAVolumeName,
-		MountPath: constants.PathTLS,
-		ReadOnly:  true,
-	})
+	if !tlsTrust.UseSystemRoots {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      backupTLSCAVolumeName,
+			MountPath: constants.PathTLS,
+			ReadOnly:  true,
+		})
+	}
 
 	if cluster.Spec.Backup.Target.RoleARN != "" {
 		mounts = append(mounts, corev1.VolumeMount{
@@ -253,18 +267,25 @@ func BuildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster) []corev
 }
 
 // BuildBackupJobVolumes builds the volumes for a backup job.
-func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.Volume {
+func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster, tlsTrust portopenbao.TrustBundleSource) []corev1.Volume {
 	volumes := []corev1.Volume{}
 
-	// TLS CA certificate
-	volumes = append(volumes, corev1.Volume{
-		Name: backupTLSCAVolumeName,
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName: cluster.Name + constants.SuffixTLSCA,
+	if !tlsTrust.UseSystemRoots {
+		volumes = append(volumes, corev1.Volume{
+			Name: backupTLSCAVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: tlsTrust.SecretName,
+					Items: []corev1.KeyToPath{
+						{
+							Key:  tlsTrust.SecretKey,
+							Path: "ca.crt",
+						},
+					},
+				},
 			},
-		},
-	})
+		})
+	}
 
 	if cluster.Spec.Backup.Target.RoleARN != "" {
 		volumes = append(volumes, corev1.Volume{
@@ -347,5 +368,15 @@ func GetBackupExecutorImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, er
 	if cluster.Spec.Backup != nil && strings.TrimSpace(cluster.Spec.Backup.Image) != "" {
 		return cluster.Spec.Backup.Image, nil
 	}
-	return constants.DefaultBackupImage()
+	image, err := constants.DefaultBackupImage()
+	if err != nil {
+		return "", operatorerrors.WrapPermanentConfig(operatorerrors.WithReason(
+			constants.ReasonHelperImageConfigurationInvalid,
+			fmt.Errorf(
+				"default backup executor image is unavailable; set spec.backup.image explicitly or configure OPERATOR_VERSION in the operator Deployment: %w",
+				err,
+			),
+		))
+	}
+	return image, nil
 }

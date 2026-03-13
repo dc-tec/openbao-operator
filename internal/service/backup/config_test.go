@@ -110,7 +110,7 @@ func TestExecutorConfig_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "missing TLS CA cert",
+			name: "allows system roots when TLS CA cert is omitted",
 			config: &ExecutorConfig{
 				ClusterNamespace: "test-ns",
 				ClusterName:      "test-cluster",
@@ -120,7 +120,7 @@ func TestExecutorConfig_Validate(t *testing.T) {
 				AuthMethod:       constants.BackupAuthMethodToken,
 				OpenBaoToken:     "fake-token",
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "JWT auth missing role",

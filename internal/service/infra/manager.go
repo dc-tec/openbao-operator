@@ -31,6 +31,7 @@ const (
 	unsealVolumeName         = "unseal"
 	tmpVolumeName            = "tmp"
 	utilsVolumeName          = "utils"
+	acmeCacheVolumeName      = "acme-cache"
 	kubeAPIAccessVolumeName  = "kube-api-access"
 	configFileName           = "config.hcl"
 	configTemplatePath       = "/etc/bao/config/config.hcl"
@@ -49,6 +50,7 @@ const (
 	kubeRootCAConfigMapName  = "kube-root-ca.crt"
 	openBaoBinaryName        = constants.BinaryBao
 	configHashAnnotation     = "openbao.org/config-hash"
+	unsealTypeTransit        = "transit"
 
 	// OpenBao images are built to run as a non-root user with stable UID/GID.
 	// The StatefulSet security context pins these IDs so that both the main
@@ -126,6 +128,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		}
 	}
 
+	if err := m.validateUnsealPrerequisites(ctx, cluster); err != nil {
+		return err
+	}
+
 	if err := m.runACMEPreflight(ctx, logger, cluster); err != nil {
 		return err
 	}
@@ -186,6 +192,10 @@ func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logge
 	}
 
 	if err := m.ensureACMEChallengeService(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	if err := m.ensureACMESharedCachePVC(ctx, logger, cluster); err != nil {
 		return err
 	}
 

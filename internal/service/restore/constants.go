@@ -5,8 +5,16 @@ const (
 	// ReasonRestoreValidationStarted indicates restore validation has started.
 	ReasonRestoreValidationStarted = "RestoreValidationStarted"
 
+	// RestoreConfigurationConditionType reports whether operator-known restore
+	// prerequisites such as auth references, storage credential references, and
+	// hardened-profile egress requirements are satisfied.
+	RestoreConfigurationConditionType = "RestoreConfigurationReady"
+
 	// ReasonRestoreStarted indicates restore execution has started.
 	ReasonRestoreStarted = "RestoreStarted"
+
+	// ReasonRestoreIdentityConfiguration describes how the generated restore workload receives cloud identity.
+	ReasonRestoreIdentityConfiguration = "RestoreIdentityConfiguration"
 
 	// ReasonRestoreJobCreated indicates the restore Job was created successfully.
 	ReasonRestoreJobCreated = "RestoreJobCreated"

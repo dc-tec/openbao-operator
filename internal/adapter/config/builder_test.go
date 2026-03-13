@@ -777,12 +777,15 @@ func TestRenderHCL_KMIPSeal(t *testing.T) {
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
 		Type: "kmip",
 		KMIP: &openbaov1alpha1.KMIPSealConfig{
-			Address:       "kmip.example.com:5696",
-			Certificate:   "/etc/kmip/cert.pem",
-			Key:           "/etc/kmip/key.pem",
-			CACert:        "/etc/kmip/ca.pem",
-			TLSServerName: "kmip.example.com",
-			TLSSkipVerify: boolPtr(false),
+			Endpoint:     "kmip.example.com:5696",
+			KMSKeyID:     "openbao-kmip-key",
+			ClientCert:   "/etc/kmip/client.crt",
+			ClientKey:    "/etc/kmip/client.key",
+			CACert:       "/etc/kmip/ca.pem",
+			ServerName:   "kmip.example.com",
+			Timeout:      int32Ptr(30),
+			EncryptAlg:   "AES_GCM",
+			TLS12Ciphers: "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
 		},
 	}
 
@@ -809,8 +812,7 @@ func TestRenderHCL_OCIKMSSeal(t *testing.T) {
 			KeyID:              "ocid1.key.oc1..example",
 			CryptoEndpoint:     "https://kms.us-ashburn-1.oraclecloud.com",
 			ManagementEndpoint: "https://kms.us-ashburn-1.oraclecloud.com",
-			AuthType:           "instance_principal",
-			CompartmentID:      "ocid1.compartment.oc1..example",
+			AuthTypeAPIKey:     boolPtr(true),
 		},
 	}
 
@@ -834,12 +836,13 @@ func TestRenderHCL_PKCS11Seal(t *testing.T) {
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
 		Type: "pkcs11",
 		PKCS11: &openbaov1alpha1.PKCS11SealConfig{
-			Lib:          "/usr/lib/libpkcs11.so",
-			Slot:         "0",
-			KeyLabel:     "vault-key",
-			HMACKeyLabel: "vault-hmac-key",
-			GenerateKey:  boolPtr(true),
-			RSAOAEPHash:  "sha256",
+			Lib:                       "/usr/lib/libpkcs11.so",
+			TokenLabel:                "openbao-token",
+			KeyLabel:                  "openbao-hsm-key",
+			KeyID:                     "01",
+			Mechanism:                 "0x0009",
+			DisableSoftwareEncryption: boolPtr(true),
+			RSAOAEPHash:               "sha256",
 		},
 	}
 
@@ -861,4 +864,8 @@ func TestRenderHCL_PKCS11Seal(t *testing.T) {
 // boolPtr returns a pointer to a bool value.
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+func int32Ptr(v int32) *int32 {
+	return &v
 }

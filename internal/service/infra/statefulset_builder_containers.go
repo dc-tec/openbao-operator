@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func buildInitContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedInitContainerDigest string, disableSelfInit bool) ([]corev1.Container, error) {
@@ -201,12 +202,20 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 		ReadOnly:  true,
 	})
 
-	// Only mount TLS volume when not using ACME mode (ACME stores certs in /bao/data)
+	// Only mount TLS volume when not using ACME mode (ACME stores certs in OpenBao's
+	// internal ACME cache rather than in a mounted Kubernetes TLS Secret).
 	if !usesACMEMode(cluster) {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      tlsVolumeName,
 			MountPath: openBaoTLSMountPath,
 			ReadOnly:  true,
+		})
+	}
+
+	if portopenbao.HasACMESharedCache(cluster) {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      acmeCacheVolumeName,
+			MountPath: portopenbao.ACMESharedCacheMountPath,
 		})
 	}
 

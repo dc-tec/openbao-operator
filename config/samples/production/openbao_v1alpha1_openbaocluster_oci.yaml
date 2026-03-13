@@ -5,8 +5,8 @@
 #
 # Prerequisites:
 # - OCI KMS vault and master encryption key created
-# - OCI compartment with appropriate permissions
-# - Instance Principal configured (for OKE) OR User Principal credentials
+# - OCI KMS permissions for the runtime principal
+# - Default OCI principal configured (for example instance principal), or OCI API-key credentials
 #
 # See: https://openbao.org/docs/configuration/seal/ocikms/
 apiVersion: openbao.org/v1alpha1
@@ -44,20 +44,21 @@ spec:
       cryptoEndpoint: "https://kms.us-ashburn-1.oraclecloud.com"
       # OCI KMS management endpoint
       managementEndpoint: "https://kms.us-ashburn-1.oraclecloud.com"
-      # Optional: Authentication type (e.g., "instance_principal", "user_principal")
-      # Defaults to instance_principal when running on OKE
-      # authType: "instance_principal"
-      # Optional: OCID of the compartment containing the key
-      # compartmentID: "ocid1.compartment.oc1..example"
-    # Optional: If using user_principal authentication
+      # Optional: enable OCI API-key authentication through an OCI SDK config file.
+      # When omitted or false, OpenBao uses the default OCI principal flow.
+      # authTypeAPIKey: true
+    # Optional: If using OCI API-key authentication
     # credentialsSecretRef:
     #   name: oci-kms-credentials
-    #   namespace: openbaocluster-oci
+    #
+    # The referenced Secret must contain:
+    # - config: OCI SDK config file with a [DEFAULT] profile
+    # - the private key file referenced by key_file in that config, mounted under /etc/bao/seal-creds
   # Self-initialization (required for Hardened profile)
   selfInit:
     enabled: true
 ---
-# Example: Create OCI KMS credentials Secret (only if using user_principal auth)
+# Example: Create OCI KMS credentials Secret (only if using authTypeAPIKey: true)
 # apiVersion: v1
 # kind: Secret
 # metadata:
@@ -65,13 +66,14 @@ spec:
 #   namespace: openbaocluster-oci
 # type: Opaque
 # stringData:
-#   OCI_PRIVATE_KEY: |
+#   config: |
+#     [DEFAULT]
+#     user=ocid1.user.oc1..example
+#     fingerprint=aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99
+#     tenancy=ocid1.tenancy.oc1..example
+#     region=us-ashburn-1
+#     key_file=/etc/bao/seal-creds/private.pem
+#   private.pem: |
 #     -----BEGIN RSA PRIVATE KEY-----
 #     ...
 #     -----END RSA PRIVATE KEY-----
-#   OCI_PRIVATE_KEY_PASSPHRASE: "your-passphrase"
-#   OCI_TENANCY_OCID: "ocid1.tenancy.oc1..example"
-#   OCI_USER_OCID: "ocid1.user.oc1..example"
-#   OCI_FINGERPRINT: "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
-#   OCI_REGION: "us-ashburn-1"
-

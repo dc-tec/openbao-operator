@@ -15,6 +15,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // ErrStatefulSetPrerequisitesMissing indicates that required prerequisites (ConfigMap or TLS Secret)
@@ -53,6 +54,19 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 				return fmt.Errorf("%w: TLS server Secret %s/%s not found; cannot create StatefulSet (waiting for TLS reconciliation or external provider)", ErrStatefulSetPrerequisitesMissing, cluster.Namespace, tlsSecretName)
 			}
 			return fmt.Errorf("failed to get TLS server Secret %s/%s: %w", cluster.Namespace, tlsSecretName, err)
+		}
+	}
+
+	if claimName := portopenbao.ACMESharedCacheClaimName(cluster); claimName != "" {
+		cachePVC := &corev1.PersistentVolumeClaim{}
+		if err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      claimName,
+		}, cachePVC); err != nil {
+			if apierrors.IsNotFound(err) {
+				return fmt.Errorf("%w: ACME shared cache PVC %s/%s not found; cannot create StatefulSet", ErrStatefulSetPrerequisitesMissing, cluster.Namespace, claimName)
+			}
+			return fmt.Errorf("failed to get ACME shared cache PVC %s/%s: %w", cluster.Namespace, claimName, err)
 		}
 	}
 
@@ -258,6 +272,9 @@ func (m *Manager) deletePVCs(ctx context.Context, cluster *openbaov1alpha1.OpenB
 
 	for i := range pvcList.Items {
 		pvc := &pvcList.Items[i]
+		if portopenbao.UsesExistingACMESharedCache(cluster) && pvc.Name == portopenbao.ACMESharedCacheClaimName(cluster) {
+			continue
+		}
 		// Envtest runs without controllers (like kube-controller-manager), which means
 		// protection finalizers (e.g. pvc-protection) may never be removed and deletions
 		// can get stuck. When the user explicitly opted into PVC deletion, ensure the

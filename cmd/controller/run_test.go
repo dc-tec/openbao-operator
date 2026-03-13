@@ -18,6 +18,8 @@ package controller
 
 import (
 	"testing"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 // Note: OIDC/JWKS tests have been moved to internal/adapter/auth/oidc_test.go
@@ -34,4 +36,24 @@ func TestRun(t *testing.T) {
 	// We can't easily test the full Run() function without a real cluster,
 	// so this is a placeholder for future integration tests.
 	_ = Run
+}
+
+func TestUnavailableHelperImageDefaultFields(t *testing.T) {
+	t.Run("returns all helper image fields when operator version is missing", func(t *testing.T) {
+		t.Setenv(constants.EnvOperatorVersion, "")
+
+		fields := unavailableHelperImageDefaultFields()
+		if len(fields) != 3 {
+			t.Fatalf("unavailableHelperImageDefaultFields() len = %d, want 3 (%v)", len(fields), fields)
+		}
+	})
+
+	t.Run("returns no fields when operator version is present", func(t *testing.T) {
+		t.Setenv(constants.EnvOperatorVersion, "0.1.0")
+
+		fields := unavailableHelperImageDefaultFields()
+		if len(fields) != 0 {
+			t.Fatalf("unavailableHelperImageDefaultFields() = %v, want empty", fields)
+		}
+	})
 }

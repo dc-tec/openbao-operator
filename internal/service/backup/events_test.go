@@ -30,6 +30,30 @@ func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...s
 	}
 }
 
+func expectAnyEventContains(t *testing.T, recorder *events.FakeRecorder, attempts int, parts ...string) {
+	t.Helper()
+
+	for i := 0; i < attempts; i++ {
+		select {
+		case event := <-recorder.Events:
+			match := true
+			for _, part := range parts {
+				if !strings.Contains(event, part) {
+					match = false
+					break
+				}
+			}
+			if match {
+				return
+			}
+		case <-time.After(time.Second):
+			t.Fatal("expected event, got none")
+		}
+	}
+
+	t.Fatalf("did not find event containing %q within %d attempts", strings.Join(parts, ", "), attempts)
+}
+
 func TestHandleManualTrigger_EmitsAcceptedEvent(t *testing.T) {
 	t.Parallel()
 
@@ -139,4 +163,33 @@ func TestProcessBackupJobResult_EmitsFailedEvent(t *testing.T) {
 	}
 
 	expectEventContains(t, recorder, "Warning", ReasonBackupFailed)
+}
+
+func TestEnsureBackupJob_EmitsIdentityConfigurationEvent(t *testing.T) {
+	t.Parallel()
+
+	cluster := newTestClusterWithBackup("backup-identity", "default")
+	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
+
+	recorder := events.NewFakeRecorder(10)
+	k8sClient := newTestClient(t, cluster)
+	manager := NewManager(
+		k8sClient,
+		testScheme,
+		portopenbao.ClientConfig{},
+		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+		"",
+		recorder,
+	)
+
+	inProgress, err := manager.ensureBackupJob(context.Background(), logr.Discard(), cluster, backupJobName(cluster, scheduled), scheduled)
+	if err != nil {
+		t.Fatalf("ensureBackupJob() error = %v", err)
+	}
+	if !inProgress {
+		t.Fatal("inProgress = false, want true")
+	}
+
+	expectAnyEventContains(t, recorder, 2, "Normal", ReasonBackupIdentityConfiguration)
+	expectAnyEventContains(t, recorder, 2, "Normal", ReasonBackupJobCreated)
 }

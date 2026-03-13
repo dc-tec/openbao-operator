@@ -28,6 +28,7 @@ import (
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
+	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
 const (
@@ -125,29 +126,39 @@ func restoreJobRunningStatusMessage(jobName string) string {
 	return fmt.Sprintf("Restore Job %s is running; waiting for completion.", jobName)
 }
 
-func restoreJobFailedStatusMessage(job *batchv1.Job) string {
+func restoreJobFailedStatusMessage(job *batchv1.Job, failureHint string) string {
+	message := ""
 	if job == nil {
-		return "Restore Job failed. Check the restore Job logs and create a new OpenBaoRestore to retry."
-	}
-
-	for _, cond := range job.Status.Conditions {
-		if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue && cond.Message != "" {
-			return fmt.Sprintf(
-				"Restore Job %s failed: %s. Check kubectl logs job/%s -n %s and create a new OpenBaoRestore to retry.",
-				job.Name,
-				cond.Message,
-				job.Name,
-				job.Namespace,
-			)
+		message = "Restore Job failed. Check the restore Job logs and create a new OpenBaoRestore to retry."
+	} else {
+		for _, cond := range job.Status.Conditions {
+			if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue && cond.Message != "" {
+				message = fmt.Sprintf(
+					"Restore Job %s failed: %s. Check kubectl logs job/%s -n %s and create a new OpenBaoRestore to retry.",
+					job.Name,
+					cond.Message,
+					job.Name,
+					job.Namespace,
+				)
+				break
+			}
 		}
 	}
 
-	return fmt.Sprintf(
-		"Restore Job %s failed. Check kubectl logs job/%s -n %s and create a new OpenBaoRestore to retry.",
-		job.Name,
-		job.Name,
-		job.Namespace,
-	)
+	if message == "" && job != nil {
+		message = fmt.Sprintf(
+			"Restore Job %s failed. Check kubectl logs job/%s -n %s and create a new OpenBaoRestore to retry.",
+			job.Name,
+			job.Name,
+			job.Namespace,
+		)
+	}
+
+	if failureHint == "" {
+		return message
+	}
+
+	return message + " " + failureHint
 }
 
 func (m *Manager) ensureTerminalLockReleased(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
@@ -221,8 +232,8 @@ func (m *Manager) handleValidating(ctx context.Context, logger logr.Logger, rest
 		return ctrl.Result{}, err
 	}
 
-	// Validate authentication
-	if result, err := m.validateAuthentication(ctx, logger, restore, cluster); result != nil || err != nil {
+	// Validate restore auth/storage/egress assumptions the operator can verify.
+	if result, err := m.validateExecutionReadiness(ctx, logger, restore, cluster); result != nil || err != nil {
 		if result != nil {
 			return *result, err
 		}
@@ -381,15 +392,20 @@ func (m *Manager) validateClusterState(ctx context.Context, logger logr.Logger, 
 	return nil, nil
 }
 
-// validateAuthentication validates that authentication is configured for the restore operation.
-// Returns (result, error) where result is non-nil if validation failed and should return early.
-func (m *Manager) validateAuthentication(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*ctrl.Result, error) {
-	hasJWTAuth := effectiveRestoreJWTRole(restore, cluster) != ""
-	hasTokenSecret := restore.Spec.TokenSecretRef != nil && restore.Spec.TokenSecretRef.Name != ""
+// validateExecutionReadiness validates restore auth, storage, and hardened-profile
+// egress prerequisites the operator can verify before creating a restore Job.
+func (m *Manager) validateExecutionReadiness(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*ctrl.Result, error) {
+	readiness, err := workloadidentity.EvaluateRestoreReadiness(ctx, m.client, restore, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate restore prerequisites: %w", err)
+	}
 
-	if !hasJWTAuth && !hasTokenSecret {
-		result, err := m.failRestore(ctx, logger, restore,
-			"authentication is required: either jwtAuthRole or tokenSecretRef must be set in the restore spec")
+	if err := m.patchRestoreConfigurationCondition(ctx, restore, readiness.Status, readiness.Reason, readiness.Message); err != nil {
+		return nil, err
+	}
+
+	if readiness.Status != metav1.ConditionTrue {
+		result, err := m.failRestore(ctx, logger, restore, readiness.Message)
 		return &result, err
 	}
 
@@ -474,7 +490,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 	}
 
 	if job.Status.Failed > 0 {
-		return m.failRestore(ctx, logger, restore, restoreJobFailedStatusMessage(job))
+		return m.failRestore(ctx, logger, restore, restoreJobFailedStatusMessage(job, workloadidentity.FailureHint(restore.Spec.Source.Target, restoreServiceAccountName(cluster))))
 	}
 
 	// Job still running
@@ -561,6 +577,9 @@ func (m *Manager) createRestoreJob(
 		"restore_name":      restore.Name,
 		"job":               jobName,
 	})
+	if message, ok := workloadidentity.IdentityConfigurationEventMessage(restore.Spec.Source.Target, restoreServiceAccountName(cluster)); ok {
+		m.emitNormalEvent(restore, ReasonRestoreIdentityConfiguration, "%s", message)
+	}
 	m.emitNormalEvent(restore, ReasonRestoreJobCreated, "Created restore Job %s", jobName)
 	original := restore.DeepCopy()
 	restore.Status.Message = restoreJobRunningStatusMessage(jobName)
@@ -612,6 +631,38 @@ func (m *Manager) failRestore(ctx context.Context, logger logr.Logger, restore *
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (m *Manager) patchRestoreConfigurationCondition(
+	ctx context.Context,
+	restore *openbaov1alpha1.OpenBaoRestore,
+	status metav1.ConditionStatus,
+	reason, message string,
+) error {
+	current := meta.FindStatusCondition(restore.Status.Conditions, RestoreConfigurationConditionType)
+	if current != nil &&
+		current.Status == status &&
+		current.Reason == reason &&
+		current.Message == message &&
+		current.ObservedGeneration == restore.Generation {
+		return nil
+	}
+
+	original := restore.DeepCopy()
+	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
+		Type:               RestoreConfigurationConditionType,
+		Status:             status,
+		ObservedGeneration: restore.Generation,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now(),
+	})
+
+	if err := m.patchStatus(ctx, restore, original); err != nil {
+		return fmt.Errorf("failed to patch restore configuration status: %w", err)
+	}
+
+	return nil
 }
 
 // completeRestore transitions the restore to Completed phase.

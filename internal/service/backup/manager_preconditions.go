@@ -3,15 +3,15 @@ package backup
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
 
 type backupPreconditionError struct {
@@ -126,48 +126,12 @@ func (m *Manager) checkPreconditions(ctx context.Context, _ logr.Logger, cluster
 		return newBackupSkipError("pre-upgrade backup in progress")
 	}
 
-	// Check we have a token for backup.
-	// All clusters (both standard and self-init) must use either JWT Auth
-	// or a backup token Secret. Root tokens are not used for security reasons.
-	backupCfg := cluster.Spec.Backup
-	if backupCfg == nil {
-		return newBackupWarningError(ReasonNoBackupToken, ErrNoBackupToken.Error())
+	readiness, err := workloadidentity.EvaluateBackupReadiness(ctx, m.client, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to evaluate backup Job prerequisites: %w", err)
 	}
-
-	// Check if JWT Auth is configured (preferred method).
-	// If jwtAuthRole is empty, check if OIDC is enabled (operator will auto-create the backup role).
-	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
-	if !hasJWTAuth && cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.OIDC != nil && cluster.Spec.SelfInit.OIDC.Enabled {
-		// Operator will auto-create the backup role with name auth.RoleNameBackup.
-		hasJWTAuth = true
-	}
-
-	// Check if static token is configured (fallback method).
-	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
-
-	// At least one authentication method must be configured.
-	if !hasJWTAuth && !hasTokenSecret {
-		return newBackupWarningError(ReasonNoBackupToken, ErrNoBackupToken.Error())
-	}
-
-	// If using token secret, verify it exists.
-	// SECURITY: Always use cluster.Namespace for secret lookups.
-	// Do NOT trust user-provided Namespace in SecretRef to prevent Confused Deputy attacks.
-	if hasTokenSecret {
-		secretNamespace := cluster.Namespace
-
-		secretName := types.NamespacedName{
-			Namespace: secretNamespace,
-			Name:      backupCfg.TokenSecretRef.Name,
-		}
-
-		secret := &corev1.Secret{}
-		if err := m.client.Get(ctx, secretName, secret); err != nil {
-			if apierrors.IsNotFound(err) {
-				return newBackupWarningError(ReasonNoBackupToken, fmt.Sprintf("backup token Secret %s/%s not found: %v", secretNamespace, backupCfg.TokenSecretRef.Name, ErrNoBackupToken))
-			}
-			return fmt.Errorf("failed to get backup token Secret %s/%s: %w", secretNamespace, backupCfg.TokenSecretRef.Name, err)
-		}
+	if readiness.Status != metav1.ConditionTrue {
+		return newBackupWarningError(readiness.Reason, readiness.Message)
 	}
 
 	return nil

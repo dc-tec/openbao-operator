@@ -282,7 +282,7 @@ type StoragePodClient interface {
 }
 
 // StoragePodClientFactory constructs pod-targeted OpenBao API clients.
-type StoragePodClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (StoragePodClient, error)
+type StoragePodClientFactory func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (StoragePodClient, error)
 
 // StoragePodRuntime groups pod-targeted OpenBao client construction.
 type StoragePodRuntime struct {
@@ -373,7 +373,7 @@ func ReconcileStorageResizeRestart(
 		return recon.Result{RequeueAfter: storageRequeueShort}, nil
 	}
 
-	actions, err := clientForPod(cluster, targetPod.Name, deps.Pods.ClientForPodFunc)
+	actions, err := clientForPod(ctx, cluster, targetPod.Name, deps.Pods.ClientForPodFunc)
 	if err != nil {
 		return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create OpenBao client for pod %s: %w", targetPod.Name, err))
 	}
@@ -510,12 +510,13 @@ func nextPodNeedingFSResizeRestart(
 }
 
 func clientForPod(
+	ctx context.Context,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	podName string,
 	factory StoragePodClientFactory,
 ) (StoragePodClient, error) {
 	if factory != nil {
-		return factory(cluster, podName)
+		return factory(ctx, cluster, podName)
 	}
 	return nil, fmt.Errorf("OpenBao pod client factory is not configured")
 }

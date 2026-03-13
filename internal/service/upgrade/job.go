@@ -23,6 +23,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -213,7 +214,13 @@ func buildUpgradeExecutorJob(
 		var err error
 		image, err = constants.DefaultUpgradeImage()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get default upgrade image: %w", err)
+			return nil, operatorerrors.WrapPermanentConfig(operatorerrors.WithReason(
+				constants.ReasonHelperImageConfigurationInvalid,
+				fmt.Errorf(
+					"default upgrade executor image is unavailable; set spec.upgrade.image explicitly or configure OPERATOR_VERSION in the operator Deployment: %w",
+					err,
+				),
+			))
 		}
 	}
 
@@ -230,12 +237,23 @@ func buildUpgradeExecutorJob(
 		return nil, fmt.Errorf("upgrade Jobs require JWT auth: Configure JWT auth and set the role name in spec.upgrade.jwtAuthRole")
 	}
 
+	tlsTrust, err := portopenbao.ResolveClientTrustBundle(cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve upgrade TLS trust source: %w", err)
+	}
+
 	env := []corev1.EnvVar{
 		{Name: constants.EnvClusterNamespace, Value: cluster.Namespace},
 		{Name: constants.EnvClusterName, Value: cluster.Name},
 		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
 		{Name: constants.EnvUpgradeAction, Value: string(action)},
 		{Name: constants.EnvUpgradeJWTAuthRole, Value: jwtRole},
+	}
+	if tlsServerName := portopenbao.ComputeTLSServerName(cluster); tlsServerName != "" {
+		env = append(env, corev1.EnvVar{Name: constants.EnvTLSServerName, Value: tlsServerName})
+	}
+	if !tlsTrust.UseSystemRoots {
+		env = append(env, corev1.EnvVar{Name: constants.EnvTLSCAPath, Value: constants.PathTLSCACert})
 	}
 
 	if blueRevision != "" {
@@ -332,11 +350,6 @@ func buildUpgradeExecutorJob(
 							Env: env,
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      upgradeTLSCAVolumeName,
-									MountPath: constants.PathTLS,
-									ReadOnly:  true,
-								},
-								{
 									Name:      upgradeTokenVolumeName,
 									MountPath: upgradeTokenMountPath,
 									ReadOnly:  true,
@@ -345,14 +358,6 @@ func buildUpgradeExecutorJob(
 						},
 					},
 					Volumes: []corev1.Volume{
-						{
-							Name: upgradeTLSCAVolumeName,
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: cluster.Name + constants.SuffixTLSCA,
-								},
-							},
-						},
 						{
 							Name: upgradeTokenVolumeName,
 							VolumeSource: corev1.VolumeSource{
@@ -374,6 +379,38 @@ func buildUpgradeExecutorJob(
 				},
 			},
 		},
+	}
+
+	if !tlsTrust.UseSystemRoots {
+		job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			[]corev1.VolumeMount{
+				{
+					Name:      upgradeTLSCAVolumeName,
+					MountPath: constants.PathTLS,
+					ReadOnly:  true,
+				},
+			},
+			job.Spec.Template.Spec.Containers[0].VolumeMounts...,
+		)
+		job.Spec.Template.Spec.Volumes = append(
+			[]corev1.Volume{
+				{
+					Name: upgradeTLSCAVolumeName,
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: tlsTrust.SecretName,
+							Items: []corev1.KeyToPath{
+								{
+									Key:  tlsTrust.SecretKey,
+									Path: "ca.crt",
+								},
+							},
+						},
+					},
+				},
+			},
+			job.Spec.Template.Spec.Volumes...,
+		)
 	}
 
 	if cluster.Spec.WorkloadHardening != nil && cluster.Spec.WorkloadHardening.AppArmorEnabled {

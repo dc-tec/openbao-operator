@@ -71,6 +71,7 @@ const (
 	EnvBackupCredentialsPath = "BACKUP_CREDENTIALS_PATH" // #nosec G101 -- This is an environment variable name constant, not a credential
 	EnvJWTTokenPath          = "JWT_TOKEN_PATH"          // #nosec G101 -- This is an environment variable name constant, not a credential
 	EnvTLSCAPath             = "TLS_CA_PATH"
+	EnvTLSServerName         = "TLS_SERVER_NAME"
 
 	EnvBackupCredentialsSecretName      = "BACKUP_CREDENTIALS_SECRET_NAME"      // #nosec G101 -- This is an environment variable name constant, not a credential
 	EnvBackupCredentialsSecretNamespace = "BACKUP_CREDENTIALS_SECRET_NAMESPACE" // #nosec G101 -- This is an environment variable name constant, not a credential

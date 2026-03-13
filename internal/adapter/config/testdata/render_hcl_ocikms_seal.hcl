@@ -16,8 +16,7 @@ seal "ocikms" {
   key_id              = "ocid1.key.oc1..example"
   crypto_endpoint     = "https://kms.us-ashburn-1.oraclecloud.com"
   management_endpoint = "https://kms.us-ashburn-1.oraclecloud.com"
-  auth_type           = "instance_principal"
-  compartment_id      = "ocid1.compartment.oc1..example"
+  auth_type_api_key   = true
 }
 storage "raft" {
   path    = "/bao/data"

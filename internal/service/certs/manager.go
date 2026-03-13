@@ -30,6 +30,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/openbaotls"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
@@ -448,13 +449,14 @@ func (m *Manager) reconcileExternalTLS(ctx context.Context, logger logr.Logger, 
 		return false, fmt.Errorf("failed to get server TLS Secret %s/%s: %w", cluster.Namespace, serverSecretName, err)
 	}
 
-	// Both secrets exist. Calculate hash and trigger reload if needed.
-	// This enables hot-reload when cert-manager or other external tools rotate certificates.
-	serverCertPEM, ok := serverSecret.Data[tlsCertKey]
-	if !ok || len(serverCertPEM) == 0 {
-		logger.Info("External TLS server Secret exists but missing certificate; waiting for external provider to populate", "secret", serverSecretName)
+	if err := openbaotls.ValidateExternalServerSecret(cluster, caSecret, serverSecret); err != nil {
+		logger.Info("External TLS assets are not usable yet; waiting for external provider to populate valid material", "error", err.Error())
 		return true, nil
 	}
+
+	// Both secrets exist and are usable. Calculate hash and trigger reload if needed.
+	// This enables hot-reload when cert-manager or other external tools rotate certificates.
+	serverCertPEM := serverSecret.Data[tlsCertKey]
 
 	// For external TLS, parse the certificate to record its expiry time.
 	serverCert, parseErr := parseCertificate(serverCertPEM)

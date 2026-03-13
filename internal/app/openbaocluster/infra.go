@@ -30,6 +30,8 @@ const (
 	defaultImageVerificationFailurePolicyBlock = "Block"
 
 	defaultReasonGatewayAPIMissing                   = "GatewayAPIMissing"
+	defaultReasonOIDCBootstrapConfigurationInvalid   = "OIDCBootstrapConfigurationInvalid"
+	defaultReasonAPIServerNetworkConfiguration       = "APIServerNetworkConfigurationInvalid"
 	defaultReasonPrerequisitesMissing                = "PrerequisitesMissing"
 	defaultReasonACMEDomainNotResolvable             = "ACMEDomainNotResolvable"
 	defaultReasonACMEGatewayNotConfiguredPassthrough = "ACMEGatewayNotConfiguredForPassthrough"
@@ -52,6 +54,8 @@ type OIDCConfig struct {
 // InfraReasonPolicy configures infra-related error reason values.
 type InfraReasonPolicy struct {
 	GatewayAPIMissing                   string
+	OIDCBootstrapConfiguration          string
+	APIServerNetworkConfiguration       string
 	PrerequisitesMissing                string
 	ACMEDomainNotResolvable             string
 	ACMEGatewayNotConfiguredPassthrough string
@@ -64,6 +68,20 @@ func (p InfraReasonPolicy) gatewayAPIMissingReason() string {
 		return p.GatewayAPIMissing
 	}
 	return defaultReasonGatewayAPIMissing
+}
+
+func (p InfraReasonPolicy) oidcBootstrapConfigurationReason() string {
+	if strings.TrimSpace(p.OIDCBootstrapConfiguration) != "" {
+		return p.OIDCBootstrapConfiguration
+	}
+	return defaultReasonOIDCBootstrapConfigurationInvalid
+}
+
+func (p InfraReasonPolicy) apiServerNetworkConfigurationReason() string {
+	if strings.TrimSpace(p.APIServerNetworkConfiguration) != "" {
+		return p.APIServerNetworkConfiguration
+	}
+	return defaultReasonAPIServerNetworkConfiguration
 }
 
 func (p InfraReasonPolicy) prerequisitesMissingReason() string {
@@ -109,7 +127,7 @@ type ScaleDownPodClient interface {
 	IsLeader(ctx context.Context) (bool, error)
 	StepDownLeader(ctx context.Context) error
 }
-type ScaleDownPodClientFactory func(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error)
+type ScaleDownPodClientFactory func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error)
 type discoverOIDCConfigFunc func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error)
 
 // InfraKubernetesRuntime groups Kubernetes-facing collaborators used by infra reconciliation.
@@ -168,6 +186,16 @@ func NewInfraReconciler(deps InfraDependencies, reasons InfraReasonPolicy) SubRe
 	return &infraReconciler{deps: deps, reasons: reasons}
 }
 
+func (r *infraReconciler) oidcBootstrapConfigurationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+		err = operatorerrors.WrapPermanentConfig(err)
+	}
+	return operatorerrors.WithReason(r.reasons.oidcBootstrapConfigurationReason(), err)
+}
+
 func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	return cluster != nil &&
 		cluster.Spec.SelfInit != nil &&
@@ -190,7 +218,7 @@ func (r *infraReconciler) oidcDiscoveryError(err error) error {
 	if statusCode, ok := r.oidcDiscoveryStatusCode(err); ok {
 		switch statusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
-			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
+			return r.oidcBootstrapConfigurationError(fmt.Errorf(
 				"OIDC discovery blocked by Kubernetes API RBAC (%d). Ensure the operator ServiceAccount can GET %q and %q on the Kubernetes API server (nonResourceURLs RBAC): %w",
 				statusCode,
 				"/.well-known/openid-configuration",
@@ -198,7 +226,7 @@ func (r *infraReconciler) oidcDiscoveryError(err error) error {
 				err,
 			))
 		case http.StatusNotFound:
-			return operatorerrors.WrapPermanentConfig(fmt.Errorf(
+			return r.oidcBootstrapConfigurationError(fmt.Errorf(
 				"OIDC discovery endpoint not found (404). Ensure the Kubernetes API server exposes OIDC discovery and JWKS endpoints: %w",
 				err,
 			))
@@ -206,7 +234,7 @@ func (r *infraReconciler) oidcDiscoveryError(err error) error {
 			if statusCode == http.StatusTooManyRequests || statusCode >= 500 {
 				return operatorerrors.WrapTransientKubernetesAPI(err)
 			}
-			return operatorerrors.WrapPermanentConfig(err)
+			return r.oidcBootstrapConfigurationError(err)
 		}
 	}
 
@@ -222,12 +250,12 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 	}
 
 	if r.deps.OIDC.RestConfig == nil {
-		return "", nil, operatorerrors.WrapPermanentConfig(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
+		return "", nil, r.oidcBootstrapConfigurationError(fmt.Errorf("OIDC discovery required but controller rest.Config is not available"))
 	}
 
 	discover := r.deps.OIDC.DiscoverOIDCConfig
 	if discover == nil {
-		return "", nil, operatorerrors.WrapPermanentConfig(fmt.Errorf("OIDC discovery function is not configured"))
+		return "", nil, r.oidcBootstrapConfigurationError(fmt.Errorf("OIDC discovery function is not configured"))
 	}
 
 	discoveryCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -547,6 +575,9 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
 			return recon.Result{}, operatorerrors.WithReason(r.reasons.gatewayAPIMissingReason(), err)
 		}
+		if errors.Is(err, inframanager.ErrAPIServerNetworkConfigurationInvalid) {
+			return recon.Result{}, operatorerrors.WithReason(r.reasons.apiServerNetworkConfigurationReason(), err)
+		}
 		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
 			return recon.Result{}, operatorerrors.WithReason(r.reasons.prerequisitesMissingReason(), err)
 		}
@@ -577,7 +608,7 @@ func (r *infraReconciler) handleScaleDownSafety(ctx context.Context, cluster *op
 	logger := log.FromContext(ctx).WithValues("victim", victimPodName, "currentReplicas", currentReplicas, "desiredReplicas", desiredReplicas)
 	logger.Info("Detected scale down operation; checking victim leadership")
 
-	victimClient, err := r.clientForPod(cluster, victimPodName)
+	victimClient, err := r.clientForPod(ctx, cluster, victimPodName)
 	if err != nil {
 		logger.Error(err, "Failed to create client for victim pod; assuming safe to remove")
 		return nil
@@ -601,9 +632,9 @@ func (r *infraReconciler) handleScaleDownSafety(ctx context.Context, cluster *op
 	return nil
 }
 
-func (r *infraReconciler) clientForPod(cluster *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error) {
+func (r *infraReconciler) clientForPod(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error) {
 	if r.deps.Pods.ClientForPodFunc != nil {
-		return r.deps.Pods.ClientForPodFunc(cluster, podName)
+		return r.deps.Pods.ClientForPodFunc(ctx, cluster, podName)
 	}
 	return nil, fmt.Errorf("OpenBao pod client factory is not configured")
 }

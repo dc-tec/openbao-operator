@@ -61,9 +61,38 @@ const (
 	ConditionAvailable ConditionType = "Available"
 	// ConditionTLSReady indicates whether TLS assets have been successfully provisioned.
 	ConditionTLSReady ConditionType = "TLSReady"
+	// ConditionACMEIntegrationReady indicates whether operator-known ACME integration
+	// prerequisites are satisfied, such as Gateway passthrough, private ACME trust,
+	// and self-reachability checks for supported topologies.
+	ConditionACMEIntegrationReady ConditionType = "ACMEIntegrationReady"
+	// ConditionACMECacheReady indicates whether the shared ACME cache PVC is ready for use
+	// when the configured topology requires or uses a shared ACME cache.
+	ConditionACMECacheReady ConditionType = "ACMECacheReady"
+	// ConditionGatewayIntegrationReady indicates whether the operator can verify
+	// the referenced Gateway and GatewayClass integration contract for the chosen
+	// Gateway API mode.
+	ConditionGatewayIntegrationReady ConditionType = "GatewayIntegrationReady"
+	// ConditionAPIServerNetworkReady indicates whether the operator can validate
+	// the Kubernetes API egress contract used by the operator-managed NetworkPolicy.
+	// Unknown means the common service-VIP path is configured, but some CNIs may
+	// still require explicit apiServerEndpointIPs for post-DNAT enforcement.
+	ConditionAPIServerNetworkReady ConditionType = "APIServerNetworkReady"
+	// ConditionBackupConfigurationReady indicates whether the operator can verify
+	// the backup Job's operator-known prerequisites such as auth references,
+	// storage credential Secret references, and hardened-profile egress rules.
+	ConditionBackupConfigurationReady ConditionType = "BackupConfigurationReady"
+	// ConditionCloudUnsealIdentityReady indicates whether the operator can
+	// determine and validate the cloud KMS unseal authentication path for the
+	// main OpenBao Pods when using AWS KMS, GCP Cloud KMS, Azure Key Vault, or OCI KMS.
+	ConditionCloudUnsealIdentityReady ConditionType = "CloudUnsealIdentityReady"
 	// ConditionProductionReady indicates whether the cluster configuration is considered
 	// production-ready by the operator (security posture, unseal, bootstrap flow).
 	ConditionProductionReady ConditionType = "ProductionReady"
+	// ConditionUserAccessBootstrap indicates whether the operator could recognize
+	// a likely user-facing authentication bootstrap path in self-init requests.
+	// This is a best-effort heuristic and does not prove that the configured auth
+	// methods, roles, or identities are usable.
+	ConditionUserAccessBootstrap ConditionType = "UserAccessBootstrap"
 	// ConditionUpgrading indicates whether an upgrade is currently in progress.
 	ConditionUpgrading ConditionType = "Upgrading"
 	// ConditionBackingUp indicates whether a backup is currently in progress.
@@ -143,6 +172,47 @@ type ACMEConfig struct {
 	// Email is the email address to use for ACME registration.
 	// +optional
 	Email string `json:"email,omitempty"`
+	// SharedCache configures a filesystem cache shared across OpenBao replicas for ACME account
+	// and certificate state. This is required for HA ACME topologies where more than one Pod
+	// can serve the same hostname concurrently.
+	// +optional
+	SharedCache *ACMESharedCacheConfig `json:"sharedCache,omitempty"`
+}
+
+// ACMESharedCacheMode controls how the operator provides a shared filesystem for OpenBao's ACME cache.
+// +kubebuilder:validation:Enum=ManagedPVC;ExistingPVC
+type ACMESharedCacheMode string
+
+const (
+	// ACMESharedCacheModeManagedPVC instructs the operator to create a dedicated RWX PVC.
+	ACMESharedCacheModeManagedPVC ACMESharedCacheMode = "ManagedPVC"
+	// ACMESharedCacheModeExistingPVC instructs the operator to mount an existing RWX PVC.
+	ACMESharedCacheModeExistingPVC ACMESharedCacheMode = "ExistingPVC"
+)
+
+// ACMESharedCacheConfig configures the shared filesystem cache for ACME account and certificate state.
+// See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ManagedPVC' || !has(self.existingClaimName) || size(self.existingClaimName) == 0",message="tls.acme.sharedCache.existingClaimName is only supported when mode is ExistingPVC"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ExistingPVC' || size(self.existingClaimName) > 0",message="tls.acme.sharedCache.existingClaimName is required when mode is ExistingPVC"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ExistingPVC' || !has(self.size) || size(self.size) == 0",message="tls.acme.sharedCache.size is only supported when mode is ManagedPVC"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ExistingPVC' || !has(self.storageClassName) || size(self.storageClassName) == 0",message="tls.acme.sharedCache.storageClassName is only supported when mode is ManagedPVC"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ManagedPVC' || size(self.size) > 0",message="tls.acme.sharedCache.size is required when mode is ManagedPVC"
+type ACMESharedCacheConfig struct {
+	// Mode selects whether the operator creates a dedicated RWX PVC or mounts an existing one.
+	Mode ACMESharedCacheMode `json:"mode"`
+	// ExistingClaimName is the name of a pre-created RWX PVC in the same namespace.
+	// Required when Mode is ExistingPVC.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	ExistingClaimName string `json:"existingClaimName,omitempty"`
+	// Size is the requested capacity for the managed ACME cache PVC.
+	// Required when Mode is ManagedPVC.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Size string `json:"size,omitempty"`
+	// StorageClassName is an optional StorageClass for the managed ACME cache PVC.
+	// +optional
+	StorageClassName *string `json:"storageClassName,omitempty"`
 }
 
 // TLSConfig captures TLS configuration for an OpenBaoCluster.
@@ -524,6 +594,19 @@ type NetworkConfig struct {
 	// +kubebuilder:default="kube-system"
 	DNSNamespace string `json:"dnsNamespace,omitempty"`
 
+	// DNSEndpointIPs is an optional list of DNS resolver endpoint IPs that should be
+	// allow-listed directly in the operator-managed NetworkPolicy on TCP/UDP port 53.
+	//
+	// Use this for clusters that resolve DNS through node-local or host-networked caches
+	// instead of pod-backed DNS Services in a namespace. These IP-based rules are additive
+	// to the namespace-based allow-list controlled by DNSNamespace.
+	//
+	// The operator does not auto-detect these endpoint IPs because doing so reliably would
+	// require environment-specific node or DNS discovery logic outside the current trust model.
+	// Example: ["169.254.20.10"]
+	// +optional
+	DNSEndpointIPs []string `json:"dnsEndpointIPs,omitempty"`
+
 	// EgressRules allows users to specify additional egress rules that will be merged into
 	// the operator-managed NetworkPolicy. This is useful for allowing access to external
 	// services such as transit seal backends, object storage endpoints, or other dependencies.
@@ -562,6 +645,31 @@ type NetworkConfig struct {
 	//       port: 8200
 	// +optional
 	IngressRules []networkingv1.NetworkPolicyIngressRule `json:"ingressRules,omitempty"`
+
+	// TrustedIngressPeers allows users to declare ingress-controller or passthrough-proxy peers
+	// that should be allowed to reach OpenBao on the API port without writing full raw
+	// NetworkPolicy ingress rules.
+	//
+	// This is useful for user-managed TCP passthrough or external ingress components that the
+	// operator does not manage directly. The operator adds least-privilege ingress rules for
+	// port 8200 using these peers.
+	//
+	// Example: Allow a Traefik namespace to reach OpenBao on port 8200:
+	//   trustedIngressPeers:
+	//   - namespaceSelector:
+	//       matchLabels:
+	//         kubernetes.io/metadata.name: traefik
+	//
+	// Example: Allow only specific ingress-controller pods in another namespace:
+	//   trustedIngressPeers:
+	//   - namespaceSelector:
+	//       matchLabels:
+	//         kubernetes.io/metadata.name: ingress-system
+	//     podSelector:
+	//       matchLabels:
+	//         app.kubernetes.io/name: traefik
+	// +optional
+	TrustedIngressPeers []networkingv1.NetworkPolicyPeer `json:"trustedIngressPeers,omitempty"`
 }
 
 // BackupTarget describes a generic, cloud-agnostic object storage destination.
@@ -1098,29 +1206,48 @@ type GCPCloudKMSSealConfig struct {
 // KMIPSealConfig configures the KMIP seal type.
 // See: https://openbao.org/docs/configuration/seal/kmip/
 type KMIPSealConfig struct {
-	// Address is the address of the KMIP server.
+	// Endpoint is the KMIP server endpoint.
 	// +kubebuilder:validation:MinLength=1
-	Address string `json:"address"`
+	Endpoint string `json:"endpoint"`
 
-	// Certificate is the path to the client certificate for KMIP communication.
-	// +optional
-	Certificate string `json:"certificate,omitempty"`
+	// KMSKeyID is the unique identifier of the KMIP key to use.
+	// +kubebuilder:validation:MinLength=1
+	KMSKeyID string `json:"kmsKeyID"`
 
-	// Key is the path to the private key for KMIP communication.
-	// +optional
-	Key string `json:"key,omitempty"`
+	// ClientCert is the path to the client certificate used for KMIP communication.
+	// +kubebuilder:validation:MinLength=1
+	ClientCert string `json:"clientCert"`
+
+	// ClientKey is the path to the private key used for KMIP communication.
+	// +kubebuilder:validation:MinLength=1
+	ClientKey string `json:"clientKey"`
 
 	// CACert is the path to the CA certificate for KMIP communication.
 	// +optional
 	CACert string `json:"caCert,omitempty"`
 
-	// TLSServerName is the SNI host name to use when connecting via TLS.
+	// ServerName is the TLS server name to use when connecting to the KMIP endpoint.
 	// +optional
-	TLSServerName string `json:"tlsServerName,omitempty"`
+	ServerName string `json:"serverName,omitempty"`
 
-	// TLSSkipVerify disables verification of TLS certificates.
+	// Timeout is the timeout in seconds for KMIP requests.
+	// +kubebuilder:validation:Minimum=1
 	// +optional
-	TLSSkipVerify *bool `json:"tlsSkipVerify,omitempty"`
+	Timeout *int32 `json:"timeout,omitempty"`
+
+	// EncryptAlg is the encryption algorithm used for KMIP requests.
+	// +kubebuilder:validation:Enum=AES_GCM;RSA_OAEP_SHA256;RSA_OAEP_SHA384;RSA_OAEP_SHA512
+	// +optional
+	EncryptAlg string `json:"encryptAlg,omitempty"`
+
+	// TLS12Ciphers configures the TLS 1.2 cipher suites to use when connecting
+	// to the KMIP endpoint.
+	// +optional
+	TLS12Ciphers string `json:"tls12Ciphers,omitempty"`
+
+	// Disabled disables this seal configuration, for example during seal migration.
+	// +optional
+	Disabled *bool `json:"disabled,omitempty"`
 }
 
 // OCIKMSSealConfig configures the OCI KMS seal type.
@@ -1138,17 +1265,21 @@ type OCIKMSSealConfig struct {
 	// +kubebuilder:validation:MinLength=1
 	ManagementEndpoint string `json:"managementEndpoint"`
 
-	// AuthType is the authentication type (e.g., "instance_principal", "user_principal").
+	// AuthTypeAPIKey enables OCI API key authentication through an OCI SDK config file.
+	// When false or omitted, OpenBao uses the default OCI principal flow for the runtime
+	// environment, such as instance principal.
 	// +optional
-	AuthType string `json:"authType,omitempty"`
+	AuthTypeAPIKey *bool `json:"authTypeAPIKey,omitempty"`
 
-	// CompartmentID is the OCID of the compartment containing the key.
+	// Disabled disables this seal configuration, for example during seal migration.
 	// +optional
-	CompartmentID string `json:"compartmentID,omitempty"`
+	Disabled *bool `json:"disabled,omitempty"`
 }
 
 // PKCS11SealConfig configures the PKCS#11 seal type.
 // See: https://openbao.org/docs/configuration/seal/pkcs11/
+// +kubebuilder:validation:XValidation:rule="(has(self.slot) && size(self.slot) > 0) || (has(self.tokenLabel) && size(self.tokenLabel) > 0)",message="spec.unseal.pkcs11.slot or spec.unseal.pkcs11.tokenLabel is required"
+// +kubebuilder:validation:XValidation:rule="!(has(self.slot) && size(self.slot) > 0 && has(self.tokenLabel) && size(self.tokenLabel) > 0)",message="spec.unseal.pkcs11.slot and spec.unseal.pkcs11.tokenLabel are mutually exclusive"
 type PKCS11SealConfig struct {
 	// Lib is the path to the PKCS#11 library provided by the HSM vendor.
 	// +kubebuilder:validation:MinLength=1
@@ -1157,6 +1288,10 @@ type PKCS11SealConfig struct {
 	// Slot is the slot number where the HSM token is located.
 	// +optional
 	Slot string `json:"slot,omitempty"`
+
+	// TokenLabel is the token label of the HSM slot to use instead of Slot.
+	// +optional
+	TokenLabel string `json:"tokenLabel,omitempty"`
 
 	// PIN is the PIN for accessing the HSM token.
 	// Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
@@ -1167,17 +1302,21 @@ type PKCS11SealConfig struct {
 	// +kubebuilder:validation:MinLength=1
 	KeyLabel string `json:"keyLabel"`
 
-	// HMACKeyLabel is the label for the HMAC key used by OpenBao.
+	// KeyID is the PKCS#11 key identifier to use instead of KeyLabel.
 	// +optional
-	HMACKeyLabel string `json:"hmacKeyLabel,omitempty"`
+	KeyID string `json:"keyID,omitempty"`
 
-	// GenerateKey indicates whether OpenBao should generate the key if it doesn't exist.
+	// Mechanism overrides the PKCS#11 wrapping or encryption mechanism.
 	// +optional
-	GenerateKey *bool `json:"generateKey,omitempty"`
+	Mechanism string `json:"mechanism,omitempty"`
 
-	// RSAEncryptLocal allows performing encryption locally for HSMs that don't support encryption for RSA keys.
+	// DisableSoftwareEncryption disables the software encryption fallback.
 	// +optional
-	RSAEncryptLocal *bool `json:"rsaEncryptLocal,omitempty"`
+	DisableSoftwareEncryption *bool `json:"disableSoftwareEncryption,omitempty"`
+
+	// Disabled disables this seal configuration, for example during seal migration.
+	// +optional
+	Disabled *bool `json:"disabled,omitempty"`
 
 	// RSAOAEPHash specifies the hash algorithm to use for RSA with OAEP padding.
 	// Valid values: sha1, sha224, sha256, sha384, sha512.
@@ -1251,7 +1390,8 @@ type UnsealConfig struct {
 	PKCS11 *PKCS11SealConfig `json:"pkcs11,omitempty"`
 
 	// CredentialsSecretRef references a Secret containing provider credentials
-	// (e.g., AWS_ACCESS_KEY_ID, GOOGLE_CREDENTIALS JSON, Azure client secret, etc.).
+	// (for example AWS access keys, GCP credentials.json, Azure client-secret keys,
+	// or OCI SDK config for authTypeAPIKey mode).
 	// If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
 	// The Secret must exist in the same namespace as the OpenBaoCluster.
 	// Cross-namespace references are not allowed for security reasons.
@@ -1554,6 +1694,9 @@ type PluginConfig struct {
 // listener "tcp", storage "raft", and seal "static" when using default unseal).
 // Users must not override these via spec.configuration.
 // +kubebuilder:validation:XValidation:rule="self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod) > 0",message="spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged"
+// +kubebuilder:validation:XValidation:rule="self.tls.mode == 'ACME' || !has(self.tls.acme) || !has(self.tls.acme.sharedCache)",message="spec.tls.acme.sharedCache is only supported when spec.tls.mode is ACME"
+// +kubebuilder:validation:XValidation:rule="self.tls.mode != 'ACME' || ((self.replicas <= 1) && (!has(self.upgrade) || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) && has(self.tls.acme.sharedCache))",message="HA ACME clusters require spec.tls.acme.sharedCache when more than one Pod can serve the same hostname"
+// +kubebuilder:validation:XValidation:rule="!has(self.unseal) || self.unseal.type != 'ocikms' || !has(self.unseal.credentialsSecretRef) || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey) && self.unseal.ocikms.authTypeAPIKey == true)",message="spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true"
 type OpenBaoClusterSpec struct {
 	// Version is the semantic OpenBao version, used for upgrade orchestration.
 	// The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.

@@ -43,6 +43,7 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 	// Create a ClientManager for this operation
 	mgr := openbao.NewClientManager(portopenbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
+		TLSServerName:                  cfg.TLSServerName,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,
 		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
@@ -122,6 +123,7 @@ func authenticate(ctx context.Context, cfg *backupconfig.ExecutorConfig, leaderU
 	if cfg.AuthMethod == constants.BackupAuthMethodJWT {
 		mgr := openbao.NewClientManager(portopenbao.ClientConfig{
 			CACert:                         cfg.TLSCACert,
+			TLSServerName:                  cfg.TLSServerName,
 			RateLimitQPS:                   cfg.RateLimitQPS,
 			RateLimitBurst:                 cfg.RateLimitBurst,
 			CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
@@ -164,6 +166,7 @@ func run(ctx context.Context) error {
 	// Create OpenBao client for leader
 	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
+		TLSServerName:                  cfg.TLSServerName,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,
 		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
@@ -292,6 +295,7 @@ func runRestore(ctx context.Context) error {
 	// Create OpenBao client for leader
 	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{
 		CACert:                         cfg.TLSCACert,
+		TLSServerName:                  cfg.TLSServerName,
 		RateLimitQPS:                   cfg.RateLimitQPS,
 		RateLimitBurst:                 cfg.RateLimitBurst,
 		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,

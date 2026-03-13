@@ -597,9 +597,12 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 		t.Fatalf("expected restore phase Failed after failed job, got %s", latest.Status.Phase)
 	}
 	jobName := restore.RestoreJobNamePrefix + restoreObj.Name
-	expectedMessage := "Restore Job " + jobName + " failed. Check kubectl logs job/" + jobName + " -n " + namespace + " and create a new OpenBaoRestore to retry."
-	if latest.Status.Message != expectedMessage {
-		t.Fatalf("expected failed-job message %q, got %q", expectedMessage, latest.Status.Message)
+	expectedPrefix := "Restore Job " + jobName + " failed. Check kubectl logs job/" + jobName + " -n " + namespace + " and create a new OpenBaoRestore to retry."
+	if !strings.Contains(latest.Status.Message, expectedPrefix) {
+		t.Fatalf("expected failed-job message to contain %q, got %q", expectedPrefix, latest.Status.Message)
+	}
+	if !strings.Contains(latest.Status.Message, "generated ServiceAccount") {
+		t.Fatalf("expected failed-job message to include identity hint, got %q", latest.Status.Message)
 	}
 	if latest.Status.CompletionTime == nil {
 		t.Fatalf("expected completionTime to be set on terminal failure")

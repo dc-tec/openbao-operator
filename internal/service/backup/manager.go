@@ -26,11 +26,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
-// ErrNoBackupToken indicates that no suitable backup token is configured for
-// the cluster. This occurs when neither JWT Auth role nor backup token Secret
-// is provided, or the referenced Secret is missing.
-var ErrNoBackupToken = errors.New("no backup token configured: either jwtAuthRole or tokenSecretRef must be set")
-
 const backupOperationLockHolder = constants.ControllerNameOpenBaoCluster + "/backup"
 
 var backupOperationLock = opslifecycle.OperationLock{
