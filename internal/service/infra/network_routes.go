@@ -329,6 +329,10 @@ func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha2.TLS
 	backendServiceName := externalServiceName(cluster)
 	hostname := gatewayv1alpha2.Hostname(gw.Hostname)
 	port := gatewayv1alpha2.PortNumber(constants.PortAPI)
+	if usesACMEMode(cluster) {
+		backendServiceName = acmeServiceName(cluster)
+		port = gatewayv1alpha2.PortNumber(443)
+	}
 	gatewayNS := gatewayv1alpha2.Namespace(gatewayNamespace)
 	var sectionName *gatewayv1alpha2.SectionName
 	if strings.TrimSpace(gw.ListenerName) != "" {
