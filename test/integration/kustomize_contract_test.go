@@ -246,6 +246,62 @@ func TestKustomizeDefault_ProvisionerRoleDoesNotReadServiceAccounts(t *testing.T
 	}
 }
 
+func TestKustomizeDefault_ControllerRoleReadsGatewayAPIByGetOnly(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
+		return u.GetAPIVersion() == "rbac.authorization.k8s.io/v1" &&
+			u.GetKind() == "ClusterRole" &&
+			u.GetName() == "openbao-operator-controller-openbaocluster-role"
+	})
+
+	if len(objs) != 1 {
+		t.Fatalf("expected exactly one controller ClusterRole, got %d", len(objs))
+	}
+
+	rules, found, err := unstructured.NestedSlice(objs[0].Object, "rules")
+	if err != nil || !found {
+		t.Fatalf("read controller rules: found=%v err=%v", found, err)
+	}
+
+	foundGatewayRule := false
+	for _, rule := range rules {
+		ruleMap, ok := rule.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		resources, _ := ruleMap["resources"].([]any)
+		if len(resources) != 2 {
+			continue
+		}
+
+		hasGateways := false
+		hasGatewayClasses := false
+		for _, resource := range resources {
+			switch resource {
+			case "gateways":
+				hasGateways = true
+			case "gatewayclasses":
+				hasGatewayClasses = true
+			}
+		}
+		if !hasGateways || !hasGatewayClasses {
+			continue
+		}
+
+		verbs, _ := ruleMap["verbs"].([]any)
+		if len(verbs) != 1 || verbs[0] != "get" {
+			t.Fatalf("controller ClusterRole must grant Gateway API reads via get only, got %#v", ruleMap)
+		}
+
+		foundGatewayRule = true
+	}
+
+	if !foundGatewayRule {
+		t.Fatal("expected controller ClusterRole to include get-only access to gateways and gatewayclasses")
+	}
+}
+
 func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner(t *testing.T) {
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "overlays", "single-tenant"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, nil)

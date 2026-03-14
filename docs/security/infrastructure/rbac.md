@@ -86,6 +86,7 @@ flowchart TB
     | `OpenBaoCluster` | `get`, `list`, `watch` | Global watch for CRD events. |
     | `TokenReview` | `create` | Authenticate metrics requests. |
     | `ValidatingAdmissionPolicy` | `get` | Verify security policy existence. |
+    | `Gateway`, `GatewayClass` | `get` | Verify the referenced `spec.gateway.gatewayRef` and controller capabilities. Deterministic-name reads only; no `list`/`watch`. |
 
     **Tenant Scope (via RoleBinding):**
 
