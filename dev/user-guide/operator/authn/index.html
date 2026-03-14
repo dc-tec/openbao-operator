@@ -4850,8 +4850,9 @@ Initialization</strong>. This ensures no root token is ever persisted to a Kuber
 </ol>
 <p>If OIDC discovery or operator identity bootstrap is miswired, the cluster surfaces <code>OIDCBootstrapConfigurationInvalid</code>.</p>
 <p>On managed control planes, the discovery document may return a JWKS URL on a hostname that is not directly
-reachable from cluster Pods. The operator retries standard Kubernetes JWKS paths (<code>/openid/v1/jwks</code> and
-<code>/.well-known/jwks.json</code>) through the same Kubernetes API service endpoint used for discovery before failing.</p>
+reachable from cluster Pods. The operator first retries discovery through the advertised issuer URL and then,
+for standard Kubernetes JWKS paths, falls back to the same Kubernetes API service endpoint used for discovery
+before failing.</p>
 <p>If the operator cannot recognize a human login path from <code>spec.selfInit.requests</code>, the cluster surfaces <code>UserAccessBootstrap=Unknown</code> with reason <code>UserAccessUnverified</code>. This is a warning signal, not a hard block.</p>
 <h3 id="manual-role-configuration">Manual Role Configuration<a class="headerlink" href="#manual-role-configuration" title="Permanent link">&para;</a></h3>
 <p>If you are <strong>not</strong> using Self-Initialization, you must manually configure the operator's access:</p>
