@@ -21,7 +21,9 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
@@ -207,6 +209,45 @@ func TestInfraReconciler_ResolveOIDC_LazyDiscoveryForSelfInit(t *testing.T) {
 	assert.Equal(t, "https://issuer.example/keys", oidc.JWKSURL)
 }
 
+func TestInfraReconciler_VerifyInitContainerImageDigest_UsesResolvedDefaultImage(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "1.2.3")
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+		},
+	}
+
+	var verifiedImage string
+	r := &infraReconciler{deps: InfraDependencies{
+		ImageVerification: InfraImageVerificationRuntime{
+			VerifyOperatorImage: func(_ context.Context, _ logr.Logger, _ imageverify.Verifier, _ *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error) {
+				verifiedImage = imageRef
+				return "ghcr.io/dc-tec/openbao-init@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", nil
+			},
+		},
+	}}
+
+	initImage, err := r.resolveInitContainerImage(cluster)
+	if err != nil {
+		t.Fatalf("resolveInitContainerImage() error = %v", err)
+	}
+	if initImage != "ghcr.io/dc-tec/openbao-init:1.2.3" {
+		t.Fatalf("resolveInitContainerImage() = %q, want %q", initImage, "ghcr.io/dc-tec/openbao-init:1.2.3")
+	}
+
+	digest, err := r.verifyInitContainerImageDigest(context.Background(), logr.Discard(), cluster, initImage)
+	if err != nil {
+		t.Fatalf("verifyInitContainerImageDigest() error = %v", err)
+	}
+	if digest != "ghcr.io/dc-tec/openbao-init@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("verifyInitContainerImageDigest() = %q", digest)
+	}
+	if verifiedImage != initImage {
+		t.Fatalf("verified image = %q, want %q", verifiedImage, initImage)
+	}
+}
+
 func TestInfraReconciler_ResolveTargetMainImage_BlueGreenPrefersActivePods(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
@@ -340,7 +381,7 @@ func TestInfraReconciler_Reconcile_BlocksInvalidVersionSelection(t *testing.T) {
 }
 
 func TestInfraReconciler_Reconcile_MapsAPIServerNetworkConfigurationError(t *testing.T) {
-	t.Parallel()
+	t.Setenv(constants.EnvOperatorVersion, "1.2.3")
 
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)

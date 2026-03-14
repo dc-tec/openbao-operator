@@ -114,6 +114,51 @@ func TestBuildTLSRoute_ListenerNameSetsSectionName(t *testing.T) {
 	}
 }
 
+func TestBuildTLSRoute_ACMEModeTargetsChallengeService(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "infra-tlsroute-acme",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+				Mode:    openbaov1alpha1.TLSModeACME,
+				ACME: &openbaov1alpha1.ACMEConfig{
+					DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+					Domains:      []string{"bao.example.local"},
+				},
+			},
+			Gateway: &openbaov1alpha1.GatewayConfig{
+				Enabled:        true,
+				TLSPassthrough: true,
+				GatewayRef: openbaov1alpha1.GatewayReference{
+					Name:      "traefik-gateway",
+					Namespace: "default",
+				},
+				Hostname: "bao.example.local",
+			},
+		},
+	}
+
+	route := buildTLSRoute(cluster)
+	if route == nil {
+		t.Fatalf("expected non-nil TLSRoute")
+	}
+
+	if len(route.Spec.Rules) != 1 || len(route.Spec.Rules[0].BackendRefs) != 1 {
+		t.Fatalf("expected exactly one backendRef, got %+v", route.Spec.Rules)
+	}
+
+	backend := route.Spec.Rules[0].BackendRefs[0]
+	if string(backend.Name) != acmeServiceName(cluster) {
+		t.Fatalf("expected ACME backend name %q, got %q", acmeServiceName(cluster), backend.Name)
+	}
+	if backend.Port == nil || int32(*backend.Port) != 443 {
+		t.Fatalf("expected ACME backend port 443, got %v", backend.Port)
+	}
+}
+
 func TestBuildHTTPRouteBackends_ServiceSelectorsDefault(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{

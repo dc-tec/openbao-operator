@@ -55,6 +55,13 @@ rules:
       - validatingadmissionpolicybindings
     verbs:
       - get
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gateways
+      - gatewayclasses
+    verbs:
+      - get
   - nonResourceURLs:
       - "/.well-known/openid-configuration"
       - "/openid/v1/jwks"

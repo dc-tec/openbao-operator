@@ -149,47 +149,7 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 		if !apierrors.IsNotFound(err) {
 			return phaseOutcome{}, fmt.Errorf("failed to get Green StatefulSet: %w", err)
 		}
-
-		infraDetails := configbuilder.InfrastructureDetails{
-			HeadlessServiceName:   cluster.Name,
-			Namespace:             cluster.Namespace,
-			APIPort:               constants.PortAPI,
-			ClusterPort:           constants.PortCluster,
-			TargetRevisionForJoin: blueRevision,
-		}
-
-		renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
-		if err != nil {
-			return phaseOutcome{}, fmt.Errorf("failed to render config for Green cluster: %w", err)
-		}
-		configContent := string(renderedConfig)
-
-		greenImage := cluster.Spec.Image
-		verifiedGreenDigest, err := m.verifyImageDigest(ctx, logger, cluster, greenImage, constants.ReasonBlueGreenImageVerificationFailed, "Green image verification failed")
-		if err != nil {
-			return phaseOutcome{}, err
-		}
-
-		initImage := initContainerImage(cluster)
-		verifiedInitContainerDigest, err := m.verifyOperatorImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Green init container image verification failed")
-		if err != nil {
-			return phaseOutcome{}, err
-		}
-
-		imageForGreen := greenImage
-		if verifiedGreenDigest != "" {
-			imageForGreen = verifiedGreenDigest
-		}
-
-		if m.infraRuntime == nil {
-			return phaseOutcome{}, fmt.Errorf("infra runtime is not configured")
-		}
-		if err := m.infraRuntime.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, imageForGreen, verifiedInitContainerDigest, greenRevision, true); err != nil {
-			return phaseOutcome{}, fmt.Errorf("failed to create Green StatefulSet: %w", err)
-		}
-
-		logger.Info("Created Green StatefulSet", "greenRevision", greenRevision)
-		return requeueAfterOutcome(constants.RequeueShort), nil
+		return m.createGreenStatefulSet(ctx, logger, cluster, blueRevision, greenRevision)
 	}
 
 	desiredReplicas := cluster.Spec.Replicas
@@ -228,6 +188,63 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 	}
 
 	return advance(openbaov1alpha1.PhaseJoiningMesh), nil
+}
+
+func (m *Manager) createGreenStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, blueRevision string, greenRevision string) (phaseOutcome, error) {
+	if m.infraRuntime == nil {
+		return phaseOutcome{}, fmt.Errorf("infra runtime is not configured")
+	}
+
+	infraDetails := configbuilder.InfrastructureDetails{
+		HeadlessServiceName:   cluster.Name,
+		Namespace:             cluster.Namespace,
+		APIPort:               constants.PortAPI,
+		ClusterPort:           constants.PortCluster,
+		TargetRevisionForJoin: blueRevision,
+	}
+
+	renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
+	if err != nil {
+		return phaseOutcome{}, fmt.Errorf("failed to render config for Green cluster: %w", err)
+	}
+
+	greenImage, greenInitImage, err := m.prepareGreenStatefulSetImages(ctx, logger, cluster)
+	if err != nil {
+		return phaseOutcome{}, err
+	}
+
+	if err := m.infraRuntime.EnsureStatefulSetWithRevision(ctx, logger, cluster, string(renderedConfig), greenImage, greenInitImage, greenRevision, true); err != nil {
+		return phaseOutcome{}, fmt.Errorf("failed to create Green StatefulSet: %w", err)
+	}
+
+	logger.Info("Created Green StatefulSet", "greenRevision", greenRevision)
+	return requeueAfterOutcome(constants.RequeueShort), nil
+}
+
+func (m *Manager) prepareGreenStatefulSetImages(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, string, error) {
+	greenImage := cluster.Spec.Image
+	verifiedGreenDigest, err := m.verifyImageDigest(ctx, logger, cluster, greenImage, constants.ReasonBlueGreenImageVerificationFailed, "Green image verification failed")
+	if err != nil {
+		return "", "", err
+	}
+	if verifiedGreenDigest != "" {
+		greenImage = verifiedGreenDigest
+	}
+
+	initImage, err := resolveInitContainerImage(cluster)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to resolve Green init container image: %w", err)
+	}
+
+	verifiedInitContainerDigest, err := m.verifyOperatorImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Green init container image verification failed")
+	if err != nil {
+		return "", "", err
+	}
+	if verifiedInitContainerDigest != "" {
+		initImage = verifiedInitContainerDigest
+	}
+
+	return greenImage, initImage, nil
 }
 
 // handlePhaseJoiningMesh joins Green pods to the Raft cluster as non-voters.

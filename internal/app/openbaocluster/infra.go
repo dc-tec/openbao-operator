@@ -435,16 +435,15 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 	})
 }
 
-func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	if cluster.Spec.InitContainer == nil {
-		return "", nil
+func (r *infraReconciler) resolveInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	initImage, err := inframanager.ResolveInitContainerImage(cluster)
+	if err != nil {
+		return "", err
 	}
+	return strings.TrimSpace(initImage), nil
+}
 
-	initImage := strings.TrimSpace(cluster.Spec.InitContainer.Image)
-	if initImage == "" {
-		return "", nil
-	}
-
+func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, initImage string) (string, error) {
 	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, r.reasons.initContainerImageVerificationReason(), "Init container image verification failed")
 }
 
@@ -541,12 +540,17 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		verifiedImageDigest = targetImage
 	}
 
-	verifiedInitContainerDigest, err := r.verifyInitContainerImageDigest(ctx, logger, cluster)
+	initImage, err := r.resolveInitContainerImage(cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
-	if strings.TrimSpace(verifiedInitContainerDigest) == "" && cluster.Spec.InitContainer != nil {
-		verifiedInitContainerDigest = strings.TrimSpace(cluster.Spec.InitContainer.Image)
+
+	verifiedInitContainerDigest, err := r.verifyInitContainerImageDigest(ctx, logger, cluster, initImage)
+	if err != nil {
+		return recon.Result{}, err
+	}
+	if strings.TrimSpace(verifiedInitContainerDigest) == "" {
+		verifiedInitContainerDigest = initImage
 	}
 
 	spec := r.computeStatefulSetSpec(logger, cluster, verifiedImageDigest, verifiedInitContainerDigest)

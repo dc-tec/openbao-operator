@@ -182,7 +182,20 @@ func listClusterPVCs(ctx context.Context, c client.Client, cluster *openbaov1alp
 		return nil, fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
-	return pvcList.Items, nil
+	dataPVCs := make([]corev1.PersistentVolumeClaim, 0, len(pvcList.Items))
+	for i := range pvcList.Items {
+		pvc := pvcList.Items[i]
+		if !isManagedDataPVC(cluster.Name, pvc.Name) {
+			continue
+		}
+		dataPVCs = append(dataPVCs, pvc)
+	}
+
+	return dataPVCs, nil
+}
+
+func isManagedDataPVC(clusterName, pvcName string) bool {
+	return strings.HasPrefix(pvcName, storageVolumeDataPrefix+clusterName+"-")
 }
 
 func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageClassName string, pvcs []corev1.PersistentVolumeClaim, reasons StorageReasonPolicy) error {

@@ -29,6 +29,16 @@ rules:
       - validatingadmissionpolicybindings
     verbs:
       - get
+  # Read-only access to the referenced Gateway and GatewayClass used by spec.gateway.
+  # This remains non-enumerating: the controller performs deterministic-name GETs only
+  # and does not require list/watch for Gateway reachability validation.
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gateways
+      - gatewayclasses
+    verbs:
+      - get
   # Allow OIDC discovery against the Kubernetes API server.
   # This is required when spec.selfInit.oidc.enabled is used (JWT auth bootstrap).
   - nonResourceURLs:
