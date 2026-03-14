@@ -14,6 +14,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
@@ -30,6 +31,10 @@ type Dependencies struct {
 	Recorder              events.EventRecorder
 	OperatorNamespace     string
 	OIDCIssuer            string
+	OIDCDiscoveryURL      string
+	OIDCDiscoveryCAPEM    string
+	OIDCJWKSURL           string
+	OIDCJWKSCAPEM         string
 	OIDCJWTKeys           []string
 	SmartClientConfig     portopenbao.ClientConfig
 	ImageVerifier         imageverify.Verifier
@@ -139,6 +144,14 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 		deps.OIDCJWTKeys,
 		deps.Platform,
 	)
+	infraMgr.SetOIDCConfig(&portauth.OIDCConfig{
+		IssuerURL:          deps.OIDCIssuer,
+		OIDCDiscoveryURL:   deps.OIDCDiscoveryURL,
+		OIDCDiscoveryCAPEM: deps.OIDCDiscoveryCAPEM,
+		JWKSURL:            deps.OIDCJWKSURL,
+		JWKSCAPEM:          deps.OIDCJWKSCAPEM,
+		JWKSKeys:           deps.OIDCJWTKeys,
+	})
 	backupRuntime := backupmanager.NewUpgradeStrategyRuntime(deps.Client, deps.Scheme)
 
 	return []subReconciler{

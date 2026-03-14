@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 func TestUsesStaticSeal(t *testing.T) {
@@ -366,13 +367,14 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 		},
 	}
 
-	oidcIssuer := "https://kubernetes.default.svc"
-	oidcJWTKeys := []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"}
-
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", oidcIssuer, oidcJWTKeys, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager.SetOIDCConfig(&portauth.OIDCConfig{
+		IssuerURL: "https://issuer.example",
+		JWKSURL:   "https://issuer.example/keys",
+	})
 
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err != nil {
@@ -402,7 +404,7 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 		`request "config-jwt-auth"`,
 		`request "create-operator-policy"`,
 		`request "create-operator-role"`,
-		`jwt_validation_pubkeys`,
+		`jwks_url`,
 		`bound_issuer`,
 		`bound_audiences`,
 		`openbao-internal`,
@@ -450,13 +452,14 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 		},
 	}
 
-	oidcIssuer := "https://kubernetes.default.svc"
-	oidcJWTKeys := []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"}
-
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", oidcIssuer, oidcJWTKeys, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager.SetOIDCConfig(&portauth.OIDCConfig{
+		IssuerURL: "https://issuer.example",
+		JWKSURL:   "https://issuer.example/keys",
+	})
 
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err != nil {

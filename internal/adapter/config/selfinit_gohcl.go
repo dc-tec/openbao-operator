@@ -30,8 +30,12 @@ type hclJWTAuthEnableData struct {
 }
 
 type hclJWTConfigData struct {
-	BoundIssuer          string   `hcl:"bound_issuer"`
-	JWTValidationPubkeys []string `hcl:"jwt_validation_pubkeys"`
+	BoundIssuer          string    `hcl:"bound_issuer"`
+	OIDCDiscoveryURL     *string   `hcl:"oidc_discovery_url,optional"`
+	OIDCDiscoveryCAPEM   *string   `hcl:"oidc_discovery_ca_pem,optional"`
+	JWKSURL              *string   `hcl:"jwks_url,optional"`
+	JWKSCAPEM            *string   `hcl:"jwks_ca_pem,optional"`
+	JWTValidationPubkeys *[]string `hcl:"jwt_validation_pubkeys,optional"`
 }
 
 type hclPolicyData struct {
@@ -83,10 +87,7 @@ func buildOperatorBootstrapInitializeBlock(config OperatorBootstrapConfig) *hclw
 	// 2. Configure OIDC
 	{
 		req := buildInitializeRequestBlock(reqConfigJWTAuth, opUpdate, pathAuthJWTConfig, false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTConfigData{
-			BoundIssuer:          config.OIDCIssuerURL,
-			JWTValidationPubkeys: config.JWTKeysPEM,
-		}, "data"))
+		req.Body().AppendBlock(gohcl.EncodeAsBlock(jwtConfigData(config), "data"))
 		initBody.AppendBlock(req)
 	}
 
@@ -134,10 +135,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	// 2. Configure OIDC
 	{
 		req := buildInitializeRequestBlock(reqConfigJWTAuth, opUpdate, pathAuthJWTConfig, false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTConfigData{
-			BoundIssuer:          config.OIDCIssuerURL,
-			JWTValidationPubkeys: config.JWTKeysPEM,
-		}, "data"))
+		req.Body().AppendBlock(gohcl.EncodeAsBlock(jwtConfigData(config), "data"))
 		initBody.AppendBlock(req)
 	}
 
@@ -262,4 +260,33 @@ func jwtAuthAudiences(config OperatorBootstrapConfig) []string {
 		audience = portauth.TokenAudienceOpenBaoInternal
 	}
 	return []string{audience}
+}
+
+func jwtConfigData(config OperatorBootstrapConfig) hclJWTConfigData {
+	data := hclJWTConfigData{
+		BoundIssuer: config.OIDCIssuerURL,
+	}
+
+	if discoveryURL := strings.TrimSpace(config.OIDCDiscoveryURL); discoveryURL != "" && (shouldUseDynamicOIDCDiscovery(config) || len(config.JWTKeysPEM) == 0) {
+		data.OIDCDiscoveryURL = &discoveryURL
+		if discoveryCAPEM := strings.TrimSpace(config.OIDCDiscoveryCAPEM); discoveryCAPEM != "" {
+			data.OIDCDiscoveryCAPEM = &discoveryCAPEM
+		}
+		return data
+	}
+
+	if jwksURL := strings.TrimSpace(config.OIDCJWKSURL); jwksURL != "" && (shouldUseDynamicJWKS(config) || len(config.JWTKeysPEM) == 0) {
+		data.JWKSURL = &jwksURL
+		if jwksCAPEM := strings.TrimSpace(config.OIDCJWKSCAPEM); jwksCAPEM != "" {
+			data.JWKSCAPEM = &jwksCAPEM
+		}
+		return data
+	}
+
+	if len(config.JWTKeysPEM) > 0 {
+		keys := append([]string(nil), config.JWTKeysPEM...)
+		data.JWTValidationPubkeys = &keys
+	}
+
+	return data
 }

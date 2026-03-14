@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -274,12 +275,123 @@ func TestDiscoverConfig(t *testing.T) {
 	}
 }
 
-func TestDiscoverConfig_FallsBackToDiscoveryBaseForStandardJWKSPath(t *testing.T) {
+func TestDiscoverConfig_RediscoversJWKSFromIssuerBeforeDiscoveryBaseFallback(t *testing.T) {
+	t.Helper()
+
+	issuerCert := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "issuer-ca"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	issuerKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate rsa key: %v", err)
+	}
+	issuerCertDER, err := x509.CreateCertificate(rand.Reader, issuerCert, issuerCert, &issuerKey.PublicKey, issuerKey)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+	issuerKeys, err := pemPublicKeysFromJWKS(jwksDocument{
+		Keys: []jwkKey{{Kty: "RSA", X5c: []string{base64.StdEncoding.EncodeToString(issuerCertDER)}}},
+	})
+	if err != nil {
+		t.Fatalf("failed to build issuer keys: %v", err)
+	}
+
+	baseCert := &x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{CommonName: "base-fallback-ca"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	baseKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate base fallback key: %v", err)
+	}
+	baseCertDER, err := x509.CreateCertificate(rand.Reader, baseCert, baseCert, &baseKey.PublicKey, baseKey)
+	if err != nil {
+		t.Fatalf("failed to create base fallback certificate: %v", err)
+	}
+
+	var issuerServer *httptest.Server
+	issuerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/issuer" + oidcWellKnownConfigurationPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":   issuerServer.URL + "/issuer",
+				"jwks_uri": issuerServer.URL + "/keys",
+			})
+		case "/keys":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jwksDocument{
+				Keys: []jwkKey{
+					{
+						Kty: "RSA",
+						X5c: []string{base64.StdEncoding.EncodeToString(issuerCertDER)},
+					},
+				},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer issuerServer.Close()
+
+	baseServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case oidcWellKnownConfigurationPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":   issuerServer.URL + "/issuer",
+				"jwks_uri": "https://unreachable.example.internal/openid/v1/jwks",
+			})
+		case kubernetesOIDCJWKSPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jwksDocument{
+				Keys: []jwkKey{
+					{
+						Kty: "RSA",
+						X5c: []string{base64.StdEncoding.EncodeToString(baseCertDER)},
+					},
+				},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer baseServer.Close()
+
+	cfg := &rest.Config{Host: baseServer.URL}
+	config, err := DiscoverConfig(context.Background(), cfg, baseServer.URL)
+	if err != nil {
+		t.Fatalf("DiscoverConfig() error = %v, want nil", err)
+	}
+	if config == nil {
+		t.Fatal("DiscoverConfig() returned nil config")
+	}
+	if config.IssuerURL != issuerServer.URL+"/issuer" {
+		t.Fatalf("DiscoverConfig() IssuerURL = %q, want %q", config.IssuerURL, issuerServer.URL+"/issuer")
+	}
+	if len(config.JWKSKeys) == 0 {
+		t.Fatal("DiscoverConfig() expected JWKS keys from issuer rediscovery, got none")
+	}
+	if config.JWKSKeys[0] != issuerKeys[0] {
+		t.Fatal("DiscoverConfig() used discovery-base fallback before issuer rediscovery")
+	}
+}
+
+func TestDiscoverConfig_FallsBackToDiscoveryBaseForStandardJWKSPathWhenIssuerRediscoveryFails(t *testing.T) {
 	t.Helper()
 
 	cert := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "test-ca"},
+		Subject:               pkix.Name{CommonName: "base-fallback-ca"},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(24 * time.Hour),
 		IsCA:                  true,
@@ -292,6 +404,12 @@ func TestDiscoverConfig_FallsBackToDiscoveryBaseForStandardJWKSPath(t *testing.T
 	certDER, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
 	if err != nil {
 		t.Fatalf("failed to create certificate: %v", err)
+	}
+	expectedKeys, err := pemPublicKeysFromJWKS(jwksDocument{
+		Keys: []jwkKey{{Kty: "RSA", X5c: []string{base64.StdEncoding.EncodeToString(certDER)}}},
+	})
+	if err != nil {
+		t.Fatalf("failed to build expected fallback keys: %v", err)
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -324,25 +442,161 @@ func TestDiscoverConfig_FallsBackToDiscoveryBaseForStandardJWKSPath(t *testing.T
 		t.Fatalf("DiscoverConfig() error = %v, want nil", err)
 	}
 	if config == nil {
-		t.Fatal("DiscoverConfig() returned nil config")
+		t.Fatal("DiscoverConfig() expected config on fallback, got nil")
 	}
-	if config.IssuerURL != "https://issuer.example.internal" {
-		t.Fatalf("DiscoverConfig() IssuerURL = %q, want %q", config.IssuerURL, "https://issuer.example.internal")
+	if len(config.JWKSKeys) != 1 {
+		t.Fatalf("DiscoverConfig() JWKSKeys = %d, want 1", len(config.JWKSKeys))
 	}
-	if len(config.JWKSKeys) == 0 {
-		t.Fatal("DiscoverConfig() expected JWKS keys from fallback path, got none")
+	if config.JWKSKeys[0] != expectedKeys[0] {
+		t.Fatal("DiscoverConfig() did not use discovery-base fallback JWKS key")
+	}
+	if config.OIDCDiscoveryURL != server.URL {
+		t.Fatalf("DiscoverConfig() OIDCDiscoveryURL = %q, want %q", config.OIDCDiscoveryURL, server.URL)
+	}
+}
+
+func TestDiscoverConfig_UsesClusterCAForHTTPSKubernetesFallbackJWKS(t *testing.T) {
+	t.Helper()
+
+	cert := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "base-fallback-ca"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("failed to generate rsa key: %v", err)
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+	expectedKeys, err := pemPublicKeysFromJWKS(jwksDocument{
+		Keys: []jwkKey{{Kty: "RSA", X5c: []string{base64.StdEncoding.EncodeToString(certDER)}}},
+	})
+	if err != nil {
+		t.Fatalf("failed to build expected fallback keys: %v", err)
+	}
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case oidcWellKnownConfigurationPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":   "https://issuer.example.internal",
+				"jwks_uri": "https://unreachable.example.internal/openid/v1/jwks",
+			})
+		case kubernetesOIDCJWKSPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(jwksDocument{
+				Keys: []jwkKey{
+					{
+						Kty: "RSA",
+						X5c: []string{base64.StdEncoding.EncodeToString(certDER)},
+					},
+				},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	cfg := &rest.Config{
+		Host: server.URL,
+		TLSClientConfig: rest.TLSClientConfig{
+			CAData: caPEM,
+		},
+	}
+
+	config, err := DiscoverConfig(context.Background(), cfg, server.URL)
+	if err != nil {
+		t.Fatalf("DiscoverConfig() error = %v, want nil", err)
+	}
+	if config == nil {
+		t.Fatal("DiscoverConfig() expected config on fallback, got nil")
+	}
+	if len(config.JWKSKeys) != 1 {
+		t.Fatalf("DiscoverConfig() JWKSKeys = %d, want 1", len(config.JWKSKeys))
+	}
+	if config.JWKSKeys[0] != expectedKeys[0] {
+		t.Fatal("DiscoverConfig() did not use discovery-base fallback JWKS key")
+	}
+	if config.OIDCDiscoveryURL != server.URL {
+		t.Fatalf("DiscoverConfig() OIDCDiscoveryURL = %q, want %q", config.OIDCDiscoveryURL, server.URL)
+	}
+	if config.OIDCDiscoveryCAPEM != string(caPEM) {
+		t.Fatalf("DiscoverConfig() OIDCDiscoveryCAPEM mismatch, got %q", config.OIDCDiscoveryCAPEM)
+	}
+}
+
+func TestCanonicalClusterJWKSURL(t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name    string
+		baseURL string
+		jwksURL string
+		want    string
+	}{
+		{
+			name:    "canonicalizes standard kubernetes jwks path",
+			baseURL: "https://kubernetes.default.svc",
+			jwksURL: "https://192.168.147.2:6443/openid/v1/jwks",
+			want:    "https://kubernetes.default.svc/openid/v1/jwks",
+		},
+		{
+			name:    "preserves standard path query",
+			baseURL: "https://kubernetes.default.svc",
+			jwksURL: "https://internal.example/openid/v1/jwks?foo=bar",
+			want:    "https://kubernetes.default.svc/openid/v1/jwks?foo=bar",
+		},
+		{
+			name:    "leaves custom jwks path untouched",
+			baseURL: "https://kubernetes.default.svc",
+			jwksURL: "https://issuer.example/custom/jwks",
+			want:    "https://issuer.example/custom/jwks",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := canonicalClusterJWKSURL(tt.baseURL, tt.jwksURL)
+			if got != tt.want {
+				t.Fatalf("canonicalClusterJWKSURL() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
 func TestDiscoverConfig_DoesNotRewriteCustomJWKSPath(t *testing.T) {
 	t.Helper()
 
+	var issuerServer *httptest.Server
+	issuerServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/issuer" + oidcWellKnownConfigurationPath:
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"issuer":   issuerServer.URL + "/issuer",
+				"jwks_uri": "https://unreachable.example.internal/custom/jwks",
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer issuerServer.Close()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case oidcWellKnownConfigurationPath:
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"issuer":   "https://issuer.example.internal",
+				"issuer":   issuerServer.URL + "/issuer",
 				"jwks_uri": "https://unreachable.example.internal/custom/jwks",
 			})
 		default:
@@ -359,8 +613,8 @@ func TestDiscoverConfig_DoesNotRewriteCustomJWKSPath(t *testing.T) {
 	if config == nil {
 		t.Fatal("DiscoverConfig() expected partial config on JWKS fetch error, got nil")
 	}
-	if config.IssuerURL != "https://issuer.example.internal" {
-		t.Fatalf("DiscoverConfig() IssuerURL = %q, want %q", config.IssuerURL, "https://issuer.example.internal")
+	if config.IssuerURL != issuerServer.URL+"/issuer" {
+		t.Fatalf("DiscoverConfig() IssuerURL = %q, want %q", config.IssuerURL, issuerServer.URL+"/issuer")
 	}
 	if len(config.JWKSKeys) != 0 {
 		t.Fatalf("DiscoverConfig() JWKSKeys = %d, want 0", len(config.JWKSKeys))

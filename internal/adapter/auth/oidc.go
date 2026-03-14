@@ -13,6 +13,8 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/rest"
@@ -26,6 +28,7 @@ const (
 	kubernetesOIDCJWKSPath                = "/openid/v1/jwks"
 	legacyOIDCJWKSPath                    = "/.well-known/jwks.json"
 	publicKeyPEMBlockType                 = "PUBLIC KEY"
+	serviceAccountCAPath                  = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 )
 
 // HTTPStatusError represents a non-200 response when calling an HTTP endpoint.
@@ -73,31 +76,12 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*por
 	}
 
 	httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wellKnownURL, nil)
+	oidcConfig, err := fetchOIDCWellKnown(ctx, httpClient, wellKnownURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OIDC discovery request: %w", err)
-	}
-
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch OIDC well-known endpoint: %w", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			_ = err
+		if statusErr, ok := err.(*HTTPStatusError); ok {
+			return nil, statusErr
 		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, &HTTPStatusError{URL: wellKnownURL, StatusCode: resp.StatusCode}
-	}
-
-	var oidcConfig struct {
-		Issuer  string `json:"issuer"`
-		JWKSURI string `json:"jwks_uri"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&oidcConfig); err != nil {
-		return nil, fmt.Errorf("failed to parse OIDC config: %w", err)
+		return nil, err
 	}
 
 	if oidcConfig.Issuer == "" {
@@ -107,28 +91,75 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*por
 	issuerURL := oidcConfig.Issuer
 
 	// Fetch JWKS keys if JWKS URI is available
-	var jwksKeys []string
+	var (
+		jwksKeys       []string
+		effective      string
+		jwksCAPEM      string
+		discoveryURL   string
+		discoveryCAPEM string
+	)
 	if oidcConfig.JWKSURI != "" {
 		keys, err := FetchJWKSKeys(ctx, cfg, oidcConfig.JWKSURI)
+		if err == nil {
+			jwksKeys = keys
+			jwksCAPEM = clusterTransportJWKSConfig(cfg, oidcConfig.JWKSURI)
+			discoveryURL, discoveryCAPEM = dynamicOIDCDiscoveryConfig(baseURL, issuerURL, oidcConfig.JWKSURI, jwksCAPEM)
+			effective = canonicalClusterJWKSURL(baseURL, oidcConfig.JWKSURI)
+			if discoveryURL != "" {
+				effective = ""
+				jwksCAPEM = ""
+			}
+		}
+		if err != nil {
+			if fallbackURL, ok := issuerJWKSRediscoveryURL(ctx, issuerURL); ok {
+				keys, err = fetchJWKSKeysPublic(ctx, fallbackURL)
+				if err == nil {
+					jwksKeys = keys
+					discoveryURL = issuerURL
+					discoveryCAPEM = ""
+					effective = ""
+					jwksCAPEM = ""
+				}
+			}
+		}
 		if err != nil {
 			if fallbackURL, ok := kubernetesJWKSFallbackURL(baseURL, oidcConfig.JWKSURI); ok {
 				keys, err = FetchJWKSKeys(ctx, cfg, fallbackURL)
+				if err == nil {
+					jwksKeys = keys
+					discoveryURL = canonicalClusterDiscoveryURL(baseURL)
+					discoveryCAPEM = clusterTransportJWKSConfig(cfg, fallbackURL)
+					effective = ""
+					jwksCAPEM = ""
+				}
 			}
 		}
 		if err != nil {
 			// Log but don't fail - JWKS keys are optional for some configurations
 			return &portauth.OIDCConfig{
-				IssuerURL: issuerURL,
-				JWKSKeys:  nil,
+				IssuerURL:          issuerURL,
+				OIDCDiscoveryURL:   "",
+				OIDCDiscoveryCAPEM: "",
+				JWKSURL:            "",
+				JWKSCAPEM:          "",
+				JWKSKeys:           nil,
 			}, fmt.Errorf("failed to fetch JWKS keys: %w", err)
 		}
-		jwksKeys = keys
 	}
 
 	return &portauth.OIDCConfig{
-		IssuerURL: issuerURL,
-		JWKSKeys:  jwksKeys,
+		IssuerURL:          issuerURL,
+		OIDCDiscoveryURL:   discoveryURL,
+		OIDCDiscoveryCAPEM: discoveryCAPEM,
+		JWKSURL:            effective,
+		JWKSCAPEM:          jwksCAPEM,
+		JWKSKeys:           jwksKeys,
 	}, nil
+}
+
+type oidcWellKnownDocument struct {
+	Issuer  string `json:"issuer"`
+	JWKSURI string `json:"jwks_uri"`
 }
 
 type jwksDocument struct {
@@ -160,6 +191,15 @@ func FetchJWKSKeys(ctx context.Context, cfg *rest.Config, jwksURL string) ([]str
 	}
 
 	httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	return fetchJWKSKeysWithClient(ctx, httpClient, jwksURL)
+}
+
+func fetchJWKSKeysPublic(ctx context.Context, jwksURL string) ([]string, error) {
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	return fetchJWKSKeysWithClient(ctx, httpClient, jwksURL)
+}
+
+func fetchJWKSKeysWithClient(ctx context.Context, httpClient *http.Client, jwksURL string) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, jwksURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create jwks request: %w", err)
@@ -192,6 +232,153 @@ func FetchJWKSKeys(ctx context.Context, cfg *rest.Config, jwksURL string) ([]str
 	return keys, nil
 }
 
+func fetchOIDCWellKnown(ctx context.Context, httpClient *http.Client, wellKnownURL string) (*oidcWellKnownDocument, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wellKnownURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OIDC discovery request: %w", err)
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch OIDC well-known endpoint: %w", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			_ = err
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, &HTTPStatusError{URL: wellKnownURL, StatusCode: resp.StatusCode}
+	}
+
+	var oidcConfig oidcWellKnownDocument
+	if err := json.NewDecoder(resp.Body).Decode(&oidcConfig); err != nil {
+		return nil, err
+	}
+
+	return &oidcConfig, nil
+}
+
+func issuerJWKSRediscoveryURL(ctx context.Context, issuerURL string) (string, bool) {
+	if issuerURL == "" {
+		return "", false
+	}
+
+	issuer, err := url.Parse(issuerURL)
+	if err != nil || issuer.Scheme == "" || issuer.Host == "" {
+		return "", false
+	}
+
+	wellKnownURL := strings.TrimRight(issuerURL, "/") + oidcWellKnownConfigurationPath
+	oidcConfig, err := fetchOIDCWellKnown(ctx, &http.Client{Timeout: 10 * time.Second}, wellKnownURL)
+	if err != nil || oidcConfig == nil || oidcConfig.JWKSURI == "" {
+		return "", false
+	}
+
+	return oidcConfig.JWKSURI, true
+}
+
+func clusterTransportJWKSConfig(cfg *rest.Config, jwksURL string) string {
+	if cfg == nil || jwksURL == "" {
+		return ""
+	}
+
+	jwks, err := url.Parse(jwksURL)
+	if err != nil || jwks.Scheme == "" || jwks.Host == "" {
+		return ""
+	}
+	if jwks.Scheme != "https" {
+		return ""
+	}
+
+	if len(cfg.CAData) > 0 {
+		return string(cfg.CAData)
+	}
+
+	if caFile := strings.TrimSpace(cfg.CAFile); caFile != "" {
+		caPEM, err := os.ReadFile(caFile)
+		if err == nil {
+			return string(caPEM)
+		}
+	}
+
+	caPEM, err := os.ReadFile(serviceAccountCAPath)
+	if err != nil {
+		return ""
+	}
+	return string(caPEM)
+}
+
+func dynamicOIDCDiscoveryConfig(baseURL, issuerURL, jwksURL, caPEM string) (string, string) {
+	if caPEM != "" {
+		if discoveryURL := canonicalClusterDiscoveryURL(baseURL); discoveryURL != "" {
+			if isStandardKubernetesJWKSURL(jwksURL) {
+				return discoveryURL, caPEM
+			}
+		}
+	}
+
+	if canUseIssuerDiscoveryURL(issuerURL, jwksURL) {
+		return issuerURL, ""
+	}
+
+	return "", ""
+}
+
+func canUseIssuerDiscoveryURL(issuerURL, jwksURL string) bool {
+	if issuerURL == "" || jwksURL == "" {
+		return false
+	}
+
+	issuer, err := url.Parse(issuerURL)
+	if err != nil || issuer.Scheme == "" || issuer.Host == "" {
+		return false
+	}
+	jwks, err := url.Parse(jwksURL)
+	if err != nil || jwks.Scheme == "" || jwks.Host == "" {
+		return false
+	}
+
+	return strings.EqualFold(issuer.Scheme, jwks.Scheme) && strings.EqualFold(issuer.Host, jwks.Host)
+}
+
+func canonicalClusterDiscoveryURL(baseURL string) string {
+	if baseURL == "" {
+		return ""
+	}
+	base, err := url.Parse(baseURL)
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return ""
+	}
+	return (&url.URL{Scheme: base.Scheme, Host: base.Host}).String()
+}
+
+func canonicalClusterJWKSURL(baseURL, jwksURL string) string {
+	if baseURL == "" || jwksURL == "" {
+		return jwksURL
+	}
+
+	base, err := url.Parse(baseURL)
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return jwksURL
+	}
+
+	jwks, err := url.Parse(jwksURL)
+	if err != nil || jwks.Scheme == "" || jwks.Host == "" {
+		return jwksURL
+	}
+
+	if !isStandardKubernetesJWKSURL(jwksURL) {
+		return jwksURL
+	}
+
+	return base.ResolveReference(&url.URL{
+		Path:     jwks.Path,
+		RawQuery: jwks.RawQuery,
+	}).String()
+}
+
 func kubernetesJWKSFallbackURL(baseURL, jwksURL string) (string, bool) {
 	if baseURL == "" || jwksURL == "" {
 		return "", false
@@ -211,9 +398,7 @@ func kubernetesJWKSFallbackURL(baseURL, jwksURL string) (string, bool) {
 		return "", false
 	}
 
-	switch jwks.Path {
-	case kubernetesOIDCJWKSPath, legacyOIDCJWKSPath:
-	default:
+	if !isStandardKubernetesJWKSURL(jwksURL) {
 		return "", false
 	}
 
@@ -221,6 +406,22 @@ func kubernetesJWKSFallbackURL(baseURL, jwksURL string) (string, bool) {
 		Path:     jwks.Path,
 		RawQuery: jwks.RawQuery,
 	}).String(), true
+}
+
+func isStandardKubernetesJWKSURL(jwksURL string) bool {
+	if jwksURL == "" {
+		return false
+	}
+	jwks, err := url.Parse(jwksURL)
+	if err != nil {
+		return false
+	}
+	switch jwks.Path {
+	case kubernetesOIDCJWKSPath, legacyOIDCJWKSPath:
+		return true
+	default:
+		return false
+	}
 }
 
 func pemPublicKeysFromJWKS(jwks jwksDocument) ([]string, error) {

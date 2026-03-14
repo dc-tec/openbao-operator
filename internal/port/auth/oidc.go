@@ -7,10 +7,17 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// OIDCConfig contains discovered issuer and key material for JWT bootstrap.
+// OIDCConfig contains discovered issuer and JWT validation material for
+// operator bootstrap. OIDCDiscoveryURL is preferred for dynamic verification
+// and key rotation; JWKSURL and JWKSKeys are retained as compatibility
+// fallbacks when a discovery URL cannot be determined safely.
 type OIDCConfig struct {
-	IssuerURL string
-	JWKSKeys  []string
+	IssuerURL          string
+	OIDCDiscoveryURL   string
+	OIDCDiscoveryCAPEM string
+	JWKSURL            string
+	JWKSCAPEM          string
+	JWKSKeys           []string
 }
 
 // DiscoverConfigFunc discovers OIDC configuration for a Kubernetes API server.

@@ -17,6 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 const (
@@ -69,13 +70,17 @@ const (
 
 // Manager reconciles infrastructure resources such as ConfigMaps, StatefulSets, and Services for an OpenBaoCluster.
 type Manager struct {
-	client            client.Client
-	reader            client.Reader
-	scheme            *runtime.Scheme
-	operatorNamespace string
-	oidcIssuer        string
-	oidcJWTKeys       []string
-	Platform          string
+	client             client.Client
+	reader             client.Reader
+	scheme             *runtime.Scheme
+	operatorNamespace  string
+	oidcIssuer         string
+	oidcDiscoveryURL   string
+	oidcDiscoveryCAPEM string
+	oidcJWKSURL        string
+	oidcJWKSCAPEM      string
+	oidcJWTKeys        []string
+	Platform           string
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client.
@@ -104,6 +109,22 @@ func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Sche
 		m.reader = r
 	}
 	return m
+}
+
+// SetOIDCConfig overlays dynamic JWT validation settings discovered at runtime.
+// This preserves compatibility with older tests and call sites that still pass
+// static JWT keys through the constructor while letting production code prefer
+// dynamic jwks_url configuration when available.
+func (m *Manager) SetOIDCConfig(config *portauth.OIDCConfig) {
+	if m == nil || config == nil {
+		return
+	}
+	m.oidcIssuer = config.IssuerURL
+	m.oidcDiscoveryURL = config.OIDCDiscoveryURL
+	m.oidcDiscoveryCAPEM = config.OIDCDiscoveryCAPEM
+	m.oidcJWKSURL = config.JWKSURL
+	m.oidcJWKSCAPEM = config.JWKSCAPEM
+	m.oidcJWTKeys = append([]string(nil), config.JWKSKeys...)
 }
 
 // EnsureBlueGreenStatus exposes blue/green status bootstrap/repair for strategy consumers.

@@ -38,6 +38,10 @@ type ControllerRuntime struct {
 // OIDCRuntime groups OIDC discovery configuration and warmup state.
 type OIDCRuntime struct {
 	OIDCIssuer         string // OIDC issuer URL discovered at startup (best-effort warmup)
+	OIDCDiscoveryURL   string
+	OIDCDiscoveryCAPEM string
+	OIDCJWKSURL        string
+	OIDCJWKSCAPEM      string
 	OIDCJWTKeys        []string
 	DiscoverOIDCConfig portauth.DiscoverConfigFunc
 	OIDCStatusCode     portauth.DiscoveryStatusCodeFunc

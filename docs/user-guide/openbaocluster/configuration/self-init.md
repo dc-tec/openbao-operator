@@ -168,10 +168,12 @@ Each item in `requests[]` maps to an OpenBao API call.
       operation: update
       path: auth/jwt-operator/config  # Note: Config path depends on mount path
       data:
-        bound_issuer: "https://kubernetes.default.svc"
-        jwt_validation_pubkeys:
-          - "<PEM_KEYS>"
+        bound_issuer: "https://issuer.example"
+        jwks_url: "https://kubernetes.default.svc/openid/v1/jwks"
+        jwks_ca_pem: "<K8S_CA_PEM>"
     ```
+
+    Prefer `jwks_url` or `oidc_discovery_url` over `jwt_validation_pubkeys` when possible so key rotation stays automatic.
 
 === "Policies"
 

@@ -370,6 +370,106 @@ func TestRenderOperatorBootstrapHCL(t *testing.T) {
 	compareGolden(t, "render_operator_bootstrap", got)
 }
 
+func TestRenderOperatorBootstrapHCL_PrefersJWKSURL(t *testing.T) {
+	config := OperatorBootstrapConfig{
+		OIDCIssuerURL: "https://issuer.example",
+		OIDCJWKSURL:   "https://issuer.example/keys",
+		OIDCJWKSCAPEM: "-----BEGIN CERTIFICATE-----\ntest-ca\n-----END CERTIFICATE-----\n",
+		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
+		OperatorNS:    "openbao-operator-system",
+		OperatorSA:    "openbao-operator-controller",
+	}
+
+	got, err := RenderOperatorBootstrapHCL(config)
+	if err != nil {
+		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	if !strings.Contains(rendered, `jwks_url`) {
+		t.Fatalf("expected rendered bootstrap to contain jwks_url, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, `jwks_ca_pem`) {
+		t.Fatalf("expected rendered bootstrap to contain jwks_ca_pem, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, `jwt_validation_pubkeys`) {
+		t.Fatalf("expected rendered bootstrap to prefer jwks_url over static keys, got:\n%s", rendered)
+	}
+}
+
+func TestRenderOperatorBootstrapHCL_PrefersOIDCDiscoveryURL(t *testing.T) {
+	config := OperatorBootstrapConfig{
+		OIDCIssuerURL:    "https://issuer.example",
+		OIDCDiscoveryURL: "https://issuer.example",
+		JWTKeysPEM:       []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
+		OperatorNS:       "openbao-operator-system",
+		OperatorSA:       "openbao-operator-controller",
+	}
+
+	got, err := RenderOperatorBootstrapHCL(config)
+	if err != nil {
+		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	if !strings.Contains(rendered, `oidc_discovery_url`) {
+		t.Fatalf("expected rendered bootstrap to contain oidc_discovery_url, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, `jwks_url`) {
+		t.Fatalf("expected rendered bootstrap to prefer oidc_discovery_url over jwks_url, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, `jwt_validation_pubkeys`) {
+		t.Fatalf("expected rendered bootstrap to prefer oidc_discovery_url over static keys, got:\n%s", rendered)
+	}
+}
+
+func TestRenderOperatorBootstrapHCL_FallsBackToStaticKeysWhenOIDCDiscoveryRequiresCA(t *testing.T) {
+	config := OperatorBootstrapConfig{
+		OIDCIssuerURL:      "https://kubernetes.default.svc.cluster.local",
+		OIDCDiscoveryURL:   "https://kubernetes.default.svc",
+		OIDCDiscoveryCAPEM: "-----BEGIN CERTIFICATE-----\ntest-ca\n-----END CERTIFICATE-----\n",
+		JWTKeysPEM:         []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
+		OperatorNS:         "openbao-operator-system",
+		OperatorSA:         "openbao-operator-controller",
+	}
+
+	got, err := RenderOperatorBootstrapHCL(config)
+	if err != nil {
+		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	if strings.Contains(rendered, `oidc_discovery_url`) {
+		t.Fatalf("expected rendered bootstrap to fall back to static keys when oidc_discovery_url requires a CA bundle, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, `jwt_validation_pubkeys`) {
+		t.Fatalf("expected rendered bootstrap to contain jwt_validation_pubkeys fallback, got:\n%s", rendered)
+	}
+}
+
+func TestRenderOperatorBootstrapHCL_FallsBackToStaticKeysWhenJWKSURLHostDiffersWithoutCA(t *testing.T) {
+	config := OperatorBootstrapConfig{
+		OIDCIssuerURL: "https://kubernetes.default.svc.cluster.local",
+		OIDCJWKSURL:   "https://192.168.147.2:6443/openid/v1/jwks",
+		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
+		OperatorNS:    "openbao-operator-system",
+		OperatorSA:    "openbao-operator-controller",
+	}
+
+	got, err := RenderOperatorBootstrapHCL(config)
+	if err != nil {
+		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	if strings.Contains(rendered, `jwks_url`) {
+		t.Fatalf("expected rendered bootstrap to fall back to static keys when jwks_url host differs without CA, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, `jwt_validation_pubkeys`) {
+		t.Fatalf("expected rendered bootstrap to contain jwt_validation_pubkeys fallback, got:\n%s", rendered)
+	}
+}
+
 func TestRenderSelfInitHCL_WithBootstrapConfig(t *testing.T) {
 	cluster := newMinimalCluster("hardened-cluster", "default")
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened

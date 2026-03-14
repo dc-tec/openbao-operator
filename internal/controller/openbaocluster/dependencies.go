@@ -23,6 +23,10 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 		OIDC: appopenbaocluster.InfraOIDCRuntime{
 			RestConfig:          r.RestConfig,
 			OIDCIssuer:          r.OIDCIssuer,
+			OIDCDiscoveryURL:    r.OIDCDiscoveryURL,
+			OIDCDiscoveryCAPEM:  r.OIDCDiscoveryCAPEM,
+			OIDCJWKSURL:         r.OIDCJWKSURL,
+			OIDCJWKSCAPEM:       r.OIDCJWKSCAPEM,
 			OIDCJWTKeys:         r.OIDCJWTKeys,
 			DiscoverOIDCConfig:  r.discoverOIDCConfigAdapter(),
 			DiscoveryStatusCode: r.oidcDiscoveryStatusCodeAdapter(),
@@ -177,6 +181,10 @@ func (r *OpenBaoClusterReconciler) adminOpsDependencies() appopenbaocluster.Admi
 		Recorder:              r.Recorder,
 		OperatorNamespace:     r.OperatorNamespace,
 		OIDCIssuer:            r.OIDCIssuer,
+		OIDCDiscoveryURL:      r.OIDCDiscoveryURL,
+		OIDCDiscoveryCAPEM:    r.OIDCDiscoveryCAPEM,
+		OIDCJWKSURL:           r.OIDCJWKSURL,
+		OIDCJWKSCAPEM:         r.OIDCJWKSCAPEM,
 		OIDCJWTKeys:           r.OIDCJWTKeys,
 		SmartClientConfig:     r.SmartClientConfig,
 		ImageVerifier:         r.ImageVerifier,
@@ -188,13 +196,17 @@ func (r *OpenBaoClusterReconciler) adminOpsDependencies() appopenbaocluster.Admi
 
 func (r *OpenBaoClusterReconciler) deletionDependencies() appopenbaocluster.DeletionDependencies {
 	return appopenbaocluster.DeletionDependencies{
-		Client:            r.Client,
-		APIReader:         r.APIReader,
-		Scheme:            r.ControllerRuntime.Scheme,
-		OperatorNamespace: r.OperatorNamespace,
-		OIDCIssuer:        r.OIDCIssuer,
-		OIDCJWTKeys:       r.OIDCJWTKeys,
-		Platform:          r.Platform,
+		Client:             r.Client,
+		APIReader:          r.APIReader,
+		Scheme:             r.ControllerRuntime.Scheme,
+		OperatorNamespace:  r.OperatorNamespace,
+		OIDCIssuer:         r.OIDCIssuer,
+		OIDCDiscoveryURL:   r.OIDCDiscoveryURL,
+		OIDCDiscoveryCAPEM: r.OIDCDiscoveryCAPEM,
+		OIDCJWKSURL:        r.OIDCJWKSURL,
+		OIDCJWKSCAPEM:      r.OIDCJWKSCAPEM,
+		OIDCJWTKeys:        r.OIDCJWTKeys,
+		Platform:           r.Platform,
 	}
 }
 
@@ -211,8 +223,12 @@ func (r *OpenBaoClusterReconciler) discoverOIDCConfigAdapter() func(ctx context.
 			return nil, nil
 		}
 		return &appopenbaocluster.OIDCConfig{
-			IssuerURL: discovered.IssuerURL,
-			JWKSKeys:  discovered.JWKSKeys,
+			IssuerURL:          discovered.IssuerURL,
+			OIDCDiscoveryURL:   discovered.OIDCDiscoveryURL,
+			OIDCDiscoveryCAPEM: discovered.OIDCDiscoveryCAPEM,
+			JWKSURL:            discovered.JWKSURL,
+			JWKSCAPEM:          discovered.JWKSCAPEM,
+			JWKSKeys:           discovered.JWKSKeys,
 		}, nil
 	}
 }
