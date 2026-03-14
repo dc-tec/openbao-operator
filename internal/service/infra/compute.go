@@ -76,7 +76,8 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 // EnsureStatefulSetWithRevision manages the StatefulSet for the OpenBaoCluster using Server-Side Apply.
 // This is exported for use by BlueGreenManager.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
-// verifiedInitContainerDigest is the verified init container image digest to use (if provided, overrides cluster.Spec.InitContainer.Image).
+// verifiedInitContainerDigest is the resolved init container image to use.
+// When operator image verification is enabled, this should be a digest.
 // revision is an optional revision identifier for blue/green deployments (e.g., "blue-v1hash" or "green-v2hash").
 // disableSelfInit prevents the pod from attempting to initialize itself (used for Green pods that must join).
 // If revision is empty, uses the cluster name (backward compatible behavior).

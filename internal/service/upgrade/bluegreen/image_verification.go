@@ -10,6 +10,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -35,11 +36,8 @@ func operatorImageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoClus
 	return failurePolicy
 }
 
-func initContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	if cluster.Spec.InitContainer == nil {
-		return ""
-	}
-	return cluster.Spec.InitContainer.Image
+func resolveInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	return inframanager.ResolveInitContainerImage(cluster)
 }
 
 func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {

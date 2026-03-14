@@ -21,7 +21,8 @@ const (
 
 // buildStatefulSetWithRevision constructs a StatefulSet for the given OpenBaoCluster.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
-// verifiedInitContainerDigest is the verified init container image digest to use (if provided, overrides cluster.Spec.InitContainer.Image).
+// verifiedInitContainerDigest is the resolved init container image to use.
+// When operator image verification is enabled, this should be a digest.
 // revision is an optional revision identifier for blue/green deployments.
 // disableSelfInit prevents adding self-init logic (used for Green pods).
 func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool, platform string) (*appsv1.StatefulSet, error) {

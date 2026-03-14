@@ -12,7 +12,8 @@ type StatefulSetSpec struct {
 	// Image is the container image to use (verified digest if available)
 	Image string
 
-	// InitContainerImage is the init container image (verified digest if available)
+	// InitContainerImage is the resolved init container image to use.
+	// When operator image verification is enabled, this should be a digest.
 	InitContainerImage string
 
 	// Replicas is the desired replica count

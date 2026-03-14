@@ -91,18 +91,18 @@ func TestOperatorImageVerificationFailurePolicy_TableDriven(t *testing.T) {
 	))
 }
 
-func TestInitContainerImage_TableDriven(t *testing.T) {
-	t.Parallel()
-
+func TestResolveInitContainerImage_TableDriven(t *testing.T) {
 	tests := []struct {
 		name     string
 		cluster  *openbaov1alpha1.OpenBaoCluster
+		version  string
 		expected string
 	}{
 		{
-			name:     "returns empty when init container config is nil",
+			name:     "returns default operator-managed image when init container config is nil",
 			cluster:  &openbaov1alpha1.OpenBaoCluster{},
-			expected: "",
+			version:  "1.2.3",
+			expected: "ghcr.io/dc-tec/openbao-init:1.2.3",
 		},
 		{
 			name: "returns configured image",
@@ -119,9 +119,15 @@ func TestInitContainerImage_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := initContainerImage(tt.cluster); got != tt.expected {
-				t.Fatalf("initContainerImage() = %q, want %q", got, tt.expected)
+			if tt.version != "" {
+				t.Setenv(constants.EnvOperatorVersion, tt.version)
+			}
+			got, err := resolveInitContainerImage(tt.cluster)
+			if err != nil {
+				t.Fatalf("resolveInitContainerImage() error = %v", err)
+			}
+			if got != tt.expected {
+				t.Fatalf("resolveInitContainerImage() = %q, want %q", got, tt.expected)
 			}
 		})
 	}

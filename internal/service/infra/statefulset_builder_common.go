@@ -32,10 +32,10 @@ type probeExecActions struct {
 	readiness *corev1.ExecAction
 }
 
-// getInitContainerImage returns the init container image to use.
+// ResolveInitContainerImage returns the init container image to use.
 // If not specified in the cluster spec, returns the default image derived from
 // OPERATOR_INIT_IMAGE_REPOSITORY and OPERATOR_VERSION environment variables.
-func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+func ResolveInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	if cluster.Spec.InitContainer != nil && cluster.Spec.InitContainer.Image != "" {
 		return cluster.Spec.InitContainer.Image, nil
 	}
@@ -50,6 +50,10 @@ func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, err
 		))
 	}
 	return image, nil
+}
+
+func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	return ResolveInitContainerImage(cluster)
 }
 
 // getContainerImage returns the container image to use for the OpenBao container.

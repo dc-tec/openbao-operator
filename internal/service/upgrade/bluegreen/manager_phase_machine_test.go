@@ -169,8 +169,6 @@ func TestHandlePhaseDeployingGreen_WaitsForBlueClusterReadiness(t *testing.T) {
 }
 
 func TestHandlePhaseDeployingGreen_CreatesGreenStatefulSet(t *testing.T) {
-	t.Parallel()
-
 	scheme := newBlueGreenTestScheme(t)
 	cluster := newPhaseMachineCluster()
 	bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
@@ -198,8 +196,8 @@ func TestHandlePhaseDeployingGreen_CreatesGreenStatefulSet(t *testing.T) {
 	if runtime.lastVerifiedImage != cluster.Spec.Image {
 		t.Fatalf("image = %q, want %q", runtime.lastVerifiedImage, cluster.Spec.Image)
 	}
-	if runtime.lastVerifiedInitImage != "" {
-		t.Fatalf("init image digest = %q, want empty when operator image verification is disabled", runtime.lastVerifiedInitImage)
+	if runtime.lastVerifiedInitImage != cluster.Spec.InitContainer.Image {
+		t.Fatalf("init image = %q, want %q", runtime.lastVerifiedInitImage, cluster.Spec.InitContainer.Image)
 	}
 	if !runtime.lastDisableSelfInit {
 		t.Fatal("expected Green StatefulSet to be created with self-init disabled")
