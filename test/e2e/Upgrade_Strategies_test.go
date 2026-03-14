@@ -111,6 +111,77 @@ func isOpenBaoServiceAvailableStatus(statusCode int) bool {
 	}
 }
 
+func ensureGatewayClassReady(
+	ctx context.Context,
+	c client.Client,
+	name string,
+	features ...gatewayv1.FeatureName,
+) {
+	gatewayClass := &gatewayv1.GatewayClass{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: gatewayv1.GatewayClassSpec{
+			ControllerName: gatewayv1.GatewayController("openbao.org/e2e-gateway"),
+		},
+	}
+	Expect(c.Create(ctx, gatewayClass)).To(Succeed())
+	DeferCleanup(func() {
+		_ = c.Delete(context.Background(), &gatewayv1.GatewayClass{ObjectMeta: metav1.ObjectMeta{Name: name}})
+	})
+
+	Eventually(func(g Gomega) {
+		current := &gatewayv1.GatewayClass{}
+		g.Expect(c.Get(ctx, types.NamespacedName{Name: name}, current)).To(Succeed())
+
+		original := current.DeepCopy()
+		current.Status.Conditions = []metav1.Condition{
+			{
+				Type:               string(gatewayv1.GatewayClassConditionStatusAccepted),
+				Status:             metav1.ConditionTrue,
+				Reason:             string(gatewayv1.GatewayClassReasonAccepted),
+				ObservedGeneration: current.Generation,
+				LastTransitionTime: metav1.Now(),
+			},
+			{
+				Type:               string(gatewayv1.GatewayClassConditionStatusSupportedVersion),
+				Status:             metav1.ConditionTrue,
+				Reason:             string(gatewayv1.GatewayClassReasonSupportedVersion),
+				ObservedGeneration: current.Generation,
+				LastTransitionTime: metav1.Now(),
+			},
+		}
+		current.Status.SupportedFeatures = make([]gatewayv1.SupportedFeature, 0, len(features))
+		for _, feature := range features {
+			current.Status.SupportedFeatures = append(current.Status.SupportedFeatures, gatewayv1.SupportedFeature{Name: feature})
+		}
+
+		g.Expect(c.Status().Patch(ctx, current, client.MergeFrom(original))).To(Succeed())
+	}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+}
+
+func markGatewayProgrammed(
+	ctx context.Context,
+	c client.Client,
+	namespace, name string,
+) {
+	Eventually(func(g Gomega) {
+		gateway := &gatewayv1.Gateway{}
+		g.Expect(c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, gateway)).To(Succeed())
+
+		original := gateway.DeepCopy()
+		gateway.Status.Conditions = []metav1.Condition{
+			{
+				Type:               string(gatewayv1.GatewayConditionProgrammed),
+				Status:             metav1.ConditionTrue,
+				Reason:             "Programmed",
+				ObservedGeneration: gateway.Generation,
+				LastTransitionTime: metav1.Now(),
+			},
+		}
+
+		g.Expect(c.Status().Patch(ctx, gateway, client.MergeFrom(original))).To(Succeed())
+	}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+}
+
 func findUpgradeExecutorJob(jobs []batchv1.Job, action bluegreen.ExecutorAction, runID string) *batchv1.Job {
 	for i := range jobs {
 		job := &jobs[i]
@@ -2959,10 +3030,11 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 	// --- Gateway Integration ---
 	Context("Gateway Integration", Label("gateway", "requires-gateway-api", "bluegreen"), func() {
 		var (
-			tenantNamespace string
-			tenantFW        *framework.Framework
-			upgradeCluster  *openbaov1alpha1.OpenBaoCluster
-			admin           client.Client
+			tenantNamespace  string
+			tenantFW         *framework.Framework
+			upgradeCluster   *openbaov1alpha1.OpenBaoCluster
+			admin            client.Client
+			gatewayClassName = "e2e-traefik-http"
 			// ... vars
 		)
 
@@ -2986,7 +3058,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					Namespace: tenantNamespace,
 				},
 				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: "traefik",
+					GatewayClassName: gatewayv1.ObjectName(gatewayClassName),
 					Listeners: []gatewayv1.Listener{
 						{
 							Name:     "https",
@@ -2998,6 +3070,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				},
 			}
 			Expect(admin.Create(ctx, gw)).To(Succeed())
+			ensureGatewayClassReady(ctx, admin, gatewayClassName, gatewayv1.FeatureName("HTTPRoute"))
+			markGatewayProgrammed(ctx, admin, tenantNamespace, gw.Name)
 
 			initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
 			upgradeCluster = &openbaov1alpha1.OpenBaoCluster{
@@ -3238,6 +3312,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			passthroughHostname = "bao-passthrough.example.local"
 			passthroughListener = "tls-passthrough"
 			passthroughGateway  = "tenant-gateway-passthrough"
+			gatewayClassName    = "e2e-traefik-tls"
 		)
 
 		BeforeAll(func() {
@@ -3258,7 +3333,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					Namespace: tenantNamespace,
 				},
 				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: "traefik",
+					GatewayClassName: gatewayv1.ObjectName(gatewayClassName),
 					Listeners: []gatewayv1.Listener{
 						{
 							Name:     gatewayv1.SectionName(passthroughListener),
@@ -3273,6 +3348,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				},
 			}
 			Expect(admin.Create(ctx, gw)).To(Succeed())
+			ensureGatewayClassReady(ctx, admin, gatewayClassName, gatewayv1.FeatureName("TLSRoute"))
+			markGatewayProgrammed(ctx, admin, tenantNamespace, gw.Name)
 
 			passthroughCluster = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -3344,15 +3421,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 
 				cond := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
 				g.Expect(cond).NotTo(BeNil())
-				g.Expect(cond.Status).NotTo(Equal(metav1.ConditionFalse))
-				switch cond.Status {
-				case metav1.ConditionTrue:
-					g.Expect(cond.Reason).To(Equal("GatewayIntegrationReady"))
-				case metav1.ConditionUnknown:
-					g.Expect(cond.Reason).To(Equal("GatewayCapabilitiesUnknown"))
-				default:
-					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-				}
+				g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+				g.Expect(cond.Reason).To(Equal("GatewayIntegrationReady"))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("verifying a TLSRoute is created for passthrough access")
