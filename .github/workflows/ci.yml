@@ -568,7 +568,7 @@ jobs:
     permissions:
       contents: read
       packages: read
-    timeout-minutes: 45
+    timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
       matrix:
@@ -576,6 +576,8 @@ jobs:
           - name: "Core Lifecycle & Manager"
             label_filter: "(((lifecycle && !tls) || manager) && !openshift)"
             pr_scope: "always"
+            timeout_minutes: 45
+            e2e_timeout: "40m"
             exclude_pentest_on_default_pr: "false"
             hardened_signed: "false"
             openbao_image: ""
@@ -588,6 +590,8 @@ jobs:
           - name: "Security & Tenants"
             label_filter: "(((security || tenant || tenancy || tls) && !profile-hardened && !gitops && !(tls && slow)) && !openshift)"
             pr_scope: "always"
+            timeout_minutes: 45
+            e2e_timeout: "40m"
             exclude_pentest_on_default_pr: "true"
             hardened_signed: "false"
             openbao_image: ""
@@ -600,6 +604,8 @@ jobs:
           - name: "Backup & Restore"
             label_filter: "((dr || restore) && !openshift)"
             pr_scope: "backup"
+            timeout_minutes: 45
+            e2e_timeout: "40m"
             exclude_pentest_on_default_pr: "false"
             hardened_signed: "false"
             openbao_image: ""
@@ -612,6 +618,8 @@ jobs:
           - name: "Upgrade Rolling"
             label_filter: "((upgrade && (rolling || validation || guardrails || snapshot || recovery || operation-lock) && !hardened) && !openshift)"
             pr_scope: "upgrade"
+            timeout_minutes: 45
+            e2e_timeout: "40m"
             exclude_pentest_on_default_pr: "false"
             hardened_signed: "false"
             openbao_image: ""
@@ -624,6 +632,8 @@ jobs:
           - name: "Upgrade Blue/Green"
             label_filter: "((upgrade && (bluegreen || gateway || verification || rollback || chaos || failure) && !hardened) && !openshift)"
             pr_scope: "upgrade"
+            timeout_minutes: 60
+            e2e_timeout: "55m"
             exclude_pentest_on_default_pr: "false"
             hardened_signed: "false"
             openbao_image: ""
@@ -636,6 +646,8 @@ jobs:
           - name: "Hardened (Signed)"
             label_filter: "((profile-hardened || gitops || (tls && slow)) && !openshift)"
             pr_scope: "hardened"
+            timeout_minutes: 45
+            e2e_timeout: "40m"
             exclude_pentest_on_default_pr: "false"
             hardened_signed: "true"
             openbao_image: "ghcr.io/openbao/openbao:2.5.0"
@@ -747,7 +759,7 @@ jobs:
           OPENBAO_REQUEUE_STANDARD: 10s
           # E2E_LABEL_FILTER is set by previous step
           E2E_PARALLEL_NODES: "1"
-          E2E_TIMEOUT: 40m
+          E2E_TIMEOUT: ${{ matrix.e2e_timeout }}
           E2E_SKIP_IMAGE_BUILD: "true"
           E2E_ENABLE_HARDENED_SIGNED_SUITE: ${{ matrix.hardened_signed }}
           E2E_OPERATOR_IMAGE: ${{ needs.build-e2e-images.outputs.manager_ref }}
