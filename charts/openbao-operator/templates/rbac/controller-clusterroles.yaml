@@ -55,7 +55,6 @@ rules:
       - validatingadmissionpolicybindings
     verbs:
       - get
-  {{- if .Values.gatewayAPI.enabled }}
   - apiGroups:
       - gateway.networking.k8s.io
     resources:
@@ -63,7 +62,6 @@ rules:
       - gatewayclasses
     verbs:
       - get
-  {{- end }}
   - nonResourceURLs:
       - "/.well-known/openid-configuration"
       - "/openid/v1/jwks"
@@ -137,3 +135,4 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "openbao-operator.controllerServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}
+
