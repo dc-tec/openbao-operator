@@ -6,35 +6,35 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Step-by-step recipe for scheduled OpenBao backups to S3-compatible storage using the operator-managed backup ServiceAccount and JWT auth.">
+        <meta name="description" content="Prescriptive guide for choosing tenancy mode, security profile, bootstrap flow, TLS mode, admission posture, and upgrade strategy for OpenBao Operator.">
       
       
       
-        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/scheduled-backups-s3-compatible/">
+        <link rel="canonical" href="https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/deployment-decision-guide/">
       
       
-        <link rel="prev" href="../development-self-init-userpass/">
+        <link rel="prev" href="../../">
       
       
-        <link rel="next" href="../hardened-transit-external-tls/">
+        <link rel="next" href="../installation/">
       
       
         
       
       
-      <link rel="icon" href="../../../../assets/favicon.png">
+      <link rel="icon" href="../../../assets/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
     
     
       
-        <title>Scheduled Backups to S3-Compatible Storage - OpenBao Operator</title>
+        <title>Deployment Decision Guide - OpenBao Operator</title>
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,9 +53,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -71,19 +71,19 @@
   
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Scheduled Backups to S3-Compatible Storage">
+  <meta property="og:title" content="Deployment Decision Guide">
   
-    <meta property="og:description" content="Step-by-step recipe for scheduled OpenBao backups to S3-compatible storage using the operator-managed backup ServiceAccount and JWT auth.">
+    <meta property="og:description" content="Prescriptive guide for choosing tenancy mode, security profile, bootstrap flow, TLS mode, admission posture, and upgrade strategy for OpenBao Operator.">
   
-  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/scheduled-backups-s3-compatible/">
+  <meta property="og:url" content="https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/deployment-decision-guide/">
   
     <meta property="og:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
   
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Scheduled Backups to S3-Compatible Storage">
+  <meta name="twitter:title" content="Deployment Decision Guide">
   
-    <meta name="twitter:description" content="Step-by-step recipe for scheduled OpenBao backups to S3-compatible storage using the operator-managed backup ServiceAccount and JWT auth.">
+    <meta name="twitter:description" content="Prescriptive guide for choosing tenancy mode, security profile, bootstrap flow, TLS mode, admission posture, and upgrade strategy for OpenBao Operator.">
   
   
     <meta name="twitter:image" content="https://dc-tec.github.io/openbao-operator/latestassets/favicon.png">
@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#scheduled-backups-to-s3-compatible-storage" class="md-skip">
+        <a href="#deployment-decision-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -130,9 +130,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="OpenBao Operator" class="md-header__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
+    <a href="../../.." title="OpenBao Operator" class="md-header__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
       
-  <img src="../../../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -149,7 +149,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Scheduled Backups to S3-Compatible Storage
+              Deployment Decision Guide
             
           </span>
         </div>
@@ -265,9 +265,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="OpenBao Operator" class="md-nav__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
+    <a href="../../.." title="OpenBao Operator" class="md-nav__button md-logo" aria-label="OpenBao Operator" data-md-component="logo">
       
-  <img src="../../../../assets/logo.svg" alt="logo">
+  <img src="../../../assets/logo.svg" alt="logo">
 
     </a>
     OpenBao Operator
@@ -294,7 +294,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -375,7 +375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../" class="md-nav__link">
+      <a href="../../" class="md-nav__link">
         
   
   
@@ -400,10 +400,88 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../deployment-decision-guide/" class="md-nav__link">
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operator
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment Decision Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -419,6 +497,240 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#default-production-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Production Path
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Profiles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operational-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operational Checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#status-checkpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status Checkpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../identity-and-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Identity & Access
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authz/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authorization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../single-tenant-mode/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Single-Tenant Mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -453,7 +765,7 @@
   <span class="md-ellipsis">
     
   
-    Operator
+    OpenBaoTenant
   
 
     
@@ -469,7 +781,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    Operator
+    OpenBaoTenant
   
 
           </label>
@@ -482,14 +794,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operator/installation/" class="md-nav__link">
+      <a href="../../openbaotenant/overview/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Installation
+    Overview
   
 
     
@@ -510,14 +822,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operator/identity-and-access/" class="md-nav__link">
+      <a href="../../openbaotenant/onboarding/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Identity & Access
+    Onboarding
   
 
     
@@ -538,70 +850,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operator/authn/" class="md-nav__link">
+      <a href="../../openbaotenant/multi-tenancy/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Authentication
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../operator/authz/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Authorization
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../operator/single-tenant-mode/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Single-Tenant Mode
+    Multi-Tenancy
   
 
     
@@ -652,7 +908,7 @@
   <span class="md-ellipsis">
     
   
-    OpenBaoTenant
+    OpenBaoCluster
   
 
     
@@ -668,7 +924,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    OpenBaoTenant
+    OpenBaoCluster
   
 
           </label>
@@ -681,7 +937,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../openbaotenant/overview/" class="md-nav__link">
+      <a href="../../openbaocluster/overview/" class="md-nav__link">
         
   
   
@@ -709,150 +965,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../openbaotenant/onboarding/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Onboarding
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../openbaotenant/multi-tenancy/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Multi-Tenancy
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_5" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    OpenBaoCluster
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_2_5">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    OpenBaoCluster
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../overview/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../getting-started/" class="md-nav__link">
+      <a href="../../openbaocluster/getting-started/" class="md-nav__link">
         
   
   
@@ -880,7 +993,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../next-steps/" class="md-nav__link">
+      <a href="../../openbaocluster/next-steps/" class="md-nav__link">
         
   
   
@@ -905,368 +1018,6 @@
                 
   
   
-    
-  
-  
-  
-    
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_5_4" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_2_5_4" id="__nav_2_5_4_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Recipes
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_5_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_2_5_4">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Recipes
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Overview
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../development-self-init-userpass/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Development + Self-Init + Userpass
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scheduled Backups to S3-Compatible Storage
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Scheduled Backups to S3-Compatible Storage
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#inputs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Inputs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-1-create-the-object-storage-credentials-secret" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 1: Create the object storage credentials Secret
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#step-2-add-the-backup-configuration-to-the-cluster" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Step 2: Add the backup configuration to the cluster
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#operations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Operations
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Operations">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#verify-backup-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify backup resources
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-a-successful-backup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify a successful backup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#trigger-a-manual-backup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Trigger a manual backup
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-failures" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common Failures
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See Also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../hardened-transit-external-tls/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Hardened + Transit + External TLS
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../hardened-transit-acme-tls/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Hardened + Transit + ACME TLS
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
   
   
     
@@ -1282,10 +1033,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_2_5_5" id="__nav_2_5_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_4_4" id="__nav_2_4_4_label" tabindex="0">
             
   
   
@@ -1303,8 +1054,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_5_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_5_5">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1321,7 +1072,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/security-profiles/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/security-profiles/" class="md-nav__link">
         
   
   
@@ -1349,7 +1100,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/self-init/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/self-init/" class="md-nav__link">
         
   
   
@@ -1377,7 +1128,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/server/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/server/" class="md-nav__link">
         
   
   
@@ -1405,7 +1156,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/external-access/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/external-access/" class="md-nav__link">
         
   
   
@@ -1433,7 +1184,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/network/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/network/" class="md-nav__link">
         
   
   
@@ -1461,7 +1212,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/air-gapped/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/air-gapped/" class="md-nav__link">
         
   
   
@@ -1489,7 +1240,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/resources-storage/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/resources-storage/" class="md-nav__link">
         
   
   
@@ -1517,7 +1268,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/gateway-api/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/gateway-api/" class="md-nav__link">
         
   
   
@@ -1545,7 +1296,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../configuration/observability/" class="md-nav__link">
+      <a href="../../openbaocluster/configuration/observability/" class="md-nav__link">
         
   
   
@@ -1593,10 +1344,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_2_5_6" id="__nav_2_5_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_4_5" id="__nav_2_4_5_label" tabindex="0">
             
   
   
@@ -1614,8 +1365,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_5_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_5_6">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1632,7 +1383,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/upgrades/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/upgrades/" class="md-nav__link">
         
   
   
@@ -1660,7 +1411,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/backups/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/backups/" class="md-nav__link">
         
   
   
@@ -1688,7 +1439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/maintenance/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/maintenance/" class="md-nav__link">
         
   
   
@@ -1716,7 +1467,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/pausing/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/pausing/" class="md-nav__link">
         
   
   
@@ -1744,7 +1495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/deletion/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/deletion/" class="md-nav__link">
         
   
   
@@ -1772,7 +1523,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/troubleshooting/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/troubleshooting/" class="md-nav__link">
         
   
   
@@ -1800,7 +1551,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/production-checklist/" class="md-nav__link">
+      <a href="../../openbaocluster/operations/production-checklist/" class="md-nav__link">
         
   
   
@@ -1836,7 +1587,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../security-considerations/" class="md-nav__link">
+      <a href="../../openbaocluster/security-considerations/" class="md-nav__link">
         
   
   
@@ -1876,10 +1627,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_2_5_8" id="__nav_2_5_8_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_4_7" id="__nav_2_4_7_label" tabindex="0">
             
   
   
@@ -1897,8 +1648,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_5_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_5_8">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1915,7 +1666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../recovery/safe-mode/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/safe-mode/" class="md-nav__link">
         
   
   
@@ -1943,7 +1694,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../recovery/no-leader/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/no-leader/" class="md-nav__link">
         
   
   
@@ -1971,7 +1722,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../recovery/sealed-cluster/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/sealed-cluster/" class="md-nav__link">
         
   
   
@@ -1999,7 +1750,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../recovery/failed-rollback/" class="md-nav__link">
+      <a href="../../openbaocluster/recovery/failed-rollback/" class="md-nav__link">
         
   
   
@@ -2055,10 +1806,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
         
           
-          <label class="md-nav__link" for="__nav_2_6" id="__nav_2_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="0">
             
   
   
@@ -2076,8 +1827,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2094,7 +1845,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../openbaorestore/overview/" class="md-nav__link">
+      <a href="../../openbaorestore/overview/" class="md-nav__link">
         
   
   
@@ -2122,7 +1873,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../openbaorestore/restore/" class="md-nav__link">
+      <a href="../../openbaorestore/restore/" class="md-nav__link">
         
   
   
@@ -2150,7 +1901,1087 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../openbaorestore/recipes/restore-from-s3-compatible-snapshot/" class="md-nav__link">
+      <a href="../../openbaorestore/recovery-restore-after-upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Restore After Partial Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6" id="__nav_2_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validated Deployments
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Validated Deployments
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6_2" id="__nav_2_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architectures
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architectures
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6_2_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6_2_2" id="__nav_2_6_2_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_6_2_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6_2_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cloud
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/cloud/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Amazon EKS Development + AWS KMS + S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Amazon EKS Hardened + AWS KMS + ACME
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6_2_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6_2_3" id="__nav_2_6_2_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_6_2_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6_2_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Local
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/local/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/local/k3d-development-shared-edge-rustfs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    k3d Development with Shared Edge and RustFS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/local/k3d-hardened-transit-external-tls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    k3d Hardened with Transit and External TLS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/local/k3d-hardened-transit-acme/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    k3d Hardened with Transit and Internal ACME
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    k3d Cross-Cluster DR with Shared Transit and RustFS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6_3" id="__nav_2_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6_3_2" id="__nav_2_6_3_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloud
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_6_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cloud
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/cloud/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Amazon EKS Development + AWS KMS + S3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Amazon EKS Hardened + AWS KMS + ACME
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6_3_3" id="__nav_2_6_3_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_6_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Local
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/local/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/local/development-self-init-userpass/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development + Self-Init + Userpass
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/local/hardened-transit-external-tls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardened + Transit + External TLS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/local/hardened-transit-acme-tls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardened + Transit + ACME TLS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    k3d Cross-Cluster DR Bootstrap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_6_4" id="__nav_2_6_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbooks
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Runbooks
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/runbooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/runbooks/scheduled-backups-s3-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduled Backups to S3-Compatible Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validated-deployments/runbooks/restore-from-s3-compatible-snapshot/" class="md-nav__link">
         
   
   
@@ -2178,14 +3009,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../openbaorestore/recovery-restore-after-upgrade/" class="md-nav__link">
+      <a href="../../validated-deployments/runbooks/cross-cluster-dr-restore-rustfs/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Restore After Partial Upgrade
+    Cross-Cluster DR Restore with RustFS
   
 
     
@@ -2194,6 +3025,14 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -2275,7 +3114,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/" class="md-nav__link">
+      <a href="../../../architecture/" class="md-nav__link">
         
   
   
@@ -2303,7 +3142,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/operator-invariants/" class="md-nav__link">
+      <a href="../../../architecture/operator-invariants/" class="md-nav__link">
         
   
   
@@ -2331,7 +3170,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/components/" class="md-nav__link">
+      <a href="../../../architecture/components/" class="md-nav__link">
         
   
   
@@ -2410,7 +3249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/cert-manager/" class="md-nav__link">
+      <a href="../../../architecture/cert-manager/" class="md-nav__link">
         
   
   
@@ -2438,7 +3277,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/infra-manager/" class="md-nav__link">
+      <a href="../../../architecture/infra-manager/" class="md-nav__link">
         
   
   
@@ -2466,7 +3305,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/init-manager/" class="md-nav__link">
+      <a href="../../../architecture/init-manager/" class="md-nav__link">
         
   
   
@@ -2494,7 +3333,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/upgrade-manager/" class="md-nav__link">
+      <a href="../../../architecture/upgrade-manager/" class="md-nav__link">
         
   
   
@@ -2522,7 +3361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/backup-manager/" class="md-nav__link">
+      <a href="../../../architecture/backup-manager/" class="md-nav__link">
         
   
   
@@ -2550,7 +3389,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/restore-manager/" class="md-nav__link">
+      <a href="../../../architecture/restore-manager/" class="md-nav__link">
         
   
   
@@ -2578,7 +3417,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/provisioner-manager/" class="md-nav__link">
+      <a href="../../../architecture/provisioner-manager/" class="md-nav__link">
         
   
   
@@ -2606,7 +3445,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/operation-lifecycle/" class="md-nav__link">
+      <a href="../../../architecture/operation-lifecycle/" class="md-nav__link">
         
   
   
@@ -2693,7 +3532,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/lifecycle/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/" class="md-nav__link">
         
   
   
@@ -2721,7 +3560,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/lifecycle/day0-provisioning/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/day0-provisioning/" class="md-nav__link">
         
   
   
@@ -2749,7 +3588,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/lifecycle/day1-creation/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/day1-creation/" class="md-nav__link">
         
   
   
@@ -2777,7 +3616,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/lifecycle/day2-operations/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/day2-operations/" class="md-nav__link">
         
   
   
@@ -2805,7 +3644,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../architecture/lifecycle/dayN-backups/" class="md-nav__link">
+      <a href="../../../architecture/lifecycle/dayN-backups/" class="md-nav__link">
         
   
   
@@ -2902,7 +3741,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/" class="md-nav__link">
+      <a href="../../../security/" class="md-nav__link">
         
   
   
@@ -2981,7 +3820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/fundamentals/" class="md-nav__link">
+      <a href="../../../security/fundamentals/" class="md-nav__link">
         
   
   
@@ -3009,7 +3848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/fundamentals/threat-model/" class="md-nav__link">
+      <a href="../../../security/fundamentals/threat-model/" class="md-nav__link">
         
   
   
@@ -3037,7 +3876,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/fundamentals/profiles/" class="md-nav__link">
+      <a href="../../../security/fundamentals/profiles/" class="md-nav__link">
         
   
   
@@ -3065,7 +3904,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/fundamentals/secrets-management/" class="md-nav__link">
+      <a href="../../../security/fundamentals/secrets-management/" class="md-nav__link">
         
   
   
@@ -3152,7 +3991,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/infrastructure/" class="md-nav__link">
+      <a href="../../../security/infrastructure/" class="md-nav__link">
         
   
   
@@ -3180,7 +4019,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/infrastructure/rbac/" class="md-nav__link">
+      <a href="../../../security/infrastructure/rbac/" class="md-nav__link">
         
   
   
@@ -3208,7 +4047,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/infrastructure/admission-policies/" class="md-nav__link">
+      <a href="../../../security/infrastructure/admission-policies/" class="md-nav__link">
         
   
   
@@ -3236,7 +4075,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/infrastructure/network-security/" class="md-nav__link">
+      <a href="../../../security/infrastructure/network-security/" class="md-nav__link">
         
   
   
@@ -3323,7 +4162,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/workload/" class="md-nav__link">
+      <a href="../../../security/workload/" class="md-nav__link">
         
   
   
@@ -3351,7 +4190,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/workload/workload-security/" class="md-nav__link">
+      <a href="../../../security/workload/workload-security/" class="md-nav__link">
         
   
   
@@ -3379,7 +4218,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/workload/tls/" class="md-nav__link">
+      <a href="../../../security/workload/tls/" class="md-nav__link">
         
   
   
@@ -3407,7 +4246,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/workload/supply-chain/" class="md-nav__link">
+      <a href="../../../security/workload/supply-chain/" class="md-nav__link">
         
   
   
@@ -3494,7 +4333,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/multi-tenancy/" class="md-nav__link">
+      <a href="../../../security/multi-tenancy/" class="md-nav__link">
         
   
   
@@ -3522,7 +4361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/multi-tenancy/tenant-isolation/" class="md-nav__link">
+      <a href="../../../security/multi-tenancy/tenant-isolation/" class="md-nav__link">
         
   
   
@@ -3619,7 +4458,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/" class="md-nav__link">
+      <a href="../../../contributing/" class="md-nav__link">
         
   
   
@@ -3698,7 +4537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/getting-started/" class="md-nav__link">
+      <a href="../../../contributing/getting-started/" class="md-nav__link">
         
   
   
@@ -3726,7 +4565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/getting-started/development/" class="md-nav__link">
+      <a href="../../../contributing/getting-started/development/" class="md-nav__link">
         
   
   
@@ -3813,7 +4652,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/standards/" class="md-nav__link">
+      <a href="../../../contributing/standards/" class="md-nav__link">
         
   
   
@@ -3841,7 +4680,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/standards/go-style/" class="md-nav__link">
+      <a href="../../../contributing/standards/go-style/" class="md-nav__link">
         
   
   
@@ -3869,7 +4708,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/standards/error-handling/" class="md-nav__link">
+      <a href="../../../contributing/standards/error-handling/" class="md-nav__link">
         
   
   
@@ -3897,7 +4736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/standards/generated-artifacts/" class="md-nav__link">
+      <a href="../../../contributing/standards/generated-artifacts/" class="md-nav__link">
         
   
   
@@ -3925,7 +4764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/standards/kubernetes-patterns/" class="md-nav__link">
+      <a href="../../../contributing/standards/kubernetes-patterns/" class="md-nav__link">
         
   
   
@@ -3953,7 +4792,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/standards/security-practices/" class="md-nav__link">
+      <a href="../../../contributing/standards/security-practices/" class="md-nav__link">
         
   
   
@@ -3981,7 +4820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/standards/conventional-commits/" class="md-nav__link">
+      <a href="../../../contributing/standards/conventional-commits/" class="md-nav__link">
         
   
   
@@ -4009,7 +4848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/standards/project-conventions/" class="md-nav__link">
+      <a href="../../../contributing/standards/project-conventions/" class="md-nav__link">
         
   
   
@@ -4096,7 +4935,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/testing/" class="md-nav__link">
+      <a href="../../../contributing/testing/" class="md-nav__link">
         
   
   
@@ -4132,7 +4971,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/ci/" class="md-nav__link">
+      <a href="../../../contributing/ci/" class="md-nav__link">
         
   
   
@@ -4160,7 +4999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/release-management/" class="md-nav__link">
+      <a href="../../../contributing/release-management/" class="md-nav__link">
         
   
   
@@ -4188,7 +5027,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/supply-chain-security/" class="md-nav__link">
+      <a href="../../../contributing/supply-chain-security/" class="md-nav__link">
         
   
   
@@ -4216,7 +5055,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/dependency-licenses/" class="md-nav__link">
+      <a href="../../../contributing/dependency-licenses/" class="md-nav__link">
         
   
   
@@ -4244,7 +5083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/distribution/" class="md-nav__link">
+      <a href="../../../contributing/distribution/" class="md-nav__link">
         
   
   
@@ -4272,7 +5111,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/sdlc/" class="md-nav__link">
+      <a href="../../../contributing/sdlc/" class="md-nav__link">
         
   
   
@@ -4300,7 +5139,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../contributing/docs-style-guide/" class="md-nav__link">
+      <a href="../../../contributing/docs-style-guide/" class="md-nav__link">
         
   
   
@@ -4389,7 +5228,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../reference/api/" class="md-nav__link">
+      <a href="../../../reference/api/" class="md-nav__link">
         
   
   
@@ -4417,7 +5256,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../reference/compatibility/" class="md-nav__link">
+      <a href="../../../reference/compatibility/" class="md-nav__link">
         
   
   
@@ -4445,7 +5284,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../reference/deprecation-policy/" class="md-nav__link">
+      <a href="../../../reference/deprecation-policy/" class="md-nav__link">
         
   
   
@@ -4473,7 +5312,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../reference/support-policy/" class="md-nav__link">
+      <a href="../../../reference/support-policy/" class="md-nav__link">
         
   
   
@@ -4501,7 +5340,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../reference/operator-upgrade-compatibility/" class="md-nav__link">
+      <a href="../../../reference/operator-upgrade-compatibility/" class="md-nav__link">
         
   
   
@@ -4529,7 +5368,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../reference/status-and-events/" class="md-nav__link">
+      <a href="../../../reference/status-and-events/" class="md-nav__link">
         
   
   
@@ -4557,7 +5396,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../reference/known-limitations/" class="md-nav__link">
+      <a href="../../../reference/known-limitations/" class="md-nav__link">
         
   
   
@@ -4612,10 +5451,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#default-production-path" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        Default Production Path
       
     </span>
   </a>
@@ -4623,10 +5462,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inputs" class="md-nav__link">
+  <a href="#decision-matrix" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Inputs
+        Decision Matrix
       
     </span>
   </a>
@@ -4634,10 +5473,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-1-create-the-object-storage-credentials-secret" class="md-nav__link">
+  <a href="#recommended-profiles" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 1: Create the object storage credentials Secret
+        Recommended Profiles
       
     </span>
   </a>
@@ -4645,10 +5484,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#step-2-add-the-backup-configuration-to-the-cluster" class="md-nav__link">
+  <a href="#operational-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Step 2: Add the backup configuration to the cluster
+        Operational Checks
       
     </span>
   </a>
@@ -4656,60 +5495,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#operations" class="md-nav__link">
+  <a href="#status-checkpoints" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Operations
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Operations">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#verify-backup-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify backup resources
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#verify-a-successful-backup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Verify a successful backup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#trigger-a-manual-backup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Trigger a manual backup
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-failures" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common Failures
+        Status Checkpoints
       
     </span>
   </a>
@@ -4747,162 +5536,179 @@
   
 
 
-<h1 id="scheduled-backups-to-s3-compatible-storage">Scheduled Backups to S3-Compatible Storage<a class="headerlink" href="#scheduled-backups-to-s3-compatible-storage" title="Permanent link">&para;</a></h1>
-<p>This recipe adds scheduled backups to an existing <code>OpenBaoCluster</code> with:</p>
-<ul>
-<li>S3-compatible object storage</li>
-<li><code>spec.selfInit.oidc.enabled: true</code></li>
-<li>JWT authentication for the backup Job</li>
-<li>backup status reporting through <code>status.backup</code></li>
-</ul>
+<h1 id="deployment-decision-guide">Deployment Decision Guide<a class="headerlink" href="#deployment-decision-guide" title="Permanent link">&para;</a></h1>
+<p>Use this guide to choose the default operating path for OpenBao Operator. Start with the default production path unless you have a clear reason to deviate.</p>
+<h2 id="default-production-path">Default Production Path<a class="headerlink" href="#default-production-path" title="Permanent link">&para;</a></h2>
 <div class="admonition success">
-<p class="admonition-title">Validated by E2E</p>
-<p>This recipe follows the storage-provider backup flows exercised by the in-repo E2E suite. The S3-compatible path is covered against RustFS in the <code>DR: Storage Providers Backup &amp; Restore</code> suite.</p>
-</div>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
+<p class="admonition-title">Start Here</p>
+<p>For most production deployments, use this combination:</p>
 <ul>
-<li>A working <code>OpenBaoCluster</code> already exists.</li>
-<li>The cluster uses <code>spec.selfInit.enabled: true</code> and <code>spec.selfInit.oidc.enabled: true</code>.</li>
-<li>Your object storage bucket already exists.</li>
-<li>You have credentials with write access to the bucket or prefix.</li>
-<li>If your environment restricts egress, backup Jobs can reach the storage endpoint.</li>
+<li><code>tenancy.mode=multi</code></li>
+<li><code>spec.profile: Hardened</code></li>
+<li><code>spec.selfInit.enabled: true</code></li>
+<li><code>spec.tls.mode: External</code> or <code>ACME</code></li>
+<li><code>spec.upgrade.strategy: RollingUpdate</code></li>
+<li><code>admissionPolicies.enabled=true</code></li>
 </ul>
-<div class="admonition tip">
-<p class="admonition-title">Recommended starting point</p>
-<p>If you do not have a cluster yet, start with <a href="../development-self-init-userpass/">Development Profile with Self-Init and Userpass</a>.</p>
 </div>
-<h2 id="inputs">Inputs<a class="headerlink" href="#inputs" title="Permanent link">&para;</a></h2>
-<p>Replace these values before applying the manifests:</p>
+<h2 id="decision-matrix">Decision Matrix<a class="headerlink" href="#decision-matrix" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th style="text-align: left;">Placeholder</th>
-<th style="text-align: left;">Example</th>
-<th style="text-align: left;">Purpose</th>
+<th style="text-align: left;">Decision</th>
+<th style="text-align: left;">Default choice</th>
+<th style="text-align: left;">Choose the alternative when</th>
+<th style="text-align: left;">Tradeoff</th>
+<th style="text-align: left;">Reference</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><code>&lt;namespace&gt;</code></td>
-<td style="text-align: left;"><code>openbaocluster-demo</code></td>
-<td style="text-align: left;">Namespace of the target cluster</td>
+<td style="text-align: left;"><strong>Tenancy model</strong></td>
+<td style="text-align: left;"><strong>Multi-Tenant</strong></td>
+<td style="text-align: left;">Use <strong>Single-Tenant</strong> when one team owns one namespace and you intentionally want direct namespace-scoped operator control.</td>
+<td style="text-align: left;">Single-tenant is simpler, but it does not use the default namespace-introduction model.</td>
+<td style="text-align: left;"><a href="../single-tenant-mode/">Single-Tenant Mode</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>&lt;cluster-name&gt;</code></td>
-<td style="text-align: left;"><code>openbaocluster-demo</code></td>
-<td style="text-align: left;">Target <code>OpenBaoCluster</code> name</td>
+<td style="text-align: left;"><strong>Security profile</strong></td>
+<td style="text-align: left;"><strong>Hardened</strong></td>
+<td style="text-align: left;">Use <strong>Development</strong> only for local testing, CI, or short-lived evaluation environments.</td>
+<td style="text-align: left;">Development relaxes bootstrap and transport guardrails and is highly discouraged for production.</td>
+<td style="text-align: left;"><a href="../../openbaocluster/configuration/security-profiles/">Security Profiles</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>&lt;secret-name&gt;</code></td>
-<td style="text-align: left;"><code>rustfs-secret</code></td>
-<td style="text-align: left;">Secret containing object storage credentials</td>
+<td style="text-align: left;"><strong>Bootstrap flow</strong></td>
+<td style="text-align: left;"><strong>Self-Init</strong></td>
+<td style="text-align: left;">Use manual bootstrap only for compatibility or controlled break-glass workflows.</td>
+<td style="text-align: left;">Manual bootstrap stores a root token Secret and is not a supported production path.</td>
+<td style="text-align: left;"><a href="../../openbaocluster/configuration/self-init/">Self-Initialization</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>&lt;s3-endpoint&gt;</code></td>
-<td style="text-align: left;"><code>http://rustfs-svc.rustfs.svc.cluster.local:9000</code></td>
-<td style="text-align: left;">S3-compatible endpoint</td>
+<td style="text-align: left;"><strong>TLS mode</strong></td>
+<td style="text-align: left;"><strong>External</strong> or <strong>ACME</strong></td>
+<td style="text-align: left;">Use <code>OperatorManaged</code> only in non-Hardened environments where internal PKI convenience matters more than production trust requirements.</td>
+<td style="text-align: left;"><code>OperatorManaged</code> TLS is rejected for Hardened clusters and is not a production path there.</td>
+<td style="text-align: left;"><a href="../../../security/workload/tls/">TLS &amp; Identity</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>&lt;bucket&gt;</code></td>
-<td style="text-align: left;"><code>openbao-backups</code></td>
-<td style="text-align: left;">Target bucket</td>
+<td style="text-align: left;"><strong>Installation path</strong></td>
+<td style="text-align: left;"><strong>Helm</strong></td>
+<td style="text-align: left;">Use raw manifests when you need install-time identity customization, local overlay control, or source-based rendering.</td>
+<td style="text-align: left;">Helm is easier to keep consistent. Raw manifests require you to choose the right overlay and verify rendered identities.</td>
+<td style="text-align: left;"><a href="../installation/">Operator Installation</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>&lt;path-prefix&gt;</code></td>
-<td style="text-align: left;"><code>clusters</code></td>
-<td style="text-align: left;">Prefix used for stored snapshots</td>
+<td style="text-align: left;"><strong>Admission posture</strong></td>
+<td style="text-align: left;"><strong>Admission policies enabled</strong></td>
+<td style="text-align: left;">Disable admission policies only for development or break-glass recovery.</td>
+<td style="text-align: left;">Disabling them enters unsafe mode and removes part of the normal safety model.</td>
+<td style="text-align: left;"><a href="../../../security/infrastructure/admission-policies/">Admission Policies</a></td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>&lt;schedule&gt;</code></td>
-<td style="text-align: left;"><code>*/5 * * * *</code></td>
-<td style="text-align: left;">Backup schedule</td>
+<td style="text-align: left;"><strong>Upgrade strategy</strong></td>
+<td style="text-align: left;"><strong>RollingUpdate</strong></td>
+<td style="text-align: left;">Use <strong>BlueGreen</strong> when you need parallel validation, manual promotion, or stronger cutover boundaries.</td>
+<td style="text-align: left;">Blue/green uses more resources and adds operational complexity.</td>
+<td style="text-align: left;"><a href="../../openbaocluster/operations/upgrades/">Cluster Upgrades</a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Platform mode</strong></td>
+<td style="text-align: left;"><strong>Auto-detection</strong></td>
+<td style="text-align: left;">Use explicit OpenShift mode when the target cluster is OpenShift or when SCC-compatible rendering must be explicit.</td>
+<td style="text-align: left;">Explicit platform selection gives you predictable rendering, but you still need target-cluster validation for the exact SCC and platform behavior you rely on.</td>
+<td style="text-align: left;"><a href="../installation/">Operator Installation</a></td>
 </tr>
 </tbody>
 </table>
-<h2 id="step-1-create-the-object-storage-credentials-secret">Step 1: Create the object storage credentials Secret<a class="headerlink" href="#step-1-create-the-object-storage-credentials-secret" title="Permanent link">&para;</a></h2>
-<p>Create the Secret referenced by <code>spec.backup.target.credentialsSecretRef</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>&lt;secret-name&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">accessKeyId</span><span class="o">=</span><span class="s1">&#39;&lt;access-key-id&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">secretAccessKey</span><span class="o">=</span><span class="s1">&#39;&lt;secret-access-key&gt;&#39;</span>
-</span></code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">E2E validation target</p>
-<p>The in-repo E2E suite uses RustFS credentials:</p>
+<h2 id="recommended-profiles">Recommended Profiles<a class="headerlink" href="#recommended-profiles" title="Permanent link">&para;</a></h2>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Shared Production</label><label for="__tabbed_1_2">Dedicated Team Namespace</label><label for="__tabbed_1_3">Local Development or CI</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Use this profile for the normal production path:</p>
 <ul>
-<li><code>accessKeyId</code>: <code>rustfsadmin</code></li>
-<li><code>secretAccessKey</code>: <code>rustfsadmin</code></li>
+<li><code>tenancy.mode=multi</code></li>
+<li><code>spec.profile: Hardened</code></li>
+<li><code>spec.selfInit.enabled: true</code></li>
+<li><code>spec.tls.mode: External</code> or <code>ACME</code></li>
+<li><code>spec.upgrade.strategy: RollingUpdate</code></li>
+<li>Scheduled backups configured before the first production upgrade</li>
 </ul>
 </div>
-<h2 id="step-2-add-the-backup-configuration-to-the-cluster">Step 2: Add the backup configuration to the cluster<a class="headerlink" href="#step-2-add-the-backup-configuration-to-the-cluster" title="Permanent link">&para;</a></h2>
-<p>Add this block under <code>spec</code> in your <code>OpenBaoCluster</code> manifest and re-apply it:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">backup</span><span class="p">:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;schedule&gt;&quot;</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">jwtAuthRole</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openbao-operator-backup</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">target</span><span class="p">:</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;s3-endpoint&gt;&quot;</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="nt">bucket</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;bucket&gt;&quot;</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">pathPrefix</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;path-prefix&gt;&quot;</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">usePathStyle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="nt">credentialsSecretRef</span><span class="p">:</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;secret-name&gt;</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="nt">maxCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="nt">maxAge</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;168h&quot;</span>
-</span></code></pre></div>
-<p>The object key format is:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>&lt;path-prefix&gt;/&lt;namespace&gt;/&lt;cluster-name&gt;/&lt;timestamp&gt;-&lt;uuid&gt;.snap
-</span></code></pre></div>
-<p>For example:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>clusters/openbaocluster-demo/openbaocluster-demo/2026-03-11T12-55-00Z-279d2d60.snap
-</span></code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">JWT role bootstrap</p>
-<p>When <code>spec.selfInit.oidc.enabled: true</code> is already enabled, the operator can bootstrap the <code>openbao-operator-backup</code> role and bind it to <code>&lt;cluster-name&gt;-backup-serviceaccount</code>.</p>
-</div>
-<h2 id="operations">Operations<a class="headerlink" href="#operations" title="Permanent link">&para;</a></h2>
-<h3 id="verify-backup-resources">Verify backup resources<a class="headerlink" href="#verify-backup-resources" title="Permanent link">&para;</a></h3>
-<p>Confirm that the backup <code>ServiceAccount</code> exists:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>get<span class="w"> </span>serviceaccount<span class="w"> </span>&lt;cluster-name&gt;-backup-serviceaccount
-</span></code></pre></div>
-<p>Check the backup schedule reported in cluster status:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>&lt;cluster-name&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.backup.nextScheduledBackup}{&quot;\n&quot;}&#39;</span>
-</span></code></pre></div>
-<p>Check the backup configuration condition:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>&lt;cluster-name&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .status.conditions[*]}{.type}={.status}{&quot; reason=&quot;}{.reason}{&quot;\n&quot;}{end}&#39;</span>
-</span></code></pre></div>
-<p>The important checkpoint is <code>BackupConfigurationReady=True</code>.</p>
-<p>Watch backup Jobs:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>get<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>-l<span class="w"> </span>openbao.org/component<span class="o">=</span>backup<span class="w"> </span>-w
-</span></code></pre></div>
-<h3 id="verify-a-successful-backup">Verify a successful backup<a class="headerlink" href="#verify-a-successful-backup" title="Permanent link">&para;</a></h3>
-<p>After the first backup succeeds, inspect the backup status:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>get<span class="w"> </span>openbaocluster<span class="w"> </span>&lt;cluster-name&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.backup.lastBackupName}{&quot;\n&quot;}{.status.backup.lastBackupTime}{&quot;\n&quot;}{.status.backup.lastFailureReason}{&quot;\n&quot;}&#39;</span>
-</span></code></pre></div>
-<p>The important field for later restore operations is <code>status.backup.lastBackupName</code>.</p>
-<h3 id="trigger-a-manual-backup">Trigger a manual backup<a class="headerlink" href="#trigger-a-manual-backup" title="Permanent link">&para;</a></h3>
-<p>Patch the cluster with the supported manual-backup annotation:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>annotate<span class="w"> </span>openbaocluster<span class="w"> </span>&lt;cluster-name&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>openbao.org/trigger-backup<span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>date<span class="w"> </span>-u<span class="w"> </span>+%Y-%m-%dT%H:%M:%SZ<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span>--overwrite
-</span></code></pre></div>
-<p>This is the manual backup path exercised by the E2E suite.</p>
-<h2 id="common-failures">Common Failures<a class="headerlink" href="#common-failures" title="Permanent link">&para;</a></h2>
+<div class="tabbed-block">
+<p>Use this profile when one team owns one namespace and does not need the default tenant-onboarding model:</p>
 <ul>
-<li>The backup Job cannot reach object storage: verify the endpoint URL and network policy or egress settings.</li>
-<li>Authentication fails: verify the Secret keys and credentials.</li>
-<li><code>BackupConfigurationReady=False</code>: inspect the reason first. <code>CredentialsSecretMissing</code>, <code>AuthenticationRequired</code>, and <code>NetworkEgressRulesRequired</code> are the most common setup failures.</li>
-<li>The backup Job never starts: confirm <code>spec.selfInit.oidc.enabled: true</code> or set an explicit static <code>tokenSecretRef</code>.</li>
-<li>Backups are skipped while another long-running operation is active: wait for upgrade or restore activity to finish and retry.</li>
+<li><code>tenancy.mode=single</code></li>
+<li><code>spec.profile: Hardened</code></li>
+<li><code>spec.selfInit.enabled: true</code></li>
+<li><code>spec.tls.mode: External</code> or <code>ACME</code></li>
+<li><code>spec.upgrade.strategy: RollingUpdate</code></li>
+<li>Admission policies still enabled</li>
 </ul>
+</div>
+<div class="tabbed-block">
+<p>Use this profile only for non-production environments:</p>
+<ul>
+<li><code>tenancy.mode=multi</code> or <code>single</code>, depending on the scenario under test</li>
+<li><code>spec.profile: Development</code></li>
+<li><code>spec.tls.mode: OperatorManaged</code> is acceptable</li>
+<li>Manual bootstrap is acceptable if you need the root token Secret</li>
+<li>Unsafe mode only when you are intentionally testing without admission enforcement</li>
+</ul>
+</div>
+</div>
+</div>
+<h2 id="operational-checks">Operational Checks<a class="headerlink" href="#operational-checks" title="Permanent link">&para;</a></h2>
+<p>Before calling a deployment production-ready, verify these choices:</p>
+<ol>
+<li><code>Hardened</code> profile is selected.</li>
+<li><code>selfInit.enabled</code> is <code>true</code>.</li>
+<li>TLS mode is <code>External</code> or <code>ACME</code>.</li>
+<li>Admission policies are installed and enforced.</li>
+<li>Backups are configured and tested.</li>
+<li>Upgrade validation is done in staging, with <code>RollingUpdate</code> as the default strategy unless you need blue/green cutover control.</li>
+</ol>
+<h2 id="status-checkpoints">Status Checkpoints<a class="headerlink" href="#status-checkpoints" title="Permanent link">&para;</a></h2>
+<p>Use these condition checkpoints before calling a path ready:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Path</th>
+<th style="text-align: left;">Minimum checkpoint</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Hardened with External TLS</td>
+<td style="text-align: left;"><code>Available=True</code>, <code>TLSReady=True</code>, <code>UserAccessBootstrap=True</code>, <code>ProductionReady=True</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Hardened with ACME</td>
+<td style="text-align: left;"><code>Available=True</code>, <code>ACMEIntegrationReady=True</code>, <code>ACMECacheReady=True</code>, <code>UserAccessBootstrap=True</code>, <code>ProductionReady=True</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Gateway exposure</td>
+<td style="text-align: left;"><code>GatewayIntegrationReady=True</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Strict NetworkPolicy clusters</td>
+<td style="text-align: left;"><code>APIServerNetworkReady=True</code> or <code>Unknown</code> with <code>APIServerEndpointIPsRecommended</code> after you confirm the service-VIP path works in your CNI</td>
+</tr>
+<tr>
+<td style="text-align: left;">Scheduled backups</td>
+<td style="text-align: left;"><code>BackupConfigurationReady=True</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Restore before execution</td>
+<td style="text-align: left;"><code>RestoreConfigurationReady=True</code></td>
+</tr>
+</tbody>
+</table>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="../">Recipes Overview</a></li>
-<li><a href="../development-self-init-userpass/">Development Profile with Self-Init and Userpass</a></li>
-<li><a href="../../../openbaorestore/recipes/restore-from-s3-compatible-snapshot/">Restore from an S3-Compatible Snapshot</a></li>
-<li><a href="../../operations/backups/">Backup Operations</a></li>
+<li><a href="../../../architecture/operator-invariants/">Operator Invariants</a></li>
+<li><a href="../../openbaocluster/operations/production-checklist/">Production Checklist</a></li>
+<li><a href="../../openbaotenant/multi-tenancy/">Multi-Tenancy</a></li>
 </ul>
 
 
@@ -4964,10 +5770,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.expand", "navigation.sections", "content.code.copy", "content.code.annotation", "content.tabs.link", "navigation.top"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.expand", "navigation.sections", "content.code.copy", "content.code.annotation", "content.tabs.link", "navigation.top"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   </body>

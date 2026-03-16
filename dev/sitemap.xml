@@ -237,10 +237,6 @@
          <lastmod>2026-03-16</lastmod>
     </url>
     <url>
-         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/deployment-decision-guide/</loc>
-         <lastmod>2026-03-16</lastmod>
-    </url>
-    <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/getting-started/</loc>
          <lastmod>2026-03-16</lastmod>
     </url>
@@ -321,26 +317,6 @@
          <lastmod>2026-03-16</lastmod>
     </url>
     <url>
-         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/</loc>
-         <lastmod>2026-03-16</lastmod>
-    </url>
-    <url>
-         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/development-self-init-userpass/</loc>
-         <lastmod>2026-03-16</lastmod>
-    </url>
-    <url>
-         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/hardened-transit-acme-tls/</loc>
-         <lastmod>2026-03-16</lastmod>
-    </url>
-    <url>
-         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/hardened-transit-external-tls/</loc>
-         <lastmod>2026-03-16</lastmod>
-    </url>
-    <url>
-         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recipes/scheduled-backups-s3-compatible/</loc>
-         <lastmod>2026-03-16</lastmod>
-    </url>
-    <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/recovery/failed-rollback/</loc>
          <lastmod>2026-03-16</lastmod>
     </url>
@@ -369,10 +345,6 @@
          <lastmod>2026-03-16</lastmod>
     </url>
     <url>
-         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaorestore/recipes/restore-from-s3-compatible-snapshot/</loc>
-         <lastmod>2026-03-16</lastmod>
-    </url>
-    <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaotenant/multi-tenancy/</loc>
          <lastmod>2026-03-16</lastmod>
     </url>
@@ -393,6 +365,10 @@
          <lastmod>2026-03-16</lastmod>
     </url>
     <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/deployment-decision-guide/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/identity-and-access/</loc>
          <lastmod>2026-03-16</lastmod>
     </url>
@@ -402,6 +378,98 @@
     </url>
     <url>
          <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/operator/single-tenant-mode/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/cloud/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/local/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/cloud/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/local/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/local/development-self-init-userpass/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/runbooks/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/runbooks/restore-from-s3-compatible-snapshot/</loc>
+         <lastmod>2026-03-16</lastmod>
+    </url>
+    <url>
+         <loc>https://dc-tec.github.io/openbao-operator/latest/user-guide/validated-deployments/runbooks/scheduled-backups-s3-compatible/</loc>
          <lastmod>2026-03-16</lastmod>
     </url>
 </urlset>
