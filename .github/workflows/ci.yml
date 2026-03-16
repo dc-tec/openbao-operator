@@ -2,7 +2,14 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      force_full_e2e:
+        description: Run the full PR E2E suite for the selected ref.
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -19,6 +26,7 @@ jobs:
     name: Detect Changes
     runs-on: &runner ubuntu-24.04
     outputs:
+      manual_full_e2e: ${{ steps.diff.outputs.manual_full_e2e }}
       chart: ${{ steps.diff.outputs.chart }}
       workflow: ${{ steps.diff.outputs.workflow }}
       docs: ${{ steps.diff.outputs.docs }}
@@ -44,6 +52,17 @@ jobs:
 
           head_sha="${GITHUB_SHA}"
           base_sha=""
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "manual_full_e2e=${{ inputs.force_full_e2e && 'true' || 'false' }}" >> "${GITHUB_OUTPUT}"
+            for key in chart workflow docs go_quality go_tests config_compat security_scan e2e e2e_backup e2e_upgrade e2e_hardened; do
+              echo "${key}=false" >> "${GITHUB_OUTPUT}"
+            done
+            echo "::notice::workflow_dispatch run: skipping diff-based routing and using manual inputs."
+            exit 0
+          fi
+
+          echo "manual_full_e2e=false" >> "${GITHUB_OUTPUT}"
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             base_sha="${{ github.event.pull_request.base.sha }}"
@@ -423,7 +442,7 @@ jobs:
   build-artifacts:
     name: Build Artifacts
     needs: changes
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: *runner
     steps:
       - name: Checkout
@@ -450,7 +469,7 @@ jobs:
     name: Build E2E Images Once
     runs-on: *runner
     needs: [changes, build-artifacts]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     permissions:
       contents: read
       packages: write
@@ -562,7 +581,7 @@ jobs:
 
   e2e:
     needs: [changes, build-e2e-images]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     name: E2E (${{ matrix.name }})
     runs-on: *runner
     permissions:
@@ -669,7 +688,7 @@ jobs:
           set -euo pipefail
 
           HAS_E2E_CHANGES="${{ needs.changes.outputs.e2e == 'true' }}"
-          FULL_E2E="${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
+          FULL_E2E="${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
           PR_BACKUP="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'backup') }}"
           PR_UPGRADE="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades') }}"
           PR_HARDENED="${{ github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller')) }}"
@@ -794,6 +813,91 @@ jobs:
           name: ${{ env.E2E_ARTIFACT_NAME }}
           path: artifacts/
           retention-days: 7
+
+  ci-required:
+    name: CI Required
+    runs-on: *runner
+    if: always()
+    needs:
+      - changes
+      - security
+      - dependency-licenses
+      - workflow-lint
+      - lint
+      - verify-fmt
+      - tidy-check
+      - verify-vendor
+      - verify-generated
+      - test-unit
+      - test-integration
+      - openbao-config-compat
+      - docs
+      - helm
+      - helm-e2e-smoke
+      - build-artifacts
+      - build-e2e-images
+      - e2e
+    steps:
+      - name: Validate required CI graph
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          SECURITY: ${{ needs.security.result }}
+          DEPENDENCY_LICENSES: ${{ needs.dependency-licenses.result }}
+          WORKFLOW_LINT: ${{ needs.workflow-lint.result }}
+          LINT: ${{ needs.lint.result }}
+          VERIFY_FMT: ${{ needs.verify-fmt.result }}
+          TIDY_CHECK: ${{ needs.tidy-check.result }}
+          VERIFY_VENDOR: ${{ needs.verify-vendor.result }}
+          VERIFY_GENERATED: ${{ needs.verify-generated.result }}
+          TEST_UNIT: ${{ needs.test-unit.result }}
+          TEST_INTEGRATION: ${{ needs.test-integration.result }}
+          OPENBAO_CONFIG_COMPAT: ${{ needs.openbao-config-compat.result }}
+          DOCS: ${{ needs.docs.result }}
+          HELM: ${{ needs.helm.result }}
+          HELM_E2E_SMOKE: ${{ needs.helm-e2e-smoke.result }}
+          BUILD_ARTIFACTS: ${{ needs.build-artifacts.result }}
+          BUILD_E2E_IMAGES: ${{ needs.build-e2e-images.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          set -euo pipefail
+
+          failures=()
+          while IFS='=' read -r job result; do
+            case "${result}" in
+              success|skipped)
+                ;;
+              *)
+                failures+=("${job}:${result}")
+                ;;
+            esac
+          done <<EOF
+          changes=${CHANGES}
+          security=${SECURITY}
+          dependency-licenses=${DEPENDENCY_LICENSES}
+          workflow-lint=${WORKFLOW_LINT}
+          lint=${LINT}
+          verify-fmt=${VERIFY_FMT}
+          tidy-check=${TIDY_CHECK}
+          verify-vendor=${VERIFY_VENDOR}
+          verify-generated=${VERIFY_GENERATED}
+          test-unit=${TEST_UNIT}
+          test-integration=${TEST_INTEGRATION}
+          openbao-config-compat=${OPENBAO_CONFIG_COMPAT}
+          docs=${DOCS}
+          helm=${HELM}
+          helm-e2e-smoke=${HELM_E2E_SMOKE}
+          build-artifacts=${BUILD_ARTIFACTS}
+          build-e2e-images=${BUILD_E2E_IMAGES}
+          e2e=${E2E}
+          EOF
+
+          if [[ "${#failures[@]}" -gt 0 ]]; then
+            printf 'Required CI graph failures:\n' >&2
+            printf '  - %s\n' "${failures[@]}" >&2
+            exit 1
+          fi
+
+          echo "Required CI graph completed successfully."
 
   prepare-edge-candidate:
     name: Prepare Edge Candidate
