@@ -399,7 +399,7 @@ jobs:
           test -f "dist/rebuild/openbao-operator-${CHART_VERSION}.tgz"
 
       - name: Generate SBOM (primary) - manager
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.build.outputs.manager_digest }}
           format: spdx-json
@@ -410,7 +410,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (primary) - config-init
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
         with:
           image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.build.outputs.config_init_digest }}
           format: spdx-json
@@ -421,7 +421,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (primary) - backup
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
         with:
           image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.build.outputs.backup_executor_digest }}
           format: spdx-json
@@ -432,7 +432,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (primary) - upgrade
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
         with:
           image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.build.outputs.upgrade_executor_digest }}
           format: spdx-json
@@ -443,7 +443,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (rebuild) - manager
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
         with:
           image: ${{ needs.prepare.outputs.manager_image }}@${{ needs.rebuild.outputs.manager_digest }}
           format: spdx-json
@@ -454,7 +454,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (rebuild) - config-init
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
         with:
           image: ${{ needs.prepare.outputs.config_init_image }}@${{ needs.rebuild.outputs.config_init_digest }}
           format: spdx-json
@@ -465,7 +465,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (rebuild) - backup
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
         with:
           image: ${{ needs.prepare.outputs.backup_executor_image }}@${{ needs.rebuild.outputs.backup_executor_digest }}
           format: spdx-json
@@ -476,7 +476,7 @@ jobs:
           registry-password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate SBOM (rebuild) - upgrade
-        uses: anchore/sbom-action@17ae1740179002c89186b61233e0f892c3118b11 # v0.23.0
+        uses: anchore/sbom-action@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
         with:
           image: ${{ needs.prepare.outputs.upgrade_executor_image }}@${{ needs.rebuild.outputs.upgrade_executor_digest }}
           format: spdx-json
@@ -653,7 +653,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download byte-verified assets
-        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-byte-verified-assets
           path: dist
@@ -690,7 +690,7 @@ jobs:
           docker buildx imagetools create -t "${UPGRADE_EXECUTOR_IMAGE}:${VERSION}" "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
         with:
           cosign-release: v3.0.4
 
@@ -924,7 +924,7 @@ jobs:
           python-version: "3.x"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098 # v7.3.1
+        uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
 
       - name: Install dependencies
         run: uv pip install --system mkdocs-material mike
