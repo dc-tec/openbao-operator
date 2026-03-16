@@ -5,8 +5,27 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
+      pr_number:
+        description: Pull request number for concurrency grouping and PR-associated reruns.
+        required: false
+        type: string
       force_full_e2e:
         description: Run the full PR E2E suite for the selected ref.
+        required: false
+        default: false
+        type: boolean
+      force_backup_e2e:
+        description: Run the backup/restore PR E2E shard set.
+        required: false
+        default: false
+        type: boolean
+      force_upgrade_e2e:
+        description: Run the upgrade PR E2E shard set.
+        required: false
+        default: false
+        type: boolean
+      force_hardened_e2e:
+        description: Run the hardened/security PR E2E shard set.
         required: false
         default: false
         type: boolean
@@ -18,7 +37,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || inputs.pr_number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,7 +45,11 @@ jobs:
     name: Detect Changes
     runs-on: &runner ubuntu-24.04
     outputs:
+      manual_e2e_requested: ${{ steps.diff.outputs.manual_e2e_requested }}
       manual_full_e2e: ${{ steps.diff.outputs.manual_full_e2e }}
+      manual_backup_e2e: ${{ steps.diff.outputs.manual_backup_e2e }}
+      manual_upgrade_e2e: ${{ steps.diff.outputs.manual_upgrade_e2e }}
+      manual_hardened_e2e: ${{ steps.diff.outputs.manual_hardened_e2e }}
       chart: ${{ steps.diff.outputs.chart }}
       workflow: ${{ steps.diff.outputs.workflow }}
       docs: ${{ steps.diff.outputs.docs }}
@@ -54,15 +77,27 @@ jobs:
           base_sha=""
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "manual_full_e2e=${{ inputs.force_full_e2e && 'true' || 'false' }}" >> "${GITHUB_OUTPUT}"
-            for key in chart workflow docs go_quality go_tests config_compat security_scan e2e e2e_backup e2e_upgrade e2e_hardened; do
-              echo "${key}=false" >> "${GITHUB_OUTPUT}"
-            done
+            {
+              echo "manual_e2e_requested=${{ (inputs.force_full_e2e || inputs.force_backup_e2e || inputs.force_upgrade_e2e || inputs.force_hardened_e2e) && 'true' || 'false' }}"
+              echo "manual_full_e2e=${{ inputs.force_full_e2e && 'true' || 'false' }}"
+              echo "manual_backup_e2e=${{ inputs.force_backup_e2e && 'true' || 'false' }}"
+              echo "manual_upgrade_e2e=${{ inputs.force_upgrade_e2e && 'true' || 'false' }}"
+              echo "manual_hardened_e2e=${{ inputs.force_hardened_e2e && 'true' || 'false' }}"
+              for key in chart workflow docs go_quality go_tests config_compat security_scan e2e e2e_backup e2e_upgrade e2e_hardened; do
+                echo "${key}=false"
+              done
+            } >> "${GITHUB_OUTPUT}"
             echo "::notice::workflow_dispatch run: skipping diff-based routing and using manual inputs."
             exit 0
           fi
 
-          echo "manual_full_e2e=false" >> "${GITHUB_OUTPUT}"
+          {
+            echo "manual_e2e_requested=false"
+            echo "manual_full_e2e=false"
+            echo "manual_backup_e2e=false"
+            echo "manual_upgrade_e2e=false"
+            echo "manual_hardened_e2e=false"
+          } >> "${GITHUB_OUTPUT}"
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             base_sha="${{ github.event.pull_request.base.sha }}"
@@ -442,7 +477,7 @@ jobs:
   build-artifacts:
     name: Build Artifacts
     needs: changes
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: *runner
     steps:
       - name: Checkout
@@ -469,7 +504,7 @@ jobs:
     name: Build E2E Images Once
     runs-on: *runner
     needs: [changes, build-artifacts]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     permissions:
       contents: read
       packages: write
@@ -581,7 +616,7 @@ jobs:
 
   e2e:
     needs: [changes, build-e2e-images]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     name: E2E (${{ matrix.name }})
     runs-on: *runner
     permissions:
@@ -689,9 +724,9 @@ jobs:
 
           HAS_E2E_CHANGES="${{ needs.changes.outputs.e2e == 'true' }}"
           FULL_E2E="${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
-          PR_BACKUP="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'backup') }}"
-          PR_UPGRADE="${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades') }}"
-          PR_HARDENED="${{ github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller')) }}"
+          PR_BACKUP="${{ needs.changes.outputs.manual_backup_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'backup')) }}"
+          PR_UPGRADE="${{ needs.changes.outputs.manual_upgrade_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades')) }}"
+          PR_HARDENED="${{ needs.changes.outputs.manual_hardened_e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))) }}"
 
           FILTER='${{ matrix.label_filter }}'
           SHOULD_RUN="false"

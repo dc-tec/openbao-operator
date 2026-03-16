@@ -1,0 +1,60 @@
+name: CI Label Dispatch
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-label-dispatch-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    name: Dispatch CI Rerun
+    if: github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && (github.event.label.name == 'ci:full-e2e' || github.event.label.name == 'backup' || github.event.label.name == 'upgrades' || github.event.label.name == 'security' || github.event.label.name == 'provisioner' || github.event.label.name == 'admission' || github.event.label.name == 'controller')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Dispatch CI workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          FORCE_FULL_E2E: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') && 'true' || 'false' }}
+          FORCE_BACKUP_E2E: ${{ contains(github.event.pull_request.labels.*.name, 'backup') && 'true' || 'false' }}
+          FORCE_UPGRADE_E2E: ${{ contains(github.event.pull_request.labels.*.name, 'upgrades') && 'true' || 'false' }}
+          FORCE_HARDENED_E2E: ${{ (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller')) && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+
+          payload_file="$(mktemp)"
+          jq -n \
+            --arg ref "${REF}" \
+            --arg pr_number "${PR_NUMBER}" \
+            --arg force_full_e2e "${FORCE_FULL_E2E}" \
+            --arg force_backup_e2e "${FORCE_BACKUP_E2E}" \
+            --arg force_upgrade_e2e "${FORCE_UPGRADE_E2E}" \
+            --arg force_hardened_e2e "${FORCE_HARDENED_E2E}" \
+            '{
+              ref: $ref,
+              inputs: {
+                pr_number: $pr_number,
+                force_full_e2e: $force_full_e2e,
+                force_backup_e2e: $force_backup_e2e,
+                force_upgrade_e2e: $force_upgrade_e2e,
+                force_hardened_e2e: $force_hardened_e2e
+              }
+            }' > "${payload_file}"
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${REPO}/actions/workflows/ci.yml/dispatches" \
+            --input "${payload_file}"
+
+          echo "Dispatched CI rerun for PR #${PR_NUMBER} on ref ${REF}."
