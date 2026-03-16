@@ -18,13 +18,13 @@ This recipe deploys a production-style `OpenBaoCluster` with:
 ## Prerequisites
 
 - OpenBao Operator is installed in multi-tenant mode with admission policies enabled.
-- A Transit-capable OpenBao instance is reachable from the cluster.
-- The same external OpenBao instance also exposes an ACME directory endpoint.
+- A Transit-capable OpenBao service is reachable from the cluster.
+- The same external OpenBao service also exposes an ACME directory endpoint.
 - You have a Secret payload containing:
   - `token`
   - `ca.crt`
   - `pki-ca.crt`
-- Your external hostname resolves to the ingress controller from inside the cluster.
+- Your ACME hostname resolves to the passthrough edge from the validating environment.
 - Your external exposure layer supports TLS passthrough on port `443`.
 
 ## Inputs
@@ -36,13 +36,16 @@ Replace these values before applying the manifests:
 | `<namespace>` | `openbaocluster-acme` | Tenant namespace for the cluster |
 | `<cluster-name>` | `openbaocluster-acme` | `OpenBaoCluster` name |
 | `<openbao-version>` | `2.5.0` | OpenBao version |
-| `<transit-address>` | `https://infra-bao.openbao-infra.svc:8200` | Transit provider URL |
-| `<acme-directory-url>` | `https://infra-bao.openbao-infra.svc:8200/v1/pki/acme/directory` | ACME directory URL |
+| `<transit-address>` | `https://trust-services.openbao-infra.svc:8200` | Transit provider URL |
+| `<acme-directory-url>` | `https://trust-services.openbao-infra.svc:8200/v1/pki/acme/directory` | ACME directory URL |
 | `<transit-key>` | `openbao-unseal` | Transit key name |
 | `<external-host>` | `bao-acme.example.com` | External DNS name for clients and ACME validation |
 | `<ingress-namespace>` | `default` | Namespace of the ingress controller that forwards traffic to OpenBao |
 | `<transit-namespace>` | `openbao-infra` | Namespace hosting the Transit and ACME provider |
 | `<operator-namespace>` | `openbao-operator-system` | Rendered operator namespace used for centralized tenant onboarding |
+
+!!! note "Validated local implementation"
+    The validated k3d path uses a CoreDNS rewrite so `<external-host>` resolves back to the passthrough edge from inside the cluster. Equivalent DNS approaches are acceptable as long as the hostname resolves correctly for `tls-alpn-01`.
 
 ## Step 1: Create the tenant namespace
 
@@ -84,10 +87,10 @@ The steady-state expectation is `Provisioned=True` on the `OpenBaoTenant`.
 Create the Secret referenced by `spec.unseal.credentialsSecretRef`:
 
 ```bash
-kubectl -n <namespace> create secret generic infra-bao-token \
+kubectl -n <namespace> create secret generic trust-services-token \
   --from-literal=token='<transit-token>' \
-  --from-file=ca.crt=/path/to/infra-bao-ca.crt \
-  --from-file=pki-ca.crt=/path/to/infra-bao-pki-ca.crt
+  --from-file=ca.crt=/path/to/trust-services-ca.crt \
+  --from-file=pki-ca.crt=/path/to/acme-issuer-ca.crt
 ```
 
 !!! note "Expected Secret keys"
@@ -161,7 +164,7 @@ spec:
   unseal:
     type: transit
     credentialsSecretRef:
-      name: infra-bao-token
+      name: trust-services-token
     transit:
       address: "<transit-address>"
       mountPath: "transit"
@@ -284,13 +287,13 @@ curl -sS -k \
 ## Common Failures
 
 - `Degraded=True` with `ACMEGatewayNotConfiguredForPassthrough`: your exposure layer is terminating TLS instead of passing it through.
-- `Degraded=True` with `ACMEDomainNotResolvable`: the configured hostname does not resolve from inside the cluster.
+- `Degraded=True` with `ACMEDomainNotResolvable`: the configured hostname does not resolve for the validator. Verify the DNS path for the ACME hostname.
 - `UserAccessBootstrap=Unknown`: `spec.selfInit.requests` did not give the operator a recognizable human login path.
 - Transit connection failures: verify the Secret keys, Transit token policy, and the CA bundle used by `tlsCACert`.
 - Raft join or probe verification errors with a private ACME CA: verify that `pki-ca.crt` is present in the same Secret and mounted alongside `acmeCARoot`.
 
 ## See Also
 
-- [Gateway API Support](../../configuration/gateway-api.md)
-- [External Access](../../configuration/external-access.md)
-- [Troubleshooting](../../operations/troubleshooting.md)
+- [Gateway API Support](../../../openbaocluster/configuration/gateway-api.md)
+- [External Access](../../../openbaocluster/configuration/external-access.md)
+- [Troubleshooting](../../../openbaocluster/operations/troubleshooting.md)

@@ -2,6 +2,9 @@
 
 The OpenBao Operator supports restoring clusters from snapshots stored in object storage (S3, GCS, Azure) using the `OpenBaoRestore` CRD.
 
+!!! tip "Validated deployment runbooks"
+    For tested restore procedures and snapshot-driven recovery flows, use the runbooks under [Validated Deployments](../validated-deployments/index.md).
+
 !!! danger "DATA OVERWRITE"
     A Restore operation **completely overwrites** the existing data in the target OpenBaoCluster.
 

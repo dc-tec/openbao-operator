@@ -4,6 +4,9 @@ description: Validated reference architecture for a Hardened OpenBao cluster on 
 
 # Amazon EKS Hardened with AWS KMS, Gateway API Passthrough, and ACME
 
+!!! note "Classification"
+    Cloud reference architecture. This is the current production-style Amazon EKS reference shape validated by the project.
+
 This validated architecture describes the hardened Amazon EKS topology exercised during manual cloud validation for OpenBao Operator.
 
 It is the reference shape for:

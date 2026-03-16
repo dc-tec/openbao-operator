@@ -4,7 +4,10 @@ description: Validated local reference architecture for a Development-profile Op
 
 # k3d Development with Shared Edge and RustFS
 
-This validated architecture describes the local k3d development lane used in the project test environment.
+!!! note "Classification"
+    Local reference architecture. k3d is not a production target, but this page documents a realistic and repeatable local Kubernetes model for development, rehearsal, and operator validation.
+
+This validated architecture describes the local k3d development lane used in the project validation environment.
 
 It is the reference shape for:
 
@@ -16,7 +19,7 @@ It is the reference shape for:
 - blue/green upgrades in a local validation lane
 
 !!! success "Validation status"
-    This architecture is grounded in the local k3d validation environment under `openbao-operator-test` and reinforced by the in-repo Development lifecycle, backup, and blue/green E2E coverage.
+    This architecture is grounded in the local k3d validation environment and reinforced by the in-repo Development lifecycle, backup, and blue/green E2E coverage.
 
 !!! warning "Development only"
     This is a low-friction local validation topology. It is not a production architecture.
@@ -101,7 +104,7 @@ This local lane is used for:
 ## Known constraints
 
 - This architecture intentionally keeps `spec.profile: Development`, so `ProductionReady` is not the goal.
-- It relies on local wildcard hostnames under `*.adfinis.test` and the shared test Gateway certificate.
+- It relies on local wildcard hostnames under `*.example.com` and the shared test Gateway certificate.
 - It is a direct local deployment lane, not a GitOps architecture.
 
 ## Related recipe

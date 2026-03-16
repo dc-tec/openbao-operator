@@ -4,6 +4,9 @@ description: Validated reference architecture for a Development-profile OpenBao 
 
 # Amazon EKS Development with AWS KMS and S3 Backups
 
+!!! note "Classification"
+    Cloud reference architecture. This is a realistic cloud validation and bring-up topology, but it is intentionally a `Development` profile lane rather than a production target.
+
 This validated architecture describes the development and manual-validation lane exercised on Amazon EKS for OpenBao Operator.
 
 It is the reference shape for:

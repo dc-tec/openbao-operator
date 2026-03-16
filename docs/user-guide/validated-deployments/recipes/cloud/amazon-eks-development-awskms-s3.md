@@ -282,6 +282,6 @@ kubectl -n <namespace> get openbaocluster <cluster-name> \
 
 ## See Also
 
-- [Gateway API Support](../../configuration/gateway-api.md)
-- [Backups](../../operations/backups.md)
-- [Self-Initialization](../../configuration/self-init.md)
+- [Gateway API Support](../../../openbaocluster/configuration/gateway-api.md)
+- [Backups](../../../openbaocluster/operations/backups.md)
+- [Self-Initialization](../../../openbaocluster/configuration/self-init.md)

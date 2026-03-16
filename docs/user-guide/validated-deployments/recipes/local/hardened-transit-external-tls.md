@@ -34,7 +34,7 @@ Replace these values before applying the manifests:
 | `<namespace>` | `openbaocluster-hardened` | Tenant namespace for the cluster |
 | `<cluster-name>` | `openbaocluster-hardened` | `OpenBaoCluster` name |
 | `<openbao-version>` | `2.5.0` | OpenBao version |
-| `<transit-address>` | `https://infra-bao.openbao-infra.svc:8200` | Transit provider URL |
+| `<transit-address>` | `https://transit-provider.openbao-infra.svc:8200` | Transit provider URL |
 | `<transit-key>` | `openbao-unseal` | Transit key name |
 | `<external-host>` | `bao-hardened.example.com` | External DNS name for clients |
 | `<ingress-namespace>` | `default` | Namespace of the ingress controller that forwards traffic to OpenBao |
@@ -81,9 +81,9 @@ The steady-state expectation is `Provisioned=True` on the `OpenBaoTenant`.
 Create the Secret referenced by `spec.unseal.credentialsSecretRef`:
 
 ```bash
-kubectl -n <namespace> create secret generic infra-bao-token \
+kubectl -n <namespace> create secret generic transit-provider-token \
   --from-literal=token='<transit-token>' \
-  --from-file=ca.crt=/path/to/infra-bao-ca.crt
+  --from-file=ca.crt=/path/to/transit-provider-ca.crt
 ```
 
 !!! note "Expected Secret keys"
@@ -190,7 +190,7 @@ spec:
   unseal:
     type: transit
     credentialsSecretRef:
-      name: infra-bao-token
+      name: transit-provider-token
     transit:
       address: "<transit-address>"
       mountPath: "transit"
@@ -249,7 +249,7 @@ spec:
 ```
 
 !!! warning "API server endpoint IPs"
-    If your CNI enforces egress on post-DNAT traffic, you may also need `spec.network.apiServerEndpointIPs`. See [Network Configuration](../../configuration/network.md).
+    If your CNI enforces egress on post-DNAT traffic, you may also need `spec.network.apiServerEndpointIPs`. See [Network Configuration](../../../openbaocluster/configuration/network.md).
 
 ## Step 5: Expose the cluster (validated local path)
 
@@ -339,6 +339,6 @@ curl -sS -k \
 
 ## See Also
 
-- [Security Profiles](../../configuration/security-profiles.md)
-- [Self-Initialization](../../configuration/self-init.md)
+- [Security Profiles](../../../openbaocluster/configuration/security-profiles.md)
+- [Self-Initialization](../../../openbaocluster/configuration/self-init.md)
 - [Status Conditions and Events](../../../../reference/status-and-events.md)

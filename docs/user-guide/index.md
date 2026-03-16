@@ -59,7 +59,7 @@ This guide covers everything you need to know to successfully operate OpenBao on
 ## Advanced Topics
 
 - [**Deployment Decision Guide**](deployment-decision-guide.md) – Choose the default path for tenancy, security posture, bootstrap, TLS, and upgrades.
-- [**Step-by-Step Recipes**](openbaocluster/recipes/index.md) – Follow validated recipes for development bootstrap, backups, restore, and Hardened deployment paths.
+- [**Validated Deployments**](validated-deployments/index.md) – Use tested architectures, deployment recipes, and runbooks for bootstrap, backup, restore, and disaster recovery.
 - [**Architecture**](../architecture/index.md) – Understand the internal controller design.
 - [**Security Model**](../security/index.md) – Learn about the zero-trust security model.
 - [**Troubleshooting**](openbaocluster/operations/troubleshooting.md) – Common issues and remediation steps.

@@ -265,6 +265,6 @@ curl -sS -k \
 ## See Also
 
 - [Recipes Overview](../index.md)
-- [Scheduled Backups to S3-Compatible Storage](../operations/scheduled-backups-s3-compatible.md)
-- [Security Profiles](../../configuration/security-profiles.md)
-- [Self-Initialization](../../configuration/self-init.md)
+- [Scheduled Backups to S3-Compatible Storage](../../runbooks/scheduled-backups-s3-compatible.md)
+- [Security Profiles](../../../openbaocluster/configuration/security-profiles.md)
+- [Self-Initialization](../../../openbaocluster/configuration/self-init.md)

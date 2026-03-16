@@ -34,4 +34,12 @@ The current scope matches the local lanes exercised in the project test environm
 
     [:material-arrow-right: Open Recipe](hardened-transit-acme-tls.md)
 
+- :material-backup-restore: **Cross-Cluster DR Bootstrap**
+
+    ---
+
+    Bootstrap the validated local DR proving ground with shared Transit auto-unseal, RustFS snapshots, and multiple k3d clusters.
+
+    [:material-arrow-right: Open Recipe](k3d-cross-cluster-dr-bootstrap.md)
+
 </div>

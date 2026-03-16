@@ -4,18 +4,21 @@ description: Validated local reference architecture for a Hardened OpenBao clust
 
 # k3d Hardened with Transit and External TLS
 
+!!! note "Classification"
+    Local reference architecture. k3d is not the target runtime for production, but this lane is the closest validated local analogue to a hardened deployment with an external seal provider and externally managed certificates.
+
 This validated architecture describes the hardened local k3d lane that uses Transit auto-unseal and externally managed TLS Secrets.
 
 It is the reference shape for:
 
 - `spec.profile: Hardened`
-- Transit auto-unseal through the local `infra-bao` dependency
+- Transit auto-unseal through a shared external OpenBao service
 - `spec.tls.mode: External`
 - user-managed TCP passthrough through Traefik CRDs
 - JWT bootstrap for Operator access and human admin access
 
 !!! success "Validation status"
-    This architecture matches the hardened local validation lane in `openbao-operator-test` and aligns with the Hardened external-TLS lifecycle covered by the in-repo E2E suite.
+    This architecture matches the hardened local validation lane in the project validation environment and aligns with the Hardened external-TLS lifecycle covered by the in-repo E2E suite.
 
 ## Intended use
 
@@ -36,7 +39,7 @@ flowchart LR
 
     Operator["OpenBao Operator"] -->|"JWT bootstrap"| Bao
     AdminSA["Admin ServiceAccount token"] -->|"JWT login"| Bao
-    Bao -->|"Transit encrypt/decrypt"| Infra["infra-bao"]
+    Bao -->|"Transit encrypt/decrypt"| Infra["Shared Transit Provider"]
     CertMgr["cert-manager"] -->|"TLS Secret issuance"| TLS["External TLS Secrets"]
     TLS --> Bao
 
@@ -51,9 +54,9 @@ flowchart LR
 
 ## Architecture decisions
 
-### Transit dependency stays local
+### Transit dependency stays external
 
-The hardened local lane uses `infra-bao` as the Transit provider so the unseal flow is realistic without needing an external cloud KMS.
+The hardened local lane uses a shared external OpenBao service as the Transit provider so the unseal flow is realistic without needing a cloud KMS.
 
 ### External TLS stays separate from the Operator
 
@@ -68,7 +71,7 @@ This architecture uses a Traefik `IngressRouteTCP` instead of `spec.gateway`. Th
 Keep these assumptions if you want to stay on the validated path:
 
 - Use `spec.profile: Hardened`.
-- Keep Transit reachable through `infra-bao`.
+- Keep the shared Transit provider reachable.
 - Keep `tls.mode: External`.
 - Provide the expected CA and server Secrets before or alongside the cluster.
 - Keep the passthrough route managed outside `spec.gateway`.
@@ -79,13 +82,13 @@ Keep these assumptions if you want to stay on the validated path:
 This local lane is used for:
 
 - Hardened cluster bootstrap with self-init
-- Transit auto-unseal through `infra-bao`
+- Transit auto-unseal through a shared external OpenBao service
 - JWT login for a human admin `ServiceAccount`
 - passthrough external access with externally managed TLS Secrets
 
 ## Known constraints
 
-- This architecture depends on the local `infra-bao` dependency being present and reachable.
+- This architecture depends on the shared Transit provider being present and reachable.
 - `GatewayIntegrationReady` is not the primary success signal because the passthrough path is user-managed.
 - It is a local validation architecture, not a cloud or GitOps reference.
 

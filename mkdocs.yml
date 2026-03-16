@@ -108,12 +108,6 @@ nav:
                       - Overview: user-guide/openbaocluster/overview.md
                       - Getting Started: user-guide/openbaocluster/getting-started.md
                       - Next Steps: user-guide/openbaocluster/next-steps.md
-                      - Recipes:
-                              - Overview: user-guide/openbaocluster/recipes/index.md
-                              - Development + Self-Init + Userpass: user-guide/openbaocluster/recipes/development-self-init-userpass.md
-                              - Scheduled Backups to S3-Compatible Storage: user-guide/openbaocluster/recipes/scheduled-backups-s3-compatible.md
-                              - Hardened + Transit + External TLS: user-guide/openbaocluster/recipes/hardened-transit-external-tls.md
-                              - Hardened + Transit + ACME TLS: user-guide/openbaocluster/recipes/hardened-transit-acme-tls.md
                       - Configuration:
                               - Security Profiles: user-guide/openbaocluster/configuration/security-profiles.md
                               - Self-Initialization: user-guide/openbaocluster/configuration/self-init.md
@@ -141,8 +135,38 @@ nav:
               - OpenBaoRestore:
                       - Overview: user-guide/openbaorestore/overview.md
                       - Restore: user-guide/openbaorestore/restore.md
-                      - Restore from S3-Compatible Snapshot: user-guide/openbaorestore/recipes/restore-from-s3-compatible-snapshot.md
                       - Restore After Partial Upgrade: user-guide/openbaorestore/recovery-restore-after-upgrade.md
+              - Validated Deployments:
+                      - Overview: user-guide/validated-deployments/index.md
+                      - Architectures:
+                              - Overview: user-guide/validated-deployments/architectures/index.md
+                              - Cloud:
+                                      - Overview: user-guide/validated-deployments/architectures/cloud/index.md
+                                      - Amazon EKS Development + AWS KMS + S3: user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3.md
+                                      - Amazon EKS Hardened + AWS KMS + ACME: user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme.md
+                              - Local:
+                                      - Overview: user-guide/validated-deployments/architectures/local/index.md
+                                      - k3d Development with Shared Edge and RustFS: user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs.md
+                                      - k3d Hardened with Transit and External TLS: user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls.md
+                                      - k3d Hardened with Transit and Internal ACME: user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme.md
+                                      - k3d Cross-Cluster DR with Shared Transit and RustFS: user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs.md
+                      - Recipes:
+                              - Overview: user-guide/validated-deployments/recipes/index.md
+                              - Cloud:
+                                      - Overview: user-guide/validated-deployments/recipes/cloud/index.md
+                                      - Amazon EKS Development + AWS KMS + S3: user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3.md
+                                      - Amazon EKS Hardened + AWS KMS + ACME: user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme.md
+                              - Local:
+                                      - Overview: user-guide/validated-deployments/recipes/local/index.md
+                                      - Development + Self-Init + Userpass: user-guide/validated-deployments/recipes/local/development-self-init-userpass.md
+                                      - Hardened + Transit + External TLS: user-guide/validated-deployments/recipes/local/hardened-transit-external-tls.md
+                                      - Hardened + Transit + ACME TLS: user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls.md
+                                      - k3d Cross-Cluster DR Bootstrap: user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap.md
+                      - Runbooks:
+                              - Overview: user-guide/validated-deployments/runbooks/index.md
+                              - Scheduled Backups to S3-Compatible Storage: user-guide/validated-deployments/runbooks/scheduled-backups-s3-compatible.md
+                              - Restore from S3-Compatible Snapshot: user-guide/validated-deployments/runbooks/restore-from-s3-compatible-snapshot.md
+                              - Cross-Cluster DR Restore with RustFS: user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs.md
       - Architecture:
               - Overview: architecture/index.md
               - Operator Invariants: architecture/operator-invariants.md
