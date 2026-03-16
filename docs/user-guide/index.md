@@ -14,7 +14,7 @@ This guide covers everything you need to know to successfully operate OpenBao on
 
     Pick the default operating model for tenancy, security posture, bootstrap, TLS, and upgrades.
 
-    [:material-arrow-right: Decision Guide](deployment-decision-guide.md)
+    [:material-arrow-right: Decision Guide](operator/deployment-decision-guide.md)
 
 - :material-download: **2. Install Operator**
 
@@ -58,7 +58,7 @@ This guide covers everything you need to know to successfully operate OpenBao on
 
 ## Advanced Topics
 
-- [**Deployment Decision Guide**](deployment-decision-guide.md) – Choose the default path for tenancy, security posture, bootstrap, TLS, and upgrades.
+- [**Deployment Decision Guide**](operator/deployment-decision-guide.md) – Choose the default path for tenancy, security posture, bootstrap, TLS, and upgrades.
 - [**Validated Deployments**](validated-deployments/index.md) – Use tested architectures, deployment recipes, and runbooks for bootstrap, backup, restore, and disaster recovery.
 - [**Architecture**](../architecture/index.md) – Understand the internal controller design.
 - [**Security Model**](../security/index.md) – Learn about the zero-trust security model.

@@ -22,14 +22,14 @@ Use this guide to choose the default operating path for OpenBao Operator. Start 
 
 | Decision | Default choice | Choose the alternative when | Tradeoff | Reference |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tenancy model** | **Multi-Tenant** | Use **Single-Tenant** when one team owns one namespace and you intentionally want direct namespace-scoped operator control. | Single-tenant is simpler, but it does not use the default namespace-introduction model. | [Single-Tenant Mode](operator/single-tenant-mode.md) |
-| **Security profile** | **Hardened** | Use **Development** only for local testing, CI, or short-lived evaluation environments. | Development relaxes bootstrap and transport guardrails and is highly discouraged for production. | [Security Profiles](openbaocluster/configuration/security-profiles.md) |
-| **Bootstrap flow** | **Self-Init** | Use manual bootstrap only for compatibility or controlled break-glass workflows. | Manual bootstrap stores a root token Secret and is not a supported production path. | [Self-Initialization](openbaocluster/configuration/self-init.md) |
-| **TLS mode** | **External** or **ACME** | Use `OperatorManaged` only in non-Hardened environments where internal PKI convenience matters more than production trust requirements. | `OperatorManaged` TLS is rejected for Hardened clusters and is not a production path there. | [TLS & Identity](../security/workload/tls.md) |
-| **Installation path** | **Helm** | Use raw manifests when you need install-time identity customization, local overlay control, or source-based rendering. | Helm is easier to keep consistent. Raw manifests require you to choose the right overlay and verify rendered identities. | [Operator Installation](operator/installation.md) |
-| **Admission posture** | **Admission policies enabled** | Disable admission policies only for development or break-glass recovery. | Disabling them enters unsafe mode and removes part of the normal safety model. | [Admission Policies](../security/infrastructure/admission-policies.md) |
-| **Upgrade strategy** | **RollingUpdate** | Use **BlueGreen** when you need parallel validation, manual promotion, or stronger cutover boundaries. | Blue/green uses more resources and adds operational complexity. | [Cluster Upgrades](openbaocluster/operations/upgrades.md) |
-| **Platform mode** | **Auto-detection** | Use explicit OpenShift mode when the target cluster is OpenShift or when SCC-compatible rendering must be explicit. | Explicit platform selection gives you predictable rendering, but you still need target-cluster validation for the exact SCC and platform behavior you rely on. | [Operator Installation](operator/installation.md) |
+| **Tenancy model** | **Multi-Tenant** | Use **Single-Tenant** when one team owns one namespace and you intentionally want direct namespace-scoped operator control. | Single-tenant is simpler, but it does not use the default namespace-introduction model. | [Single-Tenant Mode](single-tenant-mode.md) |
+| **Security profile** | **Hardened** | Use **Development** only for local testing, CI, or short-lived evaluation environments. | Development relaxes bootstrap and transport guardrails and is highly discouraged for production. | [Security Profiles](../openbaocluster/configuration/security-profiles.md) |
+| **Bootstrap flow** | **Self-Init** | Use manual bootstrap only for compatibility or controlled break-glass workflows. | Manual bootstrap stores a root token Secret and is not a supported production path. | [Self-Initialization](../openbaocluster/configuration/self-init.md) |
+| **TLS mode** | **External** or **ACME** | Use `OperatorManaged` only in non-Hardened environments where internal PKI convenience matters more than production trust requirements. | `OperatorManaged` TLS is rejected for Hardened clusters and is not a production path there. | [TLS & Identity](../../security/workload/tls.md) |
+| **Installation path** | **Helm** | Use raw manifests when you need install-time identity customization, local overlay control, or source-based rendering. | Helm is easier to keep consistent. Raw manifests require you to choose the right overlay and verify rendered identities. | [Operator Installation](installation.md) |
+| **Admission posture** | **Admission policies enabled** | Disable admission policies only for development or break-glass recovery. | Disabling them enters unsafe mode and removes part of the normal safety model. | [Admission Policies](../../security/infrastructure/admission-policies.md) |
+| **Upgrade strategy** | **RollingUpdate** | Use **BlueGreen** when you need parallel validation, manual promotion, or stronger cutover boundaries. | Blue/green uses more resources and adds operational complexity. | [Cluster Upgrades](../openbaocluster/operations/upgrades.md) |
+| **Platform mode** | **Auto-detection** | Use explicit OpenShift mode when the target cluster is OpenShift or when SCC-compatible rendering must be explicit. | Explicit platform selection gives you predictable rendering, but you still need target-cluster validation for the exact SCC and platform behavior you rely on. | [Operator Installation](installation.md) |
 
 ## Recommended Profiles
 
@@ -91,6 +91,6 @@ Use these condition checkpoints before calling a path ready:
 
 ## See Also
 
-- [Operator Invariants](../architecture/operator-invariants.md)
-- [Production Checklist](openbaocluster/operations/production-checklist.md)
-- [Multi-Tenancy](openbaotenant/multi-tenancy.md)
+- [Operator Invariants](../../architecture/operator-invariants.md)
+- [Production Checklist](../openbaocluster/operations/production-checklist.md)
+- [Multi-Tenancy](../openbaotenant/multi-tenancy.md)
