@@ -63,5 +63,5 @@ This page defines the cross-cutting guarantees OpenBao Operator tries to preserv
 ## See Also
 
 - [Architecture Overview](index.md)
-- [Deployment Decision Guide](../user-guide/deployment-decision-guide.md)
+- [Deployment Decision Guide](../user-guide/operator/deployment-decision-guide.md)
 - [Security Overview](../security/index.md)

@@ -183,6 +183,10 @@ For ACME clusters, also check `ACMEIntegrationReady` and `ACMECacheReady`. Gatew
 
 ## Blue/Green Upgrade Integration
 
-When combining Gateway API with [Blue/Green upgrades](../operations/upgrades.md), the Operator keeps the generated Gateway route stable by targeting the cluster's main external Service (`<cluster>-public`).
+When combining Gateway API with [Blue/Green upgrades](../operations/upgrades.md), the Operator keeps the generated Gateway route stable by targeting the cluster's external Service for the selected TLS mode:
 
-This applies to both `TLSRoute` passthrough and `HTTPRoute` termination. During cutover, the operator updates that Service's selector to point at the Green revision.
+- `HTTPRoute` termination targets the main external Service (`<cluster>-public`)
+- `TLSRoute` passthrough with `tls.mode: ACME` targets the dedicated ACME Service (`<cluster>-acme`)
+- other `TLSRoute` passthrough deployments target the main external Service (`<cluster>-public`)
+
+During cutover, the operator updates the relevant Service selector to point at the Green revision.

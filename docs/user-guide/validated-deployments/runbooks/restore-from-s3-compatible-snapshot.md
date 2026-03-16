@@ -25,7 +25,7 @@ This recipe restores a cluster from an existing snapshot with:
 - No other long-running operation should be active unless you intentionally use restore break-glass options.
 
 !!! tip "Recommended starting point"
-    If you need a matching source snapshot first, follow [Scheduled Backups to S3-Compatible Storage](../../openbaocluster/recipes/scheduled-backups-s3-compatible.md).
+    If you need a matching source snapshot first, follow [Scheduled Backups to S3-Compatible Storage](scheduled-backups-s3-compatible.md).
 
 ## Inputs
 
@@ -145,7 +145,7 @@ kubectl -n <namespace> get openbaocluster <cluster-name> \
 If you restored a snapshot taken from the same Development cluster, verify access again:
 
 - Use the restored `userpass` credentials in the UI.
-- Repeat the JWT login flow from [Development Profile with Self-Init and Userpass](../../openbaocluster/recipes/development-self-init-userpass.md).
+- Repeat the JWT login flow from [Development Profile with Self-Init and Userpass](../recipes/local/development-self-init-userpass.md).
 
 ## Common Failures
 
@@ -157,6 +157,6 @@ If you restored a snapshot taken from the same Development cluster, verify acces
 
 ## See Also
 
-- [Scheduled Backups to S3-Compatible Storage](../../openbaocluster/recipes/scheduled-backups-s3-compatible.md)
-- [Restore Operations](../restore.md)
-- [Restore After Partial Upgrade](../recovery-restore-after-upgrade.md)
+- [Scheduled Backups to S3-Compatible Storage](scheduled-backups-s3-compatible.md)
+- [Restore Operations](../../openbaorestore/restore.md)
+- [Restore After Partial Upgrade](../../openbaorestore/recovery-restore-after-upgrade.md)

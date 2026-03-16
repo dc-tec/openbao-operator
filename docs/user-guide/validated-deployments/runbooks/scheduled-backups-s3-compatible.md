@@ -23,7 +23,7 @@ This recipe adds scheduled backups to an existing `OpenBaoCluster` with:
 - If your environment restricts egress, backup Jobs can reach the storage endpoint.
 
 !!! tip "Recommended starting point"
-    If you do not have a cluster yet, start with [Development Profile with Self-Init and Userpass](development-self-init-userpass.md).
+    If you do not have a cluster yet, start with [Development Profile with Self-Init and Userpass](../recipes/local/development-self-init-userpass.md).
 
 ## Inputs
 
@@ -155,7 +155,7 @@ This is the manual backup path exercised by the E2E suite.
 
 ## See Also
 
-- [Recipes Overview](index.md)
-- [Development Profile with Self-Init and Userpass](development-self-init-userpass.md)
-- [Restore from an S3-Compatible Snapshot](../../openbaorestore/recipes/restore-from-s3-compatible-snapshot.md)
-- [Backup Operations](../operations/backups.md)
+- [Recipes Overview](../index.md)
+- [Development Profile with Self-Init and Userpass](../recipes/local/development-self-init-userpass.md)
+- [Restore from an S3-Compatible Snapshot](restore-from-s3-compatible-snapshot.md)
+- [Backup Operations](../../openbaocluster/operations/backups.md)
