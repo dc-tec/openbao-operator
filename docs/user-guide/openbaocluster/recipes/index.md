@@ -1,51 +1,45 @@
 ---
-description: Step-by-step, validated recipes for development, backup, restore, and Hardened OpenBao cluster deployments.
+description: Step-by-step OpenBaoCluster recipes grouped by environment, operating model, and day-2 workflow type.
 ---
 
 # Recipes
 
 These recipes are grounded in the project's manual validation environment. Use them when you want a complete, step-by-step flow instead of a feature reference page.
 
+If you want the tested topology, invariants, and validation scope first, start with [Validated Architectures](../architectures/index.md).
+
 <div class="grid cards" markdown>
 
-- :material-test-tube: **Development Bootstrap**
+- :material-cloud-outline: **Cloud**
 
     ---
 
-    Create a Development-profile cluster with self-init, Operator-managed TLS, `userpass`, and JWT login.
+    Cloud deployment flows, starting with the validated Amazon EKS development and hardened lanes.
 
-    [:material-arrow-right: Open Recipe](development-self-init-userpass.md)
+    [:material-arrow-right: Open Category](cloud/index.md)
 
-- :material-content-save: **Scheduled Backups**
-
-    ---
-
-    Add scheduled backups to S3-compatible storage and verify snapshot keys in cluster status.
-
-    [:material-arrow-right: Open Recipe](scheduled-backups-s3-compatible.md)
-
-- :material-restore: **Restore from Snapshot**
+- :material-laptop: **Local**
 
     ---
 
-    Restore a cluster from an S3-compatible snapshot using the `OpenBaoRestore` CRD.
+    Local development and validation flows, including self-init, Hardened, and passthrough examples.
 
-    [:material-arrow-right: Open Recipe](../../openbaorestore/recipes/restore-from-s3-compatible-snapshot.md)
+    [:material-arrow-right: Open Category](local/index.md)
 
-- :material-shield-check: **Hardened with External TLS**
-
-    ---
-
-    Deploy a Hardened cluster with Transit auto-unseal, self-init, and externally managed TLS Secrets.
-
-    [:material-arrow-right: Open Recipe](hardened-transit-external-tls.md)
-
-- :material-certificate-outline: **Hardened with ACME TLS**
+- :material-source-branch: **GitOps**
 
     ---
 
-    Deploy a Hardened cluster with Transit auto-unseal and OpenBao-managed ACME certificates.
+    GitOps-oriented flows where ArgoCD or a similar control plane is the operating model.
 
-    [:material-arrow-right: Open Recipe](hardened-transit-acme-tls.md)
+    [:material-arrow-right: Open Category](gitops/index.md)
+
+- :material-wrench: **Operations**
+
+    ---
+
+    Day-2 workflows such as scheduled backups and snapshot-driven restore procedures.
+
+    [:material-arrow-right: Open Category](operations/index.md)
 
 </div>

@@ -1,31 +1,29 @@
 ---
-description: Step-by-step recipe for a Hardened OpenBao cluster using Transit auto-unseal, an internal ACME CA, self-init, and validated local TLS passthrough.
+description: Step-by-step recipe for a Hardened OpenBao cluster using Transit auto-unseal, self-init, externally managed TLS Secrets, and validated local passthrough access.
 ---
 
-# Hardened Transit with ACME TLS
+# Hardened Transit with External TLS
 
 This recipe deploys a production-style `OpenBaoCluster` with:
 
 - `spec.profile: Hardened`
 - Transit auto-unseal
-- `spec.tls.mode: ACME`
+- `spec.tls.mode: External`
 - `spec.selfInit.enabled: true`
 - JWT login for a human admin `ServiceAccount`
 
 !!! success "Validated by E2E"
-    This recipe follows the ACME TLS lifecycle covered by the in-repo E2E suite, especially the `ACME TLS (OpenBao native ACME client)` suite. That suite validates private ACME CA trust material, Transit auto-unseal, ACME readiness, and certificate verification.
+    This recipe follows the Hardened profile lifecycle covered by the in-repo E2E suite, especially the `Hardened profile (External TLS + Transit auto-unseal + SelfInit)` suite. That suite validates tenant onboarding, external TLS Secrets, Transit auto-unseal, self-init, and rolling or blue/green upgrades.
 
 ## Prerequisites
 
 - OpenBao Operator is installed in multi-tenant mode with admission policies enabled.
+- cert-manager is installed.
 - A Transit-capable OpenBao instance is reachable from the cluster.
-- The same external OpenBao instance also exposes an ACME directory endpoint.
-- You have a Secret payload containing:
-  - `token`
-  - `ca.crt`
-  - `pki-ca.crt`
-- Your external hostname resolves to the ingress controller from inside the cluster.
-- Your external exposure layer supports TLS passthrough on port `443`.
+- You have a Transit token with `update` access to:
+  - `transit/encrypt/<key-name>`
+  - `transit/decrypt/<key-name>`
+- You know the namespace used by your ingress controller if you plan to expose the cluster externally.
 
 ## Inputs
 
@@ -33,15 +31,14 @@ Replace these values before applying the manifests:
 
 | Placeholder | Example | Purpose |
 | :--- | :--- | :--- |
-| `<namespace>` | `openbaocluster-acme` | Tenant namespace for the cluster |
-| `<cluster-name>` | `openbaocluster-acme` | `OpenBaoCluster` name |
+| `<namespace>` | `openbaocluster-hardened` | Tenant namespace for the cluster |
+| `<cluster-name>` | `openbaocluster-hardened` | `OpenBaoCluster` name |
 | `<openbao-version>` | `2.5.0` | OpenBao version |
 | `<transit-address>` | `https://infra-bao.openbao-infra.svc:8200` | Transit provider URL |
-| `<acme-directory-url>` | `https://infra-bao.openbao-infra.svc:8200/v1/pki/acme/directory` | ACME directory URL |
 | `<transit-key>` | `openbao-unseal` | Transit key name |
-| `<external-host>` | `bao-acme.example.com` | External DNS name for clients and ACME validation |
+| `<external-host>` | `bao-hardened.example.com` | External DNS name for clients |
 | `<ingress-namespace>` | `default` | Namespace of the ingress controller that forwards traffic to OpenBao |
-| `<transit-namespace>` | `openbao-infra` | Namespace hosting the Transit and ACME provider |
+| `<transit-namespace>` | `openbao-infra` | Namespace hosting the Transit provider |
 | `<operator-namespace>` | `openbao-operator-system` | Rendered operator namespace used for centralized tenant onboarding |
 
 ## Step 1: Create the tenant namespace
@@ -79,48 +76,87 @@ kubectl -n <operator-namespace> describe openbaotenant <cluster-name>-tenant
 
 The steady-state expectation is `Provisioned=True` on the `OpenBaoTenant`.
 
-## Step 2: Create the Transit and ACME trust Secret
+## Step 2: Create the Transit credential Secret
 
 Create the Secret referenced by `spec.unseal.credentialsSecretRef`:
 
 ```bash
 kubectl -n <namespace> create secret generic infra-bao-token \
   --from-literal=token='<transit-token>' \
-  --from-file=ca.crt=/path/to/infra-bao-ca.crt \
-  --from-file=pki-ca.crt=/path/to/infra-bao-pki-ca.crt
+  --from-file=ca.crt=/path/to/infra-bao-ca.crt
 ```
 
 !!! note "Expected Secret keys"
     For the validated path, the Secret contains:
 
     - `token`: Transit token used as `VAULT_TOKEN`
-    - `ca.crt`: CA bundle for the Transit and ACME directory endpoint
-    - `pki-ca.crt`: CA bundle that signs the ACME-issued leaf certificates
+    - `ca.crt`: CA bundle used as `VAULT_CACERT`
 
-## Step 3: Expose the ACME challenge Service with passthrough
+## Step 3: Create the External TLS Secrets
 
-The validated local path uses Traefik TCP passthrough so OpenBao can terminate TLS itself:
+For the validated local path, use cert-manager to create the Secrets expected by `tls.mode: External`.
 
 ```yaml
-apiVersion: traefik.io/v1alpha1
-kind: IngressRouteTCP
+apiVersion: cert-manager.io/v1
+kind: Issuer
 metadata:
-  name: bao-acme
+  name: <cluster-name>-selfsigned-issuer
   namespace: <namespace>
 spec:
-  entryPoints:
-    - websecure
-  routes:
-    - match: HostSNI(`<external-host>`)
-      services:
-        - name: <cluster-name>-acme
-          port: 443
-  tls:
-    passthrough: true
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: <cluster-name>-tls-ca
+  namespace: <namespace>
+spec:
+  secretName: <cluster-name>-tls-ca
+  commonName: <cluster-name>-ca
+  isCA: true
+  issuerRef:
+    kind: Issuer
+    name: <cluster-name>-selfsigned-issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: <cluster-name>-ca-issuer
+  namespace: <namespace>
+spec:
+  ca:
+    secretName: <cluster-name>-tls-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: <cluster-name>-tls-server
+  namespace: <namespace>
+spec:
+  secretName: <cluster-name>-tls-server
+  dnsNames:
+    - <external-host>
+    - openbao-cluster-<cluster-name>.local
+    - <cluster-name>.<namespace>.svc
+    - "*.<cluster-name>.<namespace>.svc"
+    - <cluster-name>-public.<namespace>.svc
+  issuerRef:
+    kind: Issuer
+    name: <cluster-name>-ca-issuer
 ```
 
-!!! warning "Passthrough is required"
-    `tls.mode: ACME` requires TLS passthrough. If your Gateway or ingress controller terminates TLS first, OpenBao cannot complete ACME challenges.
+Wait for the certificates to become ready:
+
+```bash
+kubectl -n <namespace> wait certificate/<cluster-name>-tls-ca --for=condition=Ready --timeout=5m
+kubectl -n <namespace> wait certificate/<cluster-name>-tls-server --for=condition=Ready --timeout=5m
+```
+
+!!! note "Corporate PKI"
+    If you already use cert-manager with a corporate issuer, replace the self-signed Issuer objects and keep the Secret names:
+
+    - `<cluster-name>-tls-ca`
+    - `<cluster-name>-tls-server`
 
 ## Step 4: Apply the OpenBaoCluster
 
@@ -143,20 +179,13 @@ spec:
 
   tls:
     enabled: true
-    mode: ACME
-    acme:
-      directoryURL: "<acme-directory-url>"
-      domains:
-        - "<cluster-name>-acme.<namespace>.svc"
-        - "<external-host>"
-      email: "admin@example.invalid"
+    mode: External
 
   configuration:
     logLevel: "info"
     ui: true
     logging:
       format: "json"
-    acmeCARoot: "/etc/bao/seal-creds/ca.crt"
 
   unseal:
     type: transit
@@ -219,8 +248,32 @@ spec:
             port: 8200
 ```
 
-!!! note "Internal `.svc` domain"
-    The first entry in `spec.tls.acme.domains` is intentional. For the validated local path, the internal `.svc` hostname gives OpenBao a stable SNI and Raft join target while the external hostname remains present in the certificate SANs.
+!!! warning "API server endpoint IPs"
+    If your CNI enforces egress on post-DNAT traffic, you may also need `spec.network.apiServerEndpointIPs`. See [Network Configuration](../../configuration/network.md).
+
+## Step 5: Expose the cluster (validated local path)
+
+For the validated local path, Traefik exposes the OpenBao public Service through TCP passthrough:
+
+```yaml
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: bao-hardened
+  namespace: <namespace>
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: HostSNI(`<external-host>`)
+      services:
+        - name: <cluster-name>-public
+          port: 8200
+  tls:
+    passthrough: true
+```
+
+If you use Gateway API instead, keep the `OpenBaoCluster` manifest and replace this Traefik resource with your own passthrough route or terminating Gateway configuration.
 
 ## Operations
 
@@ -236,34 +289,26 @@ kubectl -n <namespace> get openbaocluster <cluster-name> \
 The steady-state expectation is:
 
 - `Available=True`
-- `ACMEIntegrationReady=True`
-- `ACMECacheReady=True`
+- `TLSReady=True`
 - `UserAccessBootstrap=True`
 - `ProductionReady=True`
 - `OpenBaoInitialized=True`
-- `OpenBaoSealed=False`
 - `APIServerNetworkReady=True` or `Unknown` with reason `APIServerEndpointIPsRecommended`
 
-Verify that the dedicated ACME Service exists:
+Confirm that no root token Secret was created:
 
 ```bash
-kubectl -n <namespace> get svc <cluster-name>-acme
-```
-
-Verify that no external TLS Secret was required:
-
-```bash
-kubectl -n <namespace> get secret <cluster-name>-tls-server
+kubectl -n <namespace> get secret <cluster-name>-root-token
 ```
 
 This should return `NotFound`.
 
 !!! note "User-managed passthrough"
-    This recipe uses a user-managed passthrough route instead of `spec.gateway`, so `GatewayIntegrationReady` is not the primary checkpoint here. For ACME, the important operator-owned conditions are `ACMEIntegrationReady` and `ACMECacheReady`.
+    This recipe uses a user-managed Traefik TCP passthrough route, not `spec.gateway`. The important exposure contract here is the `trustedIngressPeers` rule plus successful end-to-end traffic, not `GatewayIntegrationReady`.
 
 ### Verify JWT admin login
 
-Port-forward the main Service for direct access:
+If you exposed the cluster externally, set `VAULT_ADDR` to the external hostname. Otherwise, port-forward the Service first.
 
 ```bash
 kubectl -n <namespace> port-forward svc/<cluster-name> 8200:8200
@@ -281,16 +326,19 @@ curl -sS -k \
   "${VAULT_ADDR%/}/v1/auth/jwt/login"
 ```
 
+!!! note "TLS verification in local validation"
+    The validated local path uses self-signed certificates, so the example uses `-k`. In production, use trusted certificates and remove `-k`.
+
 ## Common Failures
 
-- `Degraded=True` with `ACMEGatewayNotConfiguredForPassthrough`: your exposure layer is terminating TLS instead of passing it through.
-- `Degraded=True` with `ACMEDomainNotResolvable`: the configured hostname does not resolve from inside the cluster.
+- `TLSReady=False` with `TLSSecretMissing`: the external TLS Secrets are missing or not Ready yet.
 - `UserAccessBootstrap=Unknown`: `spec.selfInit.requests` did not give the operator a recognizable human login path.
+- `ProductionReady=False` with `RootTokenStored`: `selfInit.enabled` is not set to `true`.
+- `ProductionReady=False` with `OperatorManagedTLS`: `tls.mode` is not `External` or `ACME`.
 - Transit connection failures: verify the Secret keys, Transit token policy, and the CA bundle used by `tlsCACert`.
-- Raft join or probe verification errors with a private ACME CA: verify that `pki-ca.crt` is present in the same Secret and mounted alongside `acmeCARoot`.
 
 ## See Also
 
-- [Gateway API Support](../configuration/gateway-api.md)
-- [External Access](../configuration/external-access.md)
-- [Troubleshooting](../operations/troubleshooting.md)
+- [Security Profiles](../../configuration/security-profiles.md)
+- [Self-Initialization](../../configuration/self-init.md)
+- [Status Conditions and Events](../../../../reference/status-and-events.md)

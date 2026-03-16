@@ -54,6 +54,21 @@ For private ACME CAs running inside the cluster (for example, an in-cluster PKI)
 - Ensure the referenced Gateway has a `TLS` listener with `tls.mode: Passthrough` (controller support varies).
 - Inspect `GatewayIntegrationReady` to confirm the referenced `GatewayClass` is accepted, advertises the required route feature, and the `Gateway` is programmed.
 
+## Public ACME CA cannot reach the endpoint
+
+!!! failure "Symptom"
+    Pod logs show ACME errors such as `Timeout during connect`, `secondary validation`, or repeated `tls-alpn-01` failures against a public CA such as Let's Encrypt.
+
+**Cause:**
+
+The hardened hostname is not publicly reachable on port `443`, or the passthrough edge is only reachable from a restricted source CIDR.
+
+**Resolution:**
+
+- For public ACME, expose the hardened hostname on a dedicated public passthrough listener.
+- Do not source-restrict the hardened ACME endpoint to a single client IP.
+- Keep restricted admin UIs on a separate terminating edge if needed.
+
 ## Kubernetes API egress issues
 
 !!! failure "Symptom"

@@ -253,7 +253,11 @@ Use the recovery runbooks for that workflow:
 
 ### Gateway API and Blue/Green upgrades
 
-When using **Gateway API**, the OpenBao Operator keeps the generated Gateway route targeting the cluster's main external Service (`<cluster>-public`). This is a `TLSRoute` when `spec.gateway.tlsPassthrough=true`, or an `HTTPRoute` when Gateway TLS termination is used. During `Cleanup`, it updates that Service selector to the Green revision.
+When using **Gateway API**, the OpenBao Operator keeps the generated route stable and retargets the Service selector during `Cleanup`:
+
+- `HTTPRoute` termination targets `<cluster>-public`
+- `TLSRoute` passthrough with `tls.mode: ACME` targets `<cluster>-acme`
+- other `TLSRoute` passthrough deployments target `<cluster>-public`
 
 ```yaml
 spec:
