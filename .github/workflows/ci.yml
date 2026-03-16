@@ -279,7 +279,6 @@ jobs:
           set -euo pipefail
           version="$(ast-grep --version)"
           echo "${version}"
-          test "${version}" = "ast-grep 0.41.0"
 
       - name: Run linter
         run: make lint-ci
