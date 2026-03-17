@@ -12,7 +12,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
-func TestSetGatewayIntegrationReadyCondition(t *testing.T) {
+func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 	t.Parallel()
 
 	scheme := newOpenBaoClusterTestScheme(t)
