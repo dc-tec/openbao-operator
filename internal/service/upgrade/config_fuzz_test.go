@@ -19,24 +19,24 @@ func FuzzLoadUpgradeExecutorConfig(f *testing.F) {
 		jwtPath := filepath.Join(tmpDir, "upgrade.jwt")
 		caPath := filepath.Join(tmpDir, "ca.crt")
 
-		if err := os.WriteFile(jwtPath, []byte(sanitizeUpgradeConfigText(jwtToken, "")), 0o600); err != nil {
+		if err := os.WriteFile(jwtPath, []byte(sanitizeUpgradeConfigText(jwtToken)), 0o600); err != nil {
 			t.Fatalf("failed to write JWT token file: %v", err)
 		}
-		if err := os.WriteFile(caPath, []byte(sanitizeUpgradeConfigText(caData, "")), 0o600); err != nil {
+		if err := os.WriteFile(caPath, []byte(sanitizeUpgradeConfigText(caData)), 0o600); err != nil {
 			t.Fatalf("failed to write CA file: %v", err)
 		}
 
-		t.Setenv(constants.EnvClusterNamespace, sanitizeUpgradeConfigText(namespace, ""))
-		t.Setenv(constants.EnvClusterName, sanitizeUpgradeConfigText(clusterName, ""))
-		t.Setenv(constants.EnvClusterReplicas, sanitizeUpgradeConfigText(replicas, ""))
-		t.Setenv(constants.EnvUpgradeAction, sanitizeUpgradeConfigText(action, ""))
-		t.Setenv(constants.EnvUpgradeJWTAuthRole, sanitizeUpgradeConfigText(jwtRole, ""))
+		t.Setenv(constants.EnvClusterNamespace, sanitizeUpgradeConfigText(namespace))
+		t.Setenv(constants.EnvClusterName, sanitizeUpgradeConfigText(clusterName))
+		t.Setenv(constants.EnvClusterReplicas, sanitizeUpgradeConfigText(replicas))
+		t.Setenv(constants.EnvUpgradeAction, sanitizeUpgradeConfigText(action))
+		t.Setenv(constants.EnvUpgradeJWTAuthRole, sanitizeUpgradeConfigText(jwtRole))
 		t.Setenv(constants.EnvJWTTokenPath, jwtPath)
 		t.Setenv(constants.EnvTLSCAPath, caPath)
-		t.Setenv(constants.EnvUpgradeBlueRevision, sanitizeUpgradeConfigText(blueRevision, ""))
-		t.Setenv(constants.EnvUpgradeGreenRevision, sanitizeUpgradeConfigText(greenRevision, ""))
-		t.Setenv(constants.EnvUpgradeSyncThreshold, sanitizeUpgradeConfigText(syncThreshold, ""))
-		t.Setenv(constants.EnvUpgradeTimeout, sanitizeUpgradeConfigText(timeout, ""))
+		t.Setenv(constants.EnvUpgradeBlueRevision, sanitizeUpgradeConfigText(blueRevision))
+		t.Setenv(constants.EnvUpgradeGreenRevision, sanitizeUpgradeConfigText(greenRevision))
+		t.Setenv(constants.EnvUpgradeSyncThreshold, sanitizeUpgradeConfigText(syncThreshold))
+		t.Setenv(constants.EnvUpgradeTimeout, sanitizeUpgradeConfigText(timeout))
 
 		cfg, err := LoadExecutorConfig()
 		if err == nil {
@@ -54,11 +54,8 @@ func FuzzLoadUpgradeExecutorConfig(f *testing.F) {
 	})
 }
 
-func sanitizeUpgradeConfigText(input, fallback string) string {
+func sanitizeUpgradeConfigText(input string) string {
 	trimmed := strings.TrimSpace(strings.ReplaceAll(input, "\x00", ""))
-	if trimmed == "" {
-		return fallback
-	}
 	if len(trimmed) > 128 {
 		return trimmed[:128]
 	}

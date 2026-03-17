@@ -24,11 +24,12 @@ func FuzzShouldEmitSecurityWarning(f *testing.F) {
 		annotations := map[string]string{
 			annotationLastDevelopmentWarning: raw,
 		}
-		if deltaSeconds%4 == 0 {
+		switch deltaSeconds % 4 {
+		case 0:
 			annotations = nil
-		} else if deltaSeconds%4 == 1 {
+		case 1:
 			annotations = map[string]string{}
-		} else if deltaSeconds%4 == 2 {
+		case 2:
 			annotations = map[string]string{
 				annotationLastDevelopmentWarning: now.Add(time.Duration(deltaSeconds%10) * time.Minute).Format(time.RFC3339Nano),
 			}

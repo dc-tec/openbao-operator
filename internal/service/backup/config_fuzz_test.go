@@ -20,16 +20,16 @@ func FuzzLoadBackupAuthConfig(f *testing.F) {
 		tokenPath := filepath.Join(tmpDir, "token")
 
 		if !missingJWTFile {
-			if err := os.WriteFile(jwtPath, []byte(sanitizeBackupConfigText(jwtToken, "")), 0o600); err != nil {
+			if err := os.WriteFile(jwtPath, []byte(sanitizeBackupConfigText(jwtToken)), 0o600); err != nil {
 				t.Fatalf("failed to write JWT token file: %v", err)
 			}
 		}
-		if err := os.WriteFile(tokenPath, []byte(sanitizeBackupConfigText(staticToken, "")), 0o600); err != nil {
+		if err := os.WriteFile(tokenPath, []byte(sanitizeBackupConfigText(staticToken)), 0o600); err != nil {
 			t.Fatalf("failed to write static token file: %v", err)
 		}
 
-		t.Setenv(constants.EnvBackupAuthMethod, sanitizeBackupConfigText(authMethod, ""))
-		t.Setenv(constants.EnvBackupJWTAuthRole, sanitizeBackupConfigText(jwtRole, ""))
+		t.Setenv(constants.EnvBackupAuthMethod, sanitizeBackupConfigText(authMethod))
+		t.Setenv(constants.EnvBackupJWTAuthRole, sanitizeBackupConfigText(jwtRole))
 		t.Setenv(constants.EnvJWTTokenPath, jwtPath)
 		t.Setenv(constants.EnvBackupTokenPath, tokenPath)
 
@@ -65,10 +65,10 @@ func FuzzBackupExecutorValidateAuthModes(f *testing.F) {
 			BackupProvider:   constants.StorageProviderS3,
 			BackupEndpoint:   "https://s3.example",
 			BackupBucket:     "backups",
-			AuthMethod:       sanitizeBackupConfigText(authMethod, ""),
-			JWTAuthRole:      sanitizeBackupConfigText(jwtRole, ""),
-			JWTToken:         sanitizeBackupConfigText(jwtToken, ""),
-			OpenBaoToken:     sanitizeBackupConfigText(staticToken, ""),
+			AuthMethod:       sanitizeBackupConfigText(authMethod),
+			JWTAuthRole:      sanitizeBackupConfigText(jwtRole),
+			JWTToken:         sanitizeBackupConfigText(jwtToken),
+			OpenBaoToken:     sanitizeBackupConfigText(staticToken),
 		}
 		if withTLS {
 			cfg.TLSCACert = []byte("ca")
@@ -90,11 +90,8 @@ func FuzzBackupExecutorValidateAuthModes(f *testing.F) {
 	})
 }
 
-func sanitizeBackupConfigText(input, fallback string) string {
+func sanitizeBackupConfigText(input string) string {
 	trimmed := strings.TrimSpace(strings.ReplaceAll(input, "\x00", ""))
-	if trimmed == "" {
-		return fallback
-	}
 	if len(trimmed) > 128 {
 		return trimmed[:128]
 	}

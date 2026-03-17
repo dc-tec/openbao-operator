@@ -30,7 +30,7 @@ func FuzzBlueGreenStepperHelpers(f *testing.F) {
 			if err == nil {
 				t.Fatalf("expected nil job result to fail")
 			}
-		} else if !(result.Succeeded || result.Running || result.Failed) {
+		} else if !result.Succeeded && !result.Running && !result.Failed {
 			if err == nil {
 				t.Fatalf("expected invalid job result to fail")
 			}
@@ -41,7 +41,7 @@ func FuzzBlueGreenStepperHelpers(f *testing.F) {
 		}
 
 		hookDecision, err := validationHookDecision(autoRollback.OnValidationFailure, result, sanitizeStepReason(failureReason, "hook failed"))
-		if result != nil && !(result.Succeeded || result.Running || result.Failed) {
+		if result != nil && !result.Succeeded && !result.Running && !result.Failed {
 			if err == nil {
 				t.Fatalf("expected invalid hook result to fail")
 			}
@@ -54,7 +54,7 @@ func FuzzBlueGreenStepperHelpers(f *testing.F) {
 		}
 
 		preDecision, err := prePromotionHookDecision(autoRollback, result, sanitizeStepReason(failureReason, "pre-promotion"))
-		if result != nil && !(result.Succeeded || result.Running || result.Failed) {
+		if result != nil && !result.Succeeded && !result.Running && !result.Failed {
 			if err == nil {
 				t.Fatalf("expected invalid pre-promotion hook result to fail")
 			}
