@@ -15,7 +15,7 @@ endif
 	@echo "✅ All CI checks passed!"
 
 .PHONY: ci-core
-ci-core: security-ci lint-ci verify-fmt verify-tidy verify-vendor verify-generated test-ci verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
+ci-core: security-ci lint-ci verify-fmt verify-tidy verify-vendor verify-generated test-ci fuzz verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
 
 .PHONY: pentest-smoke
 pentest-smoke: ## Run "pentest" labeled e2e tests against an existing cluster (requires E2E_OPERATOR_IMAGE).

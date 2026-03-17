@@ -62,6 +62,36 @@ jobs:
           report-schema-drift: "true"
           operator-schema-drift-image-tag: 2.5.0
 
+  fuzz:
+    name: Fuzz Nightly
+    runs-on: *runner
+    timeout-minutes: 30
+    env:
+      GOFLAGS: -mod=vendor
+      FUZZ_ARTIFACT_DIR: dist/fuzz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
+        with:
+          cache-tools: false
+
+      - name: Run extended fuzz sweep
+        run: make fuzz-long
+
+      - name: Upload fuzz artifacts (failure)
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: fuzz-nightly-artifacts
+          path: |
+            dist/fuzz/
+            **/testdata/fuzz/**/*
+          if-no-files-found: ignore
+          retention-days: 7
+
   build-artifacts:
     name: Build Artifacts
     runs-on: *runner

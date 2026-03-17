@@ -57,6 +57,7 @@ jobs:
       go_tests: ${{ steps.diff.outputs.go_tests }}
       config_compat: ${{ steps.diff.outputs.config_compat }}
       security_scan: ${{ steps.diff.outputs.security_scan }}
+      fuzz: ${{ steps.diff.outputs.fuzz }}
       e2e: ${{ steps.diff.outputs.e2e }}
       e2e_backup: ${{ steps.diff.outputs.e2e_backup }}
       e2e_upgrade: ${{ steps.diff.outputs.e2e_upgrade }}
@@ -83,7 +84,7 @@ jobs:
               echo "manual_backup_e2e=${{ inputs.force_backup_e2e && 'true' || 'false' }}"
               echo "manual_upgrade_e2e=${{ inputs.force_upgrade_e2e && 'true' || 'false' }}"
               echo "manual_hardened_e2e=${{ inputs.force_hardened_e2e && 'true' || 'false' }}"
-              for key in chart workflow docs go_quality go_tests config_compat security_scan e2e e2e_backup e2e_upgrade e2e_hardened; do
+              for key in chart workflow docs go_quality go_tests config_compat security_scan fuzz e2e e2e_backup e2e_upgrade e2e_hardened; do
                 echo "${key}=false"
               done
             } >> "${GITHUB_OUTPUT}"
@@ -153,6 +154,12 @@ jobs:
             echo "security_scan=true" >> "${GITHUB_OUTPUT}"
           else
             echo "security_scan=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(internal/|cmd/|go\.(mod|sum)$|hack/ci/fuzz\.sh|mk/|\.github/workflows/(ci|nightly)\.yml|Makefile)'; then
+            echo "fuzz=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "fuzz=false" >> "${GITHUB_OUTPUT}"
           fi
 
           if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|Makefile|mk/)'; then
@@ -381,6 +388,37 @@ jobs:
       - name: Run integration tests
         run: |
           make test-integration
+
+  fuzz:
+    name: Fuzz Smoke
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.fuzz == 'true'
+    runs-on: *runner
+    env:
+      GOFLAGS: -mod=vendor
+      FUZZ_ARTIFACT_DIR: dist/fuzz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
+        with:
+          cache-tools: false
+
+      - name: Run fuzz smoke sweep
+        run: make fuzz
+
+      - name: Upload fuzz artifacts (failure)
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: fuzz-artifacts
+          path: |
+            dist/fuzz/
+            **/testdata/fuzz/**/*
+          if-no-files-found: ignore
+          retention-days: 7
 
   openbao-config-compat:
     name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.6.0)
@@ -864,6 +902,7 @@ jobs:
       - verify-generated
       - test-unit
       - test-integration
+      - fuzz
       - openbao-config-compat
       - docs
       - helm
@@ -885,6 +924,7 @@ jobs:
           VERIFY_GENERATED: ${{ needs.verify-generated.result }}
           TEST_UNIT: ${{ needs.test-unit.result }}
           TEST_INTEGRATION: ${{ needs.test-integration.result }}
+          FUZZ: ${{ needs.fuzz.result }}
           OPENBAO_CONFIG_COMPAT: ${{ needs.openbao-config-compat.result }}
           DOCS: ${{ needs.docs.result }}
           HELM: ${{ needs.helm.result }}
@@ -916,6 +956,7 @@ jobs:
           verify-generated=${VERIFY_GENERATED}
           test-unit=${TEST_UNIT}
           test-integration=${TEST_INTEGRATION}
+          fuzz=${FUZZ}
           openbao-config-compat=${OPENBAO_CONFIG_COMPAT}
           docs=${DOCS}
           helm=${HELM}
