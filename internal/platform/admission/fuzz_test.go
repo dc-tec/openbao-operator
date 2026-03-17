@@ -48,9 +48,8 @@ func FuzzStatusSummaryMessage(f *testing.F) {
 	f.Add("", "", true, false)
 
 	f.Fuzz(func(t *testing.T, depName, issue string, ready, overallReady bool) {
-		if len(depName) > 256 || len(issue) > 1024 {
-			t.Skip()
-		}
+		depName = sanitizeAdmissionSummaryName(depName, "")
+		issue = sanitizeAdmissionSummaryText(issue)
 
 		status := Status{
 			OverallReady: overallReady,
@@ -152,4 +151,20 @@ func sanitizeAdmissionEnvValue(v, fallback string) string {
 		return fallback
 	}
 	return string(out)
+}
+
+func sanitizeAdmissionSummaryName(v, fallback string) string {
+	v = sanitizeAdmissionName(v, fallback)
+	if len(v) > 64 {
+		return v[:64]
+	}
+	return v
+}
+
+func sanitizeAdmissionSummaryText(v string) string {
+	v = strings.TrimSpace(strings.ReplaceAll(v, "\x00", ""))
+	if len(v) > 256 {
+		return v[:256]
+	}
+	return v
 }
