@@ -117,6 +117,7 @@ make ci-core
 | `Helm Chart` | `make verify-helm && make helm-test` | Includes Helm sync, lint, template, and OpenShift rendering checks |
 | `Security (vulncheck + Trivy FS)` | `make security-ci` | Runs `govulncheck` plus the CI-equivalent Trivy filesystem scan |
 | `Unit Tests` + `Envtest Integration` | `make test-ci` | Runs unit + integration test stack |
+| `Fuzz Smoke` | `make fuzz` | Runs the short curated fuzz sweep across discovered `*fuzz_test.go` targets |
 | `OpenBao Config Compatibility` | `make verify-openbao-config-compat` | Validates generated HCL fixtures against upstream parser |
 | `Docs Build` | `make docs-build` | Strict MkDocs build |
 
@@ -180,6 +181,25 @@ We run E2E tests on Kind and route scope based on changed files and labels.
 
 ## 5. Security Checks
 
+## 5. Fuzzing in CI
+
+Pull request and `main` CI run `make fuzz` as a smoke lane when code or CI inputs that affect fuzz
+coverage change. The nightly workflow runs `make fuzz-long` with a larger time budget against the same
+discovered target set.
+
+When a fuzz job fails in CI, the workflow uploads per-target logs from `dist/fuzz/` and any generated
+minimized inputs under `testdata/fuzz/` as build artifacts for replay.
+
+For local repro, use:
+
+```sh
+make fuzz
+FUZZTIME=30s make fuzz
+FUZZ_TARGET_FILTER='FuzzDiscoverConfig|internal/service/upgrade' make fuzz
+```
+
+## 6. Security Checks
+
 === "Govulncheck"
 
     ```sh
@@ -212,14 +232,14 @@ We run E2E tests on Kind and route scope based on changed files and labels.
         - `.github/workflows/nightly.yml`
         - `Makefile` (`security-scan` target)
 
-## 6. Documentation Build
+## 7. Documentation Build
 
 ```sh
 make docs-serve
 make docs-build
 ```
 
-## 7. Performance Workflows
+## 8. Performance Workflows
 
 ### 7.1 Baseline Capture
 
@@ -235,7 +255,7 @@ The `Performance Regression Weekly` workflow runs `make verify-perf` weekly and 
 - Scheduled failures open or update the `Weekly performance regression detected` issue.
 - Release workflow enforces full `verify-perf` as a blocking gate.
 
-## 8. GHCR Housekeeping
+## 9. GHCR Housekeeping
 
 Run `GHCR Housekeeping` (`.github/workflows/ghcr-housekeeping.yml`) to manage image package retention for:
 

@@ -164,6 +164,8 @@ Use `make help` to see all available commands, or refer to this cheatsheet:
 | | `make test-sum` | Run unit tests with gotestsum output and JUnit XML under `dist/test/`. |
 | | `make test-integration` | Run integration tests (envtest). |
 | | `make test-integration-sum` | Run integration tests with gotestsum output and JUnit XML under `dist/test/`. |
+| | `make fuzz` | Run the short fuzz smoke sweep across discovered `*fuzz_test.go` targets. |
+| | `make fuzz-long` | Run the longer fuzz sweep used by nightly CI. |
 | | `make report-internal-deps` | Generate local internal dependency graph/report artifacts. |
 | | `make report-internal-deps-snapshot` | Generate report and save/update a local baseline snapshot. |
 | | `make report-internal-deps-diff` | Compare baseline snapshot vs current report (delta output). |

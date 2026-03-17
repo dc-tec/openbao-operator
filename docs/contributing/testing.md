@@ -68,6 +68,29 @@ graph BT
 
 ---
 
+## Fuzzing
+
+Fuzzing complements the normal unit and integration suite by mutating inputs against parsers, renderers,
+normalizers, auth helpers, and selected controller/service decision helpers.
+
+```sh
+make fuzz
+make fuzz-long
+```
+
+- `make fuzz` runs the short smoke sweep used in pull request CI.
+- `make fuzz-long` runs the longer nightly sweep.
+- `FUZZTIME=30s make fuzz` overrides the time budget for a local run.
+- `FUZZ_TARGET_FILTER='FuzzRenderHCL|internal/adapter/auth' make fuzz` narrows the sweep to matching targets or packages.
+
+The fuzz runner discovers `*fuzz_test.go` targets under `cmd/` and `internal/`, then executes each fuzz target
+individually so failures are easy to attribute and replay.
+
+When Go fuzzing finds an interesting failing input, it writes a reproducer under `testdata/fuzz/`. CI uploads
+those inputs together with per-target logs when a fuzz job fails.
+
+---
+
 ## Test Layers
 
 === ":material-test-tube: 1. Unit Tests"
