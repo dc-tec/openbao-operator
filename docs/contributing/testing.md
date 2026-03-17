@@ -1,15 +1,18 @@
 # Testing Strategy
 
-To ensure correctness and avoid regressions, we adopt a **Layered Testing Strategy**. We trade off speed and isolation (Unit) for fidelity and coverage (E2E).
+To ensure correctness and avoid regressions, we adopt a **Layered Testing Strategy**. We trade off
+speed and isolation (Unit / Contract) for fidelity and coverage (E2E).
 
 ```mermaid
 graph BT
-    Unit["Unit Tests (Go)<br/><i>Business Logic, HCL Gen</i>"]
-    Integration["Integration (EnvTest)<br/><i>Controller Logic, K8s API</i>"]
+    Unit["Unit Tests (Go)<br/><i>Pure Logic, Helpers</i>"]
+    Contract["Fast Contract (Go)<br/><i>Builders, Fake Client, Manifests</i>"]
+    Integration["Integration (EnvTest)<br/><i>Real API Server, Reconcile Flows</i>"]
     E2E["End-to-End (Kind)<br/><i>Full Lifecycle, Upgrades</i>"]
     Manual["Manual / Exploratory<br/><i>Chaos, DR, Hardware Failures</i>"]
 
-    Unit --> Integration
+    Unit --> Contract
+    Contract --> Integration
     Integration --> E2E
     E2E --> Manual
 
@@ -19,6 +22,7 @@ graph BT
     classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
 
     class Unit read;
+    class Contract read;
     class Integration process;
     class E2E write;
     class Manual git;
@@ -32,7 +36,7 @@ graph BT
 
     ---
 
-    Fast, in-process logic checks.
+    Fast, in-process logic and contract checks.
 
     `make test`
 
@@ -40,7 +44,7 @@ graph BT
 
     ---
 
-    Controller logic against real K8s API.
+    Real API-server and reconciliation behavior.
 
     `make test-integration`
 
@@ -75,6 +79,19 @@ graph BT
     - HCL Config Generation (`internal/adapter/config`)
     - PKI Helpers (Cert rotation math)
     - State Machine Logic (Upgrade paths)
+
+    **Subtypes:**
+
+    - **Pure Unit**: plain Go logic with no Kubernetes API dependency.
+    - **Fast Kubernetes Contract**: in-process tests that build Kubernetes objects or use
+      `controller-runtime/pkg/client/fake` to verify emitted resources, patches, or
+      manifest contracts when API-server semantics do not matter.
+
+    !!! note "Fake Client Boundary"
+        The controller-runtime fake client is a fast contract tool, not a substitute for
+        the API server. It does not provide real OpenAPI validation, server-side
+        defaulting, correct `Generation` / `ResourceVersion` behavior, or faithful
+        subresource handling. If your test depends on those semantics, use EnvTest.
     
     ### Table-Driven Pattern
     
@@ -135,9 +152,23 @@ graph BT
     - **Status Updates**: Verifying `Status.Phase` transitions.
     - **Finalizers**: Testing deletion interception.
     - **Admission Policies**: Verifying VAP-enforced invariants and safety checks.
+    - **API Semantics**: Validation, defaulting, status subresources, and ownership behavior
+      that only a real API server can provide.
     
     !!! tip "Speed vs Fidelity"
         Since no Pods run, you cannot test network connectivity, volume mounting, or OpenBao startup. Use E2E tests for those.
+
+    **Controller-specific guidance**:
+
+    - Reserve `//go:build integration` for EnvTest-backed tests only.
+    - Prefer `test/integration/` for shared EnvTest suites and cross-package flows.
+    - Package-local EnvTest is fine when colocated fixtures improve clarity, but it should
+      still mean the same thing: a real API server is part of the harness.
+    - If a test claims to cover `SetupWithManager()`, watches, cache and index behavior, or
+      event-driven reconciliation, start a controller manager in the test and register the
+      reconciler.
+    - Calling `Reconcile(...)` directly under EnvTest is still useful, but it proves
+      orchestration under real API semantics, not full controller-runtime wiring.
 
 === ":material-robot: 3. End-to-End (E2E)"
 
@@ -314,6 +345,16 @@ graph BT
 
     !!! danger "Production Safety"
         Never run exploratory chaos tests against a production cluster. Use a dedicated staging environment.
+
+## Naming And Placement Rules
+
+- Keep pure unit and fast contract tests untagged.
+- Reserve `_integration_test.go` for files that are actually `//go:build integration`.
+- Use `*_contract_test.go` when a fast test validates emitted manifests, Kubernetes objects,
+  or compatibility contracts without a real API server.
+- Keep static manifest and compatibility tests under `test/manifests/` or `test/utils/`
+  rather than the EnvTest lane.
+- Keep `test/e2e/` focused on tagged E2E suite and scenario files.
 
 ## Code Quality Standards
 
