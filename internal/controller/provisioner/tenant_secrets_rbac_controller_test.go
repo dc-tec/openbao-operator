@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -136,13 +137,15 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 				Enabled: true,
 			},
 			Backup: &openbaov1alpha1.BackupSchedule{
+				Schedule: "0 3 * * *",
 				Target: openbaov1alpha1.BackupTarget{
+					Bucket:               "backups",
 					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "backup-creds"},
 				},
 				TokenSecretRef: &corev1.LocalObjectReference{Name: "backup-token"},
 			},
 			Upgrade: &openbaov1alpha1.UpgradeConfig{
-				TokenSecretRef: &corev1.LocalObjectReference{Name: "upgrade-token"},
+				JWTAuthRole: "upgrade-role",
 			},
 			Unseal: &openbaov1alpha1.UnsealConfig{
 				CredentialsSecretRef: &corev1.LocalObjectReference{Name: "unseal-creds"},
@@ -179,18 +182,10 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 	}, writerRole); err != nil {
 		t.Fatalf("expected writer role: %v", err)
 	}
-	if len(writerRole.Rules) != 2 {
-		t.Fatalf("writer role rules = %d, want 2", len(writerRole.Rules))
-	}
 	wantWriterSecrets := []string{"cluster-a-root-token", "cluster-a-tls-ca", "cluster-a-tls-server", "cluster-a-unseal-key"}
-	gotWriterSecrets := writerRole.Rules[1].ResourceNames
-	if len(gotWriterSecrets) != len(wantWriterSecrets) {
+	sort.Strings(wantWriterSecrets)
+	if gotWriterSecrets := extractSecretResourceNames(writerRole.Rules); !slicesEqual(gotWriterSecrets, wantWriterSecrets) {
 		t.Fatalf("writer secrets = %v, want %v", gotWriterSecrets, wantWriterSecrets)
-	}
-	for i, want := range wantWriterSecrets {
-		if gotWriterSecrets[i] != want {
-			t.Fatalf("writer secrets[%d] = %q, want %q", i, gotWriterSecrets[i], want)
-		}
 	}
 
 	readerRole := &rbacv1.Role{}
@@ -200,15 +195,10 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 	}, readerRole); err != nil {
 		t.Fatalf("expected reader role: %v", err)
 	}
-	wantReaderSecrets := []string{"backup-creds", "backup-token", "unseal-creds", "upgrade-token"}
-	gotReaderSecrets := readerRole.Rules[0].ResourceNames
-	if len(gotReaderSecrets) != len(wantReaderSecrets) {
+	wantReaderSecrets := []string{"backup-creds", "backup-token", "unseal-creds"}
+	sort.Strings(wantReaderSecrets)
+	if gotReaderSecrets := extractSecretResourceNames(readerRole.Rules); !slicesEqual(gotReaderSecrets, wantReaderSecrets) {
 		t.Fatalf("reader secrets = %v, want %v", gotReaderSecrets, wantReaderSecrets)
-	}
-	for i, want := range wantReaderSecrets {
-		if gotReaderSecrets[i] != want {
-			t.Fatalf("reader secrets[%d] = %q, want %q", i, gotReaderSecrets[i], want)
-		}
 	}
 
 	writerBinding := &rbacv1.RoleBinding{}
@@ -324,4 +314,41 @@ func TestTenantSecretsRBACReconcile_UnsafeAdmissionDisabledBypassesDependencyChe
 	if result.RequeueAfter != 0 {
 		t.Fatalf("requeueAfter = %v, want zero", result.RequeueAfter)
 	}
+}
+
+func extractSecretResourceNames(rules []rbacv1.PolicyRule) []string {
+	var out []string
+	for i := range rules {
+		rule := rules[i]
+		if !contains(rule.Resources, "secrets") {
+			continue
+		}
+		if len(rule.ResourceNames) == 0 {
+			continue
+		}
+		out = append(out, rule.ResourceNames...)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func slicesEqual(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
