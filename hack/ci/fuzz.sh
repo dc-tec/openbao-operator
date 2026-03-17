@@ -23,11 +23,34 @@ sanitize_name() {
 targets_manifest="${FUZZ_ARTIFACT_DIR}/targets.txt"
 : > "${targets_manifest}"
 
-mapfile -t entries < <(
-	rg -n --no-heading '^func (Fuzz[[:alnum:]_]+)\(' cmd internal --glob '*fuzz_test.go' |
-		sed -E 's#^([^:]+):[0-9]+:func (Fuzz[^(]+)\(.*#\1\t\2#' |
-		LC_ALL=C sort -u
-)
+discover_entries() {
+	local search_dirs=()
+	local dir
+
+	for dir in cmd internal; do
+		if [[ -d "${dir}" ]]; then
+			search_dirs+=("${dir}")
+		fi
+	done
+
+	if [[ "${#search_dirs[@]}" -eq 0 ]]; then
+		return 0
+	fi
+
+	local file
+	local line
+	local fuzz_target
+	while IFS= read -r -d '' file; do
+		while IFS= read -r line; do
+			fuzz_target="$(printf '%s\n' "${line}" | sed -E 's#^[0-9]+:func (Fuzz[^(]+)\(.*#\1#')"
+			if [[ -n "${fuzz_target}" ]]; then
+				printf '%s\t%s\n' "${file}" "${fuzz_target}"
+			fi
+		done < <(grep -nE '^func (Fuzz[[:alnum:]_]+)\(' "${file}" || true)
+	done < <(find "${search_dirs[@]}" -type f -name '*fuzz_test.go' -print0) | LC_ALL=C sort -u
+}
+
+mapfile -t entries < <(discover_entries)
 
 if [[ "${#entries[@]}" -eq 0 ]]; then
 	echo "No fuzz targets found under cmd/ or internal/." >&2
