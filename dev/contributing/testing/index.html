@@ -4954,6 +4954,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#naming-and-placement-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming And Placement Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#code-quality-standards" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5540,6 +5551,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#naming-and-placement-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming And Placement Rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#code-quality-standards" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5571,14 +5593,17 @@
 
 
 <h1 id="testing-strategy">Testing Strategy<a class="headerlink" href="#testing-strategy" title="Permanent link">&para;</a></h1>
-<p>To ensure correctness and avoid regressions, we adopt a <strong>Layered Testing Strategy</strong>. We trade off speed and isolation (Unit) for fidelity and coverage (E2E).</p>
+<p>To ensure correctness and avoid regressions, we adopt a <strong>Layered Testing Strategy</strong>. We trade off
+speed and isolation (Unit / Contract) for fidelity and coverage (E2E).</p>
 <pre class="mermaid"><code>graph BT
-    Unit["Unit Tests (Go)&lt;br/&gt;&lt;i&gt;Business Logic, HCL Gen&lt;/i&gt;"]
-    Integration["Integration (EnvTest)&lt;br/&gt;&lt;i&gt;Controller Logic, K8s API&lt;/i&gt;"]
+    Unit["Unit Tests (Go)&lt;br/&gt;&lt;i&gt;Pure Logic, Helpers&lt;/i&gt;"]
+    Contract["Fast Contract (Go)&lt;br/&gt;&lt;i&gt;Builders, Fake Client, Manifests&lt;/i&gt;"]
+    Integration["Integration (EnvTest)&lt;br/&gt;&lt;i&gt;Real API Server, Reconcile Flows&lt;/i&gt;"]
     E2E["End-to-End (Kind)&lt;br/&gt;&lt;i&gt;Full Lifecycle, Upgrades&lt;/i&gt;"]
     Manual["Manual / Exploratory&lt;br/&gt;&lt;i&gt;Chaos, DR, Hardware Failures&lt;/i&gt;"]
 
-    Unit --&gt; Integration
+    Unit --&gt; Contract
+    Contract --&gt; Integration
     Integration --&gt; E2E
     E2E --&gt; Manual
 
@@ -5588,6 +5613,7 @@
     classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
 
     class Unit read;
+    class Contract read;
     class Integration process;
     class E2E write;
     class Manual git;</code></pre>
@@ -5597,13 +5623,13 @@
 <li>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 2v2h1v14a4 4 0 0 0 4 4 4 4 0 0 0 4-4V4h1V2zm4 14c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1m2-4c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1m1-5h-4V4h4z"/></svg></span> <strong>Unit Tests</strong></p>
 <hr />
-<p>Fast, in-process logic checks.</p>
+<p>Fast, in-process logic and contract checks.</p>
 <p><code>make test</code></p>
 </li>
 <li>
 <p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 19h1a1 1 0 0 1 1 1h7v2h-7a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1H2v-2h7a1 1 0 0 1 1-1h1v-2H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-7zM4 3h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1m5 4h1V5H9zm0 8h1v-2H9zM5 5v2h2V5zm0 8v2h2v-2z"/></svg></span> <strong>Integration</strong></p>
 <hr />
-<p>Controller logic against real K8s API.</p>
+<p>Real API-server and reconciliation behavior.</p>
 <p><code>make test-integration</code></p>
 </li>
 <li>
@@ -5632,6 +5658,20 @@
 <li>PKI Helpers (Cert rotation math)</li>
 <li>State Machine Logic (Upgrade paths)</li>
 </ul>
+<p><strong>Subtypes:</strong></p>
+<ul>
+<li><strong>Pure Unit</strong>: plain Go logic with no Kubernetes API dependency.</li>
+<li><strong>Fast Kubernetes Contract</strong>: in-process tests that build Kubernetes objects or use
+  <code>controller-runtime/pkg/client/fake</code> to verify emitted resources, patches, or
+  manifest contracts when API-server semantics do not matter.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Fake Client Boundary</p>
+<p>The controller-runtime fake client is a fast contract tool, not a substitute for
+the API server. It does not provide real OpenAPI validation, server-side
+defaulting, correct <code>Generation</code> / <code>ResourceVersion</code> behavior, or faithful
+subresource handling. If your test depends on those semantics, use EnvTest.</p>
+</div>
 <h3 id="table-driven-pattern">Table-Driven Pattern<a class="headerlink" href="#table-driven-pattern" title="Permanent link">&para;</a></h3>
 <p>We strictly enforce table-driven tests for business logic.</p>
 <div class="language-go highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">TestRenderConfig</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -5686,11 +5726,25 @@
 <li><strong>Status Updates</strong>: Verifying <code>Status.Phase</code> transitions.</li>
 <li><strong>Finalizers</strong>: Testing deletion interception.</li>
 <li><strong>Admission Policies</strong>: Verifying VAP-enforced invariants and safety checks.</li>
+<li><strong>API Semantics</strong>: Validation, defaulting, status subresources, and ownership behavior
+  that only a real API server can provide.</li>
 </ul>
 <div class="admonition tip">
 <p class="admonition-title">Speed vs Fidelity</p>
 <p>Since no Pods run, you cannot test network connectivity, volume mounting, or OpenBao startup. Use E2E tests for those.</p>
 </div>
+<p><strong>Controller-specific guidance</strong>:</p>
+<ul>
+<li>Reserve <code>//go:build integration</code> for EnvTest-backed tests only.</li>
+<li>Prefer <code>test/integration/</code> for shared EnvTest suites and cross-package flows.</li>
+<li>Package-local EnvTest is fine when colocated fixtures improve clarity, but it should
+  still mean the same thing: a real API server is part of the harness.</li>
+<li>If a test claims to cover <code>SetupWithManager()</code>, watches, cache and index behavior, or
+  event-driven reconciliation, start a controller manager in the test and register the
+  reconciler.</li>
+<li>Calling <code>Reconcile(...)</code> directly under EnvTest is still useful, but it proves
+  orchestration under real API semantics, not full controller-runtime wiring.</li>
+</ul>
 </div>
 <div class="tabbed-block">
 <p>E2E tests validate real-system behavior in a <code>kind</code> cluster.</p>
@@ -5875,6 +5929,16 @@ set <code>E2E_STORAGE_CLASS=&lt;name&gt;</code> to a class with <code>allowVolum
 </div>
 </div>
 </div>
+<h2 id="naming-and-placement-rules">Naming And Placement Rules<a class="headerlink" href="#naming-and-placement-rules" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Keep pure unit and fast contract tests untagged.</li>
+<li>Reserve <code>_integration_test.go</code> for files that are actually <code>//go:build integration</code>.</li>
+<li>Use <code>*_contract_test.go</code> when a fast test validates emitted manifests, Kubernetes objects,
+  or compatibility contracts without a real API server.</li>
+<li>Keep static manifest and compatibility tests under <code>test/manifests/</code> or <code>test/utils/</code>
+  rather than the EnvTest lane.</li>
+<li>Keep <code>test/e2e/</code> focused on tagged E2E suite and scenario files.</li>
+</ul>
 <h2 id="code-quality-standards">Code Quality Standards<a class="headerlink" href="#code-quality-standards" title="Permanent link">&para;</a></h2>
 <p>We enforce strict quality gates via <code>make lint-ci</code>.</p>
 <div class="grid cards">
