@@ -5046,10 +5046,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-documentation-build" class="md-nav__link">
+  <a href="#5-fuzzing-in-ci" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Documentation Build
+        5. Fuzzing in CI
       
     </span>
   </a>
@@ -5057,15 +5057,37 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-performance-workflows" class="md-nav__link">
+  <a href="#6-security-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Performance Workflows
+        6. Security Checks
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="7. Performance Workflows">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-documentation-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Documentation Build
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-performance-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Performance Workflows
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Performance Workflows">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -5096,10 +5118,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#8-ghcr-housekeeping" class="md-nav__link">
+  <a href="#9-ghcr-housekeeping" class="md-nav__link">
     <span class="md-ellipsis">
       
-        8. GHCR Housekeeping
+        9. GHCR Housekeeping
       
     </span>
   </a>
@@ -5702,10 +5724,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#6-documentation-build" class="md-nav__link">
+  <a href="#5-fuzzing-in-ci" class="md-nav__link">
     <span class="md-ellipsis">
       
-        6. Documentation Build
+        5. Fuzzing in CI
       
     </span>
   </a>
@@ -5713,15 +5735,37 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#7-performance-workflows" class="md-nav__link">
+  <a href="#6-security-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        7. Performance Workflows
+        6. Security Checks
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="7. Performance Workflows">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-documentation-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Documentation Build
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-performance-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Performance Workflows
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Performance Workflows">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -5752,10 +5796,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#8-ghcr-housekeeping" class="md-nav__link">
+  <a href="#9-ghcr-housekeeping" class="md-nav__link">
     <span class="md-ellipsis">
       
-        8. GHCR Housekeeping
+        9. GHCR Housekeeping
       
     </span>
   </a>
@@ -5928,6 +5972,11 @@ for the full pipeline. Pushes to <code>main</code> still run the full gate.</p>
 <td style="text-align: left;">Runs unit + integration test stack</td>
 </tr>
 <tr>
+<td style="text-align: left;"><code>Fuzz Smoke</code></td>
+<td style="text-align: left;"><code>make fuzz</code></td>
+<td style="text-align: left;">Runs the short curated fuzz sweep across discovered <code>*fuzz_test.go</code> targets</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>OpenBao Config Compatibility</code></td>
 <td style="text-align: left;"><code>make verify-openbao-config-compat</code></td>
 <td style="text-align: left;">Validates generated HCL fixtures against upstream parser</td>
@@ -5992,15 +6041,27 @@ for the full pipeline. Pushes to <code>main</code> still run the full gate.</p>
 </div>
 </div>
 <h2 id="5-security-checks">5. Security Checks<a class="headerlink" href="#5-security-checks" title="Permanent link">&para;</a></h2>
+<h2 id="5-fuzzing-in-ci">5. Fuzzing in CI<a class="headerlink" href="#5-fuzzing-in-ci" title="Permanent link">&para;</a></h2>
+<p>Pull request and <code>main</code> CI run <code>make fuzz</code> as a smoke lane when code or CI inputs that affect fuzz
+coverage change. The nightly workflow runs <code>make fuzz-long</code> with a larger time budget against the same
+discovered target set.</p>
+<p>When a fuzz job fails in CI, the workflow uploads per-target logs from <code>dist/fuzz/</code> and any generated
+minimized inputs under <code>testdata/fuzz/</code> as build artifacts for replay.</p>
+<p>For local repro, use:</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>fuzz
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nv">FUZZTIME</span><span class="o">=</span>30s<span class="w"> </span>make<span class="w"> </span>fuzz
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nv">FUZZ_TARGET_FILTER</span><span class="o">=</span><span class="s1">&#39;FuzzDiscoverConfig|internal/service/upgrade&#39;</span><span class="w"> </span>make<span class="w"> </span>fuzz
+</span></code></pre></div>
+<h2 id="6-security-checks">6. Security Checks<a class="headerlink" href="#6-security-checks" title="Permanent link">&para;</a></h2>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Govulncheck</label><label for="__tabbed_2_2">Dependency licenses</label><label for="__tabbed_2_3">Trivy</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>vulncheck
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>vulncheck
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>make<span class="w"> </span>license-check
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>make<span class="w"> </span>license-report
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>license-check
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>make<span class="w"> </span>license-report
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -6009,7 +6070,7 @@ See <a href="../dependency-licenses/">Dependency License Policy</a> for the allo
 </div>
 </div>
 <div class="tabbed-block">
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>make<span class="w"> </span>security-scan<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:edge
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>security-scan<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/dc-tec/openbao-operator:edge
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Expected RBAC findings</p>
@@ -6024,11 +6085,11 @@ See <a href="../dependency-licenses/">Dependency License Policy</a> for the allo
 </div>
 </div>
 </div>
-<h2 id="6-documentation-build">6. Documentation Build<a class="headerlink" href="#6-documentation-build" title="Permanent link">&para;</a></h2>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>make<span class="w"> </span>docs-serve
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>make<span class="w"> </span>docs-build
+<h2 id="7-documentation-build">7. Documentation Build<a class="headerlink" href="#7-documentation-build" title="Permanent link">&para;</a></h2>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>make<span class="w"> </span>docs-serve
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>make<span class="w"> </span>docs-build
 </span></code></pre></div>
-<h2 id="7-performance-workflows">7. Performance Workflows<a class="headerlink" href="#7-performance-workflows" title="Permanent link">&para;</a></h2>
+<h2 id="8-performance-workflows">8. Performance Workflows<a class="headerlink" href="#8-performance-workflows" title="Permanent link">&para;</a></h2>
 <h3 id="71-baseline-capture">7.1 Baseline Capture<a class="headerlink" href="#71-baseline-capture" title="Permanent link">&para;</a></h3>
 <ol>
 <li>Open <strong>Actions</strong> -&gt; <strong>Performance Baseline Capture</strong>.</li>
@@ -6042,7 +6103,7 @@ See <a href="../dependency-licenses/">Dependency License Policy</a> for the allo
 <li>Scheduled failures open or update the <code>Weekly performance regression detected</code> issue.</li>
 <li>Release workflow enforces full <code>verify-perf</code> as a blocking gate.</li>
 </ul>
-<h2 id="8-ghcr-housekeeping">8. GHCR Housekeeping<a class="headerlink" href="#8-ghcr-housekeeping" title="Permanent link">&para;</a></h2>
+<h2 id="9-ghcr-housekeeping">9. GHCR Housekeeping<a class="headerlink" href="#9-ghcr-housekeeping" title="Permanent link">&para;</a></h2>
 <p>Run <code>GHCR Housekeeping</code> (<code>.github/workflows/ghcr-housekeeping.yml</code>) to manage image package retention for:</p>
 <ul>
 <li><code>ghcr.io/dc-tec/openbao-operator</code></li>
