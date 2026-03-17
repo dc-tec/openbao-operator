@@ -83,6 +83,15 @@ test-integration-sum: manifests generate vet setup-envtest gotestsum ## Run envt
 	@mkdir -p "$(TEST_ARTIFACT_DIR)"
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" GOFLAGS="$(GOFLAGS_VENDOR)" "$(GOTESTSUM)" --format="$(GOTESTSUM_FORMAT)" --junitfile "$(TEST_ARTIFACT_DIR)/integration.xml" -- -tags=integration -count=1 -coverprofile "$(TEST_ARTIFACT_DIR)/integration.cover.out" $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e)
 
+.PHONY: fuzz
+fuzz: ## Run the curated fuzz smoke sweep across repo fuzz targets.
+	@FUZZTIME="$(FUZZTIME)" FUZZ_GOMAXPROCS="$(FUZZ_GOMAXPROCS)" FUZZ_TARGET_FILTER="$(FUZZ_TARGET_FILTER)" GOFLAGS="$(GOFLAGS_VENDOR)" bash hack/ci/fuzz.sh
+
+.PHONY: fuzz-long
+fuzz-long: FUZZTIME=20s
+fuzz-long: ## Run the longer fuzz sweep used by nightly CI.
+	@FUZZTIME="$(FUZZTIME)" FUZZ_GOMAXPROCS="$(FUZZ_GOMAXPROCS)" FUZZ_TARGET_FILTER="$(FUZZ_TARGET_FILTER)" GOFLAGS="$(GOFLAGS_VENDOR)" bash hack/ci/fuzz.sh
+
 .PHONY: verify-tidy
 verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 	@GOFLAGS="-mod=mod" go mod tidy
@@ -320,6 +329,9 @@ DOCS_PIP ?= $(DOCS_VENV)/bin/pip
 DOCS_MKDOCS ?= $(DOCS_VENV)/bin/mkdocs
 TEST_ARTIFACT_DIR ?= dist/test
 GOTESTSUM_FORMAT ?= pkgname
+FUZZTIME ?= 3s
+FUZZ_GOMAXPROCS ?= 4
+FUZZ_TARGET_FILTER ?=
 
 .PHONY: docs-deps
 docs-deps: ## Install MkDocs tooling in a local venv (CI-equivalent).
