@@ -13,16 +13,20 @@ See [Testing Guide](docs/contributing/testing.md) for full documentation.
 | Change Type | Required Tests |
 |-------------|----------------|
 | Logic in `internal/` | Table-driven unit tests |
+| Kubernetes object builders / fake-client flows | Untagged fast contract tests |
 | HCL generation | Updated golden files (`make test-update-golden`) |
 | Reconciliation flows | At least one envtest integration test |
+| Controller setup / watch behavior | Envtest integration that starts a manager |
 | Upgrade/backup changes | At least one E2E scenario |
+| Manifest compatibility / policy bundles | Untagged static contract tests under `test/manifests/` or `test/utils/` |
 
 ## Patterns
 
 1. **Table-Driven Tests**: Use for unit tests in `internal/`
 2. **Golden Files**: For HCL output verification (`internal/adapter/config/testdata/`)
-3. **EnvTest**: For integration tests behind `-tags=integration` (prefer `test/integration/`)
-4. **Ginkgo/Gomega**: For E2E tests with Kind
+3. **Fast Kubernetes Contract Tests**: Keep fake-client and manifest contract tests untagged
+4. **EnvTest**: Use behind `-tags=integration` for real API-server semantics (prefer `test/integration/`)
+5. **Ginkgo/Gomega**: Use for E2E tests with Kind
 
 ## Commands
 
@@ -47,4 +51,14 @@ make bench-compare OLD=... NEW=... # Compare benchmark runs with benchstat
 4. Use `t.Helper()` in test helper functions
 5. Use `require` for fatal assertions, `assert` for non-fatal
 6. Prefer `test-sum` / `test-integration-sum` when you want readable local output or CI-style artifacts
-7. Performance-sensitive changes SHOULD include targeted benchmarks and `benchstat` comparisons when evaluating regressions
+7. Reserve `//go:build integration` and `_integration_test.go` for envtest-backed tests only
+8. Use envtest when the behavior depends on validation, defaulting, status subresources,
+   `Generation` / `ResourceVersion`, admission, SSA, owner references, or real API-server semantics
+9. Controller tests that claim `SetupWithManager()`, watch behavior, cache/index behavior, or
+   event-driven reconciliation MUST start a manager and register the reconciler
+10. Direct `Reconcile(...)` tests are fine for fast orchestration coverage, but they are not a
+    substitute for manager-driven controller integration tests
+11. Prefer `test/integration/` for shared envtest suites; keep package-local envtest only when
+    colocated fixtures materially improve clarity
+12. Keep static manifest / compatibility tests untagged under `test/manifests/` or `test/utils/`
+13. Performance-sensitive changes SHOULD include targeted benchmarks and `benchstat` comparisons when evaluating regressions
