@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -244,6 +245,14 @@ func (r *infraReconciler) oidcDiscoveryError(err error) error {
 		}
 	}
 
+	if operatorerrors.IsTransientConnection(err) {
+		return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
+	}
+
+	if isOIDCDiscoveryContentError(err) {
+		return r.oidcBootstrapConfigurationError(err)
+	}
+
 	return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
 }
 
@@ -278,13 +287,47 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 		return nil, r.oidcDiscoveryError(err)
 	}
 	if discovered == nil || strings.TrimSpace(discovered.IssuerURL) == "" {
-		return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned empty issuer"))
+		return nil, r.oidcBootstrapConfigurationError(fmt.Errorf("OIDC discovery returned empty issuer"))
 	}
 	if strings.TrimSpace(discovered.OIDCDiscoveryURL) == "" && strings.TrimSpace(discovered.JWKSURL) == "" && len(discovered.JWKSKeys) == 0 {
-		return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("OIDC discovery returned no JWT validation material"))
+		return nil, r.oidcBootstrapConfigurationError(fmt.Errorf("OIDC discovery returned no JWT validation material"))
 	}
 
 	return discovered, nil
+}
+
+func isOIDCDiscoveryContentError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		return true
+	}
+
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &typeErr) {
+		return true
+	}
+
+	message := strings.ToLower(err.Error())
+	patterns := []string{
+		"oidc config missing issuer",
+		"oidc discovery returned empty issuer",
+		"oidc discovery returned no jwt validation material",
+		"failed to parse jwks document",
+		"failed to extract public keys from jwks",
+		"failed to fetch jwks keys",
+	}
+
+	for _, pattern := range patterns {
+		if strings.Contains(message, pattern) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
