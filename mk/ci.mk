@@ -15,7 +15,26 @@ endif
 	@echo "✅ All CI checks passed!"
 
 .PHONY: ci-core
-ci-core: security-ci lint-ci verify-fmt verify-tidy verify-vendor verify-generated test-ci fuzz verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
+ci-core: security-ci security-scan-built-images lint-ci verify-fmt verify-tidy verify-vendor verify-generated test-ci fuzz verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
+
+CI_MANAGER_SCAN_IMG ?= local/openbao-operator:ci
+CI_INIT_SCAN_IMG ?= local/openbao-init:ci
+CI_BACKUP_SCAN_IMG ?= local/openbao-backup:ci
+CI_UPGRADE_SCAN_IMG ?= local/openbao-upgrade:ci
+
+.PHONY: security-scan-built-images
+security-scan-built-images: ## Build the manager and helper images locally and run the CI-equivalent Trivy image scans.
+	@$(MAKE) docker-build IMG='$(CI_MANAGER_SCAN_IMG)'
+	@$(MAKE) docker-build-init IMG='$(CI_INIT_SCAN_IMG)'
+	@$(MAKE) docker-build-backup IMG='$(CI_BACKUP_SCAN_IMG)'
+	@$(MAKE) docker-build-upgrade IMG='$(CI_UPGRADE_SCAN_IMG)'
+	@$(MAKE) security-scan-image IMG='$(CI_MANAGER_SCAN_IMG)'
+	@$(MAKE) security-scan-image IMG='$(CI_INIT_SCAN_IMG)'
+	@$(MAKE) security-scan-image IMG='$(CI_BACKUP_SCAN_IMG)'
+	@$(MAKE) security-scan-image IMG='$(CI_UPGRADE_SCAN_IMG)'
+
+.PHONY: security-scan-built-manager
+security-scan-built-manager: security-scan-built-images ## Backward-compatible alias for the CI-equivalent built-image Trivy scans.
 
 .PHONY: pentest-smoke
 pentest-smoke: ## Run "pentest" labeled e2e tests against an existing cluster (requires E2E_OPERATOR_IMAGE).

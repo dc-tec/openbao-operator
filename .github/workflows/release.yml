@@ -176,9 +176,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install Trivy (safe pinned release)
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.69.3
+
       - name: Scan image
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
+          skip-setup-trivy: true
           scan-type: image
           image-ref: ${{ matrix.image_ref }}
           severity: HIGH,CRITICAL
