@@ -52,7 +52,8 @@ jobs:
     name: Open Weekly Regression Issue
     runs-on: ubuntu-24.04
     needs: verify-perf
-    if: ${{ github.event_name == 'schedule' && needs.verify-perf.result == 'failure' }}
+    # `always()` is required so this job still runs after the failed `needs` job.
+    if: ${{ always() && github.event_name == 'schedule' && needs.verify-perf.result == 'failure' }}
     steps:
       - name: Open or update issue
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.1
