@@ -83,6 +83,15 @@ func (t *Tracker) EnsureFresh(ctx context.Context) (*Status, error) {
 		return current, nil
 	}
 
+	return t.Refresh(ctx)
+}
+
+// Refresh re-checks admission dependencies immediately, bypassing the cached age window.
+func (t *Tracker) Refresh(ctx context.Context) (*Status, error) {
+	if t == nil {
+		return nil, nil
+	}
+
 	status, err := CheckDependencies(ctx, t.reader, t.dependencies, t.namePrefixes)
 	if err != nil {
 		status = Status{

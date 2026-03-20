@@ -65,6 +65,56 @@ func TestReconcilers_PauseWhenAdmissionDependenciesNotReady(t *testing.T) {
 	}
 }
 
+func TestReconcilers_RefreshAdmissionDependenciesEvenWhenCachedReady(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		newRuntime func(parent *OpenBaoClusterReconciler) admissionRuntimeTestReconciler
+	}{
+		{
+			name: "workload",
+			newRuntime: func(parent *OpenBaoClusterReconciler) admissionRuntimeTestReconciler {
+				return &openBaoClusterWorkloadReconciler{parent: parent}
+			},
+		},
+		{
+			name: "adminops",
+			newRuntime: func(parent *OpenBaoClusterReconciler) admissionRuntimeTestReconciler {
+				return &openBaoClusterAdminOpsReconciler{parent: parent}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cluster, tracker, parent := newAdmissionRuntimeTestContext(t)
+			tracker.Set(admission.Status{
+				CheckedAt:    time.Now(),
+				OverallReady: true,
+			})
+			reconciler := tc.newRuntime(parent)
+
+			result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+			})
+			if err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if result.RequeueAfter != constants.RequeueShort {
+				t.Fatalf("Reconcile() requeueAfter = %s, want %s", result.RequeueAfter, constants.RequeueShort)
+			}
+
+			status := tracker.Current()
+			if status == nil || status.OverallReady {
+				t.Fatalf("tracker status = %#v, want refreshed admission not ready", status)
+			}
+		})
+	}
+}
+
 func newAdmissionRuntimeTestContext(t *testing.T) (*openbaov1alpha1.OpenBaoCluster, *admission.Tracker, *OpenBaoClusterReconciler) {
 	t.Helper()
 

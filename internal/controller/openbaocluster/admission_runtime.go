@@ -24,12 +24,19 @@ func (r *OpenBaoClusterReconciler) ensureAdmissionStatusFresh(ctx context.Contex
 	return r.AdmissionTracker.EnsureFresh(ctx)
 }
 
+func (r *OpenBaoClusterReconciler) refreshAdmissionStatus(ctx context.Context) (*admission.Status, error) {
+	if r.AdmissionTracker == nil {
+		return nil, nil
+	}
+	return r.AdmissionTracker.Refresh(ctx)
+}
+
 func (r *OpenBaoClusterReconciler) pauseForAdmissionDependencyLoss(ctx context.Context, logger logr.Logger, controllerName string) (ctrl.Result, bool) {
 	if admission.UnsafeAdmissionDisabled() {
 		return ctrl.Result{}, false
 	}
 
-	status, err := r.ensureAdmissionStatusFresh(ctx)
+	status, err := r.refreshAdmissionStatus(ctx)
 	if err != nil {
 		logger.Info("Admission policy dependency refresh failed; pausing reconciliation", "controller", controllerName, "error", err)
 		return ctrl.Result{RequeueAfter: constants.RequeueShort}, true
