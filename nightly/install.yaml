@@ -4871,7 +4871,7 @@ spec:
           value: 0.0.0
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:3f4feaffca7d2aaead473b48618146db66282732150fa38feec23c1ca336cd7f
+        image: ghcr.io/dc-tec/openbao-operator@sha256:9ca92878c904dc9aca06661ecf5e0dc838fc8f2c9f177bf1e9f3ff76604dcd4d
         livenessProbe:
           httpGet:
             path: /healthz
@@ -4987,7 +4987,7 @@ spec:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:3f4feaffca7d2aaead473b48618146db66282732150fa38feec23c1ca336cd7f
+        image: ghcr.io/dc-tec/openbao-operator@sha256:9ca92878c904dc9aca06661ecf5e0dc838fc8f2c9f177bf1e9f3ff76604dcd4d
         livenessProbe:
           httpGet:
             path: /healthz
