@@ -57,6 +57,7 @@ jobs:
       go_tests: ${{ steps.diff.outputs.go_tests }}
       config_compat: ${{ steps.diff.outputs.config_compat }}
       security_scan: ${{ steps.diff.outputs.security_scan }}
+      security_image: ${{ steps.diff.outputs.security_image }}
       fuzz: ${{ steps.diff.outputs.fuzz }}
       e2e: ${{ steps.diff.outputs.e2e }}
       e2e_backup: ${{ steps.diff.outputs.e2e_backup }}
@@ -84,7 +85,7 @@ jobs:
               echo "manual_backup_e2e=${{ inputs.force_backup_e2e && 'true' || 'false' }}"
               echo "manual_upgrade_e2e=${{ inputs.force_upgrade_e2e && 'true' || 'false' }}"
               echo "manual_hardened_e2e=${{ inputs.force_hardened_e2e && 'true' || 'false' }}"
-              for key in chart workflow docs go_quality go_tests config_compat security_scan fuzz e2e e2e_backup e2e_upgrade e2e_hardened; do
+              for key in chart workflow docs go_quality go_tests config_compat security_scan security_image fuzz e2e e2e_backup e2e_upgrade e2e_hardened; do
                 echo "${key}=false"
               done
             } >> "${GITHUB_OUTPUT}"
@@ -156,6 +157,12 @@ jobs:
             echo "security_scan=false" >> "${GITHUB_OUTPUT}"
           fi
 
+          if echo "${changed}" | grep -qE '^(internal/|cmd/|go\.(mod|sum)$|vendor/|Dockerfile(\..*)?$|\.dockerignore|Makefile|mk/|\.github/workflows/ci\.yml)'; then
+            echo "security_image=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "security_image=false" >> "${GITHUB_OUTPUT}"
+          fi
+
           if echo "${changed}" | grep -qE '^(internal/|cmd/|go\.(mod|sum)$|hack/ci/fuzz\.sh|mk/|\.github/workflows/(ci|nightly)\.yml|Makefile)'; then
             echo "fuzz=true" >> "${GITHUB_OUTPUT}"
           else
@@ -202,9 +209,15 @@ jobs:
           GOFLAGS: -mod=vendor
         run: make vulncheck
 
+      - name: Install Trivy (safe pinned release)
+        uses: aquasecurity/setup-trivy@3fb12ecedf7920f89f7ece6f6fd6e7c31027b61d # v0.2.6
+        with:
+          version: v0.69.3
+
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
+          skip-setup-trivy: true
           scan-type: fs
           scan-ref: .
           scanners: vuln,misconfig
@@ -230,6 +243,50 @@ jobs:
 
       - name: Verify shipped dependency licenses
         run: make license-check
+
+  security-image:
+    name: Security (Trivy built image ${{ matrix.image_name }})
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.security_image == 'true'
+    runs-on: *runner
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image_name: manager
+            build_target: docker-build
+            image_ref: local/openbao-operator-pr-scan:${{ github.sha }}
+          - image_name: config-init
+            build_target: docker-build-init
+            image_ref: local/openbao-init-pr-scan:${{ github.sha }}
+          - image_name: backup-executor
+            build_target: docker-build-backup
+            image_ref: local/openbao-backup-pr-scan:${{ github.sha }}
+          - image_name: upgrade-executor
+            build_target: docker-build-upgrade
+            image_ref: local/openbao-upgrade-pr-scan:${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build image
+        run: make ${{ matrix.build_target }} IMG="${{ matrix.image_ref }}"
+
+      - name: Install Trivy (safe pinned release)
+        uses: aquasecurity/setup-trivy@3fb12ecedf7920f89f7ece6f6fd6e7c31027b61d # v0.2.6
+        with:
+          version: v0.69.3
+
+      - name: Run Trivy image scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
+        with:
+          skip-setup-trivy: true
+          scan-type: image
+          image-ref: ${{ matrix.image_ref }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore
 
   workflow-lint:
     name: Workflow Lint
@@ -893,6 +950,7 @@ jobs:
     needs:
       - changes
       - security
+      - security-image
       - dependency-licenses
       - workflow-lint
       - lint
@@ -915,6 +973,7 @@ jobs:
         env:
           CHANGES: ${{ needs.changes.result }}
           SECURITY: ${{ needs.security.result }}
+          SECURITY_IMAGE: ${{ needs.security-image.result }}
           DEPENDENCY_LICENSES: ${{ needs.dependency-licenses.result }}
           WORKFLOW_LINT: ${{ needs.workflow-lint.result }}
           LINT: ${{ needs.lint.result }}
@@ -947,6 +1006,7 @@ jobs:
           done <<EOF
           changes=${CHANGES}
           security=${SECURITY}
+          security-image=${SECURITY_IMAGE}
           dependency-licenses=${DEPENDENCY_LICENSES}
           workflow-lint=${WORKFLOW_LINT}
           lint=${LINT}

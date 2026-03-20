@@ -116,13 +116,14 @@ make ci-core
 | `Verify Generated Artifacts` | `make verify-generated` | Checks generated files drift (`api/v1alpha1`, `config/crd/bases`, `docs/reference/api.md`) |
 | `Helm Chart` | `make verify-helm && make helm-test` | Includes Helm sync, lint, template, and OpenShift rendering checks |
 | `Security (vulncheck + Trivy FS)` | `make security-ci` | Runs `govulncheck` plus the CI-equivalent Trivy filesystem scan |
+| `Security (Trivy built image <name>)` | `make security-scan-built-images` | Builds and scans the manager, config-init, backup, and upgrade images with the same Trivy policy used in PR CI |
 | `Unit Tests` + `Envtest Integration` | `make test-ci` | Runs unit + integration test stack |
 | `Fuzz Smoke` | `make fuzz` | Runs the short curated fuzz sweep across discovered `*fuzz_test.go` targets |
 | `OpenBao Config Compatibility` | `make verify-openbao-config-compat` | Validates generated HCL fixtures against upstream parser |
 | `Docs Build` | `make docs-build` | Strict MkDocs build |
 
 !!! tip
-    `make security-scan-image IMG=<image>` is available as an extra local hardening check when you want to scan a built image in addition to the CI-equivalent gates.
+    `make security-scan-image IMG=<image>` is available when you want to scan a specific prebuilt image directly. `make security-scan-built-manager` remains as a backward-compatible alias for the full local CI-equivalent built-image scan set.
 
 ## 3. Pull Request Standards Gates
 

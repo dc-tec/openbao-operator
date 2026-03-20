@@ -28,9 +28,15 @@ jobs:
           GOFLAGS: -mod=vendor
         run: make vulncheck
 
+      - name: Install Trivy (safe pinned release)
+        uses: aquasecurity/setup-trivy@3fb12ecedf7920f89f7ece6f6fd6e7c31027b61d # v0.2.6
+        with:
+          version: v0.69.3
+
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # 0.35.0
         with:
+          skip-setup-trivy: true
           scan-type: fs
           scan-ref: .
           scanners: vuln,misconfig

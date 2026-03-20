@@ -157,7 +157,7 @@ Use `make help` to see all available commands, or refer to this cheatsheet:
 | **Deploy** | `make install` / `uninstall` | Install/Remove CRDs. |
 | | `make deploy` / `undeploy` | Deploy/Remove Operator & RBAC. |
 | **Verify** | `make lint-ci` | Run code linters and ast-grep guardrails. |
-| | `make ci-core` | Run the PR-equivalent local gate (everything except E2E). |
+| | `make ci-core` | Run the PR-equivalent local gate (everything except E2E), including local Trivy scans for the manager and helper images. |
 | | `make generate-ast-rules` | Generate ast-grep architecture boundary rules from policy. |
 | | `make verify-arch-policy` | Verify generated ast-grep architecture rules are up-to-date. |
 | | `make test` | Run unit tests. |
