@@ -273,8 +273,18 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
-	requeueAfter := safetyNetRequeueAfter(time.Now())
+	// In steady state, keep status fresh on a normal cadence. In multi-tenant mode
+	// we do not watch child resources directly, so relying only on the safety-net
+	// requeue can leave health conditions stale for many minutes after runtime drift.
+	requeueAfter := steadyStateStatusRefreshRequeueAfter(time.Now())
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+}
+
+func steadyStateStatusRefreshRequeueAfter(now time.Time) time.Duration {
+	if constants.RequeueStandard > 0 {
+		return constants.RequeueStandard
+	}
+	return safetyNetRequeueAfter(now)
 }
 
 func safetyNetRequeueAfter(now time.Time) time.Duration {

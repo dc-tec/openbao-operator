@@ -114,3 +114,13 @@ func TestSafetyNetRequeueAfter(t *testing.T) {
 		}
 	}
 }
+
+func TestSteadyStateStatusRefreshRequeueAfter(t *testing.T) {
+	t.Parallel()
+
+	now := time.Unix(1700000000, 123456789)
+	got := steadyStateStatusRefreshRequeueAfter(now)
+	if got != constants.RequeueStandard {
+		t.Fatalf("steadyStateStatusRefreshRequeueAfter(%v)=%v, want %v", now, got, constants.RequeueStandard)
+	}
+}
