@@ -11,12 +11,14 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -81,6 +83,26 @@ func containsString(values []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func findAdmissionPolicyBinding(
+	ctx context.Context,
+	c client.Client,
+	suffix string,
+	prefixes []string,
+) (*admissionregistrationv1.ValidatingAdmissionPolicyBinding, error) {
+	for _, prefix := range prefixes {
+		binding := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+		name := prefix + suffix
+		if err := c.Get(ctx, types.NamespacedName{Name: name}, binding); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return nil, err
+		}
+		return binding, nil
+	}
+	return nil, fmt.Errorf("no ValidatingAdmissionPolicyBinding found for suffix %q", suffix)
 }
 
 var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, func() {
@@ -1072,6 +1094,161 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				}
 				g.Expect(found).To(BeTrue(), "expected Degraded condition to be present")
 			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+		})
+	})
+
+	// --- Admission Dependency Runtime Recheck ---
+	Context("Admission Dependency Runtime Recheck", Label("admission", "pentest"), func() {
+		var (
+			tenantFW        *framework.Framework
+			tenantNamespace string
+			clusterName     = "admission-runtime-loss"
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.New(ctx, admin, "tenant-admission-runtime", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  openBaoVersion,
+					Image:    openBaoImage,
+					Replicas: 1,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+							Enabled: true,
+						},
+						Requests: framework.DefaultAdminSelfInitRequests(),
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Maintenance: &openbaov1alpha1.MaintenanceConfig{
+						Enabled: true,
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, cluster)).To(Succeed())
+
+			Eventually(func() error {
+				return admin.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, &openbaov1alpha1.OpenBaoCluster{})
+			}, 30*time.Second, time.Second).Should(Succeed())
+
+			_, err = tenantFW.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultWaitTimeout, framework.DefaultPollInterval)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tenantFW.TriggerReconcile(ctx, clusterName)).To(Succeed())
+			tenantFW.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("pauses managed-resource reconciliation when a required admission binding disappears, then recovers when restored", Label(
+			"case:admission-runtime-binding-loss",
+			"covers:admission-runtime-recheck",
+			"covers:managed-resource-pause-on-policy-loss",
+		), func() {
+			const bindingSuffix = "openbao-lock-managed-resource-mutations-binding"
+
+			binding, err := findAdmissionPolicyBinding(ctx, admin, bindingSuffix, admission.DefaultNamePrefixes())
+			Expect(err).NotTo(HaveOccurred())
+			originalBinding := binding.DeepCopy()
+			originalBinding.SetResourceVersion("")
+			originalBinding.SetUID("")
+			originalBinding.SetCreationTimestamp(metav1.Time{})
+			originalBinding.SetManagedFields(nil)
+
+			By("removing a required admission binding after the cluster is healthy")
+			Expect(admin.Delete(ctx, binding)).To(Succeed())
+			DeferCleanup(func() {
+				current := &admissionregistrationv1.ValidatingAdmissionPolicyBinding{}
+				err := admin.Get(ctx, types.NamespacedName{Name: originalBinding.Name}, current)
+				if apierrors.IsNotFound(err) {
+					Expect(admin.Create(ctx, originalBinding)).To(Succeed())
+					return
+				}
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("waiting for live dependency checks to report the missing binding")
+			Eventually(func(g Gomega) {
+				checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+
+				status, err := admission.CheckDependencies(checkCtx, admin, admission.DefaultDependencies(), admission.DefaultNamePrefixes())
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(status.OverallReady).To(BeFalse())
+				g.Expect(status.SummaryMessage()).To(ContainSubstring(bindingSuffix))
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("requesting a scale-up that would normally mutate the managed StatefulSet")
+			Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				current := &openbaov1alpha1.OpenBaoCluster{}
+				if err := admin.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, current); err != nil {
+					return err
+				}
+				original := current.DeepCopy()
+				current.Spec.Replicas = 2
+				return admin.Patch(ctx, current, client.MergeFrom(original))
+			})).To(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, clusterName)).To(Succeed())
+
+			By("proving the controller fails closed and does not mutate the StatefulSet")
+			Consistently(func(g Gomega) {
+				sts := &appsv1.StatefulSet{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, sts)).To(Succeed())
+				g.Expect(sts.Spec.Replicas).NotTo(BeNil())
+				g.Expect(*sts.Spec.Replicas).To(Equal(int32(1)))
+			}, 45*time.Second, 5*time.Second).Should(Succeed())
+
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, updated)).To(Succeed())
+				available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+				g.Expect(available).NotTo(BeNil())
+				g.Expect(available.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(available.Reason).To(Equal("NotReady"))
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("restoring the admission binding and verifying recovery")
+			Expect(admin.Create(ctx, originalBinding)).To(Succeed())
+			Eventually(func(g Gomega) {
+				checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				defer cancel()
+
+				status, err := admission.CheckDependencies(checkCtx, admin, admission.DefaultDependencies(), admission.DefaultNamePrefixes())
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(status.OverallReady).To(BeTrue(), status.SummaryMessage())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			Expect(tenantFW.TriggerReconcile(ctx, clusterName)).To(Succeed())
+			_, err = tenantFW.WaitForStatefulSetReady(ctx, clusterName, 2, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			Expect(err).NotTo(HaveOccurred())
+			tenantFW.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
 		})
 	})
 

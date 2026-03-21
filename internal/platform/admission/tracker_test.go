@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestTracker_SetAndCurrent(t *testing.T) {
@@ -56,5 +58,35 @@ func TestTracker_EnsureFreshCachesRecentStatus(t *testing.T) {
 	}
 	if current == nil || !current.OverallReady {
 		t.Fatalf("EnsureFresh() returned unexpected status: %#v", current)
+	}
+}
+
+func TestTracker_RefreshBypassesRecentCache(t *testing.T) {
+	t.Parallel()
+
+	tracker := NewTracker(
+		fake.NewClientBuilder().Build(),
+		[]Dependency{{
+			Name:        "missing-policy",
+			PolicyName:  "missing-policy",
+			BindingName: "missing-binding",
+		}},
+		[]string{""},
+		time.Hour,
+	)
+	tracker.Set(Status{
+		CheckedAt:    time.Now(),
+		OverallReady: true,
+	})
+
+	current, err := tracker.Refresh(context.Background())
+	if err != nil {
+		t.Fatalf("Refresh() returned unexpected error: %v", err)
+	}
+	if current == nil || current.OverallReady {
+		t.Fatalf("Refresh() returned unexpected status: %#v", current)
+	}
+	if len(current.Dependencies) != 1 || current.Dependencies[0].Ready {
+		t.Fatalf("Refresh() lost dependency details: %#v", current)
 	}
 }
