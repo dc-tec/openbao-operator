@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -26,6 +27,10 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+)
+
+const (
+	OIDCBootstrapConfigurationInvalid = "OIDCBootstrapConfigurationInvalid"
 )
 
 func TestHandleScaleDownSafety(t *testing.T) {
@@ -465,8 +470,8 @@ func TestInfraReconciler_ResolveOIDC_MissingRestConfigReturnsBootstrapReason(t *
 		t.Fatalf("expected permanent config error, got %v", err)
 	}
 	reason, ok := operatorerrors.Reason(err)
-	if !ok || reason != "OIDCBootstrapConfigurationInvalid" {
-		t.Fatalf("reason = %q,%v want OIDCBootstrapConfigurationInvalid,true", reason, ok)
+	if !ok || reason != OIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
 	}
 }
 
@@ -509,7 +514,164 @@ func TestInfraReconciler_ResolveOIDC_ForbiddenDiscoveryReturnsBootstrapReason(t 
 		t.Fatalf("expected permanent config error, got %v", err)
 	}
 	reason, ok := operatorerrors.Reason(err)
-	if !ok || reason != "OIDCBootstrapConfigurationInvalid" {
-		t.Fatalf("reason = %q,%v want OIDCBootstrapConfigurationInvalid,true", reason, ok)
+
+	if !ok || reason != OIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
 	}
+}
+
+func TestInfraReconciler_ResolveOIDC_EmptyIssuerReturnsBootstrapReason(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			OIDC: InfraOIDCRuntime{
+				RestConfig: &rest.Config{Host: "https://kubernetes.default.svc"},
+				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
+					return &OIDCConfig{JWKSURL: "https://issuer.example/keys"}, nil
+				},
+			},
+		},
+		reasons: InfraReasonPolicy{
+			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
+		},
+	}
+
+	_, err := r.resolveOIDC(context.Background(), cluster)
+	assertOIDCBootstrapConfigurationError(t, err)
+}
+
+func TestInfraReconciler_ResolveOIDC_NoJWTValidationMaterialReturnsBootstrapReason(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			OIDC: InfraOIDCRuntime{
+				RestConfig: &rest.Config{Host: "https://kubernetes.default.svc"},
+				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
+					return &OIDCConfig{IssuerURL: "https://issuer.example"}, nil
+				},
+			},
+		},
+		reasons: InfraReasonPolicy{
+			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
+		},
+	}
+
+	_, err := r.resolveOIDC(context.Background(), cluster)
+	assertOIDCBootstrapConfigurationError(t, err)
+}
+
+func TestInfraReconciler_ResolveOIDC_MalformedJWKSReturnsBootstrapReason(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			OIDC: InfraOIDCRuntime{
+				RestConfig: &rest.Config{Host: "https://kubernetes.default.svc"},
+				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
+					return nil, fmt.Errorf("failed to fetch JWKS keys: failed to parse jwks document: %w", malformedJSONError())
+				},
+			},
+		},
+		reasons: InfraReasonPolicy{
+			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
+		},
+	}
+
+	_, err := r.resolveOIDC(context.Background(), cluster)
+	assertOIDCBootstrapConfigurationError(t, err)
+}
+
+func TestInfraReconciler_ResolveOIDC_TransientJWKSFetchFailureStaysTransient(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			OIDC: InfraOIDCRuntime{
+				RestConfig: &rest.Config{Host: "https://kubernetes.default.svc"},
+				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
+					return nil, fmt.Errorf("failed to fetch JWKS keys: failed to fetch jwks endpoint: %w", context.DeadlineExceeded)
+				},
+			},
+		},
+		reasons: InfraReasonPolicy{
+			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
+		},
+	}
+
+	_, err := r.resolveOIDC(context.Background(), cluster)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if errors.Is(err, operatorerrors.ErrPermanentConfig) {
+		t.Fatalf("expected transient error, got permanent config: %v", err)
+	}
+	if !operatorerrors.IsTransient(err) {
+		t.Fatalf("expected transient error, got %v", err)
+	}
+}
+
+func assertOIDCBootstrapConfigurationError(t *testing.T, err error) {
+	t.Helper()
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
+		t.Fatalf("expected permanent config error, got %v", err)
+	}
+	reason, ok := operatorerrors.Reason(err)
+	if !ok || reason != OIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
+	}
+}
+
+func malformedJSONError() error {
+	var payload map[string]any
+	return json.Unmarshal([]byte("{"), &payload)
 }
