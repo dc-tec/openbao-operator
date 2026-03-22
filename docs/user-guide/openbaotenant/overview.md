@@ -1,11 +1,18 @@
+---
+slug: /install-access/tenants
+---
+
 # OpenBaoTenant
 
 `OpenBaoTenant` is the governance and onboarding CRD. It authorizes the Operator to manage OpenBao resources in a target namespace by provisioning tenant-scoped isolation.
 
 It is the key to **Multi-Tenancy**, ensuring that different teams can safely share a Kubernetes cluster without accessing each other's secrets.
 
-!!! note "API Contract"
-    `spec.targetNamespace` is immutable after creation.
+<Callout type="note" title="API Contract">
+
+`spec.targetNamespace` is immutable after creation.
+
+</Callout>
 
 ## Tenant Isolation Model
 
@@ -42,15 +49,15 @@ graph TD
 
 <div class="grid cards" markdown>
 
-- :material-account-key: **Identity & Access**
+- **Identity & Access**
 
     Automatically provisions Kubernetes **RoleBindings** to efficiently manage permissions for the Tenant.
 
-- :material-chart-pie: **Resource Quotas**
+- **Resource Quotas**
 
     Applies operator-managed **ResourceQuotas** and **LimitRanges** to prevent a single tenant from consuming all cluster storage or compute. Self-service tenants use the default guardrails; custom values are reserved for centrally managed onboarding.
 
-- :material-shield-check: **Namespace Guardrails**
+- **Namespace Guardrails**
 
     Applies Pod Security Standards labels and reserves quota customization for centrally managed onboarding paths.
 
@@ -62,7 +69,7 @@ Choose the onboarding model that fits your organization.
 
 <div class="grid cards" markdown>
 
-- :material-account-check: **Self-Service**
+- **Self-Service**
 
     ---
 
@@ -70,9 +77,9 @@ Choose the onboarding model that fits your organization.
 
     *Best for: High-trust, low-friction environments.*
 
-    [:material-arrow-right: Self-Service Guide](onboarding.md#self-service-onboarding)
+    [Self-Service Guide](onboarding.md#self-service-onboarding)
 
-- :material-police-badge: **Centralized Admin**
+- **Centralized Admin**
 
     ---
 
@@ -80,7 +87,7 @@ Choose the onboarding model that fits your organization.
 
     *Best for: Strict compliance and audit trails.*
 
-    [:material-arrow-right: Admin Guide](onboarding.md#centralized-admin-onboarding)
+    [Admin Guide](onboarding.md#centralized-admin-onboarding)
 
 </div>
 

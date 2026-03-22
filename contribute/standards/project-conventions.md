@@ -1,0 +1,144 @@
+# Project Conventions
+
+Specific conventions for the OpenBao Operator codebase that go beyond standard Go idioms.
+
+## 1. Type Safety
+
+We leverage Go's strong typing to prevent runtime errors.
+
+### Strict Prohibitions
+
+<Callout type="failure" title="No `any` or `interface{}`">
+
+The use of `interface{}` or `any` is **strictly prohibited** in core logic.
+It defeats compile-time safety and requires runtime type assertions.
+
+**Exception:** Interaction with external libraries that require it (e.g., `json.Unmarshal`).
+
+</Callout>
+
+<Tabs groupId="bad-pattern-good-pattern">
+
+<TabItem value="bad-pattern" label="Bad Pattern">
+
+```go
+func process(data any) error {
+    // Runtime crash risk!
+    return data.(string)
+}
+```
+
+</TabItem>
+
+<TabItem value="good-pattern" label="Good Pattern">
+
+```go
+func process(data ConfigType) error {
+    // Compile-time safe
+    return nil
+}
+```
+
+</TabItem>
+
+</Tabs>
+
+### Enum Constants
+
+Avoid "stringly-typed" code. Use defined types for status fields.
+
+```go
+type Phase string
+
+const (
+    PhaseRunning Phase = "Running"
+    PhaseFailed  Phase = "Failed"
+)
+```
+
+## 2. Code Organization (DRY)
+
+### The Rule of Three
+
+<Callout type="note" title="Don't Abstract Too Early">
+
+Do not create a helper function or shared package until logic is repeated **three times**.
+
+1.  **First time:** Write it inline.
+2.  **Second time:** Copy-paste (yes, really).
+3.  **Third time:** Refactor into a shared helper.
+
+</Callout>
+
+### Package Naming
+
+Avoid generic names that become "junk drawers".
+
+| Avoid | Prefer |
+| :--- | :--- |
+| `util`, `common`, `shared` | `slice`, `pointer`, `k8sutil` |
+| `types`, `models` | `api`, `config`, `schema` |
+
+## 3. Review Hygiene
+
+To keep code reviews high-signal, adhere to these scoping rules:
+
+- [ ] **One Theme**: A PR should fix a bug OR add a feature OR refactor. Not all three.
+- [ ] **No Drive-By Changes**: Do not reformat unrelated files.
+- [ ] **Update Generated Files**: If you change `api/`, run `make manifests generate`.
+
+## 4. Architecture Boundary Policy
+
+Architecture boundaries are policy-driven and enforced in CI.
+
+- **Source of truth:** `.ast-grep/policy/architecture-boundaries.yml`
+- **Generated rules:** `.ast-grep/rules/generated/architecture-boundary/`
+- **Verification:** `make verify-arch-policy`
+
+When introducing a new top-level `internal/*` package or a new controller package:
+
+1. Update `.ast-grep/policy/architecture-boundaries.yml`.
+2. Run `make generate-ast-rules`.
+3. Run `make verify-arch-policy test-ast lint-ast`.
+
+## 5. Observability Standards
+
+### Metrics
+
+Must use the `openbao_` prefix and standard labels.
+
+| Type | Name | Labels |
+| :--- | :--- | :--- |
+| **Gauge** | `openbao_cluster_replicas` | `namespace`, `name` |
+| **Counter** | `openbao_reconcile_errors_total` | `controller`, `type` |
+
+### Logging
+
+See [Kubernetes Patterns](kubernetes-patterns.md#5-structured-logging) for detailed logging rules.
+
+## 6. Testing Requirements
+
+Every change requires verification.
+
+| Change Type | Required Test | Command |
+| :--- | :--- | :--- |
+| **Business Logic** | Unit Test (Table-driven) | `make test` |
+| **HCL Config** | Golden File Update | `make test-update-golden` |
+| **Controller Logic** | EnvTest Integration | `make test-integration` |
+| **Critical Path** | End-to-End Test | `make test-e2e` |
+
+<Callout type="tip" title="Golden Files">
+
+Changes to `internal/adapter/config/builder.go` will often break tests.
+Run `make test-update-golden` to update the expected output in `internal/adapter/config/testdata/`.
+
+</Callout>
+
+## 7. CRD Evolution
+
+Breaking changes to `OpenBaoCluster` are **expensive**.
+
+1. **Prefer Additive Changes**: Add new optional fields; do not rename or remove existing ones.
+2. **Versioning**: Significant changes require a new API version (e.g., `v1beta1`).
+3. **Migration**: You must document how to migrate from the old version.
+

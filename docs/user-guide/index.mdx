@@ -1,0 +1,106 @@
+---
+title: Get Started
+slug: /get-started
+hide_title: true
+pageType: landing
+journey: get-started
+description: Choose a deployment model, install OpenBao Operator, create your first cluster, and leave with a clear day 2 plan.
+---
+
+<PageHero
+  eyebrow="Get Started"
+  title="Deploy OpenBao Operator with a clear first path."
+  lede="This journey is for platform teams standing up OpenBao Operator for the first time. The goal is not just to get pods running, but to leave the environment with the right tenancy model, security posture, first cluster shape, and day 2 plan."
+  actions={[
+    {label: 'Choose a deployment model', docId: 'user-guide/operator/deployment-decision-guide', variant: 'primary'},
+    {label: 'Jump to installation', docId: 'user-guide/operator/installation', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="A good first pass should leave you with"
+    items={[
+      'the right tenancy and namespace model',
+      'an install path you can explain and repeat',
+      'a first cluster shape that will not trap later decisions',
+      'a clear next move into backups, upgrades, and exposure',
+    ]}
+  />
+</PageHero>
+
+<JourneyRail
+  current={1}
+  title="From design choices to a production-ready baseline"
+  items={[
+    {
+      label: 'Choose a deployment model',
+      description: 'Decide tenancy mode, security profile, TLS posture, and install method.',
+      docId: 'user-guide/operator/deployment-decision-guide',
+    },
+    {
+      label: 'Install the operator',
+      description: 'Use Helm or manifests with the right namespace, identity, and admission model.',
+      docId: 'user-guide/operator/installation',
+    },
+    {
+      label: 'Create your first cluster',
+      description: 'Apply a starting profile that matches local evaluation or hardened production.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Prepare for day 2',
+      description: 'Move into production checklist items, upgrades, backups, and exposure.',
+      docId: 'user-guide/openbaocluster/next-steps',
+    },
+  ]}
+/>
+
+<RouteList
+  title="Core path"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Choose a deployment model',
+      description: 'Start with the recommended production path, then deviate only when you have a clear reason.',
+      docId: 'user-guide/operator/deployment-decision-guide',
+    },
+    {
+      eyebrow: '02',
+      title: 'Install the operator',
+      description: 'Select the supported install flow and verify the rendered identities before you continue.',
+      docId: 'user-guide/operator/installation',
+    },
+    {
+      eyebrow: '03',
+      title: 'Create your first cluster',
+      description: 'Use a development or hardened starting profile and confirm the readiness checkpoints that matter.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      eyebrow: '04',
+      title: 'Prepare for day 2',
+      description: 'Move directly into production checklist work so upgrades, backups, and access controls are not an afterthought.',
+      docId: 'user-guide/openbaocluster/next-steps',
+    },
+  ]}
+/>
+
+<NextActions
+  title="Common starting scenarios"
+  items={[
+    {
+      label: 'Shared production platform',
+      description: 'Use multi-tenant mode, the Hardened profile, self-init, and admission policies as the default operating model.',
+      docId: 'user-guide/operator/deployment-decision-guide',
+    },
+    {
+      label: 'Dedicated team namespace',
+      description: 'Use single-tenant mode when one team directly owns one namespace and does not need the default tenant onboarding model.',
+      docId: 'user-guide/operator/single-tenant-mode',
+    },
+    {
+      label: 'Validated deployment path',
+      description: 'Start from a tested architecture, recipe, or runbook when you want a known-good baseline.',
+      docId: 'user-guide/validated-deployments/index',
+    },
+  ]}
+/>

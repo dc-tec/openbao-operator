@@ -1,22 +1,63 @@
 ---
+title: Deployment Decision Guide
 description: Prescriptive guide for choosing tenancy mode, security profile, bootstrap flow, TLS mode, admission posture, and upgrade strategy for OpenBao Operator.
+slug: /get-started/deployment-decision-guide
+hide_title: true
 ---
 
-# Deployment Decision Guide
+<JourneyHero
+  eyebrow="Step 1"
+  title="Choose the deployment path you want to keep operating."
+  lede="Use this guide to lock down the default operating model before you install anything. Start with the production path unless you have a specific reason to trade off simplicity, isolation, or security posture."
+  actions={[
+    {label: 'Continue to installation', docId: 'user-guide/operator/installation', variant: 'primary'},
+    {
+      label: 'Review single-tenant mode',
+      docId: 'user-guide/operator/single-tenant-mode',
+      variant: 'secondary',
+    },
+  ]}
+>
+  <Checklist
+    title="Default production path"
+    items={[
+      'tenancy.mode=multi',
+      'spec.profile: Hardened',
+      'spec.selfInit.enabled: true',
+      'spec.tls.mode: External or ACME',
+      'spec.upgrade.strategy: RollingUpdate',
+      'admissionPolicies.enabled=true',
+    ]}
+    tone="success"
+  />
+</JourneyHero>
 
-Use this guide to choose the default operating path for OpenBao Operator. Start with the default production path unless you have a clear reason to deviate.
-
-## Default Production Path
-
-!!! success "Start Here"
-    For most production deployments, use this combination:
-
-    - `tenancy.mode=multi`
-    - `spec.profile: Hardened`
-    - `spec.selfInit.enabled: true`
-    - `spec.tls.mode: External` or `ACME`
-    - `spec.upgrade.strategy: RollingUpdate`
-    - `admissionPolicies.enabled=true`
+<JourneySteps
+  title="Make the major decisions before you install"
+  current={1}
+  items={[
+    {
+      label: 'Choose a deployment path',
+      description: 'Decide tenancy mode, security profile, TLS posture, and install method.',
+      docId: 'user-guide/operator/deployment-decision-guide',
+    },
+    {
+      label: 'Install the operator',
+      description: 'Use Helm or manifests with the right namespace, identity, and admission model.',
+      docId: 'user-guide/operator/installation',
+    },
+    {
+      label: 'Create your first cluster',
+      description: 'Apply a starting profile that matches local evaluation or hardened production.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Prepare for day 2',
+      description: 'Move into production checklist items, backups, exposure, and observability.',
+      docId: 'user-guide/openbaocluster/next-steps',
+    },
+  ]}
+/>
 
 ## Decision Matrix
 
@@ -33,48 +74,63 @@ Use this guide to choose the default operating path for OpenBao Operator. Start 
 
 ## Recommended Profiles
 
-=== "Shared Production"
+Use one of these as your starting point, then adjust only the fields your environment actually requires.
 
-    Use this profile for the normal production path:
+<Tabs groupId="shared-production-dedicated-team-namespace-local-development-or-ci">
 
-    - `tenancy.mode=multi`
-    - `spec.profile: Hardened`
-    - `spec.selfInit.enabled: true`
-    - `spec.tls.mode: External` or `ACME`
-    - `spec.upgrade.strategy: RollingUpdate`
-    - Scheduled backups configured before the first production upgrade
+<TabItem value="shared-production" label="Shared Production">
 
-=== "Dedicated Team Namespace"
+Use this profile for the normal production path:
 
-    Use this profile when one team owns one namespace and does not need the default tenant-onboarding model:
+- `tenancy.mode=multi`
+- `spec.profile: Hardened`
+- `spec.selfInit.enabled: true`
+- `spec.tls.mode: External` or `ACME`
+- `spec.upgrade.strategy: RollingUpdate`
+- Scheduled backups configured before the first production upgrade
 
-    - `tenancy.mode=single`
-    - `spec.profile: Hardened`
-    - `spec.selfInit.enabled: true`
-    - `spec.tls.mode: External` or `ACME`
-    - `spec.upgrade.strategy: RollingUpdate`
-    - Admission policies still enabled
+</TabItem>
 
-=== "Local Development or CI"
+<TabItem value="dedicated-team-namespace" label="Dedicated Team Namespace">
 
-    Use this profile only for non-production environments:
+Use this profile when one team owns one namespace and does not need the default tenant-onboarding model:
 
-    - `tenancy.mode=multi` or `single`, depending on the scenario under test
-    - `spec.profile: Development`
-    - `spec.tls.mode: OperatorManaged` is acceptable
-    - Manual bootstrap is acceptable if you need the root token Secret
-    - Unsafe mode only when you are intentionally testing without admission enforcement
+- `tenancy.mode=single`
+- `spec.profile: Hardened`
+- `spec.selfInit.enabled: true`
+- `spec.tls.mode: External` or `ACME`
+- `spec.upgrade.strategy: RollingUpdate`
+- Admission policies still enabled
 
-## Operational Checks
+</TabItem>
 
-Before calling a deployment production-ready, verify these choices:
+<TabItem value="local-development-or-ci" label="Local Development or CI">
 
-1. `Hardened` profile is selected.
-2. `selfInit.enabled` is `true`.
-3. TLS mode is `External` or `ACME`.
-4. Admission policies are installed and enforced.
-5. Backups are configured and tested.
-6. Upgrade validation is done in staging, with `RollingUpdate` as the default strategy unless you need blue/green cutover control.
+Use this profile only for non-production environments:
+
+- `tenancy.mode=multi` or `single`, depending on the scenario under test
+- `spec.profile: Development`
+- `spec.tls.mode: OperatorManaged` is acceptable
+- Manual bootstrap is acceptable if you need the root token Secret
+- Unsafe mode only when you are intentionally testing without admission enforcement
+
+</TabItem>
+
+</Tabs>
+
+## Before you move on
+
+<Checklist
+  title="Before you call the path production-ready"
+  items={[
+    'Select the Hardened profile unless this environment is strictly non-production.',
+    'Use self-init unless you are intentionally carrying a manual bootstrap workflow.',
+    'Keep TLS on External or ACME for hardened clusters.',
+    'Leave admission policies enabled unless you are doing controlled break-glass recovery.',
+    'Decide how backups will be configured and tested before the first production upgrade.',
+    'Use RollingUpdate by default and switch to BlueGreen only when parallel validation is worth the complexity.',
+  ]}
+/>
 
 ## Status Checkpoints
 
@@ -88,6 +144,22 @@ Use these condition checkpoints before calling a path ready:
 | Strict NetworkPolicy clusters | `APIServerNetworkReady=True` or `Unknown` with `APIServerEndpointIPsRecommended` after you confirm the service-VIP path works in your CNI |
 | Scheduled backups | `BackupConfigurationReady=True` |
 | Restore before execution | `RestoreConfigurationReady=True` |
+
+<OutcomePanel
+  title="You are ready to install once the path is boring to explain."
+  tone="success"
+  actions={[
+    {label: 'Install the operator', docId: 'user-guide/operator/installation'},
+    {label: 'See the production checklist', docId: 'user-guide/openbaocluster/operations/production-checklist'},
+  ]}
+>
+  <p>The next step should feel mechanical, not exploratory. You should already know:</p>
+
+  - whether you are running multi-tenant or single-tenant mode
+  - which security profile, TLS mode, and bootstrap path are acceptable
+  - whether Helm or raw manifests own the install
+  - which readiness conditions matter before the environment is exposed to real users
+</OutcomePanel>
 
 ## See Also
 

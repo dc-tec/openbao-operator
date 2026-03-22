@@ -1,9 +1,16 @@
+---
+slug: /configure/security-profiles
+---
+
 # Security Profiles
 
 Configure the security posture of your OpenBao cluster.
 
-!!! danger "Production Readiness"
-    **Always** use the `Hardened` profile for production deployments. The `Development` profile is highly discouraged for production because it can store bootstrap material in Kubernetes Secrets.
+<Callout type="danger" title="Production Readiness">
+
+**Always** use the `Hardened` profile for production deployments. The `Development` profile is highly discouraged for production because it can store bootstrap material in Kubernetes Secrets.
+
+</Callout>
 
 ## Profile Comparison
 
@@ -45,81 +52,94 @@ flowchart LR
 
 ## Configuration
 
-=== "Hardened (Production)"
-    The `Hardened` profile enforces strict security best practices. It is the supported production profile for OpenBao Operator.
+<Tabs groupId="hardened-production-development">
 
-    ```yaml
-    apiVersion: openbao.org/v1alpha1
-    kind: OpenBaoCluster
-    metadata:
-      name: prod-cluster
-    spec:
-      profile: Hardened  # REQUIRED
-      replicas: 3          # Minimum 3 for HA (Raft quorum)
-      version: "2.4.4"
-      tls:
-        enabled: true
-        mode: External   # Required (or ACME)
-      unseal:
-        type: awskms     # Required (External KMS)
-        awskms:
-          region: us-east-1
-          kmsKeyID: alias/openbao-unseal
-      selfInit:
-        enabled: true    # Required
-        requests:
-          - name: enable-audit
-            operation: update
-            path: sys/audit/file
-            auditDevice:
-              type: file
-              fileOptions:
-                filePath: /tmp/audit.log
-    ```
+<TabItem value="hardened-production" label="Hardened (Production)">
 
-    ### Requirements
+The `Hardened` profile enforces strict security best practices. It is the supported production profile for OpenBao Operator.
 
-    - :material-check: **External TLS**: `spec.tls.mode` MUST be `External` or `ACME`. `OperatorManaged` TLS is rejected by `openbao-validate-openbaocluster`.
-    - :material-check: **External KMS**: `spec.unseal.type` MUST use a cloud provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`).
-    - :material-check: **Self-Initialization**: `spec.selfInit.enabled` MUST be `true`. This is the supported production bootstrap path and is enforced by `openbao-validate-openbaocluster`.
-    - :material-check: **High Availability**: `spec.replicas` MUST be at least `3` for Raft quorum.
-    - :material-check: **Secure Network**: If backups are enabled, explicit egress rules are required (fail-closed networking).
-    - :material-check: **Supply Chain Guardrails**: `spec.imageVerification` and `spec.operatorImageVerification` cannot be disabled and cannot use `failurePolicy: Warn`.
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+spec:
+  profile: Hardened  # REQUIRED
+  replicas: 3          # Minimum 3 for HA (Raft quorum)
+  version: "2.4.4"
+  tls:
+    enabled: true
+    mode: External   # Required (or ACME)
+  unseal:
+    type: awskms     # Required (External KMS)
+    awskms:
+      region: us-east-1
+      kmsKeyID: alias/openbao-unseal
+  selfInit:
+    enabled: true    # Required
+    requests:
+      - name: enable-audit
+        operation: update
+        path: sys/audit/file
+        auditDevice:
+          type: file
+          fileOptions:
+            filePath: /tmp/audit.log
+```
 
-    If verification blocks are omitted in Hardened, or are present with `enabled: true` but no explicit trust
-    material, verification is still applied. For official release image repositories/tags, default GitHub keyless
-    identity values are used. For mirrored/private registries, provide explicit `publicKey` or keyless identity
-    fields in the verification config.
+### Requirements
 
-    ### Benefits
+- **External TLS**: `spec.tls.mode` MUST be `External` or `ACME`. `OperatorManaged` TLS is rejected by `openbao-validate-openbaocluster`.
+- **External KMS**: `spec.unseal.type` MUST use a cloud provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`).
+- **Self-Initialization**: `spec.selfInit.enabled` MUST be `true`. This is the supported production bootstrap path and is enforced by `openbao-validate-openbaocluster`.
+- **High Availability**: `spec.replicas` MUST be at least `3` for Raft quorum.
+- **Secure Network**: If backups are enabled, explicit egress rules are required (fail-closed networking).
+- **Supply Chain Guardrails**: `spec.imageVerification` and `spec.operatorImageVerification` cannot be disabled and cannot use `failurePolicy: Warn`.
 
-    - **Zero Trust**: No root token Secret is created; initialization credentials are auto-revoked.
-    - **Identity**: When `spec.selfInit.oidc.enabled` is `true`, the operator bootstraps JWT auth and roles for operator jobs (backup/upgrade/restore).
-    - **Encryption**: Root of trust is delegated to a hardware-backed KMS, not Kubernetes etcd.
+If verification blocks are omitted in Hardened, or are present with `enabled: true` but no explicit trust
+material, verification is still applied. For official release image repositories/tags, default GitHub keyless
+identity values are used. For mirrored/private registries, provide explicit `publicKey` or keyless identity
+fields in the verification config.
 
-=== "Development"
-    The `Development` profile allows relaxed security settings for rapid iteration and testing.
+### Benefits
 
-    ```yaml
-    apiVersion: openbao.org/v1alpha1
-    kind: OpenBaoCluster
-    metadata:
-      name: dev-cluster
-    spec:
-      profile: Development
-      version: "2.4.4"
-      # TLS and Self-Init are optional
-    ```
+- **Zero Trust**: No root token Secret is created; initialization credentials are auto-revoked.
+- **Identity**: When `spec.selfInit.oidc.enabled` is `true`, the operator bootstraps JWT auth and roles for operator jobs (backup/upgrade/restore).
+- **Encryption**: Root of trust is delegated to a hardware-backed KMS, not Kubernetes etcd.
 
-    ### Characteristics
+</TabItem>
 
-    - :material-alert: **Relaxed TLS**: Allows `OperatorManaged` (self-signed) TLS.
-    - :material-alert: **Static Unseal**: Uses a simple Kubernetes Secret for the unseal key.
-    - :material-alert: **Root Token**: Generates and stores a root token in a Secret if self-init is disabled.
-    - :material-alert: **Risk Indicator**: Sets `ConditionSecurityRisk=True` on the CR status.
+<TabItem value="development" label="Development">
 
-    !!! warning "Risk Acceptance"
-        By using this profile, you accept the risk of storing sensitive keys and root tokens in the cluster. Do not use it as a normal production posture.
+The `Development` profile allows relaxed security settings for rapid iteration and testing.
+
+```yaml
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: dev-cluster
+spec:
+  profile: Development
+  version: "2.4.4"
+  # TLS and Self-Init are optional
+```
+
+### Characteristics
+
+- **Relaxed TLS**: Allows `OperatorManaged` (self-signed) TLS.
+- **Static Unseal**: Uses a simple Kubernetes Secret for the unseal key.
+- **Root Token**: Generates and stores a root token in a Secret if self-init is disabled.
+- **Risk Indicator**: Sets `ConditionSecurityRisk=True` on the CR status.
+
+<Callout type="warning" title="Risk Acceptance">
+
+By using this profile, you accept the risk of storing sensitive keys and root tokens in the cluster. Do not use it as a normal production posture.
+
+</Callout>
+
+</TabItem>
+
+</Tabs>
 
 ## Workload Hardening (AppArmor)
 

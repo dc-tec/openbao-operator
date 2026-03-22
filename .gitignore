@@ -41,9 +41,7 @@ node_modules/
 
 # Documentation build output
 site/*
-
-# MkDocs virtualenv (created by `make docs-*`)
-.venv-docs/
+website/build/
 
 # Release workflow outputs (generated locally during validation)
 dist/crds.yaml

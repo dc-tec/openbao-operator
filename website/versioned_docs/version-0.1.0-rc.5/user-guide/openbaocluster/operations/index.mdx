@@ -1,0 +1,105 @@
+---
+title: Operate
+slug: /operate
+hide_title: true
+pageType: landing
+journey: operate
+description: Upgrade, back up, maintain, troubleshoot, recover, and restore OpenBao clusters with a clear operating model.
+---
+
+<PageHero
+  eyebrow="Operate"
+  title="Run the cluster as a service, not as a one-time install."
+  lede="This section is for the full day 2 lifecycle of an OpenBao cluster: upgrades, backups, maintenance, troubleshooting, recovery, restore, and the production checklist that closes the gap between a working cluster and a reliable service."
+  actions={[
+    {label: 'Plan upgrades', docId: 'user-guide/openbaocluster/operations/upgrades', variant: 'primary'},
+    {label: 'Open recovery and restore', docId: 'user-guide/openbaocluster/recovery/index', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Come here when you need to"
+    items={[
+      'upgrade a cluster safely',
+      'wire snapshots and backup identity',
+      'handle routine maintenance or pauses',
+      'move from troubleshooting into recovery and restore when the cluster is unstable',
+    ]}
+  />
+</PageHero>
+
+<JourneyRail
+  title="The day 2 operating path"
+  items={[
+    {
+      label: 'Plan upgrades',
+      description: 'Choose strategy, validate prerequisites, and understand retry behavior.',
+      docId: 'user-guide/openbaocluster/operations/upgrades',
+    },
+    {
+      label: 'Configure backups',
+      description: 'Wire snapshots, identity, and storage before the first risky change.',
+      docId: 'user-guide/openbaocluster/operations/backups',
+    },
+    {
+      label: 'Run maintenance',
+      description: 'Use pause, maintenance, and deletion workflows deliberately.',
+      docId: 'user-guide/openbaocluster/operations/maintenance',
+    },
+    {
+      label: 'Troubleshoot and recover',
+      description: 'Move from symptoms and status conditions into the right troubleshooting or recovery path.',
+      docId: 'user-guide/openbaocluster/recovery/index',
+    },
+  ]}
+/>
+
+<RouteList
+  title="Operate routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Plan upgrades',
+      description: 'Use RollingUpdate or BlueGreen with a clear understanding of prerequisites, cutover, and retry behavior.',
+      docId: 'user-guide/openbaocluster/operations/upgrades',
+    },
+    {
+      eyebrow: '02',
+      title: 'Configure backups',
+      description: 'Set up snapshot streaming, backup identity, and restore readiness before you need them.',
+      docId: 'user-guide/openbaocluster/operations/backups',
+    },
+    {
+      eyebrow: '03',
+      title: 'Routine maintenance',
+      description: 'Use maintenance, pause, and deletion workflows without losing track of lifecycle state.',
+      docId: 'user-guide/openbaocluster/operations/maintenance',
+    },
+    {
+      eyebrow: '04',
+      title: 'Troubleshoot and verify',
+      description: 'Use conditions, events, and checklist guidance to understand and stabilize the cluster before it becomes an incident.',
+      docId: 'user-guide/openbaocluster/operations/troubleshooting',
+    },
+    {
+      eyebrow: '05',
+      title: 'Recovery and restore',
+      description: 'Use safe mode, no-leader, sealed-cluster, and restore workflows when normal operations are no longer enough.',
+      docId: 'user-guide/openbaocluster/recovery/index',
+    },
+  ]}
+/>
+
+<NextActions
+  items={[
+    {
+      label: 'Open the production checklist',
+      description: 'Use the checklist before you call an environment production-ready.',
+      docId: 'user-guide/openbaocluster/operations/production-checklist',
+    },
+    {
+      label: 'Open recovery and restore',
+      description: 'Use the incident runbooks when the problem is beyond normal troubleshooting.',
+      docId: 'user-guide/openbaocluster/recovery/index',
+    },
+  ]}
+/>

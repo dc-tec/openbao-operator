@@ -1,0 +1,48 @@
+---
+title: Reference
+slug: /reference
+hide_title: true
+pageType: landing
+journey: reference
+description: Generated API, compatibility, maintenance policy, upgrade compatibility, and status and event reference for OpenBao Operator.
+---
+
+<PageHero
+  eyebrow="Reference"
+  title="Use the exact contract when the details matter."
+  lede="This section is for exact facts: generated API fields, compatibility expectations, upgrade constraints, support posture, and status and event semantics."
+  actions={[
+    {label: 'Open compatibility', docId: 'reference/compatibility', variant: 'primary'},
+    {label: 'Open API reference', docId: 'reference/api', variant: 'secondary'},
+  ]}
+/>
+
+<RouteList
+  title="Reference routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Compatibility',
+      description: 'Supported Kubernetes and OpenBao combinations and the validation expectations around them.',
+      docId: 'reference/compatibility',
+    },
+    {
+      eyebrow: '02',
+      title: 'API reference',
+      description: 'Generated CRD schema and field-level descriptions from api/v1alpha1.',
+      docId: 'reference/api',
+    },
+    {
+      eyebrow: '03',
+      title: 'Support and deprecation',
+      description: 'Support windows, deprecation policy, and the release-channel expectations behind the operator.',
+      docId: 'reference/support-policy',
+    },
+    {
+      eyebrow: '04',
+      title: 'Status and events',
+      description: 'Condition types, reason values, and the fastest way to debug the operator lifecycle.',
+      docId: 'reference/status-and-events',
+    },
+  ]}
+/>

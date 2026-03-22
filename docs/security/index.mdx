@@ -1,0 +1,73 @@
+---
+title: Security
+slug: /security
+hide_title: true
+pageType: landing
+journey: security
+description: Threat model, hardened profiles, RBAC, admission policy, network controls, workload security, and multi-tenancy.
+---
+
+<PageHero
+  eyebrow="Security"
+  title="Security is part of the operating path, not an appendix."
+  lede="Use this section to understand the trust model behind OpenBao Operator, choose the hardened posture for production, and verify the controls that enforce it at the infrastructure, workload, and tenant layers."
+  actions={[
+    {label: 'Read the fundamentals', docId: 'security/fundamentals/index', variant: 'primary'},
+    {label: 'Review infrastructure controls', docId: 'security/infrastructure/index', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Production posture usually means"
+    items={[
+      'Hardened profile by default',
+      'admission enforcement enabled',
+      'explicit version pinning and staged upgrade validation',
+      'clear workload and tenant trust boundaries',
+    ]}
+  />
+</PageHero>
+
+<RouteList
+  title="Security routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Fundamentals',
+      description: 'Threat model, security profiles, secrets management, and the assumptions the operator makes.',
+      docId: 'security/fundamentals/index',
+    },
+    {
+      eyebrow: '02',
+      title: 'Infrastructure controls',
+      description: 'RBAC architecture, admission policies, and network security boundaries.',
+      docId: 'security/infrastructure/index',
+    },
+    {
+      eyebrow: '03',
+      title: 'Workload security',
+      description: 'Pod security, TLS handling, and image verification and supply-chain enforcement.',
+      docId: 'security/workload/index',
+    },
+    {
+      eyebrow: '04',
+      title: 'Multi-tenancy',
+      description: 'Tenant isolation expectations, namespace boundaries, and the limits of the shared-service model.',
+      docId: 'security/multi-tenancy/index',
+    },
+  ]}
+/>
+
+<NextActions
+  items={[
+    {
+      label: 'Review security profiles',
+      description: 'Understand what Development and Hardened really change before you standardize on one.',
+      docId: 'user-guide/openbaocluster/configuration/security-profiles',
+    },
+    {
+      label: 'Start from the deployment path',
+      description: 'Connect security posture back to the default production choices in Get Started.',
+      docId: 'user-guide/operator/deployment-decision-guide',
+    },
+  ]}
+/>

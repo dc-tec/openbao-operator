@@ -1,3 +1,7 @@
+---
+slug: /install-access/authentication
+---
+
 # Operator Authentication
 
 The OpenBao Operator employs a **Zero Trust** security model by default. It avoids long-lived credentials (like root tokens) in favor of short-lived, automatically rotated credentials bound to specific identities.
@@ -31,12 +35,15 @@ sequenceDiagram
 3. **Audience Binding:** Tokens are scoped to `openbao-internal`, preventing them from being replayable against the Kubernetes API or other services.
 4. **Least Privilege:** The `openbao-operator` role grants only the specific permissions needed for operator tasks (e.g., `sys/storage/raft/autopilot`), not full admin access.
 
-!!! note "Installation-scoped JWT audience"
-    The OpenBao JWT audience is an operator installation setting, not a per-cluster override.
-    Configure it through `OPENBAO_JWT_AUDIENCE`:
+<Callout type="note" title="Installation-scoped JWT audience">
 
-    - Helm: `serviceAccountToken.openBaoAudience`
-    - Raw manifests: `config/default/openbao_jwt_settings.yaml`
+The OpenBao JWT audience is an operator installation setting, not a per-cluster override.
+Configure it through `OPENBAO_JWT_AUDIENCE`:
+
+- Helm: `serviceAccountToken.openBaoAudience`
+- Raw manifests: `config/default/openbao_jwt_settings.yaml`
+
+</Callout>
 
 ## Self-Initialization Integration
 
@@ -46,12 +53,18 @@ When using **Self-Initialization** (`spec.selfInit.enabled: true`), the relation
 2. **Role Creation:** It creates a policy and role named `openbao-operator`.
 3. **Binding:** This role is bound to the operator's ServiceAccount in the operator's namespace.
 
-!!! note "Operator Auth vs Human Auth"
-    `spec.selfInit.oidc.enabled: true` bootstraps operator authentication only. It does not create a human login path by itself. Watch `UserAccessBootstrap` on the cluster if you rely on `spec.selfInit.requests` to create JWT, OIDC, `userpass`, or other operator-facing auth mounts.
+<Callout type="note" title="Operator Auth vs Human Auth">
 
-!!! success "Recommended Configuration"
-    For production environments, we strongly recommend using **Hardened Profile** with **Self
-    Initialization**. This ensures no root token is ever persisted to a Kubernetes Secret.
+`spec.selfInit.oidc.enabled: true` bootstraps operator authentication only. It does not create a human login path by itself. Watch `UserAccessBootstrap` on the cluster if you rely on `spec.selfInit.requests` to create JWT, OIDC, `userpass`, or other operator-facing auth mounts.
+
+</Callout>
+
+<Callout type="success" title="Recommended Configuration">
+
+For production environments, we strongly recommend using **Hardened Profile** with **Self
+Initialization**. This ensures no root token is ever persisted to a Kubernetes Secret.
+
+</Callout>
 
 ## Custom Install Checklist
 
@@ -67,8 +80,11 @@ For the compact bridge between install identity, Kubernetes RBAC, and OpenBao-si
 4. Confirm the JWT role in OpenBao binds to the rendered controller ServiceAccount name and namespace, not the default examples.
 5. Confirm the JWT audience in OpenBao matches `OPENBAO_JWT_AUDIENCE` on the operator and the controller projected `openbao-token` audience.
 
-!!! warning "Custom Identity Installs"
-    `spec.selfInit.oidc.enabled: true` does not infer your custom operator identity from the OpenBao side. If you manually configure JWT auth, the role binding in OpenBao must match the rendered controller ServiceAccount name and namespace exactly.
+<Callout type="warning" title="Custom Identity Installs">
+
+`spec.selfInit.oidc.enabled: true` does not infer your custom operator identity from the OpenBao side. If you manually configure JWT auth, the role binding in OpenBao must match the rendered controller ServiceAccount name and namespace exactly.
+
+</Callout>
 
 ### Example: Custom Raw-Manifest Identity
 

@@ -1,0 +1,99 @@
+---
+title: Recovery & Restore
+slug: /recover
+hide_title: true
+pageType: landing
+journey: operate
+description: Use recovery and restore workflows for cluster incidents including safe mode, no leader, sealed clusters, failed rollback, and backup-driven restore.
+---
+
+<PageHero
+  eyebrow="Operate / Recovery & Restore"
+  title="Use recovery paths that are explicit, narrow, and safe."
+  lede="Recovery guidance should be read under pressure. This section lives inside Operate and focuses on the cluster states that require more than routine troubleshooting: safe mode, no leader, sealed clusters, failed rollback, and restore."
+  actions={[
+    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'primary'},
+    {label: 'Open restore workflows', docId: 'user-guide/openbaorestore/restore', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Recovery starts with the right diagnosis"
+    items={[
+      'separate routine troubleshooting from incident paths',
+      'use restore only when the symptoms justify it',
+      'keep backups and upgrade context nearby during recovery',
+      'validate the cluster state before returning to normal operations',
+    ]}
+  />
+</PageHero>
+
+<JourneyRail
+  title="Common incident entry points"
+  items={[
+    {
+      label: 'Safe mode',
+      description: 'Stabilize the cluster before making larger corrective changes.',
+      docId: 'user-guide/openbaocluster/recovery/safe-mode',
+    },
+    {
+      label: 'No leader',
+      description: 'Recover quorum and leadership safely when Raft cannot elect a leader.',
+      docId: 'user-guide/openbaocluster/recovery/no-leader',
+    },
+    {
+      label: 'Sealed cluster',
+      description: 'Diagnose and recover when unseal or trust dependencies block the cluster.',
+      docId: 'user-guide/openbaocluster/recovery/sealed-cluster',
+    },
+    {
+      label: 'Restore',
+      description: 'Use restore workflows when state must be reintroduced from backup.',
+      docId: 'user-guide/openbaorestore/restore',
+    },
+  ]}
+/>
+
+<RouteList
+  title="Recovery and restore routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Enter safe mode',
+      description: 'Use the lowest-risk stabilization path when you need to stop drift and recover control.',
+      docId: 'user-guide/openbaocluster/recovery/safe-mode',
+    },
+    {
+      eyebrow: '02',
+      title: 'Recover no leader',
+      description: 'Handle leadership loss and quorum issues without guessing at Raft state.',
+      docId: 'user-guide/openbaocluster/recovery/no-leader',
+    },
+    {
+      eyebrow: '03',
+      title: 'Recover sealed clusters',
+      description: 'Diagnose seal, TLS, and identity issues that prevent the cluster from serving requests.',
+      docId: 'user-guide/openbaocluster/recovery/sealed-cluster',
+    },
+    {
+      eyebrow: '04',
+      title: 'Restore from backup',
+      description: 'Move into restore and post-upgrade restore workflows when the cluster state must be reintroduced.',
+      docId: 'user-guide/openbaorestore/restore',
+    },
+  ]}
+/>
+
+<NextActions
+  items={[
+    {
+      label: 'Check backup readiness',
+      description: 'Good recovery depends on backup configuration being in place before the incident.',
+      docId: 'user-guide/openbaocluster/operations/backups',
+    },
+    {
+      label: 'Open status and events',
+      description: 'Use reference material when you need exact condition and event semantics during triage.',
+      docId: 'reference/status-and-events',
+    },
+  ]}
+/>

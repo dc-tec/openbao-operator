@@ -1,0 +1,48 @@
+---
+title: Architecture
+slug: /architecture
+hide_title: true
+pageType: landing
+journey: architecture
+description: Internal design, controller boundaries, lifecycle flows, invariants, and implementation decisions behind OpenBao Operator.
+---
+
+<PageHero
+  eyebrow="Architecture"
+  title="Understand why the operator behaves the way it does."
+  lede="Architecture pages explain controller boundaries, lifecycle coordination, and the invariants the system depends on. Use this section when you need to reason about behavior, validate assumptions, or change the code safely."
+  actions={[
+    {label: 'Read the invariants', docId: 'architecture/operator-invariants', variant: 'primary'},
+    {label: 'Open lifecycle architecture', docId: 'architecture/lifecycle/index', variant: 'secondary'},
+  ]}
+/>
+
+<RouteList
+  title="Architecture routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Invariants',
+      description: 'Lifecycle contracts and the assumptions the controller design depends on.',
+      docId: 'architecture/operator-invariants',
+    },
+    {
+      eyebrow: '02',
+      title: 'Component design',
+      description: 'Certificates, init, infra, upgrade, backup, restore, and tenant provisioning managers.',
+      docId: 'architecture/components',
+    },
+    {
+      eyebrow: '03',
+      title: 'Lifecycle architecture',
+      description: 'Day 0 through day N flows, including provisioning, creation, operations, and backups.',
+      docId: 'architecture/lifecycle/index',
+    },
+    {
+      eyebrow: '04',
+      title: 'Security context',
+      description: 'The architecture is tightly coupled to RBAC, admission, identity, and workload security decisions.',
+      docId: 'security/index',
+    },
+  ]}
+/>

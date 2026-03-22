@@ -1,0 +1,133 @@
+---
+description: Getting started guide for contributors to OpenBao Operator, including prerequisites, local environment setup, and first development workflow.
+---
+
+# Getting Started with Contributing
+
+Welcome! We are excited that you are interested in contributing to the OpenBao Operator. This section will guide you through setting up your environment and making your first contribution.
+
+## Quick Start
+
+<div class="grid cards" markdown>
+
+- **1. Fork & Clone**
+
+    ---
+
+    Fork the repository on GitHub and clone it locally to start working.
+
+    ```bash
+    git clone https://github.com/YOUR-USERNAME/openbao-operator.git
+    cd openbao-operator
+    ```
+
+- **2. Setup Environment**
+
+    ---
+
+    Install the required tools or open the devcontainer, then run `make bootstrap` and `make doctor`.
+
+    [Setup Guide](development.md)
+
+- **3. Create Branch**
+
+    ---
+
+    Create a new feature branch from `main` for your changes.
+
+    ```bash
+    git checkout -b feature/my-awesome-feature
+    ```
+
+- **4. Test & Submit**
+
+    ---
+
+    Run `make ci-core`, then open a Pull Request.
+
+    [Testing Guide](../testing.md)
+
+</div>
+
+## Prerequisites
+
+Ensure you have the following tools installed before starting:
+
+<div class="grid cards" markdown>
+
+- **Go 1.26+**
+
+    ---
+
+    The core language for the operator.
+
+- **Docker**
+
+    ---
+
+    Required for building container images.
+
+- **Kind**
+
+    ---
+
+    (Kubernetes in Docker) for running local E2E tests.
+
+- **kubectl**
+
+    ---
+
+    CLI for interacting with the cluster.
+
+- **Node.js + npm**
+
+    ---
+
+    Required to bootstrap local `ast-grep` for `make lint-ci`.
+
+- **Helm + Trivy + Python**
+
+    ---
+
+    Required for the full local PR-equivalent gate (`make ci-core`).
+
+</div>
+
+## Ways to Contribute
+
+We welcome many types of contributions beyond just code:
+
+| Type | Description |
+| :--- | :--- |
+| **Bug Fixes** | Fix issues found in existing functionality. Check for the `bug` label. |
+| **Features** | Add new capabilities to the operator. Discuss large changes in an Issue first. |
+| **Documentation** | Improve guides, fix typos, or add examples to help other users. |
+| **Tests** | Improve test coverage or add new E2E scenarios. |
+| **Refactoring** | Improve code quality and maintainability without changing behavior. |
+
+<Callout type="tip" title="First Time?">
+
+Look for issues labeled with `good first issue` on our [GitHub Issues](https://github.com/dc-tec/openbao-operator/issues) page.
+
+</Callout>
+
+## Next Steps
+
+<div class="grid cards" markdown>
+
+- **Development Setup**
+
+    ---
+    Step-by-step guide to configuring your local dev environment.
+
+    [Go to Setup](development.md)
+
+- **Coding Standards**
+
+    ---
+    Learn about our code style, linting rules, and conventions.
+
+    [View Standards](../standards/index.md)
+
+</div>
+

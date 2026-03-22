@@ -1,0 +1,56 @@
+---
+title: Validated Deployments
+slug: /validated-deployments
+hide_title: true
+pageType: landing
+description: Tested OpenBao Operator architectures, recipes, and runbooks for teams that want a known-good baseline.
+---
+
+<PageHero
+  eyebrow="Validated Deployments"
+  title="Start from a tested deployment shape when you do not want to improvise the baseline."
+  lede="Use validated deployments when you want an architecture, recipe, or runbook that was exercised end to end in the project validation environment before you adapt it to your own platform."
+  actions={[
+    {label: 'Open architectures', docId: 'user-guide/validated-deployments/architectures/index', variant: 'primary'},
+    {label: 'Open recipes', docId: 'user-guide/validated-deployments/recipes/index', variant: 'secondary'},
+  ]}
+/>
+
+<RouteList
+  title="Validated deployment routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Architectures',
+      description: 'Review topology, trust boundaries, and validation scope before you choose an environment shape.',
+      docId: 'user-guide/validated-deployments/architectures/index',
+    },
+    {
+      eyebrow: '02',
+      title: 'Recipes',
+      description: 'Follow tested bootstrap and deployment flows for cloud and local environments.',
+      docId: 'user-guide/validated-deployments/recipes/index',
+    },
+    {
+      eyebrow: '03',
+      title: 'Runbooks',
+      description: 'Use the validated operating procedures for backups, restore, and disaster recovery.',
+      docId: 'user-guide/validated-deployments/runbooks/index',
+    },
+  ]}
+/>
+
+<NextActions
+  items={[
+    {
+      label: 'Start with Get Started',
+      description: 'Return to the default deployment path when you need the general operator install and day 2 guidance.',
+      docId: 'user-guide/index',
+    },
+    {
+      label: 'Open configure',
+      description: 'Use the configuration guides to adapt the validated baseline to your actual cluster profile and exposure model.',
+      docId: 'user-guide/openbaocluster/configuration/index',
+    },
+  ]}
+/>

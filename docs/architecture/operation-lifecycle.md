@@ -1,5 +1,7 @@
 ---
 description: Shared operation lifecycle architecture for backup, restore, and upgrade flows, including locks, retry classes, and phase audit helpers.
+pageType: concept
+journey: architecture
 ---
 
 # Operation Lifecycle Coordination
@@ -26,37 +28,56 @@ The package centralizes three concerns:
 
 ## 3. Coordination Model
 
-```mermaid
-graph TD
+<DiagramFrame
+  title="Coordination model"
+  caption="Backup, restore, and upgrade managers share one lifecycle service so lock ownership, requeue timing, and phase audit logging remain consistent across disruptive cluster operations."
+  code={`graph TD
     Backup["Backup Manager"] --> Ops["Operation Lifecycle"]
     Restore["Restore Manager"] --> Ops
     Upgrade["Upgrade Manager"] --> Ops
     Ops --> Lock["Operation Lock Adapter"]
     Ops --> Status["OpenBaoCluster.status.operationLock"]
 
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
 
     class Backup,Restore,Upgrade process;
     class Ops process;
     class Lock read;
-    class Status write;
-```
+    class Status write;`}
+/>
 
 ## 4. Shared Primitives
 
-| Primitive | Purpose |
-| :--- | :--- |
-| `OperationLock` | Describes the expected lock identity for an operation. |
-| `Acquire` / `Release` | Wrap lock adapter behavior for status-based lock ownership. |
-| `RetryClass` / `RequeueDelay` | Keep lock-contention and progress-poll retries consistent across managers. |
-| `LogPhaseTransition` | Emit stable audit fields for phase changes. |
+<DecisionTable
+  kind="reference"
+  title="Shared primitives"
+  columns={['Primitive', 'Purpose']}
+  rows={[
+    {
+      cells: ['OperationLock', 'Describes the expected lock identity for an operation.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Acquire / Release', 'Wrap lock adapter behavior for status-based lock ownership.'],
+    },
+    {
+      cells: ['RetryClass / RequeueDelay', 'Keep lock-contention and progress-poll retries consistent across managers.'],
+    },
+    {
+      cells: ['LogPhaseTransition', 'Emit stable audit fields for phase changes.'],
+    },
+  ]}
+/>
 
 ## 5. Design Intent
 
-!!! note "Why This Exists"
-    Operation coordination belongs in the service layer so backup, restore, and upgrade flows share the same safety model without recreating lock and retry logic inside each controller.
+<Callout type="note" title="Why This Exists">
+
+Operation coordination belongs in the service layer so backup, restore, and upgrade flows share the same safety model without recreating lock and retry logic inside each controller.
+
+</Callout>
 
 This keeps long-running operations consistent:
 
