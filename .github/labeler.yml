@@ -10,7 +10,9 @@ documentation:
           - 'CONTRIBUTING.md'
           - 'LICENSE'
           - '**/*.md'
-          - 'mkdocs.yml'
+          - 'contribute/**/*'
+          - 'releases/**/*'
+          - 'website/**/*'
 
 # Helm chart changes
 helm:

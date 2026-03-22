@@ -1,0 +1,30 @@
+name: Docs build
+description: Build and smoke-test the Docusaurus documentation site using the checked-in website lockfile.
+
+inputs:
+  node-version:
+    description: Node.js version used for the docs toolchain.
+    required: false
+    default: "22"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: website/package-lock.json
+
+    - name: Install docs dependencies
+      shell: bash
+      run: npm --prefix website ci
+
+    - name: Install Playwright browser
+      shell: bash
+      run: npx --prefix website playwright install --with-deps chromium
+
+    - name: Run docs smoke suite
+      shell: bash
+      run: npm --prefix website run test:e2e

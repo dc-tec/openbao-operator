@@ -5,11 +5,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to deploy (e.g., 1.0.0 or 'dev')"
-        required: false
-        default: dev
 
 permissions:
   contents: write
@@ -30,43 +25,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: "3.x"
+      - name: Build docs
+        uses: ./.github/actions/docs-build
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-
-      - name: Install dependencies
-        run: uv pip install --system mkdocs-material mike
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Fetch gh-pages
-        run: git fetch origin gh-pages --depth=1 || true
-
-      - name: Deploy dev docs (main branch push)
-        if: github.event_name == 'push'
-        run: mike deploy --push --update-aliases dev latest
-
-      - name: Set default version
-        if: github.event_name == 'push'
-        run: mike set-default --push latest
-
-      - name: Deploy versioned docs (workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          VERSION="${{ github.event.inputs.version }}"
-          if [[ "${VERSION}" == "dev" ]]; then
-            mike deploy --push --update-aliases dev latest
-          else
-            mike deploy --push --update-aliases "${VERSION}" latest
-          fi
-
-      - name: Set default version (workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        run: mike set-default --push latest
+      - name: Publish site root to GitHub Pages
+        env:
+          COMMIT_MESSAGE: "docs: publish main site (${{ github.sha }})"
+        run: bash hack/docs/publish-gh-pages.sh website/build
