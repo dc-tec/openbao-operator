@@ -29,6 +29,10 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
+const (
+	OIDCBootstrapConfigurationInvalid = "OIDCBootstrapConfigurationInvalid"
+)
+
 func TestHandleScaleDownSafety(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
@@ -466,8 +470,8 @@ func TestInfraReconciler_ResolveOIDC_MissingRestConfigReturnsBootstrapReason(t *
 		t.Fatalf("expected permanent config error, got %v", err)
 	}
 	reason, ok := operatorerrors.Reason(err)
-	if !ok || reason != "OIDCBootstrapConfigurationInvalid" {
-		t.Fatalf("reason = %q,%v want OIDCBootstrapConfigurationInvalid,true", reason, ok)
+	if !ok || reason != OIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
 	}
 }
 
@@ -510,8 +514,9 @@ func TestInfraReconciler_ResolveOIDC_ForbiddenDiscoveryReturnsBootstrapReason(t 
 		t.Fatalf("expected permanent config error, got %v", err)
 	}
 	reason, ok := operatorerrors.Reason(err)
-	if !ok || reason != "OIDCBootstrapConfigurationInvalid" {
-		t.Fatalf("reason = %q,%v want OIDCBootstrapConfigurationInvalid,true", reason, ok)
+
+	if !ok || reason != OIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
 	}
 }
 
@@ -661,8 +666,8 @@ func assertOIDCBootstrapConfigurationError(t *testing.T, err error) {
 		t.Fatalf("expected permanent config error, got %v", err)
 	}
 	reason, ok := operatorerrors.Reason(err)
-	if !ok || reason != "OIDCBootstrapConfigurationInvalid" {
-		t.Fatalf("reason = %q,%v want OIDCBootstrapConfigurationInvalid,true", reason, ok)
+	if !ok || reason != OIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
 	}
 }
 
