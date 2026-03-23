@@ -12,10 +12,6 @@ const docsPluginDefaultExclude = [
   '**/__tests__/**',
 ];
 
-const algoliaAppId = process.env.ALGOLIA_APP_ID;
-const algoliaApiKey = process.env.ALGOLIA_API_KEY;
-const algoliaIndexName = process.env.ALGOLIA_INDEX_NAME;
-
 const config: Config = {
   title: 'OpenBao Operator',
   tagline: 'Operator-first docs for secure OpenBao lifecycle management on Kubernetes.',
@@ -168,6 +164,18 @@ const config: Config = {
         ],
       },
     ],
+    [
+      '@cmfcmf/docusaurus-search-local',
+      {
+        indexDocs: true,
+        indexBlog: false,
+        indexDocSidebarParentCategories: 2,
+        includeParentCategoriesInPageTitle: true,
+        indexPages: true,
+        language: 'en',
+        maxSearchResults: 8,
+      },
+    ],
   ],
 
   themeConfig: {
@@ -285,16 +293,6 @@ const config: Config = {
     mermaid: {
       theme: {light: 'neutral', dark: 'dark'},
     },
-    algolia:
-      algoliaAppId && algoliaApiKey && algoliaIndexName
-        ? {
-            appId: algoliaAppId,
-            apiKey: algoliaApiKey,
-            indexName: algoliaIndexName,
-            contextualSearch: true,
-            searchPagePath: 'search',
-          }
-        : undefined,
   } satisfies Preset.ThemeConfig,
 };
 

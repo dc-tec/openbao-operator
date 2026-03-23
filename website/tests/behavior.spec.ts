@@ -1,5 +1,19 @@
 import {expect, test} from '@playwright/test';
 
+test('local search is available and can find a known docs page', async ({page}) => {
+  await page.goto('docs/next/get-started');
+
+  const searchBox = page.getByRole('combobox', {name: /Search Search\.\.\./});
+  await expect(searchBox).toBeVisible();
+
+  await searchBox.click();
+  await page.keyboard.type('compatibility');
+  await expect(page.locator('.aa-Panel')).toBeVisible();
+
+  const compatibilityResult = page.locator('a[href$="/openbao-operator/docs/reference/compatibility"]').first();
+  await expect(compatibilityResult).toBeVisible();
+});
+
 test('docs navbar dropdown routes to validated deployments', async ({page}) => {
   await page.goto('');
 
