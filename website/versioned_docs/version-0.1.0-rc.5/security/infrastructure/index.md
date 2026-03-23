@@ -1,65 +1,74 @@
 ---
+title: Platform Controls
+hide_title: true
+pageType: landing
+journey: security
 description: Infrastructure security controls in OpenBao Operator, including RBAC architecture, validating admission policies, and network security boundaries.
 ---
 
-# Infrastructure Security
+<PageHero
+  variant="landing"
+  eyebrow="Security / Platform Controls"
+  title="Protect the control plane before you trust the workload."
+  lede="Platform controls are the Kubernetes-level mechanisms that keep operator identities narrow, reject unsafe objects before they persist, and limit traffic between tenants, control-plane components, and external dependencies."
+  actions={[
+    {label: 'Open RBAC architecture', docId: 'security/infrastructure/rbac', variant: 'primary'},
+    {label: 'Review admission policies', docId: 'security/infrastructure/admission-policies', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this section when you need to"
+    items={[
+      'review who can do what in the control plane',
+      'understand which unsafe changes are rejected before persistence',
+      'verify tenant and egress network boundaries',
+      'check which cluster prerequisites are required for the security model to hold',
+    ]}
+  />
+</PageHero>
 
-<Callout type="abstract" title="Platform Controls">
+<RouteList
+  title="Platform control routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'RBAC architecture',
+      description: 'Understand the split-controller model, narrow identities, and mutation-locked access boundaries.',
+      docId: 'security/infrastructure/rbac',
+    },
+    {
+      eyebrow: '02',
+      title: 'Admission policies',
+      description: 'See how CEL-based guardrails reject unsafe configurations and pause sensitive reconciliation when enforcement disappears.',
+      docId: 'security/infrastructure/admission-policies',
+    },
+    {
+      eyebrow: '03',
+      title: 'Network security',
+      description: 'Review default-deny traffic boundaries and the explicit egress model used for backups, upgrades, and integrations.',
+      docId: 'security/infrastructure/network-security',
+    },
+  ]}
+/>
 
-Infrastructure security focuses on the Kubernetes platform layer: protecting the Operator's control plane, isolating tenant namespaces, and enforcing policy compliance before workloads even start.
+<Callout type="note" title="Cluster prerequisites">
 
-</Callout>
-
-## Overview
-
-The OpenBao Operator leverages native Kubernetes security primitives to create a **Zero Trust** environment:
-
-1. **RBAC:** A precise, split-controller model that grants permissions only where needed (Provisioning vs. Management).
-2. **Admission Policies:** Guardrails that prevent insecure configurations (like disabling TLS) from being applied.
-3. **Network Security:** Isolation layers that restrict traffic flow between tenants and the internet.
-
-## Topics
-
-<div class="grid cards" markdown>
-
-- **RBAC Architecture**
-
-    ---
-
-    Deep dive into the **Provisioner** and **Controller** role separation and the "Blind Write" pattern.
-
-    [Explore RBAC](rbac.md)
-
-- **Admission Policies**
-
-    ---
-
-    Using `ValidatingAdmissionPolicy` (CEL) to enforce security standards without webhooks.
-
-    [View Policies](admission-policies.md)
-
-- **Network Security**
-
-    ---
-
-    Default-deny `NetworkPolicies` and controlling Egress traffic for backups and upgrades.
-
-    [Network Controls](network-security.md)
-
-</div>
-
-## Prerequisites
-
-<Callout type="note" title="Cluster Requirements">
-
--   **Kubernetes v1.33+**: Minimum supported by the OpenBao Operator (see [Compatibility](../../reference/compatibility.md)).
-    `ValidatingAdmissionPolicy` is GA since Kubernetes v1.30 and is available on all supported versions.
--   **CNI Plugin**: A CNI that enforces `NetworkPolicy` (e.g., Cilium, Calico, Antrea) is required for isolation features to work.
+- Kubernetes `v1.33+` is required by OpenBao Operator. `ValidatingAdmissionPolicy` is GA on all supported versions.
+- A CNI that actually enforces `NetworkPolicy` is required for the network isolation model to be real.
 
 </Callout>
 
-## See Also
-
-- [Security Fundamentals](../fundamentals/index.md)
-- [Workload Security](../workload/index.md)
-
+<NextActions
+  items={[
+    {
+      label: 'Open workload protections',
+      description: 'Move from platform enforcement into pod hardening, TLS, and supply-chain controls.',
+      docId: 'security/workload/index',
+    },
+    {
+      label: 'Open tenant isolation',
+      description: 'See how these platform controls support the multi-tenant security model.',
+      docId: 'security/multi-tenancy/index',
+    },
+  ]}
+/>

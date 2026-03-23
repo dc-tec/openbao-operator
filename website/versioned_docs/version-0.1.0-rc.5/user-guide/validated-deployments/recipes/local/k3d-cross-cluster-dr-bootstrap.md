@@ -1,175 +1,207 @@
 ---
-description: Step-by-step recipe for the validated local cross-cluster DR lane on k3d with shared Transit auto-unseal, RustFS snapshots, and Gateway API TLS passthrough.
+title: k3d Cross-Cluster DR Bootstrap
+hide_title: true
+pageType: task
+journey: validated-deployments
+description: Stand up the validated local disaster-recovery proving ground with separate infra, source, and target clusters, shared Transit, RustFS storage, and passthrough ingress.
 ---
 
-# k3d Cross-Cluster DR Bootstrap
+<PageHero
+  eyebrow="Validated Deployments / Local Baselines / k3d Cross-Cluster DR"
+  title="Bootstrap the DR proving ground before you test the restore event itself."
+  lede="This recipe prepares the validated local disaster-recovery lane: a shared trust-services cluster, a source cluster, and a target cluster, all wired so the restore event will cross the same kinds of trust, storage, and ingress boundaries you expect in a real DR rehearsal."
+  actions={[
+    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs", variant: "primary"},
+    {label: "Open DR restore runbook", docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="This recipe should leave you with"
+    items={[
+      "an infra cluster that hosts shared trust services and the shared Transit key",
+      "a healthy source cluster and target cluster with distinct namespaces and external endpoints",
+      "shared RustFS storage available to both clusters for snapshot transfer",
+      "known pre-restore state on both sides so the restore event can be verified later",
+    ]}
+  />
+</PageHero>
 
-This recipe boots the validated local cross-cluster DR proving ground with:
+<Callout type="success" title="Validated lane">
 
-- one infra k3d cluster hosting shared trust services
-- one source k3d cluster
-- one target k3d cluster
-- shared Transit auto-unseal
-- shared RustFS object storage
-- Gateway API TLS passthrough on all three clusters
-
-<Callout type="success" title="Validated manually">
-
-This recipe matches the local DR lane proven end to end on March 16, 2026 in the project validation environment, including source backup, restore into the target cluster, target unseal, and source-state verification on the target endpoint.
+This bootstrap path matches the local DR lane that was proven end to end on March 16, 2026, including source backup, restore into the target cluster, target unseal, and credential plus data verification after restore.
 
 </Callout>
 
-## Prerequisites
+<DecisionTable
+  title="What this lane assumes"
+  columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
+  rows={[
+    {
+      cells: [
+        "You can create three k3d-backed contexts",
+        "The lane depends on an infra cluster plus separate source and target clusters.",
+        "If you collapse everything into one cluster, you stop proving the cluster-boundary part of DR.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "You have bootstrap automation or manifests for the three-cluster lab",
+        "The validated lane was assembled from repeatable infra, gateway, and operator setup rather than ad hoc kubectl edits.",
+        "Without repeatable bootstrap artifacts, the restore result is hard to trust or reproduce.",
+      ],
+    },
+    {
+      cells: [
+        "Shared Transit and shared storage are available before cluster apply",
+        "Source and target clusters both depend on them from the start.",
+        "The restore will fail later if these dependencies are improvised after the source cluster is already in use.",
+      ],
+    },
+    {
+      cells: [
+        "Cutover remains manual",
+        "The bootstrap only prepares the recovery pair; it does not automate failover.",
+        "Treating the lane as automatic DR creates false confidence in behavior it does not validate.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-- Docker, `k3d`, `kubectl`, `make`, and `jq` are installed.
-- You can pull the public signed `edge` operator and helper images.
+<DecisionTable
+  kind="reference"
+  title="Validated lane defaults"
+  columns={["Value", "Default", "Purpose"]}
+  rows={[
+    {cells: ["Infra context", "`k3d-openbao-dr-infra`", "Shared trust-services cluster."]},
+    {cells: ["Source context", "`k3d-openbao-dr-source`", "Primary cluster that creates the snapshot."]},
+    {cells: ["Target context", "`k3d-openbao-dr-target`", "Recovery target cluster."]},
+    {cells: ["Source hostname", "`bao-dr-source.example.com`", "Source passthrough endpoint."]},
+    {cells: ["Target hostname", "`bao-dr-target.example.com`", "Target passthrough endpoint."]},
+    {cells: ["Transit endpoint", "`https://host.k3d.internal`", "Shared trust-services endpoint."]},
+    {cells: ["Snapshot bucket", "`openbao-dr-backups`", "Shared RustFS bucket."]},
+    {cells: ["Transit key", "`openbao-dr-shared-unseal`", "Shared seal root used by both clusters."]},
+  ]}
+/>
+
+## Step 1: Bootstrap the three-cluster lab
+
+<CommandBlock
+  language="text"
+  label="configure"
+  title="Run the bootstrap automation or manifests you keep for the validated lane"
+  code={`The validated bootstrap needs to create and wire:
+- one infra cluster for shared trust services
+- one source cluster
+- one target cluster
+- the Gateway API experimental bundle in each cluster
+- a dedicated passthrough edge in each cluster
+- a shared RustFS instance and bucket
+- a shared external OpenBao trust-services endpoint in the infra cluster
+- one operator install in the source cluster
+- one operator install in the target cluster`}
+>
+  The exact command is specific to your k3d automation. The lane contract is the resulting topology, not the name of one local helper script.
+</CommandBlock>
 
 <Callout type="tip" title="Validated defaults">
 
-The validated lane uses the public signed `edge` lane by default:
+The validated local proof used the public signed `edge` images by default:
 
-- `DR_OPERATOR_IMAGE=ghcr.io/dc-tec/openbao-operator:edge`
-- `DR_OPERATOR_VERSION=edge`
-
-</Callout>
-
-## Inputs
-
-The validated local lane uses these fixed names and endpoints:
-
-| Value | Default | Purpose |
-| :--- | :--- | :--- |
-| Infra context | `k3d-openbao-dr-infra` | Shared Transit provider cluster |
-| Source context | `k3d-openbao-dr-source` | Primary cluster |
-| Target context | `k3d-openbao-dr-target` | Recovery target cluster |
-| Source hostname | `bao-dr-source.example.com` | Source OpenBao ingress hostname |
-| Target hostname | `bao-dr-target.example.com` | Target OpenBao ingress hostname |
-| Transit endpoint | `https://host.k3d.internal` | Shared trust-services endpoint |
-| Snapshot bucket | `openbao-dr-backups` | Shared RustFS bucket |
-| Transit key | `openbao-dr-shared-unseal` | Shared DR seal key |
-
-<Callout type="note" title="Host bindings are implementation-specific">
-
-Local host port mappings are not part of the validated DR contract. The validated architecture depends on distinct source, target, and shared Transit endpoints, but the exact local port bindings are specific to your k3d environment.
+- `ghcr.io/dc-tec/openbao-operator:edge`
+- `ghcr.io/dc-tec/openbao-backup:edge`
 
 </Callout>
-
-## Step 1: Bootstrap the DR environment
-
-Bootstrap your local DR environment with the cluster automation you use for k3d. One validated implementation grouped the cluster, gateway, trust-services, and operator setup into a single bootstrap target.
-
-```bash
-k3d cluster create ...
-```
-
-The validated bootstrap target performs the following:
-
-- starts the shared RustFS instance and creates the bucket
-- creates the infra, source, and target k3d clusters
-- installs the Gateway API experimental bundle in each cluster
-- installs a dedicated Traefik passthrough edge in each cluster
-- bootstraps a shared external OpenBao trust-services endpoint in the infra cluster
-- syncs the shared Transit token and CA bundle Secret into the source and target namespaces
-- installs one single-tenant OpenBao Operator instance into the source and target clusters
 
 ## Step 2: Apply the source and target clusters
 
-Apply the source and target `OpenBaoCluster` manifests that match the architecture invariants from [k3d Cross-Cluster DR with Shared Transit and RustFS](../../architectures/local/k3d-cross-cluster-dr-transit-rustfs.md).
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Apply the source and target OpenBaoCluster manifests"
+  code={`kubectl --context <source-context> apply -f source-openbaocluster.yaml
+kubectl --context <target-context> apply -f target-openbaocluster.yaml`}
+>
+  The source and target manifests must both reference the same Transit endpoint, CA bundle, SNI, and key name. That shared seal root is the invariant the restore event depends on.
+</CommandBlock>
 
-```bash
-kubectl --context <source-context> apply -f source-openbaocluster.yaml
-kubectl --context <target-context> apply -f target-openbaocluster.yaml
-```
+## Verify the bootstrap
 
-This applies:
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check source and target readiness"
+  code={`kubectl --context k3d-openbao-dr-source -n openbaocluster-dr-source \\
+  get openbaocluster openbaocluster-dr-source \\
+  -o jsonpath='{.status.phase}{"\\n"}{.status.readyReplicas}{"\\n"}{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\\n"}{end}'
 
-- the source `OpenBaoCluster` in `openbaocluster-dr-source`
-- the target `OpenBaoCluster` in `openbaocluster-dr-target`
-- the target-side S3-compatible endpoint wiring used for the restore path
+kubectl --context k3d-openbao-dr-target -n openbaocluster-dr-target \\
+  get openbaocluster openbaocluster-dr-target \\
+  -o jsonpath='{.status.phase}{"\\n"}{.status.readyReplicas}{"\\n"}{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\\n"}{end}'`}
+>
+  The important steady-state expectation on both sides is `phase=Running`, `readyReplicas=1`, `Available=True`, `OpenBaoInitialized=True`, and `OpenBaoSealed=False`.
+</CommandBlock>
 
-## Operations
-
-### Verify source and target readiness
-
-Check the source cluster:
-
-```bash
-kubectl --context k3d-openbao-dr-source -n openbaocluster-dr-source \
-  get openbaocluster openbaocluster-dr-source \
-  -o jsonpath='{.status.phase}{"\n"}{.status.readyReplicas}{"\n"}{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\n"}{end}'
-```
-
-Check the target cluster:
-
-```bash
-kubectl --context k3d-openbao-dr-target -n openbaocluster-dr-target \
-  get openbaocluster openbaocluster-dr-target \
-  -o jsonpath='{.status.phase}{"\n"}{.status.readyReplicas}{"\n"}{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\n"}{end}'
-```
-
-The important steady-state expectations are:
-
-- `phase=Running`
-- `readyReplicas=1`
-- `Available=True`
-- `OpenBaoInitialized=True`
-- `OpenBaoSealed=False`
-
-### Verify the source and target passthrough endpoints
-
-Check the source health endpoint:
-
-```bash
-curl -ksS --resolve bao-dr-source.example.com:10443:127.0.0.1 \
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check the source and target health endpoints"
+  code={`curl -ksS --resolve bao-dr-source.example.com:10443:127.0.0.1 \\
   https://bao-dr-source.example.com:10443/v1/sys/health
-```
 
-Check the target health endpoint:
+curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \\
+  https://bao-dr-target.example.com:11443/v1/sys/health`}
+/>
 
-```bash
-curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \
-  https://bao-dr-target.example.com:11443/v1/sys/health
-```
-
-### Verify the pre-restore bootstrap state
-
-The validated source cluster starts with `source-demo-password` and a `dr-control` marker of `phase1-source`:
-
-```bash
-SOURCE_TOKEN="$(
-  curl -ksS --resolve bao-dr-source.example.com:10443:127.0.0.1 \
-    -H 'Content-Type: application/json' \
-    -d '{"password":"source-demo-password"}' \
-    https://bao-dr-source.example.com:10443/v1/auth/userpass/login/demo-admin \
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Verify the pre-restore source and target state"
+  code={`SOURCE_TOKEN="$(
+  curl -ksS --resolve bao-dr-source.example.com:10443:127.0.0.1 \\
+    -H 'Content-Type: application/json' \\
+    -d '{"password":"source-demo-password"}' \\
+    https://bao-dr-source.example.com:10443/v1/auth/userpass/login/demo-admin \\
   | jq -r '.auth.client_token'
 )"
 
-curl -ksS --resolve bao-dr-source.example.com:10443:127.0.0.1 \
-  -H "X-Vault-Token: ${SOURCE_TOKEN}" \
-  https://bao-dr-source.example.com:10443/v1/secret/data/dr-control
-```
-
-The validated target cluster starts with `target-demo-password` and a `dr-control` marker of `phase1-target`:
-
-```bash
 TARGET_TOKEN="$(
-  curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \
-    -H 'Content-Type: application/json' \
-    -d '{"password":"target-demo-password"}' \
-    https://bao-dr-target.example.com:11443/v1/auth/userpass/login/demo-admin \
+  curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \\
+    -H 'Content-Type: application/json' \\
+    -d '{"password":"target-demo-password"}' \\
+    https://bao-dr-target.example.com:11443/v1/auth/userpass/login/demo-admin \\
   | jq -r '.auth.client_token'
 )"
 
-curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \
-  -H "X-Vault-Token: ${TARGET_TOKEN}" \
-  https://bao-dr-target.example.com:11443/v1/secret/data/dr-control
-```
+curl -ksS --resolve bao-dr-source.example.com:10443:127.0.0.1 \\
+  -H "X-Vault-Token: \${SOURCE_TOKEN}" \\
+  https://bao-dr-source.example.com:10443/v1/secret/data/dr-control
 
-## Next step
+curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \\
+  -H "X-Vault-Token: \${TARGET_TOKEN}" \\
+  https://bao-dr-target.example.com:11443/v1/secret/data/dr-control`}
+>
+  The validated lane starts with `phase1-source` on the source side and `phase1-target` on the target side so the restore event can prove that target state was really replaced.
+</CommandBlock>
 
-After bootstrap and pre-restore verification, follow [Cross-Cluster DR Restore with RustFS](../../runbooks/cross-cluster-dr-restore-rustfs.md).
-
-## Related architecture
-
-Use [k3d Cross-Cluster DR with Shared Transit and RustFS](../../architectures/local/k3d-cross-cluster-dr-transit-rustfs.md) for the topology, invariants, and validation scope behind this recipe.
-
+<NextActions
+  title="Continue the DR rehearsal"
+  items={[
+    {
+      label: "DR restore runbook",
+      description: "Run the destructive restore event once the source and target are both healthy and the pre-restore state is known.",
+      docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs",
+    },
+    {
+      label: "Reference architecture",
+      description: "Review the DR invariants again before you move the source snapshot into the target cluster.",
+      docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs",
+    },
+    {
+      label: "Restore from backup",
+      description: "Use the generic restore guide for the operator-wide restore behavior behind this lane-specific runbook.",
+      docId: "user-guide/openbaorestore/restore",
+    },
+  ]}
+/>

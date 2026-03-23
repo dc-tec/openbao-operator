@@ -1,77 +1,180 @@
 ---
-description: Architecture of tenant namespace provisioning, including RBAC, Secret allowlists, Pod Security labels, and quota defaults.
+title: Provisioner Manager
+hide_title: true
+pageType: concept
+journey: architecture
+description: Provision tenant namespaces with scoped RBAC, Secret allowlists, Pod Security labels, and quota defaults for OpenBaoTenant.
 ---
 
-# Provisioner Manager (Tenant Onboarding)
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Provisioning"
+  title="Provision tenant namespaces with scoped RBAC, Secret allowlists, and policy defaults."
+  lede="The provisioner manager owns the tenant-onboarding contract for `OpenBaoTenant`. It creates namespace-scoped permissions for the operator, applies Pod Security and quota defaults, and keeps Secret access narrowed to explicit allowlists derived from managed clusters."
+  actions={[
+    {label: 'Open tenant onboarding', docId: 'user-guide/openbaotenant/onboarding', variant: 'primary'},
+    {label: 'Open day 0 lifecycle flow', docId: 'architecture/lifecycle/day0-provisioning', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand how tenant namespaces become safe onboarding targets for OpenBaoCluster',
+      'trace namespace RBAC, Secret allowlists, and quota defaults back to one manager',
+      'reason about why tenant cleanup waits until managed clusters are gone',
+      'connect tenant provisioning to admission dependencies and multi-tenant security boundaries',
+    ]}
+  />
+</PageHero>
 
-`internal/service/provisioner` owns tenant namespace provisioning for `OpenBaoTenant` resources. It applies the namespace-scoped RBAC, Secret allowlists, Pod Security labels, and quota defaults that let the OpenBao Operator manage `OpenBaoCluster` resources safely in tenant namespaces.
+<ManagerAtAGlance
+  sections={[
+    {
+      label: 'Control path',
+      items: [
+        'dedicated OpenBaoTenant controller',
+        'internal/app/provisioner',
+        'internal/service/provisioner',
+      ],
+    },
+    {
+      label: 'Owns',
+      items: [
+        'tenant-scoped operator Role and RoleBinding resources',
+        'reader and writer Secret allowlists derived from tenant clusters',
+        'Pod Security labels plus optional ResourceQuota and LimitRange defaults',
+      ],
+    },
+    {
+      label: 'Writes',
+      items: [
+        'tenant Role / RoleBinding and Secret RBAC resources',
+        'namespace labels that enforce Pod Security defaults',
+        'ResourceQuota and LimitRange resources from OpenBaoTenant.spec',
+      ],
+    },
+    {
+      label: 'Depends on',
+      items: [
+        'OpenBaoTenant namespace targeting rules and resource policies',
+        'admission dependencies before tenant Secret RBAC sync can proceed',
+        'current OpenBaoCluster objects that still exist in the tenant namespace',
+      ],
+    },
+  ]}
+/>
 
-## 1. Architectural Placement
+## Architectural Placement
 
-Provisioning follows the dedicated tenant-controller path:
+Provisioning follows a dedicated tenant-controller path:
 
 1. `internal/controller/provisioner` receives the reconcile event for `OpenBaoTenant`.
-2. It delegates orchestration to `internal/app/provisioner`.
-3. The app layer invokes `internal/service/provisioner` to apply tenant namespace RBAC and lifecycle guardrails.
+2. The controller delegates orchestration to `internal/app/provisioner`.
+3. The app layer invokes `internal/service/provisioner` to apply RBAC, labels, allowlists, and cleanup behavior.
 
-This keeps the Provisioner controller focused on reconcile plumbing while the provisioner manager owns namespace onboarding and cleanup behavior.
+That keeps tenant onboarding separate from `OpenBaoCluster` steady-state reconciliation while still using the same design system and policy language.
 
-## 2. Responsibilities
+<DecisionTable
+  kind="reference"
+  title="Owned surfaces"
+  columns={['Surface', 'What the manager decides', 'Why it matters']}
+  rows={[
+    {
+      cells: ['Tenant RBAC', 'The operator ServiceAccount permissions granted in the tenant namespace.', 'The operator needs enough access to manage clusters there, but not broad namespace-level privileges by default.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Secret allowlists', 'Which Secrets the operator may read or write for managed clusters in the tenant namespace.', 'Multi-tenant safety depends on explicit Secret access instead of wildcard RBAC.'],
+    },
+    {
+      cells: ['Pod Security labels', 'The baseline namespace policy applied to tenant workloads and operator-managed pods.', 'Tenants need a secure default even before any cluster objects are created.'],
+    },
+    {
+      cells: ['Quota defaults', 'Optional ResourceQuota and LimitRange resources derived from OpenBaoTenant.spec.', 'Tenants need resource guardrails that travel with the namespace onboarding contract.'],
+    },
+  ]}
+/>
 
-The Provisioner Manager is responsible for:
+## Provisioning Flow
 
-- Creating and updating tenant `Role` and `RoleBinding` resources for the operator ServiceAccount.
-- Reconciling writer and reader Secret allowlists derived from `OpenBaoCluster` references in the tenant namespace.
-- Applying Pod Security Standards labels to the target namespace.
-- Reconciling `ResourceQuota` and `LimitRange` defaults from `OpenBaoTenant.spec`.
-- Cleaning up provisioned tenant RBAC resources after the tenant is deleted and no managed clusters remain.
-
-## 3. Reconcile Flow
-
-```mermaid
-graph TD
-    Tenant["OpenBaoTenant"] --> Ctrl["Provisioner Controller"]
+<DiagramFrame
+  title="Tenant onboarding flow"
+  caption="Provisioning applies namespace-scoped guardrails first, then keeps Secret allowlists synchronized as managed clusters appear or disappear in the tenant namespace."
+  code={`graph TD
+    Tenant["OpenBaoTenant"] --> Ctrl["Provisioner controller"]
     Ctrl --> App["internal/app/provisioner"]
-    App --> Prov["Provisioner Manager"]
+    App --> Manager["Provisioner manager"]
+    Manager --> RBAC["Tenant Role / RoleBinding"]
+    Manager --> Secrets["Reader / writer Secret allowlists"]
+    Manager --> Labels["Pod Security labels"]
+    Manager --> Quotas["ResourceQuota / LimitRange"]
+    Quotas --> Ready["Tenant namespace ready for OpenBaoCluster"]
 
-    Prov --> RBAC["Role / RoleBinding"]
-    Prov --> Secrets["Secret Allowlists"]
-    Prov --> Quotas["ResourceQuota / LimitRange"]
-    Prov --> Labels["Namespace Pod Security Labels"]
-
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
     class Tenant read;
-    class Ctrl,App,Prov process;
-    class RBAC,Secrets,Quotas,Labels write;
-```
+    class Ctrl,App,Manager process;
+    class RBAC,Secrets,Labels,Quotas,Ready write;`}
+/>
 
-## 4. Security Guardrails
+<DecisionTable
+  kind="reference"
+  title="Security guardrails"
+  columns={['Concern', 'Manager behavior']}
+  rows={[
+    {
+      cells: ['Namespace targeting', 'Self-service tenants may target only their own namespace; cross-namespace provisioning is reserved for trusted operator-managed cases.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Admission dependencies', 'Tenant Secret allowlists wait for admission-policy dependencies so Secret access is not widened before enforcement is ready.'],
+    },
+    {
+      cells: ['Shared RBAC lifecycle', 'Provisioned tenant RBAC avoids OwnerReferences that would let a single cluster deletion garbage-collect shared namespace permissions.'],
+    },
+    {
+      cells: ['Secret scope', 'Reader and writer Secret Roles are derived from explicit cluster references instead of wildcard list or get access to every Secret in the namespace.'],
+    },
+  ]}
+/>
 
-<Callout type="note" title="Namespace Targeting Rules">
+<DecisionTable
+  kind="reference"
+  title="Deletion lifecycle"
+  columns={['Phase', 'Manager intent']}
+  rows={[
+    {
+      cells: ['Tenant marked for deletion', 'Keep provisioned RBAC in place while managed clusters still exist in the namespace.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Namespace emptied of managed clusters', 'Remove provisioned Role, RoleBinding, Secret allowlist roles, and default quota resources.'],
+    },
+    {
+      cells: ['Finalizer removal', 'Only remove the tenant finalizer after namespace-scoped provisioning artifacts are cleaned up.'],
+    },
+  ]}
+/>
 
-Self-service tenants may only target their own namespace. Cross-namespace provisioning is reserved for trusted operator-managed namespaces.
-
-</Callout>
-
-The app and service layers enforce several guardrails before provisioning succeeds:
-
-- Wait for admission dependencies before provisioning self-service tenant RBAC.
-- Avoid OwnerReferences on tenant RBAC, so deleting a single cluster cannot garbage-collect shared namespace permissions.
-- Keep tenant Secret access reduced to explicit allowlists derived from `OpenBaoCluster` references.
-
-## 5. Deletion Semantics
-
-`OpenBaoTenant` deletion uses a finalizer-driven flow:
-
-1. Keep tenant RBAC in place while `OpenBaoCluster` objects still exist in the target namespace.
-2. Remove provisioned RBAC resources only after the namespace no longer contains managed clusters.
-3. Remove the tenant finalizer and allow the resource to be deleted.
-
-## 6. See Also
-
-- [Day 0: Tenant Provisioning](lifecycle/day0-provisioning.md)
-- [Component Design](components.md)
-
+<NextActions
+  title="Related deep dives"
+  items={[
+    {
+      label: 'Tenant onboarding guide',
+      description: 'Compare the internal provisioning contract with the user-facing onboarding sequence for OpenBaoTenant.',
+      docId: 'user-guide/openbaotenant/onboarding',
+    },
+    {
+      label: 'Admission policies',
+      description: 'See why tenant Secret allowlists wait for infrastructure policy dependencies before broadening access.',
+      docId: 'security/infrastructure/admission-policies',
+    },
+    {
+      label: 'Day 0 lifecycle flow',
+      description: 'Follow where tenant provisioning sits before cluster creation begins.',
+      docId: 'architecture/lifecycle/day0-provisioning',
+    },
+  ]}
+/>

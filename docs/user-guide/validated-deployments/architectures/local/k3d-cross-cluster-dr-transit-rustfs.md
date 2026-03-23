@@ -1,131 +1,191 @@
 ---
-description: Validated local reference architecture for cross-cluster disaster recovery on k3d with shared Transit auto-unseal, RustFS snapshots, and Gateway API TLS passthrough.
+title: k3d Cross-Cluster DR
+hide_title: true
+pageType: concept
+journey: validated-deployments
+description: Validated local disaster-recovery baseline for OpenBao on k3d with a shared Transit seal root, RustFS snapshot transfer, and manual cutover across source and target clusters.
 ---
 
-# k3d Cross-Cluster DR with Shared Transit and RustFS
+<PageHero
+  variant="compact"
+  eyebrow="Validated Deployments / Local Baselines"
+  title="Use this lane to rehearse restore across a real cluster boundary before you trust a cloud DR pair."
+  lede="This local DR baseline keeps the source, target, and shared trust services separated so backup, restore, unseal, and cutover all cross the same kinds of boundaries they will cross in a real disaster-recovery event."
+  actions={[
+    {label: "Open bootstrap recipe", docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap", variant: "primary"},
+    {label: "Open DR restore runbook", docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="This lane proves"
+    items={[
+      "a snapshot can leave the source cluster, cross an object-storage boundary, and restore into a different target cluster",
+      "the restored target can unseal only because it shares the same external Transit root of trust as the source",
+      "restore verification can confirm both credential cutover and data cutover before any manual failover happens",
+      "the operator's backup and restore workflows still work when source and target are split across real ingress and storage boundaries",
+    ]}
+  />
+</PageHero>
 
 <Callout type="note" title="Classification">
 
-Local reference architecture for DR rehearsal. k3d is not a production target, but this page documents a realistic multi-cluster recovery model that exercises the important disaster-recovery invariants before moving to a cloud DR pair.
+Local disaster-recovery reference architecture. k3d is not the production target, but this lane is the proving ground for the DR invariants that matter before you move to a cloud recovery pair.
 
 </Callout>
 
-This validated architecture describes the local multi-cluster disaster recovery lane used to prove restore across a real cluster boundary.
+<DecisionTable
+  title="Lane summary"
+  columns={["Surface", "Choice", "Why it matters"]}
+  rows={[
+    {
+      cells: [
+        "Cluster split",
+        "One infra cluster, one source cluster, one target cluster",
+        "Restore crosses a real cluster boundary instead of staying inside one namespace or one API server.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Seal path",
+        "Shared external Transit key",
+        "The target can only unseal restored data because it shares the same external seal root of trust as the source.",
+      ],
+    },
+    {
+      cells: [
+        "Transfer boundary",
+        "RustFS S3-compatible bucket",
+        "Snapshots move through a real object-storage boundary that both clusters can reach independently.",
+      ],
+    },
+    {
+      cells: [
+        "Edge model",
+        "Dedicated passthrough endpoints for infra, source, and target",
+        "The lane validates real ingress reachability without collapsing TLS termination into a single local shortcut.",
+      ],
+    },
+    {
+      cells: [
+        "Cutover model",
+        "Manual restore and manual client or DNS cutover",
+        "The lane proves restore correctness, not automatic failover orchestration.",
+      ],
+    },
+  ]}
+/>
 
-It is the reference shape for:
-
-- one infra k3d cluster hosting shared trust services
-- one source `OpenBaoCluster`
-- one target `OpenBaoCluster`
-- shared Transit auto-unseal through a shared external OpenBao service
-- shared RustFS object storage for snapshot transfer
-- Gateway API TLS passthrough on the infra, source, and target clusters
-
-<Callout type="success" title="Validation status">
-
-This architecture was manually validated on March 16, 2026 in the project validation environment. The proof completed source backup to RustFS, restore into the target cluster, target unseal with the shared Transit key, and post-restore verification that `source-demo-password` worked on the target while `target-demo-password` failed and the `dr-control` marker changed to `phase1-source`.
-
-</Callout>
-
-## Intended use
-
-Use this architecture when you want to rehearse disaster recovery locally before moving to a cloud DR pair.
-
-It is useful for:
-
-- proving that backup and restore work across a real cluster boundary
-- validating that the target cluster can unseal restored data with a shared external seal root of trust
-- rehearsing manual DR cutover and post-restore verification
-
-## Topology
-
-```mermaid
-flowchart LR
-    Client["Operator or Admin"] -->|"HTTPS (SNI)"| SourceEdge["Source Gateway"]
-    Client -->|"HTTPS (SNI)"| TargetEdge["Target Gateway"]
+<DiagramFrame
+  title="Validated lane topology"
+  caption="The source cluster writes snapshots to shared storage, the target cluster restores from that storage, and both sides depend on the same external Transit key to make restored data usable."
+  code={`flowchart LR
+    Client["Operator or admin"] -->|"HTTPS (SNI)"| SourceEdge["Source passthrough edge"]
+    Client -->|"HTTPS (SNI)"| TargetEdge["Target passthrough edge"]
 
     SourceEdge -->|"TLS passthrough"| SourceBao["Source OpenBao"]
     TargetEdge -->|"TLS passthrough"| TargetBao["Target OpenBao"]
 
     SourceOp["Source Operator"] -->|"backup orchestration"| SourceBao
     TargetOp["Target Operator"] -->|"restore orchestration"| TargetBao
-
-    SourceBao -->|"snapshot upload"| RustFS["Shared RustFS Bucket"]
+    SourceBao -->|"snapshot upload"| RustFS["Shared RustFS bucket"]
     RestoreJob["Restore Job"] -->|"snapshot download"| RustFS
     RestoreJob -->|"snapshot restore"| TargetBao
 
-    SourceBao -->|"Transit encrypt/decrypt"| Infra["Shared Transit Provider"]
-    TargetBao -->|"Transit encrypt/decrypt"| Infra
-    InfraEdge["Infra Gateway"] -->|"TLS passthrough"| Infra
+    SourceBao -->|"Transit encrypt/decrypt"| Trust["Shared Transit provider"]
+    TargetBao -->|"Transit encrypt/decrypt"| Trust
+    InfraEdge["Infra passthrough edge"] -->|"TLS passthrough"| Trust
 
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-    class SourceBao,TargetBao,Infra,RustFS write;
     class Client,RestoreJob read;
     class SourceEdge,TargetEdge,InfraEdge,SourceOp,TargetOp process;
-```
+    class SourceBao,TargetBao,Trust,RustFS write;`}
+/>
 
-## Architecture decisions
+## Why this lane exists
 
-### Shared external seal root of trust is required
+<DecisionTable
+  kind="reference"
+  title="Key design choices"
+  columns={["Choice", "What it protects", "Why it stays in the lane"]}
+  rows={[
+    {
+      cells: [
+        "Shared seal root",
+        "Restored data is still decryptable after it lands in the target cluster.",
+        "This is the core DR invariant. Without a shared external seal root, the target can restore bits and still fail to unseal.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Separate infra cluster for trust services",
+        "The shared Transit dependency stays independent from source and target failure domains.",
+        "The lane should treat trust services as an external dependency, not as part of either OpenBao cluster.",
+      ],
+    },
+    {
+      cells: [
+        "Shared RustFS bucket",
+        "The restore uses the same object-transfer shape as a real remote-storage path.",
+        "The lane is meant to prove the handoff through storage, not just a local disk copy.",
+      ],
+    },
+    {
+      cells: [
+        "Manual cutover",
+        "Operators verify the target before traffic moves.",
+        "The lane proves correctness and operator workflow, not automated failover policy.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-The validated DR topology uses one shared Transit key, `openbao-dr-shared-unseal`, for both the source and target clusters.
+<Checklist
+  tone="warning"
+  title="Stay on the validated path"
+  items={[
+    "keep the source and target on the same OpenBao version for the restore event",
+    "keep the source and target pointed at the same Transit address, CA bundle, SNI, and key name",
+    "keep shared object storage reachable from both clusters before you start a backup or restore",
+    "keep the target cluster created ahead of time with restore auth configured",
+    "perform cutover only after credential and data verification succeeds on the restored target",
+  ]}
+/>
 
-This is the important DR invariant. A restore can copy snapshot data into the target cluster, but the restored cluster cannot unseal unless the target uses the same external seal root of trust as the source.
+<Callout type="success" title="What this lane validated">
 
-### Separate infra cluster hosts the shared Transit dependency
+The local DR lane proved source backup to RustFS, restore into a separate target cluster, target unseal with the shared Transit key, and post-restore checks that source credentials and source data replaced the target bootstrap state.
 
-The local proving ground uses a third k3d cluster for shared trust services. That keeps the seal provider independent from both the source and target clusters and makes the boundary closer to a real external dependency.
+</Callout>
 
-### Object storage is the transfer boundary
+<Callout type="warning" title="What this lane is not">
 
-RustFS is the shared S3-compatible transfer layer. The source cluster uploads snapshots, and the target cluster restores from the exact object key selected by the operator or administrator.
+This is not an automatic failover design, not a cloud DR reference, and not proof that any backup can restore into any target shape. It is a validated manual recovery lane with explicit preconditions.
 
-### Gateway API passthrough remains part of the design
+</Callout>
 
-The validated lane exposes the source, target, and shared trust services endpoints through dedicated Gateway API TLS passthrough listeners. That keeps the OpenBao TLS boundary inside OpenBao while still validating cluster-to-cluster reachability over real ingress edges.
-
-### Cutover is manual
-
-This architecture does not claim automatic failover. The validated path is:
-
-1. Create a source backup.
-2. Restore that snapshot into the target cluster.
-3. Verify the restored target state.
-4. Perform manual client or DNS cutover.
-
-## Required invariants
-
-Keep these assumptions if you want to stay on the validated path:
-
-- The source and target clusters use the same Transit address, CA bundle, SNI, and Transit key name.
-- The source and target clusters use the same OpenBao version for the restore event.
-- The target cluster exists before restore and exposes `spec.restore.jwtAuthRole`.
-- Shared object storage is reachable from both clusters.
-- The target restore flow uses an explicit restore image or an equivalent cluster-level backup image configuration.
-- Cutover happens only after verifying restored credentials and application data.
-
-## Validated operations
-
-This architecture is now validated for:
-
-- bootstrap of the infra, source, and target clusters
-- source cluster backup to RustFS
-- restore into a separate target cluster
-- target unseal after restore with shared Transit auto-unseal
-- post-restore validation over the target passthrough endpoint
-
-## Known constraints
-
-- This is a local proving architecture, not the final cloud DR reference.
-- The object store is host-exposed RustFS, not a managed cloud bucket.
-- The validated path is manual restore and manual cutover only.
-- The local Gateway API experimental bundle is part of the working topology. Treat actual `Gateway` programming and live endpoint behavior as the primary ingress acceptance signal.
-
-## Related recipes
-
-- [k3d Cross-Cluster DR Bootstrap](../../recipes/local/k3d-cross-cluster-dr-bootstrap.md)
-- [Cross-Cluster DR Restore with RustFS](../../runbooks/cross-cluster-dr-restore-rustfs.md)
-
+<NextActions
+  title="Use the lane"
+  items={[
+    {
+      label: "Bootstrap recipe",
+      description: "Stand up the infra, source, and target clusters that make up the DR proving ground.",
+      docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap",
+    },
+    {
+      label: "DR restore runbook",
+      description: "Run the destructive restore workflow and verify that source state replaced target state cleanly.",
+      docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs",
+    },
+    {
+      label: "Restore from backup",
+      description: "Review the generic restore behavior behind the lane-specific runbook.",
+      docId: "user-guide/openbaorestore/restore",
+    },
+  ]}
+/>

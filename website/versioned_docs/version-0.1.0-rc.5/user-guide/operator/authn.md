@@ -1,184 +1,247 @@
-# Operator Authentication
+---
+title: Operator Authentication
+description: Understand the projected JWT auth path, audience contract, and custom-install checks before you change controller identity wiring.
+slug: /get-started/operator-authentication
+hide_title: true
+pageType: concept
+journey: get-started
+---
 
-The OpenBao Operator employs a **Zero Trust** security model by default. It avoids long-lived credentials (like root tokens) in favor of short-lived, automatically rotated credentials bound to specific identities.
+<PageHero
+  variant="compact"
+  eyebrow="Supporting decision"
+  title="Keep controller auth short-lived, bound, and boring."
+  lede="The operator authenticates to OpenBao with a projected Kubernetes ServiceAccount token by default. That path is safer than static root credentials, but it only stays safe when the rendered controller identity, JWT audience, and OpenBao-side role binding still match."
+  actions={[
+    {label: 'Review operator authorization', docId: 'user-guide/operator/authz', variant: 'primary'},
+    {label: 'Review identity mapping', docId: 'user-guide/operator/identity-and-access', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'explain how the controller authenticates without a long-lived root token',
+      'verify the audience and role binding after custom namespace or name changes',
+      'bootstrap JWT auth with self-init instead of manual token handling',
+      'debug why controller auth fails while the cluster itself stays healthy',
+    ]}
+  />
+</PageHero>
 
-## Zero Trust Architecture
-
-The Operator authenticates to managed OpenBao clusters using **Kubernetes Service Account Tokens** (Projected Volumes) via OIDC.
-
-```mermaid
-sequenceDiagram
+<DiagramFrame
+  title="Default operator auth path"
+  caption="Kubernetes issues a projected token for the controller. OpenBao validates that token against the configured JWT auth method and returns a scoped operator token for maintenance work."
+  code={`sequenceDiagram
     autonumber
     participant K8s as Kubernetes API
-    participant Op as Operator
-    participant Bao as OpenBao Cluster
+    participant Controller as Operator controller
+    participant Bao as OpenBao cluster
 
-    Note over K8s, Op: 1. Identity Injection
-    K8s->>Op: Mounts Projected Token (aud=openbao-internal)
-    
-    Note over Op, Bao: 2. Authentication
-    Op->>Bao: Login (JWT)
-    Bao-->>Op: OpenBao Token (policy=openbao-operator)
-    
-    Note over Op, Bao: 3. Operations
-    Op->>Bao: Configure Autopilot / Step-Down / Snapshot
-```
+    K8s->>Controller: Mount projected token (aud=openbao-internal)
+    Controller->>Bao: Login through auth/jwt-operator
+    Bao-->>Controller: OpenBao token with openbao-operator policy
+    Controller->>Bao: Run health, autopilot, and maintenance requests
 
-### Benefits
+    Note over Controller,Bao: Human login is a separate bootstrap path`}
+/>
 
-1. **No Secrets:** The operator does not need a `root-token` Secret to perform Day 2 operations.
-2. **Automatic Rotation:** Kubernetes rotates the projected token automatically (default every hour).
-3. **Audience Binding:** Tokens are scoped to `openbao-internal`, preventing them from being replayable against the Kubernetes API or other services.
-4. **Least Privilege:** The `openbao-operator` role grants only the specific permissions needed for operator tasks (e.g., `sys/storage/raft/autopilot`), not full admin access.
+<DecisionTable
+  title="Why the JWT path is the default"
+  columns={['Property', 'What you get', 'Why it matters']}
+  rows={[
+    {
+      cells: [
+        'No stored root token',
+        'The controller authenticates with a projected ServiceAccount token instead of a long-lived Secret.',
+        'You avoid carrying a static high-privilege credential in Kubernetes just to let the operator do day 2 work.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Automatic rotation',
+        'Kubernetes rotates the projected token on its own schedule.',
+        'Controller auth ages out naturally instead of depending on manual token rotation discipline.',
+      ],
+    },
+    {
+      cells: [
+        'Audience binding',
+        'The token is scoped to `OPENBAO_JWT_AUDIENCE`, which defaults to `openbao-internal`.',
+        'A token issued for OpenBao auth should not be replayable against unrelated services.',
+      ],
+    },
+    {
+      cells: [
+        'Scoped maintenance policy',
+        'The JWT role returns a token with the operator maintenance policy, not blanket admin privileges.',
+        'The controller gets the capabilities it needs for health checks, step-down, and autopilot without widening normal access.',
+      ],
+    },
+  ]}
+/>
 
-<Callout type="note" title="Installation-scoped JWT audience">
+<Callout type="note" title="Operator auth is not human auth">
 
-The OpenBao JWT audience is an operator installation setting, not a per-cluster override.
-Configure it through `OPENBAO_JWT_AUDIENCE`:
-
-- Helm: `serviceAccountToken.openBaoAudience`
-- Raw manifests: `config/default/openbao_jwt_settings.yaml`
-
-</Callout>
-
-## Self-Initialization Integration
-
-When using **Self-Initialization** (`spec.selfInit.enabled: true`), the relationship is bootstrapped automatically:
-
-1. **Bootstrap:** The operator uses `spec.selfInit.oidc.enabled: true` or manual requests to configure the JWT auth method.
-2. **Role Creation:** It creates a policy and role named `openbao-operator`.
-3. **Binding:** This role is bound to the operator's ServiceAccount in the operator's namespace.
-
-<Callout type="note" title="Operator Auth vs Human Auth">
-
-`spec.selfInit.oidc.enabled: true` bootstraps operator authentication only. It does not create a human login path by itself. Watch `UserAccessBootstrap` on the cluster if you rely on `spec.selfInit.requests` to create JWT, OIDC, `userpass`, or other operator-facing auth mounts.
-
-</Callout>
-
-<Callout type="success" title="Recommended Configuration">
-
-For production environments, we strongly recommend using **Hardened Profile** with **Self
-Initialization**. This ensures no root token is ever persisted to a Kubernetes Secret.
-
-</Callout>
-
-## Custom Install Checklist
-
-Use this checklist when you install the operator with raw manifests, a custom namespace, or a `namePrefix`.
-
-Start from the supported install path in [Operator Installation](installation.md#install-profiles), then use this checklist to validate the rendered controller identity and OpenBao-side JWT binding.
-
-For the compact bridge between install identity, Kubernetes RBAC, and OpenBao-side roles, see [Operator Identity And Access](identity-and-access.md).
-
-1. Confirm the controller ServiceAccount name and namespace from the rendered manifest.
-2. Confirm the controller Deployment still mounts the projected token used for OpenBao auth.
-3. Confirm the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks` from the Kubernetes API server.
-4. Confirm the JWT role in OpenBao binds to the rendered controller ServiceAccount name and namespace, not the default examples.
-5. Confirm the JWT audience in OpenBao matches `OPENBAO_JWT_AUDIENCE` on the operator and the controller projected `openbao-token` audience.
-
-<Callout type="warning" title="Custom Identity Installs">
-
-`spec.selfInit.oidc.enabled: true` does not infer your custom operator identity from the OpenBao side. If you manually configure JWT auth, the role binding in OpenBao must match the rendered controller ServiceAccount name and namespace exactly.
+`spec.selfInit.oidc.enabled: true` bootstraps the controller auth path only.
+It does not create a human login method by itself.
+If people need access after first boot, add that through `selfInit.requests` or another explicit access path.
 
 </Callout>
 
-### Example: Custom Raw-Manifest Identity
+## Self-init and manual bootstrap
 
-This example uses `config/overlays/custom-identity` with:
+<DecisionTable
+  title="Choose the bootstrap path"
+  columns={['Path', 'Use it when', 'Operator behavior', 'Watch for']}
+  rows={[
+    {
+      cells: [
+        'Self-init with OIDC',
+        'You want the supported production path and the cluster is allowed to bootstrap its own operator auth surface.',
+        'The operator configures JWT auth, discovery, the `openbao-operator` policy, and the bound role automatically.',
+        'Still add a human login path separately before you expose the cluster.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Manual JWT configuration',
+        'You are carrying a compatibility workflow, a custom install shape, or a controlled bootstrap sequence.',
+        'You create the JWT auth method, policy, and role binding yourself.',
+        'Rendered ServiceAccount name, namespace, and audience drift are the usual breakpoints.',
+      ],
+      emphasis: 'caution',
+    },
+  ]}
+/>
 
-- `namespace: platform-security`
-- `namePrefix: demo-`
-
-That render path produces a controller ServiceAccount named `demo-openbao-operator-controller` in namespace `platform-security`.
-
-If you are not using operator-managed self-init bootstrap, configure the OpenBao JWT role against that rendered identity:
-
-```bash
-bao write auth/jwt-operator/role/openbao-operator \
-    role_type="jwt" \
-    bound_audiences="openbao-internal" \
-    user_claim="sub" \
-    bound_subject="system:serviceaccount:platform-security:demo-openbao-operator-controller" \
-    token_policies="openbao-operator" \
-    token_ttl="1h"
-```
-
-To verify the rendered identity before applying manifests:
-
-```bash
-kubectl kustomize config/overlays/custom-identity
-```
-
-Check the rendered `ServiceAccount`, the controller `Deployment`, and any RoleBinding or admission-policy subject that references the controller identity.
-
-## Troubleshooting
-
-### "Permission Denied" Errors
-
-If you see errors indicating the operator cannot authenticate or lacks permission to configure Autopilot:
-
-```text
-failed to create authenticated OpenBao client: ... permission denied
-```
-
-**Check the following:**
-
-1. **Projected Volume Mounted:** Ensure the operator Deployment has the projected volume mounted at `/var/run/secrets/tokens/openbao-token`.
-2. **Audience Matching:** The `aud` (audience) in the mounted token must match the `bound_audiences` in the OpenBao JWT role. The default is `openbao-internal`, but the real source of truth is the operator installation setting `OPENBAO_JWT_AUDIENCE`.
-3. **Self-Init Status:** If the cluster was manually initialized, you must manually create the `openbao-operator` role and binding.
-4. **OIDC Discovery RBAC:** Ensure the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks`.
-5. **Rendered Identity Match:** If you customized the raw-manifest install namespace or `namePrefix`, ensure the JWT role binds to the rendered controller ServiceAccount name and namespace rather than the defaults.
-
-If OIDC discovery or operator identity bootstrap is miswired, the cluster surfaces `OIDCBootstrapConfigurationInvalid`.
-
-On managed control planes, the discovery document may return a JWKS URL on a hostname that is not directly
-reachable from cluster Pods. The operator first retries discovery through the advertised issuer URL and then,
-for standard Kubernetes JWKS paths, falls back to the same Kubernetes API service endpoint used for discovery
-before failing.
-
-If the operator cannot recognize a human login path from `spec.selfInit.requests`, the cluster surfaces `UserAccessBootstrap=Unknown` with reason `UserAccessUnverified`. This is a warning signal, not a hard block.
-
-### Manual Role Configuration
-
-If you are **not** using Self-Initialization, you must manually configure the operator's access:
-
-If you customized the raw-manifest install namespace or name prefix, substitute your controller ServiceAccount name and operator namespace in the role binding below.
-
-```bash
-# Enable JWT Auth
-bao auth enable -path=auth/jwt-operator jwt
-
-# Configure OIDC Discovery (point to your K8s API)
-bao write auth/jwt-operator/config \
-    oidc_discovery_url="https://kubernetes.default.svc.cluster.local" \
-    oidc_discovery_ca_pem=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-
-# Create Operator Policy
-bao policy write openbao-operator - <<EOF
-path "sys/health" {
+<CommandBlock
+  language="hcl"
+  label="configure"
+  title="The operator policy is intentionally narrow"
+  code={`path "sys/health" {
   capabilities = ["read"]
 }
+
 path "sys/step-down" {
   capabilities = ["sudo", "update"]
 }
+
 path "sys/storage/raft/autopilot/configuration" {
   capabilities = ["read", "update"]
-}
-EOF
+}`}
+>
+  Keep the controller policy focused on maintenance work. Backup, restore, and upgrade jobs should authenticate through their own roles instead of inheriting the controller scope.
+</CommandBlock>
 
-# Create Operator Role
-bao write auth/jwt-operator/role/openbao-operator \
-    role_type="jwt" \
-    bound_audiences="openbao-internal" \
-    user_claim="sub" \
-    bound_subject="system:serviceaccount:openbao-operator-system:openbao-operator-controller" \
-    token_policies="openbao-operator" \
-    token_ttl="1h"
-```
+<CommandBlock
+  language="bash"
+  label="configure"
+  title="Manual JWT role example for a custom controller identity"
+  code={`bao write auth/jwt-operator/role/openbao-operator \\
+  role_type="jwt" \\
+  bound_audiences="openbao-internal" \\
+  user_claim="sub" \\
+  bound_subject="system:serviceaccount:platform-security:demo-openbao-operator-controller" \\
+  token_policies="openbao-operator" \\
+  token_ttl="1h"`}
+>
+  Replace the namespace, ServiceAccount name, and audience with the values produced by your rendered install, not the defaults from an example manifest.
+</CommandBlock>
 
-## Official OpenBao Documentation
+## What must stay aligned
 
-- [JWT/OIDC Auth Method](https://openbao.org/docs/auth/jwt/)
-- [Kubernetes Auth Method](https://openbao.org/docs/auth/kubernetes/)
-- [Token Concepts](https://openbao.org/docs/concepts/tokens/)
+<DecisionTable
+  kind="reference"
+  title="Custom-install checks"
+  columns={['Surface', 'Must match', 'What breaks when it drifts']}
+  rows={[
+    {
+      cells: [
+        'Controller identity',
+        'Rendered controller ServiceAccount name and operator namespace',
+        'The OpenBao JWT role or admission-policy identity references the wrong controller subject.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Projected token mount',
+        'The controller Deployment still mounts the `openbao-token` projected volume',
+        'The controller loses its default path to authenticate to OpenBao at all.',
+      ],
+    },
+    {
+      cells: [
+        'JWT audience',
+        '`OPENBAO_JWT_AUDIENCE`, the projected token audience, and the OpenBao role `bound_audiences`',
+        'A valid ServiceAccount token is rejected because it was issued for a different audience contract.',
+      ],
+    },
+    {
+      cells: [
+        'Discovery access',
+        'The controller can reach `/.well-known/openid-configuration` and the JWKS endpoint',
+        'OpenBao cannot validate the projected token even though the controller identity itself is correct.',
+      ],
+    },
+  ]}
+/>
 
+<DecisionTable
+  kind="reference"
+  title="Typical auth failures"
+  columns={['Symptom', 'Most likely cause', 'Check first']}
+  rows={[
+    {
+      cells: [
+        '`permission denied` when the controller calls OpenBao',
+        'JWT audience mismatch or an incorrect bound subject',
+        'Rendered identity and `OPENBAO_JWT_AUDIENCE` alignment',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Self-init completes but controller auth never settles',
+        'OIDC discovery is unreachable or incomplete',
+        'Kubernetes API discovery reachability and cluster condition output',
+      ],
+    },
+    {
+      cells: [
+        'Backup or restore auth fails even though controller auth works',
+        'Executor jobs use separate roles and ServiceAccounts',
+        'Operator authorization and the job-specific auth path',
+      ],
+    },
+  ]}
+/>
+
+<NextActions
+  title="Continue the support path"
+  items={[
+    {
+      label: 'Operator authorization',
+      description: 'Review which policies belong to controller, backup, restore, and upgrade work.',
+      docId: 'user-guide/operator/authz',
+    },
+    {
+      label: 'Operator identity and access',
+      description: 'Trace which Kubernetes identity maps to which OpenBao-side auth boundary.',
+      docId: 'user-guide/operator/identity-and-access',
+    },
+    {
+      label: 'Return to installation',
+      description: 'Go back to the install page once the rendered identity and audience contract feel mechanical.',
+      docId: 'user-guide/operator/installation',
+    },
+  ]}
+/>
+
+## Official OpenBao background
+
+- [JWT/OIDC auth method](https://openbao.org/docs/auth/jwt/)
+- [Kubernetes auth method](https://openbao.org/docs/auth/kubernetes/)
+- [Token concepts](https://openbao.org/docs/concepts/tokens/)

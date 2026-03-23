@@ -1,231 +1,248 @@
-# Admission Policies
+---
+title: Admission Policies
+hide_title: true
+pageType: concept
+journey: security
+description: How ValidatingAdmissionPolicy guardrails enforce managed-resource ownership, tenant onboarding boundaries, and fail-closed startup and runtime checks.
+---
 
-<Callout type="abstract" title="Concept">
+<PageHero
+  variant="compact"
+  eyebrow="Security / Platform Controls"
+  title="Reject unsafe intent before it becomes persisted state."
+  lede="The operator uses Kubernetes `ValidatingAdmissionPolicy` to enforce key safety rules at the API boundary. These policies are not a replacement for reconciliation logic; they are the front line that prevents invalid, privileged, or drifted state from landing in etcd in the first place."
+  actions={[
+    {label: 'Open RBAC architecture', docId: 'security/infrastructure/rbac', variant: 'primary'},
+    {label: 'Open network security', docId: 'security/infrastructure/network-security', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand which unsafe changes are blocked before persistence',
+      'review why the operator fails closed when required policies are missing',
+      'see how provisioner and controller identities are constrained beyond plain RBAC',
+      'check which policy family protects a given workflow or resource type',
+    ]}
+  />
+</PageHero>
 
-The Operator uses Kubernetes `ValidatingAdmissionPolicy` (CEL) to enforce security invariants at the API level. This provides **Defense-in-Depth** by rejecting invalid or insecure configurations *before* they are persisted to etcd, supplementing the Operator's runtime reconciliation loops.
+<DiagramFrame
+  title="Admission enforcement flow"
+  caption="GitOps, human operators, and controller identities all cross the same API boundary. Admission guardrails stop invalid or dangerous objects before the reconcile loop has to repair them."
+  code={`graph LR
+    User["GitOps / human / controller write"] --> API["Kubernetes API"]
+    API --> Policy["ValidatingAdmissionPolicy"]
+    Policy -- "deny" --> Reject["Request rejected"]
+    Policy -- "allow" --> Persist["Object persisted"]
+
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+
+    class User,API read;
+    class Policy process;
+    class Reject,Persist write;`}
+/>
+
+<DecisionTable
+  title="Policy families"
+  columns={['Family', 'What it protects', 'Representative policies']}
+  rows={[
+    {
+      cells: [
+        'Managed-resource ownership',
+        'Prevents users, GitOps, and controllers from mutating operator-managed objects outside the allowed patterns.',
+        '`openbao-lock-managed-resource-mutations`, controller StatefulSet self-protection, image digest enforcement.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Spec validation',
+        'Rejects invalid `OpenBaoCluster`, `OpenBaoTenant`, and `OpenBaoRestore` objects before they persist.',
+        '`openbao-validate-openbaocluster`, `openbao-validate-openbao-tenant`, `openbao-validate-openbaorestore`.',
+      ],
+    },
+    {
+      cells: [
+        'Provisioner restrictions',
+        'Constrains tenant onboarding, namespace mutation, and day-0 governance writes.',
+        '`openbao-restrict-provisioner-rbac`, namespace-mutation, and tenant-governance policies.',
+      ],
+    },
+    {
+      cells: [
+        'Controller restrictions',
+        'Constrains controller RBAC, ServiceAccount creation, and Secret writes.',
+        '`openbao-restrict-controller-rbac`, ServiceAccount, and Secret-write policies.',
+      ],
+    },
+  ]}
+/>
+
+## Fail-closed startup and runtime behavior
+
+<DecisionTable
+  kind="reference"
+  title="Admission dependency model"
+  columns={['State', 'Operator behavior', 'Why']}
+  rows={[
+    {
+      cells: [
+        'Required policy set present and bound',
+        'Startup and sensitive reconciliation proceed normally.',
+        'The operator can rely on the API-level guardrails it expects.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Required policy set missing at startup',
+        'Startup fails closed by default.',
+        'It is safer to refuse operation than to reconcile privileged workflows without guardrails.',
+      ],
+    },
+    {
+      cells: [
+        'Required policy disappears or becomes misbound later',
+        'Sensitive reconciliation paths pause and surface degraded status.',
+        'The admission dependency is part of the runtime safety model, not only a bootstrap check.',
+      ],
+    },
+    {
+      cells: [
+        'Unsafe mode explicitly enabled',
+        'The operator can start without admission dependency enforcement.',
+        'This is intended only for development or break-glass scenarios and materially weakens defense in depth.',
+      ],
+    },
+  ]}
+/>
+
+The required fail-closed dependency set includes:
+
+- `openbao-validate-openbaocluster`
+- `openbao-validate-openbao-tenant`
+- `openbao-validate-openbaorestore`
+- `openbao-lock-controller-statefulset-mutations`
+- `openbao-restrict-provisioner-rbac`
+- `openbao-restrict-provisioner-namespace-mutations`
+- `openbao-restrict-provisioner-tenant-governance`
+- `openbao-restrict-controller-rbac`
+- `openbao-restrict-controller-serviceaccounts`
+- `openbao-restrict-controller-secret-writes`
+- `openbao-lock-managed-resource-mutations`
+- `openbao-enforce-managed-image-digests`
+
+<Callout type="warning" title="Unsafe mode is not a production posture">
+
+Disabling admission policies is treated as unsafe mode. Even if the cluster otherwise uses Hardened settings, turning off API-level guardrails weakens the operator’s defense-in-depth model substantially.
 
 </Callout>
 
-## Enforcement Flow
+## Provisioner guardrails
 
-The following diagram illustrates how the Operator's policies intercept GitOps syncs:
+<DecisionTable
+  kind="reference"
+  title="Provisioner policy goals"
+  columns={['Policy area', 'What it constrains', 'Why it matters']}
+  rows={[
+    {
+      cells: [
+        'RBAC writes',
+        'Only fixed Role and RoleBinding names, subjects, and allowed verbs are permitted.',
+        'This prevents the provisioner from becoming a generic RBAC minting identity.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Namespace mutation',
+        'Provisioner namespace updates are limited to fixed Pod Security label enforcement and blocked in system namespaces.',
+        'Tenant onboarding should not become a generic namespace-mutation channel.',
+      ],
+    },
+    {
+      cells: [
+        'Tenant governance objects',
+        'Only operator-owned `ResourceQuota` and `LimitRange` shapes are allowed for the fixed names.',
+        'Day-0 guardrails should remain centrally shaped and not drift through arbitrary direct edits.',
+      ],
+    },
+  ]}
+/>
 
-```mermaid
-graph LR
-    User["GitOps Pipeline"]
-    API["Kubernetes API"]
-    VAP["ValidatingAdmissionPolicy<br/>(openbao-lock-managed-resource-mutations)"]
-    Res["Managed Resource<br/>(StatefulSet)"]
+## Controller guardrails
 
-    User --"Apply Change"--> API
-    API --"Validate"--> VAP
-    VAP --"Deny"--> API
-    API -.-x|"Reject"| User
-    
-    API --"Pass"--> Res
+<DecisionTable
+  kind="reference"
+  title="Controller policy goals"
+  columns={['Policy area', 'What it constrains', 'Why it matters']}
+  rows={[
+    {
+      cells: [
+        'RBAC writes',
+        'Only a narrow per-cluster pod-discovery and service-registration role pattern is allowed.',
+        'This blocks RBAC self-escalation inside tenant namespaces.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'ServiceAccount writes',
+        'Only operator-managed main, backup, restore, and upgrade ServiceAccounts are allowed.',
+        'The controller should not become a general-purpose ServiceAccount management identity.',
+      ],
+    },
+    {
+      cells: [
+        'Secret writes',
+        'Only fixed operator-managed Secret names can be created or mutated.',
+        'A broader RBAC grant should not silently become arbitrary tenant Secret mutation.',
+      ],
+    },
+    {
+      cells: [
+        'Managed-resource mutation',
+        'Drift on operator-managed StatefulSets, Services, Pods, and other objects is denied.',
+        'This protects the reconciliation contract and keeps GitOps or manual edits from undermining the lifecycle model.',
+      ],
+    },
+  ]}
+/>
 
-    %% Style Guide Compliant
-    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+<Callout type="note" title="Optional canary">
 
-    class User git;
-    class API read;
-    class VAP security;
-    class Res write;
-```
-
-## Policy Inventory
-
-The Operator ships with a suite of policies to enforce "Least Privilege" and "GitOps Safety":
-
-| Policy Name | Binding Name | Target | Enforcement | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `openbao-lock-managed-resource-mutations` | `openbao-lock-managed-resource-mutations-binding` | Operator-managed resources (e.g. `StatefulSet`, `Service`, `Secret`, `Pod`) | **Block** | Prevents users/GitOps from modifying resources managed by the Operator (labeled `app.kubernetes.io/managed-by=openbao-operator`). Allows controlled exceptions for Kubernetes controllers and OpenBao service registration label updates. |
-| `openbao-lock-controller-statefulset-mutations` | `openbao-lock-controller-statefulset-mutations-binding` | `StatefulSet` (Controller) | **Block** | Self-protection: prevents the Controller from modifying its own sensitive fields (volumes, args). |
-| `openbao-validate-openbaocluster` | `openbao-validate-openbaocluster-binding` | `OpenBaoCluster` | **Validate** | Enforces spec invariants such as Hardened profile requirements, self-init for production posture, and rejection of `OperatorManaged` TLS in Hardened clusters. |
-| `openbao-validate-openbao-tenant` | `openbao-validate-openbao-tenant-binding` | `OpenBaoTenant` | **Validate** | Enforces tenant spec invariants and multi-tenant guardrails. |
-| `openbao-validate-openbaorestore` | `openbao-validate-openbaorestore-binding` | `OpenBaoRestore` | **Validate** | Enforces restore spec invariants and safety checks. |
-| `openbao-enforce-managed-image-digests` | `openbao-enforce-managed-image-digests-binding` | Operator-managed `StatefulSet` / `Job` | **Block** | Denies mutable tag-based image refs for workloads marked as requiring digest enforcement (Hardened-managed workloads by default). |
-| `openbao-restrict-provisioner-rbac` | `openbao-restrict-provisioner-rbac-binding` | `Role`, `RoleBinding` | **Restrict** | Restricts the Provisioner ServiceAccount to a fixed set of tenant RBAC objects and contents (CREATE/UPDATE/DELETE), and blocks system namespaces. |
-| `openbao-restrict-provisioner-namespace-mutations` | `openbao-restrict-provisioner-namespace-mutations-binding` | `Namespace` | **Restrict** | Restricts Provisioner Namespace updates to Pod Security Standards label enforcement only (restricted), and blocks system namespaces. |
-| `openbao-restrict-provisioner-tenant-governance` | `openbao-restrict-provisioner-tenant-governance-binding` | `ResourceQuota`, `LimitRange` | **Restrict** | Restricts the Provisioner to the fixed tenant guardrail quota/limit-range objects, requires operator-managed labels, and blocks direct drift on those objects. |
-| `openbao-restrict-controller-rbac` | `openbao-restrict-controller-rbac-binding` | `Role`, `RoleBinding` | **Restrict** | Restricts Controller RBAC writes to the narrow per-cluster pod discovery/service registration Role/RoleBinding pattern (prevents RBAC self-escalation). |
-| `openbao-restrict-controller-serviceaccounts` | `openbao-restrict-controller-serviceaccounts-binding` | `ServiceAccount` | **Restrict** | Restricts Controller ServiceAccount writes to operator-managed OpenBao, backup, restore, and upgrade ServiceAccounts. |
-| `openbao-restrict-controller-secret-writes` | `openbao-restrict-controller-secret-writes-binding` | `Secret` | **Restrict** | Restricts Controller Secret writes to the fixed operator-managed Secret names and rejects drift on unrelated Secrets from the Controller identity. |
-
-## Provisioner RBAC Hardening
-
-The `openbao-restrict-provisioner-rbac` policy is a defense-in-depth control that applies to RBAC mutations performed by the Provisioner identity.
-
-**Key guarantees:**
-
-- Only specific Role/RoleBinding names are allowed (tenant + secrets allowlist roles).
-- RoleBindings are restricted to known ServiceAccount subjects (prevents backdoor bindings).
-- Dangerous verbs and wildcards are denied (`impersonate`, `bind`, `escalate`, `*`).
-- Secret permissions are only allowed via the dedicated secrets allowlist Roles, and those Roles must be name-scoped (`resourceNames`) and non-enumerating (no `list`/`watch`).
-- Deletion is restricted to the fixed tenant template Role/RoleBinding objects.
-- RBAC mutations are blocked in system namespaces (at minimum: the Operator namespace, `kube-*`, and commonly provider-reserved namespaces like `openshift*` and `gke-*`).
-- Provider-reserved namespaces are cluster-dependent. The Helm defaults include best-effort prefixes for common managed offerings (`openshift-*`, `gke-*`, `eks-*`, `aws-*`, `aks-*`, `azure-*`); tune these to match your platform add-ons.
-
-<Callout type="note" title="Helm: provider-reserved namespaces">
-
-When installing via Helm, you can extend the system namespace deny set with:
-
-- `admissionPolicies.provisionerRBAC.deniedNamespaces`
-- `admissionPolicies.provisionerRBAC.deniedNamespacePrefixes`
-
-</Callout>
-
-<Callout type="note" title="Startup enforcement">
-
-The OpenBao Operator defaults to fail-closed startup (`--admission-enforcement=fail`), refusing to run unless required admission policies are installed and enforced.
-
-Required startup dependency set (Policy / Binding):
-
-- `openbao-validate-openbaocluster` / `openbao-validate-openbaocluster-binding`
-- `openbao-validate-openbao-tenant` / `openbao-validate-openbao-tenant-binding`
-- `openbao-validate-openbaorestore` / `openbao-validate-openbaorestore-binding`
-- `openbao-lock-controller-statefulset-mutations` / `openbao-lock-controller-statefulset-mutations-binding`
-- `openbao-restrict-provisioner-rbac` / `openbao-restrict-provisioner-rbac-binding`
-- `openbao-restrict-provisioner-namespace-mutations` / `openbao-restrict-provisioner-namespace-mutations-binding`
-- `openbao-restrict-provisioner-tenant-governance` / `openbao-restrict-provisioner-tenant-governance-binding`
-- `openbao-restrict-controller-rbac` / `openbao-restrict-controller-rbac-binding`
-- `openbao-restrict-controller-serviceaccounts` / `openbao-restrict-controller-serviceaccounts-binding`
-- `openbao-restrict-controller-secret-writes` / `openbao-restrict-controller-secret-writes-binding`
-- `openbao-lock-managed-resource-mutations` / `openbao-lock-managed-resource-mutations-binding`
-- `openbao-enforce-managed-image-digests` / `openbao-enforce-managed-image-digests-binding`
+The provisioner supports an optional admission canary that submits a dry-run RBAC request which must be denied. This gives stronger assurance that policy enforcement is active, not only that the policy objects exist.
 
 </Callout>
 
-<Callout type="note" title="Custom raw-manifest installs">
+## Configuration ownership
 
-Admission dependency resolution follows the rendered install identity, including namespace and name prefix changes. For custom raw-manifest installs, validate the rendered ServiceAccount names and policy names after `kustomize build`, not only the repository defaults.
+Admission policy is one of the reasons the operator can separate user intent from platform-owned configuration:
 
-</Callout>
+- user-owned surfaces stay in the CR where customization is supported
+- operator-owned networking, seal, listener identity, and lifecycle wiring stay protected
+- unsafe or drifted changes are rejected before they have to be repaired later
 
-<Callout type="note" title="Runtime re-check">
-
-Admission dependency enforcement is not only a startup check. The `OpenBaoCluster` workload and admin reconciliation paths re-check the dependency set during runtime and pause when required policies disappear or become misbound.
-
-</Callout>
-
-<Callout type="warning" title="Unsafe mode">
-
-Disabling admission policies is treated as **unsafe mode**. When installing via Helm with `admissionPolicies.enabled=false`, the chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can start without fail-closed admission dependency enforcement. This is intended only for development/break-glass scenarios.
-
-Unsafe mode is not a recommended production posture, even when a cluster otherwise uses the `Hardened` profile.
-
-</Callout>
-
-<Callout type="note" title="Optional runtime canary">
-
-The Provisioner supports an optional enforcement canary (`--admission-canary`) that performs a dry-run RBAC request which must be denied by the Provisioner RBAC policy. This provides stronger assurance that policy *enforcement* is active (not just policy presence/bindings).
-
-</Callout>
-
-<Callout type="note" title="What This Does *Not* Do">
-
-This policy constrains RBAC mutations by the Provisioner. It does not replace Kubernetes RBAC review or cluster-wide policy governance.
-
-</Callout>
-
-## Provisioner Namespace Mutation Hardening
-
-The `openbao-restrict-provisioner-namespace-mutations` policy constrains Namespace updates performed by the Provisioner.
-
-**Key guarantees:**
-
-- The Provisioner may not mutate system namespaces.
-- Namespace updates are limited to enforcing the three Pod Security Standards labels:
-  - `pod-security.kubernetes.io/enforce=restricted`
-  - `pod-security.kubernetes.io/audit=restricted`
-  - `pod-security.kubernetes.io/warn=restricted`
-- No other changes are allowed (spec/status/annotations/finalizers/ownerReferences must remain unchanged).
-
-## Provisioner Tenant Guardrail Hardening
-
-The `openbao-restrict-provisioner-tenant-governance` policy constrains the Provisioner when it manages the default tenant `ResourceQuota` and `LimitRange`.
-
-**Key guarantees:**
-
-- The Provisioner may only manage the fixed operator-owned names:
-  - `openbao-operator-tenant-quota`
-  - `openbao-operator-tenant-limits`
-- Those objects must be labeled as operator-managed.
-- Direct mutation or deletion of those fixed guardrails is denied; update the parent `OpenBaoTenant` instead.
-- Self-service tenant onboarding cannot set `spec.quota` or `spec.limitRange`; custom tenant guardrails are reserved for centrally managed onboarding from the operator namespace.
-
-## Controller RBAC Hardening
-
-The `openbao-restrict-controller-rbac` policy constrains RBAC mutations performed by the Controller identity.
-
-**Why this exists:**
-
-- Some tenant-scoped operations require per-cluster ServiceAccounts and minimal RBAC (pod discovery and OpenBao service registration label updates).
-- Without an admission-level guard, any bug or compromise in the controller process could use RBAC writes to broaden privileges inside tenant namespaces.
-
-**Key guarantees:**
-
-- Roles created/updated by the Controller are restricted to the `pods` resource and must match a narrow allowlist-style pattern.
-- RoleBindings created/updated by the Controller must bind a ServiceAccount to its own `*-role` in the same namespace.
-
-## Controller Secret Write Hardening
-
-The `openbao-restrict-controller-secret-writes` policy constrains Secret writes performed by the Controller identity.
-
-**Key guarantees:**
-
-- The Controller may create only the fixed operator-managed Secret names used by cluster lifecycle flows.
-- Updates and deletes remain name-scoped to those operator-managed Secret names.
-- Direct Controller writes to unrelated tenant Secrets are denied even if a broader RBAC grant is introduced accidentally.
-- The policy follows the rendered install identity, including custom raw-manifest namespace and prefix changes.
-
-## Controller ServiceAccount Hardening
-
-The `openbao-restrict-controller-serviceaccounts` policy constrains ServiceAccount writes performed by the Controller identity.
-
-**Key guarantees:**
-
-- The Controller may only create, update, or delete operator-managed ServiceAccounts tied to an `OpenBaoCluster`.
-- Backup, restore, and upgrade ServiceAccounts remain fixed-name resources derived from the cluster name.
-- The main OpenBao ServiceAccount can still use a custom `spec.serviceAccount.name`, but it must remain labeled as the operator-managed primary ServiceAccount for that cluster.
-- Direct Controller writes to unrelated ServiceAccounts are denied even if a broader RBAC grant is introduced accidentally.
-- The policy follows the rendered install identity, including custom raw-manifest namespace and prefix changes.
-
-## Configuration Ownership
-
-The Operator ensures that user intent (`spec.configuration`) is respected while enforcing mandatory platform settings.
-
-<Tabs groupId="operator-owned-user-tunable">
-
-<TabItem value="operator-owned" label="Operator Owned">
-
-These stanzas are **Always Overwritten** by the Operator to ensure correctness and security:
-
--   `listener "tcp"`: TLS settings are mandatory based on `spec.tls`.
--   `storage "raft"`: Peer discovery is managed by the Operator.
--   `seal`: Auto-unseal configuration is derived from `spec.unseal`.
--   `api_addr`, `cluster_addr`: Networking identity is fixed.
-
-</TabItem>
-
-<TabItem value="user-tunable" label="User Tunable">
-
-These areas are safe for user customization via `spec.configuration`:
-
--   `telemetry`: Metrics and tracing.
--   `log_level`: Observability tuning.
--   `plugin_directory`: Custom plugin paths.
--   `ui`: Dashboard enablement.
-
-</TabItem>
-
-</Tabs>
-
-## See Also
-
-- [RBAC Architecture](rbac.md)
-- [Security Profiles](../fundamentals/profiles.md)
-
+<NextActions
+  title="Continue platform controls"
+  items={[
+    {
+      label: 'RBAC architecture',
+      description: 'See how these policies reinforce the split-controller identity model.',
+      docId: 'security/infrastructure/rbac',
+    },
+    {
+      label: 'Network security',
+      description: 'Review the default-deny network posture that complements admission enforcement.',
+      docId: 'security/infrastructure/network-security',
+    },
+    {
+      label: 'Threat model',
+      description: 'Connect admission guardrails back to the STRIDE threats they mitigate.',
+      docId: 'security/fundamentals/threat-model',
+    },
+  ]}
+/>

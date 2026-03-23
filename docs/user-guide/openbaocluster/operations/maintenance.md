@@ -1,162 +1,237 @@
 ---
+title: Run Planned Maintenance
+description: Drain nodes, scale the cluster, enable maintenance mode, and restart Pods without guessing how quorum and admission policy interact.
 slug: /operate/maintenance
+hide_title: true
+pageType: task
+journey: operate
 ---
 
-# Cluster Maintenance
+<PageHero
+  eyebrow="Operate / Cluster controls"
+  title="Use cluster controls deliberately when you need to change the platform underneath OpenBao."
+  lede="Planned maintenance is where Kubernetes disruption rules, Raft quorum, and admission-policy guardrails all meet. Use this page to prepare drains and restarts, scale safely, and confirm the cluster is still healthy before you hand it back to normal operations."
+  actions={[
+    {label: 'Pause reconciliation', docId: 'user-guide/openbaocluster/operations/pausing', variant: 'primary'},
+    {label: 'Open recovery and restore', docId: 'user-guide/openbaocluster/recovery/index', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'drain nodes that currently host OpenBao Pods',
+      'scale the cluster up or down deliberately',
+      'enable maintenance mode for controlled restarts under strict admission policy',
+      'restart or repair the workload without turning a planned change into an incident',
+    ]}
+  />
+</PageHero>
 
-This guide covers maintenance operations for OpenBao clusters, including node drains, voluntary disruptions, and cluster scaling.
+<DecisionTable
+  title="Choose the right control"
+  columns={['Control', 'Use it when', 'Operator behavior', 'Watch for']}
+  rows={[
+    {
+      cells: [
+        'Node drain with PDB protection',
+        'You are changing the Kubernetes substrate and want the normal workload to keep serving.',
+        'The PodDisruptionBudget blocks voluntary disruption that would take too many voters offline at once.',
+        'The PDB only protects against voluntary evictions, not hard node failures.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Replica scaling',
+        'You need more capacity, stronger fault tolerance, or a deliberate reduction after a change.',
+        'The operator grows or shrinks the StatefulSet and manages peer membership as the replica count changes.',
+        'Do not treat scale-down as a harmless cost-saving action on a production Raft cluster.',
+      ],
+    },
+    {
+      cells: [
+        'Maintenance mode',
+        'Admission policy requires the `openbao.org/maintenance=true` signal before restarts or controlled deletes.',
+        'The operator annotates managed resources so maintenance-only actions are allowed under the configured break-glass groups.',
+        'This is not a generic bypass for random edits. It is a controlled operational mode.',
+      ],
+    },
+    {
+      cells: [
+        'Pause reconciliation',
+        'You need a short-lived window where the operator stops mutating the cluster while you inspect or repair it.',
+        'The operator stops normal reconciliation until you resume it.',
+        'Pausing is not the same thing as recovery and is not enough for safe-mode incidents.',
+      ],
+    },
+  ]}
+/>
 
-## Pod Disruption Budgets
+## Drain nodes without breaking quorum
 
-The Operator automatically creates a `PodDisruptionBudget` (PDB) for clusters with **3 or more replicas**. This protects against accidental quorum loss during voluntary disruptions.
+For clusters with three or more replicas, the operator creates a `PodDisruptionBudget` with `maxUnavailable: 1`. That is the main guardrail that keeps a normal node drain from evicting too many Pods at once.
 
-### Default Behavior
+<DecisionTable
+  kind="reference"
+  title="Pod disruption behavior by replica count"
+  columns={['Replicas', 'PDB created', 'What it means']}
+  rows={[
+    {
+      cells: [
+        '1',
+        'No',
+        'There is no redundancy. Any disruption takes the service down.',
+      ],
+    },
+    {
+      cells: [
+        '2',
+        'No',
+        'A two-node Raft cluster cannot tolerate one unavailable voter cleanly enough for a safe `maxUnavailable: 1` policy.',
+      ],
+    },
+    {
+      cells: [
+        '3',
+        'Yes',
+        'The PDB keeps two voters available while one Pod is evicted.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '5',
+        'Yes',
+        'The operator still uses a conservative one-at-a-time disruption model.',
+      ],
+    },
+  ]}
+/>
 
-| Replicas | PDB Created | Max Unavailable | Notes |
-|----------|-------------|-----------------|-------|
-| 1 | No | N/A | Single-replica clusters have no redundancy |
-| 2 | No | N/A | Raft quorum is 2/2; `maxUnavailable: 1` would break quorum |
-| 3 | Yes | 1 | Ensures quorum (2/3) is always maintained |
-| 5 | Yes | 1 | Conservative setting; 4 pods remain available |
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check the disruption budget before a drain"
+  code={`kubectl get pdb -n <namespace>
+kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data`}
+>
+  If more than one OpenBao Pod is concentrated on the same node, the drain may take longer because Kubernetes has to evict the Pods sequentially.
+</CommandBlock>
 
-The PDB uses `maxUnavailable: 1`, meaning Kubernetes will block eviction requests that would take more than one pod offline simultaneously.
+<Callout type="note" title="The PDB covers only voluntary disruption">
 
-### During Node Drains
-
-When you drain a node hosting OpenBao pods:
-
-1. **Kubernetes checks the PDB** before evicting any pods.
-2. **If eviction would violate the PDB**, the drain blocks and waits.
-3. **Pods are evicted one at a time**, allowing the cluster to maintain quorum.
-
-```sh
-# Safe: Node drain respects PDB
-kubectl drain node-1 --ignore-daemonsets --delete-emptydir-data
-
-# Check if PDB is blocking eviction
-kubectl get pdb -n <namespace>
-```
-
-<Callout type="warning" title="Drain Timeouts">
-
-If multiple OpenBao pods are scheduled on the same node, draining that node
-may take longer as pods are evicted sequentially. The Operator adds soft
-node and zone spreading, but you still need enough nodes and topology
-labels for that policy to be effective.
+Node drains, autoscaler evictions, and direct eviction API calls are guarded. Node crashes, OOM kills, or kernel failures are not. Those rely on normal Raft quorum behavior instead of disruption-budget enforcement.
 
 </Callout>
 
-### Limitations
+## Scale the cluster deliberately
 
-The PDB only protects against **voluntary disruptions**:
+Use scaling as an intentional operational change, not a quick patch to quiet a temporary issue.
 
-- Node drains (`kubectl drain`)
-- Cluster autoscaler scale-down
-- Pod eviction API calls
+<Tabs groupId="maintenance-scaling">
 
-It does **not** protect against:
+<TabItem value="scale-up" label="Scale up">
 
-- Node failures/crashes
-- Pod OOM kills
-- Node kernel panics
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Increase the replica count"
+  code={`spec:
+  replicas: 5`}
+>
+  The operator creates the new Pods, waits for them to join the Raft cluster, and updates the PDB to match the new size.
+</CommandBlock>
 
-For these scenarios, rely on Raft's built-in quorum-based replication.
+</TabItem>
 
-## Scaling
+<TabItem value="scale-down" label="Scale down">
 
-### Scaling Up
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Reduce the replica count"
+  code={`spec:
+  replicas: 3`}
+>
+  The operator removes voters from the highest ordinal first, waits for the Raft configuration to converge, and only then deletes the excess Pods.
+</CommandBlock>
 
-Increase replicas to add capacity or improve fault tolerance:
+<Callout type="warning" title="Do not scale below three replicas in production">
 
-```yaml
-spec:
-  replicas: 5  # Was 3
-```
-
-The Operator will:
-
-1. Create new pods via the StatefulSet
-2. Wait for each pod to join the Raft cluster
-3. Update the PDB to match the new replica count
-
-### Scaling Down
-
-Reduce replicas to save resources:
-
-```yaml
-spec:
-  replicas: 3  # Was 5
-```
-
-<Callout type="danger" title="Minimum Replicas">
-
-Never scale below **3 replicas** in production. Scaling to 1 replica means
-any pod failure results in complete unavailability.
+Reducing a production cluster below three replicas removes the redundancy that makes ordinary node and Pod failures survivable.
 
 </Callout>
 
-The Operator will:
+</TabItem>
 
-1. Gracefully remove Raft voters starting from the highest ordinal
-2. Wait for Raft configuration to update
-3. Delete the excess pods
-4. Update the PDB
+</Tabs>
 
-## Leader Step-Down
+## Use maintenance mode for controlled restarts
 
-When maintenance requires the active leader to be evicted, the Operator automatically triggers a graceful step-down:
+Enable maintenance mode when your admission policies require a deliberate maintenance signal before managed Pods or the StatefulSet can be restarted, deleted, or otherwise touched during planned work.
 
-1. **Pre-eviction hook** detects the leader is being terminated
-2. **Step-down request** is sent to `/sys/step-down`
-3. **New leader election** completes before the old leader terminates
-4. **Eviction proceeds** without service interruption
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable maintenance mode"
+  code={`spec:
+  maintenance:
+    enabled: true`}
+>
+  In this mode, the operator annotates managed Pods and the StatefulSet with `openbao.org/maintenance=true`. By default, maintenance-only bypass is limited to callers in the Kubernetes group `system:masters` unless you changed the configured break-glass groups at install time.
+</CommandBlock>
 
-This behavior is automatic and requires no manual intervention.
+This mode is also required for some day 2 changes that need a controlled restart path, such as finishing filesystem expansion after increasing `spec.storage.size`.
 
-## Maintenance Windows
+## Trigger a rolling restart
 
-For planned maintenance, consider:
+Use `restartAt` when you need the workload to roll because an external dependency changed, such as a certificate chain, secret material, or another input that should force a controlled refresh.
 
-1. **Pause reconciliation** during complex operations:
-   ```yaml
-   spec:
-     paused: true
-   ```
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Request a rolling restart"
+  code={`spec:
+  maintenance:
+    restartAt: "2026-01-19T00:00:00Z"`}
+/>
 
-2. **Enable maintenance mode** when your cluster enforces managed-resource mutation locks:
-   ```yaml
-   spec:
-     maintenance:
-       enabled: true
-   ```
+When a leader Pod must be restarted or evicted, the operator handles graceful step-down automatically before termination so the cluster can elect a new leader cleanly.
 
-   When enabled, the operator annotates managed Pods/StatefulSet with `openbao.org/maintenance=true`
-   to support controlled deletes/restarts under strict admission policies.
-   This is also required for the operator to complete certain day-2 operations that may need pod restarts,
-   such as finishing filesystem expansion after increasing `spec.storage.size`.
+## Verify the cluster before and after the window
 
-   By default, break-glass edits under maintenance mode are allowed only for callers in the Kubernetes group `system:masters`.
-   If you install with Helm, tune `admissionPolicies.maintenanceBreakGlassGroups` to match your cluster-admin groups.
-   For raw-manifest installs, update `config/default/maintenance_break_glass_settings.yaml` before rendering manifests.
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Inspect health before and after maintenance"
+  code={`kubectl get openbaocluster <name> -n <namespace> -o jsonpath='{.status.phase}{"\\n"}'
+kubectl get pods -n <namespace> -l openbao.org/cluster=<name>
+kubectl exec -n <namespace> -it <pod-name> -- bao operator raft list-peers`}
+>
+  The important end state is a clean phase, Ready Pods, and a Raft peer set that matches the intended topology after the maintenance action finishes.
+</CommandBlock>
 
-3. **Trigger a rolling restart** (for example, after rotating external dependencies):
-   ```yaml
-   spec:
-     maintenance:
-       restartAt: "2026-01-19T00:00:00Z"
-   ```
+## External references
 
-4. **Monitor cluster health** before and after:
-   ```sh
-   kubectl get openbaocluster <name> -o jsonpath='{.status.phase}'
-   kubectl get pods -l openbao.org/cluster=<name>
-   ```
+- [Raft integrated storage](https://openbao.org/docs/internals/integrated-storage)
 
-5. **Check Raft peer status** if needed:
-   ```sh
-   kubectl exec -it <pod-name> -- bao operator raft list-peers
-   ```
-
-## Official OpenBao Documentation
-
-- [Raft Integrated Storage](https://openbao.org/docs/internals/integrated-storage)
+<NextActions
+  title="Move to the next control"
+  items={[
+    {
+      label: 'Pause reconciliation',
+      description: 'Use the lighter-weight control when you need the operator to stop mutating the cluster during a short repair window.',
+      docId: 'user-guide/openbaocluster/operations/pausing',
+    },
+    {
+      label: 'Decommission a cluster',
+      description: 'Choose the right teardown policy before you remove a cluster and its storage.',
+      docId: 'user-guide/openbaocluster/operations/deletion',
+    },
+    {
+      label: 'Open recovery and restore',
+      description: 'Escalate into the incident paths when planned maintenance turns into a leader, seal, or rollback problem.',
+      docId: 'user-guide/openbaocluster/recovery/index',
+    },
+  ]}
+/>

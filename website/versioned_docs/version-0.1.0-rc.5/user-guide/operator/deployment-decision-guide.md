@@ -1,110 +1,182 @@
 ---
-description: Prescriptive guide for choosing tenancy mode, security profile, bootstrap flow, TLS mode, admission posture, and upgrade strategy for OpenBao Operator.
+title: Deployment Decision Guide
+description: Choose the tenancy model, security posture, bootstrap flow, and install path you want to keep operating after the first install.
 slug: /get-started/deployment-decision-guide
+hide_title: true
+pageType: task
+journey: get-started
+journeyStep: 1
 ---
 
-# Deployment Decision Guide
+<PageHero
+  eyebrow="Step 1"
+  title="Choose the path you want to keep operating."
+  lede="Make the main operating decisions before you install anything. Most teams should stay on the default production path and only branch when namespace ownership, local evaluation, or platform constraints give you a real reason."
+  actions={[
+    {label: 'Install the operator', docId: 'user-guide/operator/installation', variant: 'primary'},
+    {label: 'Review single-tenant mode', docId: 'user-guide/operator/single-tenant-mode', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Default production path"
+    items={[
+      'multi-tenant mode',
+      'Hardened profile',
+      'self-init enabled',
+      'External or ACME TLS',
+      'admission policies enabled',
+      'RollingUpdate until you need blue-green cutover control',
+    ]}
+    tone="success"
+  />
+</PageHero>
 
-Use this guide to choose the default operating path for OpenBao Operator. Start with the default production path unless you have a clear reason to deviate.
+<JourneyRail
+  title="The first five moves"
+  current={1}
+  items={[
+    {
+      label: 'Choose a deployment model',
+      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      docId: 'user-guide/operator/deployment-decision-guide',
+    },
+    {
+      label: 'Install the operator',
+      description: 'Render the right namespace, identity, and admission posture.',
+      docId: 'user-guide/operator/installation',
+    },
+    {
+      label: 'Onboard the target namespace',
+      description: 'In the default multi-tenant path, use OpenBaoTenant before you create the first cluster.',
+      docId: 'user-guide/openbaotenant/onboarding',
+    },
+    {
+      label: 'Create your first cluster',
+      description: 'Start with the closest cluster baseline and verify the important readiness signals.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Prepare for day 2',
+      description: 'Move immediately into backups, access, upgrades, and production hardening.',
+      docId: 'user-guide/openbaocluster/next-steps',
+    },
+  ]}
+/>
 
-## Default Production Path
+<DecisionTable
+  title="Stay on the default path unless one of these is true"
+  columns={['Decision area', 'Default', 'Branch only when', 'Go deeper']}
+  rows={[
+    {
+      cells: [
+        'Tenancy model',
+        'Multi-tenant',
+        'One team directly owns one namespace and does not need the default tenant-onboarding model.',
+        'Single-tenant mode',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Security profile',
+        'Hardened',
+        'This environment is strictly local development, CI, or short-lived evaluation.',
+        'Security profiles',
+      ],
+    },
+    {
+      cells: [
+        'Bootstrap flow',
+        'Self-init',
+        'You are intentionally carrying a compatibility or controlled manual-bootstrap workflow.',
+        'Self-initialization',
+      ],
+    },
+    {
+      cells: [
+        'TLS mode',
+        'External or ACME',
+        'You are in a non-Hardened environment and temporary operator-managed TLS convenience matters more than production trust requirements.',
+        'TLS and identity',
+      ],
+    },
+    {
+      cells: [
+        'Installation path',
+        'Helm',
+        'You need raw-manifest overlays, source-based rendering, or install-time identity customization.',
+        'Operator installation',
+      ],
+    },
+    {
+      cells: [
+        'Upgrade strategy',
+        'RollingUpdate',
+        'You need parallel validation, manual promotion, or stronger cutover control than rolling upgrades provide.',
+        'Cluster upgrades',
+      ],
+    },
+  ]}
+/>
 
-<Callout type="success" title="Start Here">
+<Callout type="warning" title="Operator auth is not human auth">
 
-For most production deployments, use this combination:
-
-- `tenancy.mode=multi`
-- `spec.profile: Hardened`
-- `spec.selfInit.enabled: true`
-- `spec.tls.mode: External` or `ACME`
-- `spec.upgrade.strategy: RollingUpdate`
-- `admissionPolicies.enabled=true`
+`spec.selfInit.oidc.enabled: true` bootstraps operator authentication only.
+Before you move on, decide how humans will authenticate to the cluster after first boot.
 
 </Callout>
 
-## Decision Matrix
+<RouteList
+  title="Branch only when you need one of these exceptions"
+  items={[
+    {
+      eyebrow: 'A',
+      title: 'Single-tenant mode',
+      description: 'Use this when one team owns one namespace and wants direct namespace-scoped operator control.',
+      docId: 'user-guide/operator/single-tenant-mode',
+      actionLabel: 'Review',
+    },
+    {
+      eyebrow: 'B',
+      title: 'Operator identity and access',
+      description: 'Use this when you customize names, namespaces, JWT audience, or raw-manifest identity wiring.',
+      docId: 'user-guide/operator/identity-and-access',
+      actionLabel: 'Review',
+    },
+    {
+      eyebrow: 'C',
+      title: 'Validated deployments',
+      description: 'Use a tested architecture or recipe when you want a known-good starting point instead of building a path from scratch.',
+      docId: 'user-guide/validated-deployments/index',
+      actionLabel: 'Open',
+    },
+  ]}
+/>
 
-| Decision | Default choice | Choose the alternative when | Tradeoff | Reference |
-| :--- | :--- | :--- | :--- | :--- |
-| **Tenancy model** | **Multi-Tenant** | Use **Single-Tenant** when one team owns one namespace and you intentionally want direct namespace-scoped operator control. | Single-tenant is simpler, but it does not use the default namespace-introduction model. | [Single-Tenant Mode](single-tenant-mode.md) |
-| **Security profile** | **Hardened** | Use **Development** only for local testing, CI, or short-lived evaluation environments. | Development relaxes bootstrap and transport guardrails and is highly discouraged for production. | [Security Profiles](../openbaocluster/configuration/security-profiles.md) |
-| **Bootstrap flow** | **Self-Init** | Use manual bootstrap only for compatibility or controlled break-glass workflows. | Manual bootstrap stores a root token Secret and is not a supported production path. | [Self-Initialization](../openbaocluster/configuration/self-init.md) |
-| **TLS mode** | **External** or **ACME** | Use `OperatorManaged` only in non-Hardened environments where internal PKI convenience matters more than production trust requirements. | `OperatorManaged` TLS is rejected for Hardened clusters and is not a production path there. | [TLS & Identity](../../security/workload/tls.md) |
-| **Installation path** | **Helm** | Use raw manifests when you need install-time identity customization, local overlay control, or source-based rendering. | Helm is easier to keep consistent. Raw manifests require you to choose the right overlay and verify rendered identities. | [Operator Installation](installation.md) |
-| **Admission posture** | **Admission policies enabled** | Disable admission policies only for development or break-glass recovery. | Disabling them enters unsafe mode and removes part of the normal safety model. | [Admission Policies](../../security/infrastructure/admission-policies.md) |
-| **Upgrade strategy** | **RollingUpdate** | Use **BlueGreen** when you need parallel validation, manual promotion, or stronger cutover boundaries. | Blue/green uses more resources and adds operational complexity. | [Cluster Upgrades](../openbaocluster/operations/upgrades.md) |
-| **Platform mode** | **Auto-detection** | Use explicit OpenShift mode when the target cluster is OpenShift or when SCC-compatible rendering must be explicit. | Explicit platform selection gives you predictable rendering, but you still need target-cluster validation for the exact SCC and platform behavior you rely on. | [Operator Installation](installation.md) |
+<Checklist
+  title="Do not move on until you can answer these plainly"
+  items={[
+    'Am I running multi-tenant or single-tenant mode?',
+    'Is this environment Hardened or Development?',
+    'If I stay multi-tenant, who creates the first OpenBaoTenant and in which namespace?',
+    'How will humans authenticate after the first cluster comes up?',
+    'Does Helm or raw manifests own the rendered operator identity?',
+    'What is my backup plan before the first production upgrade?',
+  ]}
+/>
 
-## Recommended Profiles
-
-<Tabs groupId="shared-production-dedicated-team-namespace-local-development-or-ci">
-
-<TabItem value="shared-production" label="Shared Production">
-
-Use this profile for the normal production path:
-
-- `tenancy.mode=multi`
-- `spec.profile: Hardened`
-- `spec.selfInit.enabled: true`
-- `spec.tls.mode: External` or `ACME`
-- `spec.upgrade.strategy: RollingUpdate`
-- Scheduled backups configured before the first production upgrade
-
-</TabItem>
-
-<TabItem value="dedicated-team-namespace" label="Dedicated Team Namespace">
-
-Use this profile when one team owns one namespace and does not need the default tenant-onboarding model:
-
-- `tenancy.mode=single`
-- `spec.profile: Hardened`
-- `spec.selfInit.enabled: true`
-- `spec.tls.mode: External` or `ACME`
-- `spec.upgrade.strategy: RollingUpdate`
-- Admission policies still enabled
-
-</TabItem>
-
-<TabItem value="local-development-or-ci" label="Local Development or CI">
-
-Use this profile only for non-production environments:
-
-- `tenancy.mode=multi` or `single`, depending on the scenario under test
-- `spec.profile: Development`
-- `spec.tls.mode: OperatorManaged` is acceptable
-- Manual bootstrap is acceptable if you need the root token Secret
-- Unsafe mode only when you are intentionally testing without admission enforcement
-
-</TabItem>
-
-</Tabs>
-
-## Operational Checks
-
-Before calling a deployment production-ready, verify these choices:
-
-1. `Hardened` profile is selected.
-2. `selfInit.enabled` is `true`.
-3. TLS mode is `External` or `ACME`.
-4. Admission policies are installed and enforced.
-5. Backups are configured and tested.
-6. Upgrade validation is done in staging, with `RollingUpdate` as the default strategy unless you need blue/green cutover control.
-
-## Status Checkpoints
-
-Use these condition checkpoints before calling a path ready:
-
-| Path | Minimum checkpoint |
-| :--- | :--- |
-| Hardened with External TLS | `Available=True`, `TLSReady=True`, `UserAccessBootstrap=True`, `ProductionReady=True` |
-| Hardened with ACME | `Available=True`, `ACMEIntegrationReady=True`, `ACMECacheReady=True`, `UserAccessBootstrap=True`, `ProductionReady=True` |
-| Gateway exposure | `GatewayIntegrationReady=True` |
-| Strict NetworkPolicy clusters | `APIServerNetworkReady=True` or `Unknown` with `APIServerEndpointIPsRecommended` after you confirm the service-VIP path works in your CNI |
-| Scheduled backups | `BackupConfigurationReady=True` |
-| Restore before execution | `RestoreConfigurationReady=True` |
-
-## See Also
-
-- [Operator Invariants](../../architecture/operator-invariants.md)
-- [Production Checklist](../openbaocluster/operations/production-checklist.md)
-- [Multi-Tenancy](../openbaotenant/multi-tenancy.md)
+<NextActions
+  title="Continue the guided path"
+  items={[
+    {
+      label: 'Install the operator',
+      description: 'Use the supported install flow and verify the rendered controller identity before you continue.',
+      docId: 'user-guide/operator/installation',
+    },
+    {
+      label: 'Onboard the target namespace',
+      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant before you create the first cluster.',
+      docId: 'user-guide/openbaotenant/onboarding',
+    },
+  ]}
+/>

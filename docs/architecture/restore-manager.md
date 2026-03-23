@@ -1,110 +1,190 @@
-# Restore Manager (OpenBaoRestore Lifecycle)
+---
+title: Restore Manager
+hide_title: true
+pageType: concept
+journey: architecture
+description: Reconcile OpenBaoRestore requests, acquire operation locks, and orchestrate restore jobs as explicit destructive workflows.
+---
 
-<Callout type="abstract" title="Responsibility">
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Operations Manager"
+  title="Treat restore as a destructive, explicit, lock-aware workflow."
+  lede="The restore manager keeps disaster recovery separate from normal cluster reconciliation. It models restore as an immutable CRD-backed request, coordinates execution through a dedicated controller path, and protects the cluster with explicit validation and lock ownership."
+  actions={[
+    {label: 'Open restore guide', docId: 'user-guide/openbaorestore/restore', variant: 'primary'},
+    {label: 'Open backup manager', docId: 'architecture/backup-manager', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand why restore is modeled as OpenBaoRestore instead of cluster reconcile state',
+      'see how validation, lock ownership, and execution phases fit together',
+      'reason about destructive recovery without mixing it with routine operations',
+      'connect restore behavior back to backup readiness and operate guidance',
+    ]}
+  />
+</PageHero>
 
-Reconcile `OpenBaoRestore` resources and orchestrate snapshot restores via a Kubernetes Job.
+<ManagerAtAGlance
+  sections={[
+    {
+      label: 'Control path',
+      items: [
+        'dedicated openbaorestore controller',
+        'internal/app/openbaorestore',
+        'internal/service/restore',
+      ],
+    },
+    {
+      label: 'Owns',
+      items: [
+        'restore request validation',
+        'operation lock lifecycle for restore',
+        'restore job creation and terminal cleanup',
+      ],
+    },
+    {
+      label: 'Writes',
+      items: [
+        'OpenBaoRestore phase progression',
+        'OpenBaoCluster.status.operationLock for restore ownership',
+        'restore job launch and cleanup state',
+      ],
+    },
+    {
+      label: 'Depends on',
+      items: [
+        'snapshot source accessibility',
+        'restore authentication and token strategy',
+        'backup provider configuration and cluster lock state',
+      ],
+    },
+  ]}
+/>
 
-</Callout>
+## Request Model
 
-<Callout type="tip" title="User Guide">
+<DecisionTable
+  kind="reference"
+  title="Restore request contract"
+  columns={['Contract', 'Why it exists']}
+  rows={[
+    {
+      cells: ['CRD-based request', 'Restore is visible, declarative, and auditable instead of being hidden inside OpenBaoCluster status or imperative scripts.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Immutable spec', 'Changing restore inputs requires a new request so the audit trail and execution intent stay stable.'],
+    },
+    {
+      cells: ['Stateless controller', 'The controller polls the restore job rather than depending on broad watch permissions across every child object.'],
+    },
+    {
+      cells: ['Operation lock ownership', 'Restore must block upgrades and backups while destructive data-plane changes are in flight.'],
+    },
+  ]}
+/>
 
-For operational instructions, see the [Restore User Guide](../user-guide/openbaorestore/restore.md).
+## Restore Lifecycle
 
-</Callout>
+<DiagramFrame
+  title="Restore lifecycle"
+  caption="Restore validates first, acquires the cluster lock second, and only then launches a restore job. Terminal phases keep retrying lock cleanup until the cluster is no longer marked as restore-owned."
+  code={`graph TD
+    Start["OpenBaoRestore created"] --> Pending["Pending"]
+    Pending --> Validate{"Validate request"}
+    Validate --> Failed["Failed"]
+    Validate --> Lock{"Acquire restore lock"}
+    Lock --> Pending
+    Lock --> Running["Running"]
+    Running --> Job["Launch restore job"]
+    Job --> Pull["Pull snapshot"]
+    Pull --> Apply["Restore to OpenBao"]
+    Apply --> Completed["Completed"]
+    Apply --> Retry{"Retry?"}
+    Retry --> Job
+    Retry --> Failed
 
-## 1. Architectural Placement
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef critical fill:transparent,stroke:#dc2626,stroke-width:2px,color:#f8fafc;
 
-Restore orchestration follows a dedicated controller path:
-
-1. `internal/controller/openbaorestore` receives the reconcile event.
-2. It delegates orchestration to `internal/app/openbaorestore`.
-3. The app layer invokes `internal/service/restore` manager logic for validation, lock lifecycle, and Job flow.
-
-This keeps the restore controller focused on reconcile plumbing and preserves domain ownership in the restore manager package.
-
-## 2. Design Philosophy
-
-- **CRD-Based**: Restores are modeled as `OpenBaoRestore` objects, not as a mode of `OpenBaoCluster`. This ensures GitOps stability and provides an audit log of restore operations.
-- **Immutable Request**: `OpenBaoRestore.spec` is immutable after creation. To change inputs, create a new restore object.
-- **Stateless Controller**: The controller polls the restore Job rather than watching it, minimizing RBAC requirements.
-- **Safety First**: Restores use a distinct **Operation Lock** to prevent conflicts with Backups or Upgrades.
-
-## 3. Restore Lifecycle
-
-The controller drives the `OpenBaoRestore` through a defined phase machine.
-
-```mermaid
-graph TD
-    Start[User Creates OpenBaoRestore] --> Pending
-    
-    Pending --> Validating{Validate}
-    Validating -- Invalid --> Failed[Phase: Failed]
-    Validating -- Valid --> Lock{Acquire Lock}
-    
-    Lock -- Locked --> Pending
-    Lock -- Acquired --> Running[Phase: Running]
-    
-    subgraph Execution [Restore Job]
-        Running --> Job[Launch Job]
-        Job --> Pull[Pull Snapshot]
-        Pull --> Restore[Restore to OpenBao]
-    end
-    
-    Restore -- Success --> Completed[Phase: Completed]
-    Restore -- Error --> Retrying{Retry?}
-    
-    Retrying -- Yes --> Job
-    Retrying -- No --> Failed
-
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    
     class Start read;
-    class Pending,Validating,Lock,Running,Execution,Retrying process;
+    class Pending,Validate,Lock,Running,Job,Pull,Retry process;
     class Completed write;
-    class Failed security;
-```
+    class Failed,Apply critical;`}
+/>
 
-## 4. Workflow Steps
+<DecisionTable
+  kind="reference"
+  title="Restore phases"
+  columns={['Phase', 'Manager intent']}
+  rows={[
+    {
+      cells: ['Pending / Validating', 'Reject invalid target clusters, inaccessible snapshots, missing auth, and unsafe conflicting operations before anything destructive starts.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Running', 'Launch the restore job after the restore lock is owned and the request is known-good.'],
+    },
+    {
+      cells: ['Completed', 'Release the lock and preserve the restore record as the audit trail of what happened.'],
+    },
+    {
+      cells: ['Failed', 'Expose terminal failure while continuing lock cleanup on later reconciles until the cluster is no longer marked as restore-owned.'],
+    },
+  ]}
+/>
 
-1. **Validation:**
-    - Target Cluster exists.
-    - Snapshot source is accessible.
-    - Authentication is configured (`tokenSecretRef` or JWT auth; when self-init OIDC is enabled, JWT can use the default `openbao-operator-restore` role).
-    - No conflicting operations (unless `OpenBaoRestore.spec.overrideOperationLock` is used with `OpenBaoRestore.spec.force: true`).
-2. **Operation Lock:**
-    - The controller acquires the cluster operation lock by updating `OpenBaoCluster.status.operationLock`:
-      - `operation: Restore`
-      - `holder: <controller>/<restore-name>`
-      - `message: restore <namespace>/<name>`
-    - This **blocks** the BackupManager and UpgradeManager from starting new operations.
-3. **Execution:**
-    - A Kubernetes Job is spawned with the `bao-backup` binary in restore mode.
-    - It downloads the snapshot from object storage (S3, GCS, or Azure).
-    - It uses a temporary token (or valid credentials) to authenticate and hit the `sys/storage/raft/snapshot-force` endpoint.
-4. **Completion:**
-    - On success or failure, the controller attempts to release the cluster operation lock.
-    - Terminal restores (`Completed`/`Failed`) re-run lock cleanup on subsequent reconciles until release succeeds.
-    - The cluster may need to be unsealed manually or via auto-unseal.
+## Safety Boundaries
 
-## 5. Interaction with Other Managers
+<DecisionTable
+  kind="reference"
+  title="Safety boundaries"
+  columns={['Concern', 'Manager behavior']}
+  rows={[
+    {
+      cells: ['Conflicting operations', 'Backups and upgrades are blocked by the restore operation lock while restore is active.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Emergency override', 'Override requires explicit force semantics rather than silently ignoring a stuck or conflicting lock.'],
+    },
+    {
+      cells: ['Execution surface', 'The controller delegates the destructive work to a job instead of embedding restore logic in normal reconcile loops.'],
+    },
+    {
+      cells: ['After restore', 'The manager may leave the cluster requiring unseal or follow-up recovery work; completion only means the restore workflow finished.'],
+    },
+  ]}
+/>
 
-<Callout type="note" title="Conflict Prevention">
+<Callout type="warning" title="Restore is not routine reconciliation">
 
-The **Operation Lock** is the primary mechanism for safety.
-
--   **Backups:** Will skip scheduled runs if a Restore is locked.
--   **Upgrades:** Will pause reconciliation if a Restore is locked.
+Restore is intentionally modeled outside the normal `OpenBaoCluster` lifecycle. The operator treats it as a destructive recovery operation with its own request object, its own controller path, and its own lock semantics.
 
 </Callout>
 
-To override this check during emergencies (e.g., restoring a broken cluster where the lock is stuck), use `OpenBaoRestore.spec.overrideOperationLock`.
-This requires `OpenBaoRestore.spec.force: true`.
-
-## 6. See Also
-
-- [Backup Manager](backup-manager.md)
-- [Lifecycle Flows](lifecycle/index.md)
-
+<NextActions
+  title="Related deep dives"
+  items={[
+    {
+      label: 'Backup manager',
+      description: 'Restore depends on the snapshot and object-storage path owned by the backup manager.',
+      docId: 'architecture/backup-manager',
+    },
+    {
+      label: 'Operation lifecycle coordination',
+      description: 'See how restore shares lock and retry primitives with other disruptive operations.',
+      docId: 'architecture/operation-lifecycle',
+    },
+    {
+      label: 'Restore guide',
+      description: 'Compare the internal restore controller model with the user-facing restore and recovery procedures.',
+      docId: 'user-guide/openbaorestore/restore',
+    },
+  ]}
+/>

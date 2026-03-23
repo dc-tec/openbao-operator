@@ -1,142 +1,196 @@
-# Managed Resources
+---
+title: Resources and Storage
+hide_title: true
+pageType: task
+journey: configure
+description: Choose storage class, PVC size, and workload resource requests before the cluster becomes difficult to resize or move.
+---
 
-## Prerequisites
+<PageHero
+  eyebrow="Configure / Platform Readiness"
+  title="Choose storage and workload limits before the data path makes them expensive to change."
+  lede="The operator renders the core workload for you, but it does not choose the platform capacity or storage class you intend to live with. Use this page to understand which resources the cluster owns, how PVC growth works, and where explicit sizing is safer than inheriting whatever the platform happens to default."
+  actions={[
+    {label: "Open backups", docId: "user-guide/openbaocluster/operations/backups", variant: "primary"},
+    {label: "Review server configuration", docId: "user-guide/openbaocluster/configuration/server", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "pick a StorageClass and PVC size for a new cluster before the first Pod starts",
+      "set CPU and memory requests that match the service you expect to operate",
+      "understand which Kubernetes resources the operator creates and keeps in sync",
+      "expand storage safely without guessing what Kubernetes or the operator will change for you",
+    ]}
+  />
+</PageHero>
 
-- **OpenBaoCluster**: An active `OpenBaoCluster` CR.
+<DecisionTable
+  title="What the operator manages for an OpenBaoCluster"
+  columns={["Surface", "What it does", "What still belongs to you"]}
+  rows={[
+    {
+      cells: [
+        "StatefulSet and Pod template",
+        "Renders the OpenBao Pods, init container, probes, mounts, labels, and rollout behavior.",
+        "Choose resource requests, limits, and the cluster shape that the generated Pods should follow.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Services, ConfigMaps, and Secrets",
+        "Creates the workload-facing Service surfaces plus the rendered configuration and runtime Secrets required by the chosen profile.",
+        "Own the service-boundary decision, TLS ownership model, and any external secrets or certificate material that are not operator-managed.",
+      ],
+    },
+    {
+      cells: [
+        "Data PVCs",
+        "Creates one PVC per replica from the StatefulSet claim template and patches existing PVC size when you increase storage.",
+        "Choose the correct StorageClass up front and verify that the underlying CSI driver supports the expansion behavior you expect.",
+      ],
+    },
+    {
+      cells: [
+        "Default NetworkPolicy",
+        "Applies the operator-managed baseline traffic rules for Pods in the cluster.",
+        "Add any extra ingress or egress rules your environment requires and validate them against backup, restore, and edge traffic.",
+      ],
+    },
+  ]}
+/>
 
-## Overview
+<DiagramFrame
+  title="Managed resource footprint"
+  caption="The OpenBaoCluster spec drives a rendered workload. The operator owns the generated Kubernetes resources, but the platform choices behind storage, capacity, and external dependencies still need to be deliberate."
+  code={`flowchart LR
+    CR["OpenBaoCluster"] --> STS["StatefulSet"]
+    CR --> SVC["Services"]
+    CR --> CFG["ConfigMaps and Secrets"]
+    CR --> NET["NetworkPolicy"]
+    STS --> PVC["Per-replica data PVCs"]
+    STS --> Pods["OpenBao Pods"]
 
-The Operator creates and manages a set of Kubernetes resources to support the OpenBao cluster.
-
-```mermaid
-graph TD
-    CR[OpenBaoCluster] -->|Owns| SS[StatefulSet]
-    CR -->|Owns| SVC[Service]
-    CR -->|Owns| CM[ConfigMap]
-    CR -->|Owns| SEC[Secrets]
-    CR -->|Owns| NP[NetworkPolicy]
-    SS -->|Mounts| PVC[PVC: data]
-    SS -->|Mounts| CM
-    SS -->|Mounts| SEC
-
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
     class CR read;
-    class SS,SVC,CM,SEC,NP,PVC write;
-```
+    class STS,SVC,CFG,NET,PVC,Pods write;`}
+/>
 
-## Core Workload
+## Set the baseline explicitly
 
-| Resource Type | Name Pattern | Description |
-| :--- | :--- | :--- |
-| **StatefulSet** | `<cluster>` | Manages the Pods. Mounts config, secrets, and data PVCs. |
-| **Service** | `<cluster>` | Headless Service (ClusterIP `None`) for stable network identity. |
-| **ConfigMap** | `<cluster>-config` | Contains rendered `config.hcl` and `init.sh` scripts. |
-| **Service** | `<cluster>-public` | (Optional) Created if `spec.service` or `spec.ingress` is enabled. |
-| **PVC** | `data-<cluster>-*` | Persistent volume for Raft storage, sized by `spec.storage.size`. |
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Set storage and workload requests up front"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+  namespace: openbao
+spec:
+  version: "2.5.0"
+  profile: Hardened
+  replicas: 3
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+  storage:
+    size: "50Gi"
+    storageClassName: "fast-ssd"`}
+>
+  Start with explicit requests and an explicit `storageClassName` in production. Defaults are fine for evaluation, but they are a weak contract once the cluster carries real data.
+</CommandBlock>
 
-## Storage Resizing (Expansion)
+<DecisionTable
+  kind="reference"
+  title="Storage rules that become expensive later"
+  columns={["Choice", "Operator behavior", "Why it matters"]}
+  rows={[
+    {
+      cells: [
+        "`spec.storage.storageClassName`",
+        "The effective storage class becomes immutable after the first PVCs are created.",
+        "Pick it before first reconcile if you care about IOPS, topology, encryption, or cost. Do not plan on fixing it in place later.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`spec.storage.size`",
+        "The operator supports expansion only. Decreasing size is rejected.",
+        "Plan growth, not shrinkage. If the first size is too small, you can grow it, but you cannot safely reverse it through the API.",
+      ],
+    },
+    {
+      cells: [
+        "Default StorageClass",
+        "If you omit `storageClassName`, Kubernetes uses the cluster default when PVCs are created.",
+        "That may be acceptable in development, but in production it is better to make the storage path explicit and auditable.",
+      ],
+    },
+    {
+      cells: [
+        "Filesystem expansion",
+        "Some CSI drivers finish expansion only after a restart. The operator surfaces that and can use a controlled restart path when maintenance is enabled.",
+        "Do not assume a size increase is complete just because the PVC request changed. Check the PVC and cluster conditions before you move on.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-The operator supports **expanding** persistent storage by increasing `spec.storage.size`.
+## Inspect the rendered storage state
 
-- **Pick `spec.storage.storageClassName` up front** if you need a specific class. Once data PVCs exist, the effective storage class becomes immutable.
-- **Default StorageClass is allowed but explicit is safer**: if `spec.storage.storageClassName` is omitted, Kubernetes will use the cluster default StorageClass when PVCs are created.
-  The operator surfaces the resolved outcome in the `StorageConfigured` status condition so you can see whether the class was explicit, defaulted, or inconsistent.
-- **Expansion only**: decreasing `spec.storage.size` is rejected.
-- **PVCs are the source of truth**: the operator patches existing PVCs to the new requested size.
-- **StatefulSet claim templates remain unchanged** after initial creation (Kubernetes treats them as immutable).
-  New replicas may be created with the old template size and will then be expanded by the operator.
-- **Filesystem resize completion**: some CSI drivers require a pod restart after volume expansion.
-  If a PVC reports `FileSystemResizePending`, the operator will perform a controlled pod restart **only when**
-  `spec.maintenance.enabled=true`. Otherwise it surfaces a `Degraded` signal asking for maintenance/manual restart.
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect the data PVCs for a cluster"
+  code={`kubectl get pvc -n <namespace> -l openbao.org/cluster=<name>`}
+>
+  Check the requested size, bound StorageClass, and whether any PVC reports `FileSystemResizePending`.
+</CommandBlock>
 
-## Security & Identity
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check the cluster storage condition"
+  code={`kubectl get openbaocluster <name> -n <namespace> \\
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{"\\t"}{.reason}{"\\n"}{end}'`}
+>
+  A healthy cluster should eventually report `StorageConfigured=True`. If it does not, fix the storage-path mismatch before you continue with upgrades or backups.
+</CommandBlock>
 
-The Operator manages credentials, certificates, and tokens based on the cluster configuration.
+<Callout type="note" title="Controlled restarts still matter after a PVC expansion">
 
-### TLS Configuration
-
-<Tabs groupId="operator-managed-default-external-acme">
-
-<TabItem value="operator-managed-default" label="Operator Managed (Default)">
-
-When `spec.tls.mode` is `OperatorManaged` or omitted:
-
-| Secret Name | Description |
-| :--- | :--- |
-| `<cluster>-tls-ca` | Root CA (`ca.crt`, `ca.key`). Generated and managed by the Operator. |
-| `<cluster>-tls-server` | Server certificates (`tls.crt`, `tls.key`, `ca.crt`). Generated and managed by the Operator. |
-
-</TabItem>
-
-<TabItem value="external" label="External">
-
-When `spec.tls.mode` is `External`:
-
-| Secret Name | Requirements |
-| :--- | :--- |
-| `<cluster>-tls-ca` | **User Provided**. Must contain `ca.crt`. |
-| `<cluster>-tls-server` | **User Provided**. Must contain `tls.crt`, `tls.key`, and `ca.crt`. |
-
-</TabItem>
-
-<TabItem value="acme" label="ACME">
-
-When `spec.tls.mode` is `ACME`:
-
-| Resource | Description |
-| :--- | :--- |
-| `<cluster>-tls-ca` | **User Provided** (optional). Helper CA for clients (e.g. Let's Encrypt Root) if not in system store. |
-| **Internal** | Certificates are requested and managed internally by OpenBao's ACME agent. |
-
-</TabItem>
-
-</Tabs>
-
-### Operational Secrets
-
-- **Unseal Key:** `<cluster>-unseal-key`
-  - Contains the 32-byte raw unseal key.
-  - Created only if `spec.unseal.type` is `static` (default).
-- **Root Token:** `<cluster>-root-token`
-  - Contains the initial root token after initialization.
-  - **Note:** Not created if Self-Initialization is used.
-
-## Network Security
-
-The Operator enforces a **Zero Trust** network model using a default `NetworkPolicy`.
-
-### Default Policies
-
-| Direction | Source / Destination | Port | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Ingress** | **Any** | **-** | **Deny All (Implicit)** |
-| Ingress | Within Cluster Matches `openbao.org/cluster=<name>` | Any | Intra-cluster Raft replication & forwarding. |
-| Ingress | Namespace `kube-system` | Any | DNS resolution & Kubelet probes. |
-| Ingress | OpenBao Operator | 8200 | Leader step-down & health checks. |
-| Ingress | Gateway Namespace | Any | (If Gateway API enabled) Ingress traffic. |
-| **Egress** | CoreDNS | 53 (UDP/TCP) | Service Discovery. |
-| Egress | K8s API Server | 443 | Kubernetes Auto-Join discovery. |
-| Egress | Within Cluster | 8200-8201 | Raft Replication. |
-
-<Callout type="tip" title="Customization">
-
-You can append custom rules via `spec.network.egressRules` and `spec.network.ingressRules`. For user-managed ingress controllers or passthrough proxies, prefer `spec.network.trustedIngressPeers`. The Operator's default rules cannot be disabled. See [Network Configuration](network.md) for details.
+If your CSI driver requires a restart to finish filesystem resize, use the maintenance workflow instead of bouncing Pods ad hoc. The operator can only take the controlled restart path when `spec.maintenance.enabled=true`.
 
 </Callout>
 
-<Callout type="warning" title="Backup Jobs">
-
-Backup job pods (`openbao.org/component=backup`) are **excluded** from this NetworkPolicy to ensure they can access external Object Storage (S3/GCS/Azure). You may need to create a dedicated NetworkPolicy for backup jobs if you require strict egress filtering.
-
-</Callout>
-
-## Inspection
-
-You can inspect the generated resources for a cluster named `dev-cluster` in namespace `security` with:
-
-```sh
-kubectl -n security get statefulsets,svc,cm,secrets,netpol -l openbao.org/cluster=dev-cluster
-```
-
+<NextActions
+  title="Continue platform readiness"
+  items={[
+    {
+      label: "Observability",
+      description: "Wire metrics, dashboards, and alerting before the first storage or rollout problem becomes a blind incident.",
+      docId: "user-guide/openbaocluster/configuration/observability",
+    },
+    {
+      label: "Air-gapped and private registries",
+      description: "Use the disconnected-environment guide when image sources, pull secrets, or mirrored helper images are part of the platform contract.",
+      docId: "user-guide/openbaocluster/configuration/air-gapped",
+    },
+    {
+      label: "Configure backups",
+      description: "Snapshots depend on the storage path you chose and should be routine long before you need restore.",
+      docId: "user-guide/openbaocluster/operations/backups",
+    },
+  ]}
+/>

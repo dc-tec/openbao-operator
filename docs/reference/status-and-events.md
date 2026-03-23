@@ -1,34 +1,63 @@
 ---
+title: Status Conditions and Events
 description: Reference for OpenBao Operator status conditions, Kubernetes Events, and audit events for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant resources.
+pageType: reference
+journey: reference
 ---
 
-# Status Conditions and Events
+<PageHero
+  variant="compact"
+  eyebrow="Reference / Quick Checks"
+  title="Use this page to decode what the operator is telling you through conditions, events, and lifecycle signals."
+  lede="This is the exact lookup surface for status conditions and emitted events across `OpenBaoCluster`, `OpenBaoRestore`, and `OpenBaoTenant`. Use it when a cluster is stalled, degraded, upgrading, backing up, restoring, or otherwise behaving in a way that needs precise interpretation rather than a generic troubleshooting step."
+  actions={[
+    {label: 'Open troubleshooting', to: '/docs/operate/troubleshooting', variant: 'primary'},
+    {label: 'Open recovery and restore', to: '/docs/recover', variant: 'secondary'},
+  ]}
+/>
 
-Use this reference to interpret status conditions and lifecycle events emitted by the OpenBao Operator.
-
-## Inspect Resources
-
-Run these commands to inspect CRD conditions:
-
-```bash
-kubectl -n <ns> get openbaocluster <name> -o jsonpath='{.status.conditions}' | jq
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect status conditions and namespace events"
+  code={`kubectl -n <ns> get openbaocluster <name> -o jsonpath='{.status.conditions}' | jq
 kubectl -n <ns> get openbaorestore <name> -o jsonpath='{.status.conditions}' | jq
 kubectl -n <ns> get openbaotenant <name> -o jsonpath='{.status.conditions}' | jq
-```
 
-<Callout type="tip" title="Fastest Timeline View">
+kubectl -n <ns> get events --sort-by=.lastTimestamp`}
+>
+  For the fastest timeline view, run `kubectl describe` on the parent custom resource to see status and recent events together.
+</CommandBlock>
 
-Run `kubectl -n <ns> describe openbaocluster <name>`, `kubectl -n <ns> describe openbaorestore <name>`, or `kubectl -n <ns> describe openbaotenant <name>` to view status and recent events together.
+<DecisionTable
+  kind="reference"
+  title="Workflow checkpoints"
+  caption="Use these condition sets as the fastest contract checks for common workflows."
+  columns={['Workflow', 'Conditions to watch']}
+  rows={[
+    {
+      cells: ['Hardened with external TLS', '`Available`, `TLSReady`, `UserAccessBootstrap`, `ProductionReady`'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Hardened with ACME', '`Available`, `ACMEIntegrationReady`, `ACMECacheReady`, `UserAccessBootstrap`, `ProductionReady`'],
+    },
+    {
+      cells: ['Gateway exposure', '`GatewayIntegrationReady`'],
+    },
+    {
+      cells: ['Strict NetworkPolicy environments', '`APIServerNetworkReady`'],
+    },
+    {
+      cells: ['Scheduled backups', '`BackupConfigurationReady`'],
+    },
+    {
+      cells: ['Restore execution', '`RestoreConfigurationReady`, then `RestoreComplete`'],
+    },
+  ]}
+/>
 
-</Callout>
-
-Run this command to inspect recent namespace events:
-
-```bash
-kubectl -n <ns> get events --sort-by=.lastTimestamp
-```
-
-## OpenBaoCluster Conditions
+## OpenBaoCluster conditions
 
 Condition types defined in `api/v1alpha1`:
 
@@ -43,11 +72,11 @@ Condition types defined in `api/v1alpha1`:
 | `GatewayIntegrationReady` | Operator-known Gateway API prerequisites and controller support for `spec.gateway` | `GatewayIntegrationReady`, `GatewayAPIMissing`, `GatewayReferenceMissing`, `GatewayClassMissing`, `GatewayClassPending`, `GatewayClassNotAccepted`, `GatewayVersionUnsupported`, `GatewayFeatureUnsupported`, `GatewayCapabilitiesUnknown`, `GatewayNotProgrammed`, `GatewayProgrammingPending`, `GatewayListenerIncompatible`, `Paused` |
 | `BackupConfigurationReady` | Operator-known backup Job prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired`, `Unknown`, `Paused` |
 | `CloudUnsealIdentityReady` | Operator-known authentication path for cloud KMS unseal on the main OpenBao Pods | `Ready`, `CredentialsSecretMissing`, `PrerequisitesMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `Unknown`, `Paused` |
-| `ProductionReady` | Indicates whether the cluster currently meets the operator's Hardened production posture checks. This condition does not represent API stability or project support level. | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored`, Gateway/ACME readiness reasons such as `GatewayFeatureUnsupported` or `ACMEGatewayNotConfiguredForPassthrough` |
+| `ProductionReady` | Indicates whether the cluster currently meets the operator's Hardened production posture checks. This condition does not represent API stability or project support level. | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored`, Gateway or ACME readiness reasons such as `GatewayFeatureUnsupported` or `ACMEGatewayNotConfiguredForPassthrough` |
 | `Upgrading` | Upgrade state | `InProgress`, `Idle`, or upgrade failure reason |
 | `BackingUp` | Backup job state | `InProgress`, `Idle` |
 | `StorageConfigured` | Persistent storage class selection visibility | `StorageClassConfigured`, `StorageClassPending`, `StorageClassDefaulted`, `StorageClassUnset`, `StorageClassMismatch`, `StorageClassInconsistent` |
-| `Degraded` | Problem requiring attention | `BreakGlassRequired`, upgrade failure reason, workload/adminops error reason, `OIDCBootstrapConfigurationInvalid`, `APIServerNetworkConfigurationInvalid`, `RootTokenStored`, `Reconciling`, `Paused` |
+| `Degraded` | Problem requiring attention | `BreakGlassRequired`, upgrade failure reason, workload or adminops error reason, `OIDCBootstrapConfigurationInvalid`, `APIServerNetworkConfigurationInvalid`, `RootTokenStored`, `Reconciling`, `Paused` |
 | `EtcdEncryptionWarning` | etcd encryption verification warning | `EtcdEncryptionUnknown` |
 | `SecurityRisk` | Relaxed security mode indicator | `DevelopmentProfile` |
 | `OpenBaoInitialized` | OpenBao initialization observed from registration labels | `Initialized`, `NotInitialized`, `Unknown` |
@@ -55,25 +84,13 @@ Condition types defined in `api/v1alpha1`:
 | `OpenBaoLeader` | Leader discovery from registration labels | `LeaderFound`, `LeaderUnknown`, `MultipleLeaders` |
 | `NodeSecurityCapabilityMismatch` | Node capability mismatch for enabled hardening | `Ready`, `AppArmorUnsupported` |
 
-## Workflow Checkpoints
-
-Use these condition sets as the fastest contract checks for common workflows:
-
-| Workflow | Conditions to watch |
-| :--- | :--- |
-| Hardened with External TLS | `Available`, `TLSReady`, `UserAccessBootstrap`, `ProductionReady` |
-| Hardened with ACME | `Available`, `ACMEIntegrationReady`, `ACMECacheReady`, `UserAccessBootstrap`, `ProductionReady` |
-| Gateway exposure | `GatewayIntegrationReady` |
-| Strict NetworkPolicy environments | `APIServerNetworkReady` |
-| Scheduled backups | `BackupConfigurationReady` |
-| Restore execution | `RestoreConfigurationReady`, then `RestoreComplete` |
-
-## OpenBaoRestore Conditions
+## OpenBaoRestore conditions
 
 | Type | Meaning | Typical Reasons |
 | :--- | :--- | :--- |
 | `RestoreComplete` | Restore terminal state | `RestoreSucceeded`, `RestoreFailed`, `AuthenticationRequired` |
 | `RestoreConfigurationReady` | Operator-known restore prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired` |
+| `OperationLockOverride` | Break-glass lock override occurred | `OperationLockOverridden` |
 
 <Callout type="note" title="Ambient identity reasons">
 
@@ -81,29 +98,27 @@ Use these condition sets as the fastest contract checks for common workflows:
 
 </Callout>
 
-| `OperationLockOverride` | Break-glass lock override occurred | `OperationLockOverridden` |
-
-## OpenBaoTenant Conditions
+## OpenBaoTenant conditions
 
 | Type | Meaning | Typical Reasons |
 | :--- | :--- | :--- |
-| `Provisioned` | Tenant RBAC provisioning state | `SecurityViolation` (guardrail block) and provisioning outcomes |
+| `Provisioned` | Tenant RBAC provisioning state | `SecurityViolation` and provisioning outcomes |
 
-## Kubernetes Events
+## Kubernetes events
 
-<Callout type="note" title="Event Scope">
+<Callout type="note" title="Event scope">
 
-The operator emits lifecycle events on parent custom resources only. `OpenBaoCluster` receives cluster lifecycle, init/bootstrap, upgrade, backup, and tenant Secret RBAC sync events. `OpenBaoRestore` receives restore lifecycle events. `OpenBaoTenant` receives tenant provisioning lifecycle events. Jobs do not receive the lifecycle events listed here.
+The operator emits lifecycle events on parent custom resources only. `OpenBaoCluster` receives cluster lifecycle, init and bootstrap, upgrade, backup, and tenant Secret RBAC sync events. `OpenBaoRestore` receives restore lifecycle events. `OpenBaoTenant` receives tenant provisioning lifecycle events. Jobs do not receive the lifecycle events listed here.
 
 </Callout>
 
-<Callout type="tip" title="Event Types">
+<Callout type="tip" title="Event types">
 
 Expect `Normal` events for routine progression and accepted operator input. Expect `Warning` events for failures, contention, overrides, and other states that need attention.
 
 </Callout>
 
-### OpenBaoCluster Safety and Maintenance Events
+### OpenBaoCluster safety and maintenance events
 
 | Type | Reason | Notes |
 | :--- | :--- | :--- |
@@ -117,7 +132,7 @@ Expect `Normal` events for routine progression and accepted operator input. Expe
 | `Normal` | `PVCResizeLeaderStepDown` | Leader step-down for resize restart path. |
 | `Normal` | `PVCResizePodRestart` | Pod restart to complete filesystem resize. |
 
-### OpenBaoCluster Init and Bootstrap Events
+### OpenBaoCluster init and bootstrap events
 
 | Type | Reason | Notes |
 | :--- | :--- | :--- |
@@ -125,13 +140,13 @@ Expect `Normal` events for routine progression and accepted operator input. Expe
 | `Normal` | `InitCompleted` | Cluster initialization completed successfully. |
 | `Warning` | `InitFailed` | Operator-driven initialization failed. |
 
-### OpenBaoCluster Tenant Secret RBAC Events
+### OpenBaoCluster tenant Secret RBAC events
 
 | Type | Reason | Notes |
 | :--- | :--- | :--- |
 | `Normal` | `TenantSecretRBACSynchronized` | Tenant Secret RBAC allowlists were synchronized for the namespace. |
 
-### OpenBaoCluster Upgrade Events
+### OpenBaoCluster upgrade events
 
 | Type | Reason | Notes |
 | :--- | :--- | :--- |
@@ -141,16 +156,16 @@ Expect `Normal` events for routine progression and accepted operator input. Expe
 | `Warning` | `PreUpgradeSnapshotFailed` | Pre-upgrade snapshot failed and upgrade is blocked. |
 | `Normal` | `RollingRetryRequested` | Manual retry requested for a failed rolling upgrade. |
 | `Normal` | `RollingRetryAccepted` | Failed rolling upgrade state cleared and retry resumed. |
-| `Normal` | `BlueGreenHoldEntered` | Blue/green upgrade is waiting for manual promotion approval. |
+| `Normal` | `BlueGreenHoldEntered` | Blue or green upgrade is waiting for manual promotion approval. |
 | `Normal` | `BlueGreenPromotionApproved` | Promotion approval observed and promotion started. |
 | `Normal` | `UpgradeComplete` | Upgrade finished successfully. |
 | `Warning` | `UpgradeFailed` | Upgrade failed and operator marked the upgrade as failed. |
-| `Warning` | `RollbackStarted` | Blue/green rollback started. |
-| `Warning` | `BreakGlassEntered` | Blue/green rollback entered break-glass mode. |
+| `Warning` | `RollbackStarted` | Blue or green rollback started. |
+| `Warning` | `BreakGlassEntered` | Blue or green rollback entered break-glass mode. |
 | `Normal` | `BreakGlassAcknowledged` | Break-glass mode was acknowledged and automation may resume. |
 | `Warning` | `OperationLockBlocked` | Upgrade is waiting for another cluster operation to release the lock. |
 
-### OpenBaoCluster Backup Events
+### OpenBaoCluster backup events
 
 | Type | Reason | Notes |
 | :--- | :--- | :--- |
@@ -163,7 +178,7 @@ Expect `Normal` events for routine progression and accepted operator input. Expe
 | `Warning` | `BackupFailed` | Backup Job failed. |
 | `Warning` | `OperationLockBlocked` | Backup is waiting for another cluster operation to release the lock. |
 
-### OpenBaoRestore Events
+### OpenBaoRestore events
 
 | Type | Reason | Notes |
 | :--- | :--- | :--- |
@@ -177,7 +192,7 @@ Expect `Normal` events for routine progression and accepted operator input. Expe
 | `Warning` | `OperationLockLost` | Restore lost the cluster operation lock while running. |
 | `Warning` | `OperationLockOverride` | Lock override requested with break-glass restore. |
 
-### OpenBaoTenant Provisioning Events
+### OpenBaoTenant provisioning events
 
 | Type | Reason | Notes |
 | :--- | :--- | :--- |
@@ -186,11 +201,9 @@ Expect `Normal` events for routine progression and accepted operator input. Expe
 | `Warning` | `TenantProvisioningBlocked` | Provisioning is blocked by guardrails, missing prerequisites, or dependency readiness checks. |
 | `Warning` | `TenantProvisioningFailed` | Provisioning failed while applying tenant RBAC. |
 
-## Structured Audit Events
+## Structured audit events
 
 In addition to Kubernetes Events, controllers emit structured audit events to logs, for example `UpgradeStarted`, `UpgradeFailed`, `BackupJobCreated`, `RestoreCompleted`, and `TenantRBACProvisioned`.
-
-Query centralized logs for these high-signal lifecycle events.
 
 <Callout type="note" title="Stability">
 
@@ -198,3 +211,23 @@ Condition **types** are part of the API surface. Reason and event values may exp
 
 </Callout>
 
+<NextActions
+  title="Related lookup surfaces"
+  items={[
+    {
+      label: 'Troubleshoot the cluster',
+      description: 'Use the operational troubleshooting page when you know something is wrong but do not yet know which signal matters.',
+      to: '/docs/operate/troubleshooting',
+    },
+    {
+      label: 'Recovery & Restore',
+      description: 'Move into the recovery section when the condition or event pattern already tells you the system needs intervention.',
+      to: '/docs/recover',
+    },
+    {
+      label: 'Compatibility matrix',
+      description: 'Return to compatibility when an unexpected status might actually come from an unsupported or unvalidated platform assumption.',
+      docId: 'reference/compatibility',
+    },
+  ]}
+/>

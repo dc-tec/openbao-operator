@@ -1,78 +1,119 @@
 ---
+title: Deprecation Policy
 description: Deprecation and API lifecycle policy for OpenBao Operator, including pre-1.0 compatibility expectations and migration requirements.
+pageType: reference
+journey: reference
 ---
 
-# Deprecation & API Lifecycle Policy
+<PageHero
+  variant="compact"
+  eyebrow="Reference / Lifecycle & Support Contract"
+  title="Use this page when you need the exact contract for how APIs and behavior can change across releases."
+  lede="OpenBao Operator is still pre-GA, so compatibility rules are explicit rather than implied. This page defines how deprecations are announced, how removals happen, and what migration guidance must ship with a breaking or removing change."
+  actions={[
+    {label: 'Open support policy', docId: 'reference/support-policy', variant: 'primary'},
+    {label: 'Open upgrade compatibility', docId: 'reference/operator-upgrade-compatibility', variant: 'secondary'},
+  ]}
+/>
 
-This document defines how the OpenBao Operator evolves APIs and behavior across releases.
+<DecisionTable
+  kind="reference"
+  title="Pre-GA lifecycle rules"
+  columns={['Change type', 'Current contract', 'Contributor or maintainer expectation']}
+  rows={[
+    {
+      cells: [
+        'Minor releases (`0.Y.0`)',
+        'May include breaking API or behavior changes while the project remains pre-GA.',
+        'Document the break clearly and ship a migration path.',
+      ],
+      emphasis: 'caution',
+    },
+    {
+      cells: [
+        'Patch releases (`0.Y.Z`)',
+        'Should avoid intentional breaking changes.',
+        'Use only when the change is truly compatible or required for safety and integrity.',
+      ],
+    },
+    {
+      cells: [
+        'Security or data-integrity fixes',
+        'May force urgent behavior changes earlier than the normal removal timeline.',
+        'Call the exception out explicitly in release notes and migration guidance.',
+      ],
+    },
+  ]}
+/>
 
-## 1. Scope
+## Scope
 
 This policy applies to:
 
 - CRD API versions (`openbao.org/*`)
 - CRD fields (`spec`, `status`)
-- User-visible defaults and behavior contracts
-- Operator installation and upgrade workflows
+- user-visible defaults and behavior contracts
+- operator installation and upgrade workflows
 
-## 2. Stability Level (Pre-1.0)
+## Deprecation process
 
-<Callout type="warning" title="Pre-1.0 contract">
+When a field or behavior is deprecated, the project aims to do all of the following in the same release:
 
-Until `1.0.0`, the Operator is in pre-GA (`v1alpha1`) and may introduce breaking changes.
+1. Mark the deprecation in API comments, which feed the generated API docs.
+2. Document the deprecation in [API Reference](api.md) and release notes.
+3. Provide a migration path and a concrete replacement example.
 
-</Callout>
+## Removal policy
 
-For `0.x` releases:
+For pre-1.0 releases:
 
-- **Minor releases (`0.Y.0`)** may contain breaking API/behavior changes.
-- **Patch releases (`0.Y.Z`)** should avoid intentional breaking changes.
-- Security, safety, or data-integrity fixes may require urgent behavior changes.
+- removals are expected in minor releases, not patch releases
+- deprecated fields should remain available for at least one minor release when feasible
+- urgent safety or security concerns may force earlier removal, but only with explicit release notes
 
-## 3. Deprecation Process
+<DecisionTable
+  kind="reference"
+  title="Migration requirements for breaking changes"
+  columns={['Required output', 'Why it exists']}
+  rows={[
+    {
+      cells: ['A migration section in release notes or changelog', 'Operators need a single place to see what changed and in what order to act.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Clear before-and-after manifests', 'Schema changes are easier to adopt when the new target shape is concrete.'],
+    },
+    {
+      cells: ['Upgrade sequencing notes', 'Some changes are safe only when CRDs, operator version, and workload rollout happen in the right order.'],
+    },
+  ]}
+/>
 
-When we deprecate a field or behavior, we aim to do all of the following in the same release:
+## Kubernetes versioning mechanics
 
-1. Mark deprecation in API comments (source of truth for generated API docs).
-2. Document deprecation in [API Reference](api.md) and release notes/changelog.
-3. Provide a migration path and an example replacement.
+The project currently serves a single CRD API version, `v1alpha1`. When additional CRD versions are introduced, the project will use Kubernetes-native lifecycle controls such as:
 
-## 4. Removal Policy
-
-For pre-1.0 (`0.x`) releases:
-
-- Removals are expected in **minor** releases, not patch releases.
-- We aim to keep deprecated fields available for at least one minor release when feasible.
-- In exceptional cases (security/safety), removal may happen earlier with explicit release notes.
-
-## 5. Migration Requirements
-
-Any breaking or removing change must include:
-
-- A migration section in release notes/changelog.
-- Clear "before/after" manifests for affected CRDs.
-- Upgrade sequencing notes if operator upgrade order matters.
-
-## 6. Kubernetes API Versioning Mechanics
-
-The project currently serves a single CRD API version (`v1alpha1`).
-
-When introducing additional CRD versions (for example `v1beta1` or `v1`), we will use Kubernetes-native version lifecycle controls:
-
-- `served` / `storage` version flags
+- `served` and `storage`
 - `deprecated: true`
 - `deprecationWarning`
 
-## 7. Operator User Guidance
-
-Before upgrading:
-
-1. Read release notes for deprecations and migrations.
-2. Apply CRD updates first when required.
-3. Validate changes in staging before production rollout.
-
-Related references:
-
-- [Compatibility Matrix](compatibility.md)
-- [Operator Upgrade Compatibility](operator-upgrade-compatibility.md)
-- [Release Management](/contribute/release-management)
+<NextActions
+  title="Related lifecycle references"
+  items={[
+    {
+      label: 'Compatibility matrix',
+      description: 'Open the validation matrix when the question is whether a target platform or version is still in scope.',
+      docId: 'reference/compatibility',
+    },
+    {
+      label: 'Upgrade compatibility',
+      description: 'Use the upgrade-path contract when you need sequencing and rollback guidance instead of API lifecycle rules.',
+      docId: 'reference/operator-upgrade-compatibility',
+    },
+    {
+      label: 'Release management',
+      description: 'Move to the maintainer workflow when the next step is shipping a release that contains the deprecation.',
+      to: '/contribute/release-management',
+    },
+  ]}
+/>

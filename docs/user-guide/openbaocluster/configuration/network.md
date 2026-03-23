@@ -1,142 +1,212 @@
-# Network Configuration
+---
+title: Network Configuration
+hide_title: true
+pageType: task
+journey: configure
+description: Configure the operator-managed NetworkPolicy contract, including DNS, Kubernetes API egress, trusted ingress peers, and external dependency paths for backups and restore.
+---
 
-OpenBao Operator automatically configures Kubernetes NetworkPolicies to secure your cluster by default using a "Deny All" + "Allow Essential" strategy.
+<PageHero
+  eyebrow="Configure / Service Boundary"
+  title="Treat NetworkPolicy as part of the cluster contract, not as an afterthought."
+  lede="The operator uses a deny-by-default posture and then adds the ingress and egress paths the cluster needs to function. That means DNS, Kubernetes API access, edge peers, and backup or restore dependencies should be configured intentionally rather than discovered during an outage."
+  actions={[
+    {label: "Open external access", docId: "user-guide/openbaocluster/configuration/external-access", variant: "primary"},
+    {label: "Review network security", docId: "security/infrastructure/network-security", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "understand which ingress and egress paths the operator creates automatically",
+      "wire DNS and Kubernetes API access for clusters with strict NetworkPolicy enforcement",
+      "allow ingress-controller or Gateway data-plane traffic without opening the namespace broadly",
+      "configure backup, restore, transit, or other external dependencies before day 2 workflows need them",
+    ]}
+  />
+</PageHero>
 
-## Default Topology
-
-The following diagram illustrates the allowed traffic flows.
-
-```mermaid
-flowchart TB
-    subgraph External["External World"]
-        GW[Gateway / Ingress]
-        Client[Clients]
+<DiagramFrame
+  title="Default network posture"
+  caption="The namespace starts from deny-by-default, then allows the operator, peer traffic, DNS, Kubernetes API access, and whichever external systems you configure deliberately."
+  code={`flowchart TB
+    subgraph External ["External systems"]
+        Edge["Gateway / ingress"]
+        Storage["Backup or restore storage"]
+        Transit["Transit / KMS / PKI"]
     end
 
-    subgraph Cluster["Kubernetes Cluster"]
-        API[K8s API]
-        DNS[CoreDNS]
-        
-        subgraph OperatorNS["Operator Namespace"]
-            Op[Operator]
-        end
-
-        subgraph TenantNS["Tenant Namespace"]
-            Bao[OpenBao Pods]
-        end
+    subgraph Cluster ["Kubernetes cluster"]
+        API["Kubernetes API"]
+        DNS["DNS"]
+        Operator["Operator"]
+        Bao["OpenBao Pods"]
+        Jobs["Backup / restore Jobs"]
     end
 
-    %% Ingress Flows
-    GW & Op -->|"HTTPS (8200)"| Bao
-    Client -.->|"HTTPS (443)"| GW
-    
-    %% Internal Flows
-    Bao <-->|"Raft (8201)"| Bao
+    Edge --> Bao
+    Operator --> Bao
+    Bao --> Bao
+    Bao --> DNS
+    Bao --> API
+    Jobs --> DNS
+    Jobs --> Storage
+    Bao --> Transit
 
-    %% Egress Flows
-    Bao -->|"DNS (53)"| DNS
-    Bao -->|"K8s (443/6443)"| API
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    class API,DNS,Storage,Transit read;
+    class Operator,Edge process;
+    class Bao,Jobs write;`}
+/>
 
-    class Bao write;
-    class Op,GW process;
-    class Client,API,DNS read;
-```
+<DecisionTable
+  title="Traffic the operator expects by default"
+  columns={["Direction", "Path", "Why it exists"]}
+  rows={[
+    {
+      cells: [
+        "Ingress",
+        "Operator to OpenBao on the service listener",
+        "Health checks, initialization, unseal coordination, and lifecycle orchestration all depend on this control-plane path.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Ingress",
+        "OpenBao peer-to-peer traffic",
+        "Raft members need to exchange cluster traffic on the peer port.",
+      ],
+    },
+    {
+      cells: [
+        "Egress",
+        "DNS and Kubernetes API",
+        "Pods and Jobs need name resolution and selected Kubernetes API access under strict policy.",
+      ],
+    },
+    {
+      cells: [
+        "Conditional ingress or egress",
+        "Gateway, ingress-controller, storage, transit, or PKI paths",
+        "These are environment-specific and should be configured explicitly rather than allowed broadly.",
+      ],
+    },
+  ]}
+/>
 
-### Default Rules Reference
+## DNS and Kubernetes API egress
 
-The Operator ensures these rules always exist to keep the cluster functional.
+<DecisionTable
+  kind="reference"
+  title="Core network settings"
+  columns={["Field", "Use it for", "When it matters"]}
+  rows={[
+    {
+      cells: [
+        "`network.dnsNamespace`",
+        "Tell the operator where your DNS service actually runs.",
+        "Use this when the cluster DNS namespace is not `kube-system`, such as on OpenShift.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`network.dnsEndpointIPs`",
+        "Allow direct DNS egress to resolver IPs instead of only to pod-backed Services.",
+        "Use this for node-local caches or host-networked DNS topologies where service-based rules are insufficient.",
+      ],
+    },
+    {
+      cells: [
+        "`network.apiServerCIDR`",
+        "Override the default service-VIP allow-list for Kubernetes API access.",
+        "Use this when you know the exact API-service CIDR you want to allow.",
+      ],
+    },
+    {
+      cells: [
+        "`network.apiServerEndpointIPs`",
+        "Allow egress directly to backing API-server endpoint IPs.",
+        "Use this when your CNI evaluates policy post-DNAT and the service VIP alone is not enough.",
+      ],
+    },
+  ]}
+/>
 
-| Direction | Source / Dest | Port | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Ingress** | **Operator** | `8200` | Health checks, Initialization, Unsealing. |
-| **Ingress** | **Self** | `8201` | Raft consensus replication between peers. |
-| **Ingress** | **Gateway/Ingress** | `8200` | External traffic (if Ingress/Gateway is enabled). |
-| **Ingress** | **Kube-System** | Any | Readiness probes (often from kubelet/monitoring). |
-| **Egress** | **Kube-DNS** | `53` | Service discovery. |
-| **Egress** | **K8s API** | `443` | Kubernetes Auth Method validation. |
-| **Egress** | **Self** | `8201` | Raft consensus replication. |
+<Tabs groupId="configure-network-core">
+  <TabItem value="dns" label="DNS">
 
-## DNS Configuration
-
-By default, the NetworkPolicy allows egress to DNS services in the `kube-system` namespace. If your cluster uses a different namespace for DNS (e.g., `openshift-dns` on OpenShift), you must explicitly configure it.
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Configure DNS for non-default or node-local resolver paths"
+  code={`spec:
   network:
-    dnsNamespace: "openshift-dns" # (1)!
-```
-
-1.  Defaults to `kube-system` if not specified.
-
-<Callout type="warning" title="DNS Resolution Failure">
-
-If `dnsNamespace` does not match your cluster's actual DNS namespace, OpenBao pods will fail to resolve addresses (including Cloud KMS or Storage endpoints), leading to crash loops.
-
-</Callout>
-
-If your cluster resolves DNS through node-local or host-networked caches instead of pod-backed DNS Services, also configure `dnsEndpointIPs`. The operator adds direct TCP/UDP port `53` egress rules for those resolver IPs in both the main workload and backup/restore Job NetworkPolicies.
-
-```yaml
-spec:
-  network:
-    dnsNamespace: "kube-system"
+    dnsNamespace: "openshift-dns"
     dnsEndpointIPs:
-      - "169.254.20.10" # Example: NodeLocal DNSCache
-```
+      - "169.254.20.10"`}
+>
+  Use `dnsEndpointIPs` only when the resolver is enforced by IP rather than by Service-backed pod traffic. This also affects backup and restore Jobs.
+</CommandBlock>
 
-Use `dnsEndpointIPs` when:
+  </TabItem>
+  <TabItem value="api" label="Kubernetes API">
 
-- DNS traffic is enforced against resolver IPs instead of pod IPs.
-- The resolver runs on the node, host network, or another topology outside the DNS namespace pod model.
-- `dnsNamespace` is correct but OpenBao still cannot resolve names under strict NetworkPolicy enforcement.
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Pin Kubernetes API egress explicitly when needed"
+  code={`spec:
+  network:
+    apiServerCIDR: "10.43.0.1/32"
+    apiServerEndpointIPs:
+      - "192.168.166.2"`}
+>
+  Prefer the smallest safe scope. Endpoint IPs are usually only needed when the NetworkPolicy implementation evaluates the post-DNAT destination instead of the service VIP.
+</CommandBlock>
 
-These resolver settings also matter for backup and restore Jobs. Those Jobs use separate NetworkPolicies from the main StatefulSet.
+  </TabItem>
+</Tabs>
 
-## Custom Rules (Advanced)
+## Add the environment-specific paths
 
-You can append **additional** rules to the default policy to allow integrations like backups or monitoring.
+<Tabs groupId="configure-network-extra-paths">
+  <TabItem value="trusted-ingress" label="Trusted ingress peers">
 
-<Tabs groupId="trusted-ingress-peers-egress-rules-ingress-rules">
-
-<TabItem value="trusted-ingress-peers" label="Trusted Ingress Peers">
-
-Allow a user-managed ingress controller or passthrough proxy to reach OpenBao on port `8200` without writing a full raw ingress rule.
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Allow an ingress controller or Gateway data plane to reach the cluster"
+  code={`spec:
   network:
     trustedIngressPeers:
-      # Example: Allow all pods in the Traefik namespace
       - namespaceSelector:
           matchLabels:
             kubernetes.io/metadata.name: traefik
-
-      # Example: Allow only specific ingress-controller pods
       - namespaceSelector:
           matchLabels:
             kubernetes.io/metadata.name: ingress-system
         podSelector:
           matchLabels:
-            app.kubernetes.io/name: traefik
-```
+            app.kubernetes.io/name: traefik`}
+>
+  Use this when the source is a user-managed ingress controller or Gateway data plane. It is usually clearer than writing a raw `ingressRules` block for the same case.
+</CommandBlock>
 
-Use this when traffic reaches OpenBao through a user-managed TCP proxy, passthrough ingress controller, or Gateway data plane that the Operator does not manage directly.
+  </TabItem>
+  <TabItem value="egress" label="External egress">
 
-</TabItem>
-
-<TabItem value="egress-rules" label="Egress Rules">
-
-Allow OpenBao to connect to external services (e.g., Transit Vault, S3, Databases).
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Allow egress to transit, storage, or other external systems"
+  code={`spec:
   network:
     egressRules:
-      # Example: Allow access to a Transit provider in a dedicated infrastructure namespace
       - to:
           - namespaceSelector:
               matchLabels:
@@ -144,107 +214,89 @@ spec:
         ports:
           - protocol: TCP
             port: 8200
-      
-      # Example: Allow access to S3 CIDR for Backups
       - to:
           - ipBlock:
               cidr: 192.168.100.0/24
         ports:
           - protocol: TCP
-            port: 443
-```
+            port: 443`}
+>
+  Use this for transit unseal, object storage, private PKI, or any other external dependency that should not be reachable through a broad allow-all rule.
+</CommandBlock>
 
-</TabItem>
+  </TabItem>
+  <TabItem value="ingress" label="Raw ingress rules">
 
-<TabItem value="ingress-rules" label="Ingress Rules">
-
-Add raw ingress rules when you need full control over ports and peers beyond the common ingress-controller case.
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Add a raw ingress rule when you need full control"
+  code={`spec:
   network:
     ingressRules:
-      # Example: Allow Prometheus from monitoring namespace
       - from:
           - namespaceSelector:
               matchLabels:
                 kubernetes.io/metadata.name: monitoring
         ports:
           - protocol: TCP
-            port: 8200
-```
+            port: 8200`}
+>
+  Reach for raw `ingressRules` when the source is not a normal ingress-controller path and you need exact port or peer matching.
+</CommandBlock>
 
-</TabItem>
-
+  </TabItem>
 </Tabs>
 
-## Advanced Routing
+## Read the operator conditions
 
-Configuring how OpenBao reaches the Kubernetes API server for Auth Method validation.
+<DecisionTable
+  kind="reference"
+  title="Conditions that matter"
+  columns={["Condition", "What it tells you", "Typical next move"]}
+  rows={[
+    {
+      cells: [
+        "`APIServerNetworkReady=False`",
+        "The operator could not build a safe Kubernetes API allow-list.",
+        "Fix the API CIDR or endpoint IP configuration first.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`APIServerNetworkReady=Unknown`",
+        "The service-VIP path exists, but your environment may still need explicit endpoint IPs.",
+        "Check whether your CNI enforces egress post-DNAT and add `apiServerEndpointIPs` if required.",
+      ],
+    },
+    {
+      cells: [
+        "`BackupConfigurationReady=False` or `RestoreConfigurationReady=False` with `NetworkEgressRulesRequired`",
+        "The lifecycle Jobs cannot reach the storage target safely under current policy.",
+        "Add explicit storage egress rules before relying on backup or restore workflows.",
+      ],
+    },
+  ]}
+/>
 
-<Tabs groupId="auto-detection-default-manual-cidr-endpoint-ips">
-
-<TabItem value="auto-detection-default" label="Auto-Detection (Default)">
-
-The Operator allow-lists the in-cluster Kubernetes service VIP (`KUBERNETES_SERVICE_HOST`) as a single-host CIDR (`/32` for IPv4, `/128` for IPv6) on port `443`.
-
-This does not require cross-namespace RBAC reads.
-
-The status condition `APIServerNetworkReady` reports this path as `Unknown` with reason `APIServerEndpointIPsRecommended`.
-That means the common service-VIP path is configured, but some CNIs still require explicit endpoint IPs.
-
-</TabItem>
-
-<TabItem value="manual-cidr" label="Manual CIDR">
-
-**Use Case:** Override the detected VIP allow-list (for example, if you want to allow a larger CIDR).
-
-```yaml
-spec:
-  network:
-    # Prefer single-host CIDRs when possible (least privilege).
-    # Example (k3s): "10.43.0.1/32"
-    apiServerCIDR: "10.43.0.1/32"
-```
-
-</TabItem>
-
-<TabItem value="endpoint-ips" label="Endpoint IPs">
-
-**Use Case:** CNIs / NetworkPolicy implementations that enforce egress on post-DNAT traffic.
-
-In these environments, allowing only the Service VIP (port `443`) may not be sufficient because traffic is evaluated against the backing API server endpoint IP (commonly port `6443`).
-
-The Operator does not auto-detect these endpoint IPs because that would require broader cluster permissions (list/watch).
-
-```yaml
-spec:
-  network:
-    apiServerEndpointIPs:
-      - "192.168.166.2" # The IP of the API Server container/node
-```
-
-When this field is set and valid, `APIServerNetworkReady=True`.
-
-</TabItem>
-
-</Tabs>
-
-## Troubleshooting Signal
-
-Use `APIServerNetworkReady` to interpret Kubernetes API egress behavior:
-
-- `False` with reason `APIServerNetworkConfigurationInvalid`:
-  The operator could not build a safe Kubernetes API egress allow-list.
-- `Unknown` with reason `APIServerEndpointIPsRecommended`:
-  The service VIP path is configured, but post-DNAT endpoint IPs may still be required in your environment.
-- `True` with reason `APIServerNetworkReady`:
-  The operator has a concrete service-VIP plus endpoint-IP contract for Kubernetes API egress.
-
-Also watch these related conditions when NetworkPolicy is involved:
-
-- `BackupConfigurationReady=False` with `NetworkEgressRulesRequired`: backup Jobs need explicit storage egress rules.
-- `RestoreConfigurationReady=False` with `NetworkEgressRulesRequired`: restore Jobs need explicit storage egress rules.
-
-For user-managed passthrough exposure, prefer `trustedIngressPeers` over raw `ingressRules` when the source is an ingress controller or Gateway data plane.
-
+<NextActions
+  title="Continue service boundary setup"
+  items={[
+    {
+      label: "Gateway API support",
+      description: "Use the detailed Gateway API guide when that is the primary edge model.",
+      docId: "user-guide/openbaocluster/configuration/gateway-api",
+    },
+    {
+      label: "Backup operations",
+      description: "Review the object-storage and job-identity path that depends on these network rules.",
+      docId: "user-guide/openbaocluster/operations/backups",
+    },
+    {
+      label: "Network security",
+      description: "Go deeper on the security model behind the deny-by-default posture and namespace isolation.",
+      docId: "security/infrastructure/network-security",
+    },
+  ]}
+/>

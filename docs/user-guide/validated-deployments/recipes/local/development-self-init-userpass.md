@@ -1,56 +1,102 @@
 ---
-description: Step-by-step recipe for a Development-profile OpenBao cluster with self-init, Operator-managed TLS, demo userpass login, and JWT admin access.
+title: k3d Development / Shared Edge Recipe
+hide_title: true
+pageType: task
+journey: validated-deployments
+description: Reproduce the validated local development lane with self-init, operator-managed TLS, a shared terminating edge, demo login, JWT admin access, and RustFS backups.
 ---
 
-# Development Profile with Self-Init and Userpass
+<PageHero
+  eyebrow="Validated Deployments / Local Baselines / k3d Development"
+  title="Reproduce the validated local development lane without turning a quick-start cluster into a pile of one-off overrides."
+  lede="This recipe stands up the local development baseline with tenant onboarding, operator-managed TLS, a shared terminating edge, JWT bootstrap, an optional demo login, and an S3-compatible backup path backed by RustFS."
+  actions={[
+    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs", variant: "primary"},
+    {label: "Open backup operations", docId: "user-guide/openbaocluster/operations/backups", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="This recipe should leave you with"
+    items={[
+      "an onboarded tenant namespace and admin ServiceAccount",
+      "a Development-profile cluster that self-initializes and exposes the UI through the shared edge",
+      "JWT admin login working for a real ServiceAccount token",
+      "a RustFS-backed backup configuration you can verify before the first upgrade rehearsal",
+    ]}
+  />
+</PageHero>
 
-This recipe deploys a local-development `OpenBaoCluster` with:
+<Callout type="success" title="Validated lane">
 
-- `spec.profile: Development`
-- `spec.tls.mode: OperatorManaged`
-- `spec.selfInit.enabled: true`
-- `userpass` login for a demo UI user
-- JWT login for a human admin `ServiceAccount`
-
-<Callout type="success" title="Based on Validated E2E Patterns">
-
-This recipe is built from the Development-profile lifecycle patterns exercised by the in-repo E2E suites, especially cluster lifecycle and self-init flows. The optional `userpass` demo login is a documentation convenience layered on top of those validated patterns, so keep it scoped to local development and evaluation.
+This recipe follows the development lifecycle, backup, and blue/green patterns exercised in the local validation environment and the in-repo E2E suites. The optional `userpass` login remains local-only convenience layered on top of the validated cluster path.
 
 </Callout>
 
-<Callout type="warning" title="Not for Production">
+<Callout type="note" title="Use the main docs for the product-wide source of truth">
 
-The `Development` profile is highly discouraged for production. It relaxes core security guarantees and uses a demo `userpass` login for convenience.
+Use <SiteLink docId="user-guide/openbaotenant/onboarding">tenant onboarding</SiteLink>, <SiteLink docId="user-guide/openbaocluster/configuration/external-access">external access</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/operations/backups">backup operations</SiteLink> when you need the generic operator behavior. This recipe only captures the exact validated local lane.
 
 </Callout>
 
-## Prerequisites
+<DecisionTable
+  title="What this lane assumes"
+  columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
+  rows={[
+    {
+      cells: [
+        "Multi-tenant operator install with admission enabled",
+        "The validated path starts from the default tenant-onboarding model.",
+        "Namespace provisioning and generated RBAC will drift from the lane you are trying to reproduce.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "A shared terminating Gateway already exists",
+        "The lane intentionally reuses one local edge for OpenBao and the rest of the toolchain.",
+        "You will not validate the same routing contract if you fall back to port-forwarding or user-managed passthrough.",
+      ],
+    },
+    {
+      cells: [
+        "RustFS is reachable as an S3-compatible endpoint",
+        "Backups are part of the lane, not an optional afterthought.",
+        "The cluster may look healthy while the part of the lane that matters for restore rehearsal never actually works.",
+      ],
+    },
+    {
+      cells: [
+        "Demo login stays local-only",
+        "The `userpass` bootstrap is included only to make UI validation and demos faster.",
+        "Reusing it outside a disposable environment turns a convenience into a security mistake.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-- OpenBao Operator is installed.
-- In multi-tenant mode, the operator can provision the target namespace through `OpenBaoTenant`.
-- A StorageClass is available for the cluster PVCs.
-- If your local nodes do not support AppArmor, be prepared to set `spec.workloadHardening.appArmorEnabled: false`.
+<DecisionTable
+  kind="reference"
+  title="Inputs to replace before apply"
+  columns={["Placeholder", "Example", "Purpose"]}
+  rows={[
+    {cells: ["`<namespace>`", "`openbaocluster-demo`", "Tenant namespace for the cluster."]},
+    {cells: ["`<cluster-name>`", "`openbaocluster-demo`", "`OpenBaoCluster` name."]},
+    {cells: ["`<openbao-version>`", "`2.5.1`", "OpenBao version."]},
+    {cells: ["`<gateway-name>`", "`shared-gateway`", "Existing terminating Gateway used by the local toolchain."]},
+    {cells: ["`<gateway-namespace>`", "`default`", "Namespace of the Gateway."]},
+    {cells: ["`<external-host>`", "`bao-demo.example.com`", "External hostname for the shared-edge route."]},
+    {cells: ["`<operator-namespace>`", "`openbao-operator-system`", "Namespace that hosts the central `OpenBaoTenant` resource."]},
+  ]}
+/>
 
-## Inputs
+## Step 1: Onboard the tenant namespace
 
-Replace these values before applying the manifests:
-
-| Placeholder | Example | Purpose |
-| :--- | :--- | :--- |
-| `<namespace>` | `openbaocluster-demo` | Tenant namespace for the cluster |
-| `<cluster-name>` | `openbaocluster-demo` | `OpenBaoCluster` name |
-| `<openbao-version>` | `2.5.1` | OpenBao version |
-| `<gateway-name>` | `traefik-gateway` | Existing passthrough-capable Gateway for optional external access |
-| `<gateway-namespace>` | `default` | Namespace of the Gateway |
-| `<external-host>` | `bao-demo.example.com` | External hostname for optional Gateway exposure |
-| `<operator-namespace>` | `openbao-operator-system` | Rendered operator namespace used for centralized tenant onboarding |
-
-## Step 1: Create the tenant namespace
-
-Apply the tenant namespace, onboarding request, and admin `ServiceAccount`:
-
-```yaml
-apiVersion: v1
+<CommandBlock
+  language="yaml"
+  label="apply"
+  title="Create the namespace, onboarding request, and admin ServiceAccount"
+  code={`apiVersion: v1
 kind: Namespace
 metadata:
   name: <namespace>
@@ -69,21 +115,38 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: openbao-admin
-  namespace: <namespace>
-```
+  namespace: <namespace>`}
+/>
 
-Verify that the tenant is provisioned:
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Wait for tenant provisioning"
+  code={`kubectl -n <operator-namespace> describe openbaotenant <cluster-name>-tenant`}
+>
+  The steady-state expectation is `Provisioned=True`. Do not move to the cluster manifest until the namespace is actually prepared for the operator.
+</CommandBlock>
 
-```bash
-kubectl -n <operator-namespace> describe openbaotenant <cluster-name>-tenant
-```
+## Step 2: Create the backup credentials Secret
 
-## Step 2: Apply the OpenBaoCluster
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Create the RustFS credentials Secret"
+  code={`kubectl -n <namespace> create secret generic rustfs-secret \\
+  --from-literal=accessKeyId='rustfsadmin' \\
+  --from-literal=secretAccessKey='rustfsadmin'`}
+>
+  If your local RustFS instance uses different credentials, replace both values here and in the object-storage service itself.
+</CommandBlock>
 
-Apply the cluster manifest:
+## Step 3: Apply the validated development cluster manifest
 
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="apply"
+  title="Apply the Development-profile cluster"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: <cluster-name>
@@ -166,11 +229,41 @@ spec:
           policies:
             - admin
           ttl: 1h
-```
+
+  gateway:
+    enabled: true
+    listenerName: websecure
+    gatewayRef:
+      name: <gateway-name>
+      namespace: <gateway-namespace>
+    hostname: "<external-host>"
+    backendTLS:
+      enabled: true
+    tlsPassthrough: false
+    path: /
+
+  backup:
+    schedule: "*/30 * * * *"
+    target:
+      provider: s3
+      endpoint: "http://rustfs-svc.rustfs.svc.cluster.local:9000"
+      bucket: "openbao-backups"
+      pathPrefix: "clusters/<cluster-name>"
+      usePathStyle: true
+      credentialsSecretRef:
+        name: rustfs-secret
+    retention:
+      maxCount: 7
+      maxAge: "168h"
+
+  upgrade:
+    preUpgradeSnapshot: true
+    strategy: BlueGreen`}
+/>
 
 <Callout type="warning" title="Demo-only credentials">
 
-The `demo-admin` user exists only to make local validation easy. Do not reuse this pattern or password in shared or production environments.
+The `demo-admin` user exists only to make local validation easy. Keep it out of any shared or long-lived environment.
 
 </Callout>
 
@@ -186,101 +279,84 @@ spec:
 
 </Callout>
 
-## Step 3: Optional Gateway exposure
+## Verify the lane
 
-If you already have a passthrough Gateway listener, add this block under `spec` before applying the manifest or patch the cluster and re-apply it:
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check the cluster conditions"
+  code={`kubectl -n <namespace> get openbaocluster <cluster-name> \\
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\\n"}{end}'`}
+>
+  The steady-state expectation is `Available=True`, `TLSReady=True`, `UserAccessBootstrap=True`, `BackupConfigurationReady=True`, `GatewayIntegrationReady=True`, `OpenBaoInitialized=True`, and `OpenBaoSealed=False`.
+</CommandBlock>
 
-```yaml
-gateway:
-  enabled: true
-  listenerName: websecure-passthrough
-  gatewayRef:
-    name: <gateway-name>
-    namespace: <gateway-namespace>
-  hostname: "<external-host>"
-  tlsPassthrough: true
-```
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Confirm the cluster did not persist a root token Secret"
+  code={`kubectl -n <namespace> get secret <cluster-name>-root-token`}
+>
+  This should return `NotFound`. A self-init lane should not leave the root token stored as a Kubernetes Secret.
+</CommandBlock>
 
-If your Gateway terminates TLS at the edge instead, switch `tlsPassthrough` to `false` and enable `backendTLS`.
-
-If you skip this step, use port-forward for verification.
-
-## Operations
-
-### Verify the cluster is ready
-
-Check the status conditions:
-
-```bash
-kubectl -n <namespace> get openbaocluster <cluster-name> \
-  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\n"}{end}'
-```
-
-The steady-state expectation is:
-
-- `Available=True`
-- `TLSReady=True`
-- `UserAccessBootstrap=True`
-- `OpenBaoInitialized=True`
-- `OpenBaoSealed=False`
-
-`ProductionReady` is not the goal for a `Development` cluster.
-
-If you enabled optional Gateway exposure, also expect `GatewayIntegrationReady=True`.
-
-Confirm that no root token Secret was created:
-
-```bash
-kubectl -n <namespace> get secret <cluster-name>-root-token
-```
-
-This should return `NotFound`.
-
-### Verify the demo UI login
-
-Port-forward the Service:
-
-```bash
-kubectl -n <namespace> port-forward svc/<cluster-name> 8200:8200
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Verify the demo UI login through the local service"
+  code={`kubectl -n <namespace> port-forward svc/<cluster-name> 8200:8200
 export VAULT_ADDR="https://127.0.0.1:8200"
-```
 
-Open `https://127.0.0.1:8200/ui` in a browser and sign in with:
+curl -sS -k \\
+  -H 'Content-Type: application/json' \\
+  -d '{"password":"demo-password"}' \\
+  \${VAULT_ADDR%/}/v1/auth/userpass/login/demo-admin`}
+>
+  Local browsers and CLIs may warn about the operator-managed CA. That is expected in this lane.
+</CommandBlock>
 
-- Username: `demo-admin`
-- Password: `demo-password`
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Verify JWT admin login"
+  code={`JWT="$(kubectl -n <namespace> create token openbao-admin --audience openbao-internal --duration=1h)"
 
-<Callout type="note" title="TLS verification in local validation">
+curl -sS -k \\
+  -H 'Content-Type: application/json' \\
+  -d "{\\"role\\":\\"admin\\",\\"jwt\\":\\"\${JWT}\\"}" \\
+  \${VAULT_ADDR%/}/v1/auth/jwt/login`}
+/>
 
-The Development recipe uses Operator-managed certificates. Your browser or CLI may warn about a self-signed CA during local validation.
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Trigger and inspect a manual backup"
+  code={`kubectl -n <namespace> annotate openbaocluster <cluster-name> \\
+  openbao.org/trigger-backup="$(date -u +%Y-%m-%dT%H:%M:%SZ)" --overwrite
 
-</Callout>
+kubectl -n <namespace> get openbaocluster <cluster-name> \\
+  -o jsonpath='{.status.backup.lastBackupName}{"\\n"}{.status.backup.lastBackupTime}{"\\n"}{.status.backup.lastFailureReason}{"\\n"}'`}
+>
+  A successful lane should produce a backup object key and no failure reason.
+</CommandBlock>
 
-### Verify JWT admin login
-
-Create a Kubernetes token for the admin `ServiceAccount` and exchange it for an OpenBao token:
-
-```bash
-JWT="$(kubectl -n <namespace> create token openbao-admin --audience openbao-internal --duration=1h)"
-
-curl -sS -k \
-  -H 'Content-Type: application/json' \
-  -d "{\"role\":\"admin\",\"jwt\":\"${JWT}\"}" \
-  "${VAULT_ADDR%/}/v1/auth/jwt/login"
-```
-
-## Common Failures
-
-- Pods fail with AppArmor errors on local clusters: set `spec.workloadHardening.appArmorEnabled: false`.
-- `OpenBaoInitialized=False`: check the `selfInit.requests` paths and data for syntax errors.
-- `UserAccessBootstrap=Unknown`: verify that the JWT or `userpass` bootstrap requests were applied as intended.
-- A root token Secret exists: `spec.selfInit.enabled` was omitted or rejected.
-- The demo UI login fails: confirm `auth/userpass` was enabled and the `demo-admin` user request was applied.
-
-## See Also
-
-- [Recipes Overview](../index.md)
-- [Scheduled Backups to S3-Compatible Storage](../../runbooks/scheduled-backups-s3-compatible.md)
-- [Security Profiles](../../../openbaocluster/configuration/security-profiles.md)
-- [Self-Initialization](../../../openbaocluster/configuration/self-init.md)
-
+<NextActions
+  title="Keep moving"
+  items={[
+    {
+      label: "Reference architecture",
+      description: "Review the lane summary, topology, and invariants behind the recipe you just applied.",
+      docId: "user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs",
+    },
+    {
+      label: "Backup operations",
+      description: "Expand the RustFS-specific recipe choices into the generic backup model used by the operator.",
+      docId: "user-guide/openbaocluster/operations/backups",
+    },
+    {
+      label: "k3d Hardened / External TLS",
+      description: "Move to the hardened local rehearsal lane when you need external certificates and an external unseal root.",
+      docId: "user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls",
+    },
+  ]}
+/>

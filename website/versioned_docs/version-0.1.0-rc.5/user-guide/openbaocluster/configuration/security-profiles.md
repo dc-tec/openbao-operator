@@ -1,161 +1,352 @@
-# Security Profiles
+---
+title: Security Profiles
+slug: /configure/security-profiles
+hide_title: true
+pageType: task
+journey: configure
+description: Choose the cluster posture first, including bootstrap, unseal, TLS, and image-verification expectations for development versus Hardened production.
+---
 
-Configure the security posture of your OpenBao cluster.
+<PageHero
+  eyebrow="Configure / Cluster Baseline"
+  title="Choose the operating posture before you tune anything else."
+  lede="`spec.profile` is the top-level decision that shapes bootstrap, unseal, TLS, image verification, and failure tolerance. Pick the posture you plan to keep operating, then let the rest of the cluster baseline follow from that choice."
+  actions={[
+    {label: "Configure self-initialization", docId: "user-guide/openbaocluster/configuration/self-init", variant: "primary"},
+    {label: "Review production posture", docId: "security/fundamentals/profiles", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "decide whether the cluster is only for evaluation or intended for production",
+      "understand how profile choice changes bootstrap and root-token handling",
+      "choose an unseal root of trust that matches the platform you actually run",
+      "set expectations for TLS, networking, and image-verification guardrails up front",
+    ]}
+  />
+</PageHero>
 
-<Callout type="danger" title="Production Readiness">
+<DecisionTable
+  title="Choose the profile deliberately"
+  columns={["Profile", "Use it when", "What it assumes", "Avoid it when"]}
+  rows={[
+    {
+      cells: [
+        "Hardened",
+        "The cluster is intended to become a real production service.",
+        "External unseal, self-initialization, verified TLS, and supply-chain guardrails are part of the normal path.",
+        "You cannot meet the external trust, identity, or networking requirements yet.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Development",
+        "You need a fast local or evaluation path and accept weaker security defaults temporarily.",
+        "Bootstrap material may live in Kubernetes Secrets, TLS can be operator-managed, and verification can be relaxed.",
+        "You are trying to define the baseline that will survive into production.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-**Always** use the `Hardened` profile for production deployments. The `Development` profile is highly discouraged for production because it can store bootstrap material in Kubernetes Secrets.
+<DiagramFrame
+  title="How the profile shapes the baseline"
+  caption="The profile is not cosmetic. It determines whether the cluster can rely on operator-generated trust material and stored bootstrap credentials or whether those paths are explicitly disallowed."
+  code={`flowchart LR
+    Profile["spec.profile"] --> Bootstrap["Bootstrap path"]
+    Profile --> Unseal["Unseal root of trust"]
+    Profile --> TLS["TLS source"]
+    Profile --> Verify["Image verification"]
+    Profile --> Risk["Status and admission guardrails"]
 
-</Callout>
+    Bootstrap --> SelfInit["Self-initialization or standard init"]
+    Unseal --> KMS["External KMS / transit / static"]
+    TLS --> External["External / ACME / operator-managed"]
+    Verify --> Policy["Block or warn"]
+    Risk --> Conditions["Conditions and validation policy"]
 
-## Profile Comparison
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-The Operator supports two distinct security profiles via `spec.profile`.
+    class Profile process;
+    class Bootstrap,Unseal,TLS,Verify,Risk read;
+    class SelfInit,KMS,External,Policy,Conditions write;`}
+/>
 
-| Feature | Development | Hardened (Production) |
-| :--- | :--- | :--- |
-| **Use Case** | Local Testing, POC | **Production Workloads** |
-| **Root Token** | Stored in a Secret when self-init is disabled | Auto-revoked (not stored in a Secret) |
-| **Unseal** | Static (Kubernetes Secret) | **External KMS** (AWS, GCP, Azure, etc.) |
-| **TLS** | Optional / Self-Signed | **Mandatory** (`External` or `ACME`) |
-| **Image Verification** | Optional | Enforced guardrails; omitted blocks still verify |
-| **Bootstrap** | Manual bootstrap or self-init | **Self-init required** |
-| **Status** | `ConditionSecurityRisk=True` | Secure by Default |
+## What actually changes with the profile
 
-```mermaid
-flowchart LR
-    Cluster["OpenBaoCluster"]
-    Dev["Development Profile"]
-    Hard["Hardened Profile"]
+<DecisionTable
+  kind="reference"
+  title="Profile effects"
+  columns={["Surface", "Development", "Hardened"]}
+  rows={[
+    {
+      cells: [
+        "Bootstrap credential handling",
+        "Manual init is allowed and can leave a root token in a Secret when self-init is disabled.",
+        "Self-initialization is the supported path and root-token persistence is not the normal operating model.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Unseal",
+        "Static unseal in a Secret is allowed for fast evaluation.",
+        "Use an external trust source such as cloud KMS or transit. Treat static unseal as a non-production exception.",
+      ],
+    },
+    {
+      cells: [
+        "TLS",
+        "Operator-managed TLS is acceptable for development and internal evaluation.",
+        "Use `External` or `ACME`; the certificate authority should not be operator-generated in production.",
+      ],
+    },
+    {
+      cells: [
+        "Image verification",
+        "Can be introduced gradually and warning-only rollouts are possible.",
+        "Verification is expected, warning-only behavior is not the production posture, and official-image defaults still verify when trust material is omitted.",
+      ],
+    },
+    {
+      cells: [
+        "Networking and jobs",
+        "You can tolerate more permissive local defaults while standing up the cluster.",
+        "Backup and other lifecycle paths should assume explicit egress and identity wiring before go-live.",
+      ],
+    },
+  ]}
+/>
 
-    Cluster -->|spec.profile| Dev
-    Cluster -->|spec.profile| Hard
+## Representative starting points
 
-    Dev -.->|Risk| RootToken["Root Token Secret (if self-init disabled)"]
-    Hard -.->|Secure| NoRoot[No Root Token Secret]
-    Hard -.->|Secure| KMS[External KMS Unseal]
-    Hard -.->|Secure| EXT_TLS[Verified TLS]
+<Tabs groupId="configure-profile-hardened-development">
+  <TabItem value="hardened" label="Hardened">
 
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-
-    class Cluster read;
-    class Dev,Hard write;
-    class RootToken,KMS,EXT_TLS security;
-    class NoRoot write;
-```
-
-## Configuration
-
-<Tabs groupId="hardened-production-development">
-
-<TabItem value="hardened-production" label="Hardened (Production)">
-
-The `Hardened` profile enforces strict security best practices. It is the supported production profile for OpenBao Operator.
-
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Start from the supported production baseline"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: prod-cluster
 spec:
-  profile: Hardened  # REQUIRED
-  replicas: 3          # Minimum 3 for HA (Raft quorum)
+  profile: Hardened
+  replicas: 3
   version: "2.4.4"
+  selfInit:
+    enabled: true
   tls:
     enabled: true
-    mode: External   # Required (or ACME)
+    mode: External
   unseal:
-    type: awskms     # Required (External KMS)
+    type: awskms
     awskms:
       region: us-east-1
       kmsKeyID: alias/openbao-unseal
-  selfInit:
-    enabled: true    # Required
-    requests:
-      - name: enable-audit
-        operation: update
-        path: sys/audit/file
-        auditDevice:
-          type: file
-          fileOptions:
-            filePath: /tmp/audit.log
-```
+  imageVerification:
+    enabled: true
+    failurePolicy: Block
+  operatorImageVerification:
+    enabled: true
+    failurePolicy: Block`}
+>
+  Hardened is the supported production path. It assumes an external trust source for unseal, non-operator-managed TLS, and a self-initializing bootstrap flow.
+</CommandBlock>
 
-### Requirements
+  </TabItem>
+  <TabItem value="development" label="Development">
 
-- **External TLS**: `spec.tls.mode` MUST be `External` or `ACME`. `OperatorManaged` TLS is rejected by `openbao-validate-openbaocluster`.
-- **External KMS**: `spec.unseal.type` MUST use a cloud provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`).
-- **Self-Initialization**: `spec.selfInit.enabled` MUST be `true`. This is the supported production bootstrap path and is enforced by `openbao-validate-openbaocluster`.
-- **High Availability**: `spec.replicas` MUST be at least `3` for Raft quorum.
-- **Secure Network**: If backups are enabled, explicit egress rules are required (fail-closed networking).
-- **Supply Chain Guardrails**: `spec.imageVerification` and `spec.operatorImageVerification` cannot be disabled and cannot use `failurePolicy: Warn`.
-
-If verification blocks are omitted in Hardened, or are present with `enabled: true` but no explicit trust
-material, verification is still applied. For official release image repositories/tags, default GitHub keyless
-identity values are used. For mirrored/private registries, provide explicit `publicKey` or keyless identity
-fields in the verification config.
-
-### Benefits
-
-- **Zero Trust**: No root token Secret is created; initialization credentials are auto-revoked.
-- **Identity**: When `spec.selfInit.oidc.enabled` is `true`, the operator bootstraps JWT auth and roles for operator jobs (backup/upgrade/restore).
-- **Encryption**: Root of trust is delegated to a hardware-backed KMS, not Kubernetes etcd.
-
-</TabItem>
-
-<TabItem value="development" label="Development">
-
-The `Development` profile allows relaxed security settings for rapid iteration and testing.
-
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Use the lightest safe evaluation baseline"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: dev-cluster
 spec:
   profile: Development
   version: "2.4.4"
-  # TLS and Self-Init are optional
-```
+  replicas: 1
+  tls:
+    enabled: true
+  unseal:
+    type: static`}
+>
+  Development is for local testing, proof-of-concept work, and environments where you explicitly accept stored bootstrap material and weaker trust boundaries.
+</CommandBlock>
 
-### Characteristics
+  </TabItem>
+</Tabs>
 
-- **Relaxed TLS**: Allows `OperatorManaged` (self-signed) TLS.
-- **Static Unseal**: Uses a simple Kubernetes Secret for the unseal key.
-- **Root Token**: Generates and stores a root token in a Secret if self-init is disabled.
-- **Risk Indicator**: Sets `ConditionSecurityRisk=True` on the CR status.
+<Callout type="warning" title="Do not let development defaults drift into production">
 
-<Callout type="warning" title="Risk Acceptance">
-
-By using this profile, you accept the risk of storing sensitive keys and root tokens in the cluster. Do not use it as a normal production posture.
+The dangerous part of the Development profile is not that it exists; it is that it feels easy to keep. If the cluster matters, switch to Hardened before other systems begin to depend on it.
 
 </Callout>
 
-</TabItem>
+## Choose the unseal root of trust
 
+<DecisionTable
+  title="Unseal options by posture"
+  columns={["Path", "Use it when", "Why it fits or does not fit"]}
+  rows={[
+    {
+      cells: [
+        "Cloud KMS",
+        "You run in AWS, GCP, Azure, or another managed platform with a usable external key service.",
+        "This is usually the cleanest Hardened path because the root of trust stays outside Kubernetes.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Transit",
+        "You already run a central OpenBao cluster or equivalent external trust service.",
+        "This works well for multi-cluster or hybrid environments where central trust management is intentional.",
+      ],
+    },
+    {
+      cells: [
+        "PKCS#11 or KMIP",
+        "You need HSM-backed or enterprise key-management integration.",
+        "Valid for production, but usually more specialized and operationally heavier than cloud KMS or transit.",
+      ],
+    },
+    {
+      cells: [
+        "Static Secret",
+        "You need a local development path and understand the blast radius.",
+        "This is convenient but keeps decryption material inside the same cluster state you are trying to protect.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
+
+<Tabs groupId="configure-unseal-common-patterns">
+  <TabItem value="aws-kms" label="AWS KMS">
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Use AWS KMS for Hardened unseal"
+  code={`spec:
+  profile: Hardened
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/openbao-awskms"
+  unseal:
+    type: awskms
+    awskms:
+      kmsKeyID: "arn:aws:kms:us-east-1:123456789012:key/..."
+      region: "us-east-1"`}
+/>
+
+  </TabItem>
+  <TabItem value="gcp-kms" label="GCP KMS">
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Use GCP Cloud KMS for Hardened unseal"
+  code={`spec:
+  profile: Hardened
+  serviceAccount:
+    annotations:
+      iam.gke.io/gcp-service-account: "openbao@my-project.iam.gserviceaccount.com"
+  unseal:
+    type: gcpckms
+    gcpCloudKMS:
+      project: "my-project"
+      region: "us-central1"
+      keyRing: "openbao-ring"
+      cryptoKey: "openbao-key"`}
+/>
+
+  </TabItem>
+  <TabItem value="azure-kv" label="Azure Key Vault">
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Use Azure Key Vault for Hardened unseal"
+  code={`spec:
+  profile: Hardened
+  serviceAccount:
+    annotations:
+      azure.workload.identity/client-id: "87654321-4321-4321-4321-210987654321"
+  podMetadata:
+    labels:
+      azure.workload.identity/use: "true"
+  unseal:
+    type: azurekeyvault
+    azureKeyVault:
+      vaultName: "my-vault"
+      keyName: "openbao-key"`}
+/>
+
+  </TabItem>
+  <TabItem value="transit" label="Transit">
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Use a central OpenBao transit key for unseal"
+  code={`spec:
+  profile: Hardened
+  unseal:
+    type: transit
+    credentialsSecretRef:
+      name: transit-unseal-creds
+    transit:
+      address: "https://central-openbao.example.com"
+      keyName: "tenant-1-key"
+      mountPath: "transit"`}
+>
+  The referenced Secret should hold the transit token and any optional CA or client-certificate material required by that upstream cluster.
+</CommandBlock>
+
+  </TabItem>
 </Tabs>
 
-## Workload Hardening (AppArmor)
+## Optional runtime hardening
 
-AppArmor support is **opt-in** as it depends on the underlying Kubernetes node OS support.
-
-To enable `RuntimeDefault` AppArmor profiles on all OpenBao Pods:
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable AppArmor when the nodes support it"
+  code={`spec:
   workloadHardening:
-    appArmorEnabled: true
-```
+    appArmorEnabled: true`}
+>
+  AppArmor is opt-in because support depends on the underlying node OS and cluster runtime. Pair this with the broader workload baseline in <SiteLink docId="security/workload/workload-security">Pod and runtime security</SiteLink>.
+</CommandBlock>
 
-## Official OpenBao Documentation
-
-- [Seal Configuration Overview](https://openbao.org/docs/configuration/seal/)
-- [Static Seal Configuration](https://openbao.org/docs/configuration/seal/static/)
-- [AWS KMS Seal Configuration](https://openbao.org/docs/configuration/seal/awskms/)
-- [GCP KMS Seal Configuration](https://openbao.org/docs/configuration/seal/gcpckms/)
-- [Azure Key Vault Seal Configuration](https://openbao.org/docs/configuration/seal/azurekeyvault/)
-- [Transit Seal Configuration](https://openbao.org/docs/configuration/seal/transit/)
-- [Self-Initialization](https://openbao.org/docs/configuration/self-init/)
-
+<NextActions
+  title="Continue cluster baseline"
+  items={[
+    {
+      label: "Self-initialization",
+      description: "Configure the bootstrap requests and operator OIDC flow that follow from the profile choice.",
+      docId: "user-guide/openbaocluster/configuration/self-init",
+    },
+    {
+      label: "External access",
+      description: "Choose the TLS and exposure pattern that matches the baseline you just picked.",
+      docId: "user-guide/openbaocluster/configuration/external-access",
+    },
+    {
+      label: "Workload protections",
+      description: "Review the runtime and supply-chain controls expected behind the Hardened posture.",
+      docId: "security/workload/index",
+    },
+  ]}
+/>

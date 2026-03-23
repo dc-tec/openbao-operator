@@ -1,192 +1,223 @@
 ---
+title: Recover from No Leader
+description: Diagnose whether quorum loss comes from pod health, network isolation, stale peers, or a last-resort manual Raft recovery path.
 slug: /recover/no-leader
+hide_title: true
+pageType: runbook
+journey: operate
 ---
 
-# Recovering From No Leader / No Quorum
+<PageHero
+  variant="compact"
+  eyebrow="Operate / Incident recovery"
+  title="Repair quorum before you change Raft membership."
+  lede="A no-leader incident is not one thing. Sometimes the cluster cannot elect because pods are crash-looping or the cluster port is blocked. Sometimes a dead peer still counts toward quorum. Only when those narrower fixes are exhausted should you move into manual quorum recovery."
+  actions={[
+    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'primary'},
+    {label: 'Recover a sealed cluster', docId: 'user-guide/openbaocluster/recovery/sealed-cluster', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this runbook when"
+    items={[
+      'the cluster cannot elect or keep a leader',
+      'Raft commands time out or report no leader elected',
+      'pods are running but the cluster still cannot form quorum',
+      'you need to decide whether a stale peer, network break, or manual recovery path is required',
+    ]}
+  />
+</PageHero>
 
-This runbook applies when the OpenBao cluster cannot elect a leader due to network partitions, crash-looping pods, or loss of quorum (e.g., 2 out of 3 pods lost).
+<DecisionTable
+  title="Match the failure before you repair it"
+  columns={['Signal', 'Start with', 'Why']}
+  rows={[
+    {
+      cells: [
+        'Pods are crash-looping or never become ready.',
+        'Fix pod health, storage, or config first.',
+        'Quorum cannot recover while one or more members are not healthy enough to participate in Raft.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '`raft list-peers` hangs or returns transport errors.',
+        'Check network reachability and DNS on the cluster port.',
+        'A healthy Raft set still fails if members cannot talk to each other on the internal cluster address.',
+      ],
+    },
+    {
+      cells: [
+        'A failed or stale member still appears in the peer list.',
+        'Remove the dead peer from a healthy node.',
+        'The cluster may be counting a non-existent member toward quorum.',
+      ],
+    },
+    {
+      cells: [
+        'No node can form quorum and there is no healthy leader to remove peers from.',
+        'Use manual quorum recovery with `peers.json` as a last resort.',
+        'This is destructive and should be used only when automatic recovery is no longer possible.',
+      ],
+    },
+  ]}
+/>
 
-<Callout type="failure" title="Symptoms">
+<DiagramFrame
+  title="No-leader decision flow"
+  caption="Check pod health first, then verify the cluster network, then decide whether this is a stale-peer cleanup or a manual quorum-recovery event."
+  code={`flowchart TD
+    Start["No leader"] --> Pods{"Pods healthy?"}
+    Pods -- "No" --> FixPods["Repair crashes, PVCs, or config"]
+    Pods -- "Yes" --> Net{"Cluster port reachable?"}
+    Net -- "No" --> FixNet["Repair DNS, NetworkPolicy, or routing"]
+    Net -- "Yes" --> Peers{"Stale peer in raft list?"}
+    Peers -- "Yes" --> RemovePeer["Remove dead peer from healthy node"]
+    Peers -- "No" --> Quorum{"Any node can still form quorum?"}
+    Quorum -- "Yes" --> Inspect["Inspect logs and conditions again"]
+    Quorum -- "No" --> Manual["Manual quorum recovery with peers.json"]
 
-- `kubectl get openbaocluster` shows `Ready=False`.
-- Pod logs show `[WARN] raft: no known peers, aborting election`.
-- `bao status` returns `Sealed` or `Error checking seal status`.
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+
+    class Start,Pods,Net,Peers,Quorum read;
+    class FixPods,FixNet,Inspect process;
+    class RemovePeer,Manual write;`}
+/>
+
+## Inspect pod health and the Raft view
+
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Capture pod and peer state"
+  code={`kubectl get pods -n <namespace> -l openbao.org/cluster=<name> -o wide
+kubectl get openbaocluster <name> -n <namespace> \\
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\\n"}{end}'
+kubectl exec -n <namespace> -it <pod-name> -- bao operator raft list-peers`}
+>
+  Run the Raft peer command from each healthy Pod. Different peer views between nodes usually point to a transport or membership problem rather than a generic application issue.
+</CommandBlock>
+
+If Pods are `CrashLoopBackOff`, resolve the pod-level failure first. Quorum recovery does not help when the underlying member still cannot boot, mount storage, or load configuration.
+
+## Verify the cluster network path
+
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Check the Raft transport path"
+  code={`kubectl exec -n <namespace> -it <pod-a> -- nc -zv <pod-b>.<headless-service> 8201
+kubectl exec -n <namespace> -it <pod-a> -- nslookup <pod-b>.<headless-service>`}
+>
+  Use the actual cluster port if you changed it from the default. Failed DNS or blocked port `8201` is enough to make a healthy cluster look like a quorum failure.
+</CommandBlock>
+
+Check these first when the transport path is broken:
+
+- `NetworkPolicy` rules that should allow cluster-to-cluster traffic
+- service and headless-service DNS resolution
+- sidecar or mesh policies that may block direct Pod-to-Pod communication
+
+## Remove a stale peer when quorum is almost healthy
+
+Use this path only when one healthy node can still answer Raft commands and the peer list clearly shows a dead member that should no longer count toward quorum.
+
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Remove a dead peer from the Raft set"
+  code={`kubectl exec -n <namespace> -it <healthy-pod> -- \\
+  bao operator raft remove-peer -id "<dead-peer-id>"`}
+/>
+
+After removing the peer, re-run `bao operator raft list-peers` from the same node and watch the `OpenBaoCluster` conditions until a leader is present again.
+
+## Use manual quorum recovery only as a last resort
+
+<Callout type="danger" title="Manual quorum recovery can discard newer state">
+
+Creating `peers.json` forces one survivor to bootstrap a new one-node Raft cluster. If you pick a node that was behind, you can lose data that only existed on another member. Use this path only when normal quorum recovery is no longer possible.
 
 </Callout>
 
-## Troubleshooting Flow
+Before you start:
 
-```mermaid
-graph TD
-    Start(["Start"]) --> CheckPods{"Are Pods Running?"}
-    CheckPods -- No --> FixPods["Fix CrashLoop / PVCs"]
-    CheckPods -- Yes --> CheckNet{"Network OK?"}
-    
-    CheckNet -- No --> FixNet["Check DNS / NetPol"]
-    CheckNet -- Yes --> CheckRaft{"Raft State?"}
-    
-    CheckRaft -- "Stale Peer" --> RemovePeer["Prune Dead Peer"]
-    CheckRaft -- "Split Brain" --> ManualRec["Manual Recovery"]
-    CheckRaft -- "Unknown" --> Logs["Inspect Logs"]
+- stop the operator so it does not race your manual changes
+- choose the Pod with the most recent and trustworthy data
+- record which Pods you plan to restart and how you will rejoin them afterward
 
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Stop operator reconciliation before manual recovery"
+  code={`kubectl scale deploy <controller-deployment> -n <operator-namespace> --replicas=0`}
+/>
 
-    class Start read;
-    class CheckPods,CheckNet,CheckRaft process;
-    class FixPods,FixNet,Logs process;
-    class RemovePeer,ManualRec security;
-```
+<CommandBlock
+  language="json"
+  label="configure"
+  title="Create a one-node peers.json file"
+  code={`[
+  {
+    "id": "<survivor-pod-name>",
+    "address": "<survivor-pod-name>.<headless-service>:8201",
+    "non_voter": false
+  }
+]`}
+>
+  Save this file locally as `peers.json`, replacing the Pod name and address with the survivor you selected.
+</CommandBlock>
 
----
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Copy peers.json to the survivor and restart it"
+  code={`kubectl cp peers.json <namespace>/<survivor-pod-name>:/bao/data/raft/peers.json
+kubectl delete pod -n <namespace> <survivor-pod-name>`}
+/>
 
-## Phase 1: Diagnosis
+When the survivor returns:
 
-First, identify if the pods are healthy enough to communicate.
+1. verify it now reports a leader-capable state
+2. unseal it if required
+3. delete the remaining Pods so they rejoin against the new leader
+4. restart the operator deployment
 
-### 1. Check Pod Status
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Resume normal operations after manual recovery"
+  code={`kubectl exec -n <namespace> -it <survivor-pod-name> -- bao operator raft list-peers
+kubectl delete pod -n <namespace> <other-pod-1> <other-pod-2>
+kubectl scale deploy <controller-deployment> -n <operator-namespace> --replicas=1`}
+/>
 
-```sh
-kubectl -n security get pods -l openbao.org/cluster=prod-cluster -o wide
-```
+## Close out the incident deliberately
 
-If pods are `CrashLoopBackOff`, check logs for configuration or storage errors distinct from Raft issues.
+If the operator entered break glass during the failure, inspect the break-glass status and only acknowledge it after quorum, sealing, and workload health are all stable again.
 
-### 2. Inspect Raft Peers
+See <SiteLink docId="user-guide/openbaocluster/recovery/safe-mode">Enter Safe Mode</SiteLink> for the acknowledgment flow.
 
-Exec into **each** running pod and check its view of the cluster.
-
-```sh
-# Run this on pod-0, pod-1, and pod-2
-kubectl -n security exec -it prod-cluster-0 -- bao operator raft list-peers
-```
-
-**Healthy Output:**
-
-```text
-Node      Address              State       Voter
-----      -------              -----       -----
-cluster-0 10.2.1.5:8201       leader      true
-cluster-1 10.2.2.8:8201       follower    true
-cluster-2 10.2.3.12:8201      follower    true
-```
-
-**Unhealthy Output:**
-
-- `error: context deadline exceeded` (Network issue)
-- `no leader elected` (Quorum issue)
-
----
-
-## Phase 2: Network Verification
-
-If `raft list-peers` hangs, verify connectivity. Raft requires TCP port **8201** (or configured `cluster_port`) to be open between pods.
-
-```sh
-# Test connectivity from pod-0 to pod-1
-kubectl -n security exec -ti prod-cluster-0 -- nc -zv prod-cluster-1.prod-cluster-internal 8201
-```
-
-If this fails:
-
-1. Check **NetworkPolicies** (ensure `openbao-cluster-isolation` allows ingress on 8201).
-2. Check **DNS** resolution (`nslookup prod-cluster-1.prod-cluster-internal`).
-
----
-
-## Phase 3: Recovery Options
-
-Choose the scenario that matches your state.
-
-### Scenario A: Removing a Stale Peer
-
-If you replaced a node and the old IP allows ghosts to linger, the cluster might think it needs 4 votes instead of 3.
-
-**Symptoms:**
-
-- `raft list-peers` shows a node causing `(failed)` status.
-- You have a functioning leader, or a node that *could* be leader if the ghost was gone.
-
-**Action:**
-Run the `remove-peer` command from a healthy node, targeting the **ID** of the failed node.
-
-```sh
-kubectl -n security exec -ti prod-cluster-0 -- \
-  bao operator raft remove-peer -id "prod-cluster-lost-node"
-```
-
-### Scenario B: Manual Quorum Recovery (peers.json)
-
-<Callout type="danger" title="The Nuclear Option">
-
-Use this **only** if the cluster is completely down and cannot form a quorum automatically. This process manually forces a single pod to become a leader, potentially causing **data loss** if that pod was behind.
-
-</Callout>
-
-**Steps:**
-
-1. **Scale Down**: Stop the operator to prevent it from interfering.
-
-    ```sh
-    kubectl -n <operator-namespace> scale deploy <controller-deployment> --replicas=0
-    ```
-
-2. **Identify Survivor**: Choose the pod with the most up-to-date data (usually the one with the largest `raft/raft.db` file, or the last known leader).
-
-3. **Inject peers.json**: Create a `peers.json` file inside the survivor pod's data directory. This tells the pod: "You are the only member. Start a new cluster."
-
-    ```bash
-    # Content for peers.json (replace IP/Address/NodeID)
-    cat <<EOF > peers.json
-    [
-      {
-        "id": "prod-cluster-0",
-        "address": "prod-cluster-0.prod-cluster-internal:8201",
-        "non_voter": false
-      }
-    ]
-    EOF
-    
-    # Copy to pod
-    kubectl cp peers.json security/prod-cluster-0:/bao/data/raft/peers.json
-    ```
-
-4. **Restart Pod**: Delete the pod to force a restart. OpenBao will detect `peers.json` on boot and reset the Raft configuration.
-
-    ```sh
-    kubectl -n security delete pod prod-cluster-0
-    ```
-
-5. **Verify Leader**: Once running, check `bao status`. It should be sealed but have a leader. Unseal it.
-
-6. **Join Others**: Delete the *other* pods (`prod-cluster-1`, `prod-cluster-2`). When they restart, they should automatically join the new leader via the Operator's auto-join mechanism (or you can manually join them).
-
-7. **Resume Operator**:
-
-    ```sh
-    kubectl -n <operator-namespace> scale deploy <controller-deployment> --replicas=1
-    ```
-
-    For custom raw-manifest installs, use the rendered operator namespace and controller deployment name from your install manifests.
-
----
-
-## Post-Mortem
-
-After recovery, assume the Operator is in **Safe Mode** if it detected the failure.
-
-Check and acknowledge:
-
-```sh
-kubectl -n security get openbaocluster prod-cluster -o jsonpath='{.status.breakGlass}'
-```
-
-See [Break Glass / Safe Mode](safe-mode.md) for details.
-
-## Official OpenBao Documentation
-
-- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)
-- [Raft Autopilot Concepts](https://openbao.org/docs/concepts/integrated-storage/autopilot/)
-- [Recovery Mode Concepts](https://openbao.org/docs/concepts/recovery-mode/)
+<NextActions
+  title="Continue with the right recovery path"
+  items={[
+    {
+      label: 'Enter safe mode',
+      description: 'Inspect the break-glass nonce and resume automation only after the cluster is stable again.',
+      docId: 'user-guide/openbaocluster/recovery/safe-mode',
+    },
+    {
+      label: 'Recover a sealed cluster',
+      description: 'Switch to the seal-focused runbook when Pods are up but trust or unseal dependencies still block service.',
+      docId: 'user-guide/openbaocluster/recovery/sealed-cluster',
+    },
+    {
+      label: 'Run a restore',
+      description: 'Use the restore workflow if live-cluster repair is no longer the safest option.',
+      docId: 'user-guide/openbaorestore/restore',
+    },
+  ]}
+/>

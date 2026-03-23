@@ -1,30 +1,35 @@
 ---
-description: Step-by-step validated deployment recipes grouped by deployment environment.
+title: Deployment Recipe Catalog
+hide_title: true
+pageType: landing
+description: Catalog of validated deployment recipes, grouped by cloud and local environment.
 ---
 
-# Recipes
+<PageHero
+  variant="landing"
+  eyebrow="Validated Deployments / Recipe Catalog"
+  title="Use the recipe catalog when you already know the lane and just need the procedure."
+  lede="Recipes are the task-oriented half of a validated lane. They assume you either already know the topology or will keep the matching reference architecture close while you apply the manifests."
+  actions={[
+    {label: "Open cloud recipe catalog", docId: "user-guide/validated-deployments/recipes/cloud/index", variant: "primary"},
+    {label: "Open local recipe catalog", docId: "user-guide/validated-deployments/recipes/local/index", variant: "secondary"},
+  ]}
+/>
 
-These recipes are grounded in the project's manual validation environment. Use them when you want a complete, step-by-step deployment flow instead of a feature reference page.
-
-If you want the tested topology, invariants, and validation scope first, start with [Validated Architectures](../architectures/index.md).
-
-<div class="grid cards" markdown>
-
-- **Cloud**
-
-    ---
-
-    Cloud deployment flows, starting with the validated Amazon EKS development and hardened lanes.
-
-    [Open Category](cloud/index.md)
-
-- **Local**
-
-    ---
-
-    Local development and validation flows, including self-init, Hardened, and passthrough examples.
-
-    [Open Category](local/index.md)
-
-</div>
-
+<RouteList
+  title="Recipe catalogs"
+  items={[
+    {
+      eyebrow: "01",
+      title: "Cloud recipes",
+      description: "Deployment procedures for the validated EKS development and hardened lanes.",
+      docId: "user-guide/validated-deployments/recipes/cloud/index",
+    },
+    {
+      eyebrow: "02",
+      title: "Local recipes",
+      description: "Deployment procedures for the validated k3d development, hardened, and cross-cluster DR lanes.",
+      docId: "user-guide/validated-deployments/recipes/local/index",
+    },
+  ]}
+/>

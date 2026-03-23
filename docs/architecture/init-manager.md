@@ -1,157 +1,218 @@
-# InitManager (Cluster Initialization)
+---
+title: Init Manager
+hide_title: true
+pageType: concept
+journey: architecture
+description: Bootstrap a new cluster safely, handle self-init or operator init flows, and configure autopilot before scaling out.
+---
 
-<Callout type="abstract" title="Responsibility">
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Workload Manager"
+  title="Initialize one node first, then scale only after the cluster is safe to join."
+  lede="The init manager owns the first-boot contract for a new `OpenBaoCluster`. It keeps bootstrap on a single node, handles operator-driven or self-init flows, stores or suppresses root material appropriately, and configures Raft autopilot before the workload expands to full replica count."
+  actions={[
+    {label: 'Open self-init guide', docId: 'user-guide/openbaocluster/configuration/self-init', variant: 'primary'},
+    {label: 'Open day 1 lifecycle flow', docId: 'architecture/lifecycle/day1-creation', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand why the operator forces single-node bootstrap before scale-out',
+      'compare operator-driven init with self-init behavior',
+      'see where root-token handling and autopilot defaults fit into first boot',
+      'trace initialization state back to status surfaces instead of one-off startup logic',
+    ]}
+  />
+</PageHero>
 
-Automate the "Day 1" bootstrap of a new cluster.
+<ManagerAtAGlance
+  sections={[
+    {
+      label: 'Control path',
+      items: [
+        'workload reconciler',
+        'internal/controller/openbaocluster',
+        'internal/service/init',
+      ],
+    },
+    {
+      label: 'Owns',
+      items: [
+        'bootstrap detection and first init call behavior',
+        'root token handling or self-init completion detection',
+        'initial autopilot configuration immediately after cluster initialization',
+      ],
+    },
+    {
+      label: 'Writes',
+      items: [
+        'status.initialized and status.selfInitialized',
+        'root token Secret when self-init is disabled',
+        'autopilot configuration through the OpenBao API once initialization completes',
+      ],
+    },
+    {
+      label: 'Depends on',
+      items: [
+        'single-replica bootstrap from the infrastructure path',
+        'pod readiness and TLS Secret availability before init proceeds',
+        'self-init requests and auth bootstrap configuration when self-init is enabled',
+      ],
+    },
+  ]}
+/>
 
-</Callout>
+## Architectural Placement
 
-To avoid split-brain scenarios during initial formation, the Operator enforces a **Single-Pod Bootstrap** pattern.
+Initialization stays on the workload-side controller path while the cluster is not yet ready for normal steady-state reconciliation:
 
-## 1. Workflow
+1. `internal/controller/openbaocluster` keeps the cluster on the uninitialized path.
+2. The controller calls `internal/service/init` once the first pod and TLS prerequisites are ready.
+3. The init manager marks initialization state, configures autopilot, and only then allows the infrastructure path to scale to the requested replica count.
 
-The InitManager coordinates the first start of the cluster.
+That separation prevents first-boot logic from leaking into every steady-state reconcile.
 
-```mermaid
-sequenceDiagram
-    participant Op as Operator
-    participant SS as StatefulSet (Replicas=1)
-    participant Pod as Pod-0
+## Bootstrap Flow
+
+<DiagramFrame
+  title="Initialize, then scale"
+  caption="The infrastructure path holds the workload at one replica until the init manager confirms the cluster is initialized. Only then does the cluster expand to the requested replica count."
+  code={`sequenceDiagram
+    participant Ctrl as OpenBaoCluster controller
+    participant Infra as Infrastructure manager
+    participant Pod0 as Pod-0
+    participant Init as Init manager
     participant Bao as OpenBao API
-    participant Secret as Root Token Secret
+    participant Status as Cluster status
 
-    Note over Op, SS: Phase 1: Bootstrap
-    Op->>SS: Create having Replicas=1
-    Op->>Pod: Wait for Running state
-    
-    loop Health Check
-        Op->>Bao: GET /sys/health
-        Bao-->>Op: 501 Not Initialized
-    end
+    Ctrl->>Infra: Render StatefulSet at replicas=1
+    Infra->>Pod0: Start first pod
+    Pod0-->>Init: Pod ready + TLS available
+    Init->>Bao: Detect initialized or call /sys/init
+    Bao-->>Init: Init response or initialized health
+    Init->>Status: Set initialized / selfInitialized
+    Init->>Bao: Configure autopilot defaults
+    Status-->>Infra: Initialization confirmed
+    Infra->>Infra: Scale StatefulSet to spec.replicas
+  `}
+/>
 
-    Note over Op, Secret: Phase 2: Initialize
-    Op->>Bao: PUT /v1/sys/init
-    Bao-->>Op: Returns {root_token, unseal_keys_b64}
-    
-    Op->>Secret: Store Root Token
-    
-    Note over Op, SS: Phase 3: Scale
-    Op->>SS: Service now Initialized
-    Op->>SS: Scale to spec.replicas (e.g., 3)
-```
+## Initialization Phases
 
-## 2. Execution Phases
+<Tabs groupId="init-manager-phases">
+  <TabItem value="bootstrap" label="Bootstrap one node">
 
-<Tabs groupId="phase-1-bootstrap-phase-2-initialize-phase-3-scale-up">
+<Checklist
+  title="Bootstrap contract"
+  items={[
+    'A new cluster starts at one replica even when spec.replicas is greater than one.',
+    'The infrastructure manager keeps the StatefulSet capped until status.initialized becomes true.',
+    'This avoids race conditions where multiple uninitialized pods could compete to become the first Raft leader.',
+  ]}
+/>
 
-<TabItem value="phase-1-bootstrap" label="Phase 1: Bootstrap">
+  </TabItem>
+  <TabItem value="initialize" label="Initialize safely">
 
-**Goal:** Start a single, stable node.
+<Checklist
+  title="Initialization contract"
+  items={[
+    'The manager first checks for an already initialized cluster and skips the init call when status or health proves bootstrap already happened.',
+    'When self-init is disabled, it performs the init call, captures the root material once, and stores the root token in a Secret without logging the response.',
+    'When self-init is enabled, it treats pod readiness and initialization signals as the completion boundary and does not create a root-token Secret.',
+  ]}
+/>
 
-Regardless of `spec.replicas`, a new cluster **always starts with 1 replica**.
+  </TabItem>
+  <TabItem value="scale" label="Scale after success">
 
--   **Why?** Raft requires a stable leader to form a cluster. Starting 3 uninitialized nodes simultaneously can lead to race conditions on who becomes the first leader.
--   **Mechanism:** The InfrastructureManager caps `replicas: 1` as long as `status.initialized` is `false`.
+<Checklist
+  title="Scale-out contract"
+  items={[
+    'The manager sets status.initialized after the cluster is known-good and, when relevant, also sets status.selfInitialized.',
+    'Autopilot defaults are configured immediately after initialization so day-2 health policy exists before the cluster grows.',
+    'Only after that handoff does the workload path expand the StatefulSet and let additional pods join through retry_join.',
+  ]}
+/>
 
-</TabItem>
-
-<TabItem value="phase-2-initialize" label="Phase 2: Initialize">
-
-**Goal:** Bootstrap the Raft cluster and generate root material.
-
-Once `pod-0` is running, the InitManager takes over:
-
-1.  **Detection:** Checks internal status. If it finds `openbao-initialized=true` label or receives `200 OK` from `/sys/health`, it treats the cluster as already initialized and skips the init call.
-2.  **Execution:** If uninitialized, it calls `PUT /v1/sys/init`.
-3.  **Security:**
-    -   The root token is stored immediately in a Secret (`<cluster>-root-token`) and is never written to logs.
-    -   The auto-unseal key is handled separately by the InfrastructureManager (for `spec.unseal.type=static`).
-    -   !!! warning "Security"
-        The initialization response is held in memory only for the duration of the request and is **NEVER logged**.
-
-</TabItem>
-
-<TabItem value="phase-3-scale-up" label="Phase 3: Scale Up">
-
-**Goal:** Expand to High Availability.
-
-Once initialization is confirmed (and the root token is safely stored):
-
-1.  The Operator sets `status.initialized = true`.
-    When self-init is enabled, it also sets `status.selfInitialized = true` and no root token Secret exists (the root token was auto-revoked).
-2.  The InfrastructureManager observes this and updates the StatefulSet to the full `spec.replicas`.
-3.  New pods join the existing leader (Pod-0) via the `retry_join` configuration.
-
-</TabItem>
-
+  </TabItem>
 </Tabs>
 
----
+## Autopilot Defaults
 
-## 3. Reconciliation Semantics
+<DecisionTable
+  kind="reference"
+  title="Autopilot configuration defaults"
+  columns={['Setting', 'Default behavior', 'Why the init manager sets it early']}
+  rows={[
+    {
+      cells: ['cleanup_dead_servers', 'Enabled by default, but forced off when minQuorum < 3 and the user did not explicitly override it.', 'The rendered policy must remain valid for small clusters before steady-state operations begin.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['dead_server_last_contact_threshold', '5m', 'Dead-peer cleanup should wait long enough to avoid reacting to short network turbulence.'],
+    },
+    {
+      cells: ['last_contact_threshold', '10s', 'Autopilot needs a consistent heartbeat tolerance before higher replica counts join.'],
+    },
+    {
+      cells: ['server_stabilization_time', '10s', 'New members should remain stable briefly before being treated as healthy participants.'],
+    },
+    {
+      cells: ['max_trailing_logs', '1000', 'Replication lag needs a default budget before dead-server or readiness logic starts treating peers as unhealthy.'],
+    },
+    {
+      cells: ['min_quorum', 'Hardened profile defaults to 3, or replicas when replicas > 3; other profiles use max(1, replicas).', 'The cleanup policy and quorum safety model must be aligned from the first initialized reconcile.'],
+    },
+  ]}
+/>
 
-- **One-Time Operation:** The InitManager is designed to be **idempotent** but typically runs only once in the cluster's lifecycle.
-- **Failure Handling:** If `sys/init` fails (network, timeout), the operator retries. The cluster remains at `replicas: 1` until success.
-- **Already Initialized Clusters:** If the operator detects the cluster is already initialized, it skips the init call and proceeds with the initialized-cluster path. This is recovery behavior for operator-managed clusters. It is not a generic import workflow for arbitrary unmanaged OpenBao clusters.
+<Callout type="warning" title="Already initialized is recovery, not import">
 
----
-
-## 4. Autopilot Configuration
-
-After successful initialization, the InitManager configures **Raft Autopilot** for automatic dead server cleanup and quorum safety defaults.
-
-<Callout type="note" title="Default Behavior">
-
-Autopilot configuration is reconciled for every initialized cluster. Dead server cleanup defaults to `true`, but the operator forces it to `false` for small clusters when `min_quorum < 3` and the user did not explicitly override `cleanupDeadServers`. This keeps the rendered configuration valid for OpenBao.
-
-</Callout>
-
-### Default Configuration
-
-| Setting | Default Value | Description |
-| :--- | :--- | :--- |
-| `cleanup_dead_servers` | `true` by default; forced to `false` when `min_quorum < 3` and the user did not explicitly override it | Enable automatic removal of failed peers only when OpenBao accepts the configuration |
-| `dead_server_last_contact_threshold` | `5m` | Time before a server is considered dead |
-| `last_contact_threshold` | `10s` | Maximum acceptable heartbeat delay before a peer is considered unhealthy |
-| `server_stabilization_time` | `10s` | Required stabilization period before a server is considered stable |
-| `max_trailing_logs` | `1000` | Maximum replication lag before Autopilot considers a server unhealthy |
-| `min_quorum` | `Hardened`: `3`, or `replicas` when `replicas > 3`; other profiles: `max(1, replicas)` | Minimum cluster size required before dead-server cleanup can proceed |
-
-### Customization
-
-Override defaults via `spec.configuration.raft.autopilot`:
-
-```yaml
-spec:
-  configuration:
-    raft:
-      autopilot:
-        cleanupDeadServers: true
-        deadServerLastContactThreshold: "5m"
-        minQuorum: 3
-```
-
-<Callout type="warning" title="Cleanup Requires `minQuorum >= 3`">
-
-OpenBao requires `cleanupDeadServers=true` to be paired with `minQuorum >= 3`. If you intentionally set a lower `minQuorum`, also set `cleanupDeadServers: false`.
+If the manager detects that a cluster is already initialized, it takes the initialized-cluster path as recovery for an operator-managed cluster. It is not a generic import path for arbitrary unmanaged OpenBao clusters.
 
 </Callout>
 
-### Disabling Autopilot Cleanup
+<DecisionTable
+  kind="reference"
+  title="Safety boundaries"
+  columns={['Concern', 'Manager behavior']}
+  rows={[
+    {
+      cells: ['Split-brain at bootstrap', 'Single-pod bootstrap stays in force until initialization is confirmed, so the first Raft leader forms in a controlled way.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Root material handling', 'The init response is used in-memory only for the current request and is not logged; self-init intentionally avoids creating a root-token Secret.'],
+    },
+    {
+      cells: ['TLS readiness', 'Initialization waits for the TLS server Secret when TLS is managed by the operator so the API path is not used before the workload is ready.'],
+    },
+    {
+      cells: ['Invalid autopilot cleanup', 'The manager forces cleanupDeadServers off for small-cluster configurations that OpenBao would reject.'],
+    },
+  ]}
+/>
 
-To disable automatic dead server cleanup:
-
-```yaml
-spec:
-  configuration:
-    raft:
-      autopilot:
-        cleanupDeadServers: false
-```
-
-<Callout type="warning" title="Manual Cleanup Required">
-
-When disabled, you must manually remove dead Raft peers via `bao operator raft remove-peer`.
-
-</Callout>
-
+<NextActions
+  title="Related deep dives"
+  items={[
+    {
+      label: 'Infrastructure manager',
+      description: 'See how the workload path holds the StatefulSet at one replica and then scales out after init succeeds.',
+      docId: 'architecture/infra-manager',
+    },
+    {
+      label: 'Self-init guide',
+      description: 'Compare the internal self-init behavior with the user-facing bootstrap requests and auth setup.',
+      docId: 'user-guide/openbaocluster/configuration/self-init',
+    },
+    {
+      label: 'Day 1 lifecycle flow',
+      description: 'Follow where initialization fits in the broader cluster-creation sequence.',
+      docId: 'architecture/lifecycle/day1-creation',
+    },
+  ]}
+/>

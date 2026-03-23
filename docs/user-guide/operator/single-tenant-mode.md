@@ -1,305 +1,244 @@
 ---
+title: Single-Tenant Mode
+description: Use the controller-only install path when one team owns one namespace and does not need the default tenant-onboarding model.
 slug: /get-started/single-tenant-mode
+hide_title: true
+pageType: task
+journey: get-started
 ---
 
-# Single-Tenant Mode
-<!-- id: single-tenant-mode -->
+<PageHero
+  eyebrow="Supporting decision"
+  title="Use single-tenant mode when one team owns one namespace."
+  lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. It is a good fit for dedicated team environments, but it is a branch from the default platform path rather than the starting point for every install."
+  actions={[
+    {label: 'Return to the decision guide', docId: 'user-guide/operator/deployment-decision-guide', variant: 'primary'},
+    {label: 'Install the operator', docId: 'user-guide/operator/installation', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'run one operator for one team-owned namespace',
+      'remove tenant onboarding and provisioner-driven namespace orchestration',
+      'keep direct controller access scoped to a single target namespace',
+      'verify how Helm or raw manifests render the target namespace and controller identity',
+    ]}
+  />
+</PageHero>
 
-Single-tenant mode deploys only the Controller component, optimized for individual teams managing their own OpenBao cluster without multi-namespace orchestration.
+<DecisionTable
+  title="Stay on multi-tenant unless this is true"
+  columns={['Question', 'Multi-tenant default', 'Choose single-tenant when', 'Go deeper']}
+  rows={[
+    {
+      cells: [
+        'Namespace ownership',
+        'Platform teams or shared operators manage multiple target namespaces.',
+        'One team directly owns one namespace and does not need the `OpenBaoTenant` onboarding flow.',
+        'Tenant onboarding and RBAC',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Control-plane shape',
+        'Controller plus Provisioner',
+        'Controller only is the right operational model for this environment.',
+        'Architecture overview',
+      ],
+    },
+    {
+      cells: [
+        'Operational tradeoff',
+        'More default platform structure in exchange for clearer shared-operator boundaries.',
+        'A simpler dedicated setup matters more than cross-namespace platform workflows.',
+        'Deployment decision guide',
+      ],
+    },
+  ]}
+/>
 
-## Overview
-
-<div class="grid cards" markdown>
-
-- **Target Audience**
-
-    ---
-
-    Individual teams deploying OpenBao for their application.
-
-- **Performance**
-
-    ---
-
-    Event-driven reconciliation with namespace-scoped caching.
-
-- **Simplicity**
-
-    ---
-
-    Controller only—no Provisioner or OpenBaoTenant required.
-
-</div>
-
-## Architecture
-
-In single-tenant mode, the Controller directly manages resources in a single namespace using efficient event-driven watches.
-
-```mermaid
-graph LR
-    subgraph OperatorNS["<operator-namespace>"]
-        Controller["Controller"]
+<DiagramFrame
+  title="Single-tenant control path"
+  caption="The controller watches one target namespace directly. There is no Provisioner and no tenant onboarding layer in front of the cluster resources."
+  code={`graph LR
+    subgraph OperatorNS["Operator namespace"]
+      Controller["Controller"]
     end
-    
-    subgraph TargetNS["Target Namespace"]
-        Cluster["OpenBaoCluster"]
-        STS["StatefulSet"]
-        SVC["Services"]
+
+    subgraph TargetNS["Target namespace"]
+      Cluster["OpenBaoCluster"]
+      STS["StatefulSet"]
+      SVC["Services"]
+      Secret["Workload-facing Secrets"]
     end
 
-    Controller -->|Owns| Cluster
-    Cluster -.->|Creates| STS
-    Cluster -.->|Creates| SVC
-    
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    
-    class Controller write;
-    class Cluster,STS,SVC read;
-```
+    Controller --> Cluster
+    Cluster --> STS
+    Cluster --> SVC
+    Cluster --> Secret
 
-## Comparison
+    classDef control fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef data fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
-| Feature | Multi-Tenant (Default) | Single-Tenant |
-| :--- | :--- | :--- |
-| **Components** | Controller + Provisioner | Controller only |
-| **RBAC Model** | Per-namespace via OpenBaoTenant | Direct RoleBinding |
-| **Reconciliation** | Polling (cluster-wide) | Event-driven (cached) |
-| **Use Case** | Platform teams, shared infrastructure | Individual teams, dedicated clusters |
+    class Controller control;
+    class Cluster,STS,SVC,Secret data;`}
+/>
 
-## Installation
+## Install the single-tenant branch
 
-<Tabs groupId="helm-recommended-yaml-manifests">
+<Tabs groupId="single-tenant-install-path">
 
-<TabItem value="helm-recommended" label="Helm (Recommended)">
+<TabItem value="helm" label="Helm">
 
-Deploy with tenancy mode set to `single`:
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Install the operator in single-tenant mode with Helm"
+  code={`helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  --namespace openbao-operator-system \\
+  --create-namespace \\
+  --set tenancy.mode=single \\
+  --set tenancy.targetNamespace=openbao`}
+>
+  Replace `openbao-operator-system` and `openbao` with the namespaces you actually intend to keep operating. In this mode the target namespace is the controller watch scope, not just an example value.
+</CommandBlock>
 
-<Callout type="note" title="Rendered operator namespace">
-
-The examples below use the default release namespace `openbao-operator-system`. Replace it if you install the operator into another namespace.
-
-</Callout>
-
-```bash
-helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --namespace openbao-operator-system \
-  --create-namespace \
-  --set tenancy.mode=single \
-  --set tenancy.targetNamespace=openbao  # (1)!
-```
-
-1. The namespace where you will deploy your OpenBaoCluster. Defaults to the release namespace if not specified.
-
-### Configuration Options
-
-| Parameter | Description | Default |
-| :--- | :--- | :--- |
-| `tenancy.mode` | Set to `single` for single-tenant mode | `multi` |
-| `tenancy.targetNamespace` | Target namespace for the controller | `""` (release namespace) |
-| `controller.replicas` | Controller replica count | `1` |
-| `controller.resources` | Resource requests/limits | See values.yaml |
-| `admissionPolicies.enabled` | Enable ValidatingAdmissionPolicies | `true` |
-
-<Callout type="note" title="Provisioner Excluded">
-
-In single-tenant mode, the Provisioner deployment, its ServiceAccounts, and related RBAC are automatically excluded.
-
-</Callout>
-
-<Callout type="tip" title="Custom Helm Identity">
-
-If you want a custom operator identity with Helm, use a custom release name or `fullnameOverride`. That changes the rendered controller `ServiceAccount`, the single-tenant `RoleBinding` subject, and the admission-policy identity references together.
-
-</Callout>
+<DecisionTable
+  kind="reference"
+  title="Helm settings to care about"
+  columns={['Setting', 'What it controls', 'Default or note']}
+  rows={[
+    {
+      cells: ['`tenancy.mode`', 'Switches the operator to the controller-only path', '`single` for this branch'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['`tenancy.targetNamespace`', 'Sets the watched namespace and target RoleBinding scope', 'Defaults to the release namespace when unset'],
+    },
+    {
+      cells: ['`fullnameOverride` or release name', 'Changes the rendered controller identity', 'Recheck JWT auth and RoleBinding subjects after custom naming'],
+    },
+    {
+      cells: ['`admissionPolicies.enabled`', 'Controls ValidatingAdmissionPolicies for the install', 'Keep enabled unless your platform does not support them'],
+    },
+  ]}
+/>
 
 </TabItem>
 
-<TabItem value="yaml-manifests" label="YAML Manifests">
+<TabItem value="manifests" label="Raw manifests">
 
-For manual deployment without Helm:
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Apply the single-tenant overlay"
+  code={`kubectl apply -k config/overlays/single-tenant`}
+>
+  Use `config/overlays/single-tenant-custom-identity` instead when you need both the single-tenant branch and a custom operator identity.
+</CommandBlock>
 
-**1. Apply the single-tenant overlay**
-
-```bash
-kubectl apply -k config/overlays/single-tenant
-```
-
-The overlay:
-
-- installs the default controller stack
-- removes the Provisioner deployment and its RBAC
-- adds the single-tenant ClusterRole and target namespace RoleBinding
-- sets `WATCH_NAMESPACE` on the controller Deployment
-- creates the operator namespace from `config/overlays/single-tenant/kustomization.yaml`
-
-**2. Customize the operator namespace (optional)**
-
-To change the operator namespace, edit the `namespace` field in `config/overlays/single-tenant/kustomization.yaml`.
-
-<Callout type="note" title="Single-Tenant With Custom Identity">
-
-If you also need a custom operator identity, such as an extra `namePrefix`, use `config/overlays/single-tenant-custom-identity` instead of extending `config/overlays/single-tenant` manually.
-
-</Callout>
-
-**3. Customize the target namespace (optional)**
-
-By default the overlay targets the `openbao` namespace. To change it, edit `config/overlays/single-tenant/target_namespace_config.yaml` before applying:
-
-```yaml
-apiVersion: v1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Set the target namespace before you apply the overlay"
+  code={`apiVersion: v1
 kind: ConfigMap
 metadata:
   name: single-tenant-settings
   annotations:
     config.kubernetes.io/local-config: "true"
 data:
-  WATCH_NAMESPACE: my-openbao
-```
+  WATCH_NAMESPACE: my-openbao`}
+>
+  The target namespace must match both the controller `WATCH_NAMESPACE` value and the generated RoleBinding namespace.
+</CommandBlock>
 
-The overlay wires this value into both the target namespace `RoleBinding` and the controller `WATCH_NAMESPACE` environment variable.
-
-Before you apply the overlay, render it once:
-
-```bash
-kubectl kustomize config/overlays/single-tenant
-```
-
-Confirm that:
-
-1. the controller `ServiceAccount` subject points at the rendered operator namespace
-2. the single-tenant `RoleBinding` namespace matches the target namespace
-3. `WATCH_NAMESPACE` on the controller matches the same target namespace
-
-If you also need a custom operator identity, render `config/overlays/single-tenant-custom-identity` and confirm the controller admission-policy variables reference the same rendered `ServiceAccount` name and operator namespace.
-
-<Callout type="note" title="Target Namespace Creation">
-
-The single-tenant overlay does not create the target namespace. Create it before applying the overlay:
-
-```bash
-kubectl create namespace my-openbao
-```
-
-</Callout>
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Render the overlay once before you apply it"
+  code={`kubectl kustomize config/overlays/single-tenant`}
+>
+  Confirm that the controller ServiceAccount subject, RoleBinding namespace, and `WATCH_NAMESPACE` value all point at the same intended target.
+</CommandBlock>
 
 </TabItem>
 
 </Tabs>
 
-## Verify Installation
+<Callout type="note" title="What changes in this branch">
 
-```bash
-kubectl get pods -n <operator-namespace>
-```
-
-Expected output (single-tenant mode):
-
-```
-NAME                                              READY   STATUS    RESTARTS   AGE
-<controller-pod>      1/1     Running   0          1m
-```
-
-<Callout type="success" title="Ready">
-
-Only the Controller is running. No Provisioner pod should be present.
+Single-tenant mode removes the Provisioner, skips `OpenBaoTenant`, and gives the controller direct namespace-scoped access instead.
+That is simpler for a dedicated team, but it also means the operator is no longer modeling the default shared-platform boundary for you.
 
 </Callout>
 
-## Environment Variables
+## Verify the install before you create a cluster
 
-| Variable | Description |
-| :--- | :--- |
-| `WATCH_NAMESPACE` | Target namespace for the controller cache. The manual single-tenant overlay sets this automatically from `config/overlays/single-tenant/target_namespace_config.yaml`. Helm sets it automatically when `tenancy.mode=single`. |
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Check that only the controller is running"
+  code={`kubectl get pods -n <operator-namespace>`}
+>
+  In single-tenant mode you should see the controller deployment running, but not a Provisioner pod.
+</CommandBlock>
 
-## Migration
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Confirm the watched namespace matches the intended target"
+  code={`kubectl get deploy -n <operator-namespace> openbao-operator-controller \\
+  -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="WATCH_NAMESPACE")].value}'`}
+>
+  This value should match the target namespace you plan to use for the first `OpenBaoCluster`.
+</CommandBlock>
 
-<Tabs groupId="multi-tenant-single-tenant-single-tenant-multi-tenant">
+## Migration guidance
 
-<TabItem value="multi-tenant-single-tenant" label="Multi-Tenant → Single-Tenant">
+<DecisionTable
+  title="When to migrate between tenancy modes"
+  columns={['Move', 'Use it when', 'Main work before or after', 'Watch for']}
+  rows={[
+    {
+      cells: [
+        'Multi-tenant to single-tenant',
+        'A dedicated team is taking full ownership of one namespace and no longer needs tenant onboarding.',
+        'Re-render the operator, remove `OpenBaoTenant` usage, and verify the direct RoleBinding scope.',
+        'Direct namespace permissions replace the previous tenant boundary.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Single-tenant to multi-tenant',
+        'You need shared platform ownership or want to return to the default onboarding model.',
+        'Re-enable the Provisioner and model namespace access through `OpenBaoTenant` resources.',
+        'Manual single-tenant RoleBindings must not linger after the switch.',
+      ],
+    },
+  ]}
+/>
 
-1. **Backup OpenBaoCluster manifests**
-
-    ```bash
-    kubectl get openbaocluster -A -o yaml > clusters-backup.yaml
-    ```
-
-2. **Upgrade Helm release**
-
-    ```bash
-    helm upgrade openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-      --namespace openbao-operator-system \
-      --set tenancy.mode=single \
-      --set tenancy.targetNamespace=openbao
-    ```
-
-3. **Cleanup OpenBaoTenants**
-
-    ```bash
-    kubectl delete openbaotenants --all
-    ```
-
-<Callout type="warning" title="RBAC Changes">
-
-After migration, the Controller operates with direct namespace access instead of per-tenant RBAC.
-
-</Callout>
-
-</TabItem>
-
-<TabItem value="single-tenant-multi-tenant" label="Single-Tenant → Multi-Tenant">
-
-1. **Upgrade Helm release**
-
-    ```bash
-    helm upgrade openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-      --namespace openbao-operator-system \
-      --set tenancy.mode=multi
-    ```
-
-2. **Create OpenBaoTenants**
-
-    Onboard namespaces using `OpenBaoTenant` resources:
-
-    ```yaml
-    apiVersion: openbao.org/v1alpha1
-    kind: OpenBaoTenant
-    metadata:
-      name: openbao-tenant
-      namespace: <operator-namespace>
-    spec:
-      targetNamespace: openbao
-    ```
-
-3. **Cleanup manual RoleBindings**
-
-    ```bash
-    kubectl delete rolebinding <rendered-single-tenant-rolebinding> -n openbao
-    ```
-
-</TabItem>
-
-</Tabs>
-
-## Next Steps
-
-<div class="grid cards" markdown>
-
-- **Deploy a Cluster**
-
-    ---
-
-    Create your OpenBaoCluster in the target namespace.
-
-    [Getting Started](../openbaocluster/getting-started.md)
-
-- **Configuration**
-
-    ---
-
-    Configure TLS, storage, and security profiles.
-
-    [Configuration](../openbaocluster/configuration/server.md)
-
-</div>
+<NextActions
+  title="Return to the main path"
+  items={[
+    {
+      label: 'Install the operator',
+      description: 'Go back to the install guide once the tenancy branch and rendered namespaces are clear.',
+      docId: 'user-guide/operator/installation',
+    },
+    {
+      label: 'Create your first cluster',
+      description: 'Move into the first cluster guide after the controller watch scope and target namespace are verified.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Review operator identity and access',
+      description: 'Double-check auth and RoleBinding surfaces when you are also customizing names or namespaces.',
+      docId: 'user-guide/operator/identity-and-access',
+    },
+  ]}
+/>

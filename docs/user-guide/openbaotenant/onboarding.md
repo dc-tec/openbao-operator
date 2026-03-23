@@ -1,104 +1,232 @@
-# Tenant Onboarding & Governance
+---
+title: Onboard the Target Namespace
+description: Introduce the target namespace through OpenBaoTenant before you create the first cluster in the default multi-tenant path.
+slug: /get-started/onboard-target-namespace
+hide_title: true
+pageType: task
+journey: get-started
+journeyStep: 3
+---
 
-Before creating an `OpenBaoCluster`, the target namespace must be provisioned with the necessary RBAC. The operator supports two governance models: **Self-Service** (decentralized) and **Centralized Admin** (strict control).
+<PageHero
+  eyebrow="Step 3"
+  title="Introduce the target namespace before you create the first cluster."
+  lede="In the default multi-tenant model, the operator does not discover namespaces implicitly. You onboard a namespace with `OpenBaoTenant`, which gives the control plane the RBAC and tenant guardrails it needs before the first cluster lands there."
+  actions={[
+    {label: 'Create your first cluster', docId: 'user-guide/openbaocluster/getting-started', variant: 'primary'},
+    {label: 'Review tenancy & governance', docId: 'user-guide/openbaotenant/overview', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this step when"
+    items={[
+      'you stayed on the default multi-tenant operator path',
+      'the operator install is already healthy in its rendered namespace',
+      'the target namespace already exists and has an owner',
+      'you know whether onboarding is self-service or centrally managed',
+    ]}
+  />
+</PageHero>
 
-<Tabs groupId="self-service-recommended-centralized-admin">
+<Callout type="note" title="Skip this in single-tenant mode">
 
-<TabItem value="self-service-recommended" label="Self-Service (Recommended)">
+If you intentionally chose [Single-Tenant Mode](../operator/single-tenant-mode.md), the controller watches one namespace directly and you do not use `OpenBaoTenant` for the first cluster path.
 
-In this model, namespace owners can onboard themselves without cluster-admin intervention. This relies on the `Confused Deputy` prevention logic: users can only provision the namespace they already have access to.
+</Callout>
 
-### Prerequisites
+<JourneyRail
+  title="The first five moves"
+  current={3}
+  items={[
+    {
+      label: 'Choose a deployment model',
+      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      docId: 'user-guide/operator/deployment-decision-guide',
+    },
+    {
+      label: 'Install the operator',
+      description: 'Render the right namespace, identity, and admission posture.',
+      docId: 'user-guide/operator/installation',
+    },
+    {
+      label: 'Onboard the target namespace',
+      description: 'Use OpenBaoTenant to introduce the namespace and let the operator create its default governance boundary.',
+      docId: 'user-guide/openbaotenant/onboarding',
+    },
+    {
+      label: 'Create your first cluster',
+      description: 'Start with the closest cluster baseline and verify the important readiness signals.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Prepare for day 2',
+      description: 'Move immediately into backups, access, upgrades, and production hardening.',
+      docId: 'user-guide/openbaocluster/next-steps',
+    },
+  ]}
+/>
 
-Ensure the `openbaotenant-editor-role` is bound to your user (this is aggregated to the standard `admin` and `edit` ClusterRoles by default).
+<DecisionTable
+  title="Choose the onboarding model"
+  columns={['Model', 'Who creates OpenBaoTenant', 'Use it when', 'Watch for']}
+  rows={[
+    {
+      cells: [
+        'Self-service',
+        'The namespace owner creates the `OpenBaoTenant` in the same target namespace.',
+        'Teams already control their own namespaces and you want the default low-friction onboarding path.',
+        '`metadata.namespace` and `spec.targetNamespace` must match.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Centrally managed',
+        'A platform admin creates the `OpenBaoTenant` from the operator namespace.',
+        'You want a stricter approval path or need custom quota and limit-range values for a namespace.',
+        'Use the rendered operator namespace, not a guessed default.',
+      ],
+    },
+  ]}
+/>
 
-### Self-Service Onboarding
+<DiagramFrame
+  title="What onboarding introduces"
+  caption="OpenBaoTenant is the explicit namespace introduction point. The Provisioner reacts to that request and installs the namespace-scoped RBAC and default guardrails the operator depends on in the multi-tenant model."
+  code={`graph LR
+    Request["OpenBaoTenant"] --> Provisioner["Provisioner controller"]
+    Provisioner --> RBAC["Namespace Role and RoleBinding"]
+    Provisioner --> Quota["ResourceQuota and LimitRange"]
+    Provisioner --> Labels["Tenant guardrail labels"]
+    RBAC --> Cluster["OpenBaoCluster can now be managed in the namespace"]
 
-1. Create an `OpenBaoTenant` resource **in your own namespace**, targeting **that same namespace**:
+    classDef request fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef control fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef data fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
-    ```yaml
-    apiVersion: openbao.org/v1alpha1
-    kind: OpenBaoTenant
-    metadata:
-      name: my-tenant-onboarding
-      namespace: team-a-prod  # (1)!
-    spec:
-      targetNamespace: team-a-prod # (2)!
-    ```
+    class Request request;
+    class Provisioner control;
+    class RBAC,Quota,Labels,Cluster data;`}
+/>
 
-    1.  Your namespace.
-    2.  MUST match metadata.namespace.
+## Apply the onboarding request
 
-Self-service onboarding may not set `spec.quota` or `spec.limitRange`. The operator-owned tenant guardrails use the default values unless a cluster administrator creates the `OpenBaoTenant` from the operator namespace.
+<Tabs groupId="tenant-onboarding-model">
 
-2. Apply the resource:
+<TabItem value="self-service" label="Self-service">
 
-    ```sh
-    kubectl apply -f my-tenant.yaml
-    ```
-
-3. The Provisioner controller will detect this valid request and create the necessary `Role` and `RoleBinding` in `team-a-prod` to allow the operator to manage resources.
-
-### Security Note
-
-If you attempt to target a different namespace (e.g., `targetNamespace: kube-system`), the controller will **block** the request and update the status with a `SecurityViolation` error.
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Create OpenBaoTenant in the target namespace"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoTenant
+metadata:
+  name: team-a-onboarding
+  namespace: team-a-prod
+spec:
+  targetNamespace: team-a-prod`}
+>
+  In the self-service path, `metadata.namespace` and `spec.targetNamespace` must match. Self-service onboarding uses the default tenant guardrails and does not allow custom `quota` or `limitRange` values.
+</CommandBlock>
 
 </TabItem>
 
-<TabItem value="centralized-admin" label="Centralized Admin">
+<TabItem value="centralized" label="Centrally managed">
 
-In this model, cluster administrators explicitly declare which namespaces are valid tenants. This is useful for strict environments where users should not self-provision.
-
-### Centralized Admin Onboarding
-
-1. As a cluster administrator, create an `OpenBaoTenant` resource in the **operator's namespace**:
-
-    ```yaml
-    apiVersion: openbao.org/v1alpha1
-    kind: OpenBaoTenant
-    metadata:
-      name: team-b-authorization
-      namespace: <operator-namespace> # (1)!
-    spec:
-      targetNamespace: team-b-prod      # (2)!
-    ```
-
-    1.  Rendered operator namespace. Default raw-manifest and Helm installs use `openbao-operator-system`.
-    2.  Can be any namespace.
-
-2. Since the request originates from the trusted operator namespace, the controller allows cross-namespace provisioning.
-
-This is also the supported path for custom tenant guardrails. Cluster administrators may set `spec.quota` and `spec.limitRange` when they need tighter or larger defaults for a specific namespace.
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Create OpenBaoTenant from the operator namespace"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoTenant
+metadata:
+  name: team-b-authorization
+  namespace: openbao-operator-system
+spec:
+  targetNamespace: team-b-prod
+  # Optional centrally managed guardrails:
+  # quota:
+  # limitRange:`}
+>
+  Use the rendered operator namespace from your install, not a hard-coded assumption, when platform admins create onboarding requests on behalf of teams.
+</CommandBlock>
 
 </TabItem>
 
 </Tabs>
 
-## 3. Verifying Provisioning
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Apply the onboarding request"
+  code={`kubectl apply -f tenant-onboarding.yaml`}
+/>
 
-Check the `OpenBaoTenant` status:
+<Callout type="warning" title="Cross-namespace self-service is blocked">
 
-```sh
-kubectl -n team-a-prod get openbaotenant my-tenant-onboarding -o yaml
-```
-
-Look for:
-
-* `status.provisioned: true`: RBAC successfully applied.
-* `status.lastError`: detailed error message if provisioning failed.
-* **Conditions**:
-  * `Type: Provisioned`, `Status: False`, `Reason: SecurityViolation`: You attempted an unauthorized cross-namespace provisioning.
-
-## 4. How It Works (Security Model)
-
-The operator uses a **Trust-But-Verify** approach:
-
-1. **Trust**: The operator's rendered namespace is trusted. Resources created there can target *any* namespace.
-2. **Verify**: Resources created in user namespaces are verified. They must target their own namespace (`metadata.namespace == spec.targetNamespace`).
-3. **Isolation**: The Provisioner uses a delegated ServiceAccount with minimal permissions. It cannot list all namespaces in the cluster; it only acts on namespaces explicitly discovered via valid `OpenBaoTenant` CRs.
-
-<Callout type="note" title="API Contract">
-
-`spec.targetNamespace` is immutable after creation. To change the target namespace, delete and recreate the `OpenBaoTenant`.
+If a namespace owner creates `OpenBaoTenant` in one namespace and targets a different namespace, the controller rejects it with a security violation instead of silently broadening access.
 
 </Callout>
+
+## Verify onboarding before you create the cluster
+
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect the OpenBaoTenant status"
+  code={`kubectl get openbaotenant <name> -n <namespace> -o yaml`}
+>
+  Look for `status.provisioned: true` and a healthy `Provisioned` condition before you move on to the first cluster manifest.
+</CommandBlock>
+
+<DecisionTable
+  kind="reference"
+  title="Typical onboarding failures"
+  columns={['Symptom', 'Most likely cause', 'Check first']}
+  rows={[
+    {
+      cells: [
+        'Provisioning is rejected with a security violation',
+        'A self-service request targeted a namespace different from `metadata.namespace`',
+        'The requested namespace pair and the onboarding model in use',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Provisioning never completes',
+        'The Provisioner is missing, unhealthy, or cannot write the tenant guardrails',
+        'Operator install health and the Provisioner deployment in the operator namespace',
+      ],
+    },
+    {
+      cells: [
+        'Custom quotas are ignored',
+        'The request came from the self-service path, which uses default guardrails only',
+        'Whether the `OpenBaoTenant` was created from the operator namespace',
+      ],
+    },
+  ]}
+/>
+
+<NextActions
+  title="Continue the main path"
+  items={[
+    {
+      label: 'Create your first cluster',
+      description: 'Apply the first OpenBaoCluster only after the target namespace is provisioned and ready.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Review tenancy & governance',
+      description: 'Use the concept page when you need the mental model behind OpenBaoTenant rather than just the task steps.',
+      docId: 'user-guide/openbaotenant/overview',
+    },
+    {
+      label: 'Review multi-tenant security',
+      description: 'Go deeper on namespace isolation, RBAC, network policy, and guardrail assumptions in the shared-operator model.',
+      docId: 'user-guide/openbaotenant/multi-tenancy',
+    },
+  ]}
+/>

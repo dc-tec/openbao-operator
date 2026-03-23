@@ -1,101 +1,174 @@
-# Deletion Policy
+---
+title: Decommission a Cluster
+description: Choose the right deletion policy before you tear down a cluster so you know exactly what happens to PVCs, secrets, and backups.
+slug: /operate/decommission
+hide_title: true
+pageType: task
+journey: operate
+---
 
-When an `OpenBaoCluster` is deleted, the Operator uses Kubernetes standard cascading deletion (`OwnerReferences`) to clean up resources. You can configure how aggressive this cleanup is.
+<PageHero
+  eyebrow="Operate / Cluster controls"
+  title="Decommission the cluster without guessing what will be retained."
+  lede="Deleting an `OpenBaoCluster` is not just removing Pods. The deletion policy determines whether PVC-backed data stays behind, whether critical secrets are preserved, and what still requires manual cleanup after the control plane is gone."
+  actions={[
+    {label: 'Run planned maintenance', docId: 'user-guide/openbaocluster/operations/maintenance', variant: 'primary'},
+    {label: 'Open restore operations', docId: 'user-guide/openbaorestore/restore', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page before you"
+    items={[
+      'tear down a dev, staging, or production cluster intentionally',
+      'change the deletion policy from the default retain behavior',
+      'remove PVC-backed data as part of a deliberate teardown',
+      'confirm whether snapshot backups still need manual cleanup afterward',
+    ]}
+  />
+</PageHero>
 
-## Deletion Policies
+<DecisionTable
+  title="Choose the deletion policy"
+  columns={['Policy', 'Use it when', 'What gets deleted', 'Watch for']}
+  rows={[
+    {
+      cells: [
+        'Retain',
+        'You want the safest default, especially for production clusters or any teardown where data may need to be recovered later.',
+        'Compute resources are removed, but PVCs and the key secrets needed to recover the data remain.',
+        'You must clean up retained data and secrets manually if the teardown is truly final.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'DeletePVCs',
+        'You are tearing down an ephemeral or disposable environment and want the operator to remove PVC-backed data too.',
+        'Compute resources, secrets, and PVCs are deleted.',
+        'This is permanent data loss for the local cluster storage path.',
+      ],
+    },
+    {
+      cells: [
+        'DeleteAll',
+        'You want the most aggressive in-cluster cleanup the current implementation supports.',
+        'Compute resources and PVCs are deleted, but external object-storage backups are still left behind.',
+        'The API accepts the value, but external backup deletion is not implemented yet.',
+      ],
+    },
+  ]}
+/>
 
-Control what happens to critical data (Persistent Volumes) and external backups when a cluster is removed.
+## Understand what is retained
 
-<Tabs groupId="retain-default-deletepvcs-deleteall">
+The default `Retain` behavior preserves the things you need if the deletion turns out not to be final:
 
-<TabItem value="retain-default" label="Retain (Default)">
+- PVC-backed data
+- the unseal key Secret
+- the root token Secret
+- any external backups already stored in object storage
 
-**Best for:** Production settings where data safety is paramount.
+<Callout type="note" title="Why the unseal key is retained">
 
-The Operator cleans up compute resources (StatefulSet, Services, ConfigMaps) but **PRESERVES** critical secrets and storage.
+The unseal key material is what makes the retained PVC data usable later. If the operator let Kubernetes garbage-collect that Secret automatically, you could keep the encrypted data and still lose the practical ability to recover it.
 
-```yaml
-spec:
-  deletionPolicy: Retain  # Default behavior
-```
+</Callout>
 
-**Cleanup Scope:**
+## Configure the teardown policy
 
-- **Deleted:** Pods, StatefulSets, Services, ConfigMaps, TLS Secrets
-- **Retained:** PVCs (Data), Unseal Key Secret, Root Token Secret, S3 Backups
+<Tabs groupId="deletion-policy">
 
-<Callout type="note" title="Why Unseal Key is Retained">
+<TabItem value="retain" label="Retain (Default)">
 
-The unseal key secret is essential to decrypt your PVC data. Without it, your encrypted data becomes unrecoverable. The Operator automatically orphans these secrets (removes owner references) so Kubernetes garbage collection won't delete them.
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Keep data and critical secrets after cluster deletion"
+  code={`spec:
+  deletionPolicy: Retain`}
+/>
+
+</TabItem>
+
+<TabItem value="delete-pvcs" label="DeletePVCs">
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Delete PVC-backed data during teardown"
+  code={`spec:
+  deletionPolicy: DeletePVCs`}
+/>
+
+<Callout type="warning" title="This removes the local storage path">
+
+Once the PVCs are deleted, the underlying volume data is gone unless you have an external snapshot or storage-level recovery path outside the operator.
 
 </Callout>
 
 </TabItem>
 
-<TabItem value="deletepvcs" label="DeletePVCs">
+<TabItem value="delete-all" label="DeleteAll">
 
-**Best for:** CI/CD pipelines, ephemeral dev environments.
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Request the most aggressive supported cleanup"
+  code={`spec:
+  deletionPolicy: DeleteAll`}
+/>
 
-The Operator actively deletes the associated PersistentVolumeClaims (PVCs) when the cluster is deleted.
+<Callout type="warning" title="External backup deletion is still manual">
 
-```yaml
-spec:
-  deletionPolicy: DeletePVCs
-```
-
-<Callout type="danger" title="Data Loss Warning">
-
-This policy **permanently deletes** the underlying disk volumes when the Custom Resource is deleted. This action cannot be undone.
-
-</Callout>
-
-**Cleanup Scope:**
-
-- **Deleted:** Pods, StatefulSets, Services, ConfigMaps, Secrets, **PVCs (Data)**
-- **Retained:** S3 Backups
-
-</TabItem>
-
-<TabItem value="deleteall" label="DeleteAll">
-
-**Best for:** Explicit full teardown requests where PVC data must be removed.
-
-The Operator deletes compute resources and PVCs, similar to `DeletePVCs`.
-
-```yaml
-spec:
-  deletionPolicy: DeleteAll
-```
-
-<Callout type="warning" title="External backup deletion status">
-
-`DeleteAll` is accepted by the API and deletes PVCs, but external backup object deletion is not yet implemented.
-Backups in S3/GCS/Azure are currently left untouched.
+`DeleteAll` currently removes PVC-backed data but does not delete snapshot objects already written to S3, GCS, or Azure Blob Storage.
 
 </Callout>
-
-**Cleanup Scope (current behavior):**
-
-- **Deleted:** Pods, StatefulSets, Services, ConfigMaps, Secrets, **PVCs (Data)**
-- **Retained:** External object-storage backups
 
 </TabItem>
 
 </Tabs>
 
-## Performing Deletion
+## Delete the cluster
 
-To delete a cluster:
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Delete the OpenBaoCluster"
+  code={`kubectl delete openbaocluster <name> -n <namespace>`}
+/>
 
-```sh
-kubectl -n security delete openbaocluster dev-cluster
-```
+If the cluster still serves production traffic, stop here and confirm your cutover, backup, and recovery assumptions before you continue.
 
-## Verifying Cleanup
+## Verify the cleanup result
 
-After deletion, you can check for any leftover resources (like PVCs if using `Retain` policy):
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check for retained or remaining resources"
+  code={`kubectl get pvc -n <namespace> -l openbao.org/cluster=<name>
+kubectl get secret -n <namespace> -l openbao.org/cluster=<name>
+kubectl get jobs -n <namespace> -l openbao.org/cluster=<name>`}
+>
+  Under `Retain`, leftover PVCs and critical secrets are expected. Under `DeletePVCs` or `DeleteAll`, the PVC-backed path should be gone, but external backups still need their own manual cleanup decision.
+</CommandBlock>
 
-```sh
-kubectl -n security get pvc -l openbao.org/cluster=dev-cluster
-```
-
+<NextActions
+  title="Continue the teardown or recovery path"
+  items={[
+    {
+      label: 'Open restore operations',
+      description: 'Use the restore workflow if the goal changed from teardown to rebuilding from a snapshot.',
+      docId: 'user-guide/openbaorestore/restore',
+    },
+    {
+      label: 'Review known limitations',
+      description: 'Confirm the current pre-GA limitations around external backup deletion and other lifecycle edges.',
+      docId: 'reference/known-limitations',
+    },
+    {
+      label: 'Run planned maintenance',
+      description: 'Go back to the maintenance controls if the cluster is not actually ready for final teardown.',
+      docId: 'user-guide/openbaocluster/operations/maintenance',
+    },
+  ]}
+/>

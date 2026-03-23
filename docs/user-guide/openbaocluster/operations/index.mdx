@@ -8,59 +8,55 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
 ---
 
 <PageHero
+  variant="landing"
   eyebrow="Operate"
   title="Run the cluster as a service, not as a one-time install."
-  lede="This section is for the full day 2 lifecycle of an OpenBao cluster: upgrades, backups, maintenance, troubleshooting, recovery, restore, and the production checklist that closes the gap between a working cluster and a reliable service."
+  lede="This section covers the full day 2 lifecycle of an OpenBao cluster: make it reliable, protect data before risky change, use cluster controls deliberately, and move from troubleshooting into recovery when normal operations are no longer enough."
   actions={[
-    {label: 'Plan upgrades', docId: 'user-guide/openbaocluster/operations/upgrades', variant: 'primary'},
+    {label: 'Open the production checklist', docId: 'user-guide/openbaocluster/operations/production-checklist', variant: 'primary'},
     {label: 'Open recovery and restore', docId: 'user-guide/openbaocluster/recovery/index', variant: 'secondary'},
   ]}
 >
   <Checklist
-    title="Come here when you need to"
+    title="Use this section to"
     items={[
-      'upgrade a cluster safely',
-      'wire snapshots and backup identity',
-      'handle routine maintenance or pauses',
-      'move from troubleshooting into recovery and restore when the cluster is unstable',
+      'close the gap between a working cluster and a supportable service',
+      'put backups and upgrade planning in place before risky change',
+      'use maintenance and pause controls deliberately instead of improvising',
+      'move into recovery and restore when troubleshooting is no longer enough',
     ]}
   />
 </PageHero>
 
 <JourneyRail
-  title="The day 2 operating path"
+  title="How this section is organized"
   items={[
     {
-      label: 'Plan upgrades',
-      description: 'Choose strategy, validate prerequisites, and understand retry behavior.',
-      docId: 'user-guide/openbaocluster/operations/upgrades',
+      label: 'Reliability & Change',
+      description: 'Use the production checklist, backups, and upgrade planning to keep planned change safe.',
+      docId: 'user-guide/openbaocluster/operations/production-checklist',
     },
     {
-      label: 'Configure backups',
-      description: 'Wire snapshots, identity, and storage before the first risky change.',
-      docId: 'user-guide/openbaocluster/operations/backups',
-    },
-    {
-      label: 'Run maintenance',
-      description: 'Use pause, maintenance, and deletion workflows deliberately.',
+      label: 'Cluster Controls',
+      description: 'Use maintenance, pause, and decommission workflows when you need to change controller behavior deliberately.',
       docId: 'user-guide/openbaocluster/operations/maintenance',
     },
     {
-      label: 'Troubleshoot and recover',
-      description: 'Move from symptoms and status conditions into the right troubleshooting or recovery path.',
-      docId: 'user-guide/openbaocluster/recovery/index',
+      label: 'Troubleshooting & Recovery',
+      description: 'Start with symptoms and status, then move into recovery and restore when the incident crosses that line.',
+      docId: 'user-guide/openbaocluster/operations/troubleshooting',
     },
   ]}
 />
 
 <RouteList
-  title="Operate routes"
+  title="Reliability & Change"
   items={[
     {
       eyebrow: '01',
-      title: 'Plan upgrades',
-      description: 'Use RollingUpdate or BlueGreen with a clear understanding of prerequisites, cutover, and retry behavior.',
-      docId: 'user-guide/openbaocluster/operations/upgrades',
+      title: 'Production checklist',
+      description: 'Use the checklist before you call an environment production-ready or supportable.',
+      docId: 'user-guide/openbaocluster/operations/production-checklist',
     },
     {
       eyebrow: '02',
@@ -70,18 +66,48 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
     },
     {
       eyebrow: '03',
-      title: 'Routine maintenance',
-      description: 'Use maintenance, pause, and deletion workflows without losing track of lifecycle state.',
+      title: 'Plan upgrades',
+      description: 'Use RollingUpdate or BlueGreen with a clear understanding of prerequisites, cutover, and retry behavior.',
+      docId: 'user-guide/openbaocluster/operations/upgrades',
+    },
+  ]}
+/>
+
+<RouteList
+  title="Cluster Controls"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Run planned maintenance',
+      description: 'Use maintenance workflows for controlled disruption, scaling, and planned cluster interventions.',
       docId: 'user-guide/openbaocluster/operations/maintenance',
     },
     {
-      eyebrow: '04',
-      title: 'Troubleshoot and verify',
-      description: 'Use conditions, events, and checklist guidance to understand and stabilize the cluster before it becomes an incident.',
+      eyebrow: '02',
+      title: 'Pause reconciliation',
+      description: 'Temporarily stop operator-driven changes when you need manual intervention or a controlled investigation window.',
+      docId: 'user-guide/openbaocluster/operations/pausing',
+    },
+    {
+      eyebrow: '03',
+      title: 'Decommission a cluster',
+      description: 'Remove a cluster deliberately with the right deletion policy for data, PVCs, and external backups.',
+      docId: 'user-guide/openbaocluster/operations/deletion',
+    },
+  ]}
+/>
+
+<RouteList
+  title="Troubleshooting & Recovery"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Troubleshoot the cluster',
+      description: 'Use conditions, events, and common failure patterns to understand the problem before it becomes a wider incident.',
       docId: 'user-guide/openbaocluster/operations/troubleshooting',
     },
     {
-      eyebrow: '05',
+      eyebrow: '02',
       title: 'Recovery and restore',
       description: 'Use safe mode, no-leader, sealed-cluster, and restore workflows when normal operations are no longer enough.',
       docId: 'user-guide/openbaocluster/recovery/index',
@@ -90,16 +116,17 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
 />
 
 <NextActions
+  title="Supporting context"
   items={[
     {
-      label: 'Open the production checklist',
-      description: 'Use the checklist before you call an environment production-ready.',
-      docId: 'user-guide/openbaocluster/operations/production-checklist',
+      label: 'Recovery & Restore',
+      description: 'Use the incident runbooks when symptoms turn into an active recovery event.',
+      docId: 'user-guide/openbaocluster/recovery/index',
     },
     {
-      label: 'Open recovery and restore',
-      description: 'Use the incident runbooks when the problem is beyond normal troubleshooting.',
-      docId: 'user-guide/openbaocluster/recovery/index',
+      label: 'Operation lifecycle architecture',
+      description: 'Read the architecture deep dive when you need to understand locks, manager ownership, or serialized operations.',
+      docId: 'architecture/operation-lifecycle',
     },
   ]}
 />

@@ -1,107 +1,187 @@
-# Security Profiles
+---
+title: Production Posture
+hide_title: true
+pageType: concept
+journey: security
+description: What Development and Hardened mean as security contracts, and why Hardened is the supported production posture for OpenBao Operator.
+---
 
-<Callout type="abstract" title="Concept">
+<PageHero
+  variant="compact"
+  eyebrow="Security / Security Model"
+  title="Treat security profiles as operating contracts, not just presets."
+  lede="`Development` and `Hardened` are different security contracts, not cosmetic defaults. This page explains what each one is optimizing for, what Hardened requires in production, and why the configuration task belongs in the user guide rather than here."
+  actions={[
+    {label: 'Configure security profiles', docId: 'user-guide/openbaocluster/configuration/security-profiles', variant: 'primary'},
+    {label: 'Open secrets and trust material', docId: 'security/fundamentals/secrets-management', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand what Hardened is actually promising',
+      'review what Development deliberately relaxes for testing',
+      'decide whether an environment still meets the production contract',
+      'separate conceptual posture from the configuration task page',
+    ]}
+  />
+</PageHero>
 
-OpenBao Operator supports two distinct security profiles via `spec.profile`. These profiles enforce different validation rules and default behaviors to match the environment's risk level.
+<DecisionTable
+  title="Profile intent"
+  columns={['Profile', 'Optimized for', 'What it trades off']}
+  rows={[
+    {
+      cells: [
+        'Hardened',
+        'Production deployments with explicit external trust roots and stricter lifecycle guarantees.',
+        'More up-front requirements, less tolerance for weak bootstrap and trust shortcuts.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Development',
+        'Local testing, CI, and quick evaluation when long-term trust posture is not the goal.',
+        'Allows bootstrap and unseal material to exist in cluster Secrets and relaxes some runtime guarantees.',
+      ],
+    },
+  ]}
+/>
+
+<DecisionTable
+  kind="reference"
+  title="Profile comparison"
+  columns={['Feature', 'Hardened', 'Development']}
+  rows={[
+    {
+      cells: [
+        'Root token handling',
+        'Auto-revoked; not stored in a Secret as part of the supported production path.',
+        'Can be stored in a Secret when self-init is disabled.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Unseal root of trust',
+        'Requires a non-static external trust source such as transit, cloud KMS, or HSM-backed modes.',
+        'Defaults can rely on a static key in a Kubernetes Secret.',
+      ],
+    },
+    {
+      cells: [
+        'TLS posture',
+        'Requires `External` or `ACME` style trust; `OperatorManaged` TLS is not the production path.',
+        'Allows operator-managed TLS for local or test usage.',
+      ],
+    },
+    {
+      cells: [
+        'Bootstrap model',
+        'Self-init is the supported production path.',
+        'Manual bootstrap or self-init are both possible.',
+      ],
+    },
+    {
+      cells: [
+        'Supply-chain guardrails',
+        'Image verification protections remain on and cannot degrade to warning-only behavior.',
+        'Verification can be relaxed for testing.',
+      ],
+    },
+  ]}
+/>
+
+## Why Hardened is the supported production contract
+
+<DecisionTable
+  kind="reference"
+  title="Hardened production requirements"
+  columns={['Requirement', 'Why it exists', 'Operational effect']}
+  rows={[
+    {
+      cells: [
+        'At least three replicas',
+        'Raft needs quorum and safe disruption handling in production.',
+        'Single-node clusters are not treated as production-safe.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'External trust root for unseal',
+        'The cluster should not keep its root of trust only in Kubernetes etcd.',
+        'Cloud KMS, transit, KMIP, or PKCS#11-style paths become part of the deployment contract.',
+      ],
+    },
+    {
+      cells: [
+        'Trusted TLS path',
+        'The workload identity boundary should be anchored in a production-grade certificate model.',
+        '`OperatorManaged` TLS is rejected for Hardened clusters.',
+      ],
+    },
+    {
+      cells: [
+        'Self-init enabled',
+        'The supported bootstrap path should avoid persisting the initial root token.',
+        'Human bootstrap becomes declarative instead of secret-based.',
+      ],
+    },
+    {
+      cells: [
+        'Verification guardrails stay enforced',
+        'Production image trust should not be optional.',
+        'Managed workloads keep digest and verification enforcement even when omitted from config.',
+      ],
+    },
+  ]}
+/>
+
+<Callout type="success" title="What Hardened is really saying">
+
+Hardened means the operator is allowed to assume an external trust root, explicit runtime identity, and production-ready lifecycle posture. It is a statement about the whole operating model, not only about one field in the CR.
 
 </Callout>
 
-## Profile Comparison
+## What Development deliberately relaxes
 
-| Feature | Hardened (Production) | Development (Testing) |
-| :--- | :--- | :--- |
-| **Root Token** | Auto-revoked (not stored in a Secret) | Stored in a Secret when self-init is disabled |
-| **Unseal Keys** | Non-static external root of trust required | Defaults to static key stored in a Secret |
-| **TLS** | External / ACME required | Operator-managed allowed |
-| **Replicas** | Minimum 3 (HA Required) | Any (1+) |
-| **Self-Init** | Required (`enabled=true`) | Optional |
-| **Admission Check** | Strict Validation | Relaxed Validation |
-| **Supply Chain** | Verification blocks cannot be disabled; digest-only admission applies to managed workloads | Verification optional |
-| **Use Case** | **Production** | Proof of Concept, Local Dev |
+Development is still useful, but it should be understood as an intentional weakening of the production contract:
 
-## Detailed Configuration
+- bootstrap material can persist in cluster Secrets
+- static unseal remains available
+- operator-managed TLS can be used
+- runtime and supply-chain controls can be less strict
+- the cluster reports a security-risk signal rather than pretending this posture is production-ready
 
-<Tabs groupId="hardened-profile-development-profile">
+<Callout type="warning" title="Do not upgrade trust roots in place by assumption">
 
-<TabItem value="hardened-profile" label="Hardened Profile">
-
-<Callout type="success" title="Production Ready">
-
-The `Hardened` profile is **MANDATORY** for production deployments. It is the supported production posture for OpenBao Operator and enforces a secure-by-default bootstrap and runtime model.
+Teams often start in Development for exploration. When moving to staging or production, create a new Hardened cluster rather than assuming a Development trust path can be promoted safely.
 
 </Callout>
 
-To use this profile, your `OpenBaoCluster` must meet these requirements:
+## Where configuration belongs
 
-1.  **High Availability:** You must set `spec.replicas` to at least `3` for Raft quorum.
-2.  **External Root of Trust:** You must use a non-static unseal backend such as `transit`, `awskms`, `gcpckms`, `azurekeyvault`, `ocikms`, `kmip`, or `pkcs11`.
-3.  **Valid TLS:** You must provide valid TLS certificates. `OperatorManaged` TLS is rejected for `Hardened` clusters by admission policy.
-4.  **Self-Initialization:** You must enable self-init. Manual bootstrap is not a supported production path because it persists a root token Secret.
-5.  **Image Verification Guardrails:** You cannot set `spec.imageVerification.enabled=false`, `spec.operatorImageVerification.enabled=false`, or use `failurePolicy: Warn`.
+This page explains the contract. The actual task of setting `spec.profile`, choosing the unseal mode, and satisfying the production requirements belongs in <SiteLink docId="user-guide/openbaocluster/configuration/security-profiles">Configure Security Profiles</SiteLink>.
 
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: production-cluster
-spec:
-  profile: Hardened
-  replicas: 3 # Minimum 3 for HA
-  tls:
-    enabled: true
-    mode: External # or ACME
-  selfInit:
-    enabled: true
-  unseal:
-    type: awskms # or transit, gcpckms, azurekeyvault, ocikms, kmip, pkcs11
-```
-
-If image verification blocks are omitted in `Hardened`, the operator still treats verification as enabled.
-Official release images receive default keyless identity settings; custom/air-gapped registries should
-provide explicit `publicKey` or keyless identity fields.
-
-</TabItem>
-
-<TabItem value="development-profile" label="Development Profile">
-
-<Callout type="warning" title="Non-Production Only">
-
-The `Development` profile is highly discouraged for production. It creates significant security risks by allowing bootstrap and unseal material to be stored in Kubernetes Secrets.
-
-</Callout>
-
-This profile is useful for:
-
--   Local testing (Minikube/Kind).
--   CI/CD integration tests.
--   Rapid prototyping where long-term security is not required.
-
-**Key Behaviors:**
-
--   **Root Token:** Stored in `<cluster-name>-root-token` when self-init is disabled.
--   **Unseal Keys:** Stored in `<cluster-name>-unseal-key` when `spec.unseal.type` is `static` (default).
--   **Status Warning:** The Operator sets `ConditionSecurityRisk=True` on the cluster status.
-
-<Callout type="tip" title="Prefer Self-Init">
-
-Even in Development, enabling `spec.selfInit.enabled: true` avoids root token Secret creation. Do not store raw secrets in Git.
-
-</Callout>
-
-</TabItem>
-
-</Tabs>
-
-## Guidance
-
-<Callout type="tip" title="Migration Path">
-
-Teams often start with **Development** for initial exploration. When moving to **Staging** or **Production**, create a *new* cluster with the **Hardened** profile rather than trying to convert an existing Development cluster. Trust roots established in Development are typically not secure enough for Production.
-
-</Callout>
-
-## See Also
-
-- [Infrastructure Security](../infrastructure/index.md)
-- [Server Configuration](../../user-guide/openbaocluster/configuration/server.md)
-
+<NextActions
+  title="Continue the security model"
+  items={[
+    {
+      label: 'Configure security profiles',
+      description: 'Switch to the task page when you are ready to apply the profile to a real cluster.',
+      docId: 'user-guide/openbaocluster/configuration/security-profiles',
+    },
+    {
+      label: 'Secrets and trust material',
+      description: 'Review how root tokens, unseal keys, and job identities differ between these profiles.',
+      docId: 'security/fundamentals/secrets-management',
+    },
+    {
+      label: 'Threat model',
+      description: 'Go back to the broader threat model if you need the rationale behind these profile boundaries.',
+      docId: 'security/fundamentals/threat-model',
+    },
+  ]}
+/>

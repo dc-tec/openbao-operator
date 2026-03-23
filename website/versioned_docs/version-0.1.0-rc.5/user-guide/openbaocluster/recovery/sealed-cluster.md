@@ -1,202 +1,281 @@
 ---
+title: Recover a Sealed Cluster
+description: Separate seal, trust, identity, and reachability failures so you can restore service before moving into deeper quorum recovery.
 slug: /recover/sealed-cluster
+hide_title: true
+pageType: runbook
+journey: operate
 ---
 
-# Recovering From a Sealed Cluster
+<PageHero
+  variant="compact"
+  eyebrow="Operate / Incident recovery"
+  title="Treat seal failures as trust and reachability problems first."
+  lede="A sealed cluster usually means the Pods can start but cannot complete the trust or unseal path they need to serve traffic. Start with the operator-visible conditions, then narrow the problem by seal mode before you reach for emergency manual unseal."
+  actions={[
+    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'primary'},
+    {label: 'Recover from no leader', docId: 'user-guide/openbaocluster/recovery/no-leader', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this runbook when"
+    items={[
+      'Pods are running but remain sealed and not ready',
+      'the cluster reports `OpenBaoSealed=True`',
+      'cloud KMS, transit, TLS, or static-key dependencies might be blocking startup',
+      'you need to decide whether this is a seal problem or a broader quorum problem',
+    ]}
+  />
+</PageHero>
 
-This runbook applies when OpenBao pods are running (`Running` state) but remain **sealed**, preventing the application from starting.
+<DecisionTable
+  title="Read the first conditions before you dig into logs"
+  columns={['Condition or signal', 'What it usually means', 'Where to look next']}
+  rows={[
+    {
+      cells: [
+        '`OpenBaoSealed=True` while Pods are running',
+        'The workload is up far enough to report status, but the unseal path is still blocked.',
+        'Check the configured seal mode and the corresponding credentials or trust material.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '`CloudUnsealIdentityReady=False`',
+        'The workload identity or cloud credentials for a cloud KMS backend are not usable.',
+        'Inspect the identity binding, IAM policy, and KMS reachability.',
+      ],
+    },
+    {
+      cells: [
+        '`TLSReady=False`',
+        'The cluster may not trust the configured certificates or may be missing required TLS material.',
+        'Inspect the rendered TLS Secrets and pod logs for `x509` errors.',
+      ],
+    },
+    {
+      cells: [
+        'The cluster unseals but still does not become active.',
+        'This may no longer be a seal problem.',
+        <>Move to <SiteLink docId="user-guide/openbaocluster/recovery/no-leader">Recover from No Leader</SiteLink>.</>,
+      ],
+    },
+  ]}
+/>
 
-<Callout type="failure" title="Symptoms">
+<DiagramFrame
+  title="Sealed-cluster triage"
+  caption="Confirm the cluster is actually sealed, identify the configured seal mode, then narrow the failure to credentials, trust, or network before using any emergency manual path."
+  code={`flowchart TD
+    Start["Pods running but sealed"] --> Conditions["Check operator conditions"]
+    Conditions --> Mode{"Which seal mode?"}
+    Mode -- "Static" --> Static["Verify Secret exists and key name is correct"]
+    Mode -- "Transit" --> Transit["Verify transit auth, TLS, and network path"]
+    Mode -- "Cloud KMS" --> KMS["Verify workload identity, IAM, and endpoint reachability"]
+    Mode -- "KMIP / PKCS#11" --> External["Verify device, library, certs, and connectivity"]
+    Static --> Healthy{"Unseals?"}
+    Transit --> Healthy
+    KMS --> Healthy
+    External --> Healthy
+    Healthy -- "No" --> Manual["Manual unseal only for emergency access"]
+    Healthy -- "Yes, but no leader" --> Leader["Switch to no-leader recovery"]
 
-- `kubectl get openbaocluster` reports `Sealed=True`.
-- Pods are ready `0/1` in `kubectl get pods`.
-- `bao status` shows `Sealed: true`.
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-</Callout>
+    class Start,Conditions,Mode read;
+    class Static,Transit,KMS,External process;
+    class Manual,Leader write;`}
+/>
 
-## Troubleshooting Flow
+## Inspect the operator-visible state first
 
-```mermaid
-graph TD
-    Start(["Start"]) --> CheckStatus{"Sealed?"}
-    CheckStatus -- No --> Done(["Healthy"])
-    CheckStatus -- Yes --> IdentifyMode{"Unseal Mode?"}
-    
-    IdentifyMode -- "Static" --> CheckSecret["Check Secret"]
-    IdentifyMode -- "Auto-Unseal" --> CheckLogs["Check Logs"]
-    
-    CheckSecret -- "Missing" --> CreateSecret["Create Secret"]
-    CheckLogs -- "403/Auth" --> FixIAM["Fix IAM Permissions"]
-    CheckLogs -- "Timeout" --> FixNet["Fix Network/DNS"]
-    
-    FixIAM --> ManualTry["Restart Pods"]
-    FixNet --> ManualTry
-    
-    ManualTry -- "Still Fails" --> ManualUnseal["Manual Unseal (Emergency)"]
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Read the current conditions and seal mode"
+  code={`kubectl get openbaocluster <name> -n <namespace> \\
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\\n"}{end}'
+kubectl get openbaocluster <name> -n <namespace> -o yaml | yq '.spec.unseal'
+kubectl logs -n <namespace> <pod-name> | grep -i unseal`}
+>
+  Focus on `OpenBaoSealed`, `CloudUnsealIdentityReady`, and `TLSReady`. These usually tell you whether the next step is credentials, trust, or network rather than generic application debugging.
+</CommandBlock>
 
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+## Diagnose by seal mode
 
-    class Start,Done read;
-    class CheckStatus,IdentifyMode process;
-    class CheckSecret,CheckLogs,FixIAM,FixNet,ManualTry process;
-    class CreateSecret,ManualUnseal security;
-```
+<Tabs groupId="sealed-cluster-diagnostics">
 
----
+<TabItem value="static" label="Static">
 
-## Check Conditions First
+Use this path when the cluster reads its unseal key from a Kubernetes Secret.
 
-Inspect the operator-visible conditions before drilling into pod logs:
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Verify the static unseal Secret"
+  code={`kubectl get secret -n <namespace> <cluster-name>-unseal-key
+kubectl get secret -n <namespace> <cluster-name>-unseal-key -o jsonpath='{.data}'`}
+>
+  The Secret must exist and use the expected key name, typically `bao-root` unless you intentionally changed the configuration.
+</CommandBlock>
 
-```sh
-kubectl -n security get openbaocluster prod-cluster \
-  -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
-```
-
-Focus on:
-
-- `OpenBaoSealed`
-- `CloudUnsealIdentityReady` for cloud KMS backends
-- `TLSReady` if the cluster cannot complete secure startup
-- `GatewayIntegrationReady` only if self-reachability or ACME traffic depends on Gateway exposure
-
-## Diagnostics by Mode
-
-Identify your unseal mode in the `OpenBaoCluster` configuration:
-
-```yaml
-spec:
-  unseal:
-    type: awskms # or static, transit, gcpckms, azurekeyvault, ocikms, kmip, pkcs11
-```
-
-<Tabs groupId="static-default-transit-auto-unseal-cloud-kms-kmip-hsm-manual-emergency">
-
-<TabItem value="static-default" label="Static (Default)">
-
-In **Static** mode, the operator assumes a Kubernetes Secret named `<cluster-name>-unseal-key` contains the key.
-
-**Common Failure:** The Secret is missing or has the wrong key name.
-
-1.  **Verify Secret Existence**:
-    ```sh
-    kubectl -n security get secret prod-cluster-unseal-key
-    ```
-2.  **Verify Key Format**:
-    The Secret must have a key named `bao-root` (or as configured).
-    ```sh
-    kubectl -n security get secret prod-cluster-unseal-key -o jsonpath='{.data}'
-    ```
-
-**Fix:**
-If missing, you must provide the unseal key (e.g., from a backup).
-```sh
-kubectl -n security create secret generic prod-cluster-unseal-key --from-literal=bao-root=YOUR_UNSEAL_KEY
-```
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Create or replace the static unseal Secret"
+  code={`kubectl create secret generic <cluster-name>-unseal-key -n <namespace> \\
+  --from-literal=bao-root=<UNSEAL_KEY> \\
+  --dry-run=client -o yaml | kubectl apply -f -`}
+/>
 
 </TabItem>
 
 <TabItem value="transit" label="Transit">
 
-In **Transit** mode, OpenBao connects to another Bao cluster for unseal operations.
+Use this path when the cluster unseals through another OpenBao deployment.
 
-Check first:
-
-- the credentials Secret referenced by `spec.unseal.credentialsSecretRef`
-- the transit CA / client cert material if you use custom TLS
-- connectivity from the cluster to the transit endpoint
-
-Common failures:
-
-| Signal | Root Cause | Fix |
-| :--- | :--- | :--- |
-| `permission denied` / auth failures | Transit token or auth path is wrong. | Replace the credentials Secret and verify transit policy/capabilities. |
-| `x509` or `certificate signed by unknown authority` | Transit CA or client mTLS files do not match the endpoint. | Reconcile the Secret contents and referenced TLS file paths. |
-| `context deadline exceeded` | Network or DNS path to the transit endpoint is blocked. | Check `spec.network.egressRules`, DNS, and the remote endpoint health. |
-
-</TabItem>
-
-<TabItem value="auto-unseal-cloud-kms" label="Auto-Unseal (Cloud KMS)">
-
-In **Auto-Unseal** mode, OpenBao connects to a remote cloud KMS (AWS, GCP, Azure, OCI). Failures are usually due to **Identity** or **Network**.
-
-**1. Check OpenBao Logs**
-
-Inspect the logs for "failed to unseal" messages.
-
-```sh
-kubectl -n security logs prod-cluster-0 | grep -i "unseal"
-```
-
-**Common Errors:**
-
-| Log Message | Root Cause | Fix |
-| :--- | :--- | :--- |
-| `403 Forbidden` / `AccessDeniedPath` | The IAM Role / ServiceAccount lacks permission to `Decrypt`. | Grant `kms:Decrypt` (AWS) or `cloudkms.cryptoKeyVersions.useToDecrypt` (GCP) to the role. |
-| `context deadline exceeded` | Network connectivity to the KMS endpoint is blocked. | Check NetworkPolicies (`egress`), Istio Sidecars, or Firewall rules blocking HTTPS (443). |
-| `Internal (500)` | The Cloud Provider is experiencing an outage. | Check configured Region status. |
+<DecisionTable
+  title="Transit-specific failure signals"
+  columns={['Signal', 'Likely cause', 'Fix first']}
+  rows={[
+    {
+      cells: [
+        '`permission denied` or auth failures',
+        'The token, auth path, or transit policy is wrong.',
+        'Replace the credentials Secret and verify the transit-side role or policy.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '`x509` or trust-chain errors',
+        'The transit CA or client certificate material does not match the endpoint.',
+        'Reconcile the Secret contents and referenced TLS file paths.',
+      ],
+    },
+    {
+      cells: [
+        '`context deadline exceeded`',
+        'The transit endpoint is not reachable from the workload.',
+        'Check DNS, egress rules, and the remote endpoint health.',
+      ],
+    },
+  ]}
+/>
 
 </TabItem>
 
-<TabItem value="kmip-hsm" label="KMIP / HSM">
+<TabItem value="cloud-kms" label="Cloud KMS">
 
-In **KMIP** or **PKCS#11** mode, treat failures as external trust or device-access problems first.
+Use this path for AWS KMS, GCP Cloud KMS, Azure Key Vault, or OCI KMS unseal backends.
 
-Check first:
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect cloud-unseal failures in the logs"
+  code={`kubectl logs -n <namespace> <pod-name> | grep -Ei 'unseal|kms|decrypt|accessdenied|forbidden|timeout'`}
+/>
 
-- referenced client certificate / key / CA material
-- library or device mount paths for `pkcs11`
+<DecisionTable
+  title="Cloud KMS failure patterns"
+  columns={['Log or condition', 'Likely cause', 'Fix first']}
+  rows={[
+    {
+      cells: [
+        '`CloudUnsealIdentityReady=False` or `AccessDenied`',
+        'The workload identity or IAM policy is not allowed to decrypt.',
+        'Fix the ServiceAccount binding and grant the decrypt permission on the configured key.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '`context deadline exceeded`',
+        'The cluster cannot reach the KMS endpoint.',
+        'Check egress rules, proxy behavior, firewall policy, and DNS.',
+      ],
+    },
+    {
+      cells: [
+        'Provider-side `5xx` errors',
+        'The KMS service itself may be degraded.',
+        'Confirm regional health and retry only when the upstream service is stable.',
+      ],
+    },
+  ]}
+/>
+
+</TabItem>
+
+<TabItem value="kmip-pkcs11" label="KMIP / PKCS#11">
+
+Use this path for external HSM or KMIP-backed unseal modes.
+
+Check these first:
+
+- referenced client certificate, key, and CA material
+- library and device mount paths for `pkcs11`
 - network reachability to the KMIP endpoint
+- rendered seal configuration inside the Pod
 
-These paths do not use `CloudUnsealIdentityReady`; rely on pod logs and the rendered seal configuration when diagnosing failures.
+These modes do not report `CloudUnsealIdentityReady`, so pod logs and rendered configuration are the primary signal surface.
 
 </TabItem>
 
-<TabItem value="manual-emergency" label="Manual (Emergency)">
+<TabItem value="manual" label="Manual emergency">
 
-<Callout type="danger" title="Emergency Only">
+<Callout type="danger" title="Emergency only">
 
-Use this only if automation is permanently broken and you need immediate access.
+Manual unseal is the escape hatch when automation is broken and you need immediate access. It does not fix the underlying seal path. Use it to regain access, then repair the actual trust or credential dependency.
 
 </Callout>
 
-If the Operator cannot unseal the pods, you can manually unseal them using the `bao` CLI (if you have the unseal keys/shares).
-
-1.  **Exec into Pod 0**:
-    ```sh
-    kubectl -n security exec -ti prod-cluster-0 -- sh
-    ```
-2.  **Run Unseal**:
-    ```sh
-    bao operator unseal
-    # Paste Unseal Key 1
-    # Paste Unseal Key 2 (if shamir)
-    ...
-    ```
-3.  **Repeat**:
-    You must perform this on **every** pod in the cluster (`prod-cluster-1`, `cluster-2`...).
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Manually unseal a Pod"
+  code={`kubectl exec -n <namespace> -it <pod-name> -- sh
+bao operator unseal`}
+>
+  Repeat this on every Pod that needs to join the active cluster. If the cluster then stays sealed again after restart, return to the relevant automated seal mode and fix it there.
+</CommandBlock>
 
 </TabItem>
 
 </Tabs>
 
----
+## Verify the cluster is actually serving again
 
-## Post-Recovery
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check seal status and cluster readiness"
+  code={`kubectl get openbaocluster <name> -n <namespace>
+kubectl exec -n <namespace> -it <pod-name> -- bao status`}
+/>
 
-Once unsealed, verify the cluster is initialized and active.
+If the cluster unseals but only reaches standby state or still cannot elect a leader, move to <SiteLink docId="user-guide/openbaocluster/recovery/no-leader">Recover from No Leader</SiteLink>.
 
-```sh
-kubectl -n security get openbaocluster prod-cluster
-```
-
-If the cluster unsealed successfully but assumes a **Standby** role (no active leader), check the [No Leader](no-leader.md) guide.
-
-## Official OpenBao Documentation
-
-- [Seal Configuration Overview](https://openbao.org/docs/configuration/seal/)
-- [Static Seal Configuration](https://openbao.org/docs/configuration/seal/static/)
-- [Operator Unseal Command](https://openbao.org/docs/commands/operator/unseal/)
+<NextActions
+  title="Continue with the right recovery path"
+  items={[
+    {
+      label: 'Recover from no leader',
+      description: 'Switch here when sealing is fixed but the cluster still cannot elect or keep a leader.',
+      docId: 'user-guide/openbaocluster/recovery/no-leader',
+    },
+    {
+      label: 'Enter safe mode',
+      description: 'Inspect and acknowledge break glass only after the seal path and workload health are stable.',
+      docId: 'user-guide/openbaocluster/recovery/safe-mode',
+    },
+    {
+      label: 'Run a restore',
+      description: 'Use the restore workflow if the live cluster is no longer the safest path to service recovery.',
+      docId: 'user-guide/openbaorestore/restore',
+    },
+  ]}
+/>

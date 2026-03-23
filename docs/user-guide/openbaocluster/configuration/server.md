@@ -1,267 +1,300 @@
-# Advanced Configuration
+---
+title: Server Configuration
+hide_title: true
+pageType: task
+journey: configure
+description: Configure server-runtime defaults such as UI, listener behavior, audit devices, plugins, and Raft autopilot without mixing in unrelated exposure or observability concerns.
+---
 
-The `OpenBaoCluster` Custom Resource provides comprehensive configuration options for the OpenBao server.
+<PageHero
+  eyebrow="Configure / Cluster Baseline"
+  title="Tune the server runtime without turning this page into a dump of every field."
+  lede="Use this page for the settings that shape how the OpenBao server itself runs: listener and lease behavior, Raft autopilot, audit devices, and plugin registration. Exposure, observability, and mirrored-image strategy each have their own configuration paths."
+  actions={[
+    {label: "Open observability", docId: "user-guide/openbaocluster/configuration/observability", variant: "primary"},
+    {label: "Review air-gapped setup", docId: "user-guide/openbaocluster/configuration/air-gapped", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "set the core `spec.configuration` defaults for the server runtime",
+      "understand the autopilot values the operator manages automatically",
+      "configure audit devices or plugins declaratively",
+      "avoid mixing server settings with observability or image-mirroring concerns that belong elsewhere",
+    ]}
+  />
+</PageHero>
 
-## Configuration Groups
+<DecisionTable
+  title="What this page owns"
+  columns={["Surface", "Use it for", "Do not use it for"]}
+  rows={[
+    {
+      cells: [
+        "`spec.configuration`",
+        "Listener behavior, UI, cache and lease settings, and Raft/autopilot tuning.",
+        "Edge exposure patterns or gateway wiring.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`spec.audit`",
+        "Declarative audit-device setup that should exist when the cluster starts.",
+        "General telemetry or metrics wiring.",
+      ],
+    },
+    {
+      cells: [
+        "`spec.plugins` and plugin download settings",
+        "Explicit OpenBao plugin registration and plugin fetch behavior.",
+        "Mirrored base images or disconnected-registry strategy for the whole deployment.",
+      ],
+    },
+    {
+      cells: [
+        "Raft autopilot",
+        "Membership safety, dead-peer cleanup, and quorum behavior.",
+        "Application-level backup, upgrade, or restore workflows.",
+      ],
+    },
+  ]}
+/>
 
-<Tabs groupId="core-observability-security-plugins-operations">
+<Callout type="note" title="Use the focused pages for adjacent concerns">
 
-<TabItem value="core" label="Core">
+- <SiteLink docId="user-guide/openbaocluster/configuration/external-access">External access</SiteLink> owns exposure and ingress patterns.
+- <SiteLink docId="user-guide/openbaocluster/configuration/observability">Observability</SiteLink> owns telemetry, scraping, and monitoring surfaces.
+- <SiteLink docId="user-guide/openbaocluster/configuration/air-gapped">Air-gapped and private registries</SiteLink> owns mirrored-image and disconnected-environment strategy.
 
-Configure the fundamental server behaviors like UI, Listening, and Storage tuning via `spec.configuration`.
+</Callout>
 
-```yaml
-spec:
+## Core server runtime
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Start from the core server settings"
+  code={`spec:
   configuration:
-    # User Interface
     ui: true
-    
-    # Performance Tuning
-    cacheSize: 134217728  # 128MB
+    cacheSize: 134217728
     disableCache: false
-    
-    # Raft Storage
-    raft:
-      performanceMultiplier: 2
-      # Autopilot (enabled by default)
-      autopilot:
-        cleanupDeadServers: true
-        deadServerLastContactThreshold: "5m"
-        # minQuorum is automatically calculated based on profile and replicas
-        # Hardened: max(3, replicas) - ensures HA safety
-        # Development: replicas (minimum 1) - allows single-node clusters
-        # minQuorum: 3  # Optional: override automatic calculation
-        serverStabilizationTime: "10s"
-    
-    # Lease Management
-    defaultLeaseTTL: "720h" # 30 days
-    maxLeaseTTL: "8760h"    # 1 year
-    
-    # Listener Settings
+    defaultLeaseTTL: "720h"
+    maxLeaseTTL: "8760h"
     listener:
       proxyProtocolBehavior: "use_proxy_protocol"
-```
+    raft:
+      performanceMultiplier: 2`}
+/>
 
-| Field | Description |
-| :--- | :--- |
-| `ui` | Enable/Disable the web interface. |
-| `listener` | Configure TLS and Proxy Protocol usage. |
-| `raft.performanceMultiplier` | Tune Raft timing for high-latency environments. |
-| `raft.autopilot` | Configure Autopilot dead server cleanup (enabled by default). See [Autopilot Configuration](#autopilot-configuration) below. |
-| `defaultLeaseTTL` | Default Time-To-Live for leases. |
+<DecisionTable
+  kind="reference"
+  title="Common server knobs"
+  columns={["Field", "Why you change it", "Operational note"]}
+  rows={[
+    {
+      cells: [
+        "`ui`",
+        "Enable or disable the web UI intentionally.",
+        "This is a service-boundary decision only if you also expose the route appropriately.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`listener`",
+        "Adjust listener behavior such as proxy-protocol handling.",
+        "Keep listener-level TLS assumptions aligned with the external-access path you selected.",
+      ],
+    },
+    {
+      cells: [
+        "`defaultLeaseTTL` / `maxLeaseTTL`",
+        "Set sensible lease bounds for the workloads that depend on the cluster.",
+        "Treat very long leases as an operational contract, not just a convenience setting.",
+      ],
+    },
+    {
+      cells: [
+        "`raft.performanceMultiplier`",
+        "Compensate for high-latency or slower control-plane environments.",
+        "Change this deliberately and observe cluster behavior rather than cargo-culting larger values.",
+      ],
+    },
+  ]}
+/>
 
-</TabItem>
+## Audit devices and plugins
 
-<TabItem value="observability" label="Observability">
+<Tabs groupId="server-config-audit-plugins">
+  <TabItem value="audit" label="Audit devices">
 
-Configure Logging and Telemetry for monitoring.
-
-```yaml
-spec:
-  configuration:
-    logLevel: "info"
-    logging:
-      format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
-      rotateMaxFiles: 7
-      
-  telemetry:
-    prometheusRetentionTime: "24h"
-    disableHostname: true
-    metricsPrefix: "openbao_"
-```
-
-See [Telemetry Documentation](https://openbao.org/docs/configuration/telemetry/) for all provider options (StatsD, DogStatsD, etc.).
-
-</TabItem>
-
-<TabItem value="security" label="Security">
-
-Configure declarative **Audit Devices**. These are automatically enabled on startup.
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable declarative audit devices"
+  code={`spec:
   audit:
-    - type: file
-      path: stdout
-      description: "Stdout audit device for debugging"
-      options:
-        file_path: "/dev/stdout"
-        log_raw: "true"
     - type: file
       path: secure-audit
       description: "Secure audit logging"
       options:
         file_path: "/var/log/openbao/audit.log"
-        format: "json"
-```
+        format: "json"`}
+>
+  Audit devices belong in the cluster baseline so the service does not come up “temporarily unaudited” and stay that way by accident.
+</CommandBlock>
 
-</TabItem>
+  </TabItem>
+  <TabItem value="plugins" label="Plugins">
 
-<TabItem value="plugins" label="Plugins">
-
-Configure OCI-based **Plugins** which are automatically downloaded and registered.
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Register OCI-based plugins declaratively"
+  code={`spec:
   configuration:
     plugin:
       autoDownload: true
       downloadBehavior: "direct"
-      
   plugins:
     - type: secret
       name: aws
       image: "ghcr.io/openbao/openbao-plugin-secrets-aws"
       version: "v1.0.0"
       binaryName: "openbao-plugin-secrets-aws"
-      sha256sum: "9fdd8be7947e4a4caf7cce4f0e02695081b6c85178aa912df5d37be97363144c"
-```
+      sha256sum: "9fdd8be7947e4a4caf7cce4f0e02695081b6c85178aa912df5d37be97363144c"`}
+/>
 
-</TabItem>
-
-<TabItem value="operations" label="Operations">
-
-Configure **Images**, **Backups**, and **Init Containers**.
-
-```yaml
-spec:
-  # Override Images for Air-Gapped Environments
-  image: "internal-registry.example.com/openbao/openbao:2.4.0"
-  
-  initContainer:
-    enabled: true
-    image: "internal-registry.example.com/openbao-init:1.0.0"
-
-  backup:
-    image: "internal-registry.example.com/openbao-backup:X.Y.Z"
-    schedule: "0 3 * * *"
-    retention:
-      maxCount: 7
-    target:
-      endpoint: "https://s3.amazonaws.com"
-      bucket: "backups"
-      region: "us-east-1"
-      credentialsSecretRef:
-        name: s3-credentials
-```
-
-</TabItem>
-
+  </TabItem>
 </Tabs>
 
-## Autopilot Configuration
+## Raft autopilot defaults
 
-Raft Autopilot automatically removes dead servers to properly manage the Raft quorum. The Operator configures this automatically based on your `spec.profile` and `spec.replicas`.
+<DiagramFrame
+  title="Autopilot ownership"
+  caption="The operator keeps autopilot aligned with the cluster profile and replica count so peer cleanup and quorum behavior stay in bounds as the cluster changes."
+  code={`flowchart LR
+    Cluster["OpenBaoCluster"] --> Profile["Profile and replicas"]
+    Profile --> Operator["Operator"]
+    Operator --> Autopilot["Autopilot settings"]
+    Autopilot --> Raft["Raft membership behavior"]
 
-<Callout type="note" title="Automatic Reconciliation">
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-The operator updates Autopilot settings whenever `spec.replicas` changes, ensuring `min_quorum` remains safe.
+    class Cluster,Profile read;
+    class Operator process;
+    class Autopilot,Raft write;`}
+/>
 
-</Callout>
+<DecisionTable
+  kind="reference"
+  title="Autopilot defaults"
+  columns={["Setting", "Default", "Why it exists"]}
+  rows={[
+    {
+      cells: [
+        "`cleanupDeadServers`",
+        "`true`",
+        "Dead peers should not linger indefinitely in a Kubernetes-managed environment.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`deadServerLastContactThreshold`",
+        "`5m`",
+        "The operator uses a shorter threshold than the generic upstream default because cluster nodes and Pods are expected to churn faster in Kubernetes.",
+      ],
+    },
+    {
+      cells: [
+        "`serverStabilizationTime`",
+        "`10s`",
+        "New servers should prove they are healthy before becoming stable voters.",
+      ],
+    },
+    {
+      cells: [
+        "`minQuorum`",
+        "Calculated from profile and replica count",
+        "Hardened favors HA safety; Development favors flexibility for small clusters.",
+      ],
+    },
+  ]}
+/>
 
-### Default Values
+<Tabs groupId="server-config-autopilot">
+  <TabItem value="override" label="Override defaults">
 
-The operator sets safe defaults based on your cluster profile:
-
-| Setting | Hardened Profile | Development Profile | Description |
-| :--- | :--- | :--- | :--- |
-| `cleanupDeadServers` | `true` | `true` | Enable automatic removal of failed peers |
-| `deadServerLastContactThreshold` | `5m` | `5m` | Time before a server is considered dead (shorter than OpenBao's 24h default for K8s) |
-| `lastContactThreshold` | `10s` | `10s` | Time without leader contact before a server is considered unhealthy |
-| `maxTrailingLogs` | `1000` | `1000` | Maximum Raft log entries a server can be behind before being considered unhealthy |
-| `serverStabilizationTime` | `10s` | `10s` | Minimum time a server must be healthy before promotion to voter |
-| `minQuorum` | `max(3, replicas)` | `replicas` (min 1) | Minimum servers before pruning allowed |
-
-### Automatic `min_quorum` Calculation
-
-The operator automatically calculates `min_quorum` based on your cluster profile and replica count to ensure safety or flexibility.
-
-<Tabs groupId="hardened-profile-development-profile">
-
-<TabItem value="hardened-profile" label="Hardened Profile">
-
-Designed for High Availability and production safety.
-
-- **Calculation:** `max(3, replicas)`
-- **Behavior:** Ensures at least 3 servers are required for quorum pruning. If you scale to 5 replicas, it safely adjusts to 5.
-- **Goal:** Prevent split-brain scenarios and data loss.
-
-</TabItem>
-
-<TabItem value="development-profile" label="Development Profile">
-
-Designed for resource efficiency and single-node testing.
-
-- **Calculation:** `replicas` (min: 1)
-- **Behavior:** Allows single-node clusters (`min_quorum=1`) and small multi-node setups without strict HA requirements.
-- **Goal:** Minimize resource usage for non-production environments.
-
-</TabItem>
-
-</Tabs>
-
-### Customization
-
-Override any default value via `spec.configuration.raft.autopilot`:
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Customize autopilot explicitly"
+  code={`spec:
   profile: Hardened
   replicas: 5
   configuration:
     raft:
       autopilot:
-        # Override automatic min_quorum calculation
         minQuorum: 4
-        # Customize dead server threshold
         deadServerLastContactThreshold: "10m"
-        # Customize unhealthy server threshold
         lastContactThreshold: "30s"
-        # Customize max trailing logs
         maxTrailingLogs: 2000
-        # Customize stabilization time
-        serverStabilizationTime: "30s"
-```
+        serverStabilizationTime: "30s"`}
+>
+  Override only when you have a concrete reason. Most clusters should start with the operator defaults and change them only after observing real failure or latency behavior.
+</CommandBlock>
 
-<Callout type="tip" title="When to Override min_quorum">
+  </TabItem>
+  <TabItem value="disable-cleanup" label="Disable cleanup">
 
-Generally, you should let the operator calculate `min_quorum` automatically. Override only if you have specific requirements, such as maintaining a higher quorum during maintenance windows.
-
-</Callout>
-
-### Disabling Autopilot Cleanup
-
-To disable automatic dead server cleanup:
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Disable automatic dead-peer cleanup"
+  code={`spec:
   configuration:
     raft:
       autopilot:
-        cleanupDeadServers: false
-```
+        cleanupDeadServers: false`}
+>
+  If you disable cleanup, you are taking manual ownership of peer removal. That is usually a temporary operational exception, not a steady-state recommendation.
+</CommandBlock>
 
-<Callout type="warning" title="Manual Cleanup Required">
+  </TabItem>
+</Tabs>
 
-When disabled, you must manually remove dead Raft peers via `bao operator raft remove-peer` or the OpenBao API.
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect the full configuration schema"
+  code={`kubectl explain openbaocluster.spec.configuration`}
+>
+  Use this when you need the exact field tree. Keep this page for the defaults and decision boundaries, not as a full API dump.
+</CommandBlock>
 
-</Callout>
-
-## Feature Reference
-
-For a complete list of `spec.configuration` fields, run:
-
-```bash
-kubectl explain openbaocluster.spec.configuration
-```
-
-## Official OpenBao Documentation
-
-- [Server Configuration Overview](https://openbao.org/docs/configuration/)
-- [TCP Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/)
-- [Raft Storage Configuration](https://openbao.org/docs/configuration/storage/raft/)
-- [Telemetry Configuration](https://openbao.org/docs/configuration/telemetry/)
-- [Audit Device Configuration](https://openbao.org/docs/configuration/audit/)
-
+<NextActions
+  title="Continue cluster baseline"
+  items={[
+    {
+      label: "Observability",
+      description: "Move to the telemetry and scraping page when you need monitoring rather than server-runtime tuning.",
+      docId: "user-guide/openbaocluster/configuration/observability",
+    },
+    {
+      label: "Air-gapped and private registries",
+      description: "Use the disconnected-environment guide for mirrored images and private registry behavior.",
+      docId: "user-guide/openbaocluster/configuration/air-gapped",
+    },
+    {
+      label: "Operate",
+      description: "Carry the resulting baseline into upgrades, backups, and troubleshooting once the cluster is live.",
+      docId: "user-guide/openbaocluster/operations/index",
+    },
+  ]}
+/>

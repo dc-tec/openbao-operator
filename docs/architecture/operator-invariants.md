@@ -1,79 +1,254 @@
 ---
+title: Operator Invariants
 description: Cross-cutting invariants preserved by OpenBao Operator across identity boundaries, production posture, configuration ownership, and lifecycle safety.
+hide_title: true
+pageType: concept
+journey: architecture
 ---
 
-# Operator Invariants
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Invariants"
+  title="Start design changes from the contracts the operator is trying to preserve."
+  lede="These invariants are the cross-cutting rules behind the rest of the architecture. They explain why some designs are intentionally split, why certain shortcuts are blocked, and which safety properties should survive refactors, new features, or operational changes."
+  actions={[
+    {label: 'Open component design', docId: 'architecture/components', variant: 'primary'},
+    {label: 'Open operation lifecycle', docId: 'architecture/operation-lifecycle', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'evaluate whether a proposed change weakens a core contract',
+      'understand why the operator separates identities, controllers, and disruptive workflows',
+      'map architecture choices back to security and lifecycle guarantees',
+      'review a change set for contract drift rather than only code correctness',
+    ]}
+  />
+</PageHero>
 
-This page defines the cross-cutting guarantees OpenBao Operator tries to preserve. Use it as the conceptual anchor for architecture, security, and lifecycle discussions.
-
-<Callout type="note" title="Lifecycle Contract">
+<Callout type="note" title="Lifecycle contract">
 
 `OpenBaoCluster` is an operator-owned lifecycle contract. It is not a generic import API for arbitrary unmanaged OpenBao clusters.
 
 </Callout>
 
-<Callout type="note" title="Stable Intent">
+<DecisionTable
+  title="Invariant families"
+  columns={['Family', 'What the operator is trying to preserve', 'Why it matters']}
+  rows={[
+    {
+      cells: [
+        'Identity boundaries',
+        'Provisioning, control-plane, and workload trust boundaries stay explicit and mutation-locked.',
+        'This keeps privileged access narrow and prevents tenant onboarding or operator RBAC from drifting into normal reconcile paths.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Production posture',
+        'Hardened production means self-init, trusted TLS, and a non-static unseal path.',
+        'Production safety is a contract, not just a suggested configuration style.',
+      ],
+    },
+    {
+      cells: [
+        'Integration assumptions',
+        'External dependencies surface as explicit status and readiness conditions.',
+        'This turns environment assumptions into visible contracts instead of late runtime failures.',
+      ],
+    },
+    {
+      cells: [
+        'Lifecycle safety',
+        'Disruptive workflows stay explicit, lock-aware, and separated from steady-state workload reconciliation.',
+        'This prevents upgrades, backups, and restores from colliding or becoming invisible side effects.',
+      ],
+    },
+  ]}
+/>
 
-These invariants describe what the operator is trying to preserve across releases. Implementation details may change, but weakening an invariant should be treated as a deliberate contract change.
+## Identity boundary invariants
+
+<DecisionTable
+  kind="reference"
+  title="Identity and access"
+  columns={['Invariant', 'Why it exists', 'Primary enforcement']}
+  rows={[
+    {
+      cells: [
+        'Provisioner and controller identities stay separate.',
+        'A long-running workload identity should not both mint and consume tenant access.',
+        'Split ServiceAccounts, RBAC boundaries, and admission policies.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Rendered operator identities stay internally consistent and mutation-locked.',
+        'Install drift in ServiceAccounts, RoleBindings, and admission subjects weakens the control-plane trust model.',
+        'Helm/raw-manifest rendering, managed-resource locks, and break-glass allowlists.',
+      ],
+    },
+    {
+      cells: [
+        'Tenant namespace access is introduced explicitly and remains provisioner-owned.',
+        'Tenant onboarding should be deliberate, not discovered passively by a broad controller identity.',
+        '`OpenBaoTenant` onboarding flow, tenant governance policy, and controller RBAC exclusions.',
+      ],
+    },
+    {
+      cells: [
+        'Secret access stays name-scoped and non-enumerating.',
+        'The operator needs to create or read specific secrets without gaining broad tenant secret visibility.',
+        'Allowlisted Secret roles, blind-create patterns, and admission restrictions on managed Secret writes.',
+      ],
+    },
+    {
+      cells: [
+        'Admission enforcement remains part of the normal safety model.',
+        'Guardrails should fail early at the API boundary, and loss of those guardrails should pause sensitive reconciliation.',
+        'Validating admission policy inventory, runtime admission tracking, and degraded conditions.',
+      ],
+    },
+  ]}
+/>
+
+Related reading: <SiteLink docId="security/infrastructure/rbac">RBAC Architecture</SiteLink>, <SiteLink docId="security/infrastructure/admission-policies">Admission Policies</SiteLink>, and <SiteLink docId="user-guide/operator/identity-and-access">Operator Identity and Access</SiteLink>.
+
+## Production posture invariants
+
+<DecisionTable
+  kind="reference"
+  title="Production posture"
+  columns={['Invariant', 'Why it exists', 'Primary enforcement']}
+  rows={[
+    {
+      cells: [
+        'Hardened production requires self-init, trusted TLS, and a non-static unseal path.',
+        'This prevents root token Secret persistence and weak bootstrap or transport defaults in production.',
+        'Cluster validation, the `ProductionReady` condition, and hardened-profile checks.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '`OperatorManaged` TLS is not a hardened production path.',
+        'Production trust should align with externally managed or OpenBao-native certificate models.',
+        'Admission validation and `ProductionReady=False` when an unsupported TLS mode is selected.',
+      ],
+    },
+    {
+      cells: [
+        'Self-init is the supported production bootstrap path.',
+        'Production bootstrap should stay declarative and avoid persisting the initial root token.',
+        'Self-init validation, hardened profile requirements, and production posture evaluation.',
+      ],
+    },
+    {
+      cells: [
+        'Operator-owned configuration stays operator-owned.',
+        'Networking, storage, seal settings, and listener identity need a single ownership model to stay correct.',
+        'Rendered configuration ownership and admission policy enforcement.',
+      ],
+    },
+  ]}
+/>
+
+Related reading: <SiteLink docId="security/fundamentals/profiles">Security Profiles</SiteLink>, <SiteLink docId="security/workload/tls">TLS and Identity</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/configuration/self-init">Self-Initialization</SiteLink>.
+
+## Integration invariants
+
+<DecisionTable
+  kind="reference"
+  title="External dependencies and readiness"
+  columns={['Invariant', 'Why it exists', 'Primary enforcement']}
+  rows={[
+    {
+      cells: [
+        'Gateway, ACME, and API-server assumptions surface as explicit conditions.',
+        'Environment and controller dependencies should become visible status contracts before they become runtime failures.',
+        '`GatewayIntegrationReady`, `ACMEIntegrationReady`, `ACMECacheReady`, and `APIServerNetworkReady` conditions.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Backup and restore identity stays separate from the main workload identity.',
+        'Day-2 Jobs should not silently inherit the wrong auth path, cloud permissions, or egress assumptions from the StatefulSet.',
+        'Dedicated job identities, readiness evaluation, and explicit backup/restore status reasons.',
+      ],
+    },
+  ]}
+/>
+
+Related reading: <SiteLink docId="reference/status-and-events">Status and Events</SiteLink> and <SiteLink docId="user-guide/openbaocluster/operations/backups">Configure Backups</SiteLink>.
+
+## Lifecycle safety invariants
+
+<DecisionTable
+  kind="reference"
+  title="Disruptive operation safety"
+  columns={['Invariant', 'Why it exists', 'Primary enforcement']}
+  rows={[
+    {
+      cells: [
+        'Only one disruptive operation owns the cluster operation lock at a time.',
+        'Upgrades, backups, and restores should not collide on the same cluster.',
+        '`status.operationLock`, shared lifecycle coordination, and manager-specific lock handling.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Restore remains destructive, explicit, and lock-aware.',
+        'Restore should never be mistaken for a routine reconcile side effect.',
+        '`OpenBaoRestore`, restore validation, override-lock handling, and operation-lock checks.',
+      ],
+    },
+    {
+      cells: [
+        'Break-glass access stays explicit and narrow.',
+        'Administrative escape hatches should exist without turning privileged mutation into the normal operating model.',
+        'Configured maintenance groups, admission exceptions, and recovery runbooks.',
+      ],
+    },
+    {
+      cells: [
+        'OpenBao remains the source of truth for data consistency and snapshot semantics.',
+        'The operator should orchestrate and guard the lifecycle, not reimplement the data plane.',
+        'Supervisor pattern, API-driven backup/restore flows, and OpenBao-led snapshot semantics.',
+      ],
+    },
+  ]}
+/>
+
+Related reading: <SiteLink docId="architecture/operation-lifecycle">Operation Lifecycle</SiteLink>, <SiteLink docId="user-guide/openbaorestore/restore">Restore from Backup</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/recovery/index">Recovery and Restore</SiteLink>.
+
+<Callout type="tip" title="Treat invariant changes as contract changes">
+
+If a change weakens one of these invariants, update the related architecture, security, and user-guide pages in the same change set. This is not only an implementation detail; it changes the operating contract of the product.
 
 </Callout>
 
-## Identity and Access Invariants
-
-| Invariant | Why it exists | Primary enforcement | Reference |
-| :--- | :--- | :--- | :--- |
-| **Provisioner and Controller identities remain separated** | Prevent one long-running identity from both minting and consuming tenant access. | Split ServiceAccounts, RBAC boundaries, admission policies. | [RBAC Architecture](../security/infrastructure/rbac.md) |
-| **Rendered operator identities stay internally consistent** | Prevent raw-manifest installs from drifting between ServiceAccounts, RoleBindings, and admission policy subjects. | Helm values, raw-manifest overlays, admission-policy variables, install-time render tests. | [Operator Installation](../user-guide/operator/installation.md) |
-| **Operator-managed identities and RBAC stay mutation-locked** | Prevent users, GitOps, or tenant workloads from drifting the ServiceAccounts, Roles, and RoleBindings that define operator access boundaries. | Managed-resource admission locks, RBAC restrictor policies, break-glass allowlist. | [Admission Policies](../security/infrastructure/admission-policies.md) |
-| **Tenant namespace access is introduced explicitly, not discovered** | Keep tenant onboarding intentional and prevent broad namespace discovery. | `OpenBaoTenant` onboarding flow, RoleBinding introduction, no namespace list for Controller. | [Tenant Isolation](../security/multi-tenancy/tenant-isolation.md) |
-| **Tenant guardrails remain provisioner-owned** | Preserve the Day 0 / Day 1 boundary so tenant quotas, limit ranges, and namespace labels do not drift into normal workload reconciliation. | Provisioner-owned onboarding flow, tenant governance admission policy, controller RBAC exclusions. | [RBAC Architecture](../security/infrastructure/rbac.md) |
-| **Secret access is name-scoped and non-enumerating** | Prevent broad tenant secret exposure and reduce blast radius. | Allowlisted Secret roles, no Secret list/watch in the normal model, admission policy restrictions. | [RBAC Architecture](../security/infrastructure/rbac.md) |
-| **Tenant Secret mutation remains blind-create and name-scoped** | Allow operator-managed Secret creation without enabling arbitrary tenant Secret discovery or mutation. | Dedicated Secret reader/writer Roles, name-scoped mutate verbs, admission policy restrictions on managed Secret writes. | [RBAC Architecture](../security/infrastructure/rbac.md) |
-| **Admission enforcement is part of the normal safety model** | Keep API-level guardrails active before invalid or unsafe objects persist. | `ValidatingAdmissionPolicy` inventory, fail-closed startup, optional enforcement canary. | [Admission Policies](../security/infrastructure/admission-policies.md) |
-| **Admission dependency loss pauses sensitive reconciliation** | Prevent the operator from continuing privileged writes after required guardrails disappear or stop applying. | Runtime admission tracker, fail-closed reconciliation gates, status conditions and degraded reasons. | [Status Conditions and Events](../reference/status-and-events.md) |
-
-<Callout type="note" title="Identity Map">
-
-For the compact bridge between Kubernetes identities, OpenBao authentication, and authorization surfaces, see [Operator Identity And Access](../user-guide/operator/identity-and-access.md).
-
-</Callout>
-
-## Production Posture Invariants
-
-| Invariant | Why it exists | Primary enforcement | Reference |
-| :--- | :--- | :--- | :--- |
-| **Hardened production posture requires self-init, non-static unseal, and trusted TLS** | Prevent root token Secret persistence and weak bootstrap or transport defaults in production. | `openbao-validate-openbaocluster`, `ProductionReady` condition, Hardened profile validation. | [Security Profiles](../security/fundamentals/profiles.md) |
-| **`OperatorManaged` TLS is not a Hardened production path** | Keep production posture aligned with external or OpenBao-native certificate trust models. | Admission validation for Hardened clusters, `ProductionReady=False` when `OperatorManaged` TLS is selected. | [TLS & Identity](../security/workload/tls.md) |
-| **Self-init is the supported production bootstrap path** | Keep production bootstrap declarative and avoid storing the initial root token in a Secret. | Hardened profile requirements, validation policy, `ProductionReady` evaluation. | [Self-Initialization](../user-guide/openbaocluster/configuration/self-init.md) |
-| **Operator-owned configuration stays operator-owned** | Preserve correctness for networking, storage, seal configuration, and listener identity. | Managed configuration rendering and admission ownership rules. | [Admission Policies](../security/infrastructure/admission-policies.md) |
-| **`ProductionReady` means Hardened posture checks passed** | Keep status conditions narrowly scoped and avoid implying support or API stability guarantees. | Status condition evaluation and warning reasons. | [Status Conditions and Events](../reference/status-and-events.md) |
-
-## Integration Invariants
-
-| Invariant | Why it exists | Primary enforcement | Reference |
-| :--- | :--- | :--- | :--- |
-| **Gateway, ACME, and API-server assumptions surface as explicit conditions** | Turn environment and controller assumptions into operator-visible contracts before they become late runtime failures. | `GatewayIntegrationReady`, `ACMEIntegrationReady`, `ACMECacheReady`, and `APIServerNetworkReady`. | [Status Conditions and Events](../reference/status-and-events.md) |
-| **Backup and restore identity remains separate from main workload identity** | Prevent day-2 Jobs from silently inheriting the wrong auth path or egress assumptions from the main StatefulSet. | Generated Job ServiceAccounts, backup and restore readiness evaluation, explicit status reasons. | [Backup Operations](../user-guide/openbaocluster/operations/backups.md) |
-
-## Lifecycle Safety Invariants
-
-| Invariant | Why it exists | Primary enforcement | Reference |
-| :--- | :--- | :--- | :--- |
-| **Only one disruptive operation owns the cluster operation lock at a time** | Prevent upgrades, backups, and restores from colliding on the same cluster. | `status.operationLock`, shared operation lifecycle coordination, manager-specific lock handling. | [Operation Lifecycle](operation-lifecycle.md) |
-| **Restore remains destructive, explicit, and lock-aware** | Make disaster recovery visible and prevent restore from being treated as a routine reconcile side effect. | `OpenBaoRestore` CRD, restore validation, break-glass override, operation lock checks. | [Restore](../user-guide/openbaorestore/restore.md) |
-| **Break-glass access remains explicit and narrow** | Preserve a deliberate maintenance escape hatch without turning administrative mutation into the normal operating model. | Configured maintenance break-glass groups, managed-resource admission exceptions, recovery and maintenance runbooks. | [Admission Policies](../security/infrastructure/admission-policies.md) |
-| **OpenBao remains the source of truth for data consistency and snapshot semantics** | Keep the operator focused on orchestration and guardrails rather than reimplementing OpenBao data-plane behavior. | Supervisor Pattern, OpenBao API-driven backup and restore flows, OpenBao-led snapshot semantics. | [Architecture Overview](/docs/architecture) |
-
-## Using This Page
-
-<Callout type="tip" title="When a change is high risk">
-
-If a change weakens one of these invariants, update the related architecture, security, and user-guide pages in the same change set. Treat it as a contract change, not only an implementation change.
-
-</Callout>
-
-## See Also
-
-- [Architecture Overview](/docs/architecture)
-- [Deployment Decision Guide](../user-guide/operator/deployment-decision-guide.md)
-- [Security Overview](/docs/security)
+<NextActions
+  title="Continue through the architecture"
+  items={[
+    {
+      label: 'Component design',
+      description: 'See where controllers, app facades, and managers split responsibilities to preserve these invariants.',
+      docId: 'architecture/components',
+    },
+    {
+      label: 'Operation lifecycle',
+      description: 'Trace how shared lifecycle coordination keeps upgrades, backups, and restores from colliding.',
+      docId: 'architecture/operation-lifecycle',
+    },
+    {
+      label: 'Security overview',
+      description: 'Move into the user-facing security model that these invariants are designed to protect.',
+      docId: 'security/index',
+    },
+  ]}
+/>

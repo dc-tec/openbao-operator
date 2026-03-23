@@ -8,41 +8,63 @@ description: Generated API, compatibility, maintenance policy, upgrade compatibi
 ---
 
 <PageHero
+  variant="landing"
   eyebrow="Reference"
-  title="Use reference pages when the answer needs to be exact."
-  lede="This section is for field-level behavior, compatibility boundaries, support posture, upgrade rules, and status and event semantics. It is intentionally denser and quieter than the guide-driven sections."
+  title="Use the exact contract when the details matter."
+  lede="Use this section for generated API fields, compatibility expectations, upgrade constraints, support posture, and status and event semantics."
   actions={[
-    {label: 'Open compatibility', docId: 'reference/compatibility', variant: 'primary'},
-    {label: 'Open API reference', docId: 'reference/api', variant: 'secondary'},
+    {label: 'Open compatibility matrix', docId: 'reference/compatibility', variant: 'primary'},
+    {label: 'Open status and events', docId: 'reference/status-and-events', variant: 'secondary'},
   ]}
 />
 
 <RouteList
-  title="Reference routes"
+  title="Quick checks"
   items={[
     {
       eyebrow: '01',
-      title: 'API reference',
-      description: 'Generated CRD schema and field-level descriptions from `api/v1alpha1`.',
-      docId: 'reference/api',
-    },
-    {
-      eyebrow: '02',
       title: 'Compatibility',
       description: 'Supported Kubernetes and OpenBao combinations and the validation scope behind them.',
       docId: 'reference/compatibility',
     },
     {
-      eyebrow: '03',
-      title: 'Support policy',
-      description: 'Release-channel expectations, support window, and production guidance.',
-      docId: 'reference/support-policy',
-    },
-    {
-      eyebrow: '04',
+      eyebrow: '02',
       title: 'Status and events',
       description: 'Condition types, reason values, and the fastest way to debug the operator lifecycle.',
       docId: 'reference/status-and-events',
+    },
+    {
+      eyebrow: '03',
+      title: 'Upgrade compatibility',
+      description: 'Supported operator upgrade paths, CRD upgrade order, and the project rollback stance.',
+      docId: 'reference/operator-upgrade-compatibility',
+    },
+    {
+      eyebrow: '04',
+      title: 'API reference',
+      description: 'Generated CRD schema and field-level descriptions from `api/v1alpha1`.',
+      docId: 'reference/api',
+    },
+  ]}
+/>
+
+<NextActions
+  title="Policies and caveats"
+  items={[
+    {
+      label: 'Support policy',
+      description: 'See which release lines are in scope for best-effort maintenance and what that support actually means.',
+      docId: 'reference/support-policy',
+    },
+    {
+      label: 'Deprecation policy',
+      description: 'Review how API and behavior changes are introduced across pre-GA release lines.',
+      docId: 'reference/deprecation-policy',
+    },
+    {
+      label: 'Known limitations',
+      description: 'Check current constraints, non-goals, and caveats before assuming a behavior is supported.',
+      docId: 'reference/known-limitations',
     },
   ]}
 />

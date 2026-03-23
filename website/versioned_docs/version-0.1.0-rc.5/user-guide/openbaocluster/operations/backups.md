@@ -1,47 +1,87 @@
 ---
+title: Backup Operations
+description: Configure backup jobs, object-storage auth, retention, and verification before you depend on snapshot-based recovery.
 slug: /operate/backups
+hide_title: true
+pageType: task
+journey: operate
 ---
 
-# Backups
+<PageHero
+  eyebrow="Operate / Backups"
+  title="Make snapshots routine before you need them for a restore."
+  lede="OpenBao Operator runs backups as transient Jobs that authenticate separately from the main workload, stream Raft snapshots directly to object storage, and record schedule and failure state on the cluster."
+  actions={[
+    {label: 'Open restore guide', docId: 'user-guide/openbaorestore/restore', variant: 'primary'},
+    {label: 'Open backup manager architecture', docId: 'architecture/backup-manager', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'wire scheduled snapshots before the first risky upgrade',
+      'choose backup auth and storage credentials deliberately',
+      'verify retention, status, and manual backup behavior',
+      'prepare for restore workflows without guessing how jobs are launched',
+    ]}
+  />
+</PageHero>
 
-The Operator provides a robust, Kubernetes-native backup system that streams Raft snapshots directly to object storage.
+<DiagramFrame
+  title="Backup execution path"
+  caption="A schedule or manual trigger launches a stateless Job. The Job authenticates to OpenBao, streams the Raft snapshot directly, and uploads it to object storage without sending snapshot bytes through the controller."
+  code={`flowchart LR
+    Trigger["Cron or manual trigger"] --> Job["Backup Job"]
+    Job --> Auth["Authenticate to OpenBao"]
+    Auth --> Snapshot["Stream Raft snapshot"]
+    Snapshot --> Upload["Upload to object storage"]
+    Upload --> Status["Update backup status and retention"]
 
-<Callout type="note">
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
 
-For restore procedures, see [Restore from Backup](../../openbaorestore/restore.md).
+    class Trigger read;
+    class Job,Auth,Snapshot,Upload process;
+    class Status write;`}
+/>
 
-</Callout>
-
-## Architecture
-
-Backups run as transient Kubernetes Jobs, triggered by a Cron schedule or manually.
-
-```mermaid
-flowchart LR
-    Cron[Cron Schedule] -->|Triggers| Job[Backup Job]
-    Job -->|Auths via JWT| Bao[OpenBao Cluster]
-    Bao -->|Streams Snapshot| Job
-    Job -->|Uploads| Storage[Object Storage]
-    
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    
-    class Job process;
-    class Bao read;
-    class Storage write;
-```
+<DecisionTable
+  title="Choose the backup auth path"
+  columns={['Path', 'Use it when', 'Operator behavior', 'Watch for']}
+  rows={[
+    {
+      cells: [
+        'JWT auth',
+        'You can enable `selfInit.oidc` or already run the JWT auth method on the cluster.',
+        'The operator uses a projected ServiceAccount token and can auto-configure the backup auth role when OIDC bootstrap is enabled.',
+        'Keep the JWT audience aligned between the controller env vars and the OpenBao role.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Static token',
+        'JWT auth is not available yet and you need a compatibility path.',
+        'The backup Job reads a long-lived token from a Secret in the cluster namespace.',
+        'This is a legacy path. Treat the token as a sensitive credential and rotate it deliberately.',
+      ],
+      emphasis: 'caution',
+    },
+  ]}
+/>
 
 ## Prerequisites
 
-- Configure a bucket or container in a supported provider:
-  - S3: AWS S3 or S3-compatible storage such as MinIO or Ceph
-  - GCS: Google Cloud Storage bucket
-  - Azure: Azure Blob Storage container
-- Grant write access to the bucket or container.
+- Provision a bucket or container in a supported provider:
+  - S3 or S3-compatible storage such as MinIO or Ceph
+  - Google Cloud Storage
+  - Azure Blob Storage
+- Grant the backup identity write access to that storage location.
 - Allow egress to the storage endpoint. This is required for the `Hardened` profile.
+- Decide whether the backup and restore Jobs will use a Secret, explicit workload identity metadata, or provider-default credentials.
 
-<Callout type="note" title="Separate Identity Surfaces">
+<Callout type="note" title="Separate identity surfaces">
 
 The main OpenBao Pods and backup Jobs use different ServiceAccounts.
 Cloud KMS unseal identity on the main workload does not automatically apply to backup or restore Jobs.
@@ -49,170 +89,157 @@ Check `CloudUnsealIdentityReady` for the main Pods and `BackupConfigurationReady
 
 </Callout>
 
-## Configuration
+## Configure backup auth and storage
 
-Select an authentication method. Use JWT Auth for automatic token rotation.
+<Tabs groupId="backup-auth-path">
 
-<Tabs groupId="jwt-auth-recommended-static-token-legacy">
+<TabItem value="jwt-auth" label="JWT auth (Recommended)">
 
-<TabItem value="jwt-auth-recommended" label="JWT Auth (Recommended)">
+Use JWT auth when you want automatic token rotation and the cleanest separation between the cluster workload and backup jobs.
 
-This method uses a projected ServiceAccount token to authenticate with OpenBao.
+<Callout type="success" title="Automated setup">
 
-<Callout type="success" title="Automated Setup">
+When `spec.selfInit.oidc.enabled` is `true`, the operator automatically configures:
 
-When `spec.selfInit.oidc.enabled` is `true`, the Operator automatically configures:
-1. JWT Auth Method (`auth/jwt-operator`)
-2. OIDC Discovery
-3. Backup Policy (`openbao-operator-backup`)
-4. Backup Role (`openbao-operator-backup`)
+1. the JWT auth method (`auth/jwt-operator`)
+2. OIDC discovery
+3. the backup policy (`openbao-operator-backup`)
+4. the backup role (`openbao-operator-backup`)
 
-No manual configuration is required.
+No manual OpenBao auth configuration is required.
 
 </Callout>
 
-**Cluster Configuration:**
-
-Ensure OIDC is enabled in your cluster:
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable OIDC bootstrap for automatic backup auth"
+  code={`spec:
   selfInit:
     enabled: true
     oidc:
-      enabled: true
-```
+      enabled: true`}
+/>
 
 <Callout type="note" title="JWT audience">
 
 The backup Job uses the audience from `OPENBAO_JWT_AUDIENCE` (default: `openbao-internal`).
 Set the same value in the OpenBao role `bound_audiences` and pass the env var to the operator
-(`controller.extraEnv` and `provisioner.extraEnv` in Helm).
+through `controller.extraEnv` and `provisioner.extraEnv` in Helm.
 
 </Callout>
 
-**Cluster Configuration:**
+<Tabs groupId="backup-provider-jwt">
 
-Select your storage provider:
+<TabItem value="s3" label="S3">
 
-<Tabs groupId="s3-aws-minio-etc-gcs-google-cloud-storage-azure-blob-storage">
-
-<TabItem value="s3-aws-minio-etc" label="S3 (AWS, MinIO, etc.)">
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoCluster
-metadata:
-  name: backup-cluster
-spec:
-  backup:
-    schedule: "0 3 * * *"  # Daily at 3 AM
-    # image: inferred from operator version
-    # jwtAuthRole: inferred from selfInit (openbao-operator-backup)
-    
-    target:
-      provider: s3  # Default, can be omitted
-      endpoint: "https://s3.amazonaws.com"
-      bucket: "openbao-backups"
-      region: "us-east-1"
-      pathPrefix: "clusters/backup-cluster"
-      usePathStyle: false  # Set true for MinIO/S3-compatible
-      # Optional explicit Web Identity flow managed by the operator:
-      # roleArn: "arn:aws:iam::123456789012:role/openbao-backup"
-      # Optional workload identity metadata for webhook-based integrations:
-      # workloadIdentity:
-      #   serviceAccountAnnotations:
-      #     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/openbao-backup"
-      credentialsSecretRef:
-        name: s3-credentials
-```
-
-<Callout type="note" title="S3 Credentials Secret">
-
-Create a Secret with keys:
-- `accessKeyId`: AWS access key ID
-- `secretAccessKey`: AWS secret access key
-- `sessionToken`: (optional) Temporary session token
-- `region`: (optional) Override region
-- `caCert`: (optional) Custom CA certificate for self-signed endpoints
-
-You can also omit `credentialsSecretRef` and use:
-- `roleArn` for the operator-managed Web Identity path
-- ambient workload identity/default credentials (for example EKS Pod Identity)
-- `workloadIdentity.serviceAccountAnnotations` when your platform integration is driven by ServiceAccount metadata
-
-The operator reports `WorkloadIdentityConfigured` when it can see an explicit Job identity path such as `roleArn` or `target.workloadIdentity.*`.
-It reports `AmbientIdentityAssumed` only when no storage Secret or explicit Job identity metadata is configured.
-
-</Callout>
-
-</TabItem>
-
-<TabItem value="gcs-google-cloud-storage" label="GCS (Google Cloud Storage)">
-
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Configure S3 or S3-compatible storage"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: backup-cluster
 spec:
   backup:
     schedule: "0 3 * * *"
-    image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
-    jwtAuthRole: backup
-    
+    target:
+      provider: s3
+      endpoint: "https://s3.amazonaws.com"
+      bucket: "openbao-backups"
+      region: "us-east-1"
+      pathPrefix: "clusters/backup-cluster"
+      usePathStyle: false
+      # Optional explicit web identity path:
+      # roleArn: "arn:aws:iam::123456789012:role/openbao-backup"
+      # Optional provider metadata for the generated ServiceAccount:
+      # workloadIdentity:
+      #   serviceAccountAnnotations:
+      #     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/openbao-backup"
+      credentialsSecretRef:
+        name: s3-credentials`}
+/>
+
+<Callout type="note" title="S3 credentials">
+
+Create a Secret with these keys when you are not using provider-default identity:
+
+- `accessKeyId`
+- `secretAccessKey`
+- `sessionToken` (optional)
+- `region` (optional)
+- `caCert` (optional)
+
+You can also omit `credentialsSecretRef` and rely on:
+
+- `roleArn` for the operator-managed web identity flow
+- ambient workload identity or default credentials
+- `workloadIdentity.serviceAccountAnnotations` when your platform integration is driven by ServiceAccount metadata
+
+</Callout>
+
+</TabItem>
+
+<TabItem value="gcs" label="GCS">
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Configure Google Cloud Storage"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: backup-cluster
+spec:
+  backup:
+    schedule: "0 3 * * *"
     target:
       provider: gcs
       bucket: "openbao-backups"
       pathPrefix: "clusters/backup-cluster"
       gcs:
-        project: "my-gcp-project"  # Optional if using ADC
-      # Optional workload identity metadata for the generated ServiceAccount:
+        project: "my-gcp-project"
+      # Optional Workload Identity metadata for the generated ServiceAccount:
       # workloadIdentity:
       #   serviceAccountAnnotations:
       #     iam.gke.io/gcp-service-account: "backup@my-project.iam.gserviceaccount.com"
       credentialsSecretRef:
-        name: gcs-credentials
-```
+        name: gcs-credentials`}
+/>
 
-<Callout type="note" title="GCS Credentials">
-
-**Option 1: Service Account Key (Recommended)**
-Create a Secret with key `credentials.json` containing the service account JSON key:
-```sh
-kubectl create secret generic gcs-credentials \
-  --from-file=credentials.json=/path/to/service-account-key.json
-```
-
-**Option 2: Application Default Credentials (ADC)**
-If running on GKE or with Workload Identity, omit `credentialsSecretRef` to use ADC.
-When needed, set `target.workloadIdentity.serviceAccountAnnotations` so the generated backup/restore ServiceAccount carries the required provider annotation.
-This is separate from any workload identity attached to the main OpenBao Pods for unseal.
-
-</Callout>
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Create the GCS credentials Secret"
+  code={`kubectl create secret generic gcs-credentials \\
+  --from-file=credentials.json=/path/to/service-account-key.json`}
+>
+  Omit `credentialsSecretRef` when you intentionally rely on Application Default Credentials or Workload Identity instead of a static service-account key.
+</CommandBlock>
 
 </TabItem>
 
-<TabItem value="azure-blob-storage" label="Azure Blob Storage">
+<TabItem value="azure" label="Azure">
 
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Configure Azure Blob Storage"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: backup-cluster
 spec:
   backup:
     schedule: "0 3 * * *"
-    image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
-    jwtAuthRole: backup
-    
     target:
       provider: azure
-      bucket: "openbao-backups"  # Container name
+      bucket: "openbao-backups"
       pathPrefix: "clusters/backup-cluster"
       azure:
         storageAccount: "mystorageaccount"
-        container: "openbao-backups"  # Optional, uses bucket if omitted
+        container: "openbao-backups"
       # Optional workload identity metadata:
       # workloadIdentity:
       #   serviceAccountAnnotations:
@@ -220,21 +247,21 @@ spec:
       #   podLabels:
       #     azure.workload.identity/use: "true"
       credentialsSecretRef:
-        name: azure-credentials
-```
+        name: azure-credentials`}
+/>
 
-<Callout type="note" title="Azure Credentials Secret">
+<Callout type="note" title="Azure credentials">
 
-Create a Secret with **one** of the following:
-- `accountKey`: Storage account access key
-- `connectionString`: Full Azure connection string
+Create a Secret with one of the following:
+
+- `accountKey`
+- `connectionString`
 
 For managed identity or Azure Workload Identity, omit `credentialsSecretRef`.
 If your cluster integration requires Kubernetes metadata, use:
+
 - `target.workloadIdentity.serviceAccountAnnotations`
 - `target.workloadIdentity.podLabels`
-
-The operator treats both fields together as the explicit Azure workload identity path for backup and restore Jobs.
 
 </Callout>
 
@@ -244,42 +271,39 @@ The operator treats both fields together as the explicit Azure workload identity
 
 </TabItem>
 
-<TabItem value="static-token-legacy" label="Static Token (Legacy)">
+<TabItem value="static-token" label="Static token (Legacy)">
 
-This method uses a static OpenBao token stored in a Kubernetes Secret.
+Use this path only when JWT auth is not available. The backup Job reads a long-lived OpenBao token from a Secret.
 
-<Callout type="note" title="Same-Namespace Requirement">
+<Callout type="note" title="Same-namespace requirement">
 
-All secret references must exist in the **same namespace** as the `OpenBaoCluster`. Cross-namespace references are not allowed for security reasons.
+All referenced Secrets must exist in the same namespace as the `OpenBaoCluster`. Cross-namespace references are not allowed.
 
 </Callout>
 
-<ExpandableCallout type="abstract" title="Prerequisite: Create Token Secret">
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Create the backup token Secret"
+  code={`kubectl create secret generic backup-token \\
+  --from-literal=token=hvs.yourtoken...`}
+/>
 
-1. Generate a generic token in OpenBao with snapshot read permissions.
-2. Store it in a Secret:
-   ```sh
-   kubectl create secret generic backup-token \
-     --from-literal=token=hvs.yourtoken...
-   ```
-
-</ExpandableCallout>
-
-**Cluster Configuration:**
-
-<Tabs groupId="s3-gcs-azure">
+<Tabs groupId="backup-provider-static">
 
 <TabItem value="s3" label="S3">
 
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Configure S3 backup with a static token"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: backup-cluster
 spec:
   backup:
     schedule: "0 3 * * *"
-    image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
     tokenSecretRef:
       name: backup-token
     target:
@@ -288,22 +312,24 @@ spec:
       bucket: "openbao-backups"
       region: "us-east-1"
       credentialsSecretRef:
-        name: s3-credentials
-```
+        name: s3-credentials`}
+/>
 
 </TabItem>
 
 <TabItem value="gcs" label="GCS">
 
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Configure GCS backup with a static token"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: backup-cluster
 spec:
   backup:
     schedule: "0 3 * * *"
-    image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
     tokenSecretRef:
       name: backup-token
     target:
@@ -312,22 +338,24 @@ spec:
       gcs:
         project: "my-gcp-project"
       credentialsSecretRef:
-        name: gcs-credentials
-```
+        name: gcs-credentials`}
+/>
 
 </TabItem>
 
 <TabItem value="azure" label="Azure">
 
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Configure Azure backup with a static token"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: backup-cluster
 spec:
   backup:
     schedule: "0 3 * * *"
-    image: "ghcr.io/dc-tec/openbao-backup:X.Y.Z"
     tokenSecretRef:
       name: backup-token
     target:
@@ -336,8 +364,8 @@ spec:
       azure:
         storageAccount: "mystorageaccount"
       credentialsSecretRef:
-        name: azure-credentials
-```
+        name: azure-credentials`}
+/>
 
 </TabItem>
 
@@ -347,80 +375,130 @@ spec:
 
 </Tabs>
 
-## Advanced Configuration
+## Advanced backup settings
 
-### Provider-Specific Options
+### Provider-specific options
 
-<Tabs groupId="s3-options-gcs-options-azure-options">
+<Tabs groupId="backup-provider-options">
 
-<TabItem value="s3-options" label="S3 Options">
+<TabItem value="s3-options" label="S3">
 
-| Option | Default | Description |
-| :--- | :--- | :--- |
-| `region` | `us-east-1` | AWS region or any value for S3-compatible stores |
-| `usePathStyle` | `false` | Set `true` for MinIO and S3-compatible stores |
-| `roleArn` | - | IAM role ARN for the explicit AWS Web Identity flow |
+<DecisionTable
+  kind="reference"
+  title="S3-specific options"
+  columns={['Option', 'Default', 'What it changes']}
+  rows={[
+    {
+      cells: ['`region`', '`us-east-1`', 'Sets the AWS region or any placeholder value needed by an S3-compatible implementation.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['`usePathStyle`', '`false`', 'Switch to path-style addressing for MinIO and some S3-compatible endpoints.'],
+    },
+    {
+      cells: ['`roleArn`', 'none', 'Enables the explicit AWS web identity path managed by the operator.'],
+    },
+    {
+      cells: ['`pathPrefix`', 'cluster-scoped default', 'Controls the object prefix used for backup keys so clusters stay separated inside a shared bucket.'],
+    },
+  ]}
+/>
 
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Set S3 provider-specific options"
+  code={`spec:
   backup:
     target:
       provider: s3
       region: "eu-west-1"
-      usePathStyle: true  # Required for MinIO
-      roleArn: "arn:aws:iam::123456789012:role/backup-role"  # Optional IRSA
-```
+      usePathStyle: true
+      roleArn: "arn:aws:iam::123456789012:role/backup-role"
+      pathPrefix: "clusters/prod-a"`}
+/>
 
 </TabItem>
 
-<TabItem value="gcs-options" label="GCS Options">
+<TabItem value="gcs-options" label="GCS">
 
-| Option | Description |
-| :--- | :--- |
-| `project` | GCP project ID (optional if using ADC or credentials include project) |
-| `endpoint` | Custom endpoint (useful for emulators like fake-gcs-server) |
+<DecisionTable
+  kind="reference"
+  title="GCS-specific options"
+  columns={['Option', 'What it changes']}
+  rows={[
+    {
+      cells: ['`project`', 'Pins the GCP project when credentials or ADC do not already provide it.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['`endpoint`', 'Overrides the storage endpoint for emulators such as `fake-gcs-server`.'],
+    },
+  ]}
+/>
 
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Set GCS provider-specific options"
+  code={`spec:
   backup:
     target:
       provider: gcs
-      endpoint: "http://fake-gcs-server:4443"  # Optional emulator endpoint
+      endpoint: "http://fake-gcs-server:4443"
       gcs:
-        project: "my-gcp-project"
-```
+        project: "my-gcp-project"`}
+/>
 
 </TabItem>
 
-<TabItem value="azure-options" label="Azure Options">
+<TabItem value="azure-options" label="Azure">
 
-| Option | Description |
-| :--- | :--- |
-| `storageAccount` | Azure storage account name (required) |
-| `container` | Container name (optional, uses `bucket` if omitted) |
-| `endpoint` | Custom endpoint (useful for Azurite emulator) |
+<DecisionTable
+  kind="reference"
+  title="Azure-specific options"
+  columns={['Option', 'What it changes']}
+  rows={[
+    {
+      cells: ['`storageAccount`', 'Selects the Azure storage account. This is required when `provider: azure` is used.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['`container`', 'Overrides the container name when it should differ from `bucket`.'],
+    },
+    {
+      cells: ['`endpoint`', 'Overrides the blob endpoint for testing tools such as Azurite.'],
+    },
+  ]}
+/>
 
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Set Azure provider-specific options"
+  code={`spec:
   backup:
     target:
       provider: azure
-      endpoint: "http://127.0.0.1:10000"  # Optional Azurite endpoint
+      endpoint: "http://127.0.0.1:10000"
       azure:
         storageAccount: "mystorageaccount"
-        container: "backups"  # Optional
-```
+        container: "backups"`}
+/>
 
 </TabItem>
 
 </Tabs>
 
-### Workload Identity Metadata
+### Workload identity metadata
 
-Use `target.workloadIdentity` when your cloud identity integration needs ServiceAccount annotations or pod labels on the generated backup and restore workloads.
+Use `target.workloadIdentity` when your cloud identity integration depends on ServiceAccount annotations or pod labels on the generated backup and restore workloads.
 
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Attach identity metadata to backup and restore workloads"
+  code={`spec:
   backup:
     target:
       workloadIdentity:
@@ -428,77 +506,128 @@ spec:
           iam.gke.io/gcp-service-account: "backup@my-project.iam.gserviceaccount.com"
           azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
         podLabels:
-          azure.workload.identity/use: "true"
-```
+          azure.workload.identity/use: "true"`}
+>
+  `serviceAccountAnnotations` are applied to the generated backup and restore ServiceAccounts.
+  `podLabels` are applied to backup and restore Job pods without replacing operator-managed labels.
+</CommandBlock>
 
-`serviceAccountAnnotations` are applied to the generated backup/restore ServiceAccounts.
-`podLabels` are applied to backup/restore Job pods without overriding operator-managed labels.
+<Callout type="tip" title="Emulator support">
 
-<Callout type="tip" title="Emulator Support">
-
-GCS and Azure support custom endpoints for local testing with emulators (fake-gcs-server, Azurite). For self-signed certificates, include the CA certificate in the credentials Secret.
+GCS and Azure support custom endpoints for local testing with `fake-gcs-server` and Azurite.
+When those endpoints use self-signed certificates, include the CA certificate in the credentials Secret.
 
 </Callout>
 
-### Retention Policy
+### Retention policy
 
-Automatically clean up old backups from object storage.
-Retention cleanup runs after successful backups and applies to all supported providers (S3, GCS, Azure).
+Retention cleanup runs after a successful backup and works across S3, GCS, and Azure.
 
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Keep a limited number of recent snapshots"
+  code={`spec:
   backup:
     retention:
-      maxCount: 7      # Keep last 7 backups
-      maxAge: "168h"   # Keep backups for 7 days
-```
+      maxCount: 7
+      maxAge: "168h"`}
+/>
 
-### Performance Tuning
+### Performance tuning
 
-Tune multipart upload settings for large datasets or specific network conditions.
+<DecisionTable
+  kind="reference"
+  title="Multipart upload tuning"
+  columns={['Parameter', 'Default', 'When to change it']}
+  rows={[
+    {
+      cells: ['`partSize`', '`10MB`', 'Increase it for high-bandwidth links and large datasets when larger chunks reduce upload overhead.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['`concurrency`', '`3`', 'Increase for throughput, or reduce it when memory pressure or object-store throttling becomes the limiting factor.'],
+    },
+  ]}
+/>
 
-| Parameter | Default | Description |
-| :--- | :--- | :--- |
-| `partSize` | `10MB` | Size of each upload chunk. Increase for high-bandwidth networks. |
-| `concurrency` | `3` | Parallel uploads. Increase for throughput, decrease for memory constraints. |
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Tune upload chunking and parallelism"
+  code={`spec:
   backup:
     target:
-      partSize: 20971520  # 20MB
-      concurrency: 5
-```
+      partSize: 20971520
+      concurrency: 5`}
+/>
 
-### Pre-Upgrade Snapshots
+### Pre-upgrade snapshots
 
-Ensure safety during upgrades by taking a snapshot immediately before the rolling update or blue/green deployment begins.
+Take a snapshot immediately before the rolling update or blue-green cutover begins.
 
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Require a snapshot before upgrades start"
+  code={`spec:
   upgrade:
     preUpgradeSnapshot: true
   backup:
-    # Backup config must be present!
-    target: { ... }
-```
+    target: { ... }`}
+/>
 
-## Operations
+<Callout type="note" title="Upgrade safety">
 
-**Check Status:**
+`preUpgradeSnapshot: true` only works when `spec.backup.target` is already configured.
+Confirm backup status before you start the upgrade rather than assuming the pre-upgrade snapshot can be taken on demand.
 
-```sh
-kubectl get openbaocluster my-cluster -o jsonpath='{.status.backup}'
-```
+</Callout>
 
-**Trigger Manual Backup:**
+## Verify and operate
 
-```sh
-kubectl create job --from=cronjob/my-cluster-backup manual-backup-1
-```
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect backup status on the cluster"
+  code={`kubectl get openbaocluster my-cluster \\
+  -o jsonpath='{.status.backup}'`}
+>
+  Check `lastSuccessfulBackup`, `nextScheduledBackup`, and failure counters before you rely on the policy as a recovery control.
+</CommandBlock>
 
-## Official OpenBao Documentation
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Trigger a manual backup from the generated CronJob"
+  code={`kubectl create job --from=cronjob/my-cluster-backup manual-backup-1`}
+>
+  Use a manual run to prove the full path: identity, cluster auth, storage reachability, and object naming before the first production upgrade.
+</CommandBlock>
+
+## Official OpenBao background
 
 - [OpenBao Backups](https://openbao.org/docs/concepts/storage/#backups)
 - [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)
 - [JWT/OIDC Auth Method](https://openbao.org/docs/auth/jwt/)
+
+<NextActions
+  title="Next operating steps"
+  items={[
+    {
+      label: 'Restore from backup',
+      description: 'Use the restore guide when you need to consume one of the snapshots this page configures.',
+      docId: 'user-guide/openbaorestore/restore',
+    },
+    {
+      label: 'Plan upgrades',
+      description: 'Backups should be validated before you depend on pre-upgrade snapshots and cutover safety.',
+      docId: 'user-guide/openbaocluster/operations/upgrades',
+    },
+    {
+      label: 'Open the production checklist',
+      description: 'Use the checklist to confirm backups, restore readiness, and day 2 controls before calling the cluster production-ready.',
+      docId: 'user-guide/openbaocluster/operations/production-checklist',
+    },
+  ]}
+/>

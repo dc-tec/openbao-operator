@@ -3,10 +3,12 @@ title: Configure
 slug: /configure
 hide_title: true
 pageType: landing
+journey: configure
 description: Configure OpenBaoCluster profiles, bootstrap behavior, storage, exposure, networking, and observability before you scale the service.
 ---
 
 <PageHero
+  variant="landing"
   eyebrow="Configure"
   title="Shape the cluster before it becomes expensive to change."
   lede="Use this section after installation and before broad rollout to set the OpenBaoCluster profile, bootstrap model, exposure pattern, storage, and observability defaults you intend to keep operating."
@@ -31,26 +33,26 @@ description: Configure OpenBaoCluster profiles, bootstrap behavior, storage, exp
   items={[
     {
       eyebrow: '01',
-      title: 'Cluster overview',
-      description: 'Understand the OpenBaoCluster contract, what the controller owns, and the shapes you can safely declare.',
+      title: 'Read this first',
+      description: 'Start with the OpenBaoCluster contract so the rest of the section reads like cluster shaping rather than field-by-field trivia.',
       docId: 'user-guide/openbaocluster/overview',
     },
     {
       eyebrow: '02',
-      title: 'Profiles and bootstrap',
-      description: 'Choose the security profile, self-init behavior, and server configuration before you expose the cluster.',
+      title: 'Cluster baseline',
+      description: 'Choose the security profile, bootstrap model, and server defaults you want to keep operating long term.',
       docId: 'user-guide/openbaocluster/configuration/security-profiles',
     },
     {
       eyebrow: '03',
-      title: 'Access, network, and platform wiring',
-      description: 'Configure external access, network policy expectations, Gateway API integration, and air-gapped constraints.',
+      title: 'Service boundary',
+      description: 'Define how traffic reaches the service, how the network is constrained, and which edge integration owns the exposed path.',
       docId: 'user-guide/openbaocluster/configuration/external-access',
     },
     {
       eyebrow: '04',
-      title: 'Resources, storage, and observability',
-      description: 'Set sizing, persistent storage, and observability defaults that support upgrades, troubleshooting, and restore.',
+      title: 'Platform readiness',
+      description: 'Set storage, observability, and environment-specific constraints such as private registries before the cluster becomes expensive to move.',
       docId: 'user-guide/openbaocluster/configuration/resources-storage',
     },
   ]}
@@ -70,9 +72,9 @@ description: Configure OpenBaoCluster profiles, bootstrap behavior, storage, exp
       docId: 'user-guide/openbaocluster/operations/index',
     },
     {
-      label: 'Review security considerations',
-      description: 'Check the cluster-specific security tradeoffs before you standardize on a pattern.',
-      docId: 'user-guide/openbaocluster/security-considerations',
+      label: 'Open Security',
+      description: 'Review the security model, workload protections, and tenant boundaries that back these configuration choices.',
+      docId: 'security/index',
     },
     {
       label: 'Start from a validated deployment',

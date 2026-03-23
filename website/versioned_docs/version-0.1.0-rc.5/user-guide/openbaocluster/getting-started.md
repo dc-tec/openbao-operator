@@ -1,30 +1,114 @@
-# Basic Cluster Creation
+---
+title: Create Your First Cluster
+slug: /get-started/first-cluster
+hide_title: true
+description: Start with the closest safe OpenBaoCluster baseline, verify the important readiness signals, and move cleanly into day 2 work.
+pageType: task
+journey: get-started
+journeyStep: 4
+---
 
-This guide walks you through creating your first OpenBaoCluster. Choose the path that matches your use case.
+<PageHero
+  eyebrow="Step 4"
+  title="Create the first cluster you can keep operating."
+  lede="By the time you reach this step, the operator is installed and the target namespace is already onboarded when you are in the default multi-tenant mode. Start with the closest safe baseline, verify the cluster becomes healthy, and then move directly into the next operating concern."
+  actions={[
+    {label: 'Prepare for day 2', docId: 'user-guide/openbaocluster/next-steps', variant: 'primary'},
+    {label: 'Open validated deployments', docId: 'user-guide/validated-deployments/index', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Before you apply the cluster manifest"
+    items={[
+      'confirm the operator install is healthy in the namespace model you chose',
+      'confirm the target namespace is already onboarded through OpenBaoTenant when you are in multi-tenant mode',
+      'choose a StorageClass explicitly for production before the first reconcile',
+      'decide whether this cluster is only for evaluation or intended to become production',
+    ]}
+  />
+</PageHero>
 
-## Prerequisites
+<JourneyRail
+  title="The first five moves"
+  current={4}
+  items={[
+    {
+      label: 'Choose a deployment model',
+      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      docId: 'user-guide/operator/deployment-decision-guide',
+    },
+    {
+      label: 'Install the operator',
+      description: 'Render the right namespace, identity, and admission posture.',
+      docId: 'user-guide/operator/installation',
+    },
+    {
+      label: 'Onboard the target namespace',
+      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant before you create a cluster.',
+      docId: 'user-guide/openbaotenant/onboarding',
+    },
+    {
+      label: 'Create your first cluster',
+      description: 'Start with the closest cluster baseline and verify the important readiness signals.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Prepare for day 2',
+      description: 'Move immediately into backups, access, upgrades, and production hardening.',
+      docId: 'user-guide/openbaocluster/next-steps',
+    },
+  ]}
+/>
 
-- **OpenBao Operator**: Installed and running (see [Installation](../operator/installation.md))
-- **Tenancy**: In multi-tenant mode, the target namespace must be onboarded via `OpenBaoTenant` (see [Tenant Onboarding](../openbaotenant/onboarding.md)).
-- **Storage Class**: A suitable StorageClass is available in the cluster. For production, prefer setting `spec.storage.storageClassName` explicitly before the first reconcile.
+<DecisionTable
+  title="Pick the first-cluster intent"
+  columns={['Intent', 'Start with', 'Do not skip', 'Go deeper']}
+  rows={[
+    {
+      cells: [
+        'Local evaluation',
+        'Development profile with operator-managed TLS and minimal storage choices.',
+        'Treat it as disposable. Do not carry this profile into production.',
+        'Security profiles',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Hardened production baseline',
+        'Hardened profile, self-init, External or ACME TLS, and explicit storage.',
+        'User access bootstrap, unseal configuration, and backups before the first risky upgrade.',
+        'Validated deployments',
+      ],
+    },
+    {
+      cells: [
+        'Dedicated team namespace',
+        'The hardened baseline plus the single-tenant operator install path.',
+        'Namespace ownership, rendered controller identity, and `WATCH_NAMESPACE` alignment.',
+        'Single-tenant mode',
+      ],
+    },
+  ]}
+/>
 
-## Choose Your Path
+## Start with the closest manifest
 
-<Tabs groupId="development-local-testing-production">
+<Tabs groupId="first-cluster-intent">
 
-<TabItem value="development-local-testing" label="Development (Local Testing)">
+<TabItem value="evaluation" label="Local evaluation">
 
-For local development and testing. **Not suitable for production.**
-
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Start a development-profile cluster for local evaluation"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: dev-cluster
   namespace: default
 spec:
-  version: "2.4.4"
-  # image: "openbao/openbao:2.4.4" # Optional: inferred from version
+  version: "2.5.0"
   replicas: 3
   profile: Development
   tls:
@@ -32,32 +116,31 @@ spec:
     mode: OperatorManaged
     rotationPeriod: "720h"
   storage:
-    size: "10Gi"
-```
+    size: "10Gi"`}
+/>
 
-<Callout type="warning" title="Development Profile">
+<Callout type="warning" title="Evaluation only">
 
-The `Development` profile uses static auto-unseal and stores sensitive
-material in Kubernetes Secrets. This is convenient for testing but
-**insecure for production use**.
+The `Development` profile stores sensitive material in Kubernetes Secrets and relaxes production controls.
+Use it for local testing and CI, not for real environments.
 
 </Callout>
 
 </TabItem>
 
-<TabItem value="production" label="Production">
+<TabItem value="production" label="Hardened baseline">
 
-For production deployments with hardened security.
-
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Use a hardened baseline as the starting production shape"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: prod-cluster
   namespace: openbao
 spec:
-  version: "2.4.4"
-  # image: "openbao/openbao:2.4.4" # Optional: inferred from version
+  version: "2.5.0"
   replicas: 3
   profile: Hardened
   tls:
@@ -65,54 +148,28 @@ spec:
     mode: External
   storage:
     size: "50Gi"
+    storageClassName: "fast-ssd"
   selfInit:
     enabled: true
     oidc:
-      enabled: true  # (1)!
+      enabled: true
     requests:
-      # Configure user authentication FIRST to prevent lockout
-      - name: enable-userpass
-        operation: update
-        path: sys/auth/userpass
-        authMethod:
-          type: userpass
-          description: "Userpass authentication"
-      - name: create-admin-policy
-        operation: update
-        path: sys/policies/acl/admin
-        policy:
-          policy: |
-            path "*" {
-              capabilities = ["create", "read", "update", "delete", "list", "sudo"]
-            }
-      # Then configure secret engines
-      - name: enable-kv-v2
-        operation: update
-        path: sys/mounts/secret
-        secretEngine:
-          type: kv
-          description: "General purpose KV store"
-          options:
-            version: "2"
+      # add at least one human login path before first exposure
+      # for example: userpass, JWT, or Kubernetes auth
   unseal:
-    type: awskms
-    awskms:
-      region: us-east-1
-      kmsKeyID: alias/openbao-unseal
-```
+    # configure cloud or transit auto-unseal before first reconcile`}
+/>
 
-1.  **OIDC bootstrap** enables the Operator to authenticate via JWT for cluster lifecycle operations (backups, upgrades). This is separate from user authentication.
+<Callout type="danger" title="Do not enable self-init without user access bootstrap">
 
-<Callout type="danger" title="Lockout Prevention Required">
-
-**CRITICAL**: The `requests` array **must** include user authentication configuration (e.g., userpass, JWT, Kubernetes auth) BEFORE enabling self-init. OIDC bootstrap only provides Operator authentication, not user access. Enabling `selfInit.enabled: true` without user authentication in requests results in **permanent lockout** with no recovery options. See [Self-Initialization](configuration/self-init.md) for details.
+`spec.selfInit.oidc.enabled: true` gives the operator a JWT-based control path. It does not create a human login path.
+Before you expose a hardened cluster, add at least one human auth method through `selfInit.requests`.
 
 </Callout>
 
-<Callout type="tip" title="Production Checklist">
+<Callout type="tip" title="Use a validated baseline when possible">
 
-Before deploying to production, complete the [Production Checklist](operations/production-checklist.md)
-to ensure proper security configuration.
+If you are going straight to production, prefer a tested architecture or recipe under [Validated Deployments](../validated-deployments/index.mdx) rather than inventing the entire first manifest from scratch.
 
 </Callout>
 
@@ -120,51 +177,60 @@ to ensure proper security configuration.
 
 </Tabs>
 
-## Apply the Configuration
+## Apply and verify
 
-```sh
-kubectl apply -f cluster.yaml
-```
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Apply the cluster manifest"
+  code={`kubectl apply -f cluster.yaml`}
+/>
 
-## Verify Deployment
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect cluster phase and readiness"
+  code={`kubectl get openbaocluster <name> -n <namespace> -o wide`}
+>
+  Watch `status.phase`, `readyReplicas`, and whether the cluster reaches `Available=True`.
+</CommandBlock>
 
-Check the cluster status:
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Watch the cluster pods stabilize"
+  code={`kubectl get pods -l openbao.org/cluster=<name> -n <namespace> -w`}
+>
+  A healthy first cluster should converge without repeated crash loops or long-lived pending state.
+</CommandBlock>
 
-```sh
-kubectl get openbaocluster <name> -n <namespace>
-```
+<Callout type="note" title="What to look for before you move on">
 
-Watch pods come up:
+Confirm the cluster is available, TLS and storage match the shape you intended, and hardened clusters can realistically progress toward `ProductionReady=True`.
 
-```sh
-kubectl get pods -l openbao.org/cluster=<name> -n <namespace> -w
-```
+</Callout>
 
-## Check Status Conditions
+<NextActions
+  title="Once the first cluster is healthy"
+  items={[
+    {
+      label: 'Prepare for day 2',
+      description: 'Choose the next operating concern instead of leaving the cluster in a half-configured state.',
+      docId: 'user-guide/openbaocluster/next-steps',
+    },
+    {
+      label: 'Expose the cluster',
+      description: 'Pick the access path and TLS posture that match the security profile you chose.',
+      docId: 'user-guide/openbaocluster/configuration/external-access',
+    },
+    {
+      label: 'Configure backups',
+      description: 'Wire snapshots before the first risky change so restore is not first attempted during an incident.',
+      docId: 'user-guide/openbaocluster/operations/backups',
+    },
+  ]}
+/>
 
-```sh
-kubectl describe openbaocluster <name> -n <namespace>
-```
+## Official OpenBao background
 
-Look for:
-
-- `status.phase` — Current lifecycle phase
-- `status.readyReplicas` — Number of ready replicas
-- `status.initialized` — `true` after cluster initialization
-- `status.conditions`:
-  - `Available` — Cluster is serving requests
-  - `TLSReady` — TLS certificates are valid
-  - `ProductionReady` — Security requirements met (Hardened only)
-  - `StorageConfigured` — Shows whether the effective StorageClass was explicit, defaulted, or inconsistent
-  - `Degraded` — Issues detected
-
-## Next Steps
-
-- [External Access](configuration/external-access.md) — Expose your cluster
-- [Security Profiles](configuration/security-profiles.md) — Understand profile differences
-- [Backups](operations/backups.md) — Configure disaster recovery
-
-## Official OpenBao Documentation
-
-- [OpenBao Self-Initialization](https://openbao.org/docs/configuration/self-init/)
-
+- [OpenBao self-initialization](https://openbao.org/docs/configuration/self-init/)

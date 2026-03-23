@@ -1,128 +1,227 @@
-# Day 1: Cluster Creation
+---
+title: Day 1 Creation
+hide_title: true
+pageType: concept
+journey: architecture
+description: Cluster creation flow from OpenBaoCluster creation through TLS bootstrap, one-node initialization, autopilot configuration, and scale-out.
+---
 
-Day 1 involves the instantiation and initialization of the OpenBao cluster itself.
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Lifecycle / Day 1"
+  title="Bootstrap one node, initialize safely, then scale to the requested cluster shape."
+  lede="Day 1 begins when `OpenBaoCluster` is created. The control plane bootstraps TLS and unseal prerequisites, renders the workload, keeps the StatefulSet at one replica for safe initialization, then hands off into steady-state operations only after the cluster is known-good."
+  actions={[
+    {label: 'Open init manager', docId: 'architecture/init-manager', variant: 'primary'},
+    {label: 'Open self-init guide', docId: 'user-guide/openbaocluster/configuration/self-init', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'compare self-init and standard initialization from the controller perspective',
+      'see how cert, infra, and init managers cooperate during first boot',
+      'understand why the cluster starts at one replica regardless of the requested size',
+      'trace how initialization state becomes a safe handoff into day 2 operations',
+    ]}
+  />
+</PageHero>
 
-<Callout type="tip" title="User Guide">
+<JourneyRail
+  current={2}
+  title="Lifecycle phases"
+  items={[
+    {
+      label: 'Day 0 provisioning',
+      description: 'Prepare a namespace boundary and tenant-scoped policy before any cluster exists.',
+      docId: 'architecture/lifecycle/day0-provisioning',
+    },
+    {
+      label: 'Day 1 creation',
+      description: 'Bootstrap the first node, initialize safely, and only then scale out.',
+      docId: 'architecture/lifecycle/day1-creation',
+    },
+    {
+      label: 'Day 2 operations',
+      description: 'Hand off into upgrades, maintenance, and long-running operational workflows.',
+      docId: 'architecture/lifecycle/day2-operations',
+    },
+    {
+      label: 'Backups and restore',
+      description: 'Protect data durability with scheduled snapshots and explicit restore requests.',
+      docId: 'architecture/lifecycle/dayN-backups',
+    },
+  ]}
+/>
 
-For details on configuring the cluster, see the [Cluster Configuration](../../user-guide/openbaocluster/getting-started.md) and [Security Fundamentals](../../security/fundamentals/index.md).
+<ManagerAtAGlance
+  sections={[
+    {
+      label: 'Starts with',
+      items: [
+        '`OpenBaoCluster` creation and the requested replica count',
+        'TLS mode, unseal mode, and optional self-init configuration',
+        'a provisioned namespace boundary from Day 0 when multi-tenancy is in use',
+      ],
+    },
+    {
+      label: 'Primary owners',
+      items: [
+        'internal/service/certs',
+        'internal/service/infra',
+        'internal/service/init',
+      ],
+    },
+    {
+      label: 'Writes',
+      items: [
+        'TLS Secrets, trust-bundle surfaces, and rendered `config.hcl`',
+        'single-replica StatefulSet followed by scale-out after initialization',
+        '`status.initialized`, `status.selfInitialized`, and initial autopilot configuration',
+      ],
+    },
+    {
+      label: 'Hands off to',
+      items: [
+        'steady-state workload reconciliation once the cluster is initialized',
+        'day 2 upgrade, maintenance, and backup workflows',
+        'operator-facing configuration and first-cluster guides',
+      ],
+    },
+  ]}
+/>
 
-</Callout>
+## Architectural Placement
 
-## Initialization Strategies
+Day 1 creation crosses three workload-side services in sequence:
 
-<Tabs groupId="self-initialization-recommended-standard-initialization">
+1. The cert manager ensures TLS material exists or is ready to be observed.
+2. The infrastructure manager renders the workload contract and keeps the StatefulSet at one replica.
+3. The init manager initializes the cluster, configures autopilot defaults, and only then permits scale-out.
 
-<TabItem value="self-initialization-recommended" label="Self-Initialization (Recommended)">
+That split keeps first-boot safety logic separate from routine steady-state reconciliation.
 
-When `spec.selfInit.enabled = true`, the cluster uses OpenBao's native self-initialization feature:
-
-1. User creates an `OpenBaoCluster` CR with `spec.selfInit` configured.
-2. Cert Manager (workload controller) bootstraps PKI (CA + leaf certs).
-3. If image verification is enabled, the operator verifies the container image signature before proceeding.
-4. Infrastructure Manager (workload controller) ensures a per-cluster auto-unseal configuration (static seal by default, or external KMS if configured).
-5. Infrastructure Manager renders `config.hcl` with TLS, Raft storage, `retry_join`, `service_registration "kubernetes"`, and the appropriate `seal` stanza.
-   - The init container appends the self-init `initialize` stanzas (rendered from `spec.selfInit.requests[]`) to the rendered config for pod-0 only.
-6. Infrastructure Manager creates the StatefulSet with **1 replica initially**.
-7. OpenBao automatically initializes itself on first start using the `initialize` stanzas:
-   - Auto-unseals using the configured seal (static or external KMS).
-   - Executes all configured `initialize` requests (audit, auth, secrets, policies).
-   - **The root token is NOT returned and is automatically revoked after use.**
-8. Init Manager detects initialization via Kubernetes service registration labels (preferred) and sets `status.initialized = true`.
-   It also sets `status.selfInitialized = true`.
-9. Infrastructure Manager scales the StatefulSet to the desired `spec.replicas`.
-10. Additional OpenBao pods start, auto-unseal, and join the Raft cluster.
-
-<Callout type="note" title="Self-Initialization vs Root Token">
-
-Self-initialization requires an auto-unseal mechanism (which the Operator provides via static auto-unseal by default, or external KMS if configured). No root token Secret is created when self-init is enabled.
-
-</Callout>
-
-<Callout type="warning" title="Version Requirement">
-
-The static auto-unseal feature requires **OpenBao v2.4.0 or later**. Earlier versions do not support the `seal "static"` configuration. External KMS seals may have different version requirements depending on the provider.
-
-</Callout>
-
-**Sequence Diagram:**
-
-```mermaid
-sequenceDiagram
+<DiagramFrame
+  title="Day 1 creation flow"
+  caption="First boot is a controlled handoff: TLS and rendered config first, one-node bootstrap second, initialization and autopilot third, then scale-out into the requested cluster size."
+  code={`sequenceDiagram
     autonumber
-    participant U as User
-    participant K as Kubernetes API
-    participant Op as OpenBao Operator
-    participant Bao as OpenBao Pods
+    participant User as User
+    participant K8s as Kubernetes API
+    participant Certs as Cert manager
+    participant Infra as Infrastructure manager
+    participant Init as Init manager
+    participant Pod0 as Pod-0
 
-    U->>K: Create OpenBaoCluster (selfInit.enabled=true)
-    K-->>Op: Watch OpenBaoCluster
-    Op->>K: Create TLS Secrets (CA, server)
-    Op->>K: Create config ConfigMap (config.hcl)
-    Op->>K: Create self-init ConfigMap (initialize blocks)
-    Op->>K: Create StatefulSet (replicas=1)
-    Bao-->>Bao: Auto-init and run initialize requests
-    Bao-->>Bao: Auto-unseal using static or KMS seal
-    Bao-->>K: Update Pod labels (service_registration)
-    Op->>K: Observe pod-0 labels (initialized/sealed)
-    Op->>K: Update OpenBaoCluster.status.initialized=true
-    Op->>K: Scale StatefulSet to spec.replicas
-    Bao-->>Op: Additional pods auto-unseal and join Raft
-```
+    User->>K8s: Create OpenBaoCluster
+    K8s-->>Certs: Reconcile TLS state
+    Certs->>K8s: Create or validate TLS material
+    K8s-->>Infra: Reconcile workload state
+    Infra->>K8s: Render StatefulSet at replicas=1
+    Infra->>Pod0: Start first pod
+    Pod0-->>Init: Pod ready and API reachable
+    Init->>Pod0: Detect initialized or perform init
+    Init->>K8s: Set initialized status
+    Init->>Pod0: Configure autopilot defaults
+    K8s-->>Infra: Initialization confirmed
+    Infra->>K8s: Scale StatefulSet to spec.replicas
+  `}
+/>
 
-</TabItem>
+<DecisionTable
+  kind="decision"
+  title="Initialization paths"
+  columns={['Path', 'Best fit', 'What changes in the control plane']}
+  rows={[
+    {
+      cells: ['Self-init', 'Recommended when OpenBao supports native self-initialization and you want no root-token Secret in the cluster.', 'The workload renders self-init requests for pod-0, initialization is detected rather than performed by the operator, and status.selfInitialized becomes true.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Standard initialization', 'Use when self-init is not enabled or you need the operator to drive `/sys/init` directly.', 'The init manager performs the init call, stores the root token in a Secret, then marks status.initialized before scale-out.'],
+    },
+  ]}
+/>
 
-<TabItem value="standard-initialization" label="Standard Initialization">
+<Tabs groupId="day1-init-paths">
+  <TabItem value="self-init" label="Self-init">
 
-1. User creates an `OpenBaoCluster` CR in a namespace (without `spec.selfInit`).
-2. Cert Manager (workload controller) bootstraps PKI (CA + leaf certs).
-3. If image verification is enabled (`spec.imageVerification.enabled`) or implicitly enabled by `spec.profile: Hardened` with omitted verification blocks, the operator verifies the container image signature using Cosign before proceeding.
-4. Infrastructure Manager (workload controller) ensures a per-cluster auto-unseal configuration:
-   - If `spec.unseal` is omitted or `spec.unseal.type` is `"static"`, creates a static auto-unseal key Secret (`<cluster>-unseal-key`) if missing.
-   - If `spec.unseal.type` is an external KMS provider (`awskms`, `gcpckms`, `azurekeyvault`, `transit`), configures the seal with the provided options and credentials (if specified).
-5. Infrastructure Manager renders `config.hcl` with TLS, Raft storage, `retry_join`, `service_registration "kubernetes"`, and the appropriate `seal` stanza (static or external KMS).
-   - The Operator injects `BAO_K8S_NAMESPACE` into the OpenBao container environment so service registration can determine the Pod namespace.
-6. Infrastructure Manager creates the StatefulSet with **1 replica initially** (regardless of `spec.replicas`), mounting TLS and unseal Secrets (if using static seal) or KMS credentials (if using external KMS).
-7. Init Manager waits for pod-0 to be running, then:
-   - Prefers Kubernetes service registration Pod labels (`openbao-initialized`, `openbao-sealed`) when available.
-   - Falls back to the HTTP health endpoint (`GET /v1/sys/health`) when labels are not yet available.
-   - If not, calls the HTTP initialization endpoint (`PUT /v1/sys/init`) against pod-0 to initialize the cluster.
-   - Stores the root token in a per-cluster Secret (`<cluster>-root-token`).
-   - Sets `status.initialized = true`.
-8. Once initialized, Infrastructure Manager scales the StatefulSet to the desired `spec.replicas`.
-9. Additional OpenBao pods start, auto-unseal using the static key, join the Raft cluster via `retry_join`, and become Ready.
+<Checklist
+  title="Self-init flow"
+  items={[
+    'Cert and infra managers prepare TLS, seal, and rendered config as usual, but pod-0 receives self-init requests in the rendered startup configuration.',
+    'OpenBao initializes itself on first start and auto-revokes the transient root token instead of returning it to the operator.',
+    'The init manager detects successful initialization through service-registration labels or equivalent readiness signals and sets status.selfInitialized.',
+    'Once initialized, the infrastructure manager scales to the requested replica count and later pods auto-unseal and join the Raft cluster.',
+  ]}
+/>
 
-**Sequence Diagram:**
+<Callout type="note" title="Self-init changes root-token handling">
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User
-    participant K as Kubernetes API
-    participant Op as OpenBao Operator
-    participant Bao as OpenBao Pods
+Self-init requires an auto-unseal mechanism. In exchange, it avoids creating a root-token Secret and keeps bootstrap closer to OpenBao’s native startup path.
 
-    U->>K: Create OpenBaoCluster (no selfInit)
-    K-->>Op: Watch OpenBaoCluster
-    Op->>K: Create TLS Secrets (CA, server)
-    Op->>K: Create config ConfigMap (config.hcl)
-    Op->>K: Create StatefulSet (replicas=1)
-    Bao-->>K: Update Pod labels (service_registration)
-    Op->>K: Observe pod-0 labels (initialized/sealed)
-    alt labels not yet available
-        Op->>Bao: Call /v1/sys/health (check initialized)
-    end
-    Op->>Bao: Call /v1/sys/init (initialize cluster)
-    Op->>K: Store root token Secret
-    Op->>K: Update OpenBaoCluster.status.initialized=true
-    Op->>K: Scale StatefulSet to spec.replicas
-    Bao-->>Op: Pods auto-unseal and join Raft
-```
+</Callout>
 
-</TabItem>
+  </TabItem>
+  <TabItem value="standard" label="Standard init">
 
+<Checklist
+  title="Standard init flow"
+  items={[
+    'The infrastructure manager still forces single-pod bootstrap and renders TLS, storage, retry_join, and seal configuration first.',
+    'The init manager waits for pod-0 readiness, detects whether the cluster is already initialized, and calls `/v1/sys/init` only when needed.',
+    'The init response is handled in-memory, the root token is stored in `<cluster>-root-token`, and initialization status is patched back to the cluster.',
+    'After initialization and autopilot configuration complete, the infrastructure manager scales the StatefulSet to the requested replica count.',
+  ]}
+/>
+
+<Callout type="warning" title="Static auto-unseal version requirement">
+
+Static auto-unseal requires OpenBao v2.4.0 or later. Older versions need a supported external KMS seal instead of the built-in static seal path.
+
+</Callout>
+
+  </TabItem>
 </Tabs>
 
-## Official OpenBao Documentation
+<DecisionTable
+  kind="reference"
+  title="Safety boundaries"
+  columns={['Concern', 'Creation behavior']}
+  rows={[
+    {
+      cells: ['Split-brain at first boot', 'The cluster always starts with one replica so only one node can become the first Raft leader.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Root material handling', 'Standard init stores the root token in a Secret without logging the init response; self-init avoids creating the Secret entirely.'],
+    },
+    {
+      cells: ['Already initialized detection', 'The init manager skips the init call when service-registration labels or health prove the cluster is already initialized.'],
+    },
+    {
+      cells: ['Autopilot baseline', 'The init manager applies valid autopilot defaults before steady-state operations and later upgrades begin.'],
+    },
+  ]}
+/>
 
-- [OpenBao Self-Initialization](https://openbao.org/docs/configuration/self-init/)
-- [OpenBao Service Registration](https://openbao.org/docs/configuration/service-registration/)
+<NextActions
+  title="Continue the lifecycle"
+  items={[
+    {
+      label: 'Day 2 operations',
+      description: 'Move from first boot into upgrades, maintenance, and the long-running operation model.',
+      docId: 'architecture/lifecycle/day2-operations',
+    },
+    {
+      label: 'Init manager',
+      description: 'Open the deep dive for the exact initialization, root-token, and autopilot contract.',
+      docId: 'architecture/init-manager',
+    },
+    {
+      label: 'Create your first cluster',
+      description: 'Compare the internal creation flow with the operator-facing first-cluster guide.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+  ]}
+/>

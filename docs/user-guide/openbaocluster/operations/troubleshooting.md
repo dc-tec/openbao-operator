@@ -1,128 +1,288 @@
 ---
+title: Troubleshoot the Cluster
+description: Route common failure symptoms to the right fix quickly and know when to switch from troubleshooting into recovery.
 slug: /operate/troubleshooting
+hide_title: true
+pageType: task
+journey: operate
 ---
 
-# Troubleshooting
+<PageHero
+  eyebrow="Operate / Troubleshooting"
+  title="Start with the symptom, then decide whether you need a fix or a recovery path."
+  lede="Most day 2 incidents start as configuration drift, edge integration failures, or capability mismatches. Use this page to capture the failing surface, route the symptom to the right fix, and escalate into recovery only when normal convergence is no longer realistic."
+  actions={[
+    {label: 'Open recovery and restore', docId: 'user-guide/openbaocluster/recovery/index', variant: 'primary'},
+    {label: 'Review the production checklist', docId: 'user-guide/openbaocluster/operations/production-checklist', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'identify the first troubleshooting step from cluster conditions or pod failures',
+      'separate gateway, TLS, DNS, API egress, and node-capability issues',
+      'decide whether normal configuration repair is still enough',
+      'switch from troubleshooting into recovery before the incident drifts',
+    ]}
+  />
+</PageHero>
 
-This page covers common failure modes for Hardened and ACME-enabled clusters and how to resolve them.
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Capture the failure surface first"
+  code={`kubectl describe openbaocluster <name> -n <namespace>
+kubectl get pods -n <namespace>
+kubectl describe pod <pod> -n <namespace>`}
+>
+  Start here before you jump into a fix. The cluster status, recent events, and the specific pod failures usually tell you whether the problem is inside the workload, at the edge, or in cluster policy.
+</CommandBlock>
 
-## Probes fail with x509 (no IP SANs)
+<DecisionTable
+  title="Choose the first troubleshooting route"
+  columns={['Symptom', 'Start here', 'Likely surface', 'Escalate when']}
+  rows={[
+    {
+      cells: [
+        'Probe failures with x509 or hostname mismatch',
+        'Check the service hostname, SNI source, and the SANs on the serving certificate.',
+        'TLS and probe configuration.',
+        'Pods still cannot become Ready after the hostname and certificate path are corrected.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'ACME challenge or join failures',
+        'Check DNS, SAN coverage, and whether the chosen ACME endpoint is actually reachable from the right network.',
+        'ACME domain planning or private/public edge reachability.',
+        'The cluster cannot issue or validate certs and the workload remains blocked behind the edge.',
+      ],
+    },
+    {
+      cells: [
+        'Gateway integration stays degraded',
+        'Inspect passthrough mode, Gateway listener compatibility, and Gateway programming state.',
+        'Gateway API integration.',
+        'Traffic still cannot reach the workload after the Gateway listener model is corrected.',
+      ],
+    },
+    {
+      cells: [
+        'Kubernetes API calls fail in a hardened cluster',
+        'Check `apiServerCIDR`, `apiServerEndpointIPs`, and the actual egress behavior of your CNI.',
+        'Cluster network policy and API egress.',
+        'The operator cannot reconcile core resources because it cannot talk to the Kubernetes API reliably.',
+      ],
+    },
+    {
+      cells: [
+        'Node hardening or capability mismatch',
+        'Check AppArmor and other workload hardening assumptions against the cluster capabilities.',
+        'Node capability mismatch.',
+        'The runtime cannot support the hardened profile you selected and the workload cannot start cleanly.',
+      ],
+    },
+  ]}
+/>
 
-<Callout type="failure" title="Symptom">
+<RouteList
+  title="Common failure routes"
+  items={[
+    {
+      title: 'Probe TLS failures',
+      description: 'Readiness or liveness probes fail because the serving cert does not match the name the probe actually uses.',
+      actionLabel: 'Open',
+      to: '#probe-tls-failures',
+    },
+    {
+      title: 'ACME domain and reachability',
+      description: 'Certificates do not issue, the private ACME name does not resolve, or the public CA cannot hit the endpoint you exposed.',
+      actionLabel: 'Open',
+      to: '#acme-domain-and-reachability',
+    },
+    {
+      title: 'Gateway passthrough mismatch',
+      description: 'The Gateway listener mode or controller capability does not match the TLS mode the cluster expects.',
+      actionLabel: 'Open',
+      to: '#gateway-passthrough-mismatch',
+    },
+    {
+      title: 'Kubernetes API egress',
+      description: 'The hardened network policy path blocks the controller or workload from reaching the API server.',
+      actionLabel: 'Open',
+      to: '#kubernetes-api-egress',
+    },
+    {
+      title: 'Node hardening mismatch',
+      description: 'AppArmor or another hardening requirement is not available on the target cluster.',
+      actionLabel: 'Open',
+      to: '#node-hardening-mismatch',
+    },
+    {
+      title: 'Switch to recovery',
+      description: 'Normal troubleshooting is no longer enough because leadership, restore, or rollback paths are now in play.',
+      actionLabel: 'Open',
+      to: '#switch-to-recovery',
+    },
+  ]}
+/>
 
-Pod events show readiness/liveness probe failures like `x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs`.
+## Probe TLS failures
 
-</Callout>
+### Symptom
 
-**Cause:**
+Pod events show probe failures such as `x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs`.
 
-The serving certificate contains DNS SANs only (common for externally-managed certs), but probes connect to loopback.
+### What it usually means
 
-**Resolution:**
+The serving certificate includes DNS SANs only, but the probe is connecting through loopback or another name the cert does not cover.
 
-- Ensure `spec.gateway.hostname` or `spec.ingress.host` is set (or an external Service exists). The OpenBao Operator sets probe SNI (`-servername=...`) based on these fields.
-- Ensure your certificate includes the chosen hostname in its SANs.
+### Check first
 
-## ACME domain does not resolve (private ACME CA)
+- `spec.gateway.hostname`
+- `spec.ingress.host`
+- whether an external Service exists
+- whether the selected hostname is present in the certificate SANs
 
-<Callout type="failure" title="Symptom">
+### Fix
 
-- `ConditionDegraded=True` with reason `ACMEDomainNotResolvable`.
-- Pod logs show `no such host` or challenge timeouts.
+Make sure the operator has a real hostname it can use for probe SNI and that the certificate includes that hostname. If the certificate comes from an external PKI, reissue it with the correct SAN set instead of weakening probe verification.
 
-</Callout>
+## ACME domain and reachability
 
-**Cause:**
+### Private ACME CA does not resolve
 
-For private ACME CAs running inside the cluster (for example, an in-cluster PKI), the configured `spec.tls.acme.domains` must resolve via cluster DNS.
+If `ConditionDegraded=True` with reason `ACMEDomainNotResolvable`, the configured `spec.tls.acme.domains` likely does not resolve from cluster DNS.
 
-**Resolution:**
+Use an internal domain such as `<cluster>-acme.<namespace>.svc` for private in-cluster ACME issuers and make sure CoreDNS understands any non-`.svc` override you chose for local clusters.
 
-- Use an internal domain such as `<cluster>-acme.<namespace>.svc` (the OpenBao Operator creates a dedicated `-acme` Service for this use case).
-- In local clusters (k3d/k3s), ensure CoreDNS has the required overrides if you use a non-`.svc` domain.
+### ACME join or certificate verification fails
 
-## ACME + HA (Raft) join errors
+If Raft join shows `certificate signed by unknown authority` or server-name mismatch errors:
 
-<Callout type="failure" title="Symptom">
+- make sure `spec.tls.acme.domains` contains names that are actually present in the issued cert
+- for private ACME CAs, set `spec.configuration.acmeCARoot`
+- mount `pki-ca.crt` alongside that root so the operator can use it for `retry_join` and probe verification
 
-- `certificate signed by unknown authority` during join.
-- `certificate is valid for X, not Y` / server name mismatch.
+### Public ACME cannot reach the endpoint
 
-</Callout>
+If the logs show `Timeout during connect`, `secondary validation`, or repeated `tls-alpn-01` failures:
 
-**Resolution:**
+- expose the hardened hostname on a dedicated public passthrough listener on port `443`
+- do not source-restrict the ACME validation path to a single client IP
+- keep restricted admin edges separate from the public challenge edge if you need both
 
-- Ensure `spec.tls.acme.domains` contains names that are present in the issued certificate SANs.
-- For private ACME CAs, set `spec.configuration.acmeCARoot` and provide a `pki-ca.crt` alongside it in the same mounted volume; the OpenBao Operator uses it for Raft `retry_join` and probe verification.
+## Gateway passthrough mismatch
 
-## Gateway passthrough issues
+If `ConditionDegraded=True` with reason `ACMEGatewayNotConfiguredForPassthrough`, or `GatewayIntegrationReady=False` with reasons such as `GatewayListenerIncompatible`, `GatewayFeatureUnsupported`, or `GatewayNotProgrammed`, start at the Gateway listener model.
 
-<Callout type="failure" title="Symptom">
+For `tls.mode: ACME`:
 
-`ConditionDegraded=True` with reason `ACMEGatewayNotConfiguredForPassthrough`.
-`GatewayIntegrationReady=False` with reason `GatewayListenerIncompatible`, `GatewayFeatureUnsupported`, or `GatewayNotProgrammed`.
+- set `spec.gateway.tlsPassthrough: true`
+- make sure the referenced Gateway has a `TLS` listener with `tls.mode: Passthrough`
+- verify the Gateway controller actually supports the required route feature
 
-</Callout>
+TLS termination at the Gateway breaks OpenBao's ability to complete ACME challenges. Fix the passthrough model first instead of debugging the workload Pods.
 
-**Resolution:**
+## Kubernetes API egress
 
-- For `tls.mode: ACME`, use `spec.gateway.tlsPassthrough: true` (TLSRoute). TLS termination at the Gateway prevents OpenBao from completing ACME challenges.
-- Ensure the referenced Gateway has a `TLS` listener with `tls.mode: Passthrough` (controller support varies).
-- Inspect `GatewayIntegrationReady` to confirm the referenced `GatewayClass` is accepted, advertises the required route feature, and the `Gateway` is programmed.
+If `APIServerNetworkReady=False` with reason `APIServerNetworkConfigurationInvalid`, or if API calls fail in a hardened cluster:
 
-## Public ACME CA cannot reach the endpoint
+- set `spec.network.apiServerCIDR` when the in-cluster service VIP cannot be discovered or you want an explicit allow-list
+- add `spec.network.apiServerEndpointIPs` when your CNI enforces egress on post-DNAT traffic and the service-VIP path still fails
+- treat `APIServerEndpointIPsRecommended` as advice, not automatically as a hard failure
 
-<Callout type="failure" title="Symptom">
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect the current API-network conditions"
+  code={`kubectl get openbaocluster <name> -n <namespace> -o jsonpath='{range .status.conditions[*]}{.type}={.status}{"\\t"}{.reason}{"\\n"}{end}'`}
+>
+  This gives you the condition reasons in one pass so you can see whether the controller is failing on service-VIP discovery, endpoint-IP guidance, or a more direct API connectivity problem.
+</CommandBlock>
 
-Pod logs show ACME errors such as `Timeout during connect`, `secondary validation`, or repeated `tls-alpn-01` failures against a public CA such as Let's Encrypt.
+## Node hardening mismatch
 
-</Callout>
+If `ConditionNodeSecurityCapabilityMismatch=True` with reason `AppArmorUnsupported`, the hardened profile expects a node capability your environment does not provide.
 
-**Cause:**
+For evaluation or constrained dev clusters only, you can disable AppArmor:
 
-The hardened hostname is not publicly reachable on port `443`, or the passthrough edge is only reachable from a restricted source CIDR.
-
-**Resolution:**
-
-- For public ACME, expose the hardened hostname on a dedicated public passthrough listener.
-- Do not source-restrict the hardened ACME endpoint to a single client IP.
-- Keep restricted admin UIs on a separate terminating edge if needed.
-
-## Kubernetes API egress issues
-
-<Callout type="failure" title="Symptom">
-
-`APIServerNetworkReady=False` with reason `APIServerNetworkConfigurationInvalid`.
-`Degraded=True` with reason `APIServerNetworkConfigurationInvalid`.
-
-</Callout>
-
-**Resolution:**
-
-- Set `spec.network.apiServerCIDR` if the in-cluster Kubernetes service VIP cannot be discovered or you want an explicit allow-list.
-- If your CNI enforces egress on post-DNAT traffic, also set `spec.network.apiServerEndpointIPs` with the control-plane endpoint IPs.
-- If `APIServerNetworkReady=Unknown` with reason `APIServerEndpointIPsRecommended`, the common service-VIP path is configured. Only add `apiServerEndpointIPs` if Kubernetes API connectivity still fails in your environment.
-
-## Hardened profile + AppArmor mismatch
-
-<Callout type="failure" title="Symptom">
-
-`ConditionNodeSecurityCapabilityMismatch=True` with reason `AppArmorUnsupported`.
-
-</Callout>
-
-**Resolution:**
-
-Disable AppArmor in dev clusters that do not support it:
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Disable AppArmor for unsupported dev clusters"
+  code={`spec:
   workloadHardening:
-    appArmorEnabled: false
-```
+    appArmorEnabled: false`}
+>
+  Do not use this as a quiet production workaround. The right production fix is to run on nodes that satisfy the hardening profile you selected.
+</CommandBlock>
 
-## Official OpenBao Documentation
+## Switch to recovery
 
-- [TCP Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/)
-- [ACME TLS Listener RFC](https://openbao.org/docs/rfcs/acme-tls-listeners/)
-- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)
+Normal troubleshooting stops being the right tool when the incident is no longer about a single configuration defect and is now about getting the service back into a safe known state.
+
+<DecisionTable
+  kind="reference"
+  title="When to move from troubleshooting into recovery"
+  columns={['Trigger', 'Go next', 'Why']}
+  rows={[
+    {
+      cells: [
+        'The cluster cannot elect or keep a leader',
+        'No-leader recovery',
+        'This is no longer just a config issue. You need a controlled Raft recovery path.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'The cluster remains sealed and the normal unseal path is not recovering it',
+        'Sealed-cluster recovery',
+        'The incident has crossed into availability recovery, not ordinary convergence repair.',
+      ],
+    },
+    {
+      cells: [
+        'A blue-green or rollback path failed and the controller needs operator action',
+        'Failed rollback recovery',
+        'Version change failure modes need a dedicated incident path to avoid making the situation worse.',
+      ],
+    },
+    {
+      cells: [
+        'The fastest safe recovery is to restore from a snapshot',
+        'Restore operations',
+        'You are now operating a destructive recovery workflow and should stop iterating on local fixes.',
+      ],
+    },
+  ]}
+/>
+
+## External references
+
+- [TCP listener configuration](https://openbao.org/docs/configuration/listener/tcp/)
+- [ACME TLS listener RFC](https://openbao.org/docs/rfcs/acme-tls-listeners/)
+- [Operator Raft command](https://openbao.org/docs/commands/operator/raft/)
+
+<NextActions
+  title="Escalate or go deeper"
+  items={[
+    {
+      label: 'Open recovery and restore',
+      description: 'Use the incident-focused recovery pages when normal troubleshooting no longer reduces risk.',
+      docId: 'user-guide/openbaocluster/recovery/index',
+    },
+    {
+      label: 'Review backup operations',
+      description: 'Confirm the snapshot path is healthy before you rely on restore as part of the incident response.',
+      docId: 'user-guide/openbaocluster/operations/backups',
+    },
+    {
+      label: 'Review network security',
+      description: 'Go deeper on hardened egress rules and API-server access when the incident is rooted in cluster policy.',
+      docId: 'security/infrastructure/network-security',
+    },
+  ]}
+/>

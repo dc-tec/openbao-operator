@@ -1,190 +1,132 @@
-# Observability
+---
+title: Observability
+hide_title: true
+pageType: task
+journey: configure
+description: Wire operator metrics, cluster telemetry, dashboards, alerts, and logs before you have to troubleshoot the service under pressure.
+---
 
-The OpenBao Operator exposes comprehensive metrics, structured logs, and health endpoints to integrate with your existing monitoring stack.
+<PageHero
+  eyebrow="Configure / Platform Readiness"
+  title="Observe both the operator and the workload before you call the cluster ready."
+  lede="OpenBao Operator has two observability layers: the operator control plane itself, and the OpenBao workload it renders. Use this page to wire both layers into your monitoring stack, choose the scrape model your platform already supports, and promote only the signals that help you operate upgrades, backups, and recovery."
+  actions={[
+    {label: "Open production checklist", docId: "user-guide/openbaocluster/operations/production-checklist", variant: "primary"},
+    {label: "Open troubleshooting", docId: "user-guide/openbaocluster/operations/troubleshooting", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "scrape controller and provisioner metrics from the operator installation",
+      "enable telemetry on the OpenBao workload without turning this page into a generic metrics reference",
+      "promote a small set of alerts for availability, backups, upgrades, and reconcile health",
+      "keep dashboards, logs, and health probes available before the first real incident",
+    ]}
+  />
+</PageHero>
 
-## Metrics
+<DecisionTable
+  title="Observe the right surface"
+  columns={["Surface", "Configure it through", "Use it for", "Watch for"]}
+  rows={[
+    {
+      cells: [
+        "Operator metrics",
+        "Helm or Kustomize settings on the operator installation",
+        "Controller and provisioner reconcile health, errors, and platform-level backup or upgrade counters.",
+        "The endpoint is HTTPS and RBAC-protected. Your scraper needs both network reachability and permission to GET `/metrics`.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "OpenBao workload telemetry",
+        "The `spec.observability.metrics` block on each `OpenBaoCluster`, plus optional `spec.telemetry` overrides.",
+        "Application-level metrics from the OpenBao Pods themselves.",
+        "This is separate from operator metrics. Do not assume enabling one layer automatically covers the other.",
+      ],
+    },
+    {
+      cells: [
+        "Logs and health probes",
+        "Operator install values such as log level and health probe settings.",
+        "Fast incident triage when the issue is not obvious from metrics alone.",
+        "Use debug logging intentionally and temporarily. Do not leave broad debug enabled as the long-term default.",
+      ],
+    },
+    {
+      cells: [
+        "Dashboards and alerts",
+        "Grafana assets under `config/grafana/` and your own Prometheus or Alertmanager rules.",
+        "A small, repeatable operator cockpit for upgrades, backups, and cluster readiness.",
+        "Dashboards should support decisions. They should not become an excuse to avoid explicit alerts on the failure modes that matter.",
+      ],
+    },
+  ]}
+/>
 
-The OpenBao Operator exposes Prometheus metrics on port `8443` by default (configurable via Helm values or Kustomize overlays). The endpoint is served over HTTPS and is protected via Kubernetes authentication and authorization (RBAC).
+## Wire operator metrics
 
-Use these placeholders in the examples below:
+<Tabs groupId="operator-observability-prometheus-vmagent-plain">
+  <TabItem value="prometheus-operator" label="Prometheus Operator">
 
-- `<operator-namespace>`: namespace where the operator is installed
-- `<controller-metrics-service>`: rendered controller metrics Service name
-- `<provisioner-metrics-service>`: rendered provisioner metrics Service name when multi-tenant mode is enabled
-
-### Enabling Metrics Scraping
-
-<Callout type="note" title="RBAC-protected endpoint">
-
-The `/metrics` endpoint uses Kubernetes authn/authz. Your scraper must run with a ServiceAccount token and have permission to `get` the non-resource URL `/metrics`.
-
-</Callout>
-
-<Tabs groupId="prometheus-operator-servicemonitor-victoriametrics-operator-vmservicescrape-plain-prometheus">
-
-<TabItem value="prometheus-operator-servicemonitor" label="Prometheus Operator (ServiceMonitor)">
-
-Create a `ServiceMonitor` to scrape the metrics Services.
-
-**Helm**
-
-The Helm chart can create `ServiceMonitor` resources automatically:
-
-```yaml
-# values.yaml
-metrics:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable operator metrics with ServiceMonitor resources"
+  code={`metrics:
   enabled: true
-  port: 8443
-  serviceMonitor:
-    enabled: true
-    interval: 30s
-    scrapeTimeout: 10s
-    tlsConfig:
-      insecureSkipVerify: true
-```
-
-Grant your Prometheus ServiceAccount permission to GET `/metrics`:
-
-```yaml
-# values.yaml
-metrics:
   rbac:
     enabled: true
     subjects:
       - name: prometheus-k8s
         namespace: monitoring
-```
-
-**YAML manifests**
-
-Apply a `ServiceMonitor` (example for the controller metrics Service):
-
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: openbao-operator-controller
-  namespace: monitoring
-spec:
-  namespaceSelector:
-    matchNames:
-      - <operator-namespace>
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: openbao-operator
-      app.kubernetes.io/component: controller
-  endpoints:
-    - port: https
-      path: /metrics
-      scheme: https
-      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-      tlsConfig:
-        insecureSkipVerify: true
-```
-
-If you run the provisioner (multi-tenant mode), create a second `ServiceMonitor` with `app.kubernetes.io/component: provisioner`.
-
-Grant access to `/metrics` (replace the ServiceAccount as needed):
-
-```bash
-kubectl create clusterrolebinding openbao-operator-metrics-reader-prometheus \
-  --clusterrole=openbao-operator-metrics-reader \
-  --serviceaccount=monitoring:prometheus-k8s
-```
-
-If you deploy the OpenBao Operator via Kustomize, use the opt-in overlay `config/overlays/metrics-scrape-rbac` (update the subject first):
-
-```bash
-kubectl apply -k config/overlays/metrics-scrape-rbac
-```
-
-If you manage the OpenBao Operator via Kustomize, you can also enable the bundled examples by uncommenting `../prometheus` in `config/default/kustomization.yaml` and applying `kubectl apply -k config/default`.
-
-</TabItem>
-
-<TabItem value="victoriametrics-operator-vmservicescrape" label="VictoriaMetrics Operator (VMServiceScrape)">
-
-Create a `VMServiceScrape` to scrape the metrics Services.
-
-**Helm**
-
-The Helm chart can create `VMServiceScrape` resources automatically:
-
-```yaml
-# values.yaml
-metrics:
-  enabled: true
-  port: 8443
-  victoriaMetrics:
+  serviceMonitor:
     enabled: true
+    namespace: monitoring
     interval: 30s
     scrapeTimeout: 10s
     tlsConfig:
-      insecureSkipVerify: true
+      insecureSkipVerify: true`}
+>
+  This is the cleanest path when Prometheus Operator is already your cluster standard. It creates ServiceMonitors for the controller and, in multi-tenant mode, the provisioner metrics Services.
+</CommandBlock>
+
+  </TabItem>
+  <TabItem value="victoria-metrics" label="VictoriaMetrics Operator">
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable operator metrics with VMServiceScrape resources"
+  code={`metrics:
+  enabled: true
   rbac:
     enabled: true
     subjects:
       - name: vmagent
         namespace: monitoring
-```
+  victoriaMetrics:
+    enabled: true
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+    tlsConfig:
+      insecureSkipVerify: true`}
+>
+  Use this when VictoriaMetrics is your standard scrape controller. The same HTTPS and RBAC constraints still apply to the metrics endpoint.
+</CommandBlock>
 
-**YAML manifests**
+  </TabItem>
+  <TabItem value="plain-prometheus" label="Plain Prometheus">
 
-Apply a `VMServiceScrape` (example for the controller metrics Service):
-
-```yaml
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMServiceScrape
-metadata:
-  name: openbao-operator-controller
-  namespace: monitoring
-spec:
-  namespaceSelector:
-    matchNames:
-      - <operator-namespace>
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: openbao-operator
-      app.kubernetes.io/component: controller
-  endpoints:
-    - port: https
-      path: /metrics
-      scheme: https
-      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-      tlsConfig:
-        insecureSkipVerify: true
-```
-
-If you run the provisioner (multi-tenant mode), create a second `VMServiceScrape` with `app.kubernetes.io/component: provisioner`.
-
-Grant access to `/metrics` (replace the ServiceAccount as needed):
-
-```bash
-kubectl create clusterrolebinding openbao-operator-metrics-reader-vmagent \
-  --clusterrole=openbao-operator-metrics-reader \
-  --serviceaccount=monitoring:vmagent
-```
-
-If you manage the OpenBao Operator via Kustomize, you can also enable the bundled examples by uncommenting `../victoriametrics` in `config/default/kustomization.yaml` and applying `kubectl apply -k config/default`.
-
-</TabItem>
-
-<TabItem value="plain-prometheus" label="Plain Prometheus">
-
-If you are not using an operator, add scrape jobs targeting the metrics Services.
-Ensure the Prometheus process runs with a ServiceAccount token that has `get` permission on `/metrics`
-(see `metrics.rbac` above), and configure TLS appropriately.
-
-<Callout type="note" title="Metrics Service names">
-
-- **Helm**: `<release>-openbao-operator-controller-metrics` and `<release>-openbao-operator-provisioner-metrics`
-- **YAML manifests**: `openbao-operator-controller-metrics-service` and `openbao-operator-provisioner-metrics-service`
-
-</Callout>
-
-```yaml
-scrape_configs:
-  - job_name: <controller-metrics-job>
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Scrape the operator metrics services directly"
+  code={`scrape_configs:
+  - job_name: openbao-operator-controller
     scheme: https
     metrics_path: /metrics
     bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
@@ -194,7 +136,7 @@ scrape_configs:
       - targets:
           - <controller-metrics-service>.<operator-namespace>.svc:8443
 
-  - job_name: <provisioner-metrics-job>
+  - job_name: openbao-operator-provisioner
     scheme: https
     metrics_path: /metrics
     bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
@@ -202,356 +144,27 @@ scrape_configs:
       insecure_skip_verify: true
     static_configs:
       - targets:
-          - <provisioner-metrics-service>.<operator-namespace>.svc:8443
-```
+          - <provisioner-metrics-service>.<operator-namespace>.svc:8443`}
+>
+  Use this only when you do not run a scrape operator. Keep the ServiceAccount permission to GET `/metrics` and the TLS assumptions explicit.
+</CommandBlock>
 
-<Callout type="note" title="NetworkPolicy">
-
-If you have `networkPolicy.enabled: true`, ensure your Prometheus namespace has the label(s) configured in `networkPolicy.metricsAllowedNamespaceLabels` so it can reach the metrics Service.
-
-</Callout>
-
-</TabItem>
-
+  </TabItem>
 </Tabs>
 
-<Callout type="tip" title="TLS Verification (Production)">
+<Callout type="note" title="Network policy still applies to scrapers">
 
-For production, prefer strict TLS verification:
-
-- Set `metrics.serviceMonitor.tlsConfig.insecureSkipVerify: false` and configure CA/certs.
-- Set `metrics.victoriaMetrics.tlsConfig.insecureSkipVerify: false` and configure trusted CA in your scraping stack.
-
-See the production checklist for guidance.
+If operator network policy is enabled, the monitoring namespace must carry the labels expected by `networkPolicy.metricsAllowedNamespaceLabels` so the scraper can actually reach the HTTPS metrics service.
 
 </Callout>
 
-### Available Metrics
-
-#### Reconciliation Metrics
-
-| Metric | Type | Labels | Description |
-| :----- | :--- | :----- | :---------- |
-| `openbao_reconcile_duration_seconds` | Histogram | `namespace`, `name`, `controller` | Duration of reconciliation loops |
-| `openbao_reconcile_errors_total` | Counter | `namespace`, `name`, `controller`, `reason` | Total reconciliation errors |
-
-<Callout type="tip" title="Alerting on Reconciliation Errors">
-
-Alert when the error rate exceeds a threshold:
-
-```promql
-rate(openbao_reconcile_errors_total[5m]) > 0.1
-```
-
-</Callout>
-
-#### Cluster State Metrics
-
-| Metric | Type | Labels | Description |
-| :----- | :--- | :----- | :---------- |
-| `openbao_cluster_ready_replicas` | Gauge | `namespace`, `name` | Number of ready replicas |
-| `openbao_cluster_phase` | Gauge | `namespace`, `name`, `phase` | Current cluster phase (1 = active) |
-
-The `phase` label takes one of these values:
-
-- `Initializing` - Cluster is starting up
-- `Running` - Cluster is healthy
-- `Upgrading` - Upgrade in progress
-- `BackingUp` - Backup in progress
-- `Failed` - Cluster is in a failed state
-
-<Callout type="warning" title="Cluster Availability">
-
-Alert when ready replicas drop below expected:
-
-```promql
-openbao_cluster_ready_replicas < 3
-```
-
-</Callout>
-
-#### Backup Metrics
-
-| Metric | Type | Labels | Description |
-| :----- | :--- | :----- | :---------- |
-| `openbao_backup_success_total` | Counter | `namespace`, `name` | Successful backups |
-| `openbao_backup_failure_total` | Counter | `namespace`, `name` | Failed backups |
-| `openbao_backup_consecutive_failures` | Gauge | `namespace`, `name` | Consecutive backup failures |
-| `openbao_backup_in_progress` | Gauge | `namespace`, `name` | Backup in progress (1/0) |
-| `openbao_backup_last_success_timestamp` | Gauge | `namespace`, `name` | Unix timestamp of last successful backup |
-| `openbao_backup_last_duration_seconds` | Gauge | `namespace`, `name` | Duration of the last backup in seconds |
-| `openbao_backup_last_size_bytes` | Gauge | `namespace`, `name` | Size of the last backup in bytes |
-| `openbao_backup_retention_deleted_total` | Counter | `namespace`, `name` | Backups deleted by retention policy |
-
-<Callout type="danger" title="Backup Staleness Alert">
-
-Alert if backups are older than 24 hours:
-
-```promql
-time() - openbao_backup_last_success_timestamp > 86400
-```
-
-</Callout>
-
-#### Restore Metrics
-
-| Metric | Type | Labels | Description |
-| :----- | :--- | :----- | :---------- |
-| `openbao_restore_total` | Counter | `namespace`, `name` | Restore operations attempted |
-| `openbao_restore_success_total` | Counter | `namespace`, `name` | Successful restores |
-| `openbao_restore_failure_total` | Counter | `namespace`, `name` | Failed restores |
-| `openbao_restore_duration_seconds` | Histogram | `namespace`, `name` | Restore duration |
-
-#### Upgrade Metrics
-
-| Metric | Type | Labels | Description |
-| :----- | :--- | :----- | :---------- |
-| `openbao_upgrade_status` | Gauge | `namespace`, `name` | Upgrade status (0=none, 1=running, 2=success, 3=failed) |
-| `openbao_upgrade_in_progress` | Gauge | `namespace`, `name` | Upgrade in progress (1/0) |
-| `openbao_upgrade_total` | Counter | `namespace`, `name`, `strategy` | Upgrades initiated |
-| `openbao_upgrade_success_total` | Counter | `namespace`, `name`, `strategy` | Successful upgrades |
-| `openbao_upgrade_failure_total` | Counter | `namespace`, `name`, `strategy` | Failed upgrades |
-| `openbao_upgrade_rollback_total` | Counter | `namespace`, `name`, `strategy` | Rollbacks triggered |
-| `openbao_upgrade_duration_seconds` | Histogram | `namespace`, `name`, `from_version`, `to_version` | Total upgrade duration |
-| `openbao_upgrade_pod_duration_seconds` | Histogram | `namespace`, `name`, `pod` | Per-pod upgrade duration |
-| `openbao_upgrade_stepdown_total` | Counter | `namespace`, `name` | Leader step-down operations during upgrades |
-| `openbao_upgrade_stepdown_failures_total` | Counter | `namespace`, `name` | Failed leader step-down operations |
-| `openbao_upgrade_pods_total` | Gauge | `namespace`, `name` | Total pods to upgrade |
-| `openbao_upgrade_pods_completed` | Gauge | `namespace`, `name` | Pods upgraded so far |
-| `openbao_upgrade_partition` | Gauge | `namespace`, `name` | Current StatefulSet partition during rolling upgrades |
-
-The `strategy` label is either `RollingUpdate` or `BlueGreen`.
-
-<Callout type="tip" title="Upgrade Rollback Monitoring">
-
-Track rollback frequency to identify problematic upgrades:
-
-```promql
-increase(openbao_upgrade_rollback_total[7d]) > 0
-```
-
-</Callout>
-
-## Grafana Dashboard
-
-A set of pre-built Grafana dashboards is included with the OpenBao Operator under `config/grafana/`:
-
-- Per-feature dashboards: `config/grafana/dashboards/`
-- Optional controller-runtime dashboard: `config/grafana/optional/controller-runtime/`
-- Monolithic (legacy) dashboard: `config/grafana/dashboard.json`
-
-### Installation
-
-<Tabs groupId="kubernetes-configmap-manual-import">
-
-<TabItem value="kubernetes-configmap" label="Kubernetes ConfigMap">
-
-Apply the per-feature dashboards as ConfigMaps for Grafana sidecar discovery:
-
-```bash
-# Apply in the same namespace as Grafana (example: monitoring)
-kubectl apply -k config/grafana -n monitoring
-```
-
-</TabItem>
-
-<TabItem value="manual-import" label="Manual Import">
-
-1. Open Grafana and navigate to **Dashboards > Import**.
-2. Upload one of the per-feature dashboards under `config/grafana/dashboards/` (recommended). 
-3. Select your Prometheus data source and click **Import**.
-
-</TabItem>
-
-</Tabs>
-
-### Dashboard Panels
-
-The per-feature dashboards include:
-
-| Dashboard | Panels |
-| :-------- | :----- |
-| **Overview** | Upgrade Status, Backup Status, Ready Replicas, TLS expiry |
-| **Backups & Restore** | Backup outcome timeline, duration/size, success/failure, restore outcome timeline |
-| **Upgrades** | Upgrade status timeline, duration, per-pod duration, step-down operations, progress |
-| **Controller Runtime** (optional) | workqueue depth/retries, reconcile totals/errors |
-
-## Logging
-
-The OpenBao Operator emits structured JSON logs with consistent fields for log aggregation.
-
-### Log Format
-
-```json
-{
-  "level": "info",
-  "ts": "2024-01-15T10:30:00.000Z",
-  "logger": "openbaocluster",
-  "msg": "Reconciliation complete",
-  "cluster_name": "prod-cluster",
-  "cluster_namespace": "vault",
-  "controller": "openbaocluster",
-  "reconcileID": "abc123"
-}
-```
-
-### Key Log Fields
-
-| Field | Description |
-| :---- | :---------- |
-| `cluster_name` | Name of the OpenBaoCluster |
-| `cluster_namespace` | Namespace of the cluster |
-| `controller` | Controller processing the event |
-| `reconcileID` | Unique ID for correlating log entries |
-
-### Log Levels
-
-Configure the log level via Helm:
-
-```yaml
-# values.yaml
-controller:
-  args:
-    - --zap-log-level=info  # debug, info, error
-```
-
-<Callout type="tip" title="Debug Logging">
-
-Enable debug logging temporarily for troubleshooting:
-
-```yaml
-controller:
-  args:
-    - --zap-log-level=debug
-    - --zap-stacktrace-level=error
-```
-
-</Callout>
-
-### Example Log Queries
-
-<Tabs groupId="loki-logql-elasticsearch">
-
-<TabItem value="loki-logql" label="Loki (LogQL)">
-
-```logql
-{namespace="<operator-namespace>"}
-| json
-| cluster_name="prod-cluster"
-| level="error"
-```
-
-</TabItem>
-
-<TabItem value="elasticsearch" label="Elasticsearch">
-
-```json
-{
-  "query": {
-    "bool": {
-      "must": [
-        { "match": { "cluster_name": "prod-cluster" } },
-        { "match": { "level": "error" } }
-      ]
-    }
-  }
-}
-```
-
-</TabItem>
-
-</Tabs>
-
-## Health Probes
-
-The OpenBao Operator exposes health endpoints for Kubernetes probes.
-
-### Endpoints
-
-| Endpoint | Purpose | Port |
-| :------- | :------ | :--- |
-| `/healthz` | Liveness probe | 8081 |
-| `/readyz` | Readiness probe | 8081 |
-
-### Configuring Probes
-
-```yaml
-# values.yaml
-healthProbes:
-  port: 8081
-  livenessInitialDelaySeconds: 15
-  livenessPeriodSeconds: 20
-  readinessInitialDelaySeconds: 5
-  readinessPeriodSeconds: 10
-```
-
-## Recommended Alerts
-
-Here are production-ready alert rules for the OpenBao Operator:
-
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
-metadata:
-  name: openbao-operator-alerts
-spec:
-  groups:
-    - name: openbao-operator
-      rules:
-        # Cluster availability
-        - alert: OpenBaoClusterDegraded
-          expr: openbao_cluster_ready_replicas < 3
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: "OpenBao cluster {{ $labels.name }} has fewer than 3 ready replicas"
-
-        - alert: OpenBaoClusterDown
-          expr: openbao_cluster_ready_replicas == 0
-          for: 1m
-          labels:
-            severity: critical
-          annotations:
-            summary: "OpenBao cluster {{ $labels.name }} has no ready replicas"
-
-        # Backup health
-        - alert: OpenBaoBackupStale
-          expr: time() - openbao_backup_last_success_timestamp > 86400
-          for: 1h
-          labels:
-            severity: warning
-          annotations:
-            summary: "OpenBao cluster {{ $labels.name }} has not had a successful backup in 24+ hours"
-
-        - alert: OpenBaoBackupFailing
-          expr: rate(openbao_backup_failure_total[1h]) > 0
-          for: 30m
-          labels:
-            severity: warning
-          annotations:
-            summary: "OpenBao cluster {{ $labels.name }} backups are failing"
-
-        # Reconciliation health
-        - alert: OpenBaoReconcileErrors
-          expr: rate(openbao_reconcile_errors_total[5m]) > 0.5
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "OpenBao Operator experiencing high reconciliation error rate"
-```
-
-## OpenBao Server Metrics
-
-In addition to Operator metrics, OpenBao itself exposes telemetry.
-
-### Enabling OpenBao Telemetry
-
-Configure telemetry in the cluster spec using the simplified `observability` block:
-
-```yaml
-apiVersion: openbao.org/v1alpha1
+## Enable OpenBao workload telemetry deliberately
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Turn on workload telemetry for an OpenBaoCluster"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: prod-cluster
@@ -559,23 +172,122 @@ spec:
   observability:
     metrics:
       enabled: true
-```
+      serviceMonitor:
+        enabled: true
+        interval: "30s"
+        scrapeTimeout: "10s"`}
+>
+  This enables the OpenBao telemetry stanza with safe defaults and creates a Prometheus Operator ServiceMonitor when that is the scrape model you use. Use `spec.telemetry` only when you need lower-level OpenBao telemetry tuning.
+</CommandBlock>
 
-This automatically injects a `telemetry` stanza into the OpenBao configuration with safe defaults (prometheus retention, disabled hostname).
-You can still provide fine-grained overrides via `spec.telemetry` if needed.
+<DecisionTable
+  kind="reference"
+  title="Promote a small set of signals first"
+  columns={["Concern", "What to watch", "Why it matters"]}
+  rows={[
+    {
+      cells: [
+        "Availability",
+        "`openbao_cluster_ready_replicas` and cluster conditions such as `Available` or `Degraded`",
+        "This tells you whether the cluster is actually serving, not just whether Pods exist.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Backup freshness",
+        "`openbao_backup_last_success_timestamp`, `openbao_backup_consecutive_failures`, and the backup status conditions",
+        "Restore is only as real as the last backup you can prove succeeded.",
+      ],
+    },
+    {
+      cells: [
+        "Upgrade safety",
+        "`openbao_upgrade_in_progress`, `openbao_upgrade_failure_total`, and rollback counters",
+        "Upgrades should be observable as controlled workflows, not silent StatefulSet churn.",
+      ],
+    },
+    {
+      cells: [
+        "Controller health",
+        "`openbao_reconcile_errors_total` and sustained reconcile duration spikes",
+        "This exposes control-plane failures before they become cluster-wide drift or stalled operations.",
+      ],
+    },
+  ]}
+/>
 
-This exposes OpenBao metrics at `/v1/sys/metrics` on the OpenBao pods.
+<CommandBlock
+  language="yaml"
+  label="apply"
+  title="Start with focused alert rules"
+  code={`apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: openbao-operator-alerts
+spec:
+  groups:
+    - name: openbao-operator
+      rules:
+        - alert: OpenBaoClusterDown
+          expr: openbao_cluster_ready_replicas == 0
+          for: 1m
+        - alert: OpenBaoBackupStale
+          expr: time() - openbao_backup_last_success_timestamp > 86400
+          for: 15m
+        - alert: OpenBaoReconcileErrors
+          expr: rate(openbao_reconcile_errors_total[5m]) > 0.1
+          for: 10m`}
+>
+  Keep the first alert set small. Availability, backup freshness, and sustained reconcile failure are the signals that change operator behavior fastest.
+</CommandBlock>
 
-<Callout type="note" title="Separate Scrape Config">
+## Dashboards, logs, and health
 
-OpenBao server metrics require a separate scrape configuration targeting
-the OpenBao pods directly, not the OpenBao Operator.
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Install the bundled Grafana dashboards"
+  code={`kubectl apply -k config/grafana -n monitoring`}
+>
+  The per-feature dashboards under `config/grafana/dashboards/` are the better starting point. The old monolithic dashboard still exists, but it is no longer the recommended default.
+</CommandBlock>
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Raise log detail temporarily during investigation"
+  code={`controller:
+  extraArgs:
+    - --zap-log-level=debug
+    - --zap-stacktrace-level=error`}
+>
+  Use debug logging only long enough to capture the behavior you need. Reset to the normal log level once the incident or rollout check is complete.
+</CommandBlock>
+
+<Callout type="tip" title="Keep operator metrics and workload telemetry separate in your dashboards">
+
+The most useful dashboards show both surfaces together, but they should still make it obvious whether a failure is in the operator control plane or in the OpenBao workload itself.
 
 </Callout>
 
-## Official OpenBao Documentation
-
-- [Telemetry Configuration](https://openbao.org/docs/configuration/telemetry/)
-- [Telemetry Metrics Reference](https://openbao.org/docs/internals/telemetry/metrics/)
-- [Audit Device Configuration](https://openbao.org/docs/configuration/audit/)
-
+<NextActions
+  title="Keep the operational loop tight"
+  items={[
+    {
+      label: "Configure backups",
+      description: "Backups are the first place good observability pays off. Wire them before you depend on restore.",
+      docId: "user-guide/openbaocluster/operations/backups",
+    },
+    {
+      label: "Plan upgrades",
+      description: "Use upgrade metrics and rollback signals to make rollout behavior observable before the first version change.",
+      docId: "user-guide/openbaocluster/operations/upgrades",
+    },
+    {
+      label: "Troubleshoot the cluster",
+      description: "Move from baseline telemetry into symptom-driven incident routing when the service stops behaving normally.",
+      docId: "user-guide/openbaocluster/operations/troubleshooting",
+    },
+  ]}
+/>

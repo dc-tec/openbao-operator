@@ -1,129 +1,178 @@
 ---
-description: Validated reference architecture for a Development-profile OpenBao cluster on Amazon EKS with AWS KMS auto-unseal, JWT bootstrap, a shared terminating Gateway, and S3 backups.
+title: EKS Development / Shared Edge
+hide_title: true
+pageType: concept
+journey: validated-deployments
+description: Validated cloud baseline for a development-profile OpenBao deployment on Amazon EKS with AWS KMS auto-unseal, a shared terminating edge, JWT bootstrap, and S3 backups.
 ---
 
-# Amazon EKS Development with AWS KMS and S3 Backups
+<PageHero
+  variant="compact"
+  eyebrow="Validated Deployments / Cloud Baselines"
+  title="Use this lane to validate the EKS bring-up path with real AWS integrations before you move to a hardened public endpoint."
+  lede="This cloud baseline keeps the posture intentionally Development, but it proves the integrations that matter for cloud bring-up: KMS auto-unseal, workload identity, shared-edge exposure, JWT bootstrap, and snapshot upload to S3."
+  actions={[
+    {label: "Open deployment recipe", docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
+    {label: "Review security profiles", docId: "user-guide/openbaocluster/configuration/security-profiles", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="This lane proves"
+    items={[
+      "a Development-profile cluster can bootstrap on EKS with AWS KMS auto-unseal and no static root-token workflow",
+      "JWT bootstrap and human admin JWT access both work under the cloud control-plane conditions EKS introduces",
+      "a shared terminating Gateway can expose the development cluster without requiring passthrough or public ACME",
+      "backup Jobs can authenticate separately from the main workload and write snapshots to S3 successfully",
+    ]}
+  />
+</PageHero>
 
 <Callout type="note" title="Classification">
 
-Cloud reference architecture. This is a realistic cloud validation and bring-up topology, but it is intentionally a `Development` profile lane rather than a production target.
+Cloud reference architecture. This is a realistic EKS validation and bring-up topology, but it is intentionally a Development lane rather than a production target.
 
 </Callout>
 
-This validated architecture describes the development and manual-validation lane exercised on Amazon EKS for OpenBao Operator.
+<DecisionTable
+  title="Lane summary"
+  columns={["Surface", "Choice", "Why it matters"]}
+  rows={[
+    {
+      cells: [
+        "Profile",
+        "`spec.profile: Development`",
+        "The lane is meant for cloud bring-up, demos, and operational validation, not for a production-ready posture.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Seal path",
+        "AWS KMS via workload identity",
+        "The main workload proves real cloud auto-unseal behavior instead of a local or static secret fallback.",
+      ],
+    },
+    {
+      cells: [
+        "Edge model",
+        "Shared terminating Gateway API edge",
+        "The lane keeps public routing simple and avoids ACME passthrough complexity during bring-up.",
+      ],
+    },
+    {
+      cells: [
+        "Backup path",
+        "S3 with a separate backup identity",
+        "The lane proves that backup execution stays separate from the main KMS identity surface.",
+      ],
+    },
+    {
+      cells: [
+        "Validation scope",
+        "Manual EKS validation plus operator lifecycle behavior",
+        "The lane proves the cloud integration path you need before deciding whether to harden the endpoint.",
+      ],
+    },
+  ]}
+/>
 
-It is the reference shape for:
-
-- `spec.profile: Development`
-- AWS KMS auto-unseal
-- JWT bootstrap for Operator access and human admin access
-- a shared terminating Gateway API edge
-- scheduled and manual backups to S3
-
-<Callout type="success" title="Validation status">
-
-This architecture was manually validated in the project Amazon EKS environment on March 14-15, 2026. The validated path covered bootstrap, KMS unseal, JWT login, Gateway exposure, and successful S3 backups.
-
-</Callout>
-
-<Callout type="warning" title="Not a production architecture">
-
-This page documents a validated development topology. It is useful for bring-up, demos, CI-adjacent cloud checks, and operator validation, but it is not a production-ready posture.
-
-</Callout>
-
-## Intended use
-
-Use this architecture when you want a low-friction cloud validation lane with real AWS integrations and controlled external reachability.
-
-Do not use it as your production reference if you require:
-
-- `ProductionReady=True`
-- OpenBao-managed ACME
-- end-to-end TLS passthrough
-- a fully hardened admission and image-verification posture
-
-## Topology
-
-```mermaid
-flowchart LR
-    Client["Operator or Admin Client"] -->|"HTTPS"| Edge["Shared Gateway API Edge"]
+<DiagramFrame
+  title="Validated lane topology"
+  caption="The main workload uses one cloud identity for KMS, backup Jobs use another for S3, and the public edge remains a shared terminating layer rather than a dedicated passthrough stack."
+  code={`flowchart LR
+    Client["Operator or admin"] -->|"HTTPS"| Edge["Shared Gateway API edge"]
     Edge -->|"Re-encrypted HTTPS"| Public["OpenBao public Service"]
     Public --> Bao["OpenBao Pods"]
 
     Operator["OpenBao Operator"] -->|"JWT bootstrap"| Bao
-    AdminSA["Admin ServiceAccount token"] -->|"JWT login"| Bao
+    Admin["Admin ServiceAccount token"] -->|"JWT login"| Bao
     Bao -->|"AWS KMS"| KMS["AWS KMS key"]
     Backup["Backup Job"] -->|"S3 snapshot upload"| S3["S3 bucket"]
-    Backup -->|"IRSA / workload identity"| AWS["AWS IAM"]
-    Bao -->|"IRSA / workload identity"| AWS
+    Bao -->|"IRSA / workload identity"| MainIAM["Main workload IAM role"]
+    Backup -->|"IRSA / workload identity"| BackupIAM["Backup IAM role"]
 
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-    class Client,AdminSA read;
+    class Client,Admin read;
     class Edge,Operator,Backup process;
-    class Public,Bao,KMS,S3 write;
-    class AWS security;
-```
+    class Public,Bao,KMS,S3,MainIAM,BackupIAM write;`}
+/>
 
-## Architecture decisions
+## Why this lane exists
 
-### Edge model
+<DecisionTable
+  kind="reference"
+  title="Key design choices"
+  columns={["Choice", "What it optimizes", "Why it stays in the lane"]}
+  rows={[
+    {
+      cells: [
+        "Shared terminating edge",
+        "Simple cloud bring-up with a familiar ingress model.",
+        "The lane is for proving integrations quickly, not for rehearsing production passthrough behavior.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Separate KMS and backup identities",
+        "Unseal permissions and object-storage permissions stay decoupled.",
+        "This is the cloud-specific security boundary the lane needs to prove before a hardened rollout.",
+      ],
+    },
+    {
+      cells: [
+        "Development profile",
+        "Fast bring-up and low-friction validation on real infrastructure.",
+        "The lane should prove AWS integrations without also forcing the full public-ACME hardening path.",
+      ],
+    },
+  ]}
+/>
 
-The validated EKS development lane used a shared terminating Gateway API edge.
+<Checklist
+  tone="warning"
+  title="Stay on the validated path"
+  items={[
+    "keep `spec.profile: Development` and treat the lane as bring-up coverage, not a production recommendation",
+    "keep the shared terminating edge and do not switch the same lane to passthrough midstream",
+    "keep separate IAM paths for KMS and S3 so backup behavior is actually validated",
+    "keep JWT bootstrap enabled for both operator-owned auth and human admin access",
+    "use a bucket, region, and Gateway path that are all reachable from the exact EKS environment you are validating",
+  ]}
+/>
 
-That means:
+<Callout type="success" title="What this lane validated">
 
-- the Gateway terminates the public certificate
-- traffic is re-encrypted to OpenBao
-- the OpenBao endpoint can stay behind the same shared edge as other development tools
+The EKS development lane covered bootstrap, AWS KMS auto-unseal, JWT bootstrap on EKS, human admin JWT login, Gateway exposure through the shared edge, and successful S3 backups.
 
-This keeps the topology simple and avoids ACME passthrough requirements during bring-up.
+</Callout>
 
-### Identity model
+<Callout type="warning" title="What this lane is not">
 
-The architecture separates the AWS and OpenBao identity surfaces:
+This is not a hardened public-endpoint reference, not proof of ACME passthrough, and not a final production posture. It is the shortest cloud lane that still proves the important AWS control-plane integrations.
 
-- the main OpenBao Pods use a workload identity for KMS unseal
-- backup Jobs use a separate workload identity for S3 access
-- the Operator bootstraps its own JWT auth path from Kubernetes issuer discovery
-- human admin access is bootstrapped through a dedicated `ServiceAccount` JWT role
+</Callout>
 
-### Backup model
-
-Backups are written to S3 with a separate execution identity. This keeps KMS unseal permissions and backup write permissions distinct.
-
-## Required invariants
-
-Keep these assumptions if you want to stay on the validated path:
-
-- Use `spec.profile: Development`.
-- Keep the edge in Gateway termination mode, not passthrough.
-- Keep separate AWS identities for unseal and backup.
-- Keep JWT bootstrap enabled for Operator access and admin access.
-- Provide a working KMS key and S3 bucket in the same AWS lane.
-
-## Validated operations
-
-The manual EKS validation covered these behaviors:
-
-- cluster bootstrap completed successfully
-- AWS KMS auto-unseal worked on the running OpenBao Pods
-- JWT bootstrap for the Operator worked on EKS
-- JWT login for a human admin `ServiceAccount` worked
-- Gateway API exposure through the shared terminating edge worked
-- backup Jobs authenticated and wrote snapshots to S3 successfully
-
-## Known constraints
-
-- `ProductionReady` is expected to remain false because this is a `Development` profile topology.
-- Public DNS can exist while actual reachability is still source-restricted at the shared edge.
-- This architecture deliberately does not exercise OpenBao-managed ACME.
-
-## Related recipe
-
-Use the deployment flow in [Amazon EKS Development + AWS KMS + S3](../../recipes/cloud/amazon-eks-development-awskms-s3.md).
-
+<NextActions
+  title="Use the lane"
+  items={[
+    {
+      label: "Deployment recipe",
+      description: "Apply the exact EKS development lane with KMS, shared-edge exposure, and S3 backup wiring.",
+      docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3",
+    },
+    {
+      label: "Backup operations",
+      description: "Review the generic backup model behind the lane's S3 configuration and retention behavior.",
+      docId: "user-guide/openbaocluster/operations/backups",
+    },
+    {
+      label: "EKS Hardened",
+      description: "Move to the hardened cloud baseline when you need public ACME and a dedicated passthrough edge.",
+      docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme",
+    },
+  ]}
+/>

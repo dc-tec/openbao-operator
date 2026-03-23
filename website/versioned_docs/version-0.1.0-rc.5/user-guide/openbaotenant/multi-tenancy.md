@@ -1,231 +1,226 @@
-# Multi-Tenancy Security
-
-Running multiple `OpenBaoCluster` resources in a shared Kubernetes cluster requires strict isolation layers. This guide outlines how to secure tenants using the operator's built-in RBAC, admission policies, NetworkPolicies, and default tenant guardrails.
-
-<Callout type="success" title="Recommended Production Architecture">
-
-Multi-tenant mode is the recommended production operating model for OpenBao Operator. It combines tenant onboarding guardrails, namespace introduction, and workload isolation in one control-plane model.
-
-</Callout>
-
-<Callout type="note" title="Architecture Compatibility">
-
-This guide applies to the default **Multi-Tenant** architecture. Use [Single-Tenant Mode](../operator/single-tenant-mode.md) only when you intentionally want direct namespace-scoped operator control instead of the default tenant-isolation model.
-
-</Callout>
-
-## Isolation Model
-
-The Operator facilitates a **Zero Trust** model where each tenant is isolated by default.
-
-```mermaid
-graph TD
-    subgraph Cluster["Kubernetes Cluster"]
-        
-        subgraph TenantA["Tenant A (Namespace)"]
-            RBAC_A[("RBAC Role")]
-            NetPol_A[("NetworkPolicy")]
-            Secret_A["Secrets (Root Token)"]
-            Pod_A["OpenBao Pods"]
-        end
-
-        subgraph TenantB["Tenant B (Namespace)"]
-            RBAC_B[("RBAC Role")]
-            NetPol_B[("NetworkPolicy")]
-            Secret_B["Secrets (Root Token)"]
-            Pod_B["OpenBao Pods"]
-        end
-
-        Admin["Platform Admin"] --> RBAC_A
-        Admin --> RBAC_B
-        UserA["User A"] --> RBAC_A
-        UserB["User B"] --> RBAC_B
-
-        RBAC_A -.->|Block| Secret_A
-        RBAC_B -.->|Block| Secret_B
-    end
-
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-
-    class Admin,UserA,UserB process;
-    class Pod_A,Pod_B read;
-    class RBAC_A,RBAC_B,NetPol_A,NetPol_B,Secret_A,Secret_B security;
-```
-
-## Security Layers
-
-Configure isolation across four key layers:
-
-<Tabs groupId="1-identity-rbac-2-network-3-storage-quota-4-compliance">
-
-<TabItem value="1-identity-rbac" label="1. Identity (RBAC)">
-
-The most critical layer is identity. The operator's built-in control plane already starts from:
-
-- editor roles without Secret read access
-- dedicated Secret reader/writer allowlist Roles
-- admission policies that constrain Provisioner and Controller RBAC mutation
-
-### Tenant Roles
-Use the provided ClusterRoles to granularly grant permissions.
-
-| Role | Scope | Description |
-| :--- | :--- | :--- |
-| `openbaocluster-admin-role` | Cluster | Full control. Reserved for Platform Engineers. |
-| `openbaocluster-editor-role` | Namespace | Manage Clusters, **CANNOT** read Secrets. |
-| `openbaotenant-editor-role` | Namespace | Self-service onboarding via `OpenBaoTenant`. |
-
-### Supplemental Policy Engines
-<Callout type="note" title="Optional Additional Guardrail">
-
-Kyverno or Gatekeeper can still be useful as cluster-wide supplemental controls, but they are not the primary secret-isolation mechanism. The primary controls are the built-in RBAC and admission model above.
-
-</Callout>
-
-```yaml title="Kyverno Policy: Block Sensitive Secrets"
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
-metadata:
-  name: block-openbao-sensitive-secrets
-spec:
-  validationFailureAction: Enforce
-  rules:
-    - name: block-root-token-access
-      match:
-        any:
-          - resources:
-              kinds:
-                - Secret
-              names:
-                - "*-root-token"
-                - "*-unseal-key"
-      exclude:
-            any:
-              - subjects:
-                  - kind: ServiceAccount
-                name: <rendered-controller-serviceaccount>
-                namespace: <operator-namespace>
-      validate:
-        message: "Access to OpenBao root token and unseal key is restricted."
-        deny: {}
-```
-
-Use the rendered operator ServiceAccount name and namespace for custom raw-manifest installs.
-
-</TabItem>
-
-<TabItem value="2-network" label="2. Network">
-
-By default, the Operator creates OpenBao workload NetworkPolicies that implement a **Default Deny** posture for ingress.
-
-### Default Behavior
-- **Ingress**: Allows operator traffic, Raft peer traffic, and configured Gateway or trusted-ingress paths.
-- **Egress**: Allows DNS, Kubernetes API, and cluster-internal traffic.
-- **Backup / Restore Jobs**: Use a separate Job NetworkPolicy and their own identity and egress contract.
-
-### Custom Restrictions
-If you need strict egress control for backup jobs, apply a dedicated policy.
-
-```yaml title="Backup Job Isolation"
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: backup-job-strict
-  namespace: tenant-a
-spec:
-  podSelector:
-    matchLabels:
-      openbao.org/component: backup
-  policyTypes: [Egress]
-  egress:
-    - to: # Allow S3
-        - ipBlock: { cidr: 0.0.0.0/0 }
-      ports: [{ port: 443, protocol: TCP }]
-```
-
-</TabItem>
-
-<TabItem value="3-storage-quota" label="3. Storage & Quota">
-
-Prevent "Noisy Neighbor" issues where one tenant consumes all cluster resources.
-
-### Resource Quotas
-The operator applies default tenant `ResourceQuota` and `LimitRange` guardrails during onboarding. Self-service `OpenBaoTenant` requests cannot weaken those defaults. Custom values are reserved for centrally managed onboarding from the operator namespace.
-
-Platform-admin onboarding can still provide custom tenant guardrails from the operator namespace when stricter or larger defaults are needed.
-
-### S3 Bucket Isolation
-When using shared object storage for backups, ensure each tenant uses a unique **Prefix** and has credentials scoped *only* to that prefix.
-
-```json title="AWS IAM Policy Example"
-{
-  "Effect": "Allow",
-  "Action": ["s3:PutObject", "s3:GetObject"],
-  "Resource": "arn:aws:s3:::my-backups/tenant-a/*"
-}
-```
-
-</TabItem>
-
-<TabItem value="4-compliance" label="4. Compliance">
-
-Ensure all workloads meet your organization's security baseline.
-
-### Pod Security Standards
-The Operator is compatible with the **Restricted** profile.
-
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: tenant-a
-  labels:
-    # Enforce restricted profile
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/audit: restricted
-```
-
-### Audit Logging
-Enable Kubernetes Audit Logging to track who accesses the `OpenBaoCluster` CRD and related Secrets.
-
-</TabItem>
-
-</Tabs>
-
+---
+title: Multi-Tenant Security
+description: Understand the default shared-operator security model, including namespace introduction, split controllers, RBAC boundaries, and tenant guardrails.
+slug: /tenant-onboarding/multi-tenant-security
+hide_title: true
+pageType: concept
+journey: security
 ---
 
-## Production Checklist
+<PageHero
+  variant="compact"
+  eyebrow="Tenant Onboarding / Security"
+  title="Understand the shared-operator boundary before you rely on multi-tenancy."
+  lede="Multi-tenant mode is the default production model because namespace introduction is explicit, the Provisioner and Controller stay separate, tenant access stays scoped, and guardrails are applied before a cluster ever lands in the namespace."
+  actions={[
+    {label: 'Review RBAC architecture', docId: 'security/infrastructure/rbac', variant: 'primary'},
+    {label: 'Return to tenant onboarding', docId: 'user-guide/openbaotenant/onboarding', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'explain why the default model uses both a Provisioner and a Controller',
+      'review the isolation assumptions before approving shared production use',
+      'understand what tenant onboarding does and does not grant',
+      'validate that guardrails stay in place after onboarding and first cluster creation',
+    ]}
+  />
+</PageHero>
 
-Verify these items for every tenant namespace.
+<Callout type="success" title="Default production model">
 
-<div class="grid cards" markdown>
+Multi-tenant mode is the recommended production operating model for OpenBao Operator.
+Use [Single-Tenant Mode](../operator/single-tenant-mode.md) only when one team directly owns one namespace and intentionally bypasses the default tenant-onboarding boundary.
 
-- **RBAC Isolation**
+</Callout>
 
-    Ensure users are bound to `openbaocluster-editor-role` (or stricter) and cannot read `*-root-token`.
+<DiagramFrame
+  title="Why the control plane is split"
+  caption="Namespace introduction and tenant guardrails stay with the Provisioner. Workload reconciliation stays with the tenant-scoped Controller. That separation prevents one long-running identity from both granting and consuming tenant access."
+  code={`graph LR
+    subgraph Cluster["Shared Kubernetes cluster"]
+      Admin["Platform admin or namespace owner"] --> Tenant["OpenBaoTenant"]
+      Tenant --> Provisioner["Provisioner controller"]
+      Provisioner --> Guardrails["Namespace RBAC and guardrails"]
+      Guardrails --> Controller["Tenant-scoped controller access"]
+      Controller --> ClusterObj["OpenBaoCluster and workload resources"]
+      ClusterObj --> Jobs["Backup, restore, and upgrade jobs"]
+    end
 
-- **Network Policy**
+    classDef actor fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef control fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef data fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
-    Verify that cross-tenant traffic is blocked (Test: try `curl` from Tenant A to Tenant B).
+    class Admin actor;
+    class Tenant,Provisioner,Controller control;
+    class Guardrails,ClusterObj,Jobs data;`}
+/>
 
-- **Storage Quota**
+<DecisionTable
+  title="The control-plane split is the security model"
+  columns={['Surface', 'Primary owner', 'Why it stays separate', 'If you shortcut it']}
+  rows={[
+    {
+      cells: [
+        'Namespace introduction',
+        'Provisioner',
+        'The Provisioner can introduce tenant RBAC and guardrails without becoming the steady-state workload reconciler.',
+        'You blur the boundary between granting namespace access and consuming it.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Workload reconciliation',
+        'Controller',
+        'The Controller stays namespace-scoped and only acts where onboarding already introduced access.',
+        'A cluster-wide controller increases blast radius for config and Secret-facing mistakes.',
+      ],
+    },
+    {
+      cells: [
+        'Tenant user access',
+        'Tenant-scoped roles',
+        'Users can manage clusters without automatically gaining Secret read access.',
+        'Operators and tenant users start sharing too much of the same trust surface.',
+      ],
+    },
+    {
+      cells: [
+        'Backup and restore execution',
+        'Job-specific identities',
+        'Day 2 jobs need narrower, time-bounded capabilities than the main controller.',
+        'The controller role quietly becomes a universal credential for routine and destructive operations.',
+      ],
+    },
+  ]}
+/>
 
-    Confirm `ResourceQuota` is active to prevent storage exhaustion.
+<DecisionTable
+  kind="reference"
+  title="Default tenant roles"
+  columns={['Role', 'Scope', 'Use it for', 'What it does not allow']}
+  rows={[
+    {
+      cells: [
+        '`openbaocluster-admin-role`',
+        'Cluster',
+        'Platform-level administration and exceptional cluster ownership.',
+        'It should not be the normal tenant user path.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '`openbaocluster-editor-role`',
+        'Namespace',
+        'Managing `OpenBaoCluster` resources in an onboarded tenant namespace.',
+        'It does not grant broad Secret read access.',
+      ],
+    },
+    {
+      cells: [
+        '`openbaotenant-editor-role`',
+        'Namespace',
+        'Self-service onboarding through `OpenBaoTenant` in the same namespace.',
+        'It does not allow arbitrary cross-namespace onboarding.',
+      ],
+    },
+  ]}
+/>
 
-- **S3 Isolation**
+<DecisionTable
+  title="Isolation layers to validate"
+  columns={['Layer', 'Default model', 'Validate this', 'Go deeper']}
+  rows={[
+    {
+      cells: [
+        'RBAC',
+        'Namespace-scoped operator access introduced by `OpenBaoTenant`, with editor roles that avoid direct Secret reads.',
+        'Check RoleBindings and `kubectl auth can-i` results for tenant users and operator identities.',
+        'RBAC architecture',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Network policy',
+        'OpenBao workloads default toward restricted ingress, and backup or restore jobs use their own network contract.',
+        'Confirm cross-tenant traffic is blocked and backup egress is intentionally scoped.',
+        'Network security',
+      ],
+    },
+    {
+      cells: [
+        'Quota and namespace guardrails',
+        'Onboarding applies default tenant quotas, limit ranges, and guardrail labels before the first cluster lands.',
+        'Inspect the tenant namespace for the expected quota, limit range, and labels after onboarding.',
+        'Onboard the target namespace',
+      ],
+    },
+    {
+      cells: [
+        'Backup storage isolation',
+        'Each tenant should use object-storage credentials or prefixes that do not overlap with other tenants.',
+        'Make sure backup credentials cannot list or read other tenants\' snapshot paths.',
+        'Backup operations',
+      ],
+    },
+  ]}
+/>
 
-    Verify backup credentials cannot list or read other tenants' prefixes.
+## Validate the shared-operator boundary
 
-- **Global Checklist**
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect tenant guardrails after onboarding"
+  code={`kubectl get openbaotenant <name> -n <namespace> -o yaml
+kubectl get rolebinding,resourcequota,limitrange,networkpolicy -n <target-namespace>`}
+>
+  This gives you the fast check: the onboarding request is provisioned, the namespace-scoped RBAC exists, and the expected tenant guardrails were actually introduced.
+</CommandBlock>
 
-    See the [Production Readiness Checklist](../openbaocluster/operations/production-checklist.md) for cluster-level requirements.
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check tenant access stays scoped"
+  code={`kubectl auth can-i create openbaoclusters.openbao.org -n <target-namespace> --as <tenant-user>
+kubectl auth can-i get secrets -n <target-namespace> --as <tenant-user>`}
+>
+  The normal tenant editor path should allow cluster lifecycle work without granting broad Secret reads by default.
+</CommandBlock>
 
-</div>
+<Callout type="note" title="Supplemental policy engines are optional">
 
-*[PSS]: Pod Security Standards
-*[RBAC]: Role-Based Access Control
-*[CNI]: Container Network Interface
+Kyverno or Gatekeeper can still add cluster-wide guardrails, but they are not the primary tenant-isolation mechanism here.
+The primary controls are the split-controller model, namespace introduction through `OpenBaoTenant`, built-in RBAC, and admission policy enforcement.
 
+</Callout>
+
+<NextActions
+  title="Go deeper"
+  items={[
+    {
+      label: 'Tenancy & governance',
+      description: 'Return to the higher-level OpenBaoTenant model when you need the control-plane rationale rather than the security checklist.',
+      docId: 'user-guide/openbaotenant/overview',
+    },
+    {
+      label: 'Onboard the target namespace',
+      description: 'Use the task page when you are actually creating the first tenant onboarding request.',
+      docId: 'user-guide/openbaotenant/onboarding',
+    },
+    {
+      label: 'RBAC architecture',
+      description: 'Review the exact Kubernetes permission boundaries behind the Provisioner and Controller split.',
+      docId: 'security/infrastructure/rbac',
+    },
+    {
+      label: 'Network security',
+      description: 'Go deeper on workload and job network policy assumptions in shared clusters.',
+      docId: 'security/infrastructure/network-security',
+    },
+  ]}
+/>

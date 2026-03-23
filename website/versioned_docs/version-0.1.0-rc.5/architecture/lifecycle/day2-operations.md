@@ -1,137 +1,214 @@
-# Day 2: Operations & Upgrades
+---
+title: Day 2 Operations
+hide_title: true
+pageType: concept
+journey: architecture
+description: Operational lifecycle for upgrades, maintenance controls, and long-running admin operations after the cluster is live.
+---
 
-Day 2 operations cover the ongoing management of the cluster, including version upgrades and maintenance.
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Lifecycle / Day 2"
+  title="Hand off from cluster creation into upgrades, maintenance, and long-running operational work."
+  lede="Day 2 starts once the cluster is initialized and the workload path is steady. From that point on, long-running operations such as upgrades and backups move through the admin operations path, while maintenance controls gate how much automation is allowed to continue during manual intervention."
+  actions={[
+    {label: 'Open upgrade manager', docId: 'architecture/upgrade-manager', variant: 'primary'},
+    {label: 'Open operate docs', docId: 'user-guide/openbaocluster/operations/index', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand how Day 2 work moves from the workload path into admin operations',
+      'compare rolling and blue-green upgrades at the lifecycle level',
+      'see how pause, maintenance mode, and break-glass relate to normal operations',
+      'connect internal operation state back to the operator-facing operate guides',
+    ]}
+  />
+</PageHero>
 
-<Callout type="tip" title="User Guide">
+<JourneyRail
+  current={3}
+  title="Lifecycle phases"
+  items={[
+    {
+      label: 'Day 0 provisioning',
+      description: 'Prepare a namespace boundary and tenant-scoped policy before any cluster exists.',
+      docId: 'architecture/lifecycle/day0-provisioning',
+    },
+    {
+      label: 'Day 1 creation',
+      description: 'Bootstrap the first node, initialize safely, and only then scale out.',
+      docId: 'architecture/lifecycle/day1-creation',
+    },
+    {
+      label: 'Day 2 operations',
+      description: 'Hand off into upgrades, maintenance, and long-running operational workflows.',
+      docId: 'architecture/lifecycle/day2-operations',
+    },
+    {
+      label: 'Backups and restore',
+      description: 'Protect data durability with scheduled snapshots and explicit restore requests.',
+      docId: 'architecture/lifecycle/dayN-backups',
+    },
+  ]}
+/>
 
-See the [Upgrade Guide](../../user-guide/openbaocluster/operations/upgrades.md) for detailed upgrade strategies (Rolling vs Blue/Green).
+<ManagerAtAGlance
+  sections={[
+    {
+      label: 'Starts with',
+      items: [
+        'an initialized cluster with steady-state workload reconciliation',
+        'version drift, backup schedules, or explicit maintenance requests',
+        'operation lifecycle coordination available for lock and retry management',
+      ],
+    },
+    {
+      label: 'Primary owners',
+      items: [
+        'adminops controller path',
+        'internal/service/upgrade',
+        'internal/service/backup and internal/service/opslifecycle',
+      ],
+    },
+    {
+      label: 'Writes',
+      items: [
+        '`status.upgrade`, `status.blueGreen`, and operation-lock state',
+        'upgrade and backup executor Jobs plus green revision resources when needed',
+        'maintenance annotations or pause-driven no-op behavior depending on user intent',
+      ],
+    },
+    {
+      label: 'Hands off to',
+      items: [
+        'backup and restore flows once a cluster needs ongoing durability',
+        'troubleshooting and recovery guides when automation must pause',
+        'steady-state workload reconciliation after an operation completes',
+      ],
+    },
+  ]}
+/>
 
-</Callout>
+## Architectural Placement
 
-## Cluster Operations / Upgrades
+Day 2 work is intentionally separated from the high-churn workload loop:
 
-<Tabs groupId="rolling-update-default-blue-green-upgrade">
+1. Workload reconciliation continues to own the steady-state pod, Service, and config contract.
+2. Admin operations orchestration takes over when a change requires long-running coordination such as upgrade or backup.
+3. `internal/service/opslifecycle` keeps disruptive operations consistent around lock ownership, retry timing, and audit fields.
 
-<TabItem value="rolling-update-default" label="Rolling Update (Default)">
+That separation prevents upgrades, backups, and other long-running workflows from blocking normal workload repair.
 
-1. User ensures upgrade prerequisites:
-   - Set `spec.version` to the target semantic version.
-   - Configure JWT auth for upgrade executor Jobs (`spec.upgrade.jwtAuthRole`), or enable `spec.selfInit.oidc.enabled=true` so the default role can be bootstrapped.
-   - If `spec.image` is set with a semver tag, keep it aligned with `spec.version`.
-   - If `spec.upgrade.preUpgradeSnapshot=true`, configure `spec.backup` and backup authentication.
-2. User updates `spec.version` and optionally `spec.image` (strategy is configured via `spec.upgrade.strategy`).
-3. Upgrade Manager (adminops controller) detects version drift and performs pre-upgrade validation:
-   - Validates semantic versioning and blocks downgrades.
-   - Rejects provable semver image/version mismatches.
-   - Verifies all pods are Ready and quorum is healthy.
-   - Optionally triggers a pre-upgrade snapshot using `spec.backup` if `spec.upgrade.preUpgradeSnapshot` is enabled.
-4. Upgrade Manager orchestrates Raft-aware rolling updates:
-   - Locks StatefulSet updates using partitioning.
-   - Iterates pods in reverse ordinal order.
-   - Runs an upgrade Job to perform leader step-down before updating the leader pod.
-   - Waits for pod Ready, OpenBao health, and Raft sync after each update.
-5. If a rolling step fails, progress remains in `status.upgrade` and the operator waits for `spec.upgrade.requests.retry` to change before retrying.
-6. On completion, `status.currentVersion` is updated and `status.upgrade` is cleared (rolling), or `status.blueGreen.phase` returns to `Idle` (blue/green).
+<DiagramFrame
+  title="Day 2 control-plane handoff"
+  caption="Once the cluster is live, disruptive operations route through the admin operations path instead of staying inside the high-churn workload controller."
+  code={`graph TD
+    Drift["Version drift or operation request"] --> AdminOps["AdminOps orchestration"]
+    AdminOps --> Upgrade["Upgrade manager"]
+    AdminOps --> Backup["Backup manager"]
+    Upgrade --> Lifecycle["Operation lifecycle"]
+    Backup --> Lifecycle
+    Lifecycle --> Lock["status.operationLock"]
+    Upgrade --> Status["Upgrade and blue-green status"]
+    Backup --> BackupStatus["status.backup"]
+    Workload["Workload reconcile loop"] --> Ready["Steady-state pod repair"]
 
-<Callout type="note" title="Upgrade Policy">
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-Upgrades are designed to be safe and resumable. Downgrades are blocked by default. Rolling upgrades wait for an explicit retry signal after failure. Blue/Green can abort or roll back automatically when `spec.upgrade.blueGreen.autoRollback.enabled=true`. Root tokens are not used for upgrade operations.
+    class Drift,Workload read;
+    class AdminOps,Upgrade,Backup,Lifecycle process;
+    class Lock,Status,BackupStatus,Ready write;`}
+/>
 
-</Callout>
+<DecisionTable
+  kind="reference"
+  title="Day 2 operation families"
+  columns={['Operation family', 'Primary owner', 'Lifecycle role']}
+  rows={[
+    {
+      cells: ['Routine workload repair', 'Workload reconcile path.', 'Keeps StatefulSets, Services, ConfigMaps, and Secrets converged without entering the long-running adminops model.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Upgrade orchestration', 'Upgrade manager via adminops.', 'Handles version drift, strategy-specific state, and Raft-aware cutover logic.'],
+    },
+    {
+      cells: ['Backup scheduling', 'Backup manager via adminops.', 'Runs snapshot Jobs and updates backup status without moving data through the controller.'],
+    },
+    {
+      cells: ['Manual intervention gates', 'User-driven pause and maintenance settings.', 'Limit or reshape automation when an operator needs to intervene directly.'],
+    },
+  ]}
+/>
 
-### Sequence Diagram (Rolling Updates)
+<Tabs groupId="day2-upgrade-paths-versioned">
+  <TabItem value="rolling" label="Rolling upgrades">
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User
-    participant K as Kubernetes API
-    participant Op as OpenBao Operator
-    participant Bao as OpenBao Pods
+<Checklist
+  title="Rolling path"
+  items={[
+    'Version drift triggers pre-upgrade validation around semver, health, and optional snapshot prerequisites.',
+    'The upgrade manager uses StatefulSet partitioning and leader step-down to replace one pod at a time in reverse ordinal order.',
+    'Progress is preserved in status so a failed step can stop cleanly and later resume from an explicit retry request.',
+    'Completion updates currentVersion and clears the transient rolling-upgrade state once the workload fully converges.',
+  ]}
+/>
 
-    U->>K: Patch OpenBaoCluster.spec.version
-    K-->>Op: Watch OpenBaoCluster (version drift)
-    Op->>Op: Validate versions, health, optional pre-upgrade backup
-    Op->>K: Patch StatefulSet updateStrategy (lock with partition)
-    loop per pod (highest ordinal -> 0)
-        Op->>Bao: /v1/sys/health on target pod
-        alt pod is leader
-            Op->>Bao: /v1/sys/step-down
-        end
-        Op->>K: Decrement StatefulSet.partition to update pod
-        K-->>Bao: Roll new pod
-        Bao-->>Op: Pod Ready + OpenBao health OK
-    end
-    Op->>K: Update OpenBaoCluster.status.currentVersion
-    Op->>K: Clear OpenBaoCluster.status.upgrade
-```
+  </TabItem>
+  <TabItem value="bluegreen" label="Blue-green upgrades">
 
-</TabItem>
+<Checklist
+  title="Blue-green path"
+  items={[
+    'A parallel green revision is created and joined as non-voters before any traffic cutover happens.',
+    'Promotion, demotion, cleanup, and rollback all move through explicit phases stored in status.',
+    'The Service selector changes only during cleanup, after a green leader is confirmed and blue peers are ready to leave.',
+    'If rollback safety breaks down late, the manager enters break-glass instead of continuing risky automation blindly.',
+  ]}
+/>
 
-<TabItem value="blue-green-upgrade" label="Blue/Green Upgrade">
-
-Blue/Green upgrades provide zero-downtime updates by creating a parallel "Green" standby cluster and advancing it through explicit consensus phases.
-
-1. **Drift Detection:** User updates `OpenBaoCluster` spec with a new version or image, using the Blue/Green strategy.
-2. **Optional Snapshot:** If `spec.upgrade.preUpgradeSnapshot=true` or `spec.upgrade.blueGreen.preUpgradeSnapshot=true`, the operator blocks until a pre-upgrade snapshot succeeds.
-3. **Green Creation:** The operator creates a new Green StatefulSet with the new version.
-4. **Join as Non-Voters:** Green pods start and join the existing Blue Raft cluster as non-voters.
-5. **Sync and Validate:** The operator waits for Green replication to converge, honors optional `verification.minSyncDuration`, and runs `verification.prePromotionHook` when configured.
-6. **Manual Hold or Promotion:** If `autoPromote=false` when the upgrade starts, the upgrade holds in `Syncing` until the user sets `spec.upgrade.requests.promote`. Changing `autoPromote` mid-upgrade affects only future upgrades. Otherwise, the operator promotes Green pods to voters.
-7. **Demote Blue and Verify Leader:** The operator demotes Blue voters, forces leadership transfer when needed, and waits until a Green leader is observed.
-8. **Cutover During Cleanup:** The operator switches the Service selector to Green, removes Blue peers, and deletes the Blue StatefulSet. Rollback remains possible until irreversible cleanup completes.
-9. **Break Glass:** If rollback consensus repair fails, the operator sets `status.breakGlass` and halts risky rollback automation until `spec.breakGlassAck` matches the issued nonce.
-
-### Sequence Diagram (Blue/Green)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as User
-    participant K as Kubernetes API
-    participant Op as OpenBao Operator
-    participant Blue as Blue Pods (v1)
-    participant Green as Green Pods (v2)
-
-    U->>K: Update Image to v2 (BlueGreen Strategy)
-    K-->>Op: Watch OpenBaoCluster
-    Op->>K: Create Green StatefulSet (v2)
-    K-->>Green: Start Green Pods
-    Green->>Blue: Join Raft Cluster (Non-Voters)
-    Op->>Green: Wait for Sync
-    Op->>Green: Promote to Voters
-    Op->>Blue: Demote Blue Voters / Step Down Leader
-    Op->>Green: Verify Green Leader
-    Op->>K: Switch Service Selector to Green
-    Op->>Blue: Remove Peers / Delete Blue StatefulSet
-```
-
-</TabItem>
-
+  </TabItem>
 </Tabs>
 
-## Maintenance / Manual Recovery
+<DecisionTable
+  kind="reference"
+  title="Operational control surfaces"
+  columns={['Control', 'What it does', 'When to use it']}
+  rows={[
+    {
+      cells: ['`spec.paused=true`', 'Short-circuits reconcilers so the operator stops mutating managed resources for the cluster.', 'Use when you need manual intervention and want automation to stop entirely.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['`spec.maintenance.enabled=true`', 'Keeps reconciliation running, but marks resources for controlled disruptive changes allowed by policy.', 'Use when the operator should continue known-safe automation during maintenance work.'],
+    },
+    {
+      cells: ['`spec.breakGlassAck`', 'Acknowledges an issued nonce before risky late-stage recovery automation can continue.', 'Use only after an operator has reviewed a break-glass condition and accepts the next step explicitly.'],
+    },
+  ]}
+/>
 
-There are two related (but distinct) mechanisms:
-
-1. **Pause reconciliation** (`spec.paused=true`): stops all controllers for the cluster from mutating resources.
-   This is intended for manual intervention or recovery workflows.
-2. **Maintenance annotation mode** (`spec.maintenance.enabled=true`): keeps reconciliation running, but annotates
-   managed resources with `openbao.org/maintenance=true` so admission policies can allow controlled deletes/restarts.
-   The operator also uses this gate for disruptive-but-automatable operations (for example, completing filesystem
-   expansion when a PVC reports `FileSystemResizePending` after increasing `spec.storage.size`).
-
-For manual recovery:
-
-1. User sets `spec.paused=true`.
-2. Reconcilers short-circuit and stop mutating resources, allowing manual actions (e.g., manual restore from snapshot).
-3. If an upgrade was in progress, it is paused but state is preserved in `status.upgrade` or `status.blueGreen`.
-4. After maintenance, user sets `spec.paused=false` to resume normal reconciliation (including any paused upgrade).
-
-## Official OpenBao Documentation
-
-- [Upgrade Guide](https://openbao.org/docs/upgrading/)
-- [Operator Step-Down Command](https://openbao.org/docs/commands/operator/step-down/)
-- [Operator Raft Command](https://openbao.org/docs/commands/operator/raft/)
-- [Recovery Mode Concepts](https://openbao.org/docs/concepts/recovery-mode/)
-
+<NextActions
+  title="Continue the lifecycle"
+  items={[
+    {
+      label: 'Backups and restore',
+      description: 'Move into the durability path that protects live clusters with snapshots and explicit restore requests.',
+      docId: 'architecture/lifecycle/dayN-backups',
+    },
+    {
+      label: 'Upgrade manager',
+      description: 'Open the deep dive for the exact rolling and blue-green orchestration contract.',
+      docId: 'architecture/upgrade-manager',
+    },
+    {
+      label: 'Operate docs',
+      description: 'Compare the internal Day 2 control-plane model with the operator-facing upgrade, maintenance, and troubleshooting guides.',
+      docId: 'user-guide/openbaocluster/operations/index',
+    },
+  ]}
+/>

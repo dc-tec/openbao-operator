@@ -1,75 +1,186 @@
 ---
-description: Shared operation lifecycle architecture for backup, restore, and upgrade flows, including locks, retry classes, and phase audit helpers.
+title: Operation Lifecycle Coordination
+hide_title: true
+pageType: concept
+journey: architecture
+description: Shared lock, retry, and phase-audit primitives used by backup, restore, and upgrade managers.
 ---
 
-# Operation Lifecycle Coordination
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Supporting Service"
+  title="Coordinate locks, retries, and phase transitions across disruptive operations."
+  lede="`internal/service/opslifecycle` is the shared service-layer contract behind backup, restore, and upgrade orchestration. It does not own a controller or CRD of its own. Instead, it keeps operation lock identity, retry timing, and phase audit logging consistent whenever a manager needs to take disruptive action against a cluster."
+  actions={[
+    {label: 'Open upgrade manager', docId: 'architecture/upgrade-manager', variant: 'primary'},
+    {label: 'Open restore manager', docId: 'architecture/restore-manager', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand how backup, restore, and upgrade share one lock and retry model',
+      'see which primitives wrap the status-based operation lock adapter',
+      'reason about contention, force semantics, and requeue timing without reading each manager separately',
+      'connect phase audit logging back to one common service instead of per-manager helpers',
+    ]}
+  />
+</PageHero>
 
-`internal/service/opslifecycle` provides shared service-layer primitives for long-running operations. It does not own a single controller or CRD. Instead, it gives backup, restore, and upgrade flows a consistent model for operation locks, requeue timing, and phase-transition audit logging.
+<ManagerAtAGlance
+  sections={[
+    {
+      label: 'Used by',
+      items: [
+        'internal/service/backup',
+        'internal/service/restore',
+        'internal/service/upgrade',
+      ],
+    },
+    {
+      label: 'Owns',
+      items: [
+        'operation-lock identity helpers for disruptive work',
+        'retry intent classes and default requeue mapping',
+        'phase-transition audit field normalization',
+      ],
+    },
+    {
+      label: 'Writes through',
+      items: [
+        'internal/adapter/operationlock for status.operationLock updates',
+        'audit event fields for phase transitions',
+        'shared retry delays consumed by controller requeues',
+      ],
+    },
+    {
+      label: 'Depends on',
+      items: [
+        'OpenBaoCluster.status.operationLock as the persisted mutex surface',
+        'controller requeue behavior for long-running progress polling',
+        'manager-specific phase names and audit metadata',
+      ],
+    },
+  ]}
+/>
 
-## 1. Architectural Placement
+## Architectural Placement
 
-Operation lifecycle coordination sits in the service layer and is used by multiple domain managers:
+Operation lifecycle coordination sits below the concrete managers and above the lock adapter:
 
-- `internal/service/backup`
-- `internal/service/restore`
-- `internal/service/upgrade`
+1. A manager such as backup, restore, or upgrade decides it needs to start or resume work.
+2. It uses `internal/service/opslifecycle` to acquire or release the expected lock identity, classify retry intent, and log phase changes.
+3. `opslifecycle` delegates the actual status patching to `internal/adapter/operationlock`.
 
-It wraps the concrete lock adapter in `internal/adapter/operationlock`, so controllers and app packages do not need to duplicate operation-lock semantics.
+That keeps the shared safety model in one place instead of scattering lock and retry semantics across several managers.
 
-## 2. Responsibilities
+<DiagramFrame
+  title="Coordination model"
+  caption="Backup, restore, and upgrade do not each implement their own lock and retry policy. They share one coordination service that wraps the operation-lock adapter and keeps audit fields consistent."
+  code={`graph TD
+    Backup["Backup manager"] --> Ops["Operation lifecycle"]
+    Restore["Restore manager"] --> Ops
+    Upgrade["Upgrade manager"] --> Ops
+    Ops --> Lock["Operation lock adapter"]
+    Ops --> Retry["Retry classes"]
+    Ops --> Audit["Phase audit logging"]
+    Lock --> Status["OpenBaoCluster.status.operationLock"]
 
-The package centralizes three concerns:
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-- **Lock ownership:** Acquire, renew, and release `OpenBaoCluster.status.operationLock`.
-- **Retry intent:** Map lock contention and progress polling to consistent requeue delays.
-- **Phase audit logging:** Emit consistent audit fields when long-running operations change phase.
+    class Backup,Restore,Upgrade read;
+    class Ops,Retry,Audit process;
+    class Lock process;
+    class Status write;`}
+/>
 
-## 3. Coordination Model
+<DecisionTable
+  kind="reference"
+  title="Shared primitives"
+  columns={['Primitive', 'What it standardizes', 'Why it exists']}
+  rows={[
+    {
+      cells: ['OperationLock', 'A stable holder + operation identity for a long-running action.', 'Managers need an exact lock identity so renew and release only succeed for the intended owner.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Acquire / Release', 'Status-based lock ownership via the adapter.', 'Controllers should not each patch status.operationLock differently or invent different lock messages.'],
+    },
+    {
+      cells: ['IsLockHeld / HeldError / AddHeldAuditFields', 'A shared way to classify contention and enrich audit events with who currently owns the lock.', 'Contention should produce consistent diagnostics instead of manager-specific strings.'],
+    },
+    {
+      cells: ['LogPhaseTransition', 'Stable phase_from / phase_to audit fields for long-running operations.', 'Audit streams stay comparable across backup, restore, and upgrade.'],
+    },
+  ]}
+/>
 
-```mermaid
-graph TD
-    Backup["Backup Manager"] --> Ops["Operation Lifecycle"]
-    Restore["Restore Manager"] --> Ops
-    Upgrade["Upgrade Manager"] --> Ops
-    Ops --> Lock["Operation Lock Adapter"]
-    Ops --> Status["OpenBaoCluster.status.operationLock"]
+## Retry And Lock Model
 
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+<DecisionTable
+  kind="reference"
+  title="Retry classes"
+  columns={['Retry class', 'Default delay', 'Typical use']}
+  rows={[
+    {
+      cells: ['lock-contention', '`5s`', 'Another disruptive operation already owns the cluster lock, so the manager should requeue quickly and check again.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['progress-poll', '`5s`', 'A Job or long-running operation is still in progress and the manager is waiting for the next observable state change.'],
+    },
+    {
+      cells: ['standard', '`1m` by default, overridable with `OPENBAO_REQUEUE_STANDARD`', 'Background retry work that does not need tight polling.'],
+    },
+  ]}
+/>
 
-    class Backup,Restore,Upgrade process;
-    class Ops process;
-    class Lock read;
-    class Status write;
-```
+<DecisionTable
+  kind="reference"
+  title="Lock contract"
+  columns={['Concern', 'Shared behavior']}
+  rows={[
+    {
+      cells: ['Acquire vs renew', 'If the exact holder and operation already own the lock, acquisition renews the same lock instead of treating it as contention.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Exact-match release', 'Release succeeds only when holder and operation match the active lock, so one manager cannot accidentally clear another manager’s ownership.'],
+    },
+    {
+      cells: ['Force override', 'Force semantics exist for explicit override paths only; normal long-running operations should not silently steal the lock.'],
+    },
+    {
+      cells: ['Contention diagnostics', 'HeldError exposes the current operation and holder so audit events and logs can explain why a manager requeued.'],
+    },
+  ]}
+/>
 
-## 4. Shared Primitives
+<Callout type="note" title="This is coordination, not orchestration">
 
-| Primitive | Purpose |
-| :--- | :--- |
-| `OperationLock` | Describes the expected lock identity for an operation. |
-| `Acquire` / `Release` | Wrap lock adapter behavior for status-based lock ownership. |
-| `RetryClass` / `RequeueDelay` | Keep lock-contention and progress-poll retries consistent across managers. |
-| `LogPhaseTransition` | Emit stable audit fields for phase changes. |
-
-## 5. Design Intent
-
-<Callout type="note" title="Why This Exists">
-
-Operation coordination belongs in the service layer so backup, restore, and upgrade flows share the same safety model without recreating lock and retry logic inside each controller.
+`opslifecycle` does not decide whether an upgrade should roll or blue-green, whether a restore request is valid, or whether a backup target is reachable. It only standardizes the lock, retry, and audit mechanics around those domain decisions.
 
 </Callout>
 
-This keeps long-running operations consistent:
-
-- Only one disruptive cluster operation should own the lock at a time.
-- Lock contention should requeue predictably rather than fail noisily.
-- Phase changes should produce comparable audit events across managers.
-
-## 6. See Also
-
-- [Backup Manager](backup-manager.md)
-- [Restore Manager](restore-manager.md)
-- [Upgrade Manager](upgrade-manager.md)
-
+<NextActions
+  title="Related deep dives"
+  items={[
+    {
+      label: 'Upgrade manager',
+      description: 'See how rolling and blue-green orchestration use shared lock and retry primitives during long-running transitions.',
+      docId: 'architecture/upgrade-manager',
+    },
+    {
+      label: 'Backup manager',
+      description: 'See how scheduled and manual snapshot flows reuse the same contention and requeue model.',
+      docId: 'architecture/backup-manager',
+    },
+    {
+      label: 'Restore manager',
+      description: 'See how destructive restore requests rely on the same lock identity and audit mechanics.',
+      docId: 'architecture/restore-manager',
+    },
+  ]}
+/>

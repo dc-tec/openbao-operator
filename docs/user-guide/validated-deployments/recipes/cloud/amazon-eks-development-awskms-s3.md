@@ -1,72 +1,107 @@
 ---
-description: Step-by-step recipe for a Development-profile OpenBao cluster on Amazon EKS with AWS KMS auto-unseal, JWT self-init, Gateway API exposure, and S3 backups.
+title: EKS Development / Shared Edge Recipe
+hide_title: true
+pageType: task
+journey: validated-deployments
+description: Reproduce the validated development baseline on Amazon EKS with AWS KMS auto-unseal, a shared terminating Gateway, JWT bootstrap, and S3 backups.
 ---
 
-# Amazon EKS Development with AWS KMS and S3 Backups
+<PageHero
+  eyebrow="Validated Deployments / Cloud Baselines / EKS Development"
+  title="Reproduce the validated EKS development lane without mixing the quick bring-up path with hardened endpoint requirements."
+  lede="This recipe applies the EKS development baseline with KMS auto-unseal, shared-edge exposure, JWT bootstrap, and S3 backups. Use it when you need the exact validated cloud bring-up path, not a generic EKS example."
+  actions={[
+    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
+    {label: "Open backup operations", docId: "user-guide/openbaocluster/operations/backups", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="This recipe should leave you with"
+    items={[
+      "an onboarded tenant namespace and admin ServiceAccount",
+      "a Development-profile cluster that unseals with AWS KMS through workload identity",
+      "JWT admin login and shared-edge access working on the public hostname you chose",
+      "manual and scheduled S3 backups using a backup identity that stays separate from the main workload identity",
+    ]}
+  />
+</PageHero>
 
-This recipe deploys a `Development`-profile `OpenBaoCluster` on Amazon EKS with:
+<Callout type="success" title="Validated lane">
 
-- AWS KMS auto-unseal on the main OpenBao Pods
-- JWT bootstrap for the Operator and a human admin `ServiceAccount`
-- Gateway API exposure through a shared terminating edge
-- scheduled backups to S3 using a separate backup identity
-
-<Callout type="success" title="Validated in the Manual EKS Environment">
-
-This recipe is based on the Amazon EKS lane used for manual validation in the project test environment. That path validated KMS unseal, JWT bootstrap, Gateway API exposure, and successful S3 backups.
+This recipe matches the EKS development lane validated in the project cloud environment. The tested path covered KMS unseal, JWT bootstrap, Gateway exposure, and successful S3 backups.
 
 </Callout>
 
-<Callout type="warning" title="Development only">
+<Callout type="note" title="Use the main docs for generic operator behavior">
 
-Use this recipe for validation, demos, and operational bring-up. `spec.profile: Development` is not a production posture.
-
-</Callout>
-
-<Callout type="note" title="Reference architecture">
-
-For the tested topology, assumptions, and validation scope behind this deployment flow, see [Amazon EKS Development with AWS KMS and S3 Backups](../../architectures/cloud/amazon-eks-development-awskms-s3.md).
+Use <SiteLink docId="user-guide/openbaotenant/onboarding">tenant onboarding</SiteLink>, <SiteLink docId="user-guide/openbaocluster/configuration/gateway-api">Gateway API support</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/operations/backups">backup operations</SiteLink> for the product-wide guidance. This page captures the exact validated lane.
 
 </Callout>
 
-## Prerequisites
+<DecisionTable
+  title="What this lane assumes"
+  columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
+  rows={[
+    {
+      cells: [
+        "EKS has IRSA or an equivalent workload identity path enabled",
+        "Both KMS unseal and S3 backup identities depend on cloud workload identity behavior.",
+        "The main workload or backup jobs will fail authentication even if the manifests themselves look correct.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "The shared Gateway terminates HTTPS and can re-encrypt to OpenBao",
+        "The lane uses a terminating edge instead of passthrough.",
+        "If you switch to passthrough or plain HTTP forwarding, you are no longer reproducing the validated baseline.",
+      ],
+    },
+    {
+      cells: [
+        "Separate AWS identities exist for unseal and backup",
+        "The validated lane treats those permissions as distinct surfaces.",
+        "You will miss the exact failure modes and permission boundaries the lane is supposed to prove.",
+      ],
+    },
+    {
+      cells: [
+        "This remains a Development profile",
+        "The lane is intentionally optimized for bring-up and validation speed.",
+        "Treating it as a production profile will create the wrong expectations around `ProductionReady` and endpoint posture.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-- Run Amazon EKS with an IAM OIDC provider enabled for IRSA or an equivalent workload identity setup.
-- Install OpenBao Operator in multi-tenant mode with admission policies enabled.
-- Create an AWS KMS key for auto-unseal and grant the main OpenBao workload access to it.
-- Create an S3 bucket for Raft snapshots.
-- Create separate AWS identities for:
-  - the main OpenBao Pods (KMS unseal)
-  - backup Jobs (S3 write access)
-- Expose a Gateway API listener that terminates HTTPS for the external hostname and can re-encrypt to the OpenBao backend.
-- Provision a certificate for the shared edge hostname outside the `OpenBaoCluster`, for example with cert-manager and Route53 DNS01.
-- Ensure a `StorageClass` exists for the data PVCs.
+<DecisionTable
+  kind="reference"
+  title="Inputs to replace before apply"
+  columns={["Placeholder", "Example", "Purpose"]}
+  rows={[
+    {cells: ["`<namespace>`", "`openbaocluster-dev`", "Tenant namespace for the cluster."]},
+    {cells: ["`<cluster-name>`", "`openbaocluster-dev`", "`OpenBaoCluster` name."]},
+    {cells: ["`<openbao-version>`", "`2.5.1`", "OpenBao version."]},
+    {cells: ["`<aws-region>`", "`eu-central-1`", "AWS region for KMS and S3."]},
+    {cells: ["`<kms-key-arn>`", "`arn:aws:kms:...`", "KMS key ARN for auto-unseal."]},
+    {cells: ["`<main-role-arn>`", "`arn:aws:iam::...:role/openbao-unseal`", "IRSA role for the main OpenBao Pods."]},
+    {cells: ["`<backup-role-arn>`", "`arn:aws:iam::...:role/openbao-backup`", "IRSA role for backup Jobs."]},
+    {cells: ["`<backup-bucket>`", "`openbao-backups`", "S3 bucket for snapshots."]},
+    {cells: ["`<gateway-name>`", "`shared-gateway`", "Existing terminating Gateway."]},
+    {cells: ["`<gateway-namespace>`", "`default`", "Namespace of the Gateway."]},
+    {cells: ["`<external-host>`", "`bao-dev.example.com`", "External hostname for the development cluster."]},
+    {cells: ["`<operator-namespace>`", "`openbao-operator-system`", "Namespace that hosts the central `OpenBaoTenant` resource."]},
+  ]}
+/>
 
-## Inputs
+## Step 1: Onboard the tenant namespace
 
-Replace these values before applying the manifests:
-
-| Placeholder | Example | Purpose |
-| :--- | :--- | :--- |
-| `<namespace>` | `openbaocluster-dev` | Tenant namespace for the cluster |
-| `<cluster-name>` | `openbaocluster-dev` | `OpenBaoCluster` name |
-| `<openbao-version>` | `2.5.1` | OpenBao version |
-| `<aws-region>` | `eu-central-1` | AWS region for KMS and S3 |
-| `<kms-key-arn>` | `arn:aws:kms:eu-central-1:123456789012:key/abcd...` | KMS key used for auto-unseal |
-| `<main-role-arn>` | `arn:aws:iam::123456789012:role/openbao-unseal` | IRSA role for the main OpenBao Pods |
-| `<backup-role-arn>` | `arn:aws:iam::123456789012:role/openbao-backup` | IRSA role for backup Jobs |
-| `<backup-bucket>` | `openbao-backups` | S3 bucket for snapshots |
-| `<gateway-name>` | `shared-gateway` | Existing terminating Gateway |
-| `<gateway-namespace>` | `default` | Namespace of the Gateway |
-| `<external-host>` | `bao-dev.example.com` | External hostname for the development cluster |
-| `<operator-namespace>` | `openbao-operator-system` | Namespace hosting `OpenBaoTenant` |
-
-## Step 1: Create the tenant namespace
-
-Apply the tenant namespace, onboarding request, and admin `ServiceAccount`:
-
-```yaml
-apiVersion: v1
+<CommandBlock
+  language="yaml"
+  label="apply"
+  title="Create the namespace, onboarding request, and admin ServiceAccount"
+  code={`apiVersion: v1
 kind: Namespace
 metadata:
   name: <namespace>
@@ -85,21 +120,25 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: openbao-admin
-  namespace: <namespace>
-```
+  namespace: <namespace>`}
+/>
 
-Verify that the tenant is provisioned:
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Wait for tenant provisioning"
+  code={`kubectl -n <operator-namespace> describe openbaotenant <cluster-name>-tenant`}
+>
+  The steady-state expectation is `Provisioned=True`.
+</CommandBlock>
 
-```bash
-kubectl -n <operator-namespace> describe openbaotenant <cluster-name>-tenant
-```
+## Step 2: Apply the validated EKS development cluster
 
-## Step 2: Apply the OpenBaoCluster
-
-Apply the cluster manifest:
-
-```yaml
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="apply"
+  title="Apply the Development-profile EKS manifest"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:
   name: <cluster-name>
@@ -211,93 +250,69 @@ spec:
 
   upgrade:
     preUpgradeSnapshot: true
-    strategy: RollingUpdate
-```
+    strategy: RollingUpdate`}
+/>
 
 <Callout type="note" title="AppArmor on EKS">
 
-The validated EKS lane set `spec.workloadHardening.appArmorEnabled: false`. If your node OS supports AppArmor cleanly, remove that override.
+The validated EKS lane set `spec.workloadHardening.appArmorEnabled: false`. Remove that override only if your node OS and runtime support AppArmor cleanly.
 
 </Callout>
 
-<Callout type="note" title="Separate identity surfaces">
+## Verify the lane
 
-`spec.serviceAccount.annotations` configures the main OpenBao Pods. The backup path uses its own generated ServiceAccount and the S3 identity configured under `spec.backup.target`.
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check the cluster conditions"
+  code={`kubectl -n <namespace> get openbaocluster <cluster-name> \\
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\\n"}{end}'`}
+>
+  The steady-state expectation is `Available=True`, `CloudUnsealIdentityReady=True`, `BackupConfigurationReady=True`, `GatewayIntegrationReady=True` or `Unknown`, `OpenBaoInitialized=True`, and `OpenBaoSealed=False`.
+</CommandBlock>
 
-</Callout>
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check the external endpoint and JWT admin login"
+  code={`curl -kI https://<external-host>/v1/sys/health
 
-## Operations
-
-### Verify the cluster is ready
-
-Check the status conditions:
-
-```bash
-kubectl -n <namespace> get openbaocluster <cluster-name> \
-  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\n"}{end}'
-```
-
-The steady-state expectation is:
-
-- `Available=True`
-- `CloudUnsealIdentityReady=True`
-- `BackupConfigurationReady=True`
-- `OpenBaoInitialized=True`
-- `OpenBaoSealed=False`
-
-`ProductionReady` is not the goal for this `Development` recipe.
-
-If you enabled Gateway exposure, also expect `GatewayIntegrationReady=True` or `Unknown` while the controller reports status.
-
-### Verify the external endpoint
-
-Check the external health path:
-
-```bash
-curl -kI https://<external-host>/v1/sys/health
-```
-
-Expect an OpenBao response such as `200`, `429`, or `472` depending on your health-query parameters.
-
-### Verify JWT admin login
-
-Create a Kubernetes token for the admin `ServiceAccount` and exchange it for an OpenBao token:
-
-```bash
 JWT="$(kubectl -n <namespace> create token openbao-admin --audience openbao-internal --duration=1h)"
 
-curl -sS -k \
-  -H 'Content-Type: application/json' \
-  -d "{\"role\":\"admin\",\"jwt\":\"${JWT}\"}" \
-  "https://<external-host>/v1/auth/jwt/login"
-```
+curl -sS -k \\
+  -H 'Content-Type: application/json' \\
+  -d "{\\"role\\":\\"admin\\",\\"jwt\\":\\"\${JWT}\\"}" \\
+  "https://<external-host>/v1/auth/jwt/login"`}
+/>
 
-### Trigger a manual backup
-
-Patch the cluster with the supported manual-backup annotation:
-
-```bash
-kubectl -n <namespace> annotate openbaocluster <cluster-name> \
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Trigger and inspect a manual backup"
+  code={`kubectl -n <namespace> annotate openbaocluster <cluster-name> \\
   openbao.org/trigger-backup="$(date -u +%Y-%m-%dT%H:%M:%SZ)" --overwrite
-```
 
-Then inspect backup status:
+kubectl -n <namespace> get openbaocluster <cluster-name> \\
+  -o jsonpath='{.status.backup.lastBackupName}{"\\n"}{.status.backup.lastBackupTime}{"\\n"}{.status.backup.lastFailureReason}{"\\n"}'`}
+/>
 
-```bash
-kubectl -n <namespace> get openbaocluster <cluster-name> \
-  -o jsonpath='{.status.backup.lastBackupName}{"\n"}{.status.backup.lastBackupTime}{"\n"}{.status.backup.lastFailureReason}{"\n"}'
-```
-
-## Common Failures
-
-- `CloudUnsealIdentityReady=False`: verify the KMS key permissions and the IRSA annotation on the main workload.
-- `BackupConfigurationReady=False`: verify the backup role ARN, S3 bucket access, and network egress to the S3 endpoint.
-- `OpenBaoInitialized=False`: check `spec.selfInit.requests` for syntax or path errors.
-- The Gateway returns edge `404`: verify that the referenced Gateway listener exists and your controller accepts the generated `HTTPRoute`.
-
-## See Also
-
-- [Gateway API Support](../../../openbaocluster/configuration/gateway-api.md)
-- [Backups](../../../openbaocluster/operations/backups.md)
-- [Self-Initialization](../../../openbaocluster/configuration/self-init.md)
-
+<NextActions
+  title="Keep moving"
+  items={[
+    {
+      label: "Reference architecture",
+      description: "Review the lane summary, topology, and invariants behind the EKS development path.",
+      docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3",
+    },
+    {
+      label: "Backup operations",
+      description: "Use the operator-wide backup guide for retention, credentials, and restore planning beyond this validated lane.",
+      docId: "user-guide/openbaocluster/operations/backups",
+    },
+    {
+      label: "EKS Hardened",
+      description: "Move to the hardened cloud baseline when you are ready for ACME, passthrough, and a production-style edge.",
+      docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme",
+    },
+  ]}
+/>

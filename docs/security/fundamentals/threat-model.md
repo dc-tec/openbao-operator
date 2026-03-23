@@ -1,132 +1,273 @@
 ---
-description: STRIDE threat model for OpenBao Operator covering threat actors, trust boundaries, protected assets, and accepted residual risks.
+title: Threat Model
+hide_title: true
+pageType: concept
+journey: security
+description: Threat actors, trust boundaries, protected assets, and accepted residual risks for the OpenBao Operator control plane.
 ---
 
-# Threat Model
-
-This page analyzes the OpenBao Operator security model with the **STRIDE** framework. It focuses on operator-owned control-plane behavior, tenant isolation, and lifecycle workflows.
+<PageHero
+  variant="compact"
+  eyebrow="Security / Security Model"
+  title="Start from the trust boundaries the operator is designed to defend."
+  lede="This threat model focuses on the operator control plane, tenant isolation boundaries, and lifecycle workflows such as onboarding, upgrade, backup, and restore. It does not replace OpenBao's own internal threat model; it explains the extra surface introduced by running OpenBao through the operator."
+  actions={[
+    {label: 'Open RBAC architecture', docId: 'security/infrastructure/rbac', variant: 'primary'},
+    {label: 'Read operator invariants', docId: 'architecture/operator-invariants', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'review the attacker and trust assumptions behind the operator architecture',
+      'understand which assets the control plane treats as critical',
+      'connect mitigations back to admission, RBAC, and lifecycle separation',
+      'decide whether a proposed design change expands the threat surface',
+    ]}
+  />
+</PageHero>
 
 <Callout type="note" title="Scope">
 
-This page models threats to the OpenBao Operator control plane, tenant isolation boundaries, and lifecycle workflows. It does not replace OpenBao's own internal threat model.
+This page models threats to the OpenBao Operator control plane, tenant isolation boundaries, and lifecycle workflows. It assumes the operator manages clusters it created and reconciles; generic import of arbitrary unmanaged OpenBao clusters is out of scope.
 
 </Callout>
 
-<Callout type="note" title="Lifecycle Contract">
+<DecisionTable
+  title="Threat-model scope"
+  columns={['Area', 'In scope', 'Why']}
+  rows={[
+    {
+      cells: [
+        'Operator control plane',
+        'Yes',
+        'Long-running operator identities, admission dependencies, and controller boundaries define most of the extra risk introduced by the operator.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Tenant isolation',
+        'Yes',
+        'Namespace introduction, RBAC boundaries, and managed-resource ownership are core to the multi-tenant model.',
+      ],
+    },
+    {
+      cells: [
+        'Lifecycle workflows',
+        'Yes',
+        'Backup, restore, upgrade, and tenant onboarding introduce destructive or privileged execution paths.',
+      ],
+    },
+    {
+      cells: [
+        'OpenBao internals unrelated to the operator',
+        'No',
+        'Those belong to OpenBao’s own product threat model rather than the operator-specific surface.',
+      ],
+    },
+  ]}
+/>
 
-`OpenBaoCluster` is an operator-owned lifecycle contract. This model assumes the operator manages clusters it created and reconciles. Generic import of arbitrary unmanaged OpenBao clusters is out of scope.
+## Threat actors
 
-</Callout>
+<DecisionTable
+  kind="reference"
+  title="Actors that matter"
+  columns={['Actor', 'Typical access', 'Why they matter']}
+  rows={[
+    {
+      cells: [
+        'Tenant author',
+        'Namespace-scoped write access',
+        'Can attempt to steer the operator, exploit weak isolation, or target Secrets and workload identities inside an onboarded namespace.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'GitOps pipeline or human cluster operator',
+        'Namespace or cluster write access',
+        'Can intentionally or accidentally mutate control-plane configuration, admission dependencies, or operator-managed resources.',
+      ],
+    },
+    {
+      cells: [
+        'Compromised controller or provisioner Pod',
+        'Operator-managed identity',
+        'Tests whether the split-controller model and mutation locks actually narrow blast radius.',
+      ],
+    },
+    {
+      cells: [
+        'Compromised OpenBao Pod or lifecycle Job',
+        'Namespace workload identity',
+        'Exercises the boundary between the steady-state service, generated Jobs, and the control plane.',
+      ],
+    },
+    {
+      cells: [
+        'Compromised or misconfigured external dependency',
+        'Object storage, PKI, KMS, ingress, or identity system',
+        'The operator relies on those systems for unseal, TLS, backup, restore, and external access contracts.',
+      ],
+    },
+  ]}
+/>
 
-## 1. Threat Actors
+## Trust boundaries
 
-This model assumes the following actors are relevant.
-
-- A tenant author with namespace-scoped write access.
-- A GitOps pipeline or human operator with namespace or cluster write access.
-- A compromised Controller Pod.
-- A compromised Provisioner Pod.
-- A compromised OpenBao Pod or backup, restore, or upgrade Job.
-- A misconfigured or compromised external dependency such as object storage, PKI, KMS, or an ingress controller.
-
-## 2. Trust Boundaries
-
-The system is divided into five trust zones. Admission policy is the API enforcement boundary between submitted intent and persisted state.
-
-```mermaid
-graph TD
-    subgraph Client_Zone ["Trust Zone: Mutation Clients"]
-        GitOps["GitOps / Human Operator"]
-        Tenant["Tenant Author"]
+<DiagramFrame
+  title="Trust zones"
+  caption="Admission policy is the API enforcement boundary between submitted intent and persisted state. Operator identities, tenant workloads, and external systems each carry different trust assumptions."
+  code={`graph TD
+    subgraph Client_Zone ["Mutation clients"]
+        GitOps["GitOps / human operator"]
+        Tenant["Tenant author"]
     end
 
-    subgraph Operator_Zone ["Trust Zone: Operator Identities"]
+    subgraph Operator_Zone ["Operator identities"]
         Prov["Provisioner"]
         Ctrl["Controller"]
     end
 
-    subgraph API_Zone ["Trust Zone: Kubernetes API"]
+    subgraph API_Zone ["Kubernetes API"]
         K8sAPI["Kubernetes API"]
-        VAP["Admission Policies"]
+        VAP["Admission policies"]
     end
 
-    subgraph Tenant_Zone ["Trust Zone: Tenant Namespace"]
+    subgraph Tenant_Zone ["Tenant namespace"]
         Bao["OpenBao Pods"]
-        Jobs["Backup / Restore / Upgrade Jobs"]
-        Managed["Managed Resources"]
+        Jobs["Backup / restore / upgrade Jobs"]
+        Managed["Managed resources"]
     end
 
-    subgraph External_Zone ["Trust Zone: External Systems"]
-        Edge["Gateway / Ingress"]
-        Storage["Object Storage"]
-        Trust["Seal / PKI / Identity Systems"]
+    subgraph External_Zone ["External systems"]
+        Edge["Gateway / ingress"]
+        Storage["Object storage"]
+        Trust["Seal / PKI / identity systems"]
     end
 
-    GitOps --"Apply / mutate"--> K8sAPI
-    Tenant --"Apply / mutate"--> K8sAPI
-    K8sAPI --"Enforced by"--> VAP
-    Prov --"Tenant onboarding"--> K8sAPI
-    Ctrl --"Lifecycle orchestration"--> K8sAPI
-    Ctrl --"Manages"--> Bao
-    Ctrl --"Creates"--> Jobs
-    Ctrl --"Reconciles"--> Managed
-    Edge --"Ingress"--> Bao
-    Bao --"Seal / TLS / identity"--> Trust
-    Jobs --"Backup / restore"--> Storage
+    GitOps --> K8sAPI
+    Tenant --> K8sAPI
+    K8sAPI --> VAP
+    Prov --> K8sAPI
+    Ctrl --> K8sAPI
+    Ctrl --> Bao
+    Ctrl --> Jobs
+    Ctrl --> Managed
+    Edge --> Bao
+    Bao --> Trust
+    Jobs --> Storage
 
-    classDef git fill:transparent,stroke:#f472b6,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-    class GitOps,Tenant git;
-    class K8sAPI,Storage,Trust read;
-    class Bao,Jobs,Managed,Edge write;
-    class VAP security;
-    class Prov,Ctrl process;
-```
+    class GitOps,Tenant,K8sAPI,Storage,Trust read;
+    class Prov,Ctrl,VAP process;
+    class Bao,Jobs,Managed,Edge write;`}
+/>
 
-## 3. Asset Identification
+## Protected assets
 
-### Always-Relevant Assets
+<DecisionTable
+  kind="reference"
+  title="Always-relevant assets"
+  columns={['Asset', 'Risk', 'Why it matters']}
+  rows={[
+    {
+      cells: [
+        'Admission policies and bindings',
+        'Critical',
+        'They enforce the operator’s API-level safety model before unsafe intent persists.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Provisioner and controller identities',
+        'Critical',
+        'They define namespace onboarding and lifecycle authority across the cluster.',
+      ],
+    },
+    {
+      cells: [
+        'Tenant RBAC and Secret allowlists',
+        'High',
+        'They control what an onboarded namespace can read, mutate, or discover.',
+      ],
+    },
+    {
+      cells: [
+        'Raft data and snapshots',
+        'High',
+        'They contain the OpenBao state the operator is trying to protect and recover safely.',
+      ],
+    },
+    {
+      cells: [
+        'Operator-managed configuration and generated job identities',
+        'Medium',
+        'They steer runtime behavior and disruptive workflows even when they do not directly store application secrets.',
+      ],
+    },
+  ]}
+/>
 
-| Asset | Risk Level | Location | Description |
-| :--- | :--- | :--- | :--- |
-| **Admission Policies and Bindings** | **Critical** | Kubernetes API | Enforce the operator's API-level safety model before objects persist. |
-| **Provisioner and Controller Identities** | **Critical** | `ServiceAccount`, RBAC | Long-running operator identities that define namespace onboarding and lifecycle authority. |
-| **Tenant RBAC and Secret Allowlists** | **High** | `Role`, `RoleBinding` | Define tenant namespace access and name-scoped Secret reachability. |
-| **Raft Data** | **High** | `PVC` | Encrypted persistent state containing OpenBao data. |
-| **Snapshots** | **High** | `S3/GCS/Azure` | Encrypted backup artifacts of the Raft state. |
-| **Operator-Managed Configuration** | Medium | `ConfigMap`, CR spec | HCL configuration and rendered lifecycle settings. |
-| **Generated Job Identity** | Medium | `ServiceAccount`, Pod metadata | Backup, restore, and upgrade identity contract, separate from the main OpenBao Pods. |
+<DecisionTable
+  kind="reference"
+  title="Conditional assets"
+  columns={['Asset', 'Present when', 'Why it matters']}
+  rows={[
+    {
+      cells: [
+        'Root token Secret',
+        'Bootstrap mode persists the initial root token',
+        'This is a critical administrative credential and is intentionally avoided by Hardened self-init.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Static unseal keys',
+        'Static unseal is used',
+        'The root of trust sits in a Kubernetes Secret instead of an external trust system.',
+      ],
+    },
+    {
+      cells: [
+        'Operator-managed CA key',
+        '`OperatorManaged` TLS mode is selected',
+        'This puts certificate authority material inside the cluster and is one reason that mode is not the Hardened path.',
+      ],
+    },
+    {
+      cells: [
+        'Transit, cloud KMS, or HSM credentials',
+        'External unseal or PKI integration is used',
+        'These credentials and identity paths sit at a high-value trust boundary outside the workload itself.',
+      ],
+    },
+  ]}
+/>
 
-### Conditional Assets
-
-| Asset | Risk Level | Location | Description |
-| :--- | :--- | :--- | :--- |
-| **Root Token Secret** | **Critical** | `Secret` | Present only when bootstrap mode persists the initial root token. Hardened self-init avoids this path. |
-| **Static Unseal Keys** | **High** | `Secret` | Present only when static unseal is used. Hardened production posture avoids this path. |
-| **Operator-Managed CA Key** | **High** | `Secret` | Present only in `OperatorManaged` TLS mode. |
-| **External TLS Secrets** | **High** | `Secret` | Present only when `External` TLS is used. |
-| **Transit / Cloud / HSM Credentials** | **High** | `Secret` or workload identity | Seal and PKI credentials depend on the selected unseal and identity mode. |
-
-## 4. STRIDE Analysis
+## STRIDE analysis
 
 <ExpandableCallout type="failure" title="Spoofing">
 
 **Threats**
 
-- A client or GitOps render path spoofs the operator identity by drifting `ServiceAccount` names, policy subjects, or `RoleBinding` subjects.
+- A client or GitOps render path spoofs operator identity by drifting `ServiceAccount` names, policy subjects, or `RoleBinding` subjects.
 - A workload or edge path spoofs cluster identity at the TLS boundary.
-- Backup, restore, or upgrade jobs inherit the wrong identity path.
+- Backup, restore, or upgrade Jobs inherit the wrong identity path.
 
-<Callout type="success" title="Primary Mitigations">
+<Callout type="success" title="Primary mitigations">
 
-- Split Provisioner and Controller identities.
+- Split provisioner and controller identities.
 - Validate rendered install identities for Helm and raw-manifest overlays.
 - Validate TLS SANs and trust sources before the cluster becomes ready.
-- Use separate Job `ServiceAccount` objects, identity checks, and Job-specific network controls.
+- Use separate job `ServiceAccount` objects, identity checks, and Job-specific network controls.
 
 </Callout>
 
@@ -137,21 +278,21 @@ graph TD
 **Threats**
 
 - A user, GitOps controller, or compromised namespace actor directly mutates operator-managed resources.
-- A compromised Provisioner or tenant workflow broadens tenant RBAC or tenant guardrails.
+- A compromised provisioner broadens tenant RBAC or tenant guardrails.
 - A tenant or operator steers backup or restore jobs toward unintended endpoints or credentials.
 
-<Callout type="success" title="Primary Mitigations">
+<Callout type="success" title="Primary mitigations">
 
 - Lock operator-managed resources with admission policy.
 - Restrict controller writes for RBAC, `ServiceAccount`, and Secret objects.
-- Restrict Provisioner namespace mutation and tenant-governance writes.
+- Restrict provisioner namespace mutation and tenant-governance writes.
 - Keep backup and restore credentials name-scoped and separately validated.
 
 </Callout>
 
-<Callout type="note" title="PVC Posture">
+<Callout type="note" title="PVC posture">
 
-Operator-managed PVCs are intentionally CR-driven and status-observed rather than fully admission-locked. Kubernetes storage controllers and CSI components also mutate PVCs during normal lifecycle.
+Operator-managed PVCs are intentionally CR-driven and status-observed rather than fully admission-locked because Kubernetes storage controllers and CSI components also mutate PVCs during normal lifecycle.
 
 </Callout>
 
@@ -164,17 +305,11 @@ Operator-managed PVCs are intentionally CR-driven and status-observed rather tha
 - High-value control-plane actions cannot be attributed later.
 - Break-glass changes happen without a clear audit boundary.
 
-<Callout type="success" title="Primary Mitigations">
+<Callout type="success" title="Primary mitigations">
 
 - Emit structured operator audit logs for startup gating, upgrades, backups, restore, and operation-lock transitions.
 - Use Kubernetes API audit logs and admission denials as the primary mutation trail.
 - Keep maintenance mode explicit and break-glass groups narrow by default.
-
-</Callout>
-
-<Callout type="note" title="Audit Boundary">
-
-Operator audit logs complement Kubernetes API audit logs. They do not replace cluster-level API auditing.
 
 </Callout>
 
@@ -185,10 +320,10 @@ Operator audit logs complement Kubernetes API audit logs. They do not replace cl
 **Threats**
 
 - Secrets, credentials, or keys are exposed through logs or broad namespace access.
-- TLS or certificate handling leaks sensitive material.
+- TLS handling leaks sensitive material.
 - Backup and restore credentials leak across workloads.
 
-<Callout type="success" title="Primary Mitigations">
+<Callout type="success" title="Primary mitigations">
 
 - Never log secrets.
 - Keep Secret access name-scoped without normal Secret enumeration.
@@ -209,7 +344,7 @@ Operator audit logs complement Kubernetes API audit logs. They do not replace cl
 - Voluntary disruption or PDB tampering breaks quorum.
 - Required admission policies disappear after startup.
 
-<Callout type="success" title="Primary Mitigations">
+<Callout type="success" title="Primary mitigations">
 
 - Use controller rate limiting and bounded concurrency.
 - Validate objects at admission before invalid state persists.
@@ -226,36 +361,49 @@ Operator audit logs complement Kubernetes API audit logs. They do not replace cl
 
 **Threats**
 
-- A compromised Controller broadens tenant privileges or writes to unrelated Secrets or `ServiceAccount` objects.
-- A compromised Provisioner mints broader tenant access or mutates protected namespaces.
+- A compromised controller broadens tenant privileges or writes to unrelated Secrets or `ServiceAccount` objects.
+- A compromised provisioner mints broader tenant access or mutates protected namespaces.
 - Unsafe mode or break-glass use weakens the API-level defense-in-depth boundary.
 
-<Callout type="success" title="Primary Mitigations">
+<Callout type="success" title="Primary mitigations">
 
 - Split long-running identities and restrict controller writes.
 - Keep Secret access name-scoped and allowlisted.
-- Restrict Provisioner RBAC, namespace mutation, and tenant-governance writes.
+- Restrict provisioner RBAC, namespace mutation, and tenant-governance writes.
 - Keep unsafe mode explicitly non-production and break-glass scoped.
 
 </Callout>
 
 </ExpandableCallout>
 
-## 5. Accepted Residual Risks
+## Accepted residual risks
 
-<Callout type="warning" title="Accepted Posture">
+<Callout type="warning" title="Accepted posture">
 
 - PVCs are intentionally soft-governed rather than fully admission-locked because Kubernetes and CSI controllers also update them.
-- `UserAccessBootstrap` is best-effort signaling. The operator does not try to prove that arbitrary self-init requests create a usable human authentication path.
-- Cloud KMS and external identity integrations are surfaced through conditions and validation, but still depend on external systems outside the operator trust boundary.
+- `UserAccessBootstrap` is best-effort signaling. The operator does not prove that arbitrary self-init requests create a usable human authentication path.
+- Cloud KMS and external identity integrations are surfaced through conditions and validation, but still depend on systems outside the operator trust boundary.
 - `unsafe mode` intentionally weakens the API-level safety model and is not a supported Hardened production posture.
 
 </Callout>
 
-## 6. See Also
-
-- [Operator Invariants](../../architecture/operator-invariants.md)
-- [Admission Policies](../infrastructure/admission-policies.md)
-- [RBAC Architecture](../infrastructure/rbac.md)
-- [Status Conditions and Events](../../reference/status-and-events.md)
-
+<NextActions
+  title="Continue the security model"
+  items={[
+    {
+      label: 'Production posture',
+      description: 'Move from threats into the supported security contract for Development versus Hardened.',
+      docId: 'security/fundamentals/profiles',
+    },
+    {
+      label: 'Secrets and trust material',
+      description: 'Review how root tokens, unseal keys, and workload bootstrap identities behave across the lifecycle.',
+      docId: 'security/fundamentals/secrets-management',
+    },
+    {
+      label: 'Admission policies',
+      description: 'See one of the main enforcement layers that turns this model into actual API guardrails.',
+      docId: 'security/infrastructure/admission-policies',
+    },
+  ]}
+/>

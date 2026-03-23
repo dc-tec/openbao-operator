@@ -1,132 +1,209 @@
-# Tenant Isolation (Namespace Provisioner)
+---
+title: Tenant Isolation
+hide_title: true
+pageType: concept
+journey: security
+description: How namespace introduction, split controller identities, admission policy, and network boundaries combine into the operator's tenant-isolation model.
+---
 
-<Callout type="abstract" title="Governance Engine">
+<PageHero
+  variant="compact"
+  eyebrow="Security / Tenant Isolation"
+  title="Make tenant access explicit instead of discoverable."
+  lede="The operator's multi-tenant model depends on deliberate namespace introduction. A tenant namespace becomes manageable only after onboarding introduces the controller through fixed RBAC, applies namespace guardrails, and keeps the identity that grants access separate from the identity that consumes it."
+  actions={[
+    {label: "Open RBAC architecture", docId: "security/infrastructure/rbac", variant: "primary"},
+    {label: "Review tenant onboarding", docId: "user-guide/openbaotenant/onboarding", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "understand what the shared-service model actually guarantees between namespaces",
+      "review the difference between self-service and centrally managed onboarding",
+      "connect tenant onboarding back to RBAC, admission, and network controls",
+      "decide whether the operator's isolation model fits your platform trust assumptions",
+    ]}
+  />
+</PageHero>
 
-The **Provisioner** controller is the enforcement engine for multi-tenancy. It watches for `OpenBaoTenant` requests and responsibly "onboards" namespaces by creating strict, limited RBAC bindings for the workload controller.
+<DecisionTable
+  title="Isolation pillars"
+  columns={["Pillar", "What it protects", "Primary mechanism"]}
+  rows={[
+    {
+      cells: [
+        "Namespace introduction",
+        "The controller does not become present in a namespace by accident.",
+        "`OpenBaoTenant` onboarding creates the fixed Role and RoleBinding that introduce the controller deliberately.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Identity separation",
+        "Provisioning and workload management do not share one broad credential.",
+        "The provisioner grants access, while the controller uses tenant-scoped access without minting it.",
+      ],
+    },
+    {
+      cells: [
+        "Admission guardrails",
+        "Unsafe RBAC writes and operator-object drift are blocked at the API boundary.",
+        "Validating admission policies constrain names, subjects, and managed-object mutation patterns.",
+      ],
+    },
+    {
+      cells: [
+        "Network and namespace hardening",
+        "Cross-tenant traffic and insecure sidecar drift are reduced by default.",
+        "Default-deny `NetworkPolicy` and Restricted Pod Security labels apply at onboarding time.",
+      ],
+    },
+  ]}
+/>
 
-</Callout>
+<DiagramFrame
+  title="Tenant introduction flow"
+  caption="The provisioner writes the access grant into the target namespace, but the ongoing controller uses that access without being able to mint or broaden it freely."
+  code={`flowchart TD
+    Request["OpenBaoTenant request"] --> Provisioner["Provisioner"]
+    Provisioner --> Namespace["Target namespace"]
+    Provisioner --> Role["Tenant Role"]
+    Provisioner --> Binding["Tenant RoleBinding"]
+    Provisioner --> Guardrails["Namespace guardrails"]
+    Binding --> Controller["Controller ServiceAccount"]
+    Controller --> Workload["OpenBao workload"]
 
-## Governance Models
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-The Operator supports two distinct onboarding models depending on your organization's trust level:
+    class Request,Namespace read;
+    class Provisioner,Controller process;
+    class Role,Binding,Guardrails,Workload write;`}
+/>
 
-<Tabs groupId="self-service-recommended-centralized-admin">
+## Onboarding models
 
-<TabItem value="self-service-recommended" label="Self-Service (Recommended)">
+<DecisionTable
+  title="Choose the governance model"
+  columns={["Model", "Who creates the request", "Primary constraint", "Why you would use it"]}
+  rows={[
+    {
+      cells: [
+        "Self-service",
+        "A namespace admin creates `OpenBaoTenant` inside the same namespace.",
+        "`spec.targetNamespace` must match `metadata.namespace`.",
+        "Use this when teams manage their own namespaces and you want the least central coordination without granting cross-namespace privilege.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Centralized onboarding",
+        "A platform-admin workflow creates the request in the operator namespace.",
+        "Normal tenant users must not be able to write onboarding requests there.",
+        "Use this when quotas, guardrails, or namespace vending are controlled centrally.",
+      ],
+    },
+  ]}
+/>
 
-Ideal for autonomous platform teams where reliability is the main goal.
+<Callout type="note" title="Task versus model">
 
--   **Mechanism:** Namespace admins create an `OpenBaoTenant` CR in their *own* namespace.
--   **Constraint:** `spec.targetNamespace` **MUST** match `metadata.namespace`.
--   **Constraint:** `spec.quota` and `spec.limitRange` are not available in self-service mode.
--   **Security:** Prevents users from provisioning RBAC in namespaces they do not own.
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoTenant
-metadata:
-  name: my-tenant
-  namespace: team-a # <--- Source
-spec:
-  targetNamespace: team-a # <--- MUST Match Source
-```
-
-</TabItem>
-
-<TabItem value="centralized-admin" label="Centralized Admin">
-
-Ideal for strict compliance environments where only a central platform team can vend database-as-a-service.
-
--   **Mechanism:** Cluster admins create an `OpenBaoTenant` CR in the *Operator's* namespace.
--   **Capability:** Can target *any* namespace.
--   **Security:** Rely on Kubernetes RBAC to prevent normal users from creating CRs in the operator namespace.
-
-```yaml
-apiVersion: openbao.org/v1alpha1
-kind: OpenBaoTenant
-metadata:
-  name: team-a-onboarding
-  namespace: <operator-namespace> # <--- Rendered operator namespace
-spec:
-  targetNamespace: team-a # <--- Target Any Namespace
-```
-
-The rendered operator namespace defaults to `openbao-operator-system` for the standard raw-manifest and Helm installs.
-
-</TabItem>
-
-</Tabs>
-
-## Provisioning Flow
-
-This diagram illustrates how the **Provisioner** (Cluster Scope) safely grants permission to the **Controller** (Namespace Scope) without ever possessing those permissions itself.
-
-```mermaid
-flowchart TD
-    User("User / Admin")
-    
-    subgraph OperatorNS["Operator Namespace"]
-        OBT["OpenBaoTenant CR"]
-        Prov{{"Provisioner"}}
-        Ctrl[["Controller SA"]]
-    end
-
-    subgraph TenantNS["Tenant Namespace"]
-        TRole[("Tenant Role")]
-        TRB[("RoleBinding")]
-        Workload["OpenBao Cluster"]
-    end
-
-    %% Flow
-    User -- 1. Request --> OBT
-    OBT -- 2. Trigger --> Prov
-    Prov -- 3. Create --> TRole
-    Prov -- 4. Bind --> TRB
-    TRB -.->|5. Grant Access| Ctrl
-    Ctrl ==>|6. Reconcile| Workload
-
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-
-    class User,OBT read;
-    class Prov process;
-    class Ctrl,TRole,TRB security;
-    class Workload write;
-```
-
-1. **Request:** User creates `OpenBaoTenant`.
-2. **Verify:** Provisioner checks if the request is valid (Self-Service constraint).
-3. **Create:** Provisioner creates a `Role` in the target namespace (permissions to manage StatefulSets, Services, etc.).
-4. **Bind:** Provisioner creates a `RoleBinding`, connecting the **Controller ServiceAccount** to that **Role**.
-    * *Note:* The Provisioner does not grant *itself* access. It performs a **Blind Write**.
-5. **Reconcile:** The Controller now has permission to manage resources in that namespace.
-
-## Security Guarantees
-
-With admission policies enabled (default), the architecture provides the following security properties:
-
-| Property | Description |
-| :--- | :--- |
-| **No Topology Discovery** | The Controller cannot `list` namespaces. It literally does not know other tenants exist. |
-| **No Cross-Talk** | Namespace A's RoleBinding does not grant access to Namespace B. |
-| **Privilege Separation** | The component that *grants* access (Provisioner) cannot *use* access. The component that *uses* access (Controller) cannot *grant* access. |
-| **Namespace Hardening** | The Provisioner automatically labels tenant namespaces with `pod-security: restricted`, preventing insecure workloads. |
-
-<Callout type="warning" title="Unsafe Mode Caveat">
-
-If admission policies are intentionally disabled (unsafe mode), defense-in-depth guardrails are reduced.
-Keep admission enforcement enabled in multi-tenant production deployments.
+This page explains the isolation contract. Use <SiteLink docId="user-guide/openbaotenant/onboarding">Onboard the target namespace</SiteLink> when you need the concrete onboarding workflow and field-level configuration.
 
 </Callout>
 
-## Threat Mitigation Checklist
+## What the model guarantees
 
-| Threat | Mitigation Strategy | Control |
-| :--- | :--- | :--- |
-| **Tenant A reads Tenant B's Keys** | **RBAC Scoping** | Controller has no cluster-wide Secret access. |
-| **Tenant A DoS attack on Node** | **Resource Quotas** | Operator-managed namespace guardrails (`ResourceQuota` / `LimitRange`) + Controller Rate Limiting. Custom values are reserved for centrally managed onboarding. |
-| **Tenant A attacks Tenant B's Pods** | **Network Isolation** | Default Deny NetworkPolicy. |
-| **Tenant A spoofs Admin** | **Role Restrictions** | Self-Service mode enforces `targetNamespace == namespace`. |
+<DecisionTable
+  kind="reference"
+  title="Operational guarantees"
+  columns={["Guarantee", "What it means", "Primary control"]}
+  rows={[
+    {
+      cells: [
+        "No namespace discovery as a normal workflow",
+        "The controller does not need to list namespaces to find tenants.",
+        "Namespaces are introduced through onboarding rather than through global discovery.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "No cross-tenant Secret browsing",
+        "The controller should not treat tenant Secrets as generic cluster inventory.",
+        "Secret access is name-scoped, role-scoped, and guarded by admission policy.",
+      ],
+    },
+    {
+      cells: [
+        "No all-powerful long-running operator credential",
+        "The component that grants access does not also reconcile every tenant workload with the same credential.",
+        "Provisioner/controller identity split.",
+      ],
+    },
+    {
+      cells: [
+        "Namespace-level runtime baseline",
+        "Tenant namespaces start from Restricted pod-security enforcement and default network isolation.",
+        "Provisioner-owned namespace labels and network-policy defaults.",
+      ],
+    },
+  ]}
+/>
 
+## Assumptions and residual risk
+
+<DecisionTable
+  kind="reference"
+  title="Assumptions you still need to own"
+  columns={["Assumption", "Why it matters", "What to do"]}
+  rows={[
+    {
+      cells: [
+        "Admission stays enabled",
+        "Without it, the RBAC and managed-object model loses an important API-level backstop.",
+        "Treat unsafe mode as a deliberate exception and not as the normal multi-tenant posture.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "The surrounding cluster is trustworthy",
+        "Node compromise, cluster-admin access, or hostile CNI behavior are outside what namespace isolation can solve.",
+        "Pair the operator model with normal cluster hardening, audit, and node-security controls.",
+      ],
+    },
+    {
+      cells: [
+        "Shared external systems are partitioned appropriately",
+        "Object storage, PKI, and KMS systems can still become cross-tenant blast-radius points if configured broadly.",
+        "Separate identities, prefixes, or trust roots per tenant or per environment where required.",
+      ],
+    },
+  ]}
+/>
+
+<NextActions
+  title="Continue tenant isolation"
+  items={[
+    {
+      label: "RBAC architecture",
+      description: "See the identity split that makes namespace introduction safe in the first place.",
+      docId: "security/infrastructure/rbac",
+    },
+    {
+      label: "Network security",
+      description: "Review the default-deny network posture that complements the RBAC boundary.",
+      docId: "security/infrastructure/network-security",
+    },
+    {
+      label: "Tenant onboarding",
+      description: "Switch to the user-guide workflow when you need to create or review an `OpenBaoTenant` request.",
+      docId: "user-guide/openbaotenant/onboarding",
+    },
+  ]}
+/>

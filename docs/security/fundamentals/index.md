@@ -1,55 +1,67 @@
 ---
+title: Security Model
+hide_title: true
+pageType: landing
+journey: security
 description: Core security fundamentals for OpenBao Operator including threat model, security profiles, and secrets management practices.
 ---
 
-# Security Fundamentals
+<PageHero
+  variant="landing"
+  eyebrow="Security / Security Model"
+  title="Start from the trust model before you choose controls."
+  lede="This section explains what the operator is trying to defend, which production posture it considers safe, and how trust material such as root tokens, unseal keys, and bootstrap identities should behave across the lifecycle."
+  actions={[
+    {label: 'Read the threat model', docId: 'security/fundamentals/threat-model', variant: 'primary'},
+    {label: 'Review production posture', docId: 'security/fundamentals/profiles', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this section when you need to"
+    items={[
+      'understand the security assumptions behind the operator architecture',
+      'decide what Hardened actually means before you deploy it',
+      'review how bootstrap and unseal trust material is handled',
+      'anchor security review conversations before diving into RBAC or network policy details',
+    ]}
+  />
+</PageHero>
 
-<Callout type="abstract" title="Core Concepts">
+<RouteList
+  title="Security model routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Threat model',
+      description: 'Read the trust boundaries, attacker assumptions, and design mitigations behind the operator.',
+      docId: 'security/fundamentals/threat-model',
+    },
+    {
+      eyebrow: '02',
+      title: 'Production posture',
+      description: 'Understand what Development and Hardened actually mean, and why Hardened is the supported production contract.',
+      docId: 'security/fundamentals/profiles',
+    },
+    {
+      eyebrow: '03',
+      title: 'Secrets and trust material',
+      description: 'Review how root tokens, unseal keys, and bootstrap credentials are created, stored, or intentionally avoided.',
+      docId: 'security/fundamentals/secrets-management',
+    },
+  ]}
+/>
 
-This section defines the foundational security models and mechanisms of the OpenBao Operator, establishing the baseline for secure operations.
-
-</Callout>
-
-## Security Model
-
-The Operator implements a **Defense-in-Depth** strategy, ensuring security at multiple layers:
-
-1. **Threat Modeling:** Proactive identification of attack vectors and mitigations.
-2. **Profiles:** Pre-configured security postures (Development vs. Hardened).
-3. **Secrets:** Secure lifecycle management for root tokens and auto-unseal keys.
-
-## Topics
-
-<div class="grid cards" markdown>
-
-- **Threat Model**
-
-    ---
-
-    Detailed analysis of trust boundaries, potential threats, and architectural mitigations.
-
-    [Read Analysis](threat-model.md)
-
-- **Security Profiles**
-
-    ---
-
-    Comparison of `development` versus `hardened` profiles and their impact on cluster configuration.
-
-    [Compare Profiles](profiles.md)
-
-- **Secrets Management**
-
-    ---
-
-    How the Operator generates, encrypts, and rotates sensitive credentials like Root Tokens and Recovery Keys.
-
-    [Manage Secrets](secrets-management.md)
-
-</div>
-
-## See Also
-
-- [Infrastructure Security](../infrastructure/index.md) — RBAC and Network Policies.
-- [Workload Security](../workload/index.md) — Pod Security and TLS.
-
+<NextActions
+  items={[
+    {
+      label: 'Open platform controls',
+      description: 'Move from the trust model into the Kubernetes controls that enforce it.',
+      docId: 'security/infrastructure/index',
+    },
+    {
+      label: 'Configure security profiles',
+      description: 'Switch to the user-guide task page when you are ready to set `spec.profile` on a real cluster.',
+      docId: 'user-guide/openbaocluster/configuration/security-profiles',
+    },
+  ]}
+/>

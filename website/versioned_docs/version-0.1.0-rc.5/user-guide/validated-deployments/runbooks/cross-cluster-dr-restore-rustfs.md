@@ -1,21 +1,31 @@
 ---
-description: Step-by-step runbook for restoring the validated local cross-cluster DR target from a source snapshot using RustFS and shared Transit auto-unseal.
+title: k3d Cross-Cluster DR Restore
+hide_title: true
+pageType: runbook
+journey: validated-deployments
+description: Restore the validated local disaster-recovery target from a source snapshot stored in RustFS while preserving the shared Transit seal-root assumptions the lane depends on.
 ---
 
-# Cross-Cluster DR Restore with RustFS
-
-This runbook restores the target cluster in the validated local cross-cluster DR lane with:
-
-- a manual backup from the source cluster
-- an `OpenBaoRestore` resource on the target cluster
-- shared RustFS object storage
-- shared Transit auto-unseal on the source and target clusters
-
-<Callout type="success" title="Validated manually">
-
-This runbook matches the local end-to-end DR proof completed on March 16, 2026. In that proof, the source snapshot restored cleanly into the target cluster, the target cluster unsealed with the shared Transit key, `source-demo-password` succeeded on the target, `target-demo-password` failed, and the `dr-control` marker changed to `phase1-source`.
-
-</Callout>
+<PageHero
+  variant="compact"
+  eyebrow="Validated Deployments / Local Baselines / k3d Cross-Cluster DR"
+  title="Run the destructive restore step only after the source snapshot, target health, and shared seal root are all known-good."
+  lede="This runbook restores the target cluster in the validated local DR lane from a source snapshot stored in RustFS. It assumes the source and target already share the same external Transit key and that you are ready to overwrite the target bootstrap state."
+  actions={[
+    {label: "Open bootstrap recipe", docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap", variant: "primary"},
+    {label: "Open restore overview", docId: "user-guide/openbaorestore/overview", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="This runbook should leave you with"
+    items={[
+      "a fresh source snapshot written to shared RustFS storage",
+      "an `OpenBaoRestore` object that completes on the target cluster",
+      "a restored target that unseals with the shared Transit key",
+      "post-restore proof that source credentials and source data replaced the target bootstrap state",
+    ]}
+  />
+</PageHero>
 
 <Callout type="danger" title="Destructive operation">
 
@@ -23,73 +33,100 @@ This workflow overwrites the target cluster state. Existing auth methods, polici
 
 </Callout>
 
-## Prerequisites
+<DecisionTable
+  title="Before you restore"
+  columns={["Requirement", "Why it exists", "What happens if it is wrong"]}
+  rows={[
+    {
+      cells: [
+        "Source and target share the same Transit root of trust",
+        "Restored data must decrypt under the same external seal key after it lands on the target side.",
+        "The restore can complete and the target can still remain sealed.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "The target cluster already exists and exposes restore auth",
+        "The restore Job needs a live target to authenticate against and mutate.",
+        "The `OpenBaoRestore` object will fail before it can apply the snapshot.",
+      ],
+    },
+    {
+      cells: [
+        "The snapshot key comes from a fresh successful backup",
+        "The runbook is supposed to prove actual source-state transfer, not a stale object lookup.",
+        "You may restore the wrong data set and draw the wrong conclusion about the lane.",
+      ],
+    },
+    {
+      cells: [
+        "Cutover is still manual",
+        "Verification must happen before any client-facing change.",
+        "You can move traffic to a target that restored incorrectly or still needs operator attention.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-- The validated bootstrap from [k3d Cross-Cluster DR Bootstrap](../recipes/local/k3d-cross-cluster-dr-bootstrap.md) is already running.
-- The source cluster is healthy and backup-ready.
-- The target cluster is healthy and restore-ready.
-- The source and target clusters use the same Transit key and trust bundle.
-- `jq` is installed locally for the verification commands.
+<DecisionTable
+  kind="reference"
+  title="Validated lane defaults"
+  columns={["Value", "Default", "Purpose"]}
+  rows={[
+    {cells: ["Source context", "`k3d-openbao-dr-source`", "Primary cluster that creates the backup."]},
+    {cells: ["Target context", "`k3d-openbao-dr-target`", "Recovery target cluster."]},
+    {cells: ["Source namespace", "`openbaocluster-dr-source`", "Namespace containing the source cluster."]},
+    {cells: ["Target namespace", "`openbaocluster-dr-target`", "Namespace containing the target cluster."]},
+    {cells: ["Restore name", "`openbaocluster-dr-target-restore`", "`OpenBaoRestore` name."]},
+  ]}
+/>
 
-<Callout type="warning" title="Shared seal is mandatory">
+## Step 1: Trigger a fresh source backup
 
-Cross-cluster restore is only valid when the source and target share the same external seal root of trust. In the validated local lane, both clusters use the shared Transit key `openbao-dr-shared-unseal` through the same external Transit provider.
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Trigger the source backup"
+  code={`kubectl --context k3d-openbao-dr-source -n openbaocluster-dr-source annotate \\
+  openbaocluster openbaocluster-dr-source \\
+  openbao.org/trigger-backup="$(date -u +%Y-%m-%dT%H:%M:%SZ)" --overwrite`}
+/>
 
-</Callout>
-
-## Inputs
-
-Replace or confirm these values for the validated lane:
-
-| Value | Default | Purpose |
-| :--- | :--- | :--- |
-| Source context | `k3d-openbao-dr-source` | Primary cluster |
-| Target context | `k3d-openbao-dr-target` | Recovery target |
-| Source namespace | `openbaocluster-dr-source` | Namespace containing the source cluster |
-| Target namespace | `openbaocluster-dr-target` | Namespace containing the target cluster |
-| Source cluster | `openbaocluster-dr-source` | Snapshot source |
-| Target cluster | `openbaocluster-dr-target` | Restore destination |
-| Restore name | `openbaocluster-dr-target-restore` | `OpenBaoRestore` name |
-
-## Step 1: Trigger a source backup
-
-Create a manual source backup:
-
-```bash
-kubectl --context k3d-openbao-dr-source -n openbaocluster-dr-source annotate \
-  openbaocluster openbaocluster-dr-source \
-  openbao.org/trigger-backup="$(date -u +%Y-%m-%dT%H:%M:%SZ)" --overwrite
-```
-
-Watch the source cluster until `BackingUp=False` again:
-
-```bash
-kubectl --context k3d-openbao-dr-source -n openbaocluster-dr-source \
-  get openbaocluster openbaocluster-dr-source \
-  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\n"}{end}'
-```
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Wait for the source cluster to finish backing up"
+  code={`kubectl --context k3d-openbao-dr-source -n openbaocluster-dr-source \\
+  get openbaocluster openbaocluster-dr-source \\
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\\n"}{end}'`}
+>
+  Wait until `BackingUp=False` again before you capture the snapshot key.
+</CommandBlock>
 
 ## Step 2: Capture the snapshot key
 
-Read the object key from the source cluster status:
-
-```bash
-SNAPSHOT_KEY="$(
-  kubectl --context k3d-openbao-dr-source -n openbaocluster-dr-source \
-    get openbaocluster openbaocluster-dr-source \
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Read the backup object key from source status"
+  code={`SNAPSHOT_KEY="$(
+  kubectl --context k3d-openbao-dr-source -n openbaocluster-dr-source \\
+    get openbaocluster openbaocluster-dr-source \\
     -o jsonpath='{.status.backup.lastBackupName}'
 )"
 
-printf '%s\n' "${SNAPSHOT_KEY}"
-```
+printf '%s\\n' "\${SNAPSHOT_KEY}"`}
+/>
 
-## Step 3: Apply the target restore
+## Step 3: Apply the restore on the target cluster
 
-Apply an `OpenBaoRestore` manifest with the captured snapshot key:
-
-```bash
-cat <<EOF | kubectl --context k3d-openbao-dr-target apply -f -
-apiVersion: openbao.org/v1alpha1
+<CommandBlock
+  language="yaml"
+  label="apply"
+  title="Apply the validated OpenBaoRestore manifest"
+  code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoRestore
 metadata:
   name: openbaocluster-dr-target-restore
@@ -106,100 +143,80 @@ spec:
       usePathStyle: true
       credentialsSecretRef:
         name: rustfs-secret
-    key: "${SNAPSHOT_KEY}"
-  jwtAuthRole: openbao-operator-restore
-EOF
-```
+    key: "<snapshot-key>"
+  jwtAuthRole: openbao-operator-restore`}
+>
+  Replace `<snapshot-key>` with the exact value from the previous step before you apply the manifest.
+</CommandBlock>
 
-## Operations
+## Verify the restore
 
-### Watch the restore CR
-
-Watch the target `OpenBaoRestore` resource:
-
-```bash
-kubectl --context k3d-openbao-dr-target -n openbaocluster-dr-target \
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Watch the restore object and inspect final status"
+  code={`kubectl --context k3d-openbao-dr-target -n openbaocluster-dr-target \\
   get openbaorestore openbaocluster-dr-target-restore -w
-```
 
-Inspect the final status:
+kubectl --context k3d-openbao-dr-target -n openbaocluster-dr-target \\
+  get openbaorestore openbaocluster-dr-target-restore \\
+  -o jsonpath='{.status.phase}{"\\n"}{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\\n"}{end}{.status.snapshotKey}{"\\n"}'`}
+>
+  The steady-state expectation is `phase=Completed`, `RestoreConfigurationReady=True`, and `RestoreComplete=True` with reason `RestoreSucceeded`.
+</CommandBlock>
 
-```bash
-kubectl --context k3d-openbao-dr-target -n openbaocluster-dr-target \
-  get openbaorestore openbaocluster-dr-target-restore \
-  -o jsonpath='{.status.phase}{"\n"}{range .status.conditions[*]}{.type}={.status}{" reason="}{.reason}{"\n"}{end}{.status.snapshotKey}{"\n"}'
-```
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check the target health endpoint after restore"
+  code={`curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \\
+  https://bao-dr-target.example.com:11443/v1/sys/health`}
+>
+  The restored target should return a normal OpenBao health response and the cluster lineage should now match the source snapshot.
+</CommandBlock>
 
-The steady-state expectation is:
-
-- `phase=Completed`
-- `RestoreConfigurationReady=True`
-- `RestoreComplete=True` with reason `RestoreSucceeded`
-
-### Verify the target cluster health after restore
-
-Check the target health endpoint:
-
-```bash
-curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \
-  https://bao-dr-target.example.com:11443/v1/sys/health
-```
-
-The target cluster ID should now match the source cluster ID from the snapshot lineage.
-
-### Verify credential cutover
-
-The restored target should reject the old target bootstrap password:
-
-```bash
-curl -ksS -o /tmp/target-login.json -w '%{http_code}\n' \
-  --resolve bao-dr-target.example.com:11443:127.0.0.1 \
-  -H 'Content-Type: application/json' \
-  -d '{"password":"target-demo-password"}' \
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Verify credential cutover and restored data"
+  code={`curl -ksS -o /tmp/target-login.json -w '%{http_code}\\n' \\
+  --resolve bao-dr-target.example.com:11443:127.0.0.1 \\
+  -H 'Content-Type: application/json' \\
+  -d '{"password":"target-demo-password"}' \\
   https://bao-dr-target.example.com:11443/v1/auth/userpass/login/demo-admin
-```
 
-The expected result is a non-`200` response.
-
-The restored target should now accept the source password:
-
-```bash
 SOURCE_TOKEN="$(
-  curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \
-    -H 'Content-Type: application/json' \
-    -d '{"password":"source-demo-password"}' \
-    https://bao-dr-target.example.com:11443/v1/auth/userpass/login/demo-admin \
+  curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \\
+    -H 'Content-Type: application/json' \\
+    -d '{"password":"source-demo-password"}' \\
+    https://bao-dr-target.example.com:11443/v1/auth/userpass/login/demo-admin \\
   | jq -r '.auth.client_token'
 )"
 
-printf '%s\n' "${SOURCE_TOKEN}"
-```
+curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \\
+  -H "X-Vault-Token: \${SOURCE_TOKEN}" \\
+  https://bao-dr-target.example.com:11443/v1/secret/data/dr-control`}
+>
+  The old target password should fail. The source password should succeed, and the `dr-control` marker should now show `phase1-source`.
+</CommandBlock>
 
-### Verify the restored application data
-
-Read the `dr-control` marker from the restored target:
-
-```bash
-curl -ksS --resolve bao-dr-target.example.com:11443:127.0.0.1 \
-  -H "X-Vault-Token: ${SOURCE_TOKEN}" \
-  https://bao-dr-target.example.com:11443/v1/secret/data/dr-control
-```
-
-The expected result is:
-
-- `marker=phase1-source`
-- `sourceCluster=openbao-dr-source`
-
-## Common failures
-
-- The restore completes but the target remains sealed: the source and target do not actually share the same external seal root of trust.
-- The restore Job cannot authenticate: verify that the target cluster exposes `spec.restore.jwtAuthRole` and that the generated restore `ServiceAccount` exists.
-- The restore Job cannot reach storage: verify the RustFS endpoint, credentials Secret, and the exact object key.
-- `target-demo-password` still works afterward: confirm that the restore used the expected source snapshot and that the target cluster fully returned to healthy state before re-testing.
-
-## See also
-
-- [k3d Cross-Cluster DR with Shared Transit and RustFS](../architectures/local/k3d-cross-cluster-dr-transit-rustfs.md)
-- [k3d Cross-Cluster DR Bootstrap](../recipes/local/k3d-cross-cluster-dr-bootstrap.md)
-- [Restore from an S3-Compatible Snapshot](restore-from-s3-compatible-snapshot.md)
-
+<NextActions
+  title="After the restore"
+  items={[
+    {
+      label: "Reference architecture",
+      description: "Review the DR invariants again before you consider any manual cutover or cloud equivalent.",
+      docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs",
+    },
+    {
+      label: "Troubleshoot the cluster",
+      description: "Use the generic operator incident guide if restore succeeds but the target is still degraded or sealed.",
+      docId: "user-guide/openbaocluster/operations/troubleshooting",
+    },
+    {
+      label: "Restore overview",
+      description: "Return to the generic restore model when you need the operator-wide explanation behind this lane-specific runbook.",
+      docId: "user-guide/openbaorestore/overview",
+    },
+  ]}
+/>

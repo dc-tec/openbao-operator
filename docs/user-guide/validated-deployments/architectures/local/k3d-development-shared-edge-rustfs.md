@@ -1,122 +1,185 @@
 ---
-description: Validated local reference architecture for a Development-profile OpenBao cluster on k3d with a shared terminating edge, JWT bootstrap, RustFS backups, and blue/green upgrades.
+title: k3d Development / Shared Edge
+hide_title: true
+pageType: concept
+journey: validated-deployments
+description: Validated local baseline for a development-profile OpenBao deployment on k3d with operator-managed TLS, a shared terminating edge, RustFS backups, and blue/green upgrades.
 ---
 
-# k3d Development with Shared Edge and RustFS
+<PageHero
+  variant="compact"
+  eyebrow="Validated Deployments / Local Baselines"
+  title="Use this lane to validate operator bring-up, shared-edge routing, and backup flows without pretending a dev profile is production."
+  lede="This local baseline is the lowest-friction validated path for development work on k3d. It keeps the edge simple, keeps TLS operator-managed, keeps backups pointed at an S3-compatible store, and still exercises the cluster lifecycle with a realistic control-plane shape."
+  actions={[
+    {label: "Open deployment recipe", docId: "user-guide/validated-deployments/recipes/local/development-self-init-userpass", variant: "primary"},
+    {label: "Review backup operations", docId: "user-guide/openbaocluster/operations/backups", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="This lane proves"
+    items={[
+      "a Development-profile cluster can bootstrap cleanly on k3d without extra cloud dependencies",
+      "the shared terminating edge can front OpenBao alongside the rest of the local platform toolchain",
+      "operator-managed TLS, self-init, JWT bootstrap, and RustFS backups can coexist in one repeatable lane",
+      "blue/green upgrades can be rehearsed locally before you touch a hardened or cloud baseline",
+    ]}
+  />
+</PageHero>
 
 <Callout type="note" title="Classification">
 
-Local reference architecture. k3d is not a production target, but this page documents a realistic and repeatable local Kubernetes model for development, rehearsal, and operator validation.
+Local reference architecture. k3d is not a production target, but this lane is the preferred proving ground for local operator bring-up, UI checks, backup rehearsal, and upgrade behavior.
 
 </Callout>
 
-This validated architecture describes the local k3d development lane used in the project validation environment.
+<DecisionTable
+  title="Lane summary"
+  columns={["Surface", "Choice", "Why it matters"]}
+  rows={[
+    {
+      cells: [
+        "Profile",
+        "`spec.profile: Development`",
+        "The lane is intentionally optimized for speed and validation coverage, not a production-ready posture.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "TLS model",
+        "`spec.tls.mode: OperatorManaged`",
+        "The operator owns the internal server certificate path so the lane can stay self-contained.",
+      ],
+    },
+    {
+      cells: [
+        "Edge model",
+        "Shared terminating Gateway API edge",
+        "The same local edge can front OpenBao, ArgoCD, Grafana, and other tools without a dedicated passthrough stack.",
+      ],
+    },
+    {
+      cells: [
+        "Backup target",
+        "RustFS via the S3-compatible API",
+        "The lane proves snapshot behavior against a real object-storage boundary without needing cloud credentials.",
+      ],
+    },
+    {
+      cells: [
+        "Upgrade model",
+        "`upgrade.strategy: BlueGreen`",
+        "The lane doubles as a low-risk rehearsal environment for upgrade orchestration and cutover behavior.",
+      ],
+    },
+  ]}
+/>
 
-It is the reference shape for:
-
-- `spec.profile: Development`
-- Operator-managed TLS
-- JWT bootstrap for Operator access and human admin access
-- a shared terminating Traefik Gateway API edge
-- RustFS-backed S3-compatible backups
-- blue/green upgrades in a local validation lane
-
-<Callout type="success" title="Validation status">
-
-This architecture is grounded in the local k3d validation environment and reinforced by the in-repo Development lifecycle, backup, and blue/green E2E coverage.
-
-</Callout>
-
-<Callout type="warning" title="Development only">
-
-This is a low-friction local validation topology. It is not a production architecture.
-
-</Callout>
-
-## Intended use
-
-Use this architecture when you want a repeatable local environment that exercises real routing, JWT bootstrap, and backup workflows without introducing cloud dependencies.
-
-It is especially useful for:
-
-- workstation-based operator validation
-- UI and routing checks through a shared edge
-- blue/green upgrade rehearsal in a non-production lane
-- S3-compatible backup checks using a local object store
-
-## Topology
-
-```mermaid
-flowchart LR
-    Client["Operator or Admin Client"] -->|"HTTPS"| Edge["Shared Traefik Gateway"]
+<DiagramFrame
+  title="Validated lane topology"
+  caption="The shared terminating edge stays simple, the operator owns TLS and bootstrap, and the backup path leaves the cluster through a separate RustFS boundary."
+  code={`flowchart LR
+    Client["Operator or admin"] -->|"HTTPS"| Edge["Shared Gateway API edge"]
     Edge -->|"Re-encrypted HTTPS"| Public["OpenBao public Service"]
     Public --> Bao["OpenBao Pods"]
 
     Operator["OpenBao Operator"] -->|"JWT bootstrap"| Bao
-    AdminSA["Admin ServiceAccount token"] -->|"JWT login"| Bao
+    Admin["Admin ServiceAccount token"] -->|"JWT login"| Bao
+    Demo["Optional demo userpass login"] --> Bao
     Backup["Backup Job"] -->|"S3-compatible snapshots"| RustFS["RustFS bucket"]
-    Upgrade["Blue/Green upgrade flow"] --> Bao
+    Upgrade["Blue/green upgrade flow"] --> Bao
 
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-    class Client,AdminSA read;
+    class Client,Admin,Demo read;
     class Edge,Operator,Backup,Upgrade process;
-    class Public,Bao,RustFS write;
-```
+    class Public,Bao,RustFS write;`}
+/>
 
-## Architecture decisions
+## Why this lane exists
 
-### Shared terminating edge
+<DecisionTable
+  kind="reference"
+  title="Key design choices"
+  columns={["Choice", "What it optimizes", "Why it stays in the lane"]}
+  rows={[
+    {
+      cells: [
+        "Shared terminating edge",
+        "Fast local bring-up with one ingress surface for multiple tools.",
+        "This keeps the lane practical for day-to-day operator work and avoids dedicating a separate passthrough edge to a dev profile.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "RustFS for backups",
+        "A real S3-compatible transfer boundary with no cloud dependency.",
+        "The lane should prove snapshot upload and retention behavior, not just configuration syntax.",
+      ],
+    },
+    {
+      cells: [
+        "Blue/green upgrades",
+        "Upgrade behavior can be rehearsed locally before a hardened rollout.",
+        "The development lane is where you want fast iteration on rollout logic and status transitions.",
+      ],
+    },
+    {
+      cells: [
+        "Optional demo login",
+        "UI access stays easy during development and demos.",
+        "It is a convenience for local validation only and should never be mistaken for a production auth pattern.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-The local dev lane uses the shared `traefik-gateway` listener on `:443` with TLS terminated at the edge.
+<Checklist
+  tone="warning"
+  title="Stay on the validated path"
+  items={[
+    "keep `spec.profile: Development` and do not treat the lane as a production hardening reference",
+    "keep the shared terminating Gateway in front of the cluster instead of switching to passthrough mid-lane",
+    "keep the RustFS endpoint reachable from the tenant namespace and use a dedicated backup Secret",
+    "treat the demo `userpass` login as local-only convenience and remove it from any shared environment",
+    "disable AppArmor only when the local runtime requires it and document that as a node limitation, not a preferred default",
+  ]}
+/>
 
-That keeps the development path simple and makes it easy to expose:
+<Callout type="success" title="What this lane validated">
 
-- OpenBao
-- ArgoCD
-- RustFS
-- Grafana
-- Prometheus
+The local development lane exercised self-init bootstrap, JWT admin login, optional demo UI login, shared-edge exposure, scheduled and manual backup behavior to RustFS, and blue/green upgrade rehearsal.
 
-through the same local wildcard certificate.
+</Callout>
 
-### RustFS for backup validation
+<Callout type="warning" title="What this lane is not">
 
-Backups are written to RustFS through its in-cluster S3-compatible endpoint. This gives the local lane a realistic backup target without needing cloud credentials.
+This is not a production reference, not a hardened security posture, and not proof that the shared terminating edge is the right answer for public OpenBao endpoints. It is a fast, realistic local validation lane.
 
-### Blue/green in the dev lane
+</Callout>
 
-The local development app uses `upgrade.strategy: BlueGreen`. That makes the lane useful for exercising upgrade-specific behavior without requiring a hardened deployment first.
-
-## Required invariants
-
-Keep these assumptions if you want to stay on the validated path:
-
-- Use `spec.profile: Development`.
-- Keep the shared terminating Traefik Gateway in front of the cluster.
-- Keep JWT bootstrap enabled for Operator access and human admin access.
-- Keep the RustFS endpoint reachable from the OpenBao namespace.
-- Disable AppArmor in the manifest if your k3d or k3s nodes do not support it.
-
-## Validated operations
-
-This local lane is used for:
-
-- cluster bootstrap with self-init
-- JWT login for a human admin `ServiceAccount`
-- shared-edge Gateway exposure
-- scheduled and manual backup flows to RustFS
-- blue/green upgrade rehearsal in a local environment
-
-## Known constraints
-
-- This architecture intentionally keeps `spec.profile: Development`, so `ProductionReady` is not the goal.
-- It relies on local wildcard hostnames under `*.example.com` and the shared test Gateway certificate.
-- It is a direct local deployment lane, not a GitOps architecture.
-
-## Related recipe
-
-Use the deployment flow in [Development Profile with Self-Init and Userpass](../../recipes/local/development-self-init-userpass.md).
-
+<NextActions
+  title="Use the lane"
+  items={[
+    {
+      label: "Deployment recipe",
+      description: "Reproduce the exact development lane with tenant onboarding, self-init, shared-edge exposure, and RustFS backups.",
+      docId: "user-guide/validated-deployments/recipes/local/development-self-init-userpass",
+    },
+    {
+      label: "Backup operations",
+      description: "Review the generic backup model behind the RustFS portion of this validated lane.",
+      docId: "user-guide/openbaocluster/operations/backups",
+    },
+    {
+      label: "Get Started",
+      description: "Use the operator onboarding path when you need the product-wide default workflow instead of a validated local lane.",
+      docId: "user-guide/index",
+    },
+  ]}
+/>

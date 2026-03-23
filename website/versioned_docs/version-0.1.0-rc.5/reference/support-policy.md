@@ -1,83 +1,113 @@
 ---
+title: Support Policy
 description: Support and maintenance policy for OpenBao Operator covering pre-GA posture, release channels, and best-effort latest-line support.
+pageType: reference
+journey: reference
 ---
 
-# Support & Maintenance Policy
-
-This document defines which OpenBao Operator releases are supported and what support level to expect.
-
-## 1. Pre-GA Release Contract
-
-The current stable release line is intended for real deployments, but OpenBao Operator remains pre-GA:
-
-- The served CRD API is `openbao.org/v1alpha1`.
-- Minor releases (`0.Y.0`) may introduce breaking API or behavior changes.
-- Support is best-effort and focused on the latest stable release line.
-
-See [Deprecation Policy](deprecation-policy.md) for the API evolution rules.
-
-## 2. Release Channels
-
-The Operator publishes multiple channels:
-
-- **Stable** (`X.Y.Z`): intended for real deployments.
-- **Prerelease** (`X.Y.Z-rc.1`, `X.Y.Z-beta.1`, `X.Y.Z-alpha.1`): early access builds for evaluation before the next stable release.
-- **Edge** (`main` snapshots): continuous validation channel.
-- **Nightly** (scheduled snapshots): scheduled validation channel.
-
-Channel behavior and publication details are defined in [Release Management](/contribute/release-management).
-
-## 3. Supported Versions
+<PageHero
+  variant="compact"
+  eyebrow="Reference / Lifecycle & Support Contract"
+  title="Use this page when you need the exact maintenance contract behind a release line or channel."
+  lede="Validation and support are related, but they are not the same thing. This page defines which release lines receive best-effort maintenance attention, how channels differ, and what the project expects from operators before they ask for issue triage."
+  actions={[
+    {label: 'Open compatibility matrix', docId: 'reference/compatibility', variant: 'primary'},
+    {label: 'Open deprecation policy', docId: 'reference/deprecation-policy', variant: 'secondary'},
+  ]}
+/>
 
 <Callout type="note" title="Current support window">
 
-We provide **best-effort support** for the latest stable release line.
+The project provides best-effort support for the latest stable release line.
 
 </Callout>
 
-For `0.x`:
+<DecisionTable
+  kind="reference"
+  title="Release channels"
+  columns={['Channel', 'What it is for', 'Support stance']}
+  rows={[
+    {
+      cells: ['Stable (`X.Y.Z`)', 'Real deployments and the main production line.', 'Best-effort support on the latest stable line.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Prerelease (`-rc`, `-beta`, `-alpha`)', 'Evaluation before the next stable release.', 'No expanded support window; use for testing and early adoption only.'],
+    },
+    {
+      cells: ['Edge (`main` snapshots)', 'Continuous validation and integration signal.', 'Not a production support channel.'],
+      emphasis: 'caution',
+    },
+    {
+      cells: ['Nightly', 'Scheduled validation snapshots.', 'Not a production support channel.'],
+      emphasis: 'caution',
+    },
+  ]}
+/>
 
-- Latest stable release line: eligible for issue triage and bug or security fixes.
-- Older stable releases: no guarantee of backported fixes.
-- Prereleases: evaluation builds for the next stable line; they do not expand the support window.
-- Edge/Nightly: validation channels, not production support channels.
+## Pre-GA release contract
 
-## 4. Validation Versus Support
+OpenBao Operator is still pre-GA:
 
-Validation and support are related but different:
+- the served CRD API is `openbao.org/v1alpha1`
+- minor releases may introduce breaking API or behavior changes
+- support is best-effort and focused on the latest stable release line
+
+## Validation versus support
 
 - [Compatibility Matrix](compatibility.md) defines what is explicitly validated in CI.
 - This page defines what receives best-effort maintenance attention.
-- `Recommended for production` means the documented hardened operating path, not a promise of a stable pre-GA API.
+- `Recommended for production` means the documented hardened operating path, not a promise of long-lived pre-GA API stability.
 
-## 5. Security Fixes
+## Security fixes
 
 Security fixes follow [SECURITY.md](https://github.com/dc-tec/openbao-operator/blob/main/SECURITY.md):
 
-- Security fixes are provided for the latest released version.
-- Report vulnerabilities via GitHub Security Advisories.
+- security fixes are provided for the latest released version
+- vulnerabilities should be reported through GitHub Security Advisories
 
-## 6. Compatibility Baseline
+<DecisionTable
+  kind="reference"
+  title="Operator expectations for production use"
+  columns={['Expectation', 'Why it matters']}
+  rows={[
+    {
+      cells: ['Pin explicit operator and chart versions', 'Floating channels make support and rollback reasoning weaker.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Stay close to the latest stable release', 'The project focuses its maintenance effort on that line.'],
+    },
+    {
+      cells: ['Use the `Hardened` profile with admission enforcement enabled', 'This is the documented production posture behind most guidance.'],
+    },
+    {
+      cells: ['Validate upgrades in staging', 'Best-effort support does not remove the need for environment-specific rehearsal.'],
+    },
+    {
+      cells: ['Avoid prerelease, edge, and nightly for production', 'These channels are designed for evaluation and validation, not supported production drift.'],
+      emphasis: 'caution',
+    },
+  ]}
+/>
 
-Supported Kubernetes and OpenBao versions are defined in:
-
-- [Compatibility Matrix](compatibility.md)
-
-If a platform/version is outside that matrix, it is out of support scope.
-
-## 7. Support Expectations
-
-Support is best-effort community support through repository workflows and issues.
-
-- No formal SLA/SLO is provided for response or remediation timelines.
-- Upgrade to the latest stable release before requesting issue triage.
-
-## 8. Recommended Operations Policy
-
-For production use:
-
-1. Pin explicit operator/chart versions.
-2. Stay close to latest stable.
-3. Use the `Hardened` profile with admission enforcement enabled.
-4. Validate upgrades in staging.
-5. Avoid running production on prerelease, Edge, or Nightly builds.
+<NextActions
+  title="Related support references"
+  items={[
+    {
+      label: 'Compatibility matrix',
+      description: 'Open the validation matrix when the next question is whether a platform or version is exercised by CI.',
+      docId: 'reference/compatibility',
+    },
+    {
+      label: 'Known limitations',
+      description: 'Check current caveats and non-goals when an unsupported behavior might actually be a deliberate constraint.',
+      docId: 'reference/known-limitations',
+    },
+    {
+      label: 'Release management',
+      description: 'Use the maintainer release workflow when you need the operational process behind these support promises.',
+      to: '/contribute/release-management',
+    },
+  ]}
+/>

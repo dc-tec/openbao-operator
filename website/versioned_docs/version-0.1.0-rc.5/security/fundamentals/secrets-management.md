@@ -1,145 +1,244 @@
-# Secrets Management
+---
+title: Secrets and Trust Material
+hide_title: true
+pageType: concept
+journey: security
+description: How root tokens, unseal keys, TLS material, and generated job identities are created, avoided, or bounded across the OpenBao Operator lifecycle.
+---
 
-The Operator manages the lifecycle of several critical secrets, from the Root Token to internal PKI certificates.
+<PageHero
+  variant="compact"
+  eyebrow="Security / Security Model"
+  title="Treat trust material as lifecycle state, not just as Kubernetes Secrets."
+  lede="The operator manages or coordinates several high-value trust surfaces: bootstrap credentials, unseal roots, TLS material, and the identities used by backup, restore, and upgrade workflows. The most important question is not only where they live, but whether the operating model can avoid creating them in the first place."
+  actions={[
+    {label: 'Open production posture', docId: 'security/fundamentals/profiles', variant: 'primary'},
+    {label: 'Open backup operations', docId: 'user-guide/openbaocluster/operations/backups', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand which trust material the operator may create or avoid',
+      'decide whether static unseal or persisted bootstrap secrets are acceptable',
+      'review how backup, restore, and upgrade jobs authenticate',
+      'connect lifecycle workflows back to the trust model instead of treating them as isolated features',
+    ]}
+  />
+</PageHero>
 
-## Managed Secrets Matrix
+<DecisionTable
+  kind="reference"
+  title="Managed trust material"
+  columns={['Surface', 'Typical location', 'Security posture']}
+  rows={[
+    {
+      cells: [
+        'Root token',
+        'Secret only when bootstrap mode persists it',
+        'Critical and intentionally avoided by the supported Hardened self-init path.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Static unseal key',
+        '`<cluster>-unseal-key` Secret',
+        'Critical because the root of trust sits inside Kubernetes instead of an external trust system.',
+      ],
+    },
+    {
+      cells: [
+        'Cluster CA and server TLS material',
+        'Secrets when the selected TLS mode requires them',
+        'High-value trust material whose lifecycle depends on the chosen TLS mode.',
+      ],
+    },
+    {
+      cells: [
+        'Backup, restore, and upgrade job auth',
+        'Projected tokens, generated ServiceAccounts, or explicit credentials Secrets',
+        'Should remain separate from the main OpenBao workload identity.',
+      ],
+    },
+  ]}
+/>
 
-| Secret Name Config | Default Name | Rotation Policy | Risk Level |
-| :--- | :--- | :--- | :--- |
-| **Root Token** | `<cluster>-root-token` | Manual Revocation | Critical |
-| **Unseal Keys** | `<cluster>-unseal-key` | Manual Rotation | Critical |
-| **Cluster CA** | `<cluster>-tls-ca` | Long-lived (10-year cert), not auto-rotated | High |
-| **Server TLS Cert** | `<cluster>-tls-server` | Auto-reissued when within `spec.tls.rotationPeriod` | High |
-| **Backup Creds** | User Defined | User Managed | High |
+## Unseal trust model
 
-## Auto-Unseal Configuration
+<Tabs groupId="trust-material-unseal">
 
-<Tabs groupId="static-default-external-kms-recommended">
+<TabItem value="static" label="Static unseal">
 
-<TabItem value="static-default" label="Static (Default)">
+<Callout type="warning" title="Static unseal keeps the root of trust in the cluster">
 
-<Callout type="warning" title="Static Keys">
-
-This mode generates a static 32-byte key stored in a Kubernetes Secret. This key becomes the root of trust for your OpenBao data encryption. If `etcd` is not encrypted at rest, this key is vulnerable.
+Static unseal generates a 32-byte key and stores it in a Kubernetes Secret. If etcd encryption or namespace access is weak, the effective trust root of your OpenBao data is weak too.
 
 </Callout>
 
-**Behavior:**
-
-1.  **Generation:** Operator generates a random 32-byte key.
-2.  **Storage:** Stored in `<cluster>-unseal-key`.
-3.  **Mounting:** Mounted at `/etc/bao/unseal/key`.
-4.  **Condition:** Sets `ConditionEtcdEncryptionWarning=True` if etcd encryption is not verified.
+<DecisionTable
+  kind="reference"
+  title="Static unseal behavior"
+  columns={['Aspect', 'Behavior', 'Why it matters']}
+  rows={[
+    {
+      cells: [
+        'Generation',
+        'The operator creates a random key.',
+        'Bootstrap is convenient, but the cluster is now trusted to protect the root of trust.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Storage',
+        'The key is stored in `<cluster>-unseal-key`.',
+        'Anyone who can read that Secret can compromise the trust root.',
+      ],
+    },
+    {
+      cells: [
+        'Rotation',
+        'Manual, not automatic.',
+        'Operational handling of the trust root stays a human responsibility.',
+      ],
+    },
+  ]}
+/>
 
 </TabItem>
 
-<TabItem value="external-kms-recommended" label="External KMS (Recommended)">
+<TabItem value="external" label="External trust root">
 
-<Callout type="success" title="Enhanced Security">
+<Callout type="success" title="Preferred production posture">
 
-Using an external KMS (AWS, GCP, Azure, or Vault Transit) shifts the root of trust away from the Kubernetes cluster, significantly improving security.
-
-</Callout>
-
-**Behavior:**
-
-1.  **No Operator Key:** The Operator does **NOT** generate or manage unseal keys.
-2.  **Configuration:** Configure `spec.unseal` with your provider details.
-3.  **Authentication:**
-    -   **Workload Identity (Recommended):** Use IRSA (AWS), Workload Identity (GCP), Managed Identity/Azure Workload Identity, or the equivalent OCI ambient identity mode so the main OpenBao Pods do not need static cloud credentials.
-    -   **Credentials Secret:** Mount static credentials via `spec.unseal.credentialsSecretRef`. For OCI API-key mode, the Secret must contain an OCI SDK config file in key `config` plus the private key file referenced by `key_file`.
-
-<Callout type="note" title="Main Pod Identity Contract">
-
-When `spec.unseal.credentialsSecretRef` is omitted for a cloud KMS backend, the identity contract applies to the main OpenBao Pods, not to backup or restore Jobs.
-Check the `CloudUnsealIdentityReady` condition to see which auth path the operator believes the Pods will use. `AmbientIdentityAssumed` means the operator classified the configuration as an ambient/default-chain path; it does not prove that the cloud-side identity binding is valid.
+Using transit, cloud KMS, or HSM-backed modes shifts the root of trust away from Kubernetes and into an external system that is designed to protect it.
 
 </Callout>
 
-<Callout type="note" title="Separate Job Identity Contract">
-
-Backup and restore workloads use separate generated ServiceAccounts and do not inherit the main OpenBao Pod identity automatically.
-Check `BackupConfigurationReady` or `RestoreConfigurationReady` to see whether the operator detected:
-- a storage credentials Secret
-- explicit job workload identity metadata
-- or an ambient/default credential-chain assumption
-
-</Callout>
+<DecisionTable
+  kind="reference"
+  title="External trust behavior"
+  columns={['Aspect', 'Behavior', 'Why it matters']}
+  rows={[
+    {
+      cells: [
+        'Operator-owned unseal key',
+        'Not created',
+        'The cluster does not persist its own trust root in a Kubernetes Secret.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Authentication path',
+        'Uses workload identity or explicit credentials for the selected backend.',
+        'The identity contract becomes part of the production posture and must be observable.',
+      ],
+    },
+    {
+      cells: [
+        'Readiness model',
+        'Surfaced through conditions such as `CloudUnsealIdentityReady`.',
+        'Failures become visible before operators have to infer them from generic pod errors.',
+      ],
+    },
+  ]}
+/>
 
 </TabItem>
 
 </Tabs>
 
-## Root Token Lifecycle
+## Bootstrap credentials and root token handling
 
-<Callout type="danger" title="Root Token Security">
+<DecisionTable
+  title="Bootstrap paths"
+  columns={['Path', 'What happens to the root token', 'Security effect']}
+  rows={[
+    {
+      cells: [
+        'Hardened self-init',
+        'The initial root token is not persisted as the normal operating model.',
+        'This avoids leaving a long-lived administrative credential in namespace Secrets.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Development bootstrap without self-init',
+        'The root token can be stored in `<cluster>-root-token`.',
+        'This is useful for testing but creates a critical secret in the namespace.',
+      ],
+    },
+  ]}
+/>
 
-In **Development** profile, the Root Token is stored in a Secret. This grants **Full Administrative Access** to anyone who can read Secrets in the namespace.
+<Callout type="danger" title="Persisted bootstrap secrets are full-administration material">
 
-**Recommendation:** Immediately revoke the root token after initial setup or use **Self-Initialization** with the **Hardened** profile, which avoids storing the root token entirely.
+If a root token or equivalent bootstrap credential exists in a Secret, anyone who can read that Secret effectively has full administrative control of the OpenBao cluster.
 
 </Callout>
 
-## JWT Authentication & OIDC
+## TLS and job identities
 
-The OpenBao Operator uses Kubernetes OIDC to authenticate **Backup** and **Upgrade** executor jobs without managing static long-lived tokens.
-
-<Callout type="note" title="JWT bootstrap">
-
-Enable automatic JWT auth bootstrap with `spec.selfInit.oidc.enabled: true`.
-This requires the OIDC issuer and JWKS keys to be discoverable by the operator from the Kubernetes API server (OIDC discovery non-resource URLs).
-If you disable it, configure JWT auth manually via self-init requests.
-
-</Callout>
-
-### Workflow
-
-```mermaid
-sequenceDiagram
+<DiagramFrame
+  title="Job identity separation"
+  caption="The main OpenBao Pods, backup jobs, restore jobs, and upgrade jobs should not silently share one identity path. Each surface should stay explicit and observable."
+  code={`sequenceDiagram
     autonumber
-    participant Op as Operator
+    participant Operator as Operator
     participant K8s as Kubernetes API
     participant Bao as OpenBao
-    participant Job as Executor Job
+    participant Job as Lifecycle Job
 
-    Note over Op, K8s: 1. Discovery
-    Op->>K8s: Discover OIDC Issuer & JWKS
-    
-    Note over Op, Bao: 2. Bootstrap
-    Op->>Bao: Enable JWT Auth
-    Op->>Bao: Create "openbao-operator" Policy/Role
-    
-    Note over Op, Job: 3. Execution
-    Op->>K8s: Create Job (Mounts Projected Token)
-    K8s-->>Job: Start with Token (aud=OPENBAO_JWT_AUDIENCE)
-    
-    Job->>Bao: Login (JWT)
-    Bao-->>Job: OpenBao Token
-    Job->>Bao: Perform Snapshot/Upgrade
-```
+    Note over Operator,K8s: Discovery
+    Operator->>K8s: Discover OIDC issuer and JWKS
 
-### Benefits
+    Note over Operator,Bao: Bootstrap
+    Operator->>Bao: Configure JWT auth and roles
 
-1. **Short-Lived:** Projected tokens expire automatically (default 1 hour).
-2. **Rotated:** Kubernetes rotates the tokens automatically.
-3. **Audience Bound:** Tokens are valid only for the configured audience (default: `openbao-internal`), preventing replay attacks against other services.
+    Note over Operator,Job: Execution
+    Operator->>K8s: Create Job with generated ServiceAccount
+    K8s-->>Job: Start with projected token
+    Job->>Bao: Login with JWT
+    Bao-->>Job: Scoped OpenBao token
+    Job->>Bao: Perform backup, restore, or upgrade work`}
+/>
 
-<Callout type="note" title="JWT audience">
+The important boundary is this:
 
-Set `OPENBAO_JWT_AUDIENCE` on the operator deployment and keep `bound_audiences` aligned in OpenBao roles.
+- main OpenBao Pods use the trust path selected for the cluster itself
+- backup, restore, and upgrade Jobs use separate generated identities
+- those Jobs do not automatically inherit the cloud or JWT path of the main workload unless the operator deliberately configured it
 
-</Callout>
+This is why backup and restore readiness are surfaced independently in status rather than assumed from the main Pods.
 
-## See Also
+## Where the task guidance lives
 
-- [External Access](../../user-guide/openbaocluster/configuration/external-access.md)
-- [Security Profiles](profiles.md)
-- [Backups Integration](../../user-guide/openbaocluster/operations/backups.md)
+This page owns the trust model. The operational task pages stay elsewhere:
 
-## Official OpenBao Documentation
+- <SiteLink docId="user-guide/openbaocluster/configuration/security-profiles">Configure Security Profiles</SiteLink>
+- <SiteLink docId="user-guide/openbaocluster/operations/backups">Configure Backups</SiteLink>
+- <SiteLink docId="user-guide/openbaorestore/restore">Restore from Backup</SiteLink>
 
-- [Seal Configuration Overview](https://openbao.org/docs/configuration/seal/)
-- [Static Seal Configuration](https://openbao.org/docs/configuration/seal/static/)
-- [Self-Initialization](https://openbao.org/docs/configuration/self-init/)
-- [JWT/OIDC Auth Method](https://openbao.org/docs/auth/jwt/)
-
+<NextActions
+  title="Continue the security model"
+  items={[
+    {
+      label: 'Production posture',
+      description: 'See how these trust-material choices map back to Development versus Hardened.',
+      docId: 'security/fundamentals/profiles',
+    },
+    {
+      label: 'Configure security profiles',
+      description: 'Switch to the task page when you are ready to set the actual cluster fields.',
+      docId: 'user-guide/openbaocluster/configuration/security-profiles',
+    },
+    {
+      label: 'Threat model',
+      description: 'Return to the broader threat model if you need the surrounding attacker and boundary assumptions.',
+      docId: 'security/fundamentals/threat-model',
+    },
+  ]}
+/>

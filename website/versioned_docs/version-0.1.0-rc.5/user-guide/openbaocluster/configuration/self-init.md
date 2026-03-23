@@ -1,66 +1,89 @@
-# Self-Initialization
+---
+title: Self-Initialization
+hide_title: true
+pageType: task
+journey: configure
+description: Configure bootstrap requests, operator OIDC setup, and verification for self-initializing OpenBao clusters without leaving a persistent root token behind.
+---
 
-OpenBao supports [self-initialization](https://openbao.org/docs/configuration/self-init/), allowing declarative configuration of the cluster during first startup.
+<PageHero
+  eyebrow="Configure / Cluster Baseline"
+  title="Bootstrap the cluster declaratively and avoid carrying a root token forward."
+  lede="Self-initialization lets the cluster bring up auth methods, policies, audit devices, and other bootstrap state as part of the `OpenBaoCluster` manifest. It is the supported production bootstrap path because it avoids leaving a long-lived root token in a Kubernetes Secret."
+  actions={[
+    {label: "Choose the profile", docId: "user-guide/openbaocluster/configuration/security-profiles", variant: "primary"},
+    {label: "Review operator authentication", docId: "user-guide/operator/authn", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "enable self-init as part of the initial cluster baseline",
+      "understand why self-init is safer than standard initialization for production",
+      "bootstrap operator OIDC roles for backup, upgrade, and restore",
+      "avoid locking yourself out after the root token is revoked",
+    ]}
+  />
+</PageHero>
 
-<Callout type="danger" title="Lockout Risk">
+<DecisionTable
+  title="Choose the bootstrap path deliberately"
+  columns={["Path", "Use it when", "What happens to the root token", "Watch for"]}
+  rows={[
+    {
+      cells: [
+        "Self-initialization",
+        "You want declarative bootstrap and a production-ready baseline.",
+        "The root token is auto-revoked after the requests complete successfully.",
+        "You must define at least one usable auth path for humans or automation before the cluster comes up.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Standard init",
+        "You need a temporary compatibility path for development or controlled manual setup.",
+        "A root token can be created and stored in a Secret.",
+        "This is easier to start with, but it leaves you with a stronger credential-management burden afterward.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-When self-initialization is enabled, OpenBao **auto-revokes the root token** after initialization completes. You will have **no root token** and no way to access the cluster unless you configure at least one authentication method (e.g., JWT, Kubernetes auth, userpass) via `spec.selfInit.requests`.
+<DiagramFrame
+  title="Self-init bootstrap flow"
+  caption="The cluster initializes, applies the declared requests, and then revokes the bootstrap credential instead of treating it as a permanent operating dependency."
+  code={`flowchart LR
+    Cluster["OpenBaoCluster"] --> Init["Cluster initializes"]
+    Init --> Requests["Apply selfInit requests"]
+    Requests --> Auth["Auth methods and policies"]
+    Requests --> Audit["Audit devices and engines"]
+    Requests --> Revoke["Revoke root token"]
+    Revoke --> Ready["Cluster ready for day 2"]
 
-**OIDC bootstrap** (`spec.selfInit.oidc.enabled: true`) only provides authentication for the **Operator** to perform cluster lifecycle tasks (backups, upgrades). It does NOT provide user authentication.
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-Failure to configure user authentication in requests before enabling self-init results in **permanent lockout** requiring cluster recreation.
+    class Cluster,Init read;
+    class Requests,Revoke process;
+    class Auth,Audit,Ready write;`}
+/>
+
+<Callout type="warning" title="Lockout is the real failure mode">
+
+Self-init is safer only if you plan the access path up front. If you enable it without creating a usable auth method for operators or humans, the root token is revoked and the cluster can become effectively unreachable without recreation.
 
 </Callout>
 
-<Callout type="success" title="GitOps Ready">
+## Enable self-init
 
-Self-initialization eliminates the need for manual setup scripts or post-install hooks. The entire cluster state (Auth, Secrets, Policies) is defined in your CRD.
-
-</Callout>
-
-## Standard vs Self-Initialization
-
-| Feature | Standard Init | Self-Initialization |
-| :--- | :--- | :--- |
-| **Root Token** | Created & Stored in Secret | **Auto-Revoked** (Never Stored) |
-| **Configuration** | Manual Post-Install Steps | **Declarative** (in CRD) |
-| **Recovery** | Root Token | **Cloud KMS** / Other Auth Methods |
-| **Security** | Lower (Root Token Risk) | **High** (Zero Trust) |
-
-```mermaid
-flowchart LR
-    Start["OpenBaoCluster Created"]
-    Method{"selfInit.enabled?"}
-
-    subgraph Standard [Standard Init]
-        STD_A[Ops calls /v1/sys/init]
-        STD_B[Root Token Generated]
-        STD_C[Root Token Stored in Secret]
-    end
-
-    subgraph Self [Self-Init]
-        SI_A[OpenBao Auto-Unseals]
-        SI_B[Executes Requests]
-        SI_C[Root Token Revoked]
-    end
-
-    Start --> Method
-    Method -- No --> Standard
-    Method -- Yes --> Self
-
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    
-    class Self write;
-    class Standard read;
-```
-
-## Configuration
-
-To enable self-initialization, set `spec.selfInit.enabled: true` and define your initial `requests`.
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Start from the minimum self-init block"
+  code={`spec:
   selfInit:
     enabled: true
     requests:
@@ -70,180 +93,213 @@ spec:
         auditDevice:
           type: file
           fileOptions:
-            filePath: /tmp/audit.log
-```
+            filePath: /tmp/audit.log`}
+>
+  Treat `requests` as part of the bootstrap contract. They should create the minimum auth, policy, and audit state required for the cluster to be useful after bootstrap.
+</CommandBlock>
 
-### JWT bootstrap for Operator (Optional)
+## What belongs in `requests`
 
-Enable automatic JWT auth bootstrap to allow the **Operator** to perform cluster lifecycle operations.
-This configures JWT auth (`jwt-operator` mount), OIDC settings, and creates default operator roles
-(`openbao-operator-backup`, `openbao-operator-upgrade`, `openbao-operator-restore`).
-This is **Operator authentication only** and does not provide user access to OpenBao.
+<DecisionTable
+  kind="reference"
+  title="Structured request surfaces"
+  columns={["Surface", "Use it for", "Typical example"]}
+  rows={[
+    {
+      cells: [
+        "`authMethod`",
+        "Enable and configure auth backends.",
+        "JWT or Kubernetes auth for operators and clients.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`policy`",
+        "Create ACL policies that your auth methods will bind to.",
+        "Policies for apps, operators, or bootstrap-only roles.",
+      ],
+    },
+    {
+      cells: [
+        "`secretEngine`",
+        "Enable mounts such as KV or transit.",
+        "Initial application secret storage or cryptography services.",
+      ],
+    },
+    {
+      cells: [
+        "`auditDevice`",
+        "Turn on audit logging at bootstrap time.",
+        "File or stdout audit devices required by your environment.",
+      ],
+    },
+    {
+      cells: [
+        "`data`",
+        "Fallback for raw API payloads when no structured field exists.",
+        "Specialized configuration that is not covered by the higher-level request fields yet.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-Use `spec.backup.jwtAuthRole`, `spec.upgrade.jwtAuthRole`, or `spec.restore.jwtAuthRole` to override
-the default role names with your own custom roles.
+<Callout type="danger" title="Do not embed raw secrets in requests">
 
-```yaml
-spec:
+Avoid placing passwords, tokens, or key material directly in the manifest. Use Kubernetes Secrets where supported and treat bootstrap content like the rest of your GitOps security surface.
+
+</Callout>
+
+## Bootstrap operator OIDC roles
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable operator OIDC bootstrap"
+  code={`spec:
   selfInit:
     enabled: true
     oidc:
       enabled: true
-      # issuer: "https://..." (optional override)
-      # audience: "openbao-internal" (must match the operator installation audience if set)
-```
+      # Optional:
+      # issuer: "https://..."
+      # audience: "openbao-internal"`}
+>
+  This bootstraps operator-only JWT auth roles for lifecycle work such as backup, upgrade, and restore. It does not create human login paths by itself.
+</CommandBlock>
 
-<Callout type="note" title="OIDC prerequisites">
+<DecisionTable
+  kind="reference"
+  title="What must stay aligned"
+  columns={["Surface", "Why it matters", "What to align"]}
+  rows={[
+    {
+      cells: [
+        "OIDC issuer and JWKS discovery",
+        "The operator must discover the Kubernetes issuer and keys to bootstrap JWT auth cleanly.",
+        "Ensure the operator ServiceAccount can GET the OIDC discovery and JWKS non-resource URLs.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "JWT audience",
+        "The role binding inside OpenBao and the projected token audience must match.",
+        "Keep `spec.selfInit.oidc.audience` aligned with the installation-scoped `OPENBAO_JWT_AUDIENCE` value.",
+      ],
+    },
+    {
+      cells: [
+        "Rendered controller identity",
+        "Custom namespace or name-prefix changes affect the ServiceAccount subject the JWT role expects.",
+        "If you manage roles manually, bind them to the rendered controller ServiceAccount identity rather than to a guessed default.",
+      ],
+    },
+  ]}
+/>
 
-The operator must be able to discover the Kubernetes OIDC issuer and JWKS keys from the Kubernetes API server.
-Ensure the operator ServiceAccount can GET `/.well-known/openid-configuration` and `/openid/v1/jwks` (RBAC `nonResourceURLs`).
-If you customized the operator namespace or `namePrefix`, also ensure any manually configured JWT role in OpenBao binds to the rendered controller ServiceAccount identity. See [Operator Authentication](../../operator/authn.md#custom-install-checklist).
+## Common bootstrap patterns
 
-</Callout>
+<Tabs groupId="self-init-patterns">
+  <TabItem value="auth-method" label="Auth method">
 
-<Callout type="note" title="JWT audience">
-
-The operator uses an installation-scoped JWT audience from `OPENBAO_JWT_AUDIENCE`
-(default: `openbao-internal`) when creating JWT roles. If you set
-`spec.selfInit.oidc.audience`, it must match that installation audience.
-Configure the audience on the operator installation:
-
-- Helm: `serviceAccountToken.openBaoAudience`
-- Raw manifests: `config/default/openbao_jwt_settings.yaml`
-
-Keep the same value in any manually managed OpenBao roles.
-
-</Callout>
-
-### Request Structure
-
-Each item in `requests[]` maps to an OpenBao API call.
-
-| Field | Description |
-| :--- | :--- |
-| `name` | Unique ID (e.g., `enable-jwt`). |
-| `operation` | `update` (most common), `create`, `delete`. |
-| `path` | API Path (e.g., `sys/auth/jwt`). |
-| `data` | Raw JSON payload (legacy/generic). |
-| `authMethod` | **Structured** config for `sys/auth/*`. |
-| `secretEngine` | **Structured** config for `sys/mounts/*`. |
-| `auditDevice` | **Structured** config for `sys/audit/*`. |
-| `policy` | **Structured** config for `sys/policies/*`. |
-
-<Callout type="warning" title="Sensitive Data">
-
-Do not place raw secrets (passwords, tokens) in `data`. Use Kubernetes Secrets and reference them if supported, or use a secure GitOps workflow with sealed secrets.
-
-</Callout>
-
-## Examples
-
-<Tabs groupId="secret-engines-auth-methods-policies-audit-devices">
-
-<TabItem value="secret-engines" label="Secret Engines">
-
-Enable and configure Secret Engines (`sys/mounts/*`).
-
-```yaml
-- name: enable-kv-v2
-  operation: update
-  path: sys/mounts/secret
-  secretEngine:
-    type: kv
-    description: "General purpose KV store"
-    options:
-      version: "2"
-```
-
-```yaml
-- name: enable-transit
-  operation: update
-  path: sys/mounts/transit
-  secretEngine:
-    type: transit
-    description: "Encryption as a Service"
-```
-
-</TabItem>
-
-<TabItem value="auth-methods" label="Auth Methods">
-
-Enable Authentication Methods (`sys/auth/*`).
-
-```yaml
-- name: enable-jwt
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable a JWT auth method"
+  code={`- name: enable-jwt
   operation: update
   path: sys/auth/jwt-operator
   authMethod:
     type: jwt
-    description: "Kubernetes JWT Auth"
+    description: "Kubernetes JWT auth"
     config:
-        default_lease_ttl: "1h"
-        max_lease_ttl: "24h"
-```
+      default_lease_ttl: "1h"
+      max_lease_ttl: "24h"`}
+/>
 
-```yaml
-- name: configure-jwt
-  operation: update
-  path: auth/jwt-operator/config  # Note: Config path depends on mount path
-  data:
-    bound_issuer: "https://issuer.example"
-    jwks_url: "https://kubernetes.default.svc/openid/v1/jwks"
-    jwks_ca_pem: "<K8S_CA_PEM>"
-```
+  </TabItem>
+  <TabItem value="policy" label="Policy">
 
-Prefer `jwks_url` or `oidc_discovery_url` over `jwt_validation_pubkeys` when possible so key rotation stays automatic.
-
-</TabItem>
-
-<TabItem value="policies" label="Policies">
-
-Create ACL Policies (`sys/policies/acl/*`).
-
-```yaml
-- name: app-policy
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Create an ACL policy at bootstrap"
+  code={`- name: app-policy
   operation: update
   path: sys/policies/acl/app-policy
   policy:
     policy: |
       path "secret/data/app/*" {
         capabilities = ["read", "list"]
-      }
-```
+      }`}
+/>
 
-</TabItem>
+  </TabItem>
+  <TabItem value="secret-engine" label="Secret engine">
 
-<TabItem value="audit-devices" label="Audit Devices">
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable a KV v2 mount"
+  code={`- name: enable-kv-v2
+  operation: update
+  path: sys/mounts/secret
+  secretEngine:
+    type: kv
+    description: "General purpose KV store"
+    options:
+      version: "2"`}
+/>
 
-Enable Audit Logging (`sys/audit/*`).
+  </TabItem>
+  <TabItem value="audit-device" label="Audit device">
 
-```yaml
-- name: enable-file-audit
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Enable audit logging at bootstrap"
+  code={`- name: enable-file-audit
   operation: update
   path: sys/audit/file
   auditDevice:
     type: file
     fileOptions:
-      filePath: /var/log/openbao/audit.log
-```
+      filePath: /var/log/openbao/audit.log`}
+/>
 
-</TabItem>
-
+  </TabItem>
 </Tabs>
 
-## Verification
+## Verify the cluster finished bootstrap
 
-Check the status field to confirm self-initialization succeeded.
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check the self-init status bit"
+  code={`kubectl get openbaocluster <name> -o jsonpath='{.status.selfInitialized}'`}
+>
+  A healthy bootstrap should report `true`. If it does not, inspect the cluster status conditions and controller logs before retrying with additional requests.
+</CommandBlock>
 
-```bash
-kubectl get openbaocluster <name> -o jsonpath='{.status.selfInitialized}'
-# Output: true
-```
-
-## Official OpenBao Documentation
-
-- [Self-Initialization](https://openbao.org/docs/configuration/self-init/)
-- [JWT/OIDC Auth Method](https://openbao.org/docs/auth/jwt/)
-- [Kubernetes Auth Method](https://openbao.org/docs/auth/kubernetes/)
-- [Token Concepts](https://openbao.org/docs/concepts/tokens/)
-
+<NextActions
+  title="Continue cluster baseline"
+  items={[
+    {
+      label: "Server configuration",
+      description: "Move from bootstrap into the steady-state server settings and autopilot defaults you want to keep.",
+      docId: "user-guide/openbaocluster/configuration/server",
+    },
+    {
+      label: "Operator authentication",
+      description: "Review the operator-side auth contract if you are relying on OIDC bootstrap.",
+      docId: "user-guide/operator/authn",
+    },
+    {
+      label: "Backup operations",
+      description: "See how the operator OIDC role is used by later lifecycle workflows.",
+      docId: "user-guide/openbaocluster/operations/backups",
+    },
+  ]}
+/>

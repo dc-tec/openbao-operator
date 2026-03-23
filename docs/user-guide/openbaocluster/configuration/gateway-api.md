@@ -1,92 +1,104 @@
-# Gateway API Support
+---
+title: Gateway API Support
+hide_title: true
+pageType: task
+journey: configure
+description: Configure Gateway API as the primary edge path for OpenBao, including passthrough versus termination, readiness checks, and controller compatibility.
+---
 
-The Operator provides first-class support for [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/), enabling standardized, portable, and expressive external access.
+<PageHero
+  eyebrow="Configure / Service Boundary"
+  title="Use Gateway API when the edge should be explicit, portable, and multi-tenant aware."
+  lede="Gateway API is the preferred long-term edge model for OpenBao because it makes route ownership, listener mode, and cross-namespace attachment clearer than a generic Ingress path. For most production deployments, start with TLS passthrough so OpenBao remains the TLS endpoint."
+  actions={[
+    {label: "Open external access", docId: "user-guide/openbaocluster/configuration/external-access", variant: "primary"},
+    {label: "Review TLS and workload identity", docId: "security/workload/tls", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "expose OpenBao through an existing Gateway instead of a generic Ingress",
+      "choose between TLS passthrough and Gateway-side termination",
+      "validate GatewayClass and listener compatibility before traffic depends on it",
+      "understand how Gateway readiness interacts with ACME and blue-green upgrades",
+    ]}
+  />
+</PageHero>
 
-The preferred OpenBao deployment model is **TLS passthrough**. OpenBao remains the TLS endpoint, and the Gateway routes traffic by SNI without decrypting it. Use Gateway TLS termination only when you specifically need edge HTTP features such as centralized certificate management, WAF integration, or HTTP-aware routing.
+<DecisionTable
+  title="Choose the Gateway mode"
+  columns={["Mode", "Use it when", "What the operator creates", "Watch for"]}
+  rows={[
+    {
+      cells: [
+        "TLS passthrough",
+        "You want OpenBao to remain the TLS endpoint and keep end-to-end certificate identity.",
+        "`TLSRoute`-based integration that forwards encrypted traffic to the cluster.",
+        "Your controller and GatewayClass need usable `TLSRoute` support, and ACME depends on this model.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "TLS termination",
+        "You need HTTP-aware policy, WAF behavior, or centralized certificate handling at the Gateway.",
+        "`HTTPRoute` plus optional `BackendTLSPolicy` for re-encrypted traffic to OpenBao.",
+        "Be explicit about backend trust and do not assume termination alone preserves the same trust model.",
+      ],
+    },
+  ]}
+/>
 
-## Architecture
-
-The Operator supports two primary modes: **Termination** (HTTPS at Gateway) and **Passthrough** (End-to-End Encryption).
-
-```mermaid
-flowchart TB
-    subgraph Term["TLS Termination<br>(HTTPRoute)"]
-        direction TB
-        Ext1[Client] -->|"HTTPS (443)"| GW1[Gateway]
-        GW1 -- "Re-encrypted HTTPS" --> Bao1[OpenBao]
+<DiagramFrame
+  title="Gateway API modes"
+  caption="Passthrough keeps OpenBao as the TLS endpoint. Termination shifts certificate presentation to the Gateway and then re-establishes trust on the backend hop."
+  code={`flowchart TB
+    subgraph Pass ["TLS passthrough"]
+      ClientA["Client"] --> GatewayA["Gateway"]
+      GatewayA --> BaoA["OpenBao"]
     end
 
-    subgraph Pass["TLS Passthrough<br>(TLSRoute)"]
-        direction TB
-        Ext2[Client] -->|"HTTPS (SNI)"| GW2[Gateway]
-        GW2 -- "Encrypted TLS" --> Bao2[OpenBao]
+    subgraph Term ["TLS termination"]
+      ClientB["Client"] --> GatewayB["Gateway"]
+      GatewayB --> Policy["BackendTLSPolicy"]
+      Policy --> BaoB["OpenBao"]
     end
 
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-    class Ext1,Ext2 read;
-    class GW1,GW2 process;
-    class Bao1,Bao2 write;
-```
+    class ClientA,ClientB read;
+    class GatewayA,GatewayB,Policy process;
+    class BaoA,BaoB write;`}
+/>
 
-## Configuration
+## Recommended path: TLS passthrough
 
-Choose your deployment mode.
-
-For production, prefer passthrough unless you have a clear requirement for Gateway-side TLS termination. This follows the upstream OpenBao guidance for Kubernetes deployments, which says intermediaries should not terminate TLS.
-
-The operator now reports a dedicated `GatewayIntegrationReady` condition for `spec.gateway`. This condition reflects the operator-owned Gateway contract:
-
-- the referenced `Gateway` exists
-- the referenced `GatewayClass` exists and is accepted
-- the `GatewayClass` reports a supported Gateway API version
-- the selected mode has a compatible listener
-- the `GatewayClass` advertises the required feature support when it publishes `status.supportedFeatures`
-- the `Gateway` reports `Programmed=True`
-
-If the Gateway controller does not publish feature support, the condition stays `Unknown` instead of assuming compatibility.
-
-## Readiness Checkpoints
-
-Use these conditions to validate Gateway exposure:
-
-- `GatewayIntegrationReady=True`: the operator could verify the referenced `Gateway`, `GatewayClass`, listener mode, and controller support for the configured path.
-- `GatewayIntegrationReady=Unknown`: the controller has not reported enough status yet, the controller does not publish supported features, or the operator cannot verify the Gateway capabilities from the available status.
-- `ProductionReady=True`: for Hardened clusters, treat this as the final confirmation only after the relevant Gateway or ACME conditions are also green.
-
-<Tabs groupId="tls-passthrough-recommended-tls-termination-alternative">
-
-<TabItem value="tls-passthrough-recommended" label="TLS Passthrough (Recommended)">
-
-**Best for:** Default OpenBao deployments, end-to-end TLS, ACME, client certificate auth, and keeping OpenBao as the TLS endpoint.
-
-The Gateway routes traffic based on SNI without decrypting it. OpenBao terminates TLS.
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Expose OpenBao through a passthrough Gateway listener"
+  code={`spec:
   gateway:
     enabled: true
-    tlsPassthrough: true  # Enables TLSRoute
+    tlsPassthrough: true
     hostname: bao.example.com
     gatewayRef:
       name: main-gateway
-      namespace: gateway-system
-```
+      namespace: gateway-system`}
+>
+  This is the default production recommendation because OpenBao remains the TLS endpoint. It fits the trust model used by External TLS and ACME particularly well.
+</CommandBlock>
 
-**Requirements:**
-- Gateway Listener must be in `Passthrough` mode.
-- `TLSRoute` CRD must be installed (often Experimental channel).
-- If `tls.mode` is `ACME`, passthrough is required; TLS termination at the Gateway prevents OpenBao from completing ACME challenges.
-- The referenced `GatewayClass` must advertise `TLSRoute` support when it publishes `status.supportedFeatures`.
+<ExpandableCallout type="example" title="Example Gateway listener for passthrough">
 
-<ExpandableCallout type="example" title="Gateway Listener (TLS Passthrough)">
-
-The referenced Gateway must expose a `TLS` listener in `Passthrough` mode (controller support varies):
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
+<CommandBlock
+  language="yaml"
+  label="inspect"
+  title="Gateway listener with `TLS` passthrough"
+  code={`apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: main-gateway
@@ -98,115 +110,132 @@ spec:
       port: 443
       protocol: TLS
       tls:
-        mode: Passthrough
-```
+        mode: Passthrough`}
+/>
 
 </ExpandableCallout>
 
-<Callout type="warning" title="Common conflict: existing HTTPS termination">
+<Callout type="warning" title="ACME requires passthrough">
 
-Many Gateway controllers expose an `HTTPS` termination listener on `:443` by default. Some
-controllers cannot share the same port for both termination and passthrough. Use a dedicated
-passthrough listener (or a separate port) when required by your controller.
+If `tls.mode` is `ACME`, do not terminate TLS at the Gateway. OpenBao must remain the TLS endpoint to complete the ACME lifecycle correctly.
 
 </Callout>
 
-</TabItem>
+## Alternative path: Gateway-side termination
 
-<TabItem value="tls-termination-alternative" label="TLS Termination (Alternative)">
-
-**Best for:** HTTP-aware edge policies, WAF integration, or centralized certificate handling at the Gateway.
-
-The Gateway terminates TLS, and the Operator (optionally) configures a secure link to the backend.
-
-```yaml
-spec:
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Expose OpenBao with Gateway termination"
+  code={`spec:
   gateway:
     enabled: true
     hostname: bao.example.com
     gatewayRef:
       name: main-gateway
-      namespace: gateway-system
-```
+      namespace: gateway-system`}
+>
+  Use termination only when you actually need Gateway-side HTTP features. In that model the operator can create a `BackendTLSPolicy` so the backend hop stays encrypted and validated.
+</CommandBlock>
 
-**What happens:**
-1. Operator creates an `HTTPRoute` referencing the Gateway.
-2. Operator creates a `BackendTLSPolicy` to encrypt traffic between the Gateway and OpenBao (re-encryption).
+<ExpandableCallout type="note" title="What the operator adds for backend TLS">
 
-<ExpandableCallout type="note" title="Generated BackendTLSPolicy">
-
-The operator automatically creates a policy to validate the OpenBao backend certificate:
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: BackendTLSPolicy
-metadata:
-  name: my-cluster-backend-tls
-spec:
-  targetRefs:
-    - kind: Service
-      name: my-cluster-public
-  validation:
-    caCertificateRefs:
-      - kind: ConfigMap
-        name: my-cluster-tls-ca
-    hostname: my-cluster-public.default.svc
-```
+When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins backend validation to the cluster's CA ConfigMap and expected service hostname.
 
 </ExpandableCallout>
 
-</TabItem>
+## Compatibility and readiness
 
-</Tabs>
+<DecisionTable
+  kind="reference"
+  title="What must be true"
+  columns={["Check", "Why it matters", "What to confirm"]}
+  rows={[
+    {
+      cells: [
+        "Gateway reference exists",
+        "The operator cannot integrate with a missing or mistyped target.",
+        "The referenced `Gateway` object is present in the namespace you point to.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "GatewayClass exists and is accepted",
+        "A route is only useful if the controller owning the GatewayClass is real and healthy.",
+        "The selected `GatewayClass` exists and reports acceptance.",
+      ],
+    },
+    {
+      cells: [
+        "Required feature support exists",
+        "Passthrough needs `TLSRoute`; termination may need `BackendTLSPolicy` support.",
+        "If the controller publishes `status.supportedFeatures`, verify the required features are present.",
+      ],
+    },
+    {
+      cells: [
+        "Listener mode matches the chosen path",
+        "A passthrough route attached to a terminating listener will never behave correctly.",
+        "The selected listener protocol and mode are compatible with the route type the operator is going to create.",
+      ],
+    },
+  ]}
+/>
 
-## Comparison Reference
+<DecisionTable
+  kind="reference"
+  title="Conditions to watch"
+  columns={["Condition", "What it means", "Typical next move"]}
+  rows={[
+    {
+      cells: [
+        "`GatewayIntegrationReady=True`",
+        "The operator verified the Gateway reference, class, listener path, and available controller support well enough for the chosen mode.",
+        "Continue with end-to-end validation and client connectivity checks.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`GatewayIntegrationReady=Unknown`",
+        "The controller has not published enough status, or feature support cannot be verified from the available information.",
+        "Wait for more Gateway status or inspect whether the controller publishes supported features at all.",
+      ],
+    },
+    {
+      cells: [
+        "`GatewayIntegrationReady=False`",
+        "The operator found a concrete incompatibility or missing dependency.",
+        "Read the condition reason first: missing reference, unsupported feature, incompatible listener, or not-programmed gateway are the common cases.",
+      ],
+    },
+  ]}
+/>
 
-| Feature | Ingress | Gateway API (HTTPRoute) | Gateway API (TLSRoute) |
-| :--- | :--- | :--- | :--- |
-| **Routing** | Path/Host | Header, Path, Method, Query | SNI (Host) |
-| **TLS** | Terminate Only | Terminate | Terminate or Passthrough |
-| **Multi-Tenancy** | Weak | Strong (Namespace-scoped routes) | Strong |
-| **Resource** | `Ingress` | `HTTPRoute` | `TLSRoute` |
+<Callout type="note" title="Blue-green upgrades keep the route stable">
 
-## Advanced Options
+During blue-green cutover, the operator keeps the Gateway route attached to the stable external Service and updates the Service selector behind it. That means the route object stays steady while the selected revision changes underneath.
 
-| Field | Description | Default |
-| :--- | :--- | :--- |
-| `gateway.backendTLS.enabled` | Auto-create `BackendTLSPolicy` for secure internal hop. | `true` |
-| `gateway.backendTLS.hostname` | Override hostname for internal validation. | Service DNS |
-| `gateway.listenerName` | Attach generated Route to a specific Gateway listener (sectionName), e.g. `websecure`. | All matching listeners |
-| `gateway.annotations` | Custom annotations for the generated Route. | None |
+</Callout>
 
-## Controller Compatibility
-
-Gateway API support is not only a CRD check. It also depends on the selected controller.
-
-- Passthrough mode requires `TLSRoute`.
-- Termination mode requires `HTTPRoute`.
-- Termination mode with backend TLS enabled requires `BackendTLSPolicy`.
-- Some controllers publish `status.supportedFeatures`; others do not.
-
-When `GatewayIntegrationReady=False`, inspect the condition reason first. Common reasons are:
-
-- `GatewayReferenceMissing`
-- `GatewayClassMissing`
-- `GatewayClassNotAccepted`
-- `GatewayVersionUnsupported`
-- `GatewayFeatureUnsupported`
-- `GatewayNotProgrammed`
-- `GatewayListenerIncompatible`
-
-When `GatewayIntegrationReady=Unknown`, the controller has not yet reported enough status for the operator to verify compatibility, or it does not publish `status.supportedFeatures`.
-
-For ACME clusters, also check `ACMEIntegrationReady` and `ACMECacheReady`. Gateway readiness alone is not enough for ACME issuance.
-
-## Blue/Green Upgrade Integration
-
-When combining Gateway API with [Blue/Green upgrades](../operations/upgrades.md), the Operator keeps the generated Gateway route stable by targeting the cluster's external Service for the selected TLS mode:
-
-- `HTTPRoute` termination targets the main external Service (`<cluster>-public`)
-- `TLSRoute` passthrough with `tls.mode: ACME` targets the dedicated ACME Service (`<cluster>-acme`)
-- other `TLSRoute` passthrough deployments target the main external Service (`<cluster>-public`)
-
-During cutover, the operator updates the relevant Service selector to point at the Green revision.
-
+<NextActions
+  title="Continue service boundary setup"
+  items={[
+    {
+      label: "Network configuration",
+      description: "Align trusted ingress peers and external dependency egress with the Gateway path you just chose.",
+      docId: "user-guide/openbaocluster/configuration/network",
+    },
+    {
+      label: "External access",
+      description: "Switch back to the broader exposure decision page if you still need to compare Gateway with Ingress or direct Service exposure.",
+      docId: "user-guide/openbaocluster/configuration/external-access",
+    },
+    {
+      label: "TLS and workload identity",
+      description: "Review the underlying TLS ownership model when deciding between passthrough and termination.",
+      docId: "security/workload/tls",
+    },
+  ]}
+/>

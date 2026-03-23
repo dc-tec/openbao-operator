@@ -7,19 +7,20 @@ description: OpenBao Operator documentation for installation, configuration, ope
 ---
 
 <PageHero
+  variant="landing"
   eyebrow="Operator docs"
-  title="Choose the section that matches the job in front of you."
-  lede="Use these docs to install OpenBao Operator, configure the cluster safely, run it in production, and understand the security and architectural constraints behind the platform."
+  title="Choose the route that matches the work."
+  lede="Use these docs to install OpenBao Operator, shape the cluster before go-live, run it in production, and check the exact security, architecture, and support contracts behind the platform."
   actions={[
     {label: 'Start with Get Started', docId: 'user-guide/index', variant: 'primary'},
     {label: 'Open Operate', docId: 'user-guide/openbaocluster/operations/index', variant: 'secondary'},
   ]}
 >
   <Checklist
-    title="Use this site when you need to"
+    title="Use this section when you need to"
     items={[
       'deploy OpenBao Operator for the first time',
-      'move from installation into day 2 operations',
+      'move from installation into configuration and day 2 operations',
       'understand security posture and tenant boundaries',
       'move from troubleshooting into recovery and restore when the cluster is unstable',
     ]}
@@ -57,35 +58,41 @@ OpenBao Operator is intended for real deployments, but the CRD API remains `v1al
 />
 
 <NextActions
-  title="Supporting sections"
+  title="Deployment planning"
   items={[
     {
-      label: 'Open configure',
-      description: 'Shape profiles, bootstrap, exposure, storage, and observability before the cluster gets expensive to change.',
+      label: 'Configure',
+      description: 'Set profiles, bootstrap, exposure, storage, and observability before production traffic arrives.',
       docId: 'user-guide/openbaocluster/configuration/index',
     },
     {
-      label: 'Open validated deployments',
-      description: 'Start from tested architectures, recipes, and runbooks when you want a known-good baseline.',
+      label: 'Validated Deployments',
+      description: 'Use tested baselines, recipes, and DR lanes when you want a deployment path to reproduce.',
       docId: 'user-guide/validated-deployments/index',
     },
+  ]}
+/>
+
+<NextActions
+  title="Supporting sections"
+  items={[
     {
-      label: 'Open architecture',
+      label: 'Architecture',
       description: 'Controller boundaries, lifecycle coordination, and the internal reasoning behind operator behavior.',
       docId: 'architecture/index',
     },
     {
-      label: 'Open reference',
+      label: 'Reference',
       description: 'Compatibility, support posture, API reference, and status and event semantics.',
       docId: 'reference/index',
     },
     {
-      label: 'Read release notes',
+      label: 'Releases',
       description: 'Versioned release context aligned with the published docs and artifacts.',
       to: '/releases',
     },
     {
-      label: 'Contributor docs',
+      label: 'Contribute',
       description: 'Development setup, standards, CI, testing, and release management guidance.',
       to: '/contribute',
     },

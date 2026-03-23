@@ -8,16 +8,17 @@ description: Threat model, hardened profiles, RBAC, admission policy, network co
 ---
 
 <PageHero
+  variant="landing"
   eyebrow="Security"
   title="Security is part of the operating path, not an appendix."
-  lede="Use this section to understand the trust model behind OpenBao Operator, choose the hardened posture for production, and verify the controls that enforce it at the infrastructure, workload, and tenant layers."
+  lede="Use this section to understand the operator trust model, choose the production posture you actually want to defend, and verify the controls that enforce it from the platform layer down to workload and tenant boundaries."
   actions={[
-    {label: 'Read the fundamentals', docId: 'security/fundamentals/index', variant: 'primary'},
-    {label: 'Review infrastructure controls', docId: 'security/infrastructure/index', variant: 'secondary'},
+    {label: 'Read the security model', docId: 'security/fundamentals/index', variant: 'primary'},
+    {label: 'Review platform controls', docId: 'security/infrastructure/index', variant: 'secondary'},
   ]}
 >
   <Checklist
-    title="Production posture usually means"
+    title="A production posture usually includes"
     items={[
       'Hardened profile by default',
       'admission enforcement enabled',
@@ -28,46 +29,47 @@ description: Threat model, hardened profiles, RBAC, admission policy, network co
 </PageHero>
 
 <RouteList
-  title="Security routes"
+  title="Security layers"
   items={[
     {
       eyebrow: '01',
-      title: 'Fundamentals',
-      description: 'Threat model, security profiles, secrets management, and the assumptions the operator makes.',
+      title: 'Security model',
+      description: 'Threat model, production posture, and the trust material assumptions behind the operator design.',
       docId: 'security/fundamentals/index',
     },
     {
       eyebrow: '02',
-      title: 'Infrastructure controls',
-      description: 'RBAC architecture, admission policies, and network security boundaries.',
+      title: 'Platform controls',
+      description: 'RBAC architecture, admission policies, and network boundaries that protect the control plane first.',
       docId: 'security/infrastructure/index',
     },
     {
       eyebrow: '03',
-      title: 'Workload security',
-      description: 'Pod security, TLS handling, and image verification and supply-chain enforcement.',
+      title: 'Workload protections',
+      description: 'Pod hardening, TLS identity, and supply-chain verification for the deployed service.',
       docId: 'security/workload/index',
     },
     {
       eyebrow: '04',
-      title: 'Multi-tenancy',
-      description: 'Tenant isolation expectations, namespace boundaries, and the limits of the shared-service model.',
+      title: 'Tenant isolation',
+      description: 'Namespace boundaries, tenancy guarantees, and the limits of the shared-service model.',
       docId: 'security/multi-tenancy/index',
     },
   ]}
 />
 
 <NextActions
+  title="Related task pages"
   items={[
     {
-      label: 'Review security profiles',
-      description: 'Understand what Development and Hardened really change before you standardize on one.',
+      label: 'Security profiles',
+      description: 'Map the security model back to the task page that configures `spec.profile` on a real cluster.',
       docId: 'user-guide/openbaocluster/configuration/security-profiles',
     },
     {
-      label: 'Start from the deployment path',
-      description: 'Connect security posture back to the default production choices in Get Started.',
-      docId: 'user-guide/operator/deployment-decision-guide',
+      label: 'Tenant onboarding',
+      description: 'Connect security guarantees back to the namespace introduction and governance path in the user guide.',
+      docId: 'user-guide/openbaotenant/overview',
     },
   ]}
 />

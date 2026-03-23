@@ -4,81 +4,109 @@ slug: /recover
 hide_title: true
 pageType: landing
 journey: operate
-description: Use recovery and restore workflows for cluster incidents including safe mode, no leader, sealed clusters, failed rollback, and backup-driven restore.
+description: Choose the right incident recovery or backup-driven restore path when routine troubleshooting is no longer enough.
 ---
 
 <PageHero
+  variant="landing"
   eyebrow="Operate / Recovery & Restore"
-  title="Use recovery paths that are explicit, narrow, and safe."
-  lede="Recovery guidance should be read under pressure. This section lives inside Operate and focuses on the cluster states that require more than routine troubleshooting: safe mode, no leader, sealed clusters, failed rollback, and restore."
+  title="Separate incident recovery from backup-driven restore."
+  lede="This section exists for the moments when normal troubleshooting is no longer enough. Some failures need a focused recovery path such as safe mode or no-leader repair. Others are better handled by restoring known-good state from backup through an explicit `OpenBaoRestore` request."
   actions={[
-    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'primary'},
-    {label: 'Open restore workflows', docId: 'user-guide/openbaorestore/restore', variant: 'secondary'},
+    {label: 'Run a restore', docId: 'user-guide/openbaorestore/restore', variant: 'primary'},
+    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'secondary'},
   ]}
 >
   <Checklist
-    title="Recovery starts with the right diagnosis"
+    title="Use this section when you need to"
     items={[
-      'separate routine troubleshooting from incident paths',
-      'use restore only when the symptoms justify it',
-      'keep backups and upgrade context nearby during recovery',
-      'validate the cluster state before returning to normal operations',
+      'decide whether the cluster still has a normal repair path',
+      'move from incident diagnosis into a narrow recovery runbook',
+      'restore state from backup without guessing at the destructive impact',
+      'return the cluster to normal operations only after the status surface is clean again',
     ]}
   />
 </PageHero>
 
-<JourneyRail
-  title="Common incident entry points"
-  items={[
+<DecisionTable
+  title="Choose the right path"
+  columns={['Situation', 'Start here', 'Why']}
+  rows={[
     {
-      label: 'Safe mode',
-      description: 'Stabilize the cluster before making larger corrective changes.',
-      docId: 'user-guide/openbaocluster/recovery/safe-mode',
+      cells: [
+        'The cluster lost leadership, sealed unexpectedly, or entered break-glass mode after a failed change.',
+        'Incident recovery',
+        'You still want to repair the live cluster state rather than replace it.',
+      ],
+      emphasis: 'recommended',
     },
     {
-      label: 'No leader',
-      description: 'Recover quorum and leadership safely when Raft cannot elect a leader.',
-      docId: 'user-guide/openbaocluster/recovery/no-leader',
+      cells: [
+        'The safest route is to reintroduce known-good state from object storage.',
+        'Restore from backup',
+        'Restore is explicit, destructive, and auditable instead of being hidden inside normal reconciliation.',
+      ],
     },
     {
-      label: 'Sealed cluster',
-      description: 'Diagnose and recover when unseal or trust dependencies block the cluster.',
-      docId: 'user-guide/openbaocluster/recovery/sealed-cluster',
-    },
-    {
-      label: 'Restore',
-      description: 'Use restore workflows when state must be reintroduced from backup.',
-      docId: 'user-guide/openbaorestore/restore',
+      cells: [
+        'You are still diagnosing the failure and do not know whether repair or restore is necessary.',
+        'Troubleshoot the cluster first',
+        'Do not jump into a destructive path before you know whether a narrower fix is still available.',
+      ],
     },
   ]}
 />
 
 <RouteList
-  title="Recovery and restore routes"
+  title="Incident recovery"
   items={[
     {
       eyebrow: '01',
       title: 'Enter safe mode',
-      description: 'Use the lowest-risk stabilization path when you need to stop drift and recover control.',
+      description: 'Stabilize the cluster and stop risky automation when the operator needs explicit human acknowledgment.',
       docId: 'user-guide/openbaocluster/recovery/safe-mode',
     },
     {
       eyebrow: '02',
-      title: 'Recover no leader',
-      description: 'Handle leadership loss and quorum issues without guessing at Raft state.',
+      title: 'Recover from no leader',
+      description: 'Repair quorum and leadership when Raft can no longer elect or keep a leader.',
       docId: 'user-guide/openbaocluster/recovery/no-leader',
     },
     {
       eyebrow: '03',
-      title: 'Recover sealed clusters',
-      description: 'Diagnose seal, TLS, and identity issues that prevent the cluster from serving requests.',
+      title: 'Recover a sealed cluster',
+      description: 'Diagnose trust, seal, network, or identity failures that leave Pods running but not serving.',
       docId: 'user-guide/openbaocluster/recovery/sealed-cluster',
     },
     {
       eyebrow: '04',
-      title: 'Restore from backup',
-      description: 'Move into restore and post-upgrade restore workflows when the cluster state must be reintroduced.',
+      title: 'Recover from failed rollback',
+      description: 'Use the dedicated upgrade-recovery path when blue-green rollback automation stops in break glass mode.',
+      docId: 'user-guide/openbaocluster/recovery/failed-rollback',
+    },
+  ]}
+/>
+
+<RouteList
+  title="Restore from backup"
+  items={[
+    {
+      eyebrow: '05',
+      title: 'Run a restore',
+      description: 'Apply an `OpenBaoRestore` request when you intentionally need to overwrite cluster state from a snapshot.',
       docId: 'user-guide/openbaorestore/restore',
+    },
+    {
+      eyebrow: '06',
+      title: 'Restore overview',
+      description: 'Understand why restore is modeled as an explicit CRD-backed operation and what safety boundaries it enforces.',
+      docId: 'user-guide/openbaorestore/overview',
+    },
+    {
+      eyebrow: '07',
+      title: 'Recover after upgrade restore',
+      description: 'Use the override-lock path only when a failed upgrade or rollback blocks the normal restore workflow.',
+      docId: 'user-guide/openbaorestore/recovery-restore-after-upgrade',
     },
   ]}
 />
@@ -86,13 +114,18 @@ description: Use recovery and restore workflows for cluster incidents including 
 <NextActions
   items={[
     {
+      label: 'Troubleshoot the cluster',
+      description: 'Go back to the symptom-driven incident guide when you still need to narrow the failure before choosing recovery.',
+      docId: 'user-guide/openbaocluster/operations/troubleshooting',
+    },
+    {
       label: 'Check backup readiness',
-      description: 'Good recovery depends on backup configuration being in place before the incident.',
+      description: 'Good recovery depends on the snapshot path already being healthy before the incident starts.',
       docId: 'user-guide/openbaocluster/operations/backups',
     },
     {
       label: 'Open status and events',
-      description: 'Use reference material when you need exact condition and event semantics during triage.',
+      description: 'Use the reference material when you need exact condition and event semantics during triage.',
       docId: 'reference/status-and-events',
     },
   ]}

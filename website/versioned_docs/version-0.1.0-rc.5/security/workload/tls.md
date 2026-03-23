@@ -1,126 +1,209 @@
-# TLS & Identity
+---
+title: TLS and Workload Identity
+hide_title: true
+pageType: concept
+journey: security
+description: How peer trust, certificate rotation, and workload-facing TLS identity work across operator-managed, external, and ACME-backed deployments.
+---
 
-<Callout type="abstract" title="Encryption in Transit">
+<PageHero
+  variant="compact"
+  eyebrow="Security / Workload Protections"
+  title="Keep peer trust, edge exposure, and workload identity on deliberate paths."
+  lede="TLS in the operator is not just an ingress feature. It defines how pods trust each other, how clients verify the service, where certificate authority material lives, and whether the private key ever touches Kubernetes Secrets at all."
+  actions={[
+    {label: "Open external access", docId: "user-guide/openbaocluster/configuration/external-access", variant: "primary"},
+    {label: "Review pod security", docId: "security/workload/workload-security", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      "choose the right TLS source for an evaluation, internal production, or internet-facing deployment",
+      "understand where CA and server-key material live in each mode",
+      "review how rotation and hot reload work without forcing downtime",
+      "connect edge exposure guidance back to the Hardened profile",
+    ]}
+  />
+</PageHero>
 
-When `spec.tls.enabled=true`, the Operator configures TLS for internal and external communication using one of three modes: **Operator Managed**, **External**, or **ACME**.
-In production, keep TLS enabled, prefer TLS passthrough at the edge, and use a trusted certificate source.
+<DecisionTable
+  title="Choose the TLS mode deliberately"
+  columns={["Mode", "Use it when", "What the operator owns", "Watch for"]}
+  rows={[
+    {
+      cells: [
+        "External",
+        "You already have a trusted PKI, cert-manager, or platform certificate workflow.",
+        "The operator consumes existing Secrets and watches for rotation, but does not mint the trust chain.",
+        "This is the preferred Hardened production path because CA authority stays outside the operator.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "ACME",
+        "The service is exposed publicly and OpenBao should obtain certificates directly from an ACME provider.",
+        "The operator wires the listener path, but OpenBao handles the certificate lifecycle itself.",
+        "This works best when the service owns the public endpoint and you can meet the ACME challenge requirements.",
+      ],
+    },
+    {
+      cells: [
+        "OperatorManaged",
+        "You need a fast internal evaluation path or temporary development certificates.",
+        "The operator generates and rotates the CA and leaf certificates inside the cluster.",
+        "This is not the Hardened production posture because the operator holds certificate authority material.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-</Callout>
-
-## Certificate Rotation Flow
-
-In the default **Operator Managed** mode, the operator handles the full lifecycle of the certificates, including rotation and hot-reloading.
-
-```mermaid
-sequenceDiagram
-    participant Time as Timer
-    participant Operator
-    participant Secret as K8s Secret
+<DiagramFrame
+  title="Certificate rotation and reload path"
+  caption="When the certificate source changes, the operator updates the mounted material and the workload reloads it without rebuilding or reinstalling the cluster."
+  code={`sequenceDiagram
+    participant Source as Certificate source
+    participant Operator as Operator
+    participant Secret as Kubernetes Secret
     participant Pod as OpenBao Pod
 
-    Note over Time,Pod: Rotation Period Reached (e.g. 24h)
-    
-    Time->>Operator: Trigger Rotation
-    Operator->>Operator: Generate New Cert + Key
-    Operator->>Secret: Update TLS Secret
-    
-    Note over Secret,Pod: Volume Watch Trigger
-    
-    Secret->>Pod: ConfigMap/Secret Update
-    Pod->>Pod: Hot Reload (SIGHUP or Watcher)
-    
-    Note right of Pod: New Cert Active (Zero Downtime)
-```
+    Source->>Operator: New certificate or renewal event
+    Operator->>Secret: Update mounted TLS material
+    Secret->>Pod: Projected volume refresh
+    Pod->>Pod: Reload listener configuration
 
-## TLS Modes
+    Note over Pod: New certificate becomes active without a full cluster redeploy`}
+/>
 
-<Tabs groupId="operator-managed-default-external-provider-acme-native">
+## Trust paths that matter
 
-<TabItem value="operator-managed-default" label="Operator Managed (Default)">
+<DecisionTable
+  kind="reference"
+  title="TLS surfaces"
+  columns={["Path", "What is being protected", "Primary concern"]}
+  rows={[
+    {
+      cells: [
+        "Client to service",
+        "Application and operator clients verifying the OpenBao listener.",
+        "The public or internal certificate presented by the service must chain to a trust source your clients already accept.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Pod to pod",
+        "Raft and internal service traffic between OpenBao members.",
+        "The SAN set and CA distribution need to match pod and service DNS accurately so peers can authenticate each other.",
+      ],
+    },
+    {
+      cells: [
+        "Edge proxy to backend",
+        "Gateway, ingress, or mesh traffic between the edge and the cluster.",
+        "Choose passthrough versus termination deliberately so you know where the private key lives and where client identity is enforced.",
+      ],
+    },
+  ]}
+/>
 
-This is the "batteries included" mode. The Operator acts as an internal Certificate Authority (CA).
+## Where key material lives
 
--   **Automated PKI:** Generates a self-signed Root CA and ephemeral leaf certificates.
--   **Strict Identity:** Certificates use strict **SANs** (Subject Alternative Names) matching the Service and Pod DNS.
--   **Rotation:** Automatically rotates certificates before expiry (configurable via `spec.tls.rotationPeriod`).
--   **Gateway Support:** Automatically manages a CA ConfigMap for ingress controllers.
--   **Security Posture:** Suitable for development or internal evaluation. It is not a supported Hardened production mode.
+<DecisionTable
+  kind="reference"
+  title="Key and CA ownership"
+  columns={["Mode", "Server private key", "CA or trust root", "Operational consequence"]}
+  rows={[
+    {
+      cells: [
+        "External",
+        "Kubernetes Secret supplied by your PKI workflow",
+        "External CA or organizational PKI",
+        "Certificate lifecycle aligns with the rest of your platform and is easier to audit centrally.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "ACME",
+        "Generated inside OpenBao",
+        "Public ACME issuer",
+        "The operator never needs the private key, but the cluster must satisfy the ACME issuance path.",
+      ],
+    },
+    {
+      cells: [
+        "OperatorManaged",
+        "Kubernetes Secret managed by the operator",
+        "Operator-generated internal CA",
+        "Fast to stand up, but the trust root now lives inside the same management plane you are trying to keep small and reviewable.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-```yaml
-spec:
-  tls:
-    mode: OperatorManaged
-    rotationPeriod: 24h
-```
+## Exposure guidance
 
-</TabItem>
+<DecisionTable
+  title="Edge exposure choices"
+  columns={["Pattern", "Use it when", "Why it is preferred or risky"]}
+  rows={[
+    {
+      cells: [
+        "TLS passthrough",
+        "You want OpenBao to terminate TLS and preserve end-to-end certificate identity.",
+        "This is usually the cleanest production path because the application keeps control of the server certificate and the edge stays as a transport router.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Edge termination",
+        "You need policy enforcement, client-auth handling, or platform certificate lifecycle at the edge.",
+        "This can be valid, but you must be explicit about how trust is re-established between the proxy and OpenBao.",
+      ],
+    },
+    {
+      cells: [
+        "Temporary self-signed or operator-generated edge trust",
+        "Short-lived evaluation environments only.",
+        "This path is easy to start but tends to leak into production unless you set a deliberate migration plan.",
+      ],
+      emphasis: "caution",
+    },
+  ]}
+/>
 
-<TabItem value="external-provider" label="External Provider">
+<Callout type="note" title="Configuration ownership">
 
-In this mode, the Operator delegates certificate management to an external system, such as **[cert-manager](https://cert-manager.io/)** or a corporate PKI.
+This page explains the TLS security model. Use the configuration guides when you need the exact cluster fields:
 
--   **BYO-PKI:** Integrates with existing infrastructure.
--   **Expectation:** The Operator expects Secrets named `<cluster>-tls-ca` and `<cluster>-tls-server` to exist in the namespace.
--   **Hot Reload:** The Operator monitors these Secrets and triggers hot-reloads when the external provider updates them.
-
-<Callout type="tip" title="Cert-Manager Integration">
-
-You can use `cert-manager` to issue certificates signed by Let's Encrypt or Vault, and the Operator will consume them seamlessly.
+- <SiteLink docId="user-guide/openbaocluster/configuration/external-access">External access</SiteLink>
+- <SiteLink docId="user-guide/openbaocluster/configuration/gateway-api">Gateway API support</SiteLink>
+- <SiteLink docId="user-guide/openbaocluster/configuration/network">Network configuration</SiteLink>
 
 </Callout>
 
-```yaml
-spec:
-  tls:
-    mode: External
-```
-
-</TabItem>
-
-<TabItem value="acme-native" label="ACME (Native)">
-
-OpenBao uses its built-in ACME client to fetch certificates directly from a provider like Let's Encrypt.
-
--   **Zero Trust:** The Operator **never** sees the private key. It is generated in-memory by the OpenBao process.
--   **No Secrets:** No Kubernetes Secrets are created for the server certificate.
--   **Automatic Rotation:** OpenBao handles its own rotation via the ACME protocol.
-
-```yaml
-spec:
-  tls:
-    mode: ACME
-    acme:
-      email: "admin@example.com"
-      domain: "bao.example.com"
-      directoryURL: "https://acme-v02.api.letsencrypt.org/directory"
-```
-
-</TabItem>
-
-</Tabs>
-
-## Comparison Matrix
-
-| Feature | Operator Managed | External Provider | ACME (Native) |
-| :--- | :--- | :--- | :--- |
-| **Generator** | Operator (Internal CA) | External (e.g., cert-manager) | OpenBao (Built-in) |
-| **Rotation** | Automatic | External responsibility | Automatic |
-| **Private Key** | Kubernetes Secret | Kubernetes Secret | **In-Memory** (Secure) |
-| **Best For** | Development, local evaluation | Enterprise PKI integration, internal or external production | Public-facing production with native ACME |
-
-## Exposure Guidance
-
-- Prefer **TLS passthrough** when exposing OpenBao through Gateway API or another edge proxy.
-- Use **edge termination** only when you explicitly need policy enforcement or certificate management at the edge.
-- `OperatorManaged` TLS is not a supported production path for the `Hardened` profile.
-
-## See Also
-
-- [Pod Security](workload-security.md)
-- [Supply Chain](supply-chain.md)
-
-## Official OpenBao Documentation
-
-- [TCP Listener Configuration](https://openbao.org/docs/configuration/listener/tcp/)
-- [ACME TLS Listener RFC](https://openbao.org/docs/rfcs/acme-tls-listeners/)
-
+<NextActions
+  title="Continue workload protections"
+  items={[
+    {
+      label: "Supply-chain verification",
+      description: "Review how the operator verifies and pins the images behind these workloads.",
+      docId: "security/workload/supply-chain",
+    },
+    {
+      label: "Production posture",
+      description: "See how TLS mode choice feeds into the Hardened security profile.",
+      docId: "security/fundamentals/profiles",
+    },
+    {
+      label: "External access",
+      description: "Switch to the task page when you need the concrete service and gateway configuration.",
+      docId: "user-guide/openbaocluster/configuration/external-access",
+    },
+  ]}
+/>

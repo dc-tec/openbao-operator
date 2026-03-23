@@ -1,12 +1,20 @@
 ---
+title: Compatibility Matrix
 description: Compatibility matrix for OpenBao Operator covering CI validation scope, support posture, and production guidance.
 pageType: reference
 journey: reference
 ---
 
-# Compatibility Matrix
-
-This page defines the validation coverage, support posture, and production guidance for OpenBao Operator.
+<PageHero
+  variant="compact"
+  eyebrow="Reference / Quick Checks"
+  title="Use the compatibility matrix when you need the exact validation and support boundary for a platform or version."
+  lede="This page is the contract for what the project actively validates, what remains best-effort supported, and what should be treated as out of scope for the current pre-GA line. It is the fastest way to answer whether a target Kubernetes or OpenBao version sits inside the tested envelope."
+  actions={[
+    {label: 'Open upgrade compatibility', docId: 'reference/operator-upgrade-compatibility', variant: 'primary'},
+    {label: 'Open support policy', docId: 'reference/support-policy', variant: 'secondary'},
+  ]}
+/>
 
 <Callout type="note" title="Terminology">
 
@@ -18,13 +26,9 @@ Use these terms consistently on this page:
 
 </Callout>
 
-## 1. Pre-GA Posture
+## Pre-GA posture
 
-The current stable release line is intended for real deployments, but it remains pre-GA. The served CRD API is `openbao.org/v1alpha1`, and minor releases may introduce breaking changes. See [Deprecation Policy](deprecation-policy.md) and [Support & Maintenance](support-policy.md) for the full release contract.
-
-## 2. Kubernetes Versions
-
-We run full nightly E2E coverage across the listed Kubernetes versions.
+The current stable release line is intended for real deployments, but it remains pre-GA. The served CRD API is `openbao.org/v1alpha1`, and minor releases may introduce breaking changes. See [Deprecation Policy](deprecation-policy.md) and [Support Policy](support-policy.md) for the full release contract.
 
 <DecisionTable
   kind="reference"
@@ -48,8 +52,6 @@ We run full nightly E2E coverage across the listed Kubernetes versions.
   ]}
 />
 
-## 3. Platforms
-
 <DecisionTable
   kind="reference"
   title="Platforms"
@@ -64,8 +66,6 @@ We run full nightly E2E coverage across the listed Kubernetes versions.
     },
   ]}
 />
-
-## 4. OpenBao Versions
 
 <DecisionTable
   kind="reference"
@@ -86,13 +86,10 @@ We run full nightly E2E coverage across the listed Kubernetes versions.
   ]}
 />
 
-## 5. CI Validation Matrix
-
-We treat the CI configuration as the source of truth for validation coverage.
-
 <DecisionTable
   kind="reference"
   title="CI validation matrix"
+  caption="Treat the CI configuration as the source of truth for what is actually exercised."
   columns={['Workflow', 'Scope', 'Versions tested']}
   rows={[
     {
@@ -108,8 +105,29 @@ We treat the CI configuration as the source of truth for validation coverage.
   ]}
 />
 
-<Callout type="warning" title="Production Upgrade">
+<Callout type="warning" title="Production upgrade rule">
 
 Always validate new Kubernetes or OpenBao versions in a staging environment before upgrading production, even when they are listed as validated and best-effort supported.
 
 </Callout>
+
+<NextActions
+  title="Related reference pages"
+  items={[
+    {
+      label: 'Upgrade compatibility',
+      description: 'Use the exact upgrade-path contract when the next question is sequencing rather than version support.',
+      docId: 'reference/operator-upgrade-compatibility',
+    },
+    {
+      label: 'Support policy',
+      description: 'Open the support contract when you need to know what the project maintains beyond raw validation coverage.',
+      docId: 'reference/support-policy',
+    },
+    {
+      label: 'Known limitations',
+      description: 'Check current caveats and non-goals before assuming that an unvalidated path is only temporarily undocumented.',
+      docId: 'reference/known-limitations',
+    },
+  ]}
+/>

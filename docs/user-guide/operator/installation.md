@@ -15,8 +15,8 @@ journeyStep: 2
   title="Install the operator in the mode you actually intend to run."
   lede="Choose a supported install path, keep the rendered namespace and identity explicit, and verify the controller wiring before you create your first OpenBaoCluster."
   actions={[
-    {label: 'Create your first cluster', docId: 'user-guide/openbaocluster/getting-started', variant: 'primary'},
-    {label: 'Review the decision guide', docId: 'user-guide/operator/deployment-decision-guide', variant: 'secondary'},
+    {label: 'Onboard the target namespace', docId: 'user-guide/openbaotenant/onboarding', variant: 'primary'},
+    {label: 'Review single-tenant mode', docId: 'user-guide/operator/single-tenant-mode', variant: 'secondary'},
   ]}
 >
   <Checklist
@@ -25,6 +25,7 @@ journeyStep: 2
       'confirm Kubernetes compatibility and cluster-admin access for CRDs, RBAC, and admission policies',
       'decide whether Helm or raw manifests own the install lifecycle',
       'decide whether you are staying multi-tenant or intentionally switching to single-tenant mode',
+      'if you stay multi-tenant, know who will create the first OpenBaoTenant and in which namespace',
       'pin a released operator version for production instead of relying on floating tags',
     ]}
   />
@@ -43,6 +44,11 @@ journeyStep: 2
       label: 'Install the operator',
       description: 'Use Helm or manifests with the right namespace, identity, and admission model.',
       docId: 'user-guide/operator/installation',
+    },
+    {
+      label: 'Onboard the target namespace',
+      description: 'In the default multi-tenant path, let OpenBaoTenant introduce the namespace before you create a cluster.',
+      docId: 'user-guide/openbaotenant/onboarding',
     },
     {
       label: 'Create your first cluster',
@@ -304,7 +310,7 @@ If you need single-tenant mode and a custom operator identity, such as an extra 
 
 <Callout type="note" title="Operator JWT Auth">
 
-If you use custom raw-manifest identities together with manual OpenBao JWT configuration or self-init OIDC bootstrap, verify the rendered controller ServiceAccount name and namespace first. See [Operator Authentication](authn.md#custom-install-checklist).
+If you use custom raw-manifest identities together with manual OpenBao JWT configuration or self-init OIDC bootstrap, verify the rendered controller ServiceAccount name and namespace first. See [Operator Authentication](./operator-authentication#what-must-stay-aligned).
 
 </Callout>
 
@@ -352,7 +358,7 @@ Confirm:
 4. admission-policy variables reference the same rendered namespace and ServiceAccount names
 5. `OPENBAO_JWT_AUDIENCE` on the controller matches the projected `openbao-token` audience
 
-See [Operator Authentication](authn.md#custom-install-checklist) for the OpenBao-side JWT binding checks.
+See [Operator Authentication](./operator-authentication#what-must-stay-aligned) for the OpenBao-side JWT binding checks.
 
 ### Single-Tenant Raw Manifests
 
@@ -422,7 +428,8 @@ A good install checkpoint is more than pods in `Running`:
 - the controller and provisioner pods match the tenancy mode you chose
 - the rendered namespace and ServiceAccount names match your install plan
 - admission policies are installed when they are supposed to be
-- your next step is cluster creation, not more install debugging
+- in the default multi-tenant path, you know which namespace will receive the first `OpenBaoTenant`
+- your next step is tenant onboarding or cluster creation, not more install debugging
 
 </Callout>
 
@@ -490,14 +497,14 @@ kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/latest/dow
 <NextActions
   items={[
     {
-      label: 'Create your first cluster',
-      description: 'Apply a development or hardened cluster profile and validate the readiness conditions that matter.',
-      docId: 'user-guide/openbaocluster/getting-started',
+      label: 'Onboard the target namespace',
+      description: 'In the default multi-tenant path, create OpenBaoTenant before you create the first cluster.',
+      docId: 'user-guide/openbaotenant/onboarding',
     },
     {
-      label: 'Open multi-tenancy guidance',
-      description: 'Onboard teams through OpenBaoTenant when the platform team owns the operator and shared service model.',
-      docId: 'user-guide/openbaotenant/overview',
+      label: 'Create your first cluster',
+      description: 'Move straight into the first cluster guide after onboarding is complete or when you intentionally chose single-tenant mode.',
+      docId: 'user-guide/openbaocluster/getting-started',
     },
     {
       label: 'Review single-tenant mode',

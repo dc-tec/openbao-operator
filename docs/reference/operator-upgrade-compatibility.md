@@ -1,76 +1,100 @@
 ---
+title: Upgrade Compatibility
 description: Operator upgrade compatibility policy, supported upgrade paths, rollback stance, and required CRD upgrade sequence.
+pageType: reference
+journey: reference
 ---
 
-# Operator Upgrade Compatibility
+<PageHero
+  variant="compact"
+  eyebrow="Reference / Quick Checks"
+  title="Use this page when you need the exact upgrade-path contract for the operator itself."
+  lede="This page defines which operator upgrade paths are supported, how CRD sequencing must work, and why rollback should be treated as a recovery decision rather than a normal lifecycle shortcut. It is the exact contract for changing the operator version, not the managed OpenBao workload version."
+  actions={[
+    {label: 'Open compatibility matrix', docId: 'reference/compatibility', variant: 'primary'},
+    {label: 'Open deprecation policy', docId: 'reference/deprecation-policy', variant: 'secondary'},
+  ]}
+/>
 
-This document defines supported upgrade paths for the OpenBao Operator itself.
+<DecisionTable
+  kind="reference"
+  title="Supported upgrade paths"
+  columns={['Path', 'Project stance', 'Operator guidance']}
+  rows={[
+    {
+      cells: ['Stable patch upgrades (`0.Y.Z -> 0.Y.(Z+1)`)', 'Supported', 'Use as the normal maintenance path.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Stable minor upgrades (`0.Y.Z -> 0.(Y+1).0`)', 'Supported with release note review', 'Upgrade sequentially across minors and validate in staging.'],
+    },
+    {
+      cells: ['Skipping multiple minors', 'Not recommended', 'Move sequentially so migrations and deprecations are not compressed into one jump.'],
+      emphasis: 'caution',
+    },
+    {
+      cells: ['Operator downgrades as routine rollback', 'Not supported', 'Treat downgrade pressure as a recovery decision, not as a normal release mechanism.'],
+      emphasis: 'caution',
+    },
+  ]}
+/>
 
-## 1. Supported Upgrade Paths
+<Callout type="warning" title="CRD-first upgrade rule">
 
-Supported paths:
-
-- Stable patch upgrades (`0.Y.Z -> 0.Y.(Z+1)`)
-- Stable minor upgrades (`0.Y.Z -> 0.(Y+1).0`) with release note review
-
-Recommended path:
-
-- Upgrade sequentially across minors (do not skip multiple minors at once).
-
-Not supported:
-
-- Operator downgrades as a routine rollback strategy.
-- Treating Edge/Nightly as production upgrade baselines.
-
-## 2. Required CRD Upgrade Order
-
-<Callout type="warning" title="CRD-first upgrade">
-
-Apply CRDs before upgrading the Helm release when CRDs changed.
+Apply CRDs before upgrading the Helm release when the target release changed CRD content.
 
 </Callout>
 
-Use the release assets:
-
-```bash
-kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="CRD-first upgrade sequence"
+  code={`kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/crds.yaml
 helm upgrade openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
-  --namespace <operator-namespace>
-```
+  --namespace <operator-namespace>`}
+>
+  This matches the installation guidance and keeps the API surface aligned with the controller you are about to run.
+</CommandBlock>
 
-This matches the operator installation guidance in [Installation](../user-guide/operator/installation.md#upgrading).
-
-## 3. Upgrade Safety Checklist
+## Upgrade safety checklist
 
 Before upgrade:
 
-- Confirm target version in [Compatibility Matrix](compatibility.md).
-- Take and verify backups for managed clusters.
-- Review release notes for deprecations and migrations.
+- confirm the target version in [Compatibility Matrix](compatibility.md)
+- take and verify backups for managed clusters
+- review release notes for deprecations and migrations
 
 After upgrade:
 
-- Verify operator Deployments are `Running`.
-- Verify CRD version and controller readiness.
-- Verify managed cluster conditions and recent events.
+- verify operator Deployments are `Running`
+- verify CRD version and controller readiness
+- verify managed cluster conditions and recent events
 
-## 4. Rollback Strategy
+## Rollback stance
 
 If an upgrade introduces issues:
 
-1. Prefer forward-fix on a newer stable release.
-2. If rollback is required, treat it as a recovery operation (staging validation first).
-3. Use backup/restore runbooks for data-path recovery scenarios.
+1. prefer a forward fix on a newer stable release
+2. if rollback is required, treat it as a recovery operation with staging validation first
+3. use backup and restore runbooks for data-path recovery scenarios
 
-Related references:
-
-- [Backups](../user-guide/openbaocluster/operations/backups.md)
-- [Restore](../user-guide/openbaorestore/restore.md)
-- [Recovery Runbooks](../user-guide/openbaocluster/recovery/no-leader.md)
-
-## 5. API Compatibility During Operator Upgrades
-
-- Current CRD API is `openbao.org/v1alpha1`.
-- Pre-1.0 API evolution rules are documented in [Deprecation Policy](deprecation-policy.md).
-- Always validate manifests against the generated [API Reference](api.md) before rollout.
-
+<NextActions
+  title="Related upgrade references"
+  items={[
+    {
+      label: 'Backup operations',
+      description: 'Open the backup workflow before upgrades when you still need to capture or verify the recovery point.',
+      to: '/docs/operate/backups',
+    },
+    {
+      label: 'Restore from backup',
+      description: 'Move into restore procedures when rollback is no longer enough to recover state safely.',
+      docId: 'user-guide/openbaorestore/restore',
+    },
+    {
+      label: 'Status conditions and events',
+      description: 'Use the status and events reference to interpret readiness and failure signals before and after the upgrade.',
+      docId: 'reference/status-and-events',
+    },
+  ]}
+/>

@@ -1,140 +1,258 @@
-# RBAC Architecture
+---
+title: RBAC Architecture
+hide_title: true
+pageType: concept
+journey: security
+description: How the provisioner and controller identities stay separate, narrow, and mutation-locked across tenant onboarding and workload reconciliation.
+---
 
-<Callout type="abstract" title="Core Concept">
+<PageHero
+  variant="compact"
+  eyebrow="Security / Platform Controls"
+  title="Keep the identity that grants access separate from the identity that uses it."
+  lede="The operator's RBAC model is built around a split-controller design. The provisioner introduces tenant access and namespace guardrails, while the controller consumes tenant-scoped permissions to manage workloads. Neither long-running identity should be able to do both jobs."
+  actions={[
+    {label: 'Review admission policies', docId: 'security/infrastructure/admission-policies', variant: 'primary'},
+    {label: 'Open tenant isolation', docId: 'security/multi-tenancy/tenant-isolation', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand which operator identity owns tenant onboarding versus workload management',
+      'review why the controller cannot discover or manage arbitrary namespaces',
+      'check how Secret access stays name-scoped and non-enumerating',
+      'evaluate whether a proposed RBAC change weakens the multi-tenant boundary',
+    ]}
+  />
+</PageHero>
 
-The Operator implements a **Zero Trust** security model by splitting responsibilities between two distinct ServiceAccounts: a **Provisioner** (cluster-wide permission manager) and a **Controller** (namespace-scoped workload manager). This ensures that a compromise of the workload controller does not grant cluster-wide administrative access.
-
-</Callout>
-
-## Architecture Diagram
-
-The "Split-Controller Model" ensures that broad permissions are never held by the long-running controller process.
-
-```mermaid
-flowchart TB
-    subgraph OperatorNS ["Operator Namespace"]
-        Prov["Provisioner SA"]
-        Ctrl["Controller SA"]
+<DiagramFrame
+  title="Split-controller RBAC model"
+  caption="The provisioner creates the tenant `Role` and `RoleBinding`, but the binding points at the controller ServiceAccount rather than granting those permissions back to the provisioner."
+  code={`flowchart TB
+    subgraph OperatorNS ["Operator namespace"]
+        Prov["Provisioner ServiceAccount"]
+        Ctrl["Controller ServiceAccount"]
     end
 
-    subgraph TenantNS ["Tenant Namespace"]
-        TRole["Tenant Role"]
-        TRB["Tenant RoleBinding"]
-        CRBAC["Per-Cluster RBAC<br/>(pods discovery)"]
-        Workload["StatefulSet / Pods"]
+    subgraph TenantNS ["Tenant namespace"]
+        TenantRole["Tenant Role"]
+        TenantBinding["Tenant RoleBinding"]
+        PodDiscoveryRBAC["Per-cluster pod-discovery Role / RoleBinding"]
+        Workload["StatefulSet / Pods / Services"]
     end
 
-    subgraph Policies ["Admission Guardrails"]
-        PVAP["VAP: openbao-restrict-provisioner-rbac"]
-        NVAP["VAP: openbao-restrict-provisioner-namespace-mutations"]
-        CVAP["VAP: openbao-restrict-controller-rbac"]
+    subgraph Guardrails ["Admission guardrails"]
+        ProvRBAC["Provisioner RBAC policy"]
+        ProvNS["Provisioner namespace policy"]
+        CtrlRBAC["Controller RBAC policy"]
+        CtrlSA["Controller ServiceAccount policy"]
+        CtrlSecret["Controller Secret-write policy"]
     end
 
-    %% Provisioner Flow
-    Prov --"Create/Update/Delete"--> TRole
-    Prov --"Create/Update/Delete"--> TRB
-    Prov -. "Restricted" .-> PVAP
-    Prov -. "Restricted" .-> NVAP
+    Prov --> TenantRole
+    Prov --> TenantBinding
+    TenantBinding -. binds role .-> TenantRole
+    TenantBinding -. binds subject .-> Ctrl
+    Prov -. constrained by .-> ProvRBAC
+    Prov -. constrained by .-> ProvNS
 
-    %% Controller Flow
-    TRB --"Bind"--> Ctrl
-    Ctrl --"Manage"--> Workload
-    Ctrl --"Create/Update/Delete"--> CRBAC
-    Ctrl -. "Restricted" .-> CVAP
+    Ctrl --> Workload
+    Ctrl --> PodDiscoveryRBAC
+    Ctrl -. constrained by .-> CtrlRBAC
+    Ctrl -. constrained by .-> CtrlSA
+    Ctrl -. constrained by .-> CtrlSecret
 
-    %% Styling
-    classDef security fill:transparent,stroke:#dc2626,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-    class Prov,TRole,TRB,PVAP,NVAP,CVAP security;
-    class Ctrl,Workload write;
-    class CRBAC write;
-```
+    class Prov,Ctrl process;
+    class TenantRole,TenantBinding,PodDiscoveryRBAC,Workload write;
+    class ProvRBAC,ProvNS,CtrlRBAC,CtrlSA,CtrlSecret read;`}
+/>
 
-## ServiceAccount Permissions
+<Callout type="note" title="Projected Kubernetes API tokens">
 
-<Callout type="note" title="Projected Kubernetes API token audience">
-
-The OpenBao Operator disables default token auto-mounting (`automountServiceAccountToken: false`) and mounts an explicit projected ServiceAccount token for Kubernetes API access (TTL: 3600s). By default, the Kubernetes API token does not set an explicit audience (the API server selects the default). If you want to pin the audience, set `serviceAccountToken.kubernetesAudience` (Helm) or patch the `audience` field in `config/manager/controller.yaml` and `config/manager/provisioner.yaml` (Kustomize/YAML installs). An incorrect audience typically results in 401s for in-cluster API calls.
+The operator disables default token auto-mounting and uses explicit projected ServiceAccount tokens for Kubernetes API access. Audience pinning can be configured, but the important contract here is that API identity stays explicit and short-lived rather than inherited implicitly.
 
 </Callout>
 
-<Callout type="warning" title="Unsafe mode">
+<DecisionTable
+  title="Identity split at a glance"
+  columns={['Identity', 'Primary job', 'What it must not become']}
+  rows={[
+    {
+      cells: [
+        'Provisioner',
+        'Introduce tenant namespaces, bind tenant-scoped RBAC, and apply day-0 guardrails.',
+        'A long-running identity that can read tenant Secrets or manage tenant workloads.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Controller',
+        'Reconcile `OpenBaoCluster` workloads and day-1/day-2 lifecycle actions inside onboarded namespaces.',
+        'An identity that can discover arbitrary namespaces or rewrite the RBAC that grants its own access.',
+      ],
+    },
+  ]}
+/>
 
-Installing with admission policies disabled (Helm: `admissionPolicies.enabled=false`) is treated as **unsafe mode**. The chart sets `OPENBAO_UNSAFE_ADMISSION_DISABLED=true` so the operator can run without fail-closed admission dependency enforcement and without reconciliation gating. This materially weakens the operator's defense-in-depth controls.
+## Provisioner access model
+
+<DecisionTable
+  kind="reference"
+  title="Provisioner scope"
+  columns={['Resource or action', 'Why it exists', 'Why it stays narrow']}
+  rows={[
+    {
+      cells: [
+        'Watch `OpenBaoTenant`',
+        'Tenant onboarding is the trigger for introducing namespace access.',
+        'It is the only cluster-wide watch the provisioner needs for tenant onboarding.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Patch Namespaces for fixed PSS labels',
+        'Tenant namespaces must be hardened as part of onboarding.',
+        'Namespace mutation is limited to the fixed Pod Security label set and blocked in system namespaces.',
+      ],
+    },
+    {
+      cells: [
+        'Create and patch fixed `Role` and `RoleBinding` objects',
+        'The provisioner must bind the controller into the target namespace.',
+        'Admission policy constrains names, subjects, verbs, and object shapes so this cannot expand into arbitrary RBAC minting.',
+      ],
+    },
+    {
+      cells: [
+        'Create tenant guardrails such as `ResourceQuota` and `LimitRange`',
+        'Day-0 governance belongs to provisioning, not to workload reconciliation.',
+        'The provisioner manages only the operator-owned fixed objects and does not treat these resources as general namespace inventory.',
+      ],
+    },
+  ]}
+/>
+
+<Callout type="note" title="Blind-write pattern">
+
+The provisioner writes the RBAC that grants the controller access, but it does not grant itself those permissions. That is the core security property of the onboarding path.
 
 </Callout>
 
-<Tabs groupId="provisioner-controller">
+## Controller access model
 
-<TabItem value="provisioner" label="Provisioner">
+<DecisionTable
+  kind="reference"
+  title="Controller scope"
+  columns={['Resource or action', 'Why it exists', 'Why it stays narrow']}
+  rows={[
+    {
+      cells: [
+        'Watch `OpenBaoCluster`',
+        'The controller needs the global CRD event stream to reconcile clusters.',
+        'This does not imply namespace discovery or broad tenant access by itself.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Manage tenant-scoped workload resources',
+        'StatefulSets, Services, ConfigMaps, Jobs, and related resources are the normal lifecycle surface.',
+        'This access only exists where the provisioner already introduced the controller via RoleBinding.',
+      ],
+    },
+    {
+      cells: [
+        'Read and write allowlisted Secrets',
+        'Lifecycle workflows need specific Secret names for bootstrap, TLS, and operations.',
+        'Secret access is fixed-name, non-enumerating, and guarded by dedicated admission policy.',
+      ],
+    },
+    {
+      cells: [
+        'Create minimal per-cluster `Role` and `RoleBinding` objects',
+        'Some service-registration and pod-discovery flows need narrow additional RBAC.',
+        'The controller policy only allows a tightly scoped pattern to prevent RBAC self-escalation.',
+      ],
+    },
+    {
+      cells: [
+        'Create operator-managed ServiceAccounts for workload and jobs',
+        'Backup, restore, and upgrade paths need explicit job identities.',
+        'Admission policy constrains names and shapes so the controller cannot mutate unrelated ServiceAccounts.',
+      ],
+    },
+  ]}
+/>
 
-The **Provisioner** is responsible for Day 0 tenant onboarding. It provisions tenant-scoped RBAC directly and is constrained by a `ValidatingAdmissionPolicy` that restricts the exact RBAC objects it can create/update/delete.
+## What the RBAC model guarantees
 
-<Callout type="note" title="Blind Write Pattern">
+<DecisionTable
+  title="Security properties"
+  columns={['Property', 'What it means operationally', 'Primary control']}
+  rows={[
+    {
+      cells: [
+        'No topology discovery',
+        'The controller is not supposed to list namespaces and infer who else exists in the cluster.',
+        'Provisioner-led namespace introduction and narrow cluster-scope reads.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'No Secret enumeration',
+        'Operator identities should not browse tenant Secrets as generic inventory.',
+        'Name-scoped Secret roles and the controller Secret-write policy.',
+      ],
+    },
+    {
+      cells: [
+        'Privilege separation',
+        'The identity that grants access is not the identity that consumes it.',
+        'Split provisioner/controller model plus admission guardrails.',
+      ],
+    },
+    {
+      cells: [
+        'Blind-create, name-scoped mutate',
+        'The operator can create the Secrets it owns without broadening into arbitrary tenant Secret mutation.',
+        'Dedicated Secret roles and fixed-name admission constraints.',
+      ],
+    },
+  ]}
+/>
 
-The Provisioner creates tenant-scoped Roles/RoleBindings but does not grant *itself* permission to use tenant Secrets or workloads. It binds the resulting permissions to the Controller ServiceAccount. This prevents the Provisioner identity from inspecting tenant data.
+<Callout type="warning" title="Unsafe mode weakens the model">
+
+Installing with admission policies disabled materially weakens the RBAC defense-in-depth story. The split-controller design still matters, but without the admission guardrails a broader or drifted RBAC grant has fewer backstops.
 
 </Callout>
 
-| Resource | Verbs | Rationale |
-| :--- | :--- | :--- |
-| `Namespace` | `get`, `update`, `patch` | Enforce Pod Security Standards labels during onboarding. **No `list`** (prevents discovery). Admission policy restricts Namespace updates to the three PSS label keys and blocks system namespaces. |
-| `OpenBaoTenant` | `get`, `list`, `watch` | Watch for new tenant requests. |
-| `ResourceQuota`, `LimitRange` | `create`, `get`, `patch` | Apply the fixed tenant guardrail quota/limits during onboarding (Server-Side Apply). `get`/`patch` are name-scoped to the operator-managed objects. **No `list`** (prevents discovery). |
-| `Role / RoleBinding` | `create`, `get`, `patch`, `delete` | Create and reconcile the tenant template RBAC objects (Server-Side Apply). Delete/patch are name-scoped; CREATE is guarded by admission policy. No `list`/`watch` (prevents discovery). |
-| `Role` | `bind`, `escalate` | Required by Kubernetes RBAC to create RoleBindings to specific, operator-defined Roles without holding tenant permissions directly. Guarded by admission policy. |
-
-</TabItem>
-
-<TabItem value="controller" label="Controller">
-
-The **Controller** is responsible for "Day 1 and 2" operations. It has high privileges within tenant namespaces but **zero** privileges outside them.
-
-<Callout type="success" title="Isolation">
-
-The Controller cannot even *list* namespaces. It is entirely dependent on the Provisioner to "introduce" it to a tenant namespace via a RoleBinding.
-
-</Callout>
-
-**Cluster Scope:**
-
-| Resource | Verbs | Rationale |
-| :--- | :--- | :--- |
-| `OpenBaoCluster` | `get`, `list`, `watch` | Global watch for CRD events. |
-| `TokenReview` | `create` | Authenticate metrics requests. |
-| `ValidatingAdmissionPolicy` | `get` | Verify security policy existence. |
-| `Gateway`, `GatewayClass` | `get` | Verify the referenced `spec.gateway.gatewayRef` and controller capabilities. Deterministic-name reads only; no `list`/`watch`. |
-
-**Tenant Scope (via RoleBinding):**
-
-| Resource | Verbs | Rationale |
-| :--- | :--- | :--- |
-| `StatefulSet` | `*` | Manage OpenBao pods. |
-| `Service`, `Ingress` | `*` | Manage network access. |
-| `Secret` | *(allowlisted)* | Secret access is limited by name (dedicated reader/writer Roles). No `list`/`watch`. |
-| `ConfigMap` | `*` | Manage configuration and TLS metadata. |
-| `Job` | `*` | Run snapshots and upgrades. |
-| `Gateway` ... | `*` | (Optional) Manage Gateway API resources if enabled. |
-| `ServiceAccount` | *(restricted)* | Create the main OpenBao ServiceAccount plus backup, restore, and upgrade executor ServiceAccounts. Admission policy restricts writes to operator-managed ServiceAccount shapes and names. |
-| `Role / RoleBinding` | *(restricted)* | Create minimal per-cluster pod discovery RBAC for OpenBao service accounts. Admission policy restricts RBAC writes to a narrow, allowlisted pattern (prevents RBAC self-escalation). |
-
-The Controller tenant Role does not manage `ResourceQuota` or `LimitRange`. Those namespace guardrails remain provisioner-owned Day 0 resources.
-
-</TabItem>
-
-</Tabs>
-
-## Security Guarantees
-
-1. **No Secret Enumeration:** Neither ServiceAccount has `list` permissions on Secrets cluster-wide.
-2. **No Topology Discovery:** Neither ServiceAccount has `list` permissions on Namespaces (Provisioner knows only what you tell it via CRs).
-3. **Privilege Separation:** The account that *writes* the permissions (Provisioner) cannot *use* them, and the account that *uses* them (Controller) cannot *change* them. Admission policies provide defense-in-depth by constraining both RBAC writes and Namespace mutations.
-4. **Blind Create, Name-Scoped Mutate:** Tenant Secret writer roles use Kubernetes' blind-create pattern for `create` plus name-scoped `get`/`patch`/`update`/`delete` for fixed Secret names. Admission policy constrains operator-managed Secret writes so this does not expand into arbitrary tenant Secret mutation.
-
-## See Also
-
-- [Admission Policies](admission-policies.md)
-- [Network Security](network-security.md)
-
+<NextActions
+  title="Continue platform controls"
+  items={[
+    {
+      label: 'Admission policies',
+      description: 'See how RBAC writes and managed-resource mutations are constrained at the API boundary.',
+      docId: 'security/infrastructure/admission-policies',
+    },
+    {
+      label: 'Network security',
+      description: 'Review the default-deny network posture that complements these identity boundaries.',
+      docId: 'security/infrastructure/network-security',
+    },
+    {
+      label: 'Tenant isolation',
+      description: 'Connect the RBAC model back to the multi-tenant operating guarantees.',
+      docId: 'security/multi-tenancy/tenant-isolation',
+    },
+  ]}
+/>

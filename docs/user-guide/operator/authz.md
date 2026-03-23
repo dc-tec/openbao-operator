@@ -1,186 +1,283 @@
-# Operator Authorization
+---
+title: Operator Authorization
+description: Understand which policies belong to controller, backup, restore, and upgrade work so destructive capabilities stay scoped to the right identities.
+slug: /get-started/operator-authorization
+hide_title: true
+pageType: concept
+journey: get-started
+---
 
-The OpenBao Operator uses the **Principle of Least Privilege** when interacting with managed clusters. It creates distinct **Policies** and **JWT Roles** for different lifecycle capabilities, ensuring that identities (like the backup job or the operator controller itself) only have the permissions necessary to perform their specific tasks.
+<PageHero
+  variant="compact"
+  eyebrow="Supporting decision"
+  title="Keep each operator capability on its own policy surface."
+  lede="Authentication answers who a workload is. Authorization answers what that workload can do. OpenBao Operator stays safer when controller, backup, restore, and upgrade work authenticate separately and only receive the policies each path actually needs."
+  actions={[
+    {label: 'Review identity mapping', docId: 'user-guide/operator/identity-and-access', variant: 'primary'},
+    {label: 'Open backup operations', docId: 'user-guide/openbaocluster/operations/backups', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand why backup, restore, and upgrade jobs do not share the controller role',
+      'review the destructive surfaces before you approve a production auth model',
+      'debug capability errors on a job that authenticates successfully',
+      'keep manual policy wiring aligned with the lifecycle capability that needs it',
+    ]}
+  />
+</PageHero>
 
-## Default Policies
+<DiagramFrame
+  title="Policies stay attached to job-specific identities"
+  caption="Each operator path maps to its own JWT role and policy set. The controller is not the universal credential for all day 2 work."
+  code={`graph LR
+    subgraph K8s["Kubernetes identities"]
+      Controller["Controller SA"]
+      Backup["Backup Job SA"]
+      Restore["Restore Job SA"]
+      Upgrade["Upgrade Job SA"]
+    end
 
-When using **Self-Initialization** (`spec.selfInit.enabled: true`), the Operator automatically creates the following policies and roles.
+    subgraph Bao["OpenBao auth and policy"]
+      RoleController["Role: openbao-operator"]
+      RoleBackup["Role: openbao-operator-backup"]
+      RoleRestore["Role: openbao-operator-restore"]
+      RoleUpgrade["Role: openbao-operator-upgrade"]
 
-### `openbao-operator`
+      PolicyController["Policy: controller maintenance"]
+      PolicyBackup["Policy: snapshot read"]
+      PolicyRestore["Policy: snapshot-force"]
+      PolicyUpgrade["Policy: rolling or blue-green upgrade"]
+    end
 
-This policy is bound to the Operator Controller. It grants permission to perform cluster maintenance tasks.
+    Controller --> RoleController --> PolicyController
+    Backup --> RoleBackup --> PolicyBackup
+    Restore --> RoleRestore --> PolicyRestore
+    Upgrade --> RoleUpgrade --> PolicyUpgrade
 
-<Tabs groupId="permissions-policy-definition">
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef caution fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
 
-<TabItem value="permissions" label="Permissions">
+    class Controller,Backup,Restore,Upgrade read;
+    class RoleController,RoleBackup,RoleRestore,RoleUpgrade write;
+    class PolicyController,PolicyBackup,PolicyUpgrade write;
+    class PolicyRestore caution;`}
+/>
 
-| Capability | Path | Permissions | Reason |
-| :--- | :--- | :--- | :--- |
-| **Health** | `sys/health` | `read` | Check cluster seal status and leadership. |
-| **Step-Down** | `sys/step-down` | `sudo`, `update` | Gracefully step down RS/Leader during upgrades or scale-down. |
-| **Autopilot** | `sys/storage/raft/autopilot/configuration` | `read`, `update` | Configure Raft Autopilot rules (dead server cleanup, etc). |
+<DecisionTable
+  title="Keep policies separated by lifecycle capability"
+  columns={['Policy surface', 'Used by', 'Typical capabilities', 'Why it stays separate']}
+  rows={[
+    {
+      cells: [
+        'Controller maintenance',
+        'The main controller Deployment',
+        '`sys/health`, `sys/step-down`, and autopilot configuration reads or updates',
+        'This path should stay available for routine reconciliation and maintenance without inheriting destructive restore powers.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Backup',
+        'The generated backup Job',
+        '`sys/storage/raft/snapshot` read access',
+        'Snapshot reads are narrower than normal controller maintenance and should be easy to reason about independently.',
+      ],
+    },
+    {
+      cells: [
+        'Restore',
+        'The generated restore Job',
+        '`sys/storage/raft/snapshot-force` update access',
+        'Restore can replace the full cluster state and should only exist on the specific workload that performs restore.',
+      ],
+      emphasis: 'caution',
+    },
+    {
+      cells: [
+        'Upgrade',
+        'The generated upgrade Job',
+        'Step-down, autopilot state, snapshot read, and optional peer-management operations for blue-green flows',
+        'Upgrade paths often need time-bounded orchestration permissions that should not widen steady-state controller access.',
+      ],
+    },
+  ]}
+/>
 
-</TabItem>
+<Callout type="danger" title="Treat restore as a destructive role">
 
-<TabItem value="policy-definition" label="Policy Definition">
-
-```hcl
-path "sys/health" { capabilities = ["read"] }
-path "sys/step-down" { capabilities = ["sudo", "update"] }
-path "sys/storage/raft/autopilot/configuration" { capabilities = ["read", "update"] }
-```
-
-</TabItem>
-
-</Tabs>
-
-### `openbao-operator-backup`
-
-This policy is created if `spec.backup` is configured. It is bound to the `openbao-operator-backup` role and the Backup Job ServiceAccount.
-
-<Tabs groupId="permissions-policy-definition">
-
-<TabItem value="permissions" label="Permissions">
-
-| Capability | Path | Permissions | Reason |
-| :--- | :--- | :--- | :--- |
-| **Snapshot** | `sys/storage/raft/snapshot` | `read` | Stream Raft snapshots to external storage (S3/GCS/Azure). |
-
-</TabItem>
-
-<TabItem value="policy-definition" label="Policy Definition">
-
-```hcl
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }
-```
-
-</TabItem>
-
-</Tabs>
-
-### `openbao-operator-restore`
-
-This policy is created if `spec.restore` is configured. It is bound to the `openbao-operator-restore` role and the Restore Job ServiceAccount.
-
-<Tabs groupId="permissions-policy-definition">
-
-<TabItem value="permissions" label="Permissions">
-
-| Capability | Path | Permissions | Reason |
-| :--- | :--- | :--- | :--- |
-| **Force Restore** | `sys/storage/raft/snapshot-force` | `update` | Overwrite the entire cluster state from a snapshot. |
-
-<Callout type="danger" title="Security Risk">
-
-This capability is extremely powerful and destructive. It replaces all data, keys, and policies in the cluster. Ensure the `openbao-operator-restore` role is strictly bound to the restore job's identity.
+The restore capability can replace data, policies, and keys across the cluster.
+Do not bind the restore policy to the controller or to a broad multi-purpose ServiceAccount just because it is convenient during setup.
 
 </Callout>
 
+## Default policy surfaces
+
+<Tabs groupId="operator-policy-surfaces">
+
+<TabItem value="controller" label="Controller">
+
+<CommandBlock
+  language="hcl"
+  label="configure"
+  title="Controller maintenance policy"
+  code={`path "sys/health" {
+  capabilities = ["read"]
+}
+
+path "sys/step-down" {
+  capabilities = ["sudo", "update"]
+}
+
+path "sys/storage/raft/autopilot/configuration" {
+  capabilities = ["read", "update"]
+}`}
+>
+  This is the steady-state controller scope. It should not expand to cover backup, restore, or blue-green peer management unless you are intentionally breaking the model.
+</CommandBlock>
+
 </TabItem>
 
-<TabItem value="policy-definition" label="Policy Definition">
+<TabItem value="backup" label="Backup">
 
-```hcl
-path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }
-```
+<CommandBlock
+  language="hcl"
+  label="configure"
+  title="Backup policy"
+  code={`path "sys/storage/raft/snapshot" {
+  capabilities = ["read"]
+}`}
+>
+  Backup only needs snapshot streaming. Storage-provider credentials are a separate boundary outside this OpenBao policy.
+</CommandBlock>
+
+</TabItem>
+
+<TabItem value="restore" label="Restore">
+
+<CommandBlock
+  language="hcl"
+  label="configure"
+  title="Restore policy"
+  code={`path "sys/storage/raft/snapshot-force" {
+  capabilities = ["update"]
+}`}
+>
+  Keep this policy tightly bound to the generated restore Job identity and only for the period where restore is actually needed.
+</CommandBlock>
+
+</TabItem>
+
+<TabItem value="upgrade" label="Upgrade">
+
+<CommandBlock
+  language="hcl"
+  label="configure"
+  title="Rolling and blue-green upgrade policy surfaces"
+  code={`# Rolling upgrade baseline
+path "sys/health" {
+  capabilities = ["read"]
+}
+
+path "sys/step-down" {
+  capabilities = ["sudo", "update"]
+}
+
+path "sys/storage/raft/autopilot/state" {
+  capabilities = ["read"]
+}
+
+# Blue-green adds peer-management paths
+path "sys/storage/raft/join" {
+  capabilities = ["update"]
+}
+
+path "sys/storage/raft/configuration" {
+  capabilities = ["read", "update"]
+}
+
+path "sys/storage/raft/remove-peer" {
+  capabilities = ["update"]
+}
+
+path "sys/storage/raft/promote" {
+  capabilities = ["update"]
+}
+
+path "sys/storage/raft/demote" {
+  capabilities = ["update"]
+}`}
+>
+  Rolling upgrades need less authority than blue-green cutovers. Keep those strategies separate in your head when you review the required policy surface.
+</CommandBlock>
 
 </TabItem>
 
 </Tabs>
 
-### `openbao-operator-upgrade`
+<DecisionTable
+  kind="reference"
+  title="Common authorization failures"
+  columns={['Symptom', 'Likely boundary', 'Check first']}
+  rows={[
+    {
+      cells: [
+        'JWT login succeeds but the request returns `permission denied`',
+        'The workload authenticated correctly but the policy is missing the needed path capability',
+        'Which job or controller path is making the request, then the matching policy surface',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Backup works but restore fails',
+        'The restore Job identity or restore policy is missing or misbound',
+        'Restore ServiceAccount, restore role binding, and `snapshot-force` policy',
+      ],
+    },
+    {
+      cells: [
+        'Rolling upgrade works but blue-green cutover stalls',
+        'Peer-management permissions were not added for the upgrade strategy in use',
+        'Upgrade strategy and the corresponding upgrade policy paths',
+      ],
+    },
+    {
+      cells: [
+        'Controller can do too much',
+        'A shortcut merged job-specific capabilities into the controller role',
+        'Manual auth configuration drift from the intended separation model',
+      ],
+    },
+  ]}
+/>
 
-This policy is created if `spec.upgrade` is configured. It is bound to the `openbao-operator-upgrade` role and the Upgrade Job ServiceAccount (used for rolling or blue/green upgrades depending on strategy).
+<NextActions
+  title="Go deeper"
+  items={[
+    {
+      label: 'Operator authentication',
+      description: 'Return to the JWT audience and bound-subject model when auth fails before policy even matters.',
+      docId: 'user-guide/operator/authn',
+    },
+    {
+      label: 'Backup operations',
+      description: 'See how the backup Job uses its own auth and storage credentials during normal operation.',
+      docId: 'user-guide/openbaocluster/operations/backups',
+    },
+    {
+      label: 'Restore manager architecture',
+      description: 'Review why restore stays isolated from the controller and how the operator drives it.',
+      docId: 'architecture/restore-manager',
+    },
+  ]}
+/>
 
-<Tabs groupId="permissions-rolling-permissions-blue-green-policy-definition">
+## Official OpenBao background
 
-<TabItem value="permissions-rolling" label="Permissions (Rolling)">
-
-Used for standard semantic version updates.
-
-| Capability | Path | Permissions |
-| :--- | :--- | :--- |
-| **Step-Down** | `sys/step-down` | `sudo`, `update` |
-| **Autopilot** | `sys/storage/raft/autopilot/state` | `read` |
-
-</TabItem>
-
-<TabItem value="permissions-blue-green" label="Permissions (Blue/Green)">
-
-Used for complex upgrades involving unseal key rotation or storage migration.
-
-| Capability | Path | Permissions |
-| :--- | :--- | :--- |
-| **Join** | `sys/storage/raft/join` | `update` |
-| **Configuration** | `sys/storage/raft/configuration` | `read`, `update` |
-| **Peers** |Remove/Promote/Demote Peers | `update` |
-
-</TabItem>
-
-<TabItem value="policy-definition" label="Policy Definition">
-
-**Rolling Strategy:**
-
-```hcl
-path "sys/health" { capabilities = ["read"] }
-path "sys/step-down" { capabilities = ["sudo", "update"] }
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }
-path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }
-```
-
-**Blue/Green Strategy:**
-
-```hcl
-path "sys/health" { capabilities = ["read"] }
-path "sys/step-down" { capabilities = ["sudo", "update"] }
-path "sys/storage/raft/snapshot" { capabilities = ["read"] }
-path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }
-path "sys/storage/raft/join" { capabilities = ["update"] }
-path "sys/storage/raft/configuration" { capabilities = ["read", "update"] }
-path "sys/storage/raft/remove-peer" { capabilities = ["update"] }
-path "sys/storage/raft/promote" { capabilities = ["update"] }
-path "sys/storage/raft/demote" { capabilities = ["update"] }
-```
-
-</TabItem>
-
-</Tabs>
-
-## RBAC Binding
-
-The Operator uses Kubernetes JWT Auth to bind these policies to Kubernetes ServiceAccounts.
-
-```mermaid
-graph LR
-    subgraph K8s [Kubernetes]
-        SA_Op[SA: openbao-operator]
-        SA_Backup[SA: backup-job]
-    end
-
-    subgraph Bao [OpenBao]
-        Role_Op[Role: openbao-operator]
-        Role_Backup[Role: openbao-operator-backup]
-        
-        Pol_Op[Policy: openbao-operator]
-        Pol_Backup[Policy: openbao-operator-backup]
-    end
-
-    SA_Op -->|JWT| Role_Op
-    Role_Op -->|token_policies| Pol_Op
-
-    SA_Backup -->|JWT| Role_Backup
-    Role_Backup -->|token_policies| Pol_Backup
-
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    
-    class SA_Op,SA_Backup read;
-    class Role_Op,Role_Backup,Pol_Op,Pol_Backup write;
-```
-
-## Official OpenBao Documentation
-
-- [Policy Concepts](https://openbao.org/docs/concepts/policies/)
-- [Policy Command Reference](https://openbao.org/docs/commands/policy/)
-- [Token Concepts](https://openbao.org/docs/concepts/tokens/)
-
+- [Policy concepts](https://openbao.org/docs/concepts/policies/)
+- [Policy command reference](https://openbao.org/docs/commands/policy/)
+- [Token concepts](https://openbao.org/docs/concepts/tokens/)

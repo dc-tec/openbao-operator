@@ -1,168 +1,214 @@
-# BackupManager (Snapshots to Object Storage)
+---
+title: Backup Manager
+hide_title: true
+pageType: concept
+journey: architecture
+description: Schedule snapshot jobs, enforce retention, and update backup status without moving backup data through the controller.
+---
 
-<Callout type="abstract" title="Responsibility">
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Operations Manager"
+  title="Run Raft snapshots as stateless jobs and keep retention out of the data plane."
+  lede="The backup manager owns scheduled and manual snapshot orchestration for `OpenBaoCluster`. It validates cluster readiness, acquires the operation lock, creates executor Jobs, and records backup state so backups stay auditable and resumable without embedding snapshot transport inside the controller."
+  actions={[
+    {label: 'Open backups guide', docId: 'user-guide/openbaocluster/operations/backups', variant: 'primary'},
+    {label: 'Open restore guide', docId: 'user-guide/openbaorestore/restore', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'understand how scheduled and manual backups become executor Jobs',
+      'see which preconditions block backup while upgrades or restore are active',
+      'reason about retention, status, and object naming without reading the controller code',
+      'connect backup orchestration to the restore and upgrade safety model',
+    ]}
+  />
+</PageHero>
 
-Schedule and execute Raft snapshots, stream them to object storage, and manage retention.
+<ManagerAtAGlance
+  sections={[
+    {
+      label: 'Control path',
+      items: [
+        'adminops reconciler',
+        'internal/app/openbaocluster/adminops',
+        'internal/service/backup',
+      ],
+    },
+    {
+      label: 'Owns',
+      items: [
+        'backup trigger detection for schedules and manual requests',
+        'preflight validation and operation-lock ownership for backup',
+        'retention evaluation after successful uploads',
+      ],
+    },
+    {
+      label: 'Writes',
+      items: [
+        'backup executor Jobs and job annotations',
+        'status.backup timing, success, and failure counters',
+        'operation lock state while backup is in progress',
+      ],
+    },
+    {
+      label: 'Depends on',
+      items: [
+        'cluster health and absence of conflicting upgrade or restore work',
+        'spec.backup target, authentication, and executor image configuration',
+        'object-storage reachability and trust configuration for the selected provider',
+      ],
+    },
+  ]}
+/>
 
-</Callout>
+## Architectural Placement
 
-<Callout type="tip" title="User Guide">
+Backup orchestration belongs to the AdminOps path:
 
-For operational instructions, see the [Backups User Guide](../user-guide/openbaocluster/operations/backups.md) and [Restore User Guide](../user-guide/openbaorestore/restore.md).
+1. `internal/controller/openbaocluster` receives an adminops reconcile event.
+2. The controller delegates into `internal/app/openbaocluster/adminops`.
+3. AdminOps orchestration invokes `internal/service/backup` to validate, launch, and observe backup execution.
 
-</Callout>
+That keeps the controller focused on reconcile plumbing while the backup manager owns timing, job launch, and retention decisions.
 
-## 1. Architectural Placement
+<DecisionTable
+  kind="reference"
+  title="Owned surfaces"
+  columns={['Surface', 'What the manager decides', 'Why it matters']}
+  rows={[
+    {
+      cells: ['Backup trigger window', 'Whether a cron window, manual trigger, or pre-upgrade request should launch a new Job.', 'Backups need at-most-once behavior per scheduled window and predictable manual overrides.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Executor Job', 'Job name, annotations, auth wiring, and provider-specific environment for the backup binary.', 'The controller should schedule work, not stream snapshot data itself.'],
+    },
+    {
+      cells: ['status.backup', 'Attempt timing, next schedule, last success, and consecutive failure state.', 'Operators need backup visibility without inspecting transient Jobs.'],
+    },
+    {
+      cells: ['Retention policy', 'Which completed backups can be deleted after a successful upload.', 'Retention belongs to the control plane so cleanup stays consistent across providers.'],
+    },
+  ]}
+/>
 
-Backup execution belongs to the AdminOps orchestration path:
+## Backup Flow
 
-1. `internal/controller/openbaocluster` (adminops reconciler) receives the reconcile event.
-2. It delegates to `internal/app/openbaocluster` facade functions.
-3. The app layer calls `internal/app/openbaocluster/adminops`, which invokes `internal/service/backup`.
+<DiagramFrame
+  title="Validate, launch, then record"
+  caption="The backup manager validates cluster state first, launches a stateless Job second, and only updates backup status after the Job reaches a terminal result."
+  code={`graph TD
+    Trigger["Cron or manual trigger"] --> Validate{"Preflight checks"}
+    Validate --> Retry["Requeue without launch"]
+    Validate --> Lock["Acquire backup operation lock"]
+    Lock --> Job["Create backup Job"]
+    Job --> Auth["Authenticate to OpenBao"]
+    Auth --> Snapshot["Stream Raft snapshot"]
+    Snapshot --> Upload["Upload to object storage"]
+    Upload --> Result{"Job result"}
+    Result --> Success["Patch lastSuccessfulBackup and next schedule"]
+    Result --> Failure["Increment consecutiveFailures and record attempt"]
+    Success --> Retention["Apply retention policy"]
 
-This keeps controller code as reconcile plumbing while BackupManager owns backup domain behavior.
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef critical fill:transparent,stroke:#dc2626,stroke-width:2px,color:#f8fafc;
 
-## 2. Backup Workflow
+    class Trigger read;
+    class Validate,Lock,Job,Auth,Snapshot,Upload,Retention process;
+    class Success write;
+    class Failure critical;`}
+/>
 
-The BackupManager uses a **stateless executor pattern**: the Operator only schedules Kubernetes Jobs; it does not handle data itself.
+<DecisionTable
+  kind="reference"
+  title="Preflight and status model"
+  columns={['Check', 'Manager behavior']}
+  rows={[
+    {
+      cells: ['Cluster readiness', 'Backup launches only when the cluster is in a stable running phase and the workload is not already mid-transition.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Conflicting operations', 'Restore and active upgrade state block backup launch; only one long-running operation may own the cluster lock at a time.'],
+    },
+    {
+      cells: ['At-most-once scheduling', 'status.backup.lastAttemptScheduledTime and nextScheduledBackup prevent duplicate launches in the same cron window.'],
+    },
+    {
+      cells: ['Failure accounting', 'Consecutive failures increase only when a terminal Job fails, not on every reconcile that notices the same failed Job.'],
+    },
+  ]}
+/>
 
-```mermaid
-graph TD
-    Trigger[Trigger: Cron or Manual] --> Preflight{Pre-flight Checks}
-    
-    Preflight -- Fail --> Retry[Retry Later]
-    Preflight -- Pass --> Job[Create Backup Job]
-    
-    subgraph K8s_Job [Executor Pod]
-        Job --> Auth[Authenticate to OpenBao]
-        Auth --> Stream[Stream Snapshot]
-        Stream --> Upload[Upload to Object Storage]
-    end
-    
-    Upload --> Verify{Verify?}
-    Verify -- Success --> Status[Update Status: LastSuccessfulBackup]
-    Verify -- Fail --> StatusFail[Update Status: ConsecutiveFailures]
+## Provider And Retention Surfaces
 
-    classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-    classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-    classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-    
-    class Job,Auth,Stream,Upload process;
-    class Trigger,Preflight read;
-    class Status,StatusFail write;
-```
+<DecisionTable
+  kind="reference"
+  title="Provider integration surfaces"
+  columns={['Provider family', 'Auth patterns the manager supports', 'What stays the same']}
+  rows={[
+    {
+      cells: ['S3-compatible', 'Static access keys, explicit web identity, ambient workload identity, or ServiceAccount annotation-driven identity.', 'The manager still creates one executor Job and records status the same way after upload completes.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['GCS', 'Service account key, Application Default Credentials, or Workload Identity metadata on the generated pod identity.', 'Upload and retention stay job-driven; only the credential wiring changes.'],
+    },
+    {
+      cells: ['Azure Blob Storage', 'Account key, connection string, or managed identity/workload identity defaults.', 'Retention and backup naming stay provider-agnostic at the manager boundary.'],
+    },
+  ]}
+/>
 
-## 3. Execution Phases
-
-### Phase 1: Pre-flight Checks
-
-Before spawning a Job, the Operator verifies the cluster is stable:
-
-1. **Healthy:** Cluster Phase must be `Running`.
-2. **Not Upgrading:** No upgrade is in progress (`status.upgrade == nil`) and no upgrade is pending (for example, `spec.version == status.currentVersion`).
-3. **Not Restoring:** No `OpenBaoRestore` is in progress for this cluster (restore resources targeting this cluster that are not `Completed` or `Failed`).
-4. **Exclusive:** No other backup Job is currently running.
-
-When a backup starts, the BackupManager acquires the cluster operation lock by setting `status.operationLock.operation=Backup` and releases it when the Job completes.
-
-### Phase 2: The Executor Job
-
-The Operator creates a Kubernetes Job named `backup-<cluster>-<timestamp>`. This Job:
-
-- Runs the specialized `bao-backup` binary.
-- Connects to the active Leader.
-- **Streams** the snapshot directly to object storage (no local disk buffering required).
-
-## 4. Storage Providers
-
-The BackupManager supports multiple object storage providers:
-
-<Tabs groupId="s3-aws-minio-etc-gcs-google-cloud-storage-azure-blob-storage">
-
-<TabItem value="s3-aws-minio-etc" label="S3 (AWS, MinIO, etc.)">
-
-**Configuration:**
-```yaml
-spec:
-  backup:
-    target:
-      provider: s3
-      endpoint: "https://s3.amazonaws.com"
-      bucket: "openbao-backups"
-      region: "us-east-1"
-      credentialsSecretRef:
-        name: s3-credentials
-```
-
-**Authentication:**
-- **Static Credentials:** Secret with `accessKeyId` and `secretAccessKey`
-- **Explicit Web Identity:** Set `roleArn` for the operator-managed AWS Web Identity flow
-- **Ambient Workload Identity:** Omit `credentialsSecretRef` and rely on the pod's default credential chain (for example EKS Pod Identity)
-- **Metadata-Driven Integrations:** Set `target.workloadIdentity.serviceAccountAnnotations` when your platform binds identity through ServiceAccount annotations
-
-</TabItem>
-
-<TabItem value="gcs-google-cloud-storage" label="GCS (Google Cloud Storage)">
-
-**Configuration:**
-```yaml
-spec:
-  backup:
-    target:
-      provider: gcs
-      bucket: "openbao-backups"
-      gcs:
-        project: "my-gcp-project"
-      credentialsSecretRef:
-        name: gcs-credentials
-```
-
-**Authentication:**
-- **Service Account Key:** Secret with `credentials.json` (service account JSON)
-- **Application Default Credentials (ADC):** Omit `credentialsSecretRef` when using Workload Identity or GKE
-- **Workload Identity Metadata:** Use `target.workloadIdentity.serviceAccountAnnotations` when the generated ServiceAccount needs a cloud-specific annotation
-
-</TabItem>
-
-<TabItem value="azure-blob-storage" label="Azure Blob Storage">
-
-**Configuration:**
-```yaml
-spec:
-  backup:
-    target:
-      provider: azure
-      bucket: "openbao-backups"
-      azure:
-        storageAccount: "mystorageaccount"
-      credentialsSecretRef:
-        name: azure-credentials
-```
-
-**Authentication:**
-- **Account Key:** Secret with `accountKey`
-- **Connection String:** Secret with `connectionString`
-- **Managed Identity / Workload Identity:** Omit `credentialsSecretRef` to use the Azure default credential chain
-- **Kubernetes Metadata:** Use `target.workloadIdentity.serviceAccountAnnotations` and `target.workloadIdentity.podLabels` when your Azure setup requires ServiceAccount annotations or pod labels
-
-</TabItem>
-
-</Tabs>
-
-## 5. Scheduling & Retention
-
-- **Cron:** Uses standard cron syntax (e.g., `0 2 * * *` for daily at 2 AM).
-- **Retention:** The Operator enforces retention policies configured in `spec.backup.retention`:
-  - `maxCount`: Keep only the N most recent backups
-  - `maxAge`: Delete backups older than a specified duration
-  - Applied after successful backup execution
-  - Applies to all storage providers (S3, GCS, Azure)
-
-## 6. Naming Convention
-
-Backups are stored with a predictable path structure for easy retrieval during disaster recovery:
+Backups are stored under a stable object prefix so restore workflows can locate artifacts without reverse-engineering Job names:
 
 ```text
 <pathPrefix>/<namespace>/<cluster>/<timestamp>-<short-uuid>.snap
 ```
 
+<DecisionTable
+  kind="reference"
+  title="Safety boundaries"
+  columns={['Concern', 'Manager behavior']}
+  rows={[
+    {
+      cells: ['No data-plane coupling', 'The controller never handles snapshot bytes directly; the executor Job performs authentication, snapshot, and upload work.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Retention timing', 'Retention runs only after a successful upload so cleanup never removes older recovery points before a new one exists.'],
+    },
+    {
+      cells: ['Upgrade coordination', 'Pre-upgrade snapshots reuse backup job machinery rather than creating a second snapshot implementation in the upgrade manager.'],
+    },
+    {
+      cells: ['Local buffering risk', 'The backup path is designed around streaming to object storage rather than writing large transient snapshot files inside the controller.'],
+    },
+  ]}
+/>
+
+<NextActions
+  title="Related deep dives"
+  items={[
+    {
+      label: 'Restore manager',
+      description: 'Restore consumes the snapshot contract that backup writes and protects with lock ownership.',
+      docId: 'architecture/restore-manager',
+    },
+    {
+      label: 'Upgrade manager',
+      description: 'Pre-upgrade snapshots depend on the same backup execution surface instead of a separate snapshot implementation.',
+      docId: 'architecture/upgrade-manager',
+    },
+    {
+      label: 'Backups guide',
+      description: 'Compare the internal backup orchestration model with the user-facing schedule, provider, and restore instructions.',
+      docId: 'user-guide/openbaocluster/operations/backups',
+    },
+  ]}
+/>

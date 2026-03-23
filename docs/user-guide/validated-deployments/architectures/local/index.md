@@ -1,60 +1,82 @@
 ---
-description: Validated local OpenBaoCluster architectures for k3d and similar developer or validation environments.
+title: Local Baselines
+hide_title: true
+pageType: landing
+description: Validated local baselines for k3d, including development, hardened rehearsal, and cross-cluster DR lanes.
 ---
 
-# Local Architectures
+<PageHero
+  variant="landing"
+  eyebrow="Validated Deployments / Local Baselines"
+  title="Use local lanes for rehearsal, validation, and DR proof, not as accidental production defaults."
+  lede="The local validated scope comes from the project's k3d environment. These lanes are valuable because they prove concrete behaviors such as hardened bootstrap, passthrough access, ACME issuance, and cross-cluster restore. They are not a substitute for making an explicit production platform choice."
+  actions={[
+    {label: "Open k3d Development", docId: "user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs", variant: "primary"},
+    {label: "Open k3d Cross-Cluster DR", docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use local baselines when you need to"
+    items={[
+      "rehearse a development or hardened lane on workstation-grade infrastructure",
+      "prove a boundary such as external TLS passthrough, internal ACME, or shared Transit unseal",
+      "practice restore and cutover behavior in the validated cross-cluster DR lane",
+    ]}
+  />
+</PageHero>
 
-Use these pages when you want a validated local topology with clear invariants, tradeoffs, and linked deployment recipes.
+<RouteList
+  title="Validated local lanes"
+  items={[
+    {
+      eyebrow: "01",
+      title: "k3d Development",
+      description: "Shared terminating edge, RustFS backups, JWT bootstrap, and a development-profile lane for rehearsal and integration work.",
+      docId: "user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs",
+      actionLabel: "Open lane",
+    },
+    {
+      eyebrow: "02",
+      title: "k3d Hardened / External TLS",
+      description: "Transit auto-unseal, external TLS Secrets, and user-managed passthrough for the closest local analogue to a hardened external-certificate deployment.",
+      docId: "user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls",
+      actionLabel: "Open lane",
+    },
+    {
+      eyebrow: "03",
+      title: "k3d Hardened / ACME",
+      description: "Transit auto-unseal with OpenBao-managed ACME and validated hostname resolution in the local hardened ACME lane.",
+      docId: "user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme",
+      actionLabel: "Open lane",
+    },
+    {
+      eyebrow: "04",
+      title: "k3d Cross-Cluster DR",
+      description: "A proving lane for shared Transit, shared snapshot storage, and restore rehearsal across separate source and target clusters.",
+      docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs",
+      actionLabel: "Open lane",
+    },
+  ]}
+/>
 
-The current local scope comes from the k3d-based project validation environment.
+<Callout type="note" title="Only the DR restore runbook stays lane-specific here">
 
-These pages distinguish between:
+Generic backup and restore procedures belong in the main `Operate` docs. The cross-cluster DR restore procedure remains in this section because it depends on the exact validated DR lane assumptions.
 
-- **Local reference architectures**, which are realistic local Kubernetes deployment models for workstation validation and rehearsal.
-- **Proving architectures**, which validate a specific behavior or boundary but are not the preferred general-purpose local reference.
+</Callout>
 
-<div class="grid cards" markdown>
-
-- **k3d Development**
-
-    ---
-
-    Local reference architecture for Development profile, shared terminating edge, RustFS backups, JWT bootstrap, and blue/green upgrades.
-
-    [Open Architecture](k3d-development-shared-edge-rustfs.md)
-
-- **k3d Hardened with External TLS**
-
-    ---
-
-    Local reference architecture for Hardened profile, Transit auto-unseal, external TLS Secrets, and user-managed passthrough.
-
-    [Open Architecture](k3d-hardened-transit-external-tls.md)
-
-- **k3d Hardened with Internal ACME**
-
-    ---
-
-    Local reference architecture for Hardened profile, Transit auto-unseal, internal ACME via shared trust services, validated ACME hostname resolution, and user-managed passthrough.
-
-    [Open Architecture](k3d-hardened-transit-acme.md)
-
-- **k3d Cross-Cluster DR**
-
-    ---
-
-    Local reference architecture for DR rehearsal with shared Transit auto-unseal, shared RustFS snapshots, Gateway API passthrough, and manual cutover across multiple k3d clusters.
-
-    [Open Architecture](k3d-cross-cluster-dr-transit-rustfs.md)
-
-</div>
-
-## Current validated scope
-
-| Architecture | Classification | Profile | Edge model | Certificate model | Local integrations | Validation outcome |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| [k3d Development](k3d-development-shared-edge-rustfs.md) | Local reference | `Development` | Shared terminating Gateway | Operator-managed TLS | RustFS | Bootstrap, JWT login, gateway exposure, backup, local blue/green lane |
-| [k3d Hardened External TLS](k3d-hardened-transit-external-tls.md) | Local reference | `Hardened` | User-managed passthrough | External TLS Secrets | external Transit, cert-manager | Bootstrap, Transit unseal, JWT login, passthrough access |
-| [k3d Hardened Internal ACME](k3d-hardened-transit-acme.md) | Local reference | `Hardened` | User-managed passthrough | OpenBao ACME | external trust services, ACME hostname resolution | Bootstrap, ACME issuance, Transit unseal, JWT login |
-| [k3d Cross-Cluster DR](k3d-cross-cluster-dr-transit-rustfs.md) | Local reference | `Development` pair | Dedicated passthrough Gateways | Operator-managed TLS | external Transit, RustFS | Bootstrap, source backup, cross-cluster restore, target unseal, manual cutover proof |
-
+<NextActions
+  title="Related catalogs"
+  items={[
+    {
+      label: "Local recipe catalog",
+      description: "Browse the local deployment procedures directly if you already know which lane you want to reproduce.",
+      docId: "user-guide/validated-deployments/recipes/local/index",
+    },
+    {
+      label: "Generic restore guide",
+      description: "Use the main restore docs for the canonical workflow outside the specific DR proving lane.",
+      docId: "user-guide/openbaorestore/restore",
+    },
+  ]}
+/>
