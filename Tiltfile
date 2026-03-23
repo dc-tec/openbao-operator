@@ -32,8 +32,6 @@ allow_k8s_contexts(context)
 
 watch_settings(ignore=[
     ".git",
-    ".venv",
-    ".venv-docs",
     "bin",
     "dist",
     "site",
@@ -59,8 +57,6 @@ docker_build(
     dockerfile="Dockerfile",
     ignore=[
         ".git",
-        ".venv",
-        ".venv-docs",
         "bin",
         "dist",
         "site",

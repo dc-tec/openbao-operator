@@ -10,7 +10,6 @@ documentation:
           - 'CONTRIBUTING.md'
           - 'LICENSE'
           - '**/*.md'
-          - 'contribute/**/*'
           - 'releases/**/*'
           - 'website/**/*'
 

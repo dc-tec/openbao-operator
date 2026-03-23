@@ -56,3 +56,17 @@ updates:
       npm-tools:
         patterns:
           - "*"
+
+  - package-ecosystem: npm
+    directory: "/website"
+    schedule:
+      interval: weekly
+      day: friday
+      time: "03:00"
+      timezone: Europe/Amsterdam
+    labels:
+      - dependencies
+    groups:
+      npm-website:
+        patterns:
+          - "*"

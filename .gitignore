@@ -20,6 +20,7 @@ go.work
 # Local development files
 .DS_Store
 .gocache
+.contribute-docs/
 node_modules/
 
 # Kubernetes Generated files - skip generated files, except for vendored files
