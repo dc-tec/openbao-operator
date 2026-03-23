@@ -130,7 +130,7 @@ make license-report`}
     {
       cells: [
         "Pull-request dependency review",
-        "Newly introduced dependency licenses against the repository allowlist.",
+        "Newly introduced dependency vulnerabilities in package manifests and lockfiles.",
         "`.github/workflows/dependency-review.yml` and `.github/dependency-review-config.yml`.",
       ],
     },
@@ -159,6 +159,17 @@ Treat allowlist changes as maintainer-level changes. When you change the allowed
 1. Explain the change in the PR description.
 2. Update this document in the same PR.
 3. Update the matching machine-enforced CI configuration.
+
+## GitHub dependency review scope
+
+The GitHub dependency review workflow is currently used as a pull-request
+vulnerability gate, not as the canonical license gate. In practice, its npm
+license metadata is not reliable enough for this repository's documentation-site
+dependencies.
+
+License policy is still enforced, but the authoritative check is the shipped
+artifact workflow around `make license-check` and maintainer review of
+dependency-policy changes.
 
 <NextActions
   title="Related governance pages"

@@ -80,7 +80,7 @@ make ci-core`}
       cells: [
         "Dependency and license policy",
         "`make verify-vendor` and `make license-check`",
-        "CI enforces vendored dependency resolution and shipped-license allowlists.",
+        "The repository enforces vendored dependency resolution and shipped-license allowlists through its local and CI artifact checks.",
       ],
     },
     {
