@@ -1,18 +1,19 @@
 import React from 'react';
 import clsx from 'clsx';
 import SiteLink from '@site/src/components/SiteLink';
+import renderInlineCode from '@site/src/components/renderInlineCode';
 
 type JourneyRailItem = {
-  description: string;
+  description: React.ReactNode;
   docId?: string;
-  label: string;
+  label: React.ReactNode;
   to?: string;
 };
 
 type JourneyRailProps = {
   current?: number;
   items: JourneyRailItem[];
-  title?: string;
+  title?: React.ReactNode;
 };
 
 export default function JourneyRail({
@@ -21,10 +22,10 @@ export default function JourneyRail({
   title = 'Journey',
 }: JourneyRailProps): React.JSX.Element {
   return (
-    <nav aria-label={title} className="journeyRail">
+    <nav aria-label={typeof title === 'string' ? title : 'Journey'} className="journeyRail">
       <div className="journeyRail__header">
         <p className="journeyRail__eyebrow">Journey</p>
-        <p className="journeyRail__title">{title}</p>
+        <p className="journeyRail__title">{renderInlineCode(title)}</p>
       </div>
       <ol className="journeyRail__list">
         {items.map((item, index) => {
@@ -40,7 +41,7 @@ export default function JourneyRail({
 
           return (
             <li
-              key={`${item.label}-${step}`}
+              key={`journey-rail-${item.docId ?? item.to ?? step}`}
               className={clsx('journeyRail__item', `journeyRail__item--${state}`)}
             >
               <SiteLink
@@ -53,8 +54,8 @@ export default function JourneyRail({
                   {String(step).padStart(2, '0')}
                 </span>
                 <span className="journeyRail__copy">
-                  <span className="journeyRail__label">{item.label}</span>
-                  <span className="journeyRail__description">{item.description}</span>
+                  <span className="journeyRail__label">{renderInlineCode(item.label)}</span>
+                  <span className="journeyRail__description">{renderInlineCode(item.description)}</span>
                 </span>
               </SiteLink>
             </li>

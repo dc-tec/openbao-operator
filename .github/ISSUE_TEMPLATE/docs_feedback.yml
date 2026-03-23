@@ -1,0 +1,49 @@
+name: Documentation feedback
+description: Report a docs page that was confusing, missing, or incorrect
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the docs. Use this form for page quality problems, not product bugs or feature requests.
+
+  - type: input
+    id: page_path
+    attributes:
+      label: Docs page path
+      description: Route path for the page that needs work
+      placeholder: /openbao-operator/docs/...
+    validations:
+      required: true
+
+  - type: input
+    id: page_url
+    attributes:
+      label: Docs page URL
+      description: Full URL for the page that needs work
+      placeholder: https://dc-tec.github.io/openbao-operator/docs/...
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What was confusing, missing, or incorrect?
+      description: Describe the problem as clearly as you can.
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What were you trying to do?
+      description: The task or question you had when you opened the page.
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested improvement
+      description: Optional suggestion for how the page could be clearer or more complete.

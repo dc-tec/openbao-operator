@@ -4,12 +4,17 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const repoUrl = 'https://github.com/dc-tec/openbao-operator';
 const docsEditBase = `${repoUrl}/edit/main/docs/`;
-const contributeEditBase = `${repoUrl}/edit/main/contribute/`;
+const contributeEditBase = `${repoUrl}/edit/main/docs/contribute/`;
+const docsPluginDefaultExclude = [
+  '**/_*.{js,jsx,ts,tsx,md,mdx}',
+  '**/_*/**',
+  '**/*.test.{js,jsx,ts,tsx}',
+  '**/__tests__/**',
+];
 
 const algoliaAppId = process.env.ALGOLIA_APP_ID;
 const algoliaApiKey = process.env.ALGOLIA_API_KEY;
 const algoliaIndexName = process.env.ALGOLIA_INDEX_NAME;
-const gaTrackingId = process.env.GA_TRACKING_ID;
 
 const config: Config = {
   title: 'OpenBao Operator',
@@ -49,6 +54,7 @@ const config: Config = {
           path: '../docs',
           routeBasePath: 'docs',
           sidebarPath: './sidebars.ts',
+          exclude: [...docsPluginDefaultExclude, '**/contribute/**'],
           editUrl: ({docPath}) => `${docsEditBase}${docPath}`,
           showLastUpdateAuthor: true,
           showLastUpdateTime: true,
@@ -68,12 +74,6 @@ const config: Config = {
           priority: 0.6,
           ignorePatterns: ['/tags/**'],
         },
-        gtag: gaTrackingId
-          ? {
-              trackingID: gaTrackingId,
-              anonymizeIP: true,
-            }
-          : undefined,
       } satisfies Preset.Options,
     ],
   ],
@@ -83,7 +83,7 @@ const config: Config = {
       '@docusaurus/plugin-content-docs',
       {
         id: 'contribute',
-        path: '../contribute',
+        path: '../.contribute-docs',
         routeBasePath: 'contribute',
         sidebarPath: './sidebarsContribute.ts',
         editUrl: ({docPath}: {docPath: string}) => `${contributeEditBase}${docPath}`,
@@ -148,6 +148,22 @@ const config: Config = {
           {
             to: '/contribute',
             from: ['/dev/contributing'],
+          },
+          {
+            to: '/docs/operate/backups',
+            from: [
+              '/docs/validated-deployments/runbooks/scheduled-backups-s3-compatible',
+              '/docs/next/validated-deployments/runbooks/scheduled-backups-s3-compatible',
+              '/docs/0.1.0-rc.5/validated-deployments/runbooks/scheduled-backups-s3-compatible',
+            ],
+          },
+          {
+            to: '/docs/user-guide/openbaorestore/restore',
+            from: [
+              '/docs/validated-deployments/runbooks/restore-from-s3-compatible-snapshot',
+              '/docs/next/validated-deployments/runbooks/restore-from-s3-compatible-snapshot',
+              '/docs/0.1.0-rc.5/validated-deployments/runbooks/restore-from-s3-compatible-snapshot',
+            ],
           },
         ],
       },
@@ -255,7 +271,7 @@ const config: Config = {
           items: [
             {label: 'Repository', href: repoUrl},
             {label: 'Artifact Hub', href: 'https://artifacthub.io/packages/search?repo=openbao-operator'},
-            {label: 'Edge Manifests', href: 'https://dc-tec.github.io/openbao-operator/edge/latest/'},
+            {label: 'Edge Manifests', href: 'https://dc-tec.github.io/openbao-operator/edge/latest/install.yaml'},
           ],
         },
       ],

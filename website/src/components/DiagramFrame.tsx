@@ -14,11 +14,18 @@ export default function DiagramFrame({
 }: DiagramFrameProps): React.JSX.Element {
   return (
     <figure className="diagramFrame">
-      {title ? <figcaption className="diagramFrame__title">{title}</figcaption> : null}
-      <div className="diagramFrame__canvas">
-        <Mermaid value={code} />
+      {title || caption ? (
+        <figcaption className="diagramFrame__header">
+          <p className="diagramFrame__eyebrow">Diagram</p>
+          {title ? <p className="diagramFrame__title">{title}</p> : null}
+          {caption ? <p className="diagramFrame__caption">{caption}</p> : null}
+        </figcaption>
+      ) : null}
+      <div className="diagramFrame__shell">
+        <div className="diagramFrame__canvas">
+          <Mermaid value={code} />
+        </div>
       </div>
-      {caption ? <p className="diagramFrame__caption">{caption}</p> : null}
     </figure>
   );
 }

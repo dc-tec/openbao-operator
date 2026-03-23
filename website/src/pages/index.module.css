@@ -46,6 +46,7 @@
 
 .heroInner,
 .routeSection,
+.planningSection,
 .supportSection,
 .finalSection {
   width: min(1180px, calc(100% - 3rem));
@@ -64,7 +65,7 @@
 .heroCopy {
   display: flex;
   flex-direction: column;
-  gap: 1.05rem;
+  gap: 1.1rem;
   animation: fadeRise 680ms ease both;
 }
 
@@ -103,36 +104,9 @@
   gap: 0.9rem;
 }
 
-.heroList {
-  display: grid;
-  gap: 0.55rem;
-  max-width: 31rem;
-  margin: 0.15rem 0 0;
-  padding: 0;
-  list-style: none;
-  color: rgba(237, 246, 241, 0.72);
-  font-size: 0.96rem;
-}
-
-.heroList li {
-  position: relative;
-  padding-left: 1rem;
-}
-
-.heroList li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0.72rem;
-  width: 0.34rem;
-  height: 0.34rem;
-  border-radius: 999px;
-  background: rgba(135, 214, 190, 0.8);
-}
-
 .overviewRail {
   position: relative;
-  padding: 0.1rem 0 0 0.65rem;
+  padding: 0.35rem 0 0 0.65rem;
   animation: fadeRise 840ms ease 80ms both;
 }
 
@@ -212,16 +186,6 @@
   text-transform: uppercase;
 }
 
-.overviewNote {
-  max-width: 22rem;
-  margin: 1.2rem 0 0;
-  padding-top: 0.9rem;
-  border-top: 1px solid rgba(135, 214, 190, 0.12);
-  color: rgba(237, 246, 241, 0.66);
-  font-size: 0.93rem;
-  line-height: 1.65;
-}
-
 .sectionLead {
   max-width: 40rem;
 }
@@ -242,8 +206,84 @@
 }
 
 .routeSection :global(.routeListBlock),
-.supportSection :global(.nextActions) {
+.planningSection,
+.supportSection {
   margin-top: 0;
+}
+
+.planningGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem 1.4rem;
+  margin-top: 1.7rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(135, 214, 190, 0.1);
+}
+
+.planningLink {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.15rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.planningLink:hover {
+  text-decoration: none;
+}
+
+.planningLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 1.02rem;
+  font-weight: 700;
+}
+
+.planningDescription {
+  max-width: 34rem;
+  color: var(--text-soft);
+  line-height: 1.66;
+}
+
+.supportList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.35rem 1.8rem;
+  margin-top: 1.65rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(135, 214, 190, 0.1);
+}
+
+.supportLink {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.supportLink:hover {
+  text-decoration: none;
+}
+
+.supportLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 700;
+}
+
+.supportDescription {
+  color: var(--text-soft);
+  line-height: 1.58;
+}
+
+.finalSummary {
+  max-width: 46rem;
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.68;
 }
 
 .inlineLink {
@@ -251,6 +291,66 @@
   align-items: center;
   gap: 0.45rem;
   font-weight: 700;
+}
+
+:global([data-theme='light']) .page {
+  background:
+    radial-gradient(circle at 78% 0%, rgba(135, 214, 190, 0.16), transparent 24%),
+    radial-gradient(circle at 14% 0%, rgba(253, 208, 164, 0.14), transparent 18%),
+    linear-gradient(180deg, #f4f1e9 0%, #eee7dc 20rem, #f2efe8 40rem, #f2efe8 100%);
+}
+
+:global([data-theme='light']) .page::before {
+  background-image:
+    linear-gradient(rgba(9, 26, 40, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(9, 26, 40, 0.045) 1px, transparent 1px);
+}
+
+:global([data-theme='light']) .hero {
+  color: var(--text-strong);
+  border-bottom-color: var(--border-subtle);
+}
+
+:global([data-theme='light']) .hero::before {
+  background:
+    radial-gradient(circle at 72% 16%, rgba(135, 214, 190, 0.16), transparent 18%),
+    radial-gradient(circle at 20% 0%, rgba(253, 208, 164, 0.12), transparent 14%);
+}
+
+:global([data-theme='light']) .kicker,
+:global([data-theme='light']) .sectionKicker,
+:global([data-theme='light']) .overviewKicker {
+  color: var(--brand-primary);
+}
+
+:global([data-theme='light']) .lede {
+  color: var(--text-muted);
+}
+
+:global([data-theme='light']) .overviewList::before {
+  background: linear-gradient(
+    180deg,
+    rgba(51, 109, 92, 0.34),
+    rgba(51, 109, 92, 0.14) 55%,
+    rgba(51, 109, 92, 0.04)
+  );
+}
+
+:global([data-theme='light']) .overviewStep {
+  color: var(--text-strong);
+}
+
+:global([data-theme='light']) .overviewDetail {
+  color: var(--text-muted);
+}
+
+:global([data-theme='light']) .overviewIndex {
+  color: rgba(16, 34, 48, 0.36);
+}
+
+:global([data-theme='light']) .planningGrid,
+:global([data-theme='light']) .supportList {
+  border-top-color: rgba(9, 26, 40, 0.08);
 }
 
 @keyframes fadeRise {
@@ -281,6 +381,11 @@
   .overviewRail {
     padding-top: 1.2rem;
     border-top: 1px solid rgba(135, 214, 190, 0.08);
+  }
+
+  .planningGrid,
+  .supportList {
+    grid-template-columns: 1fr;
   }
 
   .hero h1 {

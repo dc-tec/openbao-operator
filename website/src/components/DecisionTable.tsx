@@ -1,5 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
+import renderInlineCode from '@site/src/components/renderInlineCode';
 
 type DecisionRow = {
   cells: React.ReactNode[];
@@ -7,11 +8,16 @@ type DecisionRow = {
 };
 
 type DecisionTableProps = {
-  caption?: string;
+  caption?: React.ReactNode;
   columns: React.ReactNode[];
   kind?: 'decision' | 'reference';
   rows: DecisionRow[];
-  title?: string;
+  title?: React.ReactNode;
+};
+
+const kindLabels: Record<NonNullable<DecisionTableProps['kind']>, string> = {
+  decision: 'Decision matrix',
+  reference: 'Reference table',
 };
 
 export default function DecisionTable({
@@ -23,15 +29,26 @@ export default function DecisionTable({
 }: DecisionTableProps): React.JSX.Element {
   return (
     <section className={clsx('decisionTable', `decisionTable--${kind}`)}>
-      {title ? <p className="decisionTable__title">{title}</p> : null}
+      {title || caption ? (
+        <header className="decisionTable__header">
+          <p className="decisionTable__eyebrow">{kindLabels[kind]}</p>
+          {title ? <p className="decisionTable__title">{renderInlineCode(title)}</p> : null}
+          {caption ? <p className="decisionTable__caption">{renderInlineCode(caption)}</p> : null}
+        </header>
+      ) : null}
       <div className="decisionTable__scroll">
         <table>
-          {caption ? <caption>{caption}</caption> : null}
+          {title || caption ? (
+            <caption className="decisionTable__srOnly">
+              {title ? <>{renderInlineCode(title)}. </> : null}
+              {renderInlineCode(caption)}
+            </caption>
+          ) : null}
           <thead>
             <tr>
               {columns.map((column, index) => (
                 <th key={`column-${index}`} scope="col">
-                  {column}
+                  {renderInlineCode(column)}
                 </th>
               ))}
             </tr>
@@ -43,7 +60,7 @@ export default function DecisionTable({
                 className={clsx(row.emphasis && `decisionTable__row--${row.emphasis}`)}
               >
                 {row.cells.map((cell, cellIndex) => (
-                  <td key={`cell-${rowIndex}-${cellIndex}`}>{cell}</td>
+                  <td key={`cell-${rowIndex}-${cellIndex}`}>{renderInlineCode(cell)}</td>
                 ))}
               </tr>
             ))}

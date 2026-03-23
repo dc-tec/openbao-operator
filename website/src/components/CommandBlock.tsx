@@ -10,6 +10,14 @@ type CommandBlockProps = {
   title?: string;
 };
 
+const labelText: Record<NonNullable<CommandBlockProps['label']>, string> = {
+  apply: 'Apply',
+  configure: 'Configure',
+  inspect: 'Inspect',
+  output: 'Output',
+  verify: 'Verify',
+};
+
 export default function CommandBlock({
   children,
   code,
@@ -21,10 +29,11 @@ export default function CommandBlock({
     <section className={clsx('commandBlock', `commandBlock--${label}`)}>
       {label || title ? (
         <header className="commandBlock__header">
-          <div>
-            <p className="commandBlock__eyebrow">{label}</p>
+          <div className="commandBlock__headerCopy">
+            <p className="commandBlock__eyebrow">{labelText[label]}</p>
             {title ? <p className="commandBlock__title">{title}</p> : null}
           </div>
+          <p className="commandBlock__meta">{language}</p>
         </header>
       ) : null}
       <div className="commandBlock__code">

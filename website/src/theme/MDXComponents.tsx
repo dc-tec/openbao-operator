@@ -13,10 +13,12 @@ import JourneyHero from '@site/src/components/JourneyHero';
 import JourneyRail from '@site/src/components/JourneyRail';
 import JourneySteps from '@site/src/components/JourneySteps';
 import LinkCard from '@site/src/components/LinkCard';
+import ManagerAtAGlance from '@site/src/components/ManagerAtAGlance';
 import NextActions from '@site/src/components/NextActions';
 import OutcomePanel from '@site/src/components/OutcomePanel';
 import PageHero from '@site/src/components/PageHero';
 import RouteList from '@site/src/components/RouteList';
+import SiteLink from '@site/src/components/SiteLink';
 import StatusPill from '@site/src/components/StatusPill';
 
 export default {
@@ -32,10 +34,12 @@ export default {
   JourneyRail,
   JourneySteps,
   LinkCard,
+  ManagerAtAGlance,
   NextActions,
   OutcomePanel,
   PageHero,
   RouteList,
+  SiteLink,
   StatusPill,
   TabItem,
   Tabs,

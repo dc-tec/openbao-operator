@@ -1,27 +1,5 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import {ThumbsDown, ThumbsUp} from 'lucide-react';
-
-declare global {
-  interface Window {
-    gtag?: (
-      command: string,
-      action: string,
-      params?: Record<string, string | number | boolean>,
-    ) => void;
-  }
-}
-
-function emitFeedback(helpful: boolean): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.gtag?.('event', 'docs_feedback', {
-    event_category: 'docs',
-    event_label: window.location.pathname,
-    helpful,
-  });
-}
 
 function issueUrl(): string {
   if (typeof window === 'undefined') {
@@ -29,48 +7,47 @@ function issueUrl(): string {
   }
 
   const page = window.location.href;
-  const title = encodeURIComponent(`docs: feedback for ${window.location.pathname}`);
-  const body = encodeURIComponent(
-    [
-      '## What page needs work?',
-      page,
-      '',
-      '## What was confusing, missing, or incorrect?',
-      '',
-      '## What were you trying to do?',
-      '',
-      '## Suggested improvement',
-      '',
-    ].join('\n'),
-  );
+  const pagePath = encodeURIComponent(window.location.pathname);
+  const pageUrl = encodeURIComponent(page);
 
-  return `https://github.com/dc-tec/openbao-operator/issues/new?labels=documentation&title=${title}&body=${body}`;
+  return `https://github.com/dc-tec/openbao-operator/issues/new?template=docs_feedback.yml&labels=documentation&page_path=${pagePath}&page_url=${pageUrl}`;
 }
 
 export default function DocFeedback(): React.JSX.Element {
+  const [helpfulAcknowledged, setHelpfulAcknowledged] = useState(false);
+  const [issueHref, setIssueHref] = useState('https://github.com/dc-tec/openbao-operator/issues/new');
+
+  useEffect(() => {
+    setIssueHref(issueUrl());
+  }, []);
+
   return (
     <section className="docFeedback" aria-label="Documentation feedback">
       <div className="docFeedback__header">
         <div>
           <p className="docFeedback__title">Was this page helpful?</p>
           <p className="docFeedback__subtitle">
-            Feedback events are tracked in GA4. Detailed suggestions route into
-            GitHub where the maintainers already work.
+            Use <strong>Needs work</strong> to open a structured GitHub issue for this page.
+            The <strong>Yes</strong> button only acknowledges the signal locally.
           </p>
+          {helpfulAcknowledged ? (
+            <p className="docFeedback__ack" role="status">
+              Thanks. Keep using the issue link when a page needs work.
+            </p>
+          ) : null}
         </div>
         <div className="docFeedback__actions">
           <button
             className="button button--secondary button--sm"
             type="button"
-            onClick={() => emitFeedback(true)}
+            onClick={() => setHelpfulAcknowledged(true)}
           >
             <ThumbsUp size={16} />
             Yes
           </button>
           <a
             className="button button--outline button--sm"
-            href={issueUrl()}
-            onClick={() => emitFeedback(false)}
+            href={issueHref}
             rel="noreferrer"
             target="_blank"
           >

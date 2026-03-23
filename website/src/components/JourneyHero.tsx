@@ -2,6 +2,7 @@ import React from 'react';
 import clsx from 'clsx';
 import {ArrowRight} from 'lucide-react';
 import SiteLink from '@site/src/components/SiteLink';
+import renderInlineCode from '@site/src/components/renderInlineCode';
 
 type JourneyHeroAction = {
   docId?: string;
@@ -13,9 +14,9 @@ type JourneyHeroAction = {
 type JourneyHeroProps = {
   children?: React.ReactNode;
   className?: string;
-  eyebrow?: string;
-  title: string;
-  lede: string;
+  eyebrow?: React.ReactNode;
+  title: React.ReactNode;
+  lede: React.ReactNode;
   actions?: JourneyHeroAction[];
 };
 
@@ -33,7 +34,7 @@ function JourneyHeroActionLink({
 }: JourneyHeroAction): React.JSX.Element {
   return (
     <SiteLink className={clsx(actionClasses[variant], 'journeyHero__action')} docId={docId} to={to}>
-      {label}
+      {renderInlineCode(label)}
       <ArrowRight size={16} />
     </SiteLink>
   );
@@ -54,9 +55,9 @@ export default function JourneyHero({
       })}
     >
       <div className="journeyHero__content">
-        {eyebrow ? <p className="journeyHero__eyebrow">{eyebrow}</p> : null}
-        <h1>{title}</h1>
-        <p className="journeyHero__lede">{lede}</p>
+        {eyebrow ? <p className="journeyHero__eyebrow">{renderInlineCode(eyebrow)}</p> : null}
+        <h1>{renderInlineCode(title)}</h1>
+        <p className="journeyHero__lede">{renderInlineCode(lede)}</p>
         {actions.length > 0 ? (
           <div className="journeyHero__actions">
             {actions.map((action) => (

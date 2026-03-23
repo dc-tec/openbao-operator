@@ -1,18 +1,19 @@
 import React from 'react';
 import clsx from 'clsx';
 import SiteLink from '@site/src/components/SiteLink';
+import renderInlineCode from '@site/src/components/renderInlineCode';
 
 type JourneyStepItem = {
   docId?: string;
-  label: string;
-  description: string;
+  label: React.ReactNode;
+  description: React.ReactNode;
   to?: string;
 };
 
 type JourneyStepsProps = {
   current: number;
   items: JourneyStepItem[];
-  title?: string;
+  title?: React.ReactNode;
 };
 
 function JourneyStepsItem({
@@ -30,8 +31,8 @@ function JourneyStepsItem({
     <>
       <span className="journeySteps__index">{String(stepNumber).padStart(2, '0')}</span>
       <span className="journeySteps__copy">
-        <span className="journeySteps__label">{label}</span>
-        <span className="journeySteps__description">{description}</span>
+        <span className="journeySteps__label">{renderInlineCode(label)}</span>
+        <span className="journeySteps__description">{renderInlineCode(description)}</span>
       </span>
     </>
   );
@@ -58,10 +59,10 @@ export default function JourneySteps({
   title = 'Journey map',
 }: JourneyStepsProps): React.JSX.Element {
   return (
-    <nav aria-label={title} className="journeySteps">
+    <nav aria-label={typeof title === 'string' ? title : 'Journey map'} className="journeySteps">
       <div className="journeySteps__header">
         <p className="journeySteps__eyebrow">Journey map</p>
-        <p className="journeySteps__title">{title}</p>
+        <p className="journeySteps__title">{renderInlineCode(title)}</p>
       </div>
       <ol className="journeySteps__list">
         {items.map((item, index) => {
@@ -74,7 +75,7 @@ export default function JourneySteps({
                 : 'upcoming';
           return (
             <li
-              key={`${item.label}-${stepNumber}`}
+              key={`journey-step-${item.docId ?? item.to ?? stepNumber}`}
               className={clsx('journeySteps__step', `journeySteps__step--${state}`)}
             >
               <JourneyStepsItem

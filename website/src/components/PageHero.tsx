@@ -2,6 +2,7 @@ import React from 'react';
 import clsx from 'clsx';
 import {ArrowRight} from 'lucide-react';
 import SiteLink from '@site/src/components/SiteLink';
+import renderInlineCode from '@site/src/components/renderInlineCode';
 
 type PageHeroAction = {
   docId?: string;
@@ -14,9 +15,10 @@ type PageHeroProps = {
   actions?: PageHeroAction[];
   children?: React.ReactNode;
   className?: string;
-  eyebrow?: string;
-  lede: string;
-  title: string;
+  eyebrow?: React.ReactNode;
+  lede: React.ReactNode;
+  title: React.ReactNode;
+  variant?: 'landing' | 'standard' | 'compact' | 'minimal';
 };
 
 const actionClasses: Record<NonNullable<PageHeroAction['variant']>, string> = {
@@ -32,13 +34,20 @@ export default function PageHero({
   eyebrow,
   lede,
   title,
+  variant = 'standard',
 }: PageHeroProps): React.JSX.Element {
   return (
-    <section className={clsx('pageHero', className, {'pageHero--withAside': Boolean(children)})}>
+    <section
+      className={clsx(
+        'pageHero',
+        `pageHero--${variant}`,
+        className,
+        {'pageHero--withAside': Boolean(children)},
+      )}>
       <div className="pageHero__content">
-        {eyebrow ? <p className="pageHero__eyebrow">{eyebrow}</p> : null}
-        <h1>{title}</h1>
-        <p className="pageHero__lede">{lede}</p>
+        {eyebrow ? <p className="pageHero__eyebrow">{renderInlineCode(eyebrow)}</p> : null}
+        <h1>{renderInlineCode(title)}</h1>
+        <p className="pageHero__lede">{renderInlineCode(lede)}</p>
         {actions.length > 0 ? (
           <div className="pageHero__actions">
             {actions.map((action) => (
@@ -48,7 +57,7 @@ export default function PageHero({
                 docId={action.docId}
                 to={action.to}
               >
-                {action.label}
+                {renderInlineCode(action.label)}
                 <ArrowRight size={16} />
               </SiteLink>
             ))}
