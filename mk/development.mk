@@ -7,10 +7,10 @@ bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-
 	else \
 		echo "Skipping ast-grep bootstrap because npm is not available."; \
 	fi
-	@if command -v "$(DOCS_PYTHON)" >/dev/null 2>&1 && "$(DOCS_PYTHON)" -m venv --help >/dev/null 2>&1; then \
+	@if command -v "$(DOCS_NPM)" >/dev/null 2>&1; then \
 		$(MAKE) docs-deps; \
 	else \
-		echo "Skipping docs bootstrap because python3 with venv support is not available."; \
+		echo "Skipping docs bootstrap because npm is not available."; \
 	fi
 	@echo "Bootstrap complete."
 	@echo "Run 'make doctor' to validate external prerequisites."
@@ -323,10 +323,9 @@ verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
 	}
 	@echo "trusted_root.json is valid"
 
-DOCS_VENV ?= .venv-docs
-DOCS_PYTHON ?= python3
-DOCS_PIP ?= $(DOCS_VENV)/bin/pip
-DOCS_MKDOCS ?= $(DOCS_VENV)/bin/mkdocs
+DOCS_DIR ?= website
+DOCS_NPM ?= $(NPM)
+DOCS_VERSION ?=
 TEST_ARTIFACT_DIR ?= dist/test
 GOTESTSUM_FORMAT ?= pkgname
 FUZZTIME ?= 3s
@@ -334,18 +333,21 @@ FUZZ_GOMAXPROCS ?= 4
 FUZZ_TARGET_FILTER ?=
 
 .PHONY: docs-deps
-docs-deps: ## Install MkDocs tooling in a local venv (CI-equivalent).
-	@$(DOCS_PYTHON) -m venv "$(DOCS_VENV)"
-	@$(DOCS_PIP) install --upgrade pip
-	@$(DOCS_PIP) install mkdocs-material mike
+docs-deps: ## Install Docusaurus site dependencies from lockfile.
+	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" ci
 
 .PHONY: docs-build
-docs-build: docs-deps ## Build docs locally (CI-equivalent; strict). Writes ./site/.
-	@$(DOCS_MKDOCS) build --strict
+docs-build: docs-deps ## Build the Docusaurus docs site locally. Writes ./website/build/.
+	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run build
 
 .PHONY: docs-serve
 docs-serve: docs-deps ## Serve docs locally. http://localhost:8000
-	@$(DOCS_MKDOCS) serve -a 0.0.0.0:8000
+	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run start
+
+.PHONY: docs-version
+docs-version: docs-deps ## Snapshot the current docs into a versioned Docusaurus release. Set DOCS_VERSION=<version>.
+	@test -n "$(DOCS_VERSION)" || { echo "DOCS_VERSION is required, for example: make docs-version DOCS_VERSION=1.2.3"; exit 1; }
+	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run version:docs -- "$(DOCS_VERSION)"
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

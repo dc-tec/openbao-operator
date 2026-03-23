@@ -51,16 +51,8 @@ check_cmd docker "docker" "required for image builds and config compatibility ch
 check_cmd kubectl "kubectl" "required for install/deploy workflows"
 check_cmd helm "helm" "required for verify-helm and helm-test"
 check_cmd trivy "trivy" "required for security-ci and security-scan"
-check_cmd python3 "python3" "required for docs-build and manifest patch helpers"
+check_cmd python3 "python3" "required for manifest patch helpers, Tilt manifest rendering, and API/reference generation"
 check_cmd npm "npm" "required to install ast-grep for lint-ci"
-
-if command -v python3 >/dev/null 2>&1; then
-  if python3 -m venv --help >/dev/null 2>&1; then
-    ok "python3 venv module available"
-  else
-    err "python3 venv module missing (install python3-venv or equivalent)"
-  fi
-fi
 
 if command -v kind >/dev/null 2>&1; then
   ok "kind: $(command -v kind)"

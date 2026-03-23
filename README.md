@@ -28,22 +28,22 @@ Full documentation is available at **[dc-tec.github.io/openbao-operator](https:/
 
 | | |
 | :---: | :---: |
-| [![User Guide](https://img.shields.io/badge/User_Guide-007EC6?style=for-the-badge&logo=readthedocs&logoColor=white)](https://dc-tec.github.io/openbao-operator/latest/user-guide/) | [![Architecture](https://img.shields.io/badge/Architecture-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)](https://dc-tec.github.io/openbao-operator/latest/architecture/) |
+| [![User Guide](https://img.shields.io/badge/User_Guide-007EC6?style=for-the-badge&logo=readthedocs&logoColor=white)](https://dc-tec.github.io/openbao-operator/docs/get-started) | [![Architecture](https://img.shields.io/badge/Architecture-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)](https://dc-tec.github.io/openbao-operator/docs/architecture) |
 | **Installation, Operations, Day-2 Tasks** | **Component Design, Boundaries, Flows** |
-| [![Security](https://img.shields.io/badge/Security-000000?style=for-the-badge&logo=imou&logoColor=white)](https://dc-tec.github.io/openbao-operator/latest/security/) | [![Contributing](https://img.shields.io/badge/Contributing-181717?style=for-the-badge&logo=github&logoColor=white)](https://dc-tec.github.io/openbao-operator/latest/contributing/) |
+| [![Security](https://img.shields.io/badge/Security-000000?style=for-the-badge&logo=imou&logoColor=white)](https://dc-tec.github.io/openbao-operator/docs/security) | [![Contributing](https://img.shields.io/badge/Contributing-181717?style=for-the-badge&logo=github&logoColor=white)](https://dc-tec.github.io/openbao-operator/contribute) |
 | **Threat Model, Hardening, RBAC** | **Dev Setup, Coding Standards, Release** |
-| [![Compatibility](https://img.shields.io/badge/Compatibility-10b981?style=for-the-badge&logo=kubernetes&logoColor=white)](https://dc-tec.github.io/openbao-operator/latest/reference/compatibility/) | [![Samples](https://img.shields.io/badge/Samples-9333ea?style=for-the-badge&logo=yaml&logoColor=white)](config/samples/) |
+| [![Compatibility](https://img.shields.io/badge/Compatibility-10b981?style=for-the-badge&logo=kubernetes&logoColor=white)](https://dc-tec.github.io/openbao-operator/docs/reference/compatibility) | [![Samples](https://img.shields.io/badge/Samples-9333ea?style=for-the-badge&logo=yaml&logoColor=white)](config/samples/) |
 | **Validated K8s/OpenBao Versions** | **Ready-to-apply Example Manifests** |
 
 Recommended entry points:
 
-- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/latest/user-guide/deployment-decision-guide/)
-- [Operator Invariants](https://dc-tec.github.io/openbao-operator/latest/architecture/operator-invariants/)
-- [Production Checklist](https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/production-checklist/)
+- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/docs/get-started/deployment-decision-guide)
+- [Operator Invariants](https://dc-tec.github.io/openbao-operator/docs/architecture/operator-invariants)
+- [Production Checklist](https://dc-tec.github.io/openbao-operator/docs/operate/production-checklist)
 
 ## Compatibility
 
-For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openbao-operator/latest/reference/compatibility/).
+For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openbao-operator/docs/reference/compatibility).
 
 - **Kubernetes**: validated in CI on `v1.33`–`v1.35`
 - **OpenBao**: validated in CI on `2.5.0`, with config compatibility checks for `2.4.4` and upgrade coverage from `2.4.4` to `2.5.0`
@@ -68,10 +68,10 @@ For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openba
 
 ## Security Model
 
-- **Threat model**: Design assumptions and attacker model ([Threat Model](https://dc-tec.github.io/openbao-operator/latest/security/fundamentals/threat-model/))
-- **RBAC boundaries**: Least-privilege split between controller and provisioner ([RBAC](https://dc-tec.github.io/openbao-operator/latest/security/infrastructure/rbac/))
-- **Guardrails**: Validating admission policies that block dangerous settings before they reach the cluster ([Admission Policies](https://dc-tec.github.io/openbao-operator/latest/security/infrastructure/admission-policies/))
-- **Multi-tenancy**: Namespace isolation guarantees and limits ([Tenant Isolation](https://dc-tec.github.io/openbao-operator/latest/security/multi-tenancy/tenant-isolation/))
+- **Threat model**: Design assumptions and attacker model ([Threat Model](https://dc-tec.github.io/openbao-operator/docs/security/fundamentals/threat-model))
+- **RBAC boundaries**: Least-privilege split between controller and provisioner ([RBAC](https://dc-tec.github.io/openbao-operator/docs/security/infrastructure/rbac))
+- **Guardrails**: Validating admission policies that block dangerous settings before they reach the cluster ([Admission Policies](https://dc-tec.github.io/openbao-operator/docs/security/infrastructure/admission-policies))
+- **Multi-tenancy**: Namespace isolation guarantees and limits ([Tenant Isolation](https://dc-tec.github.io/openbao-operator/docs/security/multi-tenancy/tenant-isolation))
 
 ## Quick Start
 
@@ -129,9 +129,9 @@ The `Hardened` profile enforces:
 - Self-init enabled (`spec.selfInit.enabled: true`)
 
 Start with:
-- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/latest/user-guide/deployment-decision-guide/)
-- [Security Profiles](https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/configuration/security-profiles/)
-- [Production Checklist](https://dc-tec.github.io/openbao-operator/latest/user-guide/openbaocluster/operations/production-checklist/)
+- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/docs/get-started/deployment-decision-guide)
+- [Security Profiles](https://dc-tec.github.io/openbao-operator/docs/user-guide/openbaocluster/configuration/security-profiles)
+- [Production Checklist](https://dc-tec.github.io/openbao-operator/docs/operate/production-checklist)
 - Production samples in `config/samples/production/`
 
 ## Installation
@@ -182,7 +182,7 @@ kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/latest/dow
 
 ## Contributing
 
-We welcome contributions! Please see the [Contributing Guide](https://dc-tec.github.io/openbao-operator/latest/contributing/) for details on:
+We welcome contributions! Please see the [Contributing Guide](https://dc-tec.github.io/openbao-operator/contribute) for details on:
 
 - Setting up your development environment.
 - Running the PR-equivalent local gate (`make bootstrap && make doctor && make ci-core`).

@@ -18,7 +18,7 @@
 
 ## Checklist
 
-- [ ] My code follows the [project style guide](https://dc-tec.github.io/openbao-operator/contributing/standards/index.html).
+- [ ] My code follows the [project style guide](https://dc-tec.github.io/openbao-operator/contribute/standards/).
 - [ ] I have performed a self-review of my own code.
 - [ ] I have commented my code, particularly in hard-to-understand areas.
 - [ ] I have made corresponding changes to the documentation.

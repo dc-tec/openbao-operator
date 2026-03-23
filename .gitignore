@@ -20,6 +20,7 @@ go.work
 # Local development files
 .DS_Store
 .gocache
+.contribute-docs/
 node_modules/
 
 # Kubernetes Generated files - skip generated files, except for vendored files
@@ -41,9 +42,7 @@ node_modules/
 
 # Documentation build output
 site/*
-
-# MkDocs virtualenv (created by `make docs-*`)
-.venv-docs/
+website/build/
 
 # Release workflow outputs (generated locally during validation)
 dist/crds.yaml

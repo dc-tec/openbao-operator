@@ -1,180 +1,239 @@
-# UpgradeManager (Rolling & Blue/Green)
+---
+title: Upgrade Manager
+hide_title: true
+pageType: concept
+journey: architecture
+description: Orchestrate rolling and blue-green upgrades, status-backed resumability, and rollback safety without violating Raft consensus.
+---
 
-!!! tip "User Guide"
-    For operational instructions, see the [Upgrades User Guide](../user-guide/openbaocluster/operations/upgrades.md).
+<PageHero
+  variant="compact"
+  eyebrow="Architecture / Operations Manager"
+  title="Change workload versions without violating Raft safety."
+  lede="The upgrade manager owns disruptive version changes. It keeps upgrade orchestration out of the workload loop, persists state in status so upgrades survive controller restarts, and prioritizes cluster availability over finishing quickly."
+  actions={[
+    {label: 'Open operation lifecycle', docId: 'architecture/operation-lifecycle', variant: 'primary'},
+    {label: 'Open upgrades guide', docId: 'user-guide/openbaocluster/operations/upgrades', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this page when you need to"
+    items={[
+      'compare rolling and blue-green at the manager boundary',
+      'understand which status fields make upgrades resumable',
+      'see where retries, rollback, and break-glass decisions happen',
+      'connect user-facing upgrade choices back to controller behavior',
+    ]}
+  />
+</PageHero>
 
-**Responsibility:** Orchestrate safe version updates while maintaining Raft consensus.
+<ManagerAtAGlance
+  sections={[
+    {
+      label: 'Control path',
+      items: [
+        'adminops reconciler',
+        'internal/app/openbaocluster/adminops',
+        'internal/service/upgrade/rolling and internal/service/upgrade/bluegreen',
+      ],
+    },
+    {
+      label: 'Owns',
+      items: [
+        'rolling and blue-green orchestration state',
+        'upgrade executor jobs and phase transitions',
+        'status-backed retry and rollback coordination',
+      ],
+    },
+    {
+      label: 'Writes',
+      items: [
+        'status.upgrade and status.blueGreen state',
+        'partition changes, green revision resources, and executor jobs',
+        'break-glass and failure state when rollback safety is compromised',
+      ],
+    },
+    {
+      label: 'Depends on',
+      items: [
+        'target version policy and image alignment',
+        'backup readiness and network egress for snapshot prerequisites',
+        'operation lifecycle coordination for lock, retry, and phase timing',
+      ],
+    },
+  ]}
+/>
 
-## 1. Architectural Placement
+## Architectural Placement
 
 Upgrade execution belongs to the AdminOps orchestration path:
 
-1. `internal/controller/openbaocluster` (adminops reconciler) receives the reconcile event.
-2. It delegates to `internal/app/openbaocluster` facade functions.
-3. The app layer calls `internal/app/openbaocluster/adminops`, which invokes rolling (`internal/service/upgrade/rolling`) or blue/green (`internal/service/upgrade/bluegreen`) manager flows.
+1. `internal/controller/openbaocluster` receives an adminops reconcile event.
+2. The controller delegates to `internal/app/openbaocluster`.
+3. AdminOps orchestration invokes either the rolling or blue-green upgrade manager flow.
 
-This keeps controller code focused on reconcile wiring while the upgrade domain stays in dedicated manager packages.
+That keeps upgrade state machines out of the workload loop and lets long-running transitions own their own retry model.
 
-## 2. Upgrade Strategies
+<DecisionTable
+  kind="decision"
+  title="Strategy selection"
+  columns={['Strategy', 'Best fit', 'Primary tradeoff']}
+  rows={[
+    {
+      cells: ['Rolling update', 'Default upgrades with minimal extra infrastructure.', 'Lower resource cost, but each pod replacement must preserve Raft health and leader safety.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Blue-green', 'High-control cutovers with explicit promotion and rollback phases.', 'More orchestration and roughly double storage during the transition.'],
+      emphasis: 'caution',
+    },
+  ]}
+/>
 
-The Manager supports two distinct strategies, controlled by `spec.upgrade.strategy`.
+<Tabs groupId="upgrade-manager-strategies">
+  <TabItem value="rolling" label="Rolling update">
 
-=== "Rolling Update (Default)"
+<DiagramFrame
+  title="Rolling update flow"
+  caption="Rolling upgrades use StatefulSet partitioning and leader step-down so each pod can be replaced while Raft remains healthy."
+  code={`graph TD
+    Trigger["Version change"] --> Partition["Set partition to replicas"]
+    Partition --> Loop{"Partition > 0"}
+    Loop --> Identify["Identify leader"]
+    Identify --> StepDown["Step down if target pod is leader"]
+    StepDown --> Update["Decrement partition"]
+    Update --> Ready["Wait for pod ready"]
+    Ready --> Health["Wait for OpenBao health"]
+    Health --> Loop
+    Loop --> Converge["Verify StatefulSet and pod convergence"]
+    Converge --> Finalize["Atomically finalize status"]
 
-    **Goal:** Update pods one-by-one with minimal downtime.
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
-    The Manager uses **StatefulSet Partitioning** to control the rollout.
+    class Trigger,Identify,Ready,Health read;
+    class Partition,StepDown,Update,Converge process;
+    class Finalize write;`}
+/>
 
-    ```mermaid
-    graph TD
-        Trigger[Version Change] -->|Pause| Partition[Set Partition = Replicas]
-        Partition --> Loop{Partition > 0?}
-        
-        Loop -- Yes --> Ident[Identify Leader]
-        Ident -->|If Target is Leader| StepDown[Force Step-Down]
-        Ident -->|If Target is Follower| Update[Decrement Partition]
-        
-        StepDown --> WaitTransfer[Wait for Leadership Transfer]
-        WaitTransfer --> Update
-        
-        Update --> WaitReady[Wait for Pod Ready]
-        WaitReady --> WaitHealth[Wait for OpenBao Health]
-        WaitHealth --> Loop
-        
-        Loop -- No --> Converge[Wait for StatefulSet + Pod Convergence]
-        Converge --> Finalize[Atomically Clear status.upgrade + Set currentVersion]
-        Finalize --> Done[Upgrade Complete]
+<Checklist
+  title="Rolling safety controls"
+  items={[
+    'StatefulSet partitioning pauses Kubernetes-driven rollout until the manager explicitly advances each ordinal.',
+    'Reverse ordinal updates and forced leader step-down protect Raft availability during pod replacement.',
+    'Finalization only happens after the StatefulSet revision and observed workload health fully converge.',
+  ]}
+/>
 
-        classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-        classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-        classDef read fill:transparent,stroke:#60a5fa,stroke-width:2px,color:#fff;
-        
-        class Partition,StepDown,Update,Finalize write;
-        class Trigger,Ident,WaitReady,WaitHealth read;
-        class Loop,WaitTransfer,Converge process;
-    ```
+  </TabItem>
+  <TabItem value="bluegreen" label="Blue-green">
 
-    1.  **Partitioning:** We pause Kubernetes updates by setting `partition` equal to `replicas`.
-    2.  **Reverse Ordinal:** We update from highest index (e.g., 2) down to 0.
-    3.  **Leader Safety:** Before updating the node that is currently the **Leader**, we send `PUT /sys/step-down` to force a leadership transfer. This prevents the cluster from crashing during the leader's restart.
-    4.  **Convergence before finalize:** We only finalize after StatefulSet and pod revisions/health fully converge.
-    5.  **Atomic finalization:** Rolling completion writes `status.upgrade=nil` and `status.currentVersion=<target>` together to avoid split state.
+<Callout type="warning" title="Resource usage">
 
-=== "Blue/Green"
+Blue-green creates a second revision and needs roughly double storage capacity for the duration of the transition.
 
-    **Goal:** Zero-downtime upgrades with deterministic phase transitions and controlled rollback boundaries.
+</Callout>
 
-    !!! warning "Resource Usage"
-        Requires **2x Storage** capacity during the transition (Blue volume + Green volume).
+<DiagramFrame
+  title="Blue-green flow"
+  caption="Blue-green creates a parallel revision, promotes it through explicit phases, then switches traffic only after leadership and voter transitions are safe."
+  code={`graph TD
+    Deploy["Deploy green revision"] --> Join["Join green as non-voters"]
+    Join --> Sync["Wait for sync and optional hold"]
+    Sync --> Promote["Promote green to voters"]
+    Promote --> Demote["Demote blue and step down"]
+    Demote --> Leader{"Green leader observed?"}
+    Leader --> Switch["Cleanup: switch service to green"]
+    Switch --> Remove["Remove blue peers"]
+    Remove --> Delete["Delete blue StatefulSet"]
+    Promote --> Rollback["Late failure triggers rollback"]
+    Rollback --> Repair["Repair consensus"]
+    Repair --> DeleteGreen["Delete green revision"]
 
-    This strategy creates a parallel Green revision, joins it as non-voters, promotes it to voters, then cuts over traffic during `Cleanup`.
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef critical fill:transparent,stroke:#dc2626,stroke-width:2px,stroke-dasharray: 5 5,color:#f8fafc;
 
-    ```mermaid
-    graph TD
-        Start((Start)) -->|v1 -> v2| Deploy[Deploy Green Cluster]
-        
-        subgraph Preparation
-            Deploy -->|Wait Ready + Unsealed| Join[Join Green as Non-Voters]
-            Join --> Sync[Wait Green Synced]
-            Sync --> Promote[Promote Green to Voters]
-        end
+    class Deploy,Join,Sync,Promote,Demote,Remove,Delete,Repair,DeleteGreen process;
+    class Switch,Rollback critical;
+    class Leader write;`}
+/>
 
-        subgraph Cutover
-            Promote --> Demote[Demote Blue Non-Voters + Step-Down]
-            Demote --> LeaderCheck{Green Leader Observed?}
-            LeaderCheck -- No --> Wait[Requeue]
-            Wait --> LeaderCheck
-            LeaderCheck -- Yes --> Switch[Phase Cleanup: Service Selects Green]
-        end
+<Checklist
+  title="Blue-green safety controls"
+  tone="warning"
+  items={[
+    'The service selector switches to green only in cleanup.',
+    'Manual promotion, manual rollback, and validation-hook failures all route through explicit phase handling in status.',
+    'If rollback consensus repair fails late, the manager enters break-glass and stops risky automation.',
+  ]}
+/>
 
-        subgraph Cleanup
-            Switch --> Remove[Remove Blue Peers]
-            Remove --> Delete[Delete Blue StatefulSet]
-            Promote --> Rollback[Late Failure: Trigger Rollback]
-            Rollback --> Repair["Repair Consensus (Blue Voters, Green Non-Voters)"]
-            Repair --> RemoveGreen[Remove Green Peers]
-            RemoveGreen --> DeleteGreen[Delete Green StatefulSet]
-        end
+  </TabItem>
+</Tabs>
 
-        Delete --> Done((Idle))
-        DeleteGreen --> Done
+## State And Recovery Model
 
-        classDef process fill:transparent,stroke:#9333ea,stroke-width:2px,color:#fff;
-        classDef critical fill:transparent,stroke:#dc2626,stroke-width:2px,stroke-dasharray: 5 5,color:#fff;
-        classDef write fill:transparent,stroke:#22c55e,stroke-width:2px,color:#fff;
-        
-        class Deploy,Join,Sync,Promote,Demote,Wait,Remove,Delete,Repair,RemoveGreen,DeleteGreen process;
-        class Switch,Rollback critical;
-        class Start,Done,LeaderCheck write;
-    ```
+<DecisionTable
+  kind="reference"
+  title="Status-backed upgrade state"
+  columns={['State surface', 'What it preserves']}
+  rows={[
+    {
+      cells: ['status.upgrade', 'Rolling partition progress, completed pods, and finalization gating.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['status.blueGreen.phase', 'The active blue-green phase and whether promotion, cleanup, or rollback is in progress.'],
+    },
+    {
+      cells: ['lastErrorReason / lastErrorMessage', 'Why the current attempt failed and what must change before retry.'],
+    },
+    {
+      cells: ['status.breakGlass', 'The nonce and diagnostic state when late rollback automation can no longer continue safely.'],
+    },
+  ]}
+/>
 
-    **Key phases (`status.blueGreen.phase`):**
+<DecisionTable
+  kind="reference"
+  title="Safety boundaries"
+  columns={['Concern', 'Manager behavior']}
+  rows={[
+    {
+      cells: ['Availability over progress', 'Rolling pauses or retries when health is ambiguous; blue-green aborts early and rolls back later phases instead of forcing completion.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Version policy and image alignment', 'Invalid semantic versions, downgrades, and conflicting image/version inputs are rejected before orchestration begins.'],
+    },
+    {
+      cells: ['Backup prerequisites', 'Snapshot prerequisites and backup authentication must already be valid before upgrade safety checks pass.'],
+    },
+    {
+      cells: ['Atomic completion', 'Rolling finalization updates upgrade state and currentVersion together so status does not split across two truths.'],
+    },
+  ]}
+/>
 
-    | Phase | Description |
-    | :--- | :--- |
-    | `DeployingGreen` | Creates Green StatefulSet and waits for Ready + unsealed pods. |
-    | `JoiningMesh` | Adds Green pods as non-voters. |
-    | `Syncing` | Waits for sync, optional `minSyncDuration`, and optional pre-promotion hook. |
-    | `Promoting` | Promotes Green pods to voters. |
-    | `DemotingBlue` | Demotes Blue voters and verifies a Green leader is observed. |
-    | `Cleanup` | Switches service selector to Green, removes Blue peers, deletes Blue StatefulSet. |
-    | `RollingBack` | Executes rollback consensus repair (Blue voters, Green non-voters). |
-    | `RollbackCleanup` | Removes Green peers and deletes Green StatefulSet. |
-
-    !!! note
-        Blue/Green service traffic switches to Green only in `Cleanup`.
-
-    !!! warning
-        Rollback is possible until irreversible cleanup has completed.
-
-## 3. Upgrade State Machine
-
-### Resumability
-
-Upgrades are designed to survive Operator restarts. All state is stored in `Status`:
-
-- **Rolling:** Tracks `status.upgrade.currentPartition` and `status.upgrade.completedPods`.
-- **Blue/Green:** Tracks `status.blueGreen.phase` and `status.blueGreen.jobFailureCount`.
-
-If the Operator crashes, it reads the Status on startup and **resumes** exactly where it left off.
-
-### Validation and policy guardrails
-
-- **Shared version policy:** Rolling and Blue/Green both validate the target version through the same version-policy helper. Invalid semantic versions are rejected and downgrades are blocked before orchestration begins.
-- **Admission guardrails:** The admission policy rejects downgrade requests before reconcile when the previous or in-flight target version makes the regression unambiguous.
-- **Image/version alignment:** The workload and upgrade reconcilers reject semver-tagged `spec.image` values that conflict with `spec.version`. Digest-pinned images and custom non-semver tags remain allowed, but `spec.version` remains authoritative.
-- **Snapshot prerequisites:** Pre-upgrade snapshots use `spec.backup` configuration and backup authentication. In the `Hardened` profile, explicit `spec.network.egressRules` are required so snapshot Jobs can reach object storage.
-
-### Rolling completion semantics
-
-- `status.upgrade` remains present until rollout convergence is verified.
-- Finalization updates `status.upgrade` and `status.currentVersion` in a single status patch.
-- The Status controller ignores observed pod-label version regressions, so transient stale observations do not restart a completed rolling upgrade.
-
-### Rolling failure recovery
-
-- Failed rolling upgrades persist `status.upgrade.lastErrorReason` and `status.upgrade.lastErrorMessage`.
-- Recovery is explicit: the operator waits for `spec.upgrade.requests.retry` to change before clearing the failed state and retrying.
-- If the desired target changes while a rolling upgrade is in progress, the controller clears rolling state and re-evaluates the new target from the live cluster state.
-
-### Blue/Green holds and rollback safety
-
-- `Syncing` can intentionally hold when `spec.upgrade.blueGreen.autoPromote=false`.
-- Manual promotion for a held upgrade is requested via `spec.upgrade.requests.promote`.
-- Changing `spec.upgrade.blueGreen.autoPromote` during an in-flight upgrade does not approve that upgrade; it only affects future upgrades.
-- Manual abort or rollback of an active blue/green upgrade is requested via `spec.upgrade.requests.rollback`.
-- A failing `verification.prePromotionHook` either holds in `Syncing` or triggers automatic abort/rollback, depending on `blueGreen.autoRollback.onValidationFailure`.
-- If late rollback consensus repair fails, the operator enters `status.breakGlass` and halts risky rollback automation until `spec.breakGlassAck` matches the issued nonce.
-
-### Image Verification
-
-- `spec.imageVerification` applies to OpenBao workload images (StatefulSet pods).
-- `spec.operatorImageVerification` applies to operator-managed helper images (for example, upgrade executor Jobs).
-- Helper image verification does not fall back to `spec.imageVerification` when `spec.operatorImageVerification` is unset.
-
-## 4. Reconciliation Semantics
-
-- **Idempotency:** Re-running a phase multiple times does not cause side effects (e.g., "Join" checks if already joined).
-- **Safety:** The OpenBao Operator prioritizes **Availability** over Progress. Rolling pauses/retries until healthy. Blue/Green aborts in early phases and rolls back in later phases.
-- **OwnerReferences:** Executor jobs in Blue/Green are owned by the Cluster CR, ensuring easy cleanup.
-- **Upgrade stability:** Autopilot config reconciliation is skipped while `status.upgrade` is present to reduce transient API pressure during rolling restarts.
+<NextActions
+  title="Related deep dives"
+  items={[
+    {
+      label: 'Operation lifecycle coordination',
+      description: 'See how lock, retry, and phase-transition helpers are shared with backup and restore.',
+      docId: 'architecture/operation-lifecycle',
+    },
+    {
+      label: 'Backup manager',
+      description: 'Pre-upgrade snapshots and object-storage readiness are part of the upgrade safety model.',
+      docId: 'architecture/backup-manager',
+    },
+    {
+      label: 'Upgrades guide',
+      description: 'Compare the internal state machine with the user-facing rolling and blue-green operating procedures.',
+      docId: 'user-guide/openbaocluster/operations/upgrades',
+    },
+  ]}
+/>

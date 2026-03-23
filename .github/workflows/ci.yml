@@ -127,7 +127,7 @@ jobs:
             echo "workflow=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(docs/|mkdocs\.yml|README\.md|\.github/actions/mkdocs-build/)'; then
+          if echo "${changed}" | grep -qE '^(docs/|releases/|website/|hack/docs/|CHANGELOG\.md|README\.md|\.github/actions/docs-build/)'; then
             echo "docs=true" >> "${GITHUB_OUTPUT}"
           else
             echo "docs=false" >> "${GITHUB_OUTPUT}"
@@ -507,7 +507,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Build docs
-        uses: ./.github/actions/mkdocs-build
+        uses: ./.github/actions/docs-build
 
   helm:
     name: Helm Chart
