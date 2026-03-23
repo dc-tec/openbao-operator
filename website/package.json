@@ -28,7 +28,7 @@
     "@docusaurus/theme-mermaid": "3.9.2",
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.512.0",
+    "lucide-react": "^1.0.1",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
@@ -41,7 +41,7 @@
     "@docusaurus/tsconfig": "3.9.2",
     "@docusaurus/types": "3.9.2",
     "@playwright/test": "^1.53.0",
-    "typescript": "~5.9.0"
+    "typescript": "~6.0.2"
   },
   "browserslist": {
     "production": [
