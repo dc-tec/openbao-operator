@@ -156,13 +156,14 @@ Section ownership:
   label="verify"
   title="Docs preview and validation"
   code={`make docs-serve
+make docs-preview
 make docs-build
 
 npm --prefix website run typecheck
 npm --prefix website run build
 npm --prefix website run test:e2e`}
 >
-  Use the full site checks before merging structural or high-traffic documentation changes.
+  Use `make docs-serve` for the fast authoring loop. Use `make docs-preview` when you need production-style behavior such as local search. Run the full site checks before merging structural or high-traffic documentation changes.
 </CommandBlock>
 
 <NextActions
