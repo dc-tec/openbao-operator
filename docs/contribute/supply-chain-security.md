@@ -196,5 +196,10 @@ Human two-person approval controls are still limited by the current single-maint
       description: "Open the policy that governs which shipped dependencies are allowed into the release graph at all.",
       to: "/contribute/dependency-licenses",
     },
+    {
+      label: "Incident response",
+      description: "Use the supply-chain incident runbook when you need to freeze publishing, rotate credentials, or inspect recent releases.",
+      to: "/contribute/supply-chain-incident-response",
+    },
   ]}
 />
