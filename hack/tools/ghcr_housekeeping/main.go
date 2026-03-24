@@ -48,6 +48,18 @@ var defaultPackages = []string{
 	"openbao-init",
 	"openbao-backup",
 	"openbao-upgrade",
+	"ci-e2e-openbao-operator",
+	"ci-e2e-openbao-init",
+	"ci-e2e-openbao-backup",
+	"ci-e2e-openbao-upgrade",
+	"pr-e2e-openbao-operator",
+	"pr-e2e-openbao-init",
+	"pr-e2e-openbao-backup",
+	"pr-e2e-openbao-upgrade",
+	"nightly-e2e-openbao-operator",
+	"nightly-e2e-openbao-init",
+	"nightly-e2e-openbao-backup",
+	"nightly-e2e-openbao-upgrade",
 }
 
 type multiStringFlag []string
@@ -623,10 +635,26 @@ func (c *githubPackagesClient) ListPackageVersions(
 			page,
 		)
 
-		var apiItems []apiPackageVersion
-		if err := c.doJSON(ctx, http.MethodGet, endpoint, nil, &apiItems); err != nil {
+		resp, err := c.do(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
 			return nil, fmt.Errorf("list package versions: %w", err)
 		}
+		if resp.StatusCode == http.StatusNotFound {
+			_ = resp.Body.Close()
+			return versions, nil
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			msg := extractAPIErrorMessage(resp)
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("list package versions: %w", classifyAPIError(resp.StatusCode, msg))
+		}
+
+		var apiItems []apiPackageVersion
+		if err := json.NewDecoder(resp.Body).Decode(&apiItems); err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("list package versions: decode JSON response: %w", err)
+		}
+		_ = resp.Body.Close()
 		if len(apiItems) == 0 {
 			break
 		}

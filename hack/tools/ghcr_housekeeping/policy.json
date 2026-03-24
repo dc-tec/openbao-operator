@@ -25,73 +25,73 @@
       "name": "edge-sha",
       "pattern": "^edge-[0-9a-f]{12}$",
       "action": "delete_after",
-      "ttl_days": 30
+      "ttl_days": 14
     },
     {
       "name": "nightly-date",
       "pattern": "^nightly-[0-9]{8}$",
       "action": "delete_after",
-      "ttl_days": 30
+      "ttl_days": 14
     },
     {
       "name": "nightly-date-sha",
       "pattern": "^nightly-[0-9]{8}-[0-9a-f]{12}$",
       "action": "delete_after",
-      "ttl_days": 30
+      "ttl_days": 14
     },
     {
       "name": "dev",
       "pattern": "^dev$",
       "action": "delete_after",
-      "ttl_days": 30
+      "ttl_days": 14
     },
     {
       "name": "dev-family",
       "pattern": "^dev-.*$",
       "action": "delete_after",
-      "ttl_days": 30
+      "ttl_days": 14
     },
     {
       "name": "edge-build",
       "pattern": "^edge-build-[0-9a-f]{40}$",
       "action": "delete_after",
-      "ttl_days": 21
+      "ttl_days": 14
     },
     {
       "name": "edge-repro",
       "pattern": "^edge-repro-[0-9a-f]{40}$",
       "action": "delete_after",
-      "ttl_days": 21
+      "ttl_days": 14
     },
     {
       "name": "nightly-build",
       "pattern": "^nightly-build-[0-9a-f]{40}$",
       "action": "delete_after",
-      "ttl_days": 21
+      "ttl_days": 14
     },
     {
       "name": "nightly-repro",
       "pattern": "^nightly-repro-[0-9a-f]{40}$",
       "action": "delete_after",
-      "ttl_days": 21
+      "ttl_days": 14
     },
     {
       "name": "release-build",
       "pattern": "^build-[0-9a-f]{40}$",
       "action": "delete_after",
-      "ttl_days": 21
+      "ttl_days": 14
     },
     {
       "name": "release-repro",
       "pattern": "^repro-[0-9a-f]{40}$",
       "action": "delete_after",
-      "ttl_days": 21
+      "ttl_days": 14
     },
     {
       "name": "release-repro-legacy",
       "pattern": "^repro-[0-9]+\\.[0-9]+\\.[0-9]+.*-[0-9]+$",
       "action": "delete_after",
-      "ttl_days": 21
+      "ttl_days": 14
     },
     {
       "name": "e2e",

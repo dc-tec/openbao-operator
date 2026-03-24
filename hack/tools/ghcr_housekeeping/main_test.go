@@ -458,6 +458,30 @@ func TestGitHubClientPaginatesVersions(t *testing.T) {
 	}
 }
 
+func TestGitHubClientListPackageVersionsMissingPackageReturnsEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, `{"message":"Not Found"}`)
+	}))
+	defer server.Close()
+
+	client := &githubPackagesClient{
+		baseURL: server.URL,
+		token:   "test-token",
+		httpClient: &http.Client{
+			Timeout: 5 * time.Second,
+		},
+	}
+
+	got, err := client.ListPackageVersions(context.Background(), ownerKindOrg, "dc-tec", "ci-e2e-openbao-operator")
+	if err != nil {
+		t.Fatalf("ListPackageVersions() error = %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len(versions) = %d, want 0", len(got))
+	}
+}
+
 type fakePackageClient struct {
 	versionsByPackage map[string][]packageVersion
 	listErrors        map[string]error
