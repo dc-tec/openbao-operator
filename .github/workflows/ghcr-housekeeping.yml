@@ -43,6 +43,7 @@ jobs:
           MODE_INPUT: ${{ github.event.inputs.mode }}
           MODE_VAR: ${{ vars.GHCR_HOUSEKEEPING_MODE }}
           MAX_INPUT: ${{ github.event.inputs.max_delete_per_package }}
+          MAX_VAR: ${{ vars.GHCR_HOUSEKEEPING_MAX_DELETE_PER_PACKAGE }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -75,6 +76,12 @@ jobs:
               exit 1
             fi
             max_delete="${MAX_INPUT}"
+          elif [[ -n "${MAX_VAR:-}" ]]; then
+            if ! [[ "${MAX_VAR}" =~ ^[0-9]+$ ]] || [[ "${MAX_VAR}" -le 0 ]]; then
+              echo "GHCR_HOUSEKEEPING_MAX_DELETE_PER_PACKAGE must be a positive integer; got '${MAX_VAR}'" >&2
+              exit 1
+            fi
+            max_delete="${MAX_VAR}"
           fi
 
           echo "mode=${mode}" >> "${GITHUB_OUTPUT}"

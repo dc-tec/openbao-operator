@@ -96,7 +96,7 @@ jobs:
             sleep 5
           done
           echo "GitHub Release '${version}' not found after waiting." >&2
-          echo "Merge the release-please PR to create the tag and draft release." >&2
+          echo "Merge the release-please PR and allow the tag workflow to create the tag and draft release." >&2
           exit 1
 
   build:
@@ -112,6 +112,7 @@ jobs:
       build_tag: ${{ needs.prepare.outputs.build_tag }}
       ref: ${{ github.ref }}
       source_date_epoch: ${{ needs.prepare.outputs.source_date_epoch }}
+      cache-scope: ${{ needs.prepare.outputs.build_tag }}
     secrets: inherit
 
   rebuild:
@@ -127,6 +128,7 @@ jobs:
       build_tag: ${{ needs.prepare.outputs.repro_build_tag }}
       ref: ${{ github.ref }}
       source_date_epoch: ${{ needs.prepare.outputs.source_date_epoch }}
+      cache-scope: ${{ needs.prepare.outputs.repro_build_tag }}
     secrets: inherit
 
   security-govulncheck:
@@ -646,6 +648,8 @@ jobs:
     name: Promote + Publish Release
     runs-on: *runner
     needs: [prepare, build, security-govulncheck, security-images, e2e, perf-gate, verify-provenance, verify-byte-reproducibility]
+    environment:
+      name: release-publish
     permissions:
       contents: write
       packages: write
@@ -847,7 +851,7 @@ jobs:
           # This workflow only uploads release assets and publishes the draft release.
           if ! gh release view "${version}" >/dev/null 2>&1; then
             echo "GitHub Release '${version}' not found." >&2
-            echo "Merge the release-please PR to create the tag and draft release." >&2
+            echo "Merge the release-please PR and allow the tag workflow to create the tag and draft release." >&2
             exit 1
           fi
 

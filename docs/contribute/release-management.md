@@ -9,7 +9,7 @@ journey: contribute
   variant="compact"
   eyebrow="Contribute / Validate & Ship"
   title="Release once, promote by digest, and prove the published artifacts before you announce them."
-  lede="OpenBao Operator uses a build-once, promote-everywhere release model. `release-please` owns versioning and changelog state, while publish workflows own build, verification, signing, docs deployment, and release evidence."
+  lede="OpenBao Operator uses a build-once, promote-everywhere release model. `release-please` owns versioning, changelog state, and release orchestration, while publish workflows own build, verification, signing, docs deployment, and release evidence."
   actions={[
     {label: "Open CI behavior", to: "/contribute/ci", variant: "primary"},
     {label: "Open distribution", to: "/contribute/distribution", variant: "secondary"},
@@ -30,7 +30,8 @@ journey: contribute
   title="Build once, promote everywhere"
   caption="Release workflows build immutable artifacts first, then gate, sign, and publish by digest."
   code={`graph TD
-    PR["Release-please PR merged"] --> Tag["Git tag"]
+    PR["Release-please PR merged"] --> Tagger["Tag workflow"]
+    Tagger --> Tag["Git tag + draft GitHub Release"]
     Tag --> Build["Build once"]
     Build --> Gates["Security, E2E, performance, reproducibility"]
     Gates --> Promote["Promote by digest"]
@@ -45,7 +46,7 @@ journey: contribute
     {
       cells: [
         "Stable release",
-        "Merge the release-please PR so the stable version tag is created on `main`.",
+        "Merge the release-please PR so the tag workflow creates the stable version tag and draft GitHub Release from `main`.",
         "GitHub Release assets, OCI Helm chart, signed images, stable docs snapshot, docs deployment, and provenance evidence.",
         "Stable releases become permanent versioned docs and own the default `/docs` route.",
       ],
@@ -54,7 +55,7 @@ journey: contribute
     {
       cells: [
         "Prerelease",
-        "Merge the release-please PR with an explicit prerelease tag such as `-rc.1` or `-beta.1`.",
+        "Merge the release-please PR with an explicit prerelease target such as `-rc.1` or `-beta.1` so the tag workflow creates the prerelease tag and draft GitHub Release.",
         "GitHub Release assets, OCI Helm chart, signed images, docs site deployment, and provenance evidence.",
         "Prereleases use `/docs/next` plus release notes; do not create a permanent versioned docs snapshot unless there is a deliberate preview exception.",
       ],
@@ -110,14 +111,14 @@ git push`}
     {
       cells: [
         "Pre-flight",
-        "Release-please PR looks correct, docs are updated, stable releases have a committed docs snapshot, compatibility docs are current, CI is green, and the performance baseline evidence matches `make verify-perf`.",
+        "Release-please PR looks correct, docs are updated, stable releases have a committed docs snapshot, compatibility docs are current, CI is green, the PR gate is satisfied, and the performance baseline evidence matches `make verify-perf`.",
       ],
       emphasis: "recommended",
     },
     {
       cells: [
         "Publish",
-        "Release workflow tags, signs, attests, publishes assets, and keeps chart/app versions aligned with the git tag.",
+        "Release workflow passes the `release-publish` environment gate, then tags, signs, attests, publishes assets, and keeps chart/app versions aligned with the git tag.",
       ],
     },
     {
@@ -161,7 +162,12 @@ Use the verification skeleton above as the default post-release evidence pack. K
 
 <Callout type="note" title="release-please token requirements">
 
-`release-please` must use a non-default token so the resulting tag and GitHub Release can trigger downstream workflows. Prefer a GitHub App installation token through `OPENBAO_OPERATOR_RELEASE_APP_ID` and `OPENBAO_OPERATOR_RELEASE_PRIVATE_KEY`. A PAT fallback is possible through `RELEASE_PLEASE_TOKEN`, but a bot identity is safer than a maintainer’s personal token.
+`release-please` must use non-default tokens so the resulting tag and GitHub Release can trigger downstream workflows. Use two repo-scoped GitHub Apps:
+
+- `OPENBAO_OPERATOR_RELEASE_PR_APP_ID` and `OPENBAO_OPERATOR_RELEASE_PR_PRIVATE_KEY` for PR-only `release-please`
+- `OPENBAO_OPERATOR_RELEASE_TAG_APP_ID` and `OPENBAO_OPERATOR_RELEASE_TAG_PRIVATE_KEY` for tag-only `release-please`
+
+The tag app should be the only actor with semver tag ruleset bypass. A PAT fallback is possible through `RELEASE_PLEASE_TOKEN`, but a bot identity is safer than a maintainer’s personal token.
 
 </Callout>
 
