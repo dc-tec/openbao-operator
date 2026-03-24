@@ -6,25 +6,15 @@ journey: contribute
 ---
 
 <PageHero
-  variant="compact"
+  variant="minimal"
   eyebrow="Contribute / Project Governance"
-  title="Use this runbook when you need to freeze release automation fast and recover with evidence."
+  title="Freeze release automation fast and recover with evidence."
   lede="During a supply-chain incident, speed and containment matter more than elegance. This runbook is for freezing publication, suspending high-trust credentials, inspecting recent releases, and restoring trust in a controlled order."
   actions={[
     {label: "Open supply chain security", to: "/contribute/supply-chain-security", variant: "primary"},
     {label: "Open release management", to: "/contribute/release-management", variant: "secondary"},
   ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "contain a suspected compromise in GitHub Actions, GHCR, or release automation",
-      "suspend one or both release GitHub Apps and rotate their private keys",
-      "freeze semver tag creation while you assess the blast radius",
-      "inspect recent workflow runs, release tags, draft releases, and promoted images",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Immediate containment order"
