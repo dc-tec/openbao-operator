@@ -93,6 +93,7 @@ jobs:
       build_tag: ${{ inputs.build_tag }}
       ref: ${{ inputs.ref }}
       source_date_epoch: ${{ inputs.source_date_epoch }}
+      cache-scope: ${{ inputs.build_tag }}
     secrets: inherit
 
   rebuild:
@@ -107,6 +108,7 @@ jobs:
       build_tag: ${{ inputs.repro_build_tag }}
       ref: ${{ inputs.ref }}
       source_date_epoch: ${{ inputs.source_date_epoch }}
+      cache-scope: ${{ inputs.repro_build_tag }}
     secrets: inherit
 
   verify-provenance:

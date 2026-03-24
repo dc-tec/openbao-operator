@@ -74,6 +74,48 @@ jobs:
           fi
           cp -a "${artifact_dir}/." dist/candidate/
 
+      - name: Validate edge candidate metadata
+        env:
+          EXPECTED_CHANNEL: edge
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+          EXPECTED_SOURCE_REF: refs/heads/main
+          EXPECTED_BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
+          EXPECTED_MANAGER_IMAGE: ghcr.io/${{ github.repository_owner }}/openbao-operator
+          EXPECTED_CONFIG_INIT_IMAGE: ghcr.io/${{ github.repository_owner }}/openbao-init
+          EXPECTED_BACKUP_EXECUTOR_IMAGE: ghcr.io/${{ github.repository_owner }}/openbao-backup
+          EXPECTED_UPGRADE_EXECUTOR_IMAGE: ghcr.io/${{ github.repository_owner }}/openbao-upgrade
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          data = json.loads(Path("dist/candidate/metadata.json").read_text(encoding="utf-8"))
+          images = data.get("images", {})
+
+          checks = [
+              ("channel", data.get("channel"), os.environ["EXPECTED_CHANNEL"]),
+              ("sha", data.get("sha"), os.environ["EXPECTED_SHA"]),
+              ("source_ref", data.get("source_ref"), os.environ["EXPECTED_SOURCE_REF"]),
+              ("build_run_id", str(data.get("build_run_id", "")), os.environ["EXPECTED_BUILD_RUN_ID"]),
+              ("images.manager.ref", images.get("manager", {}).get("ref"), os.environ["EXPECTED_MANAGER_IMAGE"]),
+              ("images.config_init.ref", images.get("config_init", {}).get("ref"), os.environ["EXPECTED_CONFIG_INIT_IMAGE"]),
+              ("images.backup_executor.ref", images.get("backup_executor", {}).get("ref"), os.environ["EXPECTED_BACKUP_EXECUTOR_IMAGE"]),
+              ("images.upgrade_executor.ref", images.get("upgrade_executor", {}).get("ref"), os.environ["EXPECTED_UPGRADE_EXECUTOR_IMAGE"]),
+          ]
+
+          errors = []
+          for label, actual, expected in checks:
+              if actual != expected:
+                  errors.append(f"edge candidate metadata mismatch for {label}: expected {expected!r}, got {actual!r}")
+
+          if errors:
+              print("\n".join(errors), file=sys.stderr)
+              sys.exit(1)
+          PY
+
       - name: Export metadata outputs
         id: meta
         run: |
@@ -133,9 +175,11 @@ jobs:
       BACKUP_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.backup_executor_digest }}
       UPGRADE_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.upgrade_executor_digest }}
     steps:
-      - name: Checkout trusted workflow sources
+      - name: Checkout trusted workflow helper sources
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.workflow_sha }}
+          path: .github-workflow-src
           fetch-depth: 1
 
       - name: Download edge candidate bundle
@@ -143,6 +187,12 @@ jobs:
         with:
           name: edge-candidate-bundle
           path: dist
+
+      - name: Verify upstream image attestations
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: bash .github-workflow-src/hack/ci/verify-image-attestations.sh
 
       - name: Login to GHCR
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
@@ -247,12 +297,12 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           SIGNER_WORKFLOW: ${{ github.repository }}/.github/workflows/publish-edge.yml
           VERIFY_CHART: "false"
-        run: bash hack/ci/verify-release-artifact-attestations.sh
+        run: bash .github-workflow-src/hack/ci/verify-release-artifact-attestations.sh
 
       - name: Setup Go (for provenance tooling)
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
-          go-version-file: go.mod
+          go-version-file: .github-workflow-src/go.mod
           check-latest: true
           cache: false
 
@@ -276,7 +326,17 @@ jobs:
           BACKUP_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.backup_executor_digest }}
           UPGRADE_EXECUTOR_IMAGE: ${{ needs.load-candidate.outputs.upgrade_executor_image }}
           UPGRADE_EXECUTOR_DIGEST: ${{ needs.load-candidate.outputs.upgrade_executor_digest }}
-        run: bash hack/ci/generate-channel-provenance-index.sh
+        run: |
+          set -euo pipefail
+          (
+            cd .github-workflow-src
+            INDEX_PATH=../dist/provenance-index.json \
+            CHECKSUMS_PATH=../dist/checksums.txt \
+            CHECKSUMS_BUNDLE_PATH=../dist/checksums.txt.bundle \
+            INSTALL_PATH=../dist/install.yaml \
+            CRDS_PATH=../dist/crds.yaml \
+            bash hack/ci/generate-channel-provenance-index.sh
+          )
 
       - name: Upload edge publish artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

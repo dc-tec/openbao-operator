@@ -16,6 +16,11 @@ on:
         required: false
         default: ""
         type: string
+      cache-scope:
+        description: "BuildKit GHA cache scope prefix for this build trust domain"
+        required: false
+        default: trusted
+        type: string
     outputs:
       manager_digest:
         description: "Digest of the manager image"
@@ -114,8 +119,8 @@ jobs:
           provenance: false
           sbom: false
           tags: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ inputs.build_tag }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          cache-from: type=gha,scope=${{ inputs.cache-scope }}-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.cache-scope }}-${{ matrix.image }}
 
       - name: Set digest output
         id: set-output
