@@ -344,6 +344,10 @@ docs-build: docs-deps ## Build the Docusaurus docs site locally. Writes ./websit
 docs-serve: docs-deps ## Serve docs locally. http://localhost:8000
 	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run start
 
+.PHONY: docs-preview
+docs-preview: docs-build ## Preview the built docs locally with production behavior, including search. http://localhost:3000
+	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run serve -- --host 0.0.0.0
+
 .PHONY: docs-version
 docs-version: docs-deps ## Snapshot the current docs into a versioned Docusaurus release. Set DOCS_VERSION=<version>.
 	@test -n "$(DOCS_VERSION)" || { echo "DOCS_VERSION is required, for example: make docs-version DOCS_VERSION=1.2.3"; exit 1; }
