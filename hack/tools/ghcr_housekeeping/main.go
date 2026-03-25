@@ -710,34 +710,6 @@ func (c *githubPackagesClient) DeletePackageVersion(ctx context.Context, ownerKi
 	return classifyAPIError(resp.StatusCode, msg)
 }
 
-func (c *githubPackagesClient) doJSON(
-	ctx context.Context,
-	method, endpoint string,
-	body io.Reader,
-	out any,
-) error {
-	resp, err := c.do(ctx, method, endpoint, body)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		if out == nil {
-			return nil
-		}
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-			return fmt.Errorf("decode JSON response: %w", err)
-		}
-		return nil
-	}
-
-	msg := extractAPIErrorMessage(resp)
-	return classifyAPIError(resp.StatusCode, msg)
-}
-
 func (c *githubPackagesClient) do(
 	ctx context.Context,
 	method, endpoint string,
