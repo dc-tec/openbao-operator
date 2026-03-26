@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Build & Change"
+<PageHeader
   title="Use these practices when code touches keys, certificates, external input, filesystem state, or privileged controller behavior."
   lede="OpenBao Operator handles sensitive material and security-relevant control paths. The safest implementation choice is usually the simplest one: least-privilege permissions, standard cryptographic primitives, no shell escapes from controllers, and explicit care around secrets in memory and logs."
-  actions={[
-    {label: "Open supply chain security", to: "/contribute/supply-chain-security", variant: "primary"},
-    {label: "Open error handling", to: "/contribute/standards/error-handling", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "choose safe defaults for file permissions, random values, and certificate handling",
-      "validate user-controlled input before it reaches filesystem or runtime-sensitive code",
-      "avoid secret leakage through logs, shell execution, or overly broad memory exposure",
-      "review a change that touches credentials, tokens, unseal material, or TLS assets",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Secure coding defaults"

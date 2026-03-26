@@ -6,26 +6,10 @@ pageType: runbook
 journey: operate
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Operate / Restore from backup"
+<PageHeader
   title="Use override restore only when the cluster is locked after a failed upgrade."
   lede="This runbook exists for the narrow case where the normal restore path is blocked by an existing cluster operation lock, usually after a failed rollback or another crashed automation loop. It is a break-glass restore path, not the default way to restore a cluster."
-  actions={[
-    {label: 'Open failed rollback recovery', docId: 'user-guide/openbaocluster/recovery/failed-rollback', variant: 'primary'},
-    {label: 'Run a restore', docId: 'user-guide/openbaorestore/restore', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this runbook only when"
-    items={[
-      'the cluster is stuck behind an operation lock after a failed upgrade or rollback',
-      'a normal OpenBaoRestore request is blocked by that lock',
-      'you accept that the current cluster state will be overwritten by the snapshot',
-      'you already identified the last known good snapshot you are willing to restore',
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="danger" title="This bypasses the existing operation lock">
 

@@ -7,7 +7,6 @@ description: Core security fundamentals for OpenBao Operator including threat mo
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Security / Security Model"
   title="Start from the trust model before you choose controls."
   lede="This section explains what the operator is trying to defend, which production posture it considers safe, and how trust material such as root tokens, unseal keys, and bootstrap identities should behave across the lifecycle."

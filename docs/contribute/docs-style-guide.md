@@ -5,26 +5,10 @@ pageType: reference
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Build & Change"
+<PageHeader
   title="Use this guide to keep contributor and operator docs calm, exact, and structurally consistent."
   lede="The docs are written for platform engineers, SREs, operators, maintainers, and contributors doing real work. This guide defines the voice, page contracts, navigation language, and shared components that keep the documentation product coherent as it grows."
-  actions={[
-    {label: "Open coding standards", to: "/contribute/standards", variant: "primary"},
-    {label: "Open operator docs", to: "/docs", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "write or rewrite a page so it fits the Docusaurus design system instead of the old MkDocs structure",
-      "choose the correct page type, journey metadata, and shared components",
-      "keep tone and navigation language aligned across operator and contributor docs",
-      "run the right preview and validation commands before submitting docs work",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Page types"

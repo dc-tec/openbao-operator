@@ -7,25 +7,10 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Cluster controls"
+<PageHeader
   title="Pause the operator only when you need a short-lived manual window."
   lede="Pausing tells the operator to stop normal reconciliation for a specific cluster while you inspect or repair it. Use it for deliberate tactical work, not as a substitute for recovery workflows or as a long-term steady state."
-  actions={[
-    {label: 'Run planned maintenance', docId: 'user-guide/openbaocluster/operations/maintenance', variant: 'primary'},
-    {label: 'Open safe mode recovery', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this control when"
-    items={[
-      'you need the operator to stop applying changes during a short repair window',
-      'you are debugging a live cluster and do not want reconciliation to race your inspection',
-      'you plan to resume normal management after the manual intervention finishes',
-      'the cluster is not already in a dedicated safe-mode or recovery workflow',
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="What pausing changes"

@@ -7,26 +7,10 @@ pageType: concept
 journey: get-started
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Supporting decision"
+<PageHeader
   title="Keep the operator identity surfaces separate in your head."
   lede="The controller, workload pods, and day 2 executor jobs do not share one identity. This page helps you trace which Kubernetes ServiceAccount maps to which OpenBao auth and authorization surface so custom installs do not drift."
-  actions={[
-    {label: 'Review operator authentication', docId: 'user-guide/operator/authn', variant: 'primary'},
-    {label: 'Return to installation', docId: 'user-guide/operator/installation', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'customize names, namespaces, or raw-manifest overlays',
-      'explain why controller auth works but backup or restore auth does not',
-      'separate Kubernetes RBAC from OpenBao-side role binding in your mental model',
-      'verify which ServiceAccount a given day 2 job actually runs as',
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   kind="reference"

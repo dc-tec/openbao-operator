@@ -7,7 +7,6 @@ description: Infrastructure security controls in OpenBao Operator, including RBA
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Security / Platform Controls"
   title="Protect the control plane before you trust the workload."
   lede="Platform controls are the Kubernetes-level mechanisms that keep operator identities narrow, reject unsafe objects before they persist, and limit traffic between tenants, control-plane components, and external dependencies."

@@ -7,25 +7,10 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Backups"
+<PageHeader
   title="Make snapshots routine before you need them for a restore."
   lede="OpenBao Operator runs backups as transient Jobs that authenticate separately from the main workload, stream Raft snapshots directly to object storage, and record schedule and failure state on the cluster."
-  actions={[
-    {label: 'Open restore guide', docId: 'user-guide/openbaorestore/restore', variant: 'primary'},
-    {label: 'Open backup manager architecture', docId: 'architecture/backup-manager', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'wire scheduled snapshots before the first risky upgrade',
-      'choose backup auth and storage credentials deliberately',
-      'verify retention, status, and manual backup behavior',
-      'prepare for restore workflows without guessing how jobs are launched',
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="Backup execution path"

@@ -6,26 +6,10 @@ journey: architecture
 description: Bootstrap a new cluster safely, handle self-init or operator init flows, and configure autopilot before scaling out.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Workload Manager"
+<PageHeader
   title="Initialize one node first, then scale only after the cluster is safe to join."
   lede="The init manager owns the first-boot contract for a new `OpenBaoCluster`. It keeps bootstrap on a single node, handles operator-driven or self-init flows, stores or suppresses root material appropriately, and configures Raft autopilot before the workload expands to full replica count."
-  actions={[
-    {label: 'Open self-init guide', docId: 'user-guide/openbaocluster/configuration/self-init', variant: 'primary'},
-    {label: 'Open day 1 lifecycle flow', docId: 'architecture/lifecycle/day1-creation', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand why the operator forces single-node bootstrap before scale-out',
-      'compare operator-driven init with self-init behavior',
-      'see where root-token handling and autopilot defaults fit into first boot',
-      'trace initialization state back to status surfaces instead of one-off startup logic',
-    ]}
-  />
-</PageHero>
+/>
 
 <ManagerAtAGlance
   sections={[

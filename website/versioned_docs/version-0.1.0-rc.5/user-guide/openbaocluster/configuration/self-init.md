@@ -6,25 +6,10 @@ journey: configure
 description: Configure bootstrap requests, operator OIDC setup, and verification for self-initializing OpenBao clusters without leaving a persistent root token behind.
 ---
 
-<PageHero
-  eyebrow="Configure / Cluster Baseline"
+<PageHeader
   title="Bootstrap the cluster declaratively and avoid carrying a root token forward."
   lede="Self-initialization lets the cluster bring up auth methods, policies, audit devices, and other bootstrap state as part of the `OpenBaoCluster` manifest. It is the supported production bootstrap path because it avoids leaving a long-lived root token in a Kubernetes Secret."
-  actions={[
-    {label: "Choose the profile", docId: "user-guide/openbaocluster/configuration/security-profiles", variant: "primary"},
-    {label: "Review operator authentication", docId: "user-guide/operator/authn", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "enable self-init as part of the initial cluster baseline",
-      "understand why self-init is safer than standard initialization for production",
-      "bootstrap operator OIDC roles for backup, upgrade, and restore",
-      "avoid locking yourself out after the root token is revoked",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Choose the bootstrap path deliberately"

@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="minimal"
-  eyebrow="Reference / API Surface"
+<PageHeader
   title="Use the API reference when you need the exact CRD field contract."
   lede="This page is generated from `api/v1alpha1` and is the source of truth for field-level schema, validation, and description details across the operator CRDs."
-  actions={[
-    {label: 'Open compatibility matrix', docId: 'reference/compatibility', variant: 'primary'},
-    {label: 'Open status and events', docId: 'reference/status-and-events', variant: 'secondary'},
-  ]}
 />
 
 <Callout type="info" title="Generated file">

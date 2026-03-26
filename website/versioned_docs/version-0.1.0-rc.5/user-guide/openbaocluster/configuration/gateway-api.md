@@ -6,25 +6,10 @@ journey: configure
 description: Configure Gateway API as the primary edge path for OpenBao, including passthrough versus termination, readiness checks, and controller compatibility.
 ---
 
-<PageHero
-  eyebrow="Configure / Service Boundary"
+<PageHeader
   title="Use Gateway API when the edge should be explicit, portable, and multi-tenant aware."
   lede="Gateway API is the preferred long-term edge model for OpenBao because it makes route ownership, listener mode, and cross-namespace attachment clearer than a generic Ingress path. For most production deployments, start with TLS passthrough so OpenBao remains the TLS endpoint."
-  actions={[
-    {label: "Open external access", docId: "user-guide/openbaocluster/configuration/external-access", variant: "primary"},
-    {label: "Review TLS and workload identity", docId: "security/workload/tls", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "expose OpenBao through an existing Gateway instead of a generic Ingress",
-      "choose between TLS passthrough and Gateway-side termination",
-      "validate GatewayClass and listener compatibility before traffic depends on it",
-      "understand how Gateway readiness interacts with ACME and blue-green upgrades",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Choose the Gateway mode"

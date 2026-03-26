@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Build & Change"
+<PageHeader
   title="Use these conventions to make a change fit the repository before CI has to rescue it."
   lede="These are the project-specific rules that go beyond generic Go style. They keep controller code predictable, reviews focused, architecture boundaries enforceable, and generated output aligned with the code that owns it."
-  actions={[
-    {label: "Open Go style guide", to: "/contribute/standards/go-style", variant: "primary"},
-    {label: "Open testing strategy", to: "/contribute/testing", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "check whether a planned refactor or helper belongs in a shared package yet",
-      "keep pull requests scoped and reviewable",
-      "understand how architecture boundaries are enforced in CI",
-      "align observability, testing, and generated-file updates with repository expectations",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Core project conventions"

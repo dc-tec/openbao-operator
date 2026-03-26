@@ -6,26 +6,10 @@ journey: security
 description: Default-deny network posture for OpenBao Pods and lifecycle jobs, plus the control-plane and egress assumptions that support it.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Platform Controls"
+<PageHeader
   title="Start from default deny and open only the traffic the lifecycle actually needs."
   lede="The operator treats network policy as part of the security model, not as an optional hardening layer. OpenBao Pods and lifecycle jobs begin from explicit allowlists, and the allowed traffic should line up with clustering, management, and the integrations the cluster is deliberately configured to use."
-  actions={[
-    {label: 'Open network configuration', docId: 'user-guide/openbaocluster/configuration/network', variant: 'primary'},
-    {label: 'Open admission policies', docId: 'security/infrastructure/admission-policies', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand the default-deny perimeter around OpenBao Pods',
-      'review the difference between workload traffic and backup or restore job egress',
-      'check which traffic is allowed to peers, the API server, DNS, and ingress paths',
-      'connect status conditions back to network assumptions and failures',
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="OpenBao network perimeter"

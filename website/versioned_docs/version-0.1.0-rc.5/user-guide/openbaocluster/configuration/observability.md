@@ -6,25 +6,10 @@ journey: configure
 description: Wire operator metrics, cluster telemetry, dashboards, alerts, and logs before you have to troubleshoot the service under pressure.
 ---
 
-<PageHero
-  eyebrow="Configure / Platform Readiness"
+<PageHeader
   title="Observe both the operator and the workload before you call the cluster ready."
   lede="OpenBao Operator has two observability layers: the operator control plane itself, and the OpenBao workload it renders. Use this page to wire both layers into your monitoring stack, choose the scrape model your platform already supports, and promote only the signals that help you operate upgrades, backups, and recovery."
-  actions={[
-    {label: "Open production checklist", docId: "user-guide/openbaocluster/operations/production-checklist", variant: "primary"},
-    {label: "Open troubleshooting", docId: "user-guide/openbaocluster/operations/troubleshooting", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "scrape controller and provisioner metrics from the operator installation",
-      "enable telemetry on the OpenBao workload without turning this page into a generic metrics reference",
-      "promote a small set of alerts for availability, backups, upgrades, and reconcile health",
-      "keep dashboards, logs, and health probes available before the first real incident",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Observe the right surface"

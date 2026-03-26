@@ -6,26 +6,10 @@ journey: architecture
 description: Reconcile OpenBaoRestore requests, acquire operation locks, and orchestrate restore jobs as explicit destructive workflows.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Operations Manager"
+<PageHeader
   title="Treat restore as a destructive, explicit, lock-aware workflow."
   lede="The restore manager keeps disaster recovery separate from normal cluster reconciliation. It models restore as an immutable CRD-backed request, coordinates execution through a dedicated controller path, and protects the cluster with explicit validation and lock ownership."
-  actions={[
-    {label: 'Open restore guide', docId: 'user-guide/openbaorestore/restore', variant: 'primary'},
-    {label: 'Open backup manager', docId: 'architecture/backup-manager', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand why restore is modeled as OpenBaoRestore instead of cluster reconcile state',
-      'see how validation, lock ownership, and execution phases fit together',
-      'reason about destructive recovery without mixing it with routine operations',
-      'connect restore behavior back to backup readiness and operate guidance',
-    ]}
-  />
-</PageHero>
+/>
 
 <ManagerAtAGlance
   sections={[

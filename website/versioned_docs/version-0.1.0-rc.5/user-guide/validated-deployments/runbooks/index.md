@@ -6,7 +6,6 @@ description: Minimal catalog for validated procedures that still need lane-speci
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Validated Deployments / Procedure Catalog"
   title="Use this catalog only for procedures that still depend on a validated lane."
   lede="Generic backup and restore workflows now live in the main `Operate` and `Recovery & Restore` sections. This catalog remains only for the k3d cross-cluster DR restore runbook, because that workflow still depends on the assumptions of one validated lane."

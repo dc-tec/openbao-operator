@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Validate & Ship"
+<PageHeader
   title="Choose the smallest test that proves the change you actually made."
   lede="The testing stack is layered on purpose. Start with the cheapest signal that can fail for the right reason, then move outward only when the change touches controller wiring, real API semantics, full cluster lifecycle, or environment-specific behavior."
-  actions={[
-    {label: "Open CI behavior", to: "/contribute/ci", variant: "primary"},
-    {label: "Set up your environment", to: "/contribute/getting-started/development", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "map a change to the right unit, contract, integration, E2E, or manual validation layer",
-      "run the local PR-equivalent gate before you ask CI to prove the same thing again",
-      "understand when fake clients are sufficient and when EnvTest or a real cluster is required",
-      "replay fuzz, performance, or existing-cluster checks outside the default local path",
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="Testing layers"

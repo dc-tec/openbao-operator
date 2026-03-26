@@ -5,26 +5,10 @@ pageType: task
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Validate & Ship"
+<PageHeader
   title="Release once, promote by digest, and prove the published artifacts before you announce them."
   lede="OpenBao Operator uses a build-once, promote-everywhere release model. `release-please` owns versioning, changelog state, and release orchestration, while publish workflows own build, verification, signing, docs deployment, and release evidence."
-  actions={[
-    {label: "Open CI behavior", to: "/contribute/ci", variant: "primary"},
-    {label: "Open distribution", to: "/contribute/distribution", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "prepare or review a release-please PR before it is merged",
-      "cut a prerelease with Release-As override semantics",
-      "snapshot stable docs, verify published artifacts, and record release evidence",
-      "understand what stable, prerelease, edge, and nightly channels are allowed to publish",
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="Build once, promote everywhere"

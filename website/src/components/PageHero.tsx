@@ -18,7 +18,6 @@ type PageHeroProps = {
   eyebrow?: React.ReactNode;
   lede: React.ReactNode;
   title: React.ReactNode;
-  variant?: 'landing' | 'standard' | 'compact' | 'minimal';
 };
 
 const actionClasses: Record<NonNullable<PageHeroAction['variant']>, string> = {
@@ -34,13 +33,11 @@ export default function PageHero({
   eyebrow,
   lede,
   title,
-  variant = 'standard',
 }: PageHeroProps): React.JSX.Element {
   return (
     <section
       className={clsx(
         'pageHero',
-        `pageHero--${variant}`,
         className,
         {'pageHero--withAside': Boolean(children)},
       )}>

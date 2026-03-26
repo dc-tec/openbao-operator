@@ -6,7 +6,6 @@ journey: contribute
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Contribute / Start Here"
   title="Get a clean local environment before you touch the codebase."
   lede="Use this section when you are setting up your workstation, creating your first branch, or trying to understand the shortest contributor path from clone to a passing local gate."

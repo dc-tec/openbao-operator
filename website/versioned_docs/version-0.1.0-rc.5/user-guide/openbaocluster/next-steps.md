@@ -9,7 +9,6 @@ journeyStep: 5
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Step 5"
   title="Choose the next operating concern before you walk away."
   lede="A working cluster is not the end of setup. The next move should be deliberate: harden it, expose it, wire backups, or move into the operating guides that match the job in front of you."

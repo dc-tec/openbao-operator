@@ -7,25 +7,10 @@ pageType: task
 journey: get-started
 ---
 
-<PageHero
-  eyebrow="Supporting decision"
+<PageHeader
   title="Use single-tenant mode when one team owns one namespace."
   lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. It is a good fit for dedicated team environments, but it is a branch from the default platform path rather than the starting point for every install."
-  actions={[
-    {label: 'Return to the decision guide', docId: 'user-guide/operator/deployment-decision-guide', variant: 'primary'},
-    {label: 'Install the operator', docId: 'user-guide/operator/installation', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'run one operator for one team-owned namespace',
-      'remove tenant onboarding and provisioner-driven namespace orchestration',
-      'keep direct controller access scoped to a single target namespace',
-      'verify how Helm or raw manifests render the target namespace and controller identity',
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Stay on multi-tenant unless this is true"

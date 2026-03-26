@@ -6,26 +6,10 @@ journey: architecture
 description: Manage TLS certificate sources, rotation windows, and hot-reload signaling for the OpenBao workload path.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Workload Manager"
+<PageHeader
   title="Own certificate sources, rotation, and hot reload without restarting pods."
   lede="The cert manager keeps TLS lifecycle close to the workload contract. It decides whether certificates are operator-managed, externally supplied, or handled by ACME, and it turns certificate changes into safe reload signals instead of pod restarts."
-  actions={[
-    {label: 'Open TLS security guide', docId: 'security/workload/tls', variant: 'primary'},
-    {label: 'Open infrastructure manager', docId: 'architecture/infra-manager', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'compare OperatorManaged, External, and ACME at the controller boundary',
-      'understand how certificate rotation becomes a hot-reload event instead of a rollout',
-      'trace TLS Secret ownership and pod annotation updates back to one service',
-      'reason about where TLS management stops and workload rendering begins',
-    ]}
-  />
-</PageHero>
+/>
 
 <ManagerAtAGlance
   sections={[

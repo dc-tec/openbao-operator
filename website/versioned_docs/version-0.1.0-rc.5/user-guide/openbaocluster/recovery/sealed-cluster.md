@@ -7,26 +7,10 @@ pageType: runbook
 journey: operate
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Operate / Incident recovery"
+<PageHeader
   title="Treat seal failures as trust and reachability problems first."
   lede="A sealed cluster usually means the Pods can start but cannot complete the trust or unseal path they need to serve traffic. Start with the operator-visible conditions, then narrow the problem by seal mode before you reach for emergency manual unseal."
-  actions={[
-    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'primary'},
-    {label: 'Recover from no leader', docId: 'user-guide/openbaocluster/recovery/no-leader', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this runbook when"
-    items={[
-      'Pods are running but remain sealed and not ready',
-      'the cluster reports `OpenBaoSealed=True`',
-      'cloud KMS, transit, TLS, or static-key dependencies might be blocking startup',
-      'you need to decide whether this is a seal problem or a broader quorum problem',
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Read the first conditions before you dig into logs"

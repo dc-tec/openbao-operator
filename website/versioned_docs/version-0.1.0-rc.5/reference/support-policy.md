@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Reference / Lifecycle & Support Contract"
+<PageHeader
   title="Use this page when you need the exact maintenance contract behind a release line or channel."
   lede="Validation and support are related, but they are not the same thing. This page defines which release lines receive best-effort maintenance attention, how channels differ, and what the project expects from operators before they ask for issue triage."
-  actions={[
-    {label: 'Open compatibility matrix', docId: 'reference/compatibility', variant: 'primary'},
-    {label: 'Open deprecation policy', docId: 'reference/deprecation-policy', variant: 'secondary'},
-  ]}
 />
 
 <Callout type="note" title="Current support window">

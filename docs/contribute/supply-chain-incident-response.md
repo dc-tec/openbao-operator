@@ -5,15 +5,9 @@ pageType: task
 journey: contribute
 ---
 
-<PageHero
-  variant="minimal"
-  eyebrow="Contribute / Project Governance"
+<PageHeader
   title="Freeze release automation fast and recover with evidence."
   lede="During a supply-chain incident, speed and containment matter more than elegance. This runbook is for freezing publication, suspending high-trust credentials, inspecting recent releases, and restoring trust in a controlled order."
-  actions={[
-    {label: "Open supply chain security", to: "/contribute/supply-chain-security", variant: "primary"},
-    {label: "Open release management", to: "/contribute/release-management", variant: "secondary"},
-  ]}
 />
 
 <DecisionTable

@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Validate & Ship"
+<PageHeader
   title="Know what CI will enforce before you ask it to validate your branch."
   lede="CI is optimized for signal, not ceremony. Pull requests route work based on changed files and labels, while `main`, edge, nightly, and release workflows enforce the heavier publication and hardening gates. Run the closest local equivalent first so CI is confirming your work, not discovering it for you."
-  actions={[
-    {label: "Open testing strategy", to: "/contribute/testing", variant: "primary"},
-    {label: "Open release management", to: "/contribute/release-management", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "understand which workflows run on pull requests, main, nightly, and tagged releases",
-      "map a failing CI lane back to the smallest local command that reproduces it",
-      "see how E2E coverage expands through labels and targeted routing",
-      "distinguish contributor validation from maintainer-only publish and hardening flows",
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="CI and publish flow"

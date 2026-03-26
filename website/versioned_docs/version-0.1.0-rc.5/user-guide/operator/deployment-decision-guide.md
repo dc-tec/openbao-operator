@@ -8,28 +8,10 @@ journey: get-started
 journeyStep: 1
 ---
 
-<PageHero
-  eyebrow="Step 1"
+<PageHeader
   title="Choose the path you want to keep operating."
   lede="Make the main operating decisions before you install anything. Most teams should stay on the default production path and only branch when namespace ownership, local evaluation, or platform constraints give you a real reason."
-  actions={[
-    {label: 'Install the operator', docId: 'user-guide/operator/installation', variant: 'primary'},
-    {label: 'Review single-tenant mode', docId: 'user-guide/operator/single-tenant-mode', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Default production path"
-    items={[
-      'multi-tenant mode',
-      'Hardened profile',
-      'self-init enabled',
-      'External or ACME TLS',
-      'admission policies enabled',
-      'RollingUpdate until you need blue-green cutover control',
-    ]}
-    tone="success"
-  />
-</PageHero>
+/>
 
 <JourneyRail
   title="The first five moves"

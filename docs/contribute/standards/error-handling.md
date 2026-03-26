@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Build & Change"
+<PageHeader
   title="Handle errors so callers keep context, reviewers can follow the failure path, and controllers stay alive."
   lede="Most error-handling issues in this repository are not about catching more failures. They are about returning failures with enough structure and context that the next layer can make the right decision without guessing. These rules keep that path predictable."
-  actions={[
-    {label: "Open Go style guide", to: "/contribute/standards/go-style", variant: "primary"},
-    {label: "Open Kubernetes patterns", to: "/contribute/standards/kubernetes-patterns", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "wrap and classify errors without losing the underlying cause",
-      "use Kubernetes typed errors correctly around the API server",
-      "define checkable sentinel errors for internal state transitions",
-      "avoid panic paths in controllers and internal logic packages",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Default error-handling rules"

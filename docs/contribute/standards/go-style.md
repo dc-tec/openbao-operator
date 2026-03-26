@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Build & Change"
+<PageHeader
   title="Use the Go style guide to keep implementation choices boring, predictable, and easy to review."
   lede="This page captures the coding defaults maintainers expect in normal Go work: naming, error handling, logging, reconciler-safe concurrency, imports, and constants. The goal is not novelty. The goal is code that behaves like the rest of the repository."
-  actions={[
-    {label: "Open error handling", to: "/contribute/standards/error-handling", variant: "primary"},
-    {label: "Open Kubernetes patterns", to: "/contribute/standards/kubernetes-patterns", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "check how names, acronyms, getters, and interfaces should look in this codebase",
-      "keep error wrapping and logging consistent with the rest of the repository",
-      "avoid controller-runtime anti-patterns such as unmanaged goroutines or `time.Sleep` in reconcile paths",
-      "normalize imports and constants before review churn starts",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Default coding choices"

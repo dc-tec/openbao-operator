@@ -6,25 +6,10 @@ journey: validated-deployments
 description: Reproduce the validated local hardened lane with Transit auto-unseal, externally managed TLS Secrets, self-init, and user-managed passthrough access.
 ---
 
-<PageHero
-  eyebrow="Validated Deployments / Local Baselines / k3d Hardened / External TLS"
+<PageHeader
   title="Reproduce the validated hardened local lane without collapsing the trust boundaries it depends on."
   lede="This recipe stands up the local hardened lane with tenant onboarding, external Transit unseal, externally managed TLS Secrets, and user-managed TCP passthrough. Use it when you want the exact validated path, not a generic local example."
-  actions={[
-    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls", variant: "primary"},
-    {label: "Open external access", docId: "user-guide/openbaocluster/configuration/external-access", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="This recipe should leave you with"
-    items={[
-      "an onboarded tenant namespace and admin ServiceAccount",
-      "a hardened cluster that self-initializes and never persists a root token Secret",
-      "Transit auto-unseal working against the external provider you chose for the lane",
-      "externally managed TLS Secrets and end-to-end passthrough traffic working together",
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="success" title="Validated lane">
 

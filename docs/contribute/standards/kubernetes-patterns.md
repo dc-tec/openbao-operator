@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Build & Change"
+<PageHeader
   title="Use these patterns to keep controller code Kubernetes-native instead of drifting into ad hoc orchestration."
   lede="The operator relies on predictable reconcile loops, explicit controller boundaries, and safe interaction with the API server. These patterns are the default shape of controller work in this repository, especially when app-layer orchestration and manager boundaries are involved."
-  actions={[
-    {label: "Open architecture", to: "/docs/architecture", variant: "primary"},
-    {label: "Open project conventions", to: "/contribute/standards/project-conventions", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "write or review reconciliation logic against current cluster state",
-      "keep controller code idempotent and boundary-aware",
-      "avoid concurrency, logging, or API-usage patterns that fight controller-runtime",
-      "understand when a controller should delegate into the app layer instead of orchestrating inline",
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="Level-triggered reconciliation"

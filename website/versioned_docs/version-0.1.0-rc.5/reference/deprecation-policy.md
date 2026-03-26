@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Reference / Lifecycle & Support Contract"
+<PageHeader
   title="Use this page when you need the exact contract for how APIs and behavior can change across releases."
   lede="OpenBao Operator is still pre-GA, so compatibility rules are explicit rather than implied. This page defines how deprecations are announced, how removals happen, and what migration guidance must ship with a breaking or removing change."
-  actions={[
-    {label: 'Open support policy', docId: 'reference/support-policy', variant: 'primary'},
-    {label: 'Open upgrade compatibility', docId: 'reference/operator-upgrade-compatibility', variant: 'secondary'},
-  ]}
 />
 
 <DecisionTable

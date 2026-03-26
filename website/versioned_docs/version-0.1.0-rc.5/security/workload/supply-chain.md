@@ -6,26 +6,10 @@ journey: security
 description: Signature verification, transparency-log checks, digest pinning, and release-artifact validation for operator-managed OpenBao images.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Workload Protections"
+<PageHeader
   title="Verify what will run before the controller ever writes a Pod template."
   lede="The operator's supply-chain model is built around signature verification, digest pinning, and separate trust roots for the main OpenBao image versus helper images such as init, backup, restore, and upgrade executors. The goal is to keep mutable tags and unverified images out of production reconciliation."
-  actions={[
-    {label: "Review production posture", docId: "security/fundamentals/profiles", variant: "primary"},
-    {label: "Open pod security", docId: "security/workload/workload-security", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "understand what the operator verifies before it reconciles a workload update",
-      "choose between strict blocking and warning-only rollout behavior",
-      "review how digest pinning prevents tag-mutation races",
-      "verify published release artifacts independently from the cluster",
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="Verification flow before reconcile"

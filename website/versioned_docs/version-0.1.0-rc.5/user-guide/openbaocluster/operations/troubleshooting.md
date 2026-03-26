@@ -7,25 +7,10 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Troubleshooting"
+<PageHeader
   title="Start with the symptom, then decide whether you need a fix or a recovery path."
   lede="Most day 2 incidents start as configuration drift, edge integration failures, or capability mismatches. Use this page to capture the failing surface, route the symptom to the right fix, and escalate into recovery only when normal convergence is no longer realistic."
-  actions={[
-    {label: 'Open recovery and restore', docId: 'user-guide/openbaocluster/recovery/index', variant: 'primary'},
-    {label: 'Review the production checklist', docId: 'user-guide/openbaocluster/operations/production-checklist', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'identify the first troubleshooting step from cluster conditions or pod failures',
-      'separate gateway, TLS, DNS, API egress, and node-capability issues',
-      'decide whether normal configuration repair is still enough',
-      'switch from troubleshooting into recovery before the incident drifts',
-    ]}
-  />
-</PageHero>
+/>
 
 <CommandBlock
   language="bash"

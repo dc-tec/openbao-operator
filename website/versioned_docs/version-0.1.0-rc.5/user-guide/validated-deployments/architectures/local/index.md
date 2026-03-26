@@ -6,7 +6,6 @@ description: Validated local baselines for k3d, including development, hardened 
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Validated Deployments / Local Baselines"
   title="Use local lanes for rehearsal, validation, and DR proof, not as accidental production defaults."
   lede="The local validated scope comes from the project's k3d environment. These lanes are valuable because they prove concrete behaviors such as hardened bootstrap, passthrough access, ACME issuance, and cross-cluster restore. They are not a substitute for making an explicit production platform choice."
