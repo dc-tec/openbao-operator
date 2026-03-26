@@ -6,26 +6,10 @@ journey: architecture
 description: Schedule snapshot jobs, enforce retention, and update backup status without moving backup data through the controller.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Operations Manager"
+<PageHeader
   title="Run Raft snapshots as stateless jobs and keep retention out of the data plane."
   lede="The backup manager owns scheduled and manual snapshot orchestration for `OpenBaoCluster`. It validates cluster readiness, acquires the operation lock, creates executor Jobs, and records backup state so backups stay auditable and resumable without embedding snapshot transport inside the controller."
-  actions={[
-    {label: 'Open backups guide', docId: 'user-guide/openbaocluster/operations/backups', variant: 'primary'},
-    {label: 'Open restore guide', docId: 'user-guide/openbaorestore/restore', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand how scheduled and manual backups become executor Jobs',
-      'see which preconditions block backup while upgrades or restore are active',
-      'reason about retention, status, and object naming without reading the controller code',
-      'connect backup orchestration to the restore and upgrade safety model',
-    ]}
-  />
-</PageHero>
+/>
 
 <ManagerAtAGlance
   sections={[

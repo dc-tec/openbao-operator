@@ -6,25 +6,10 @@ journey: validated-deployments
 description: Reproduce the validated local hardened ACME lane with Transit auto-unseal, a private ACME issuer, self-init, and user-managed TLS passthrough.
 ---
 
-<PageHero
-  eyebrow="Validated Deployments / Local Baselines / k3d Hardened / ACME"
+<PageHeader
   title="Reproduce the validated hardened ACME lane while keeping OpenBao as the TLS endpoint all the way through the local edge."
   lede="This recipe stands up the local hardened ACME baseline with tenant onboarding, a shared trust-services dependency for Transit and ACME, an internal ACME CA, and a user-managed passthrough route that preserves `tls-alpn-01` behavior."
-  actions={[
-    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme", variant: "primary"},
-    {label: "Open troubleshooting", docId: "user-guide/openbaocluster/operations/troubleshooting", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="This recipe should leave you with"
-    items={[
-      "an onboarded tenant namespace and admin ServiceAccount",
-      "a trust Secret that carries both the Transit CA bundle and the private ACME issuer trust root",
-      "a hardened cluster that self-initializes, unseals with Transit, and serves ACME traffic through passthrough",
-      "conditions and services that prove ACME is working before you move to a public cloud lane",
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="success" title="Validated lane">
 

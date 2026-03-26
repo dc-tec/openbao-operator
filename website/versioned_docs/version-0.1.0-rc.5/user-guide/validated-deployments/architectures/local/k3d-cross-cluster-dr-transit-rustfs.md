@@ -6,26 +6,10 @@ journey: validated-deployments
 description: Validated local disaster-recovery baseline for OpenBao on k3d with a shared Transit seal root, RustFS snapshot transfer, and manual cutover across source and target clusters.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Validated Deployments / Local Baselines"
+<PageHeader
   title="Use this lane to rehearse restore across a real cluster boundary before you trust a cloud DR pair."
   lede="This local DR baseline keeps the source, target, and shared trust services separated so backup, restore, unseal, and cutover all cross the same kinds of boundaries they will cross in a real disaster-recovery event."
-  actions={[
-    {label: "Open bootstrap recipe", docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap", variant: "primary"},
-    {label: "Open DR restore runbook", docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="This lane proves"
-    items={[
-      "a snapshot can leave the source cluster, cross an object-storage boundary, and restore into a different target cluster",
-      "the restored target can unseal only because it shares the same external Transit root of trust as the source",
-      "restore verification can confirm both credential cutover and data cutover before any manual failover happens",
-      "the operator's backup and restore workflows still work when source and target are split across real ingress and storage boundaries",
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="note" title="Classification">
 

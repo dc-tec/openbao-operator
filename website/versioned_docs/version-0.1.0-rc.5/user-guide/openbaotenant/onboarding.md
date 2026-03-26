@@ -8,25 +8,10 @@ journey: get-started
 journeyStep: 3
 ---
 
-<PageHero
-  eyebrow="Step 3"
+<PageHeader
   title="Introduce the target namespace before you create the first cluster."
   lede="In the default multi-tenant model, the operator does not discover namespaces implicitly. You onboard a namespace with `OpenBaoTenant`, which gives the control plane the RBAC and tenant guardrails it needs before the first cluster lands there."
-  actions={[
-    {label: 'Create your first cluster', docId: 'user-guide/openbaocluster/getting-started', variant: 'primary'},
-    {label: 'Review tenancy & governance', docId: 'user-guide/openbaotenant/overview', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this step when"
-    items={[
-      'you stayed on the default multi-tenant operator path',
-      'the operator install is already healthy in its rendered namespace',
-      'the target namespace already exists and has an owner',
-      'you know whether onboarding is self-service or centrally managed',
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="note" title="Skip this in single-tenant mode">
 

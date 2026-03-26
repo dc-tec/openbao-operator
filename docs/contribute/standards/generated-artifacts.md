@@ -5,26 +5,10 @@ pageType: reference
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Build & Change"
+<PageHeader
   title="Use this page when a change should have emitted files and you need to know which command owns them."
   lede="Generated output is part of the source tree contract in this repository. If an API, policy, renderer, or chart input changes, the matching generated artifacts must change in the same PR. Do not edit generated files directly."
-  actions={[
-    {label: "Open project conventions", to: "/contribute/standards/project-conventions", variant: "primary"},
-    {label: "Open release management", to: "/contribute/release-management", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "map a source change to the generation command that owns its emitted files",
-      "fix a CI failure caused by generated drift",
-      "understand which artifacts are canonical outputs and which inputs should be edited instead",
-      "run a safe regeneration sweep when you are not sure which generator is implicated",
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="warning" title="Do not edit generated files manually">
 

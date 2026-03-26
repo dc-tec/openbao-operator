@@ -10,26 +10,10 @@ journeyStep: 2
 
 <!-- id: installation-guide -->
 
-<PageHero
-  eyebrow="Step 2"
+<PageHeader
   title="Install the operator in the mode you actually intend to run."
   lede="Choose a supported install path, keep the rendered namespace and identity explicit, and verify the controller wiring before you create your first OpenBaoCluster."
-  actions={[
-    {label: 'Onboard the target namespace', docId: 'user-guide/openbaotenant/onboarding', variant: 'primary'},
-    {label: 'Review single-tenant mode', docId: 'user-guide/operator/single-tenant-mode', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Preflight before you install"
-    items={[
-      'confirm Kubernetes compatibility and cluster-admin access for CRDs, RBAC, and admission policies',
-      'decide whether Helm or raw manifests own the install lifecycle',
-      'decide whether you are staying multi-tenant or intentionally switching to single-tenant mode',
-      'if you stay multi-tenant, know who will create the first OpenBaoTenant and in which namespace',
-      'pin a released operator version for production instead of relying on floating tags',
-    ]}
-  />
-</PageHero>
+/>
 
 <JourneyRail
   title="Installation is the handoff between design choices and a working control plane"

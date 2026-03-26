@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Project Governance"
+<PageHeader
   title="Use this page to understand how OpenBao Operator proves that published artifacts are attributable and reproducible."
   lede="OpenBao Operator follows a build-once, verify, then promote model. The goal is not only to build release assets, but to prove where they came from, how they were produced, and whether an independent rebuild arrives at the same bytes before anything is published."
-  actions={[
-    {label: "Open release management", to: "/contribute/release-management", variant: "primary"},
-    {label: "Open dependency license policy", to: "/contribute/dependency-licenses", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "review the trust model behind CI, edge, nightly, and stable release publication",
-      "understand which workflows enforce provenance, signing, and reproducibility gates",
-      "map a release hardening failure to the control family that blocked it",
-      "separate supply-chain governance from the concrete release steps used on a specific release day",
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="Build once, verify, then promote"

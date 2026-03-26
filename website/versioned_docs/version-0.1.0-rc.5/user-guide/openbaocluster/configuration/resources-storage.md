@@ -6,25 +6,10 @@ journey: configure
 description: Choose storage class, PVC size, and workload resource requests before the cluster becomes difficult to resize or move.
 ---
 
-<PageHero
-  eyebrow="Configure / Platform Readiness"
+<PageHeader
   title="Choose storage and workload limits before the data path makes them expensive to change."
   lede="The operator renders the core workload for you, but it does not choose the platform capacity or storage class you intend to live with. Use this page to understand which resources the cluster owns, how PVC growth works, and where explicit sizing is safer than inheriting whatever the platform happens to default."
-  actions={[
-    {label: "Open backups", docId: "user-guide/openbaocluster/operations/backups", variant: "primary"},
-    {label: "Review server configuration", docId: "user-guide/openbaocluster/configuration/server", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "pick a StorageClass and PVC size for a new cluster before the first Pod starts",
-      "set CPU and memory requests that match the service you expect to operate",
-      "understand which Kubernetes resources the operator creates and keeps in sync",
-      "expand storage safely without guessing what Kubernetes or the operator will change for you",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="What the operator manages for an OpenBaoCluster"

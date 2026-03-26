@@ -6,26 +6,10 @@ journey: architecture
 description: Cluster creation flow from OpenBaoCluster creation through TLS bootstrap, one-node initialization, autopilot configuration, and scale-out.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Lifecycle / Day 1"
+<PageHeader
   title="Bootstrap one node, initialize safely, then scale to the requested cluster shape."
   lede="Day 1 begins when `OpenBaoCluster` is created. The control plane bootstraps TLS and unseal prerequisites, renders the workload, keeps the StatefulSet at one replica for safe initialization, then hands off into steady-state operations only after the cluster is known-good."
-  actions={[
-    {label: 'Open init manager', docId: 'architecture/init-manager', variant: 'primary'},
-    {label: 'Open self-init guide', docId: 'user-guide/openbaocluster/configuration/self-init', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'compare self-init and standard initialization from the controller perspective',
-      'see how cert, infra, and init managers cooperate during first boot',
-      'understand why the cluster starts at one replica regardless of the requested size',
-      'trace how initialization state becomes a safe handoff into day 2 operations',
-    ]}
-  />
-</PageHero>
+/>
 
 <JourneyRail
   current={2}

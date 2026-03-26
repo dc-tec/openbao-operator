@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Project Governance"
+<PageHeader
   title="Use the SDLC to understand which controls prove a change is safe to ship."
   lede="The SDLC is the maintainer model for how work moves from design to production. It ties normal implementation work to the governance controls that harden builds, gate releases, and feed operational learning back into the next change."
-  actions={[
-    {label: "Open testing strategy", to: "/contribute/testing", variant: "primary"},
-    {label: "Open release management", to: "/contribute/release-management", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "understand how planning, coding, verification, release, and operations fit together in one project lifecycle",
-      "map a policy or workflow change to the stage where it is enforced",
-      "separate the SDLC control model from the concrete CI and release procedures",
-      "review how lessons from incidents and operations feed back into design and implementation work",
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="Lifecycle model"

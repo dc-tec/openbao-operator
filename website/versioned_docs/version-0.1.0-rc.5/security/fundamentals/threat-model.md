@@ -6,26 +6,10 @@ journey: security
 description: Threat actors, trust boundaries, protected assets, and accepted residual risks for the OpenBao Operator control plane.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Security Model"
+<PageHeader
   title="Start from the trust boundaries the operator is designed to defend."
   lede="This threat model focuses on the operator control plane, tenant isolation boundaries, and lifecycle workflows such as onboarding, upgrade, backup, and restore. It does not replace OpenBao's own internal threat model; it explains the extra surface introduced by running OpenBao through the operator."
-  actions={[
-    {label: 'Open RBAC architecture', docId: 'security/infrastructure/rbac', variant: 'primary'},
-    {label: 'Read operator invariants', docId: 'architecture/operator-invariants', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'review the attacker and trust assumptions behind the operator architecture',
-      'understand which assets the control plane treats as critical',
-      'connect mitigations back to admission, RBAC, and lifecycle separation',
-      'decide whether a proposed design change expands the threat surface',
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="note" title="Scope">
 

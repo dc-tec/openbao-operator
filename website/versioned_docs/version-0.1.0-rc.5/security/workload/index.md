@@ -7,7 +7,6 @@ description: Workload security guidance for OpenBao Operator covering pod securi
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Security / Workload Protections"
   title="Treat pod hardening, TLS, and image trust as one runtime surface."
   lede="Workload protections cover the controls that apply once the cluster is allowed to run: pod and container hardening, workload identity and TLS, and the supply-chain rules that decide which images the operator will trust."

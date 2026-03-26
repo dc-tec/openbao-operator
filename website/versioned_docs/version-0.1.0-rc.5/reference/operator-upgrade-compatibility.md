@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Reference / Quick Checks"
+<PageHeader
   title="Use this page when you need the exact upgrade-path contract for the operator itself."
   lede="This page defines which operator upgrade paths are supported, how CRD sequencing must work, and why rollback should be treated as a recovery decision rather than a normal lifecycle shortcut. It is the exact contract for changing the operator version, not the managed OpenBao workload version."
-  actions={[
-    {label: 'Open compatibility matrix', docId: 'reference/compatibility', variant: 'primary'},
-    {label: 'Open deprecation policy', docId: 'reference/deprecation-policy', variant: 'secondary'},
-  ]}
 />
 
 <DecisionTable

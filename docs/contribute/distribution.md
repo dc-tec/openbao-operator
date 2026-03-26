@@ -5,26 +5,10 @@ pageType: concept
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Validate & Ship"
+<PageHeader
   title="Understand what we publish today, and what we deliberately do not publish yet."
   lede="OpenBao Operator uses an Artifact Hub-first distribution model. We publish OCI Helm chart releases to GHCR, index them in Artifact Hub for discovery, and keep OLM bundle assets in-repo and CI-validated without treating public OperatorHub publication as part of the current supported surface."
-  actions={[
-    {label: "Open release management", to: "/contribute/release-management", variant: "primary"},
-    {label: "Open project governance", to: "/contribute/project-governance", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "understand the current public distribution contract for charts and release artifacts",
-      "update Artifact Hub metadata, ownership, or verified publisher wiring",
-      "review what remains intentionally deferred around OLM and OperatorHub publication",
-      "confirm which release surfaces are source-of-truth for users versus maintainers",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Distribution surfaces"

@@ -9,13 +9,13 @@ import CommandBlock from '@site/src/components/CommandBlock';
 import DecisionTable from '@site/src/components/DecisionTable';
 import DiagramFrame from '@site/src/components/DiagramFrame';
 import ExpandableCallout from '@site/src/components/ExpandableCallout';
-import JourneyHero from '@site/src/components/JourneyHero';
 import JourneyRail from '@site/src/components/JourneyRail';
 import JourneySteps from '@site/src/components/JourneySteps';
 import LinkCard from '@site/src/components/LinkCard';
 import ManagerAtAGlance from '@site/src/components/ManagerAtAGlance';
 import NextActions from '@site/src/components/NextActions';
 import OutcomePanel from '@site/src/components/OutcomePanel';
+import PageHeader from '@site/src/components/PageHeader';
 import PageHero from '@site/src/components/PageHero';
 import RouteList from '@site/src/components/RouteList';
 import SiteLink from '@site/src/components/SiteLink';
@@ -30,13 +30,13 @@ export default {
   DecisionTable,
   DiagramFrame,
   ExpandableCallout,
-  JourneyHero,
   JourneyRail,
   JourneySteps,
   LinkCard,
   ManagerAtAGlance,
   NextActions,
   OutcomePanel,
+  PageHeader,
   PageHero,
   RouteList,
   SiteLink,

@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Reference / Constraints & Caveats"
+<PageHeader
   title="Use this page when you need to know whether a behavior is unsupported, unfinished, or intentionally out of scope."
   lede="Not every missing feature is an accidental gap. This page captures the current constraints and deliberate non-goals for the pre-GA line so operators and contributors can separate unsupported assumptions from issues the project actually intends to solve."
-  actions={[
-    {label: 'Open support policy', docId: 'reference/support-policy', variant: 'primary'},
-    {label: 'Open upgrade compatibility', docId: 'reference/operator-upgrade-compatibility', variant: 'secondary'},
-  ]}
 />
 
 <DecisionTable

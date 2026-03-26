@@ -5,26 +5,10 @@ pageType: task
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Start Here"
+<PageHeader
   title="Get a workstation to the point where you can build, run, test, and debug the operator without fighting the toolchain."
   lede="Start by bootstrapping the repository-managed tools, then choose the smallest development loop that matches your task. Most contributor work does not need a full cluster deployment on the first edit, but webhooks, RBAC, networking, and lifecycle behavior eventually do."
-  actions={[
-    {label: "Open testing strategy", to: "/contribute/testing", variant: "primary"},
-    {label: "Open project conventions", to: "/contribute/standards/project-conventions", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "prepare a workstation or devcontainer for normal OpenBao Operator development",
-      "choose between the fast local loop, in-cluster integration loop, and Tilt-based cluster loop",
-      "run the local PR-equivalent checks before opening a branch or asking CI to prove the same thing again",
-      "debug missing tools, webhook limitations, or local cluster setup issues",
-    ]}
-  />
-</PageHero>
+/>
 
 ## Prerequisites
 

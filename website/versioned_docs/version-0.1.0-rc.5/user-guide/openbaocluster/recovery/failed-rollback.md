@@ -7,26 +7,10 @@ pageType: runbook
 journey: operate
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Operate / Incident recovery"
+<PageHeader
   title="Repair rollback failures without forcing a downgrade."
   lede="A failed rollback means blue-green automation stopped because continuing automatically could worsen Raft safety or cluster availability. Start with the status surface and the last failed rollback Job, then decide whether the right next step is a retry, a controlled pause for manual repair, or a restore from backup."
-  actions={[
-    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'primary'},
-    {label: 'Recover after upgrade restore', docId: 'user-guide/openbaorestore/recovery-restore-after-upgrade', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this runbook when"
-    items={[
-      'a blue-green rollback enters break glass mode',
-      'the rollback consensus repair job failed and automation stopped',
-      'you need to decide whether the rollback can safely retry or needs manual repair',
-      'you need to restore from a known-good snapshot because rollback repair is no longer enough',
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="failure" title="Do not try to downgrade around the failure">
 

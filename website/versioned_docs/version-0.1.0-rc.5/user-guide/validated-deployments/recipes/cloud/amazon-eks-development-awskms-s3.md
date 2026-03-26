@@ -6,25 +6,10 @@ journey: validated-deployments
 description: Reproduce the validated development baseline on Amazon EKS with AWS KMS auto-unseal, a shared terminating Gateway, JWT bootstrap, and S3 backups.
 ---
 
-<PageHero
-  eyebrow="Validated Deployments / Cloud Baselines / EKS Development"
+<PageHeader
   title="Reproduce the validated EKS development lane without mixing the quick bring-up path with hardened endpoint requirements."
   lede="This recipe applies the EKS development baseline with KMS auto-unseal, shared-edge exposure, JWT bootstrap, and S3 backups. Use it when you need the exact validated cloud bring-up path, not a generic EKS example."
-  actions={[
-    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
-    {label: "Open backup operations", docId: "user-guide/openbaocluster/operations/backups", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="This recipe should leave you with"
-    items={[
-      "an onboarded tenant namespace and admin ServiceAccount",
-      "a Development-profile cluster that unseals with AWS KMS through workload identity",
-      "JWT admin login and shared-edge access working on the public hostname you chose",
-      "manual and scheduled S3 backups using a backup identity that stays separate from the main workload identity",
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="success" title="Validated lane">
 

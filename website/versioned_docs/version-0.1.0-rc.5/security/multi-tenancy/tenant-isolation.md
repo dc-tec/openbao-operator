@@ -6,26 +6,10 @@ journey: security
 description: How namespace introduction, split controller identities, admission policy, and network boundaries combine into the operator's tenant-isolation model.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Tenant Isolation"
+<PageHeader
   title="Make tenant access explicit instead of discoverable."
   lede="The operator's multi-tenant model depends on deliberate namespace introduction. A tenant namespace becomes manageable only after onboarding introduces the controller through fixed RBAC, applies namespace guardrails, and keeps the identity that grants access separate from the identity that consumes it."
-  actions={[
-    {label: "Open RBAC architecture", docId: "security/infrastructure/rbac", variant: "primary"},
-    {label: "Review tenant onboarding", docId: "user-guide/openbaotenant/onboarding", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "understand what the shared-service model actually guarantees between namespaces",
-      "review the difference between self-service and centrally managed onboarding",
-      "connect tenant onboarding back to RBAC, admission, and network controls",
-      "decide whether the operator's isolation model fits your platform trust assumptions",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Isolation pillars"

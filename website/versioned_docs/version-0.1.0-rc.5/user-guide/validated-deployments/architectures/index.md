@@ -6,7 +6,6 @@ description: Catalog of validated reference architectures, grouped by cloud and 
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Validated Deployments / Architecture Catalog"
   title="Use the architecture catalog when you want topology first."
   lede="This page exists for readers who arrive looking specifically for the reference architecture side of a validated lane. The main section navigation is now lane-first, so you can move from topology to recipe without switching sections in your head."

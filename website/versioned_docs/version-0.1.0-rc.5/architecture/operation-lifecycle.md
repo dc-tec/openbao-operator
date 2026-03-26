@@ -6,26 +6,10 @@ journey: architecture
 description: Shared lock, retry, and phase-audit primitives used by backup, restore, and upgrade managers.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Supporting Service"
+<PageHeader
   title="Coordinate locks, retries, and phase transitions across disruptive operations."
   lede="`internal/service/opslifecycle` is the shared service-layer contract behind backup, restore, and upgrade orchestration. It does not own a controller or CRD of its own. Instead, it keeps operation lock identity, retry timing, and phase audit logging consistent whenever a manager needs to take disruptive action against a cluster."
-  actions={[
-    {label: 'Open upgrade manager', docId: 'architecture/upgrade-manager', variant: 'primary'},
-    {label: 'Open restore manager', docId: 'architecture/restore-manager', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand how backup, restore, and upgrade share one lock and retry model',
-      'see which primitives wrap the status-based operation lock adapter',
-      'reason about contention, force semantics, and requeue timing without reading each manager separately',
-      'connect phase audit logging back to one common service instead of per-manager helpers',
-    ]}
-  />
-</PageHero>
+/>
 
 <ManagerAtAGlance
   sections={[

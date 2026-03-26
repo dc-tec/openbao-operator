@@ -6,25 +6,10 @@ journey: configure
 description: Mirror operator and workload images, set the right repository defaults, and wire pull secrets before you move clusters into disconnected or private-registry environments.
 ---
 
-<PageHero
-  eyebrow="Configure / Platform Readiness"
+<PageHeader
   title="Mirror every image surface before you call the environment disconnected-ready."
   lede="An air-gapped or private-registry deployment is not just one image override. The operator image, the default OpenBao workload image, and the helper executors for init, backup, and upgrade each have their own source of truth. Use this page to make those defaults explicit before you need to promote clusters through a disconnected path."
-  actions={[
-    {label: "Review supply-chain verification", docId: "security/workload/supply-chain", variant: "primary"},
-    {label: "Review installation", docId: "user-guide/operator/installation", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "mirror operator, workload, and helper images into an internal registry",
-      "set install-wide defaults so new clusters do not pull from public registries by accident",
-      "override images per cluster when a workload needs a different mirror or tag",
-      "attach the right pull secrets to both the operator install and the generated cluster workload",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Plan every image surface explicitly"

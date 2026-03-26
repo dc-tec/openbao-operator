@@ -8,25 +8,10 @@ journey: get-started
 journeyStep: 4
 ---
 
-<PageHero
-  eyebrow="Step 4"
+<PageHeader
   title="Create the first cluster you can keep operating."
   lede="By the time you reach this step, the operator is installed and the target namespace is already onboarded when you are in the default multi-tenant mode. Start with the closest safe baseline, verify the cluster becomes healthy, and then move directly into the next operating concern."
-  actions={[
-    {label: 'Prepare for day 2', docId: 'user-guide/openbaocluster/next-steps', variant: 'primary'},
-    {label: 'Open validated deployments', docId: 'user-guide/validated-deployments/index', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Before you apply the cluster manifest"
-    items={[
-      'confirm the operator install is healthy in the namespace model you chose',
-      'confirm the target namespace is already onboarded through OpenBaoTenant when you are in multi-tenant mode',
-      'choose a StorageClass explicitly for production before the first reconcile',
-      'decide whether this cluster is only for evaluation or intended to become production',
-    ]}
-  />
-</PageHero>
+/>
 
 <JourneyRail
   title="The first five moves"

@@ -5,26 +5,10 @@ pageType: reference
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Project Governance"
+<PageHeader
   title="Use this page when a dependency change could affect what the project is allowed to ship."
   lede="The repository enforces license policy on shipped dependencies, not just on whatever appears in the module graph during development. This page defines the allowed set, the extra handling required for MPL-2.0, and the checks maintainers expect before a dependency change is merged."
-  actions={[
-    {label: "Open supply chain security", to: "/contribute/supply-chain-security", variant: "primary"},
-    {label: "Open project conventions", to: "/contribute/standards/project-conventions", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "review whether a new or updated dependency is compatible with shipped distribution policy",
-      "understand why vendored-mode checks are the canonical license gate",
-      "handle MPL-2.0 dependencies correctly without broadening project obligations by accident",
-      "run the local license verification steps that mirror maintainer review and CI",
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="note" title="Policy, not legal advice">
 

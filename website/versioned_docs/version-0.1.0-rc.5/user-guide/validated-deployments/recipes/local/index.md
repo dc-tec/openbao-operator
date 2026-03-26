@@ -6,7 +6,6 @@ description: Local deployment recipes for the validated k3d lanes.
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Validated Deployments / Local Recipe Catalog"
   title="Run the local procedure that matches the validated lane you want to rehearse."
   lede="These recipes reproduce the local k3d validation lanes. They are useful because they follow the exact assumptions exercised by the project environment, but they should still be read as lane procedures, not as generic operator setup."

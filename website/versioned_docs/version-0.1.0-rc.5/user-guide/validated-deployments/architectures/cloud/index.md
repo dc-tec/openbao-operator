@@ -6,7 +6,6 @@ description: Validated cloud baselines for OpenBao Operator, pairing each tested
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Validated Deployments / Cloud Baselines"
   title="Pick the cloud lane that matches the posture you want to prove."
   lede="The current cloud validated scope comes from Amazon EKS. Each lane keeps the tested topology and the matching deployment recipe adjacent, so you can confirm the architecture first and then reproduce it without jumping across unrelated nav branches."

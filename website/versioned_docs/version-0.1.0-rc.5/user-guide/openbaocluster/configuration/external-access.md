@@ -7,25 +7,10 @@ journey: configure
 description: Choose how clients reach OpenBao, decide where TLS terminates, and map that choice to Gateway API, Ingress, or direct service exposure.
 ---
 
-<PageHero
-  eyebrow="Configure / Service Boundary"
+<PageHeader
   title="Choose how traffic reaches the service before you optimize the edge."
   lede="OpenBao can be exposed through Gateway API, Ingress, or a direct L4 Service. The important decision is not just which Kubernetes resource you use, but where TLS terminates, who owns certificate lifecycle, and whether the edge path matches the production posture you actually want to operate."
-  actions={[
-    {label: "Open Gateway API support", docId: "user-guide/openbaocluster/configuration/gateway-api", variant: "primary"},
-    {label: "Review TLS and workload identity", docId: "security/workload/tls", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "choose the exposure pattern for a new cluster before users depend on it",
-      "decide whether OpenBao or the edge should terminate TLS",
-      "match the exposure path to the Hardened or Development profile you selected",
-      "connect the edge configuration back to network policy and service ownership",
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Choose the access path deliberately"

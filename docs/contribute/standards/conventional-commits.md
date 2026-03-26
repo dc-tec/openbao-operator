@@ -5,26 +5,10 @@ pageType: reference
 journey: contribute
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Contribute / Build & Change"
+<PageHeader
   title="Use Conventional Commits so history, changelog generation, and release tooling all agree on what changed."
   lede="The repository uses Conventional Commits to keep PR titles and commit history predictable. This matters both for human review and for the release automation that turns merged changes into versioned output."
-  actions={[
-    {label: "Open release management", to: "/contribute/release-management", variant: "primary"},
-    {label: "Open project conventions", to: "/contribute/standards/project-conventions", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "format a PR title for the squash-merge flow",
-      "choose the right change type and scope for a commit or PR",
-      "mark a breaking change so release notes and semantic versioning stay accurate",
-      "understand what the repository validates automatically in CI",
-    ]}
-  />
-</PageHero>
+/>
 
 <CommandBlock
   language="text"

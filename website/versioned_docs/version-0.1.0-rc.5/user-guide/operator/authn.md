@@ -7,26 +7,10 @@ pageType: concept
 journey: get-started
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Supporting decision"
+<PageHeader
   title="Keep controller auth short-lived, bound, and boring."
   lede="The operator authenticates to OpenBao with a projected Kubernetes ServiceAccount token by default. That path is safer than static root credentials, but it only stays safe when the rendered controller identity, JWT audience, and OpenBao-side role binding still match."
-  actions={[
-    {label: 'Review operator authorization', docId: 'user-guide/operator/authz', variant: 'primary'},
-    {label: 'Review identity mapping', docId: 'user-guide/operator/identity-and-access', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'explain how the controller authenticates without a long-lived root token',
-      'verify the audience and role binding after custom namespace or name changes',
-      'bootstrap JWT auth with self-init instead of manual token handling',
-      'debug why controller auth fails while the cluster itself stays healthy',
-    ]}
-  />
-</PageHero>
+/>
 
 <DiagramFrame
   title="Default operator auth path"

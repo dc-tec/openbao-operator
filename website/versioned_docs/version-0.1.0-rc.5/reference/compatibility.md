@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Reference / Quick Checks"
+<PageHeader
   title="Use the compatibility matrix when you need the exact validation and support boundary for a platform or version."
   lede="This page is the contract for what the project actively validates, what remains best-effort supported, and what should be treated as out of scope for the current pre-GA line. It is the fastest way to answer whether a target Kubernetes or OpenBao version sits inside the tested envelope."
-  actions={[
-    {label: 'Open upgrade compatibility', docId: 'reference/operator-upgrade-compatibility', variant: 'primary'},
-    {label: 'Open support policy', docId: 'reference/support-policy', variant: 'secondary'},
-  ]}
 />
 
 <Callout type="note" title="Terminology">

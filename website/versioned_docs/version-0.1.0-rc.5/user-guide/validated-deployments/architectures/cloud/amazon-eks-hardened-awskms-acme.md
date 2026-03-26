@@ -6,26 +6,10 @@ journey: validated-deployments
 description: Validated hardened cloud baseline for OpenBao on Amazon EKS with AWS KMS auto-unseal, a dedicated public passthrough Gateway, OpenBao-managed ACME, and S3 backups.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Validated Deployments / Cloud Baselines"
+<PageHeader
   title="Use this lane when you need the production-style EKS baseline that keeps OpenBao as the public TLS endpoint."
   lede="This cloud baseline is the current hardened EKS reference shape validated by the project. It keeps the unseal root in AWS KMS, keeps the public hostname on a dedicated passthrough Gateway, and lets OpenBao manage ACME issuance directly while backup Jobs write to S3 through a separate identity."
-  actions={[
-    {label: "Open deployment recipe", docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme", variant: "primary"},
-    {label: "Review TLS guidance", docId: "security/workload/tls", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="This lane proves"
-    items={[
-      "a Hardened-profile cluster can bootstrap on EKS with KMS auto-unseal and signed helper images",
-      "OpenBao-managed ACME can issue and serve the public certificate while the Gateway remains pure passthrough",
-      "JWT bootstrap, admin JWT login, and S3 backups all work under the same hardened cloud posture",
-      "the dedicated public edge can stay separate from the terminating admin edge used for the rest of the platform",
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="note" title="Classification">
 

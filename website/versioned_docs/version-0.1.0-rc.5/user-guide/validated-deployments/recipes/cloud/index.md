@@ -6,7 +6,6 @@ description: Cloud deployment recipes for the validated Amazon EKS lanes.
 ---
 
 <PageHero
-  variant="landing"
   eyebrow="Validated Deployments / Cloud Recipe Catalog"
   title="Run the cloud procedure that matches the lane you already chose."
   lede="These recipes reproduce the validated Amazon EKS lanes. Keep the matching reference architecture nearby so the recipe stays connected to the topology and assumptions it was actually proven against."

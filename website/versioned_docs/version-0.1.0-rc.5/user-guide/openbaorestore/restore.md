@@ -6,25 +6,10 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Restore from backup"
+<PageHeader
   title="Run a restore only when you are ready to overwrite the target cluster."
   lede="The operator restores snapshot state through an explicit `OpenBaoRestore` request. That request validates the target, acquires the restore operation lock, launches a dedicated restore Job, and records the outcome for audit. Use this page when restore is the right answer, not as a substitute for ordinary troubleshooting."
-  actions={[
-    {label: 'Open backup operations', docId: 'user-guide/openbaocluster/operations/backups', variant: 'primary'},
-    {label: 'Open restore overview', docId: 'user-guide/openbaorestore/overview', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'restore a cluster from a known snapshot in object storage',
-      'choose the restore auth path before the first real incident',
-      'verify restore phases and lock behavior instead of guessing what the controller is doing',
-      'recover safely after disaster, migration, or an intentional environment clone',
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="danger" title="Restore overwrites the target cluster">
 

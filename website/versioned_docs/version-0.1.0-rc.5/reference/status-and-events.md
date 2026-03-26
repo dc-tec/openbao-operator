@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Reference / Quick Checks"
+<PageHeader
   title="Use this page to decode what the operator is telling you through conditions, events, and lifecycle signals."
   lede="This is the exact lookup surface for status conditions and emitted events across `OpenBaoCluster`, `OpenBaoRestore`, and `OpenBaoTenant`. Use it when a cluster is stalled, degraded, upgrading, backing up, restoring, or otherwise behaving in a way that needs precise interpretation rather than a generic troubleshooting step."
-  actions={[
-    {label: 'Open troubleshooting', to: '/docs/operate/troubleshooting', variant: 'primary'},
-    {label: 'Open recovery and restore', to: '/docs/recover', variant: 'secondary'},
-  ]}
 />
 
 <CommandBlock
