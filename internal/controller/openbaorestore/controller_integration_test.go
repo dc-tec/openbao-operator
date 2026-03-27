@@ -122,6 +122,7 @@ func startOpenBaoRestoreManager(t *testing.T) client.Client {
 	go func() {
 		managerErr <- mgr.Start(managerCtx)
 	}()
+	require.True(t, mgr.GetCache().WaitForCacheSync(managerCtx), "expected manager cache to sync before creating test resources")
 	t.Cleanup(func() {
 		cancel()
 		select {

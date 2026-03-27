@@ -16,7 +16,7 @@ import (
 
 // RestoreReconciler coordinates restore lifecycle transitions for OpenBaoRestore resources.
 type RestoreReconciler interface {
-	Reconcile(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (recon.Result, error)
+	Reconcile(ctx context.Context, logger logr.Logger, restoreResource *openbaov1alpha1.OpenBaoRestore) (recon.Result, error)
 }
 
 // RestoreDependencies contains the runtime inputs needed to build the restore reconciler.
