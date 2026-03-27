@@ -1,13 +1,17 @@
 package openbaocluster
 
-import "time"
+import (
+	"time"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+)
 
 // Reason constants for OpenBaoCluster conditions.
 const (
-	ReasonGatewayAPIMissing                    = "GatewayAPIMissing"
-	ReasonOIDCBootstrapConfigurationInvalid    = "OIDCBootstrapConfigurationInvalid"
-	ReasonAPIServerNetworkConfigurationInvalid = "APIServerNetworkConfigurationInvalid"
-	ReasonPrerequisitesMissing                 = "PrerequisitesMissing"
+	ReasonGatewayAPIMissing                    = constants.ReasonGatewayAPIMissing
+	ReasonOIDCBootstrapConfigurationInvalid    = constants.ReasonOIDCBootstrapConfigurationInvalid
+	ReasonAPIServerNetworkConfigurationInvalid = constants.ReasonAPIServerNetworkConfigurationInvalid
+	ReasonPrerequisitesMissing                 = constants.ReasonPrerequisitesMissing
 	ReasonPrerequisitesReady                   = "PrerequisitesReady"
 	ReasonAdmissionPoliciesNotReady            = "AdmissionPoliciesNotReady"
 	ReasonAdmissionPoliciesReady               = "AdmissionPoliciesReady"
@@ -15,7 +19,7 @@ const (
 	ReasonInProgress = "InProgress"
 
 	ReasonLeaderFound                            = "LeaderFound"
-	ReasonLeaderUnknown                          = "LeaderUnknown"
+	ReasonLeaderUnknown                          = constants.ReasonLeaderUnknown
 	ReasonMultipleLeaders                        = "MultipleLeaders"
 	ReasonInitialized                            = "Initialized"
 	ReasonNotInitialized                         = "NotInitialized"
@@ -36,43 +40,43 @@ const (
 	ReasonRootTokenStored                        = "RootTokenStored"
 	ReasonStaticUnsealInUse                      = "StaticUnsealInUse"
 	ReasonOperatorManagedTLS                     = "OperatorManagedTLS"
-	ReasonSecurityViolation                      = "SecurityViolation"
+	ReasonSecurityViolation                      = constants.ReasonSecurityViolation
 	ReasonTLSSecretMissing                       = "TLSSecretMissing"
 	ReasonTLSSecretInvalid                       = "TLSSecretInvalid"
-	ReasonACMEIntegrationReady                   = "ACMEIntegrationReady"
+	ReasonACMEIntegrationReady                   = constants.ReasonACMEIntegrationReady
 	ReasonACMECacheReady                         = "ACMECacheReady"
-	ReasonGatewayIntegrationReady                = "GatewayIntegrationReady"
-	ReasonAPIServerNetworkReady                  = "APIServerNetworkReady"
-	ReasonAPIServerEndpointIPsRecommended        = "APIServerEndpointIPsRecommended"
-	ReasonGatewayReferenceMissing                = "GatewayReferenceMissing"
-	ReasonGatewayClassMissing                    = "GatewayClassMissing"
-	ReasonGatewayClassPending                    = "GatewayClassPending"
-	ReasonGatewayClassNotAccepted                = "GatewayClassNotAccepted"
-	ReasonGatewayVersionUnsupported              = "GatewayVersionUnsupported"
-	ReasonGatewayFeatureUnsupported              = "GatewayFeatureUnsupported"
-	ReasonGatewayCapabilitiesUnknown             = "GatewayCapabilitiesUnknown"
-	ReasonGatewayNotProgrammed                   = "GatewayNotProgrammed"
-	ReasonGatewayProgrammingPending              = "GatewayProgrammingPending"
-	ReasonGatewayListenerIncompatible            = "GatewayListenerIncompatible"
+	ReasonGatewayIntegrationReady                = constants.ReasonGatewayIntegrationReady
+	ReasonAPIServerNetworkReady                  = constants.ReasonAPIServerNetworkReady
+	ReasonAPIServerEndpointIPsRecommended        = constants.ReasonAPIServerEndpointIPsRecommended
+	ReasonGatewayReferenceMissing                = constants.ReasonGatewayReferenceMissing
+	ReasonGatewayClassMissing                    = constants.ReasonGatewayClassMissing
+	ReasonGatewayClassPending                    = constants.ReasonGatewayClassPending
+	ReasonGatewayClassNotAccepted                = constants.ReasonGatewayClassNotAccepted
+	ReasonGatewayVersionUnsupported              = constants.ReasonGatewayVersionUnsupported
+	ReasonGatewayFeatureUnsupported              = constants.ReasonGatewayFeatureUnsupported
+	ReasonGatewayCapabilitiesUnknown             = constants.ReasonGatewayCapabilitiesUnknown
+	ReasonGatewayNotProgrammed                   = constants.ReasonGatewayNotProgrammed
+	ReasonGatewayProgrammingPending              = constants.ReasonGatewayProgrammingPending
+	ReasonGatewayListenerIncompatible            = constants.ReasonGatewayListenerIncompatible
 	ReasonACMECacheNotConfigured                 = "ACMECacheNotConfigured"
 	ReasonACMECacheMissing                       = "ACMECacheMissing"
 	ReasonACMECachePending                       = "ACMECachePending"
 	ReasonACMECacheInvalidAccessMode             = "ACMECacheInvalidAccessMode"
-	ReasonACMEDomainNotResolvable                = "ACMEDomainNotResolvable"
-	ReasonACMEGatewayNotConfiguredForPassthrough = "ACMEGatewayNotConfiguredForPassthrough"
+	ReasonACMEDomainNotResolvable                = constants.ReasonACMEDomainNotResolvable
+	ReasonACMEGatewayNotConfiguredForPassthrough = constants.ReasonACMEGatewayNotConfiguredForPassthrough
 	ReasonDisabled                               = "Disabled"
 	ReasonNotReady                               = "NotReady"
 	ReasonAllReplicasReady                       = "AllReplicasReady"
 	ReasonNoReplicasReady                        = "NoReplicasReady"
 
-	ReasonStorageInvalidSize             = "StorageInvalidSize"
-	ReasonStorageShrinkNotSupported      = "StorageShrinkNotSupported"
-	ReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
-	ReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
-	ReasonStorageRestartRequired         = "StorageRestartRequired"
-	ReasonInvalidVersion                 = "InvalidVersion"
-	ReasonDowngradeBlocked               = "DowngradeBlocked"
-	ReasonImageVersionMismatch           = "ImageVersionMismatch"
+	ReasonStorageInvalidSize             = constants.ReasonStorageInvalidSize
+	ReasonStorageShrinkNotSupported      = constants.ReasonStorageShrinkNotSupported
+	ReasonStorageResizeNotSupported      = constants.ReasonStorageResizeNotSupported
+	ReasonStorageClassChangeNotSupported = constants.ReasonStorageClassChangeNotSupported
+	ReasonStorageRestartRequired         = constants.ReasonStorageRestartRequired
+	ReasonInvalidVersion                 = constants.ReasonInvalidVersion
+	ReasonDowngradeBlocked               = constants.ReasonDowngradeBlocked
+	ReasonImageVersionMismatch           = constants.ReasonImageVersionMismatch
 	ReasonStorageClassConfigured         = "StorageClassConfigured"
 	ReasonStorageClassPending            = "StorageClassPending"
 	ReasonStorageClassDefaulted          = "StorageClassDefaulted"
@@ -84,7 +88,7 @@ const (
 	reasonPaused             = "Paused"
 	reasonReconciling        = "Reconciling"
 	reasonIdle               = "Idle"
-	reasonUnknown            = "Unknown"
+	reasonUnknown            = constants.ReasonUnknown
 	reasonBreakGlassRequired = "BreakGlassRequired"
 
 	controllerNameWorkload = "openbaocluster-workload"

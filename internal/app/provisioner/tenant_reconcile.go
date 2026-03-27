@@ -22,12 +22,7 @@ import (
 	provisionermanager "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
-const (
-	// ReasonSecurityViolation indicates self-service tenant provisioning guardrail failure.
-	ReasonSecurityViolation = "SecurityViolation"
-
-	admissionDependencyRequeueAfter = 10 * time.Second
-)
+const admissionDependencyRequeueAfter = 10 * time.Second
 
 // TenantRuntime captures dependencies needed for OpenBaoTenant provisioning orchestration.
 type TenantRuntime struct {
@@ -73,7 +68,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 			"tenant_namespace": tenant.Namespace,
 			"tenant_name":      tenant.Name,
 			"target_namespace": targetNS,
-			"reason":           ReasonSecurityViolation,
+			"reason":           constants.ReasonSecurityViolation,
 		})
 		runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked for namespace %s: %v", targetNS, err))
 
@@ -84,7 +79,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 			Type:               conditionTypeProvisioned(runtime),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: tenant.Generation,
-			Reason:             ReasonSecurityViolation,
+			Reason:             constants.ReasonSecurityViolation,
 			Message:            err.Error(),
 		})
 		if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {

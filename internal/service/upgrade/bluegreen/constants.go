@@ -1,15 +1,17 @@
 package bluegreen
 
+import "github.com/dc-tec/openbao-operator/internal/platform/constants"
+
 // Condition reason strings for Blue/Green upgrades.
 const (
 	// ReasonUpgradeStarted indicates the blue/green upgrade process has begun.
-	ReasonUpgradeStarted = "UpgradeStarted"
+	ReasonUpgradeStarted = constants.ReasonUpgradeStarted
 
 	// ReasonUpgradeComplete indicates the blue/green upgrade finished successfully.
-	ReasonUpgradeComplete = "UpgradeComplete"
+	ReasonUpgradeComplete = constants.ReasonUpgradeComplete
 
 	// ReasonUpgradeFailed indicates the blue/green upgrade process failed.
-	ReasonUpgradeFailed = "UpgradeFailed"
+	ReasonUpgradeFailed = constants.ReasonUpgradeFailed
 
 	// ReasonUpgradeRollback indicates a blue/green upgrade is being rolled back.
 	ReasonUpgradeRollback = "UpgradeRollback"

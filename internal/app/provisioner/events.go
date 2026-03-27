@@ -4,14 +4,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 const (
-	ReasonTenantProvisioned            = "TenantProvisioned"
-	ReasonTenantRBACCleaned            = "TenantRBACCleaned"
-	ReasonTenantProvisioningBlocked    = "TenantProvisioningBlocked"
-	ReasonTenantProvisioningFailed     = "TenantProvisioningFailed"
-	ReasonTenantSecretRBACSynchronized = "TenantSecretRBACSynchronized"
+	ReasonTenantProvisioned            = constants.ReasonTenantProvisioned
+	ReasonTenantRBACCleaned            = constants.ReasonTenantRBACCleaned
+	ReasonTenantProvisioningBlocked    = constants.ReasonTenantProvisioningBlocked
+	ReasonTenantProvisioningFailed     = constants.ReasonTenantProvisioningFailed
+	ReasonTenantSecretRBACSynchronized = constants.ReasonTenantSecretRBACSynchronized
 )
 
 func (r TenantRuntime) emitTenantNormalEvent(tenant *openbaov1alpha1.OpenBaoTenant, reason, note string) {

@@ -8,12 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-)
-
-const (
-	reasonAPIServerNetworkConfigurationInvalid = "APIServerNetworkConfigurationInvalid"
-	reasonAPIServerEndpointIPsRecommended      = "APIServerEndpointIPsRecommended"
-	reasonAPIServerNetworkReady                = "APIServerNetworkReady"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 // APIServerNetworkReadiness reports how strongly the operator can validate the
@@ -34,7 +29,7 @@ func (m *Manager) EvaluateAPIServerNetworkReadiness(ctx context.Context, logger 
 		wrapped := wrapAPIServerNetworkConfigurationError("primary", err)
 		return APIServerNetworkReadiness{
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonAPIServerNetworkConfigurationInvalid,
+			Reason:  constants.ReasonAPIServerNetworkConfigurationInvalid,
 			Message: wrapped.Error(),
 		}
 	}
@@ -42,7 +37,7 @@ func (m *Manager) EvaluateAPIServerNetworkReadiness(ctx context.Context, logger 
 		wrapped := wrapAPIServerNetworkConfigurationError("primary", nil)
 		return APIServerNetworkReadiness{
 			Status:  metav1.ConditionFalse,
-			Reason:  reasonAPIServerNetworkConfigurationInvalid,
+			Reason:  constants.ReasonAPIServerNetworkConfigurationInvalid,
 			Message: wrapped.Error(),
 		}
 	}
@@ -50,7 +45,7 @@ func (m *Manager) EvaluateAPIServerNetworkReadiness(ctx context.Context, logger 
 	if len(info.EndpointIPs) == 0 {
 		return APIServerNetworkReadiness{
 			Status: metav1.ConditionUnknown,
-			Reason: reasonAPIServerEndpointIPsRecommended,
+			Reason: constants.ReasonAPIServerEndpointIPsRecommended,
 			Message: fmt.Sprintf(
 				"Kubernetes API egress is configured through the service VIP (%s). This is sufficient on many clusters. If your CNI enforces egress on post-DNAT traffic, also configure spec.network.apiServerEndpointIPs with the control-plane endpoint IPs.",
 				info.ServiceNetworkCIDR,
@@ -60,7 +55,7 @@ func (m *Manager) EvaluateAPIServerNetworkReadiness(ctx context.Context, logger 
 
 	return APIServerNetworkReadiness{
 		Status: metav1.ConditionTrue,
-		Reason: reasonAPIServerNetworkReady,
+		Reason: constants.ReasonAPIServerNetworkReady,
 		Message: fmt.Sprintf(
 			"Kubernetes API egress is configured with service VIP %s and explicit endpoint IPs %v.",
 			info.ServiceNetworkCIDR,

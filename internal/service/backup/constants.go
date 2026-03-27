@@ -1,5 +1,7 @@
 package backup
 
+import "github.com/dc-tec/openbao-operator/internal/platform/constants"
+
 // Reason constants for OpenBaoBackup conditions.
 const (
 	// ReasonBackupManualTriggerAccepted indicates a manual backup request was accepted.
@@ -24,7 +26,7 @@ const (
 	ReasonBackupFailed = "BackupFailed"
 
 	// ReasonOperationLockBlocked indicates backup could not proceed because another operation holds the cluster lock.
-	ReasonOperationLockBlocked = "OperationLockBlocked"
+	ReasonOperationLockBlocked = constants.ReasonOperationLockBlocked
 
 	// ComponentBackup is the component name for backup resources.
 	ComponentBackup = "backup"

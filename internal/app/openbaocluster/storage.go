@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
@@ -23,16 +24,11 @@ import (
 )
 
 const (
-	defaultReasonStorageInvalidSize             = "StorageInvalidSize"
-	defaultReasonStorageShrinkNotSupported      = "StorageShrinkNotSupported"
-	defaultReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
-	defaultReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
-	defaultReasonStorageRestartRequired         = "StorageRestartRequired"
-	eventReasonPVCResize                        = "PVCResize"
-	eventReasonPVCResizeLeaderStepDown          = "PVCResizeLeaderStepDown"
-	eventReasonPVCResizePodRestart              = "PVCResizePodRestart"
-	storageVolumeDataPrefix                     = "data-"
-	storageRequeueShort                         = 5 * time.Second
+	eventReasonPVCResize               = "PVCResize"
+	eventReasonPVCResizeLeaderStepDown = "PVCResizeLeaderStepDown"
+	eventReasonPVCResizePodRestart     = "PVCResizePodRestart"
+	storageVolumeDataPrefix            = "data-"
+	storageRequeueShort                = 5 * time.Second
 )
 
 // StorageReasonPolicy configures storage-related error reason values.
@@ -48,35 +44,35 @@ func (p StorageReasonPolicy) invalidSizeReason() string {
 	if strings.TrimSpace(p.InvalidSize) != "" {
 		return p.InvalidSize
 	}
-	return defaultReasonStorageInvalidSize
+	return constants.ReasonStorageInvalidSize
 }
 
 func (p StorageReasonPolicy) shrinkNotSupportedReason() string {
 	if strings.TrimSpace(p.ShrinkNotSupported) != "" {
 		return p.ShrinkNotSupported
 	}
-	return defaultReasonStorageShrinkNotSupported
+	return constants.ReasonStorageShrinkNotSupported
 }
 
 func (p StorageReasonPolicy) resizeNotSupportedReason() string {
 	if strings.TrimSpace(p.ResizeNotSupported) != "" {
 		return p.ResizeNotSupported
 	}
-	return defaultReasonStorageResizeNotSupported
+	return constants.ReasonStorageResizeNotSupported
 }
 
 func (p StorageReasonPolicy) storageClassChangeReason() string {
 	if strings.TrimSpace(p.StorageClassChangeError) != "" {
 		return p.StorageClassChangeError
 	}
-	return defaultReasonStorageClassChangeNotSupported
+	return constants.ReasonStorageClassChangeNotSupported
 }
 
 func (p StorageReasonPolicy) restartRequiredReason() string {
 	if strings.TrimSpace(p.RestartRequired) != "" {
 		return p.RestartRequired
 	}
-	return defaultReasonStorageRestartRequired
+	return constants.ReasonStorageRestartRequired
 }
 
 // StorageResourceRuntime groups Kubernetes clients used by storage reconciliation.

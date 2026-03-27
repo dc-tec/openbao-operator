@@ -50,16 +50,7 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 }
 
 func (r *OpenBaoClusterReconciler) infraReasonPolicy() appopenbaocluster.InfraReasonPolicy {
-	return appopenbaocluster.InfraReasonPolicy{
-		GatewayAPIMissing:                   ReasonGatewayAPIMissing,
-		OIDCBootstrapConfiguration:          ReasonOIDCBootstrapConfigurationInvalid,
-		APIServerNetworkConfiguration:       ReasonAPIServerNetworkConfigurationInvalid,
-		PrerequisitesMissing:                ReasonPrerequisitesMissing,
-		ACMEDomainNotResolvable:             ReasonACMEDomainNotResolvable,
-		ACMEGatewayNotConfiguredPassthrough: ReasonACMEGatewayNotConfiguredForPassthrough,
-		ImageVerificationFailed:             constants.ReasonImageVerificationFailed,
-		InitContainerImageVerification:      constants.ReasonInitContainerImageVerificationFailed,
-	}
+	return appopenbaocluster.InfraReasonPolicy{}
 }
 
 func (r *OpenBaoClusterReconciler) acmeIntegrationDependencies() appopenbaocluster.ACMEIntegrationDependencies {
@@ -93,40 +84,15 @@ func (r *OpenBaoClusterReconciler) apiServerNetworkDependencies() appopenbaoclus
 }
 
 func acmeIntegrationReasonPolicy() appopenbaocluster.ACMEIntegrationReasonPolicy {
-	return appopenbaocluster.ACMEIntegrationReasonPolicy{
-		Ready:                               ReasonACMEIntegrationReady,
-		Unknown:                             reasonUnknown,
-		GatewayAPIMissing:                   ReasonGatewayAPIMissing,
-		PrerequisitesMissing:                ReasonPrerequisitesMissing,
-		ACMEDomainNotResolvable:             ReasonACMEDomainNotResolvable,
-		ACMEGatewayNotConfiguredPassthrough: ReasonACMEGatewayNotConfiguredForPassthrough,
-	}
+	return appopenbaocluster.ACMEIntegrationReasonPolicy{}
 }
 
 func apiServerNetworkReasonPolicy() appopenbaocluster.APIServerNetworkReasonPolicy {
-	return appopenbaocluster.APIServerNetworkReasonPolicy{
-		Ready:                ReasonAPIServerNetworkReady,
-		Recommended:          ReasonAPIServerEndpointIPsRecommended,
-		ConfigurationInvalid: ReasonAPIServerNetworkConfigurationInvalid,
-	}
+	return appopenbaocluster.APIServerNetworkReasonPolicy{}
 }
 
 func gatewayIntegrationReasonPolicy() appopenbaocluster.GatewayIntegrationReasonPolicy {
-	return appopenbaocluster.GatewayIntegrationReasonPolicy{
-		Ready:                       ReasonGatewayIntegrationReady,
-		Unknown:                     reasonUnknown,
-		GatewayAPIMissing:           ReasonGatewayAPIMissing,
-		GatewayReferenceMissing:     ReasonGatewayReferenceMissing,
-		GatewayClassMissing:         ReasonGatewayClassMissing,
-		GatewayClassPending:         ReasonGatewayClassPending,
-		GatewayClassNotAccepted:     ReasonGatewayClassNotAccepted,
-		GatewayVersionUnsupported:   ReasonGatewayVersionUnsupported,
-		GatewayFeatureUnsupported:   ReasonGatewayFeatureUnsupported,
-		GatewayCapabilitiesUnknown:  ReasonGatewayCapabilitiesUnknown,
-		GatewayNotProgrammed:        ReasonGatewayNotProgrammed,
-		GatewayProgrammingPending:   ReasonGatewayProgrammingPending,
-		GatewayListenerIncompatible: ReasonGatewayListenerIncompatible,
-	}
+	return appopenbaocluster.GatewayIntegrationReasonPolicy{}
 }
 
 func (r *OpenBaoClusterReconciler) storageDependencies() appopenbaocluster.StorageDependencies {
@@ -164,13 +130,7 @@ func (r *OpenBaoClusterReconciler) statusDependencies() appopenbaocluster.Status
 }
 
 func storageReasonPolicy() appopenbaocluster.StorageReasonPolicy {
-	return appopenbaocluster.StorageReasonPolicy{
-		InvalidSize:             ReasonStorageInvalidSize,
-		ShrinkNotSupported:      ReasonStorageShrinkNotSupported,
-		ResizeNotSupported:      ReasonStorageResizeNotSupported,
-		StorageClassChangeError: ReasonStorageClassChangeNotSupported,
-		RestartRequired:         ReasonStorageRestartRequired,
-	}
+	return appopenbaocluster.StorageReasonPolicy{}
 }
 
 func (r *OpenBaoClusterReconciler) adminOpsDependencies() appopenbaocluster.AdminOpsDependencies {
