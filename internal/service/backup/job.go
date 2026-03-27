@@ -42,7 +42,7 @@ const (
 	backupTLSCAVolumeName        = "tls-ca"
 )
 
-func backupJobFailureReason(job *batchv1.Job, failureHint string) string {
+func backupJobFailureMessage(job *batchv1.Job, failureHint string) string {
 	message := ""
 	if job == nil {
 		message = "Backup Job failed."
@@ -75,6 +75,29 @@ func backupJobFailureReason(job *batchv1.Job, failureHint string) string {
 	}
 
 	return message + " " + strings.TrimSpace(failureHint)
+}
+
+func backupFailureMatches(status *openbaov1alpha1.BackupStatus, reason, message string) bool {
+	if status == nil {
+		return false
+	}
+	return status.LastFailureReason == strings.TrimSpace(reason) && status.LastFailureMessage == strings.TrimSpace(message)
+}
+
+func setBackupFailure(status *openbaov1alpha1.BackupStatus, reason, message string) {
+	if status == nil {
+		return
+	}
+	status.LastFailureReason = strings.TrimSpace(reason)
+	status.LastFailureMessage = strings.TrimSpace(message)
+}
+
+func clearBackupFailure(status *openbaov1alpha1.BackupStatus) {
+	if status == nil {
+		return
+	}
+	status.LastFailureReason = ""
+	status.LastFailureMessage = ""
 }
 
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.
@@ -127,9 +150,10 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 				if failurePolicy == "" {
 					failurePolicy = constants.ImageVerificationFailurePolicyBlock
 				}
+				failureMessage := fmt.Sprintf("Backup executor image verification failed: %v", err)
 				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
 					if cluster.Status.Backup != nil {
-						cluster.Status.Backup.LastFailureReason = fmt.Sprintf("%s: %v", constants.ReasonBackupExecutorImageVerificationFailed, err)
+						setBackupFailure(cluster.Status.Backup, constants.ReasonBackupExecutorImageVerificationFailed, failureMessage)
 						if patchErr := m.patchStatusSSA(ctx, cluster); patchErr != nil {
 							logger.Error(patchErr, "Failed to patch cluster status for image verification failure")
 						}
@@ -138,7 +162,7 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 				}
 
 				if cluster.Status.Backup != nil {
-					cluster.Status.Backup.LastFailureReason = fmt.Sprintf("%s: %v", constants.ReasonBackupExecutorImageVerificationFailed, err)
+					setBackupFailure(cluster.Status.Backup, constants.ReasonBackupExecutorImageVerificationFailed, failureMessage)
 					if patchErr := m.patchStatusSSA(ctx, cluster); patchErr != nil {
 						logger.Error(patchErr, "Failed to patch cluster status for image verification warning warning")
 					}
@@ -264,7 +288,7 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 			cluster.Status.Backup.LastBackupName = backupKey
 		}
 		cluster.Status.Backup.ConsecutiveFailures = 0
-		cluster.Status.Backup.LastFailureReason = ""
+		clearBackupFailure(cluster.Status.Backup)
 
 		if err := m.patchStatusSSA(ctx, cluster); err != nil {
 			return false, fmt.Errorf("failed to patch backup status (success): %w", err)
@@ -283,22 +307,22 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	if kube.JobFailed(job) {
 		// Job failed - check if we've already processed this specific job failure
 		// to avoid incrementing ConsecutiveFailures on every reconcile
-		expectedFailureReason := backupJobFailureReason(job, workloadidentity.FailureHint(cluster.Spec.Backup.Target, backupServiceAccountName(cluster)))
-		if cluster.Status.Backup.LastFailureReason == expectedFailureReason {
+		expectedFailureMessage := backupJobFailureMessage(job, workloadidentity.FailureHint(cluster.Spec.Backup.Target, backupServiceAccountName(cluster)))
+		if backupFailureMatches(cluster.Status.Backup, ReasonBackupFailed, expectedFailureMessage) {
 			// Already processed this job failure, don't update status again
 			logger.V(1).Info("Backup Job failure already processed", "job", jobName)
 			return false, nil
 		}
 
 		// Skip processing failed jobs that are older than the last successful backup.
-		// This prevents re-processing old failures after a successful backup clears LastFailureReason.
+		// This prevents re-processing old failures after a successful backup clears the failure status.
 		if cluster.Status.Backup.LastBackupTime != nil && job.CreationTimestamp.Before(cluster.Status.Backup.LastBackupTime) {
 			logger.V(1).Info("Skipping stale failed backup job (older than last successful backup)", "job", jobName)
 			return false, nil
 		}
 
 		cluster.Status.Backup.ConsecutiveFailures++
-		cluster.Status.Backup.LastFailureReason = expectedFailureReason
+		setBackupFailure(cluster.Status.Backup, ReasonBackupFailed, expectedFailureMessage)
 
 		if err := m.patchStatusSSA(ctx, cluster); err != nil {
 			return false, fmt.Errorf("failed to patch backup status (failed): %w", err)

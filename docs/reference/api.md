@@ -297,7 +297,8 @@ _Appears in:_
 | `lastBackupName` _string_ | LastBackupName is the object key/path of the last successful backup. |  | Optional: \{\} <br /> |
 | `nextScheduledBackup` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | NextScheduledBackup is when the next backup is scheduled. |  | Optional: \{\} <br /> |
 | `consecutiveFailures` _integer_ | ConsecutiveFailures is the number of consecutive backup failures. |  | Optional: \{\} <br /> |
-| `lastFailureReason` _string_ | LastFailureReason describes why the last backup failed (if applicable). |  | Optional: \{\} <br /> |
+| `lastFailureReason` _string_ | LastFailureReason is the low-cardinality reason code for the last backup failure (if applicable). |  | Optional: \{\} <br /> |
+| `lastFailureMessage` _string_ | LastFailureMessage is the detailed message for the last backup failure (if applicable). |  | Optional: \{\} <br /> |
 
 
 #### BackupTarget
