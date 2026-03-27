@@ -681,6 +681,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(updated.Status.Backup).NotTo(BeNil())
 				g.Expect(updated.Status.Backup.ConsecutiveFailures).To(BeNumerically(">=", 1))
 				g.Expect(updated.Status.Backup.LastFailureReason).NotTo(BeEmpty())
+				g.Expect(updated.Status.Backup.LastFailureMessage).NotTo(BeEmpty())
 			}, 10*time.Minute, 10*time.Second).Should(Succeed())
 
 			By("restoring valid credentials and retriggering backup")
@@ -706,6 +707,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
 				g.Expect(updated.Status.Backup.ConsecutiveFailures).To(Equal(int32(0)))
 				g.Expect(updated.Status.Backup.LastFailureReason).To(BeEmpty())
+				g.Expect(updated.Status.Backup.LastFailureMessage).To(BeEmpty())
 				g.Expect(updated.Status.Backup.LastBackupTime).NotTo(BeNil())
 				g.Expect(updated.Status.Backup.LastBackupTime.Time.After(recoveryTriggerTime.Add(-2 * time.Minute))).To(BeTrue())
 				backupKey = updated.Status.Backup.LastBackupName

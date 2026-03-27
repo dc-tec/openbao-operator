@@ -1,0 +1,18 @@
+id: no-raw-event-reason-literals
+valid:
+  - |
+    package p
+    type recorder struct{}
+    func (recorder) Eventf(obj, related any, eventType, reason, action, note string, args ...any) {}
+    const reasonPVCResize = "PVCResize"
+    func f(r recorder) {
+      r.Eventf(nil, nil, "Normal", reasonPVCResize, reasonPVCResize, "note")
+    }
+invalid:
+  - |
+    package p
+    type recorder struct{}
+    func (recorder) Eventf(obj, related any, eventType, reason, action, note string, args ...any) {}
+    func f(r recorder) {
+      r.Eventf(nil, nil, "Normal", "PVCResize", "PVCResize", "note")
+    }

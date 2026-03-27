@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
@@ -30,15 +31,6 @@ import (
 
 const (
 	defaultImageVerificationFailurePolicyBlock = "Block"
-
-	defaultReasonGatewayAPIMissing                   = "GatewayAPIMissing"
-	defaultReasonOIDCBootstrapConfigurationInvalid   = "OIDCBootstrapConfigurationInvalid"
-	defaultReasonAPIServerNetworkConfiguration       = "APIServerNetworkConfigurationInvalid"
-	defaultReasonPrerequisitesMissing                = "PrerequisitesMissing"
-	defaultReasonACMEDomainNotResolvable             = "ACMEDomainNotResolvable"
-	defaultReasonACMEGatewayNotConfiguredPassthrough = "ACMEGatewayNotConfiguredForPassthrough"
-	defaultReasonImageVerificationFailed             = "ImageVerificationFailed"
-	defaultReasonInitImageVerificationFailed         = "InitContainerImageVerificationFailed"
 
 	infraOpenBaoImageRepoEnv = "RELATED_IMAGE_OPENBAO"
 	infraDefaultOpenBaoImage = "openbao/openbao"
@@ -73,56 +65,56 @@ func (p InfraReasonPolicy) gatewayAPIMissingReason() string {
 	if strings.TrimSpace(p.GatewayAPIMissing) != "" {
 		return p.GatewayAPIMissing
 	}
-	return defaultReasonGatewayAPIMissing
+	return constants.ReasonGatewayAPIMissing
 }
 
 func (p InfraReasonPolicy) oidcBootstrapConfigurationReason() string {
 	if strings.TrimSpace(p.OIDCBootstrapConfiguration) != "" {
 		return p.OIDCBootstrapConfiguration
 	}
-	return defaultReasonOIDCBootstrapConfigurationInvalid
+	return constants.ReasonOIDCBootstrapConfigurationInvalid
 }
 
 func (p InfraReasonPolicy) apiServerNetworkConfigurationReason() string {
 	if strings.TrimSpace(p.APIServerNetworkConfiguration) != "" {
 		return p.APIServerNetworkConfiguration
 	}
-	return defaultReasonAPIServerNetworkConfiguration
+	return constants.ReasonAPIServerNetworkConfigurationInvalid
 }
 
 func (p InfraReasonPolicy) prerequisitesMissingReason() string {
 	if strings.TrimSpace(p.PrerequisitesMissing) != "" {
 		return p.PrerequisitesMissing
 	}
-	return defaultReasonPrerequisitesMissing
+	return constants.ReasonPrerequisitesMissing
 }
 
 func (p InfraReasonPolicy) acmeDomainNotResolvableReason() string {
 	if strings.TrimSpace(p.ACMEDomainNotResolvable) != "" {
 		return p.ACMEDomainNotResolvable
 	}
-	return defaultReasonACMEDomainNotResolvable
+	return constants.ReasonACMEDomainNotResolvable
 }
 
 func (p InfraReasonPolicy) acmeGatewayNotConfiguredReason() string {
 	if strings.TrimSpace(p.ACMEGatewayNotConfiguredPassthrough) != "" {
 		return p.ACMEGatewayNotConfiguredPassthrough
 	}
-	return defaultReasonACMEGatewayNotConfiguredPassthrough
+	return constants.ReasonACMEGatewayNotConfiguredForPassthrough
 }
 
 func (p InfraReasonPolicy) imageVerificationFailedReason() string {
 	if strings.TrimSpace(p.ImageVerificationFailed) != "" {
 		return p.ImageVerificationFailed
 	}
-	return defaultReasonImageVerificationFailed
+	return constants.ReasonImageVerificationFailed
 }
 
 func (p InfraReasonPolicy) initContainerImageVerificationReason() string {
 	if strings.TrimSpace(p.InitContainerImageVerification) != "" {
 		return p.InitContainerImageVerification
 	}
-	return defaultReasonInitImageVerificationFailed
+	return constants.ReasonInitContainerImageVerificationFailed
 }
 
 type verifyImageFunc func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string) (string, error)

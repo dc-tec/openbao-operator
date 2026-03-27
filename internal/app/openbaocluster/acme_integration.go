@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
@@ -45,27 +46,27 @@ type ACMEIntegrationResult struct {
 }
 
 func (p ACMEIntegrationReasonPolicy) readyReason() string {
-	return fallbackReason(p.Ready, "ACMEIntegrationReady")
+	return fallbackReason(p.Ready, constants.ReasonACMEIntegrationReady)
 }
 
 func (p ACMEIntegrationReasonPolicy) unknownReason() string {
-	return fallbackReason(p.Unknown, "Unknown")
+	return fallbackReason(p.Unknown, constants.ReasonUnknown)
 }
 
 func (p ACMEIntegrationReasonPolicy) gatewayAPIMissingReason() string {
-	return fallbackReason(p.GatewayAPIMissing, "GatewayAPIMissing")
+	return fallbackReason(p.GatewayAPIMissing, constants.ReasonGatewayAPIMissing)
 }
 
 func (p ACMEIntegrationReasonPolicy) prerequisitesMissingReason() string {
-	return fallbackReason(p.PrerequisitesMissing, "PrerequisitesMissing")
+	return fallbackReason(p.PrerequisitesMissing, constants.ReasonPrerequisitesMissing)
 }
 
 func (p ACMEIntegrationReasonPolicy) acmeDomainNotResolvableReason() string {
-	return fallbackReason(p.ACMEDomainNotResolvable, "ACMEDomainNotResolvable")
+	return fallbackReason(p.ACMEDomainNotResolvable, constants.ReasonACMEDomainNotResolvable)
 }
 
 func (p ACMEIntegrationReasonPolicy) acmeGatewayNotConfiguredReason() string {
-	return fallbackReason(p.ACMEGatewayNotConfiguredPassthrough, "ACMEGatewayNotConfiguredForPassthrough")
+	return fallbackReason(p.ACMEGatewayNotConfiguredPassthrough, constants.ReasonACMEGatewayNotConfiguredForPassthrough)
 }
 
 // EvaluateACMEIntegration validates the operator-managed prerequisites around

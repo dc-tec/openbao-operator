@@ -3272,9 +3272,13 @@ spec:
                       backup.
                     format: date-time
                     type: string
+                  lastFailureMessage:
+                    description: LastFailureMessage is the detailed message for the
+                      last backup failure (if applicable).
+                    type: string
                   lastFailureReason:
-                    description: LastFailureReason describes why the last backup failed
-                      (if applicable).
+                    description: LastFailureReason is the low-cardinality reason code
+                      for the last backup failure (if applicable).
                     type: string
                   nextScheduledBackup:
                     description: NextScheduledBackup is when the next backup is scheduled.

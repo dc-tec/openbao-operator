@@ -1,0 +1,22 @@
+id: no-bare-requeueafter-duration-literals
+valid:
+  - |
+    package p
+    import (
+      "time"
+      ctrl "example.com/ctrl"
+    )
+    const retryShort = 5 * time.Second
+    func f() ctrl.Result {
+      return ctrl.Result{RequeueAfter: retryShort}
+    }
+invalid:
+  - |
+    package p
+    import (
+      "time"
+      recon "example.com/recon"
+    )
+    func f() recon.Result {
+      return recon.Result{RequeueAfter: 5 * time.Second}
+    }

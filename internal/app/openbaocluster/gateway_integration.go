@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
@@ -50,55 +51,55 @@ type GatewayIntegrationResult struct {
 }
 
 func (p GatewayIntegrationReasonPolicy) readyReason() string {
-	return fallbackReason(p.Ready, "GatewayIntegrationReady")
+	return fallbackReason(p.Ready, constants.ReasonGatewayIntegrationReady)
 }
 
 func (p GatewayIntegrationReasonPolicy) unknownReason() string {
-	return fallbackReason(p.Unknown, "Unknown")
+	return fallbackReason(p.Unknown, constants.ReasonUnknown)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayAPIMissingReason() string {
-	return fallbackReason(p.GatewayAPIMissing, "GatewayAPIMissing")
+	return fallbackReason(p.GatewayAPIMissing, constants.ReasonGatewayAPIMissing)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayReferenceMissingReason() string {
-	return fallbackReason(p.GatewayReferenceMissing, "GatewayReferenceMissing")
+	return fallbackReason(p.GatewayReferenceMissing, constants.ReasonGatewayReferenceMissing)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayClassMissingReason() string {
-	return fallbackReason(p.GatewayClassMissing, "GatewayClassMissing")
+	return fallbackReason(p.GatewayClassMissing, constants.ReasonGatewayClassMissing)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayClassPendingReason() string {
-	return fallbackReason(p.GatewayClassPending, "GatewayClassPending")
+	return fallbackReason(p.GatewayClassPending, constants.ReasonGatewayClassPending)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayClassNotAcceptedReason() string {
-	return fallbackReason(p.GatewayClassNotAccepted, "GatewayClassNotAccepted")
+	return fallbackReason(p.GatewayClassNotAccepted, constants.ReasonGatewayClassNotAccepted)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayVersionUnsupportedReason() string {
-	return fallbackReason(p.GatewayVersionUnsupported, "GatewayVersionUnsupported")
+	return fallbackReason(p.GatewayVersionUnsupported, constants.ReasonGatewayVersionUnsupported)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayFeatureUnsupportedReason() string {
-	return fallbackReason(p.GatewayFeatureUnsupported, "GatewayFeatureUnsupported")
+	return fallbackReason(p.GatewayFeatureUnsupported, constants.ReasonGatewayFeatureUnsupported)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayCapabilitiesUnknownReason() string {
-	return fallbackReason(p.GatewayCapabilitiesUnknown, "GatewayCapabilitiesUnknown")
+	return fallbackReason(p.GatewayCapabilitiesUnknown, constants.ReasonGatewayCapabilitiesUnknown)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayNotProgrammedReason() string {
-	return fallbackReason(p.GatewayNotProgrammed, "GatewayNotProgrammed")
+	return fallbackReason(p.GatewayNotProgrammed, constants.ReasonGatewayNotProgrammed)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayProgrammingPendingReason() string {
-	return fallbackReason(p.GatewayProgrammingPending, "GatewayProgrammingPending")
+	return fallbackReason(p.GatewayProgrammingPending, constants.ReasonGatewayProgrammingPending)
 }
 
 func (p GatewayIntegrationReasonPolicy) gatewayListenerIncompatibleReason() string {
-	return fallbackReason(p.GatewayListenerIncompatible, "GatewayListenerIncompatible")
+	return fallbackReason(p.GatewayListenerIncompatible, constants.ReasonGatewayListenerIncompatible)
 }
 
 // EvaluateGatewayIntegration validates the operator-managed Gateway API

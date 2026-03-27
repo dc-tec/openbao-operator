@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
@@ -39,15 +40,15 @@ type APIServerNetworkResult struct {
 }
 
 func (p APIServerNetworkReasonPolicy) readyReason() string {
-	return fallbackReason(p.Ready, "APIServerNetworkReady")
+	return fallbackReason(p.Ready, constants.ReasonAPIServerNetworkReady)
 }
 
 func (p APIServerNetworkReasonPolicy) recommendedReason() string {
-	return fallbackReason(p.Recommended, "APIServerEndpointIPsRecommended")
+	return fallbackReason(p.Recommended, constants.ReasonAPIServerEndpointIPsRecommended)
 }
 
 func (p APIServerNetworkReasonPolicy) configurationInvalidReason() string {
-	return fallbackReason(p.ConfigurationInvalid, "APIServerNetworkConfigurationInvalid")
+	return fallbackReason(p.ConfigurationInvalid, constants.ReasonAPIServerNetworkConfigurationInvalid)
 }
 
 // EvaluateAPIServerNetwork evaluates the operator-known Kubernetes API egress
