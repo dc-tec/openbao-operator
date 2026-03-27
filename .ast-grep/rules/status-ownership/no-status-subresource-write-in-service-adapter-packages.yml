@@ -30,7 +30,7 @@ ignores:
   # Transitional legacy write points pending app-layer ownership consolidation.
   - internal/service/backup/manager_status.go
   - internal/adapter/operationlock/lock.go
-  - internal/service/restore/manager.go
+  - internal/service/restore/manager_status.go
   - internal/service/upgrade/rolling/lifecycle.go
   - internal/service/upgrade/rolling/retry.go
   - internal/service/upgrade/rolling/status_patch.go
