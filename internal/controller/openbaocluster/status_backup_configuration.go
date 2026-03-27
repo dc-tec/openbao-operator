@@ -19,23 +19,13 @@ func (r *OpenBaoClusterReconciler) setBackupConfigurationReadyCondition(ctx cont
 
 	result, err := appopenbaocluster.EvaluateBackupConfiguration(ctx, r.Client, cluster)
 	if err != nil {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionBackupConfigurationReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: metav1.Now(),
-			Reason:             reasonUnknown,
-			Message:            fmt.Sprintf("Failed to evaluate backup Job prerequisites: %v", err),
+		setBackupConfigurationReadyEvaluatedCondition(cluster, appopenbaocluster.BackupConfigurationResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: fmt.Sprintf("Failed to evaluate backup Job prerequisites: %v", err),
 		})
 		return
 	}
 
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionBackupConfigurationReady),
-		Status:             result.Status,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: metav1.Now(),
-		Reason:             result.Reason,
-		Message:            result.Message,
-	})
+	setBackupConfigurationReadyEvaluatedCondition(cluster, result)
 }
