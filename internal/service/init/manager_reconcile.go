@@ -52,12 +52,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	if selfInitEnabled {
-		if result, handled, err := m.reconcileSelfInit(ctx, logger, cluster, pod); handled || err != nil {
-			if err != nil {
-				return recon.Result{}, err
-			}
-			return result, nil
-		}
+		return m.reconcileSelfInit(ctx, logger, cluster, pod), nil
 	}
 
 	return m.reconcileOperatorInit(ctx, logger, cluster, pod, selfInitEnabled)
@@ -95,13 +90,13 @@ func (m *Manager) reconcileSelfInit(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pod *corev1.Pod,
-) (recon.Result, bool, error) {
+) recon.Result {
 	if handled, result := m.reconcileSelfInitFromServiceLabels(ctx, logger, cluster, pod); handled {
-		return result, true, nil
+		return result
 	}
 
 	result := m.reconcileSelfInitFromPodReadiness(ctx, logger, cluster, pod)
-	return result, true, nil
+	return result
 }
 
 func (m *Manager) reconcileSelfInitFromServiceLabels(
@@ -164,10 +159,7 @@ func (m *Manager) reconcileOperatorInit(
 	pod *corev1.Pod,
 	selfInitEnabled bool,
 ) (recon.Result, error) {
-	if result, err := m.ensureTLSServerSecretReady(ctx, logger, cluster, pod); err != nil || result != nil {
-		if err != nil {
-			return recon.Result{}, err
-		}
+	if result := m.ensureTLSServerSecretReady(ctx, logger, cluster, pod); result != nil {
 		return *result, nil
 	}
 
@@ -214,20 +206,20 @@ func (m *Manager) ensureTLSServerSecretReady(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pod *corev1.Pod,
-) (*recon.Result, error) {
+) *recon.Result {
 	tlsServerSecretName := cluster.Name + constants.SuffixTLSServer
 	_, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, tlsServerSecretName, metav1.GetOptions{})
 	if err == nil {
-		return nil, nil
+		return nil
 	}
 
 	if apierrors.IsNotFound(err) {
 		logger.Info("TLS server Secret not found yet; waiting for TLS reconciliation", "pod", pod.Name, "secret", tlsServerSecretName)
 		result := recon.Result{RequeueAfter: constants.RequeueShort}
-		return &result, nil
+		return &result
 	}
 
 	logger.Info("Failed to check TLS server Secret (will retry)", "pod", pod.Name, "secret", tlsServerSecretName, "error", err)
 	result := recon.Result{RequeueAfter: constants.RequeueShort}
-	return &result, nil
+	return &result
 }
