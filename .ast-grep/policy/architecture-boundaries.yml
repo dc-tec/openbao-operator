@@ -85,8 +85,7 @@ controllerBoundaries:
       - internal/adapter/revision
       - internal/platform/logging
     appFacadeRoot: internal/app/openbaocluster
-    allowServiceImports:
-      - internal/service/certs
+    allowServiceImports: []
     allowAdapterImports: []
   - name: openbaorestore
     displayName: OpenBaoRestore

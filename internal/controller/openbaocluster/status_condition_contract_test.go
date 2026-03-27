@@ -24,6 +24,8 @@ func TestSetACMEIntegrationReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(
 		{name: "gateway passthrough missing", status: metav1.ConditionFalse, reason: ReasonACMEGatewayNotConfiguredForPassthrough},
 		{name: "domain not resolvable", status: metav1.ConditionFalse, reason: ReasonACMEDomainNotResolvable},
 		{name: "prerequisites missing", status: metav1.ConditionFalse, reason: ReasonPrerequisitesMissing},
+		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
 		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
 	}
 
@@ -71,6 +73,8 @@ func TestSetGatewayIntegrationReadyEvaluatedCondition_AllowsKnownReasonStatusPai
 		{name: "gateway class pending", status: metav1.ConditionUnknown, reason: ReasonGatewayClassPending},
 		{name: "gateway capabilities unknown", status: metav1.ConditionUnknown, reason: ReasonGatewayCapabilitiesUnknown},
 		{name: "gateway programming pending", status: metav1.ConditionUnknown, reason: ReasonGatewayProgrammingPending},
+		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
 		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
 	}
 
@@ -109,6 +113,8 @@ func TestSetAPIServerNetworkReadyEvaluatedCondition_AllowsKnownReasonStatusPairs
 		{name: "ready", status: metav1.ConditionTrue, reason: ReasonAPIServerNetworkReady},
 		{name: "recommended", status: metav1.ConditionUnknown, reason: ReasonAPIServerEndpointIPsRecommended},
 		{name: "configuration invalid", status: metav1.ConditionFalse, reason: ReasonAPIServerNetworkConfigurationInvalid},
+		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
 		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
 	}
 
@@ -136,6 +142,87 @@ func TestSetAPIServerNetworkReadyEvaluatedCondition_AllowsKnownReasonStatusPairs
 	}
 }
 
+func TestSetTLSReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status metav1.ConditionStatus
+		reason string
+	}{
+		{name: "disabled", status: metav1.ConditionTrue, reason: ReasonDisabled},
+		{name: "ready", status: metav1.ConditionTrue, reason: reasonReady},
+		{name: "missing secret", status: metav1.ConditionFalse, reason: ReasonTLSSecretMissing},
+		{name: "invalid secret", status: metav1.ConditionFalse, reason: ReasonTLSSecretInvalid},
+		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
+		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newOpenBaoClusterStatusTestObject()
+			cluster.Generation = 17
+
+			setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+				Status:  tt.status,
+				Reason:  tt.reason,
+				Message: "contract message",
+			})
+
+			assertClusterCondition(
+				t,
+				cluster,
+				openbaov1alpha1.ConditionTLSReady,
+				true,
+				tt.status,
+				tt.reason,
+				"contract message",
+			)
+		})
+	}
+}
+
+func TestSetACMECacheReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status metav1.ConditionStatus
+		reason string
+	}{
+		{name: "ready", status: metav1.ConditionTrue, reason: ReasonACMECacheReady},
+		{name: "not configured", status: metav1.ConditionFalse, reason: ReasonACMECacheNotConfigured},
+		{name: "missing", status: metav1.ConditionFalse, reason: ReasonACMECacheMissing},
+		{name: "pending", status: metav1.ConditionFalse, reason: ReasonACMECachePending},
+		{name: "invalid access mode", status: metav1.ConditionFalse, reason: ReasonACMECacheInvalidAccessMode},
+		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newOpenBaoClusterStatusTestObject()
+			cluster.Generation = 17
+
+			setACMECacheReadyEvaluatedCondition(cluster, statusConditionResult{
+				Status:  tt.status,
+				Reason:  tt.reason,
+				Message: "contract message",
+			})
+
+			assertClusterCondition(
+				t,
+				cluster,
+				openbaov1alpha1.ConditionACMECacheReady,
+				true,
+				tt.status,
+				tt.reason,
+				"contract message",
+			)
+		})
+	}
+}
+
 func TestSetBackupConfigurationReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(t *testing.T) {
 	t.Parallel()
 
@@ -151,6 +238,8 @@ func TestSetBackupConfigurationReadyEvaluatedCondition_AllowsKnownReasonStatusPa
 		{name: "token secret missing", status: metav1.ConditionFalse, reason: constants.ReasonTokenSecretMissing},
 		{name: "credentials secret missing", status: metav1.ConditionFalse, reason: constants.ReasonCredentialsSecretMissing},
 		{name: "network egress rules required", status: metav1.ConditionFalse, reason: constants.ReasonNetworkEgressRulesRequired},
+		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
 		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
 	}
 
@@ -191,6 +280,8 @@ func TestSetCloudUnsealIdentityReadyEvaluatedCondition_AllowsKnownReasonStatusPa
 		{name: "workload identity configured", status: metav1.ConditionTrue, reason: constants.ReasonWorkloadIdentityConfigured},
 		{name: "credentials secret missing", status: metav1.ConditionFalse, reason: constants.ReasonCredentialsSecretMissing},
 		{name: "prerequisites missing", status: metav1.ConditionFalse, reason: constants.ReasonPrerequisitesMissing},
+		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
 		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
 	}
 
@@ -288,6 +379,50 @@ func TestEvaluatedConditionContracts_RejectUnexpectedReasonAndStatusPairs(t *tes
 				setAPIServerNetworkReadyEvaluatedCondition(cluster, appopenbaocluster.APIServerNetworkResult{
 					Status:  metav1.ConditionFalse,
 					Reason:  ReasonAPIServerNetworkReady,
+					Message: "wrong status for reason",
+				})
+			},
+		},
+		{
+			name:          "tls rejects acme cache reason",
+			conditionType: openbaov1alpha1.ConditionTLSReady,
+			apply: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+					Status:  metav1.ConditionTrue,
+					Reason:  ReasonACMECacheReady,
+					Message: "wrong reason for condition",
+				})
+			},
+		},
+		{
+			name:          "tls rejects ready reason with false status",
+			conditionType: openbaov1alpha1.ConditionTLSReady,
+			apply: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+					Status:  metav1.ConditionFalse,
+					Reason:  reasonReady,
+					Message: "wrong status for reason",
+				})
+			},
+		},
+		{
+			name:          "acme cache rejects tls reason",
+			conditionType: openbaov1alpha1.ConditionACMECacheReady,
+			apply: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				setACMECacheReadyEvaluatedCondition(cluster, statusConditionResult{
+					Status:  metav1.ConditionTrue,
+					Reason:  ReasonTLSSecretInvalid,
+					Message: "wrong reason for condition",
+				})
+			},
+		},
+		{
+			name:          "acme cache rejects ready reason with false status",
+			conditionType: openbaov1alpha1.ConditionACMECacheReady,
+			apply: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				setACMECacheReadyEvaluatedCondition(cluster, statusConditionResult{
+					Status:  metav1.ConditionFalse,
+					Reason:  ReasonACMECacheReady,
 					Message: "wrong status for reason",
 				})
 			},

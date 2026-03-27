@@ -49,8 +49,12 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 	}
 }
 
-func (r *OpenBaoClusterReconciler) infraReasonPolicy() appopenbaocluster.InfraReasonPolicy {
-	return appopenbaocluster.InfraReasonPolicy{}
+func (r *OpenBaoClusterReconciler) certificatesDependencies() appopenbaocluster.CertificatesDependencies {
+	return appopenbaocluster.CertificatesDependencies{
+		Client:   r.Client,
+		Scheme:   r.ControllerRuntime.Scheme,
+		Reloader: r.TLSReload,
+	}
 }
 
 func (r *OpenBaoClusterReconciler) acmeIntegrationDependencies() appopenbaocluster.ACMEIntegrationDependencies {
@@ -81,18 +85,6 @@ func (r *OpenBaoClusterReconciler) apiServerNetworkDependencies() appopenbaoclus
 		OperatorNamespace: r.OperatorNamespace,
 		Platform:          r.Platform,
 	}
-}
-
-func acmeIntegrationReasonPolicy() appopenbaocluster.ACMEIntegrationReasonPolicy {
-	return appopenbaocluster.ACMEIntegrationReasonPolicy{}
-}
-
-func apiServerNetworkReasonPolicy() appopenbaocluster.APIServerNetworkReasonPolicy {
-	return appopenbaocluster.APIServerNetworkReasonPolicy{}
-}
-
-func gatewayIntegrationReasonPolicy() appopenbaocluster.GatewayIntegrationReasonPolicy {
-	return appopenbaocluster.GatewayIntegrationReasonPolicy{}
 }
 
 func (r *OpenBaoClusterReconciler) storageDependencies() appopenbaocluster.StorageDependencies {
@@ -127,10 +119,6 @@ func (r *OpenBaoClusterReconciler) statusDependencies() appopenbaocluster.Status
 	return appopenbaocluster.StatusDependencies{
 		Reader: r.Client,
 	}
-}
-
-func storageReasonPolicy() appopenbaocluster.StorageReasonPolicy {
-	return appopenbaocluster.StorageReasonPolicy{}
 }
 
 func (r *OpenBaoClusterReconciler) adminOpsDependencies() appopenbaocluster.AdminOpsDependencies {

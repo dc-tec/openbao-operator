@@ -11,7 +11,6 @@ func (r *OpenBaoClusterReconciler) setAPIServerNetworkReadyCondition(ctx context
 	result := appopenbaocluster.EvaluateAPIServerNetwork(
 		ctx,
 		r.apiServerNetworkDependencies(),
-		apiServerNetworkReasonPolicy(),
 		cluster,
 	)
 	setAPIServerNetworkReadyEvaluatedCondition(cluster, result)

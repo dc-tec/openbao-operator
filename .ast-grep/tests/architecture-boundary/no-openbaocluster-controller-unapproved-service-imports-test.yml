@@ -2,9 +2,13 @@ id: no-openbaocluster-controller-unapproved-service-imports
 valid:
   - |
     package p
+    import app "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
+    var _ = app.NewCertificatesReconciler
+invalid:
+  - |
+    package p
     import certs "github.com/dc-tec/openbao-operator/internal/service/certs"
     var _ = certs.Manager
-invalid:
   - |
     package p
     import upgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade"

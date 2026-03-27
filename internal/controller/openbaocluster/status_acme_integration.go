@@ -23,7 +23,6 @@ func (r *OpenBaoClusterReconciler) setACMEIntegrationReadyCondition(ctx context.
 	result := appopenbaocluster.EvaluateACMEIntegration(
 		ctx,
 		r.acmeIntegrationDependencies(),
-		acmeIntegrationReasonPolicy(),
 		cluster,
 	)
 	setACMEIntegrationReadyEvaluatedCondition(cluster, result)

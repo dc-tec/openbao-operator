@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
@@ -125,7 +126,7 @@ func (r *infraReconciler) verifyMainImageDigest(ctx context.Context, logger logr
 		enabled:              isMainImageVerificationEnabled(cluster),
 		imageRef:             imageRef,
 		failurePolicy:        imageVerificationFailurePolicy(cluster),
-		failureReason:        r.reasons.imageVerificationFailedReason(),
+		failureReason:        constants.ReasonImageVerificationFailed,
 		failureMessagePrefix: "Image verification failed",
 		successMessage:       "Image verified successfully, using digest",
 		emitEventOnWarn:      true,
@@ -177,7 +178,7 @@ func (r *infraReconciler) resolveInitContainerImage(cluster *openbaov1alpha1.Ope
 }
 
 func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, initImage string) (string, error) {
-	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, r.reasons.initContainerImageVerificationReason(), "Init container image verification failed")
+	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, constants.ReasonInitContainerImageVerificationFailed, "Init container image verification failed")
 }
 
 func (r *infraReconciler) resolveVerifiedImages(

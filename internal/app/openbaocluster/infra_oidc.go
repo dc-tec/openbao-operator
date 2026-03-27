@@ -10,6 +10,7 @@ import (
 	"time"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
@@ -31,7 +32,7 @@ func (r *infraReconciler) oidcBootstrapConfigurationError(err error) error {
 	if !errors.Is(err, operatorerrors.ErrPermanentConfig) {
 		err = operatorerrors.WrapPermanentConfig(err)
 	}
-	return operatorerrors.WithReason(r.reasons.oidcBootstrapConfigurationReason(), err)
+	return operatorerrors.WithReason(constants.ReasonOIDCBootstrapConfigurationInvalid, err)
 }
 
 func shouldBootstrapJWTAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {

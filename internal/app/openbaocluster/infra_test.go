@@ -30,10 +30,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
-const (
-	OIDCBootstrapConfigurationInvalid = "OIDCBootstrapConfigurationInvalid"
-)
-
 func TestHandleScaleDownSafety(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
@@ -419,9 +415,6 @@ func TestInfraReconciler_Reconcile_MapsAPIServerNetworkConfigurationError(t *tes
 				OperatorNamespace: "openbao-operator-system",
 			},
 		},
-		reasons: InfraReasonPolicy{
-			APIServerNetworkConfiguration: "APIServerNetworkConfigurationInvalid",
-		},
 	}
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -435,8 +428,8 @@ func TestInfraReconciler_Reconcile_MapsAPIServerNetworkConfigurationError(t *tes
 	if !ok {
 		t.Fatalf("expected reasoned error, got %v", err)
 	}
-	if reason != "APIServerNetworkConfigurationInvalid" {
-		t.Fatalf("reason = %q, want APIServerNetworkConfigurationInvalid", reason)
+	if reason != constants.ReasonAPIServerNetworkConfigurationInvalid {
+		t.Fatalf("reason = %q, want %s", reason, constants.ReasonAPIServerNetworkConfigurationInvalid)
 	}
 	if !strings.Contains(err.Error(), "spec.network.apiServerEndpointIPs") {
 		t.Fatalf("error %q does not mention apiServerEndpointIPs", err)
@@ -498,11 +491,7 @@ func TestInfraReconciler_ResolveOIDC_MissingRestConfigReturnsBootstrapReason(t *
 		},
 	}
 
-	r := &infraReconciler{
-		reasons: InfraReasonPolicy{
-			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
-		},
-	}
+	r := &infraReconciler{}
 
 	_, err := r.resolveOIDC(context.Background(), cluster)
 	if err == nil {
@@ -512,8 +501,8 @@ func TestInfraReconciler_ResolveOIDC_MissingRestConfigReturnsBootstrapReason(t *
 		t.Fatalf("expected permanent config error, got %v", err)
 	}
 	reason, ok := operatorerrors.Reason(err)
-	if !ok || reason != OIDCBootstrapConfigurationInvalid {
-		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
+	if !ok || reason != constants.ReasonOIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, constants.ReasonOIDCBootstrapConfigurationInvalid)
 	}
 }
 
@@ -543,9 +532,6 @@ func TestInfraReconciler_ResolveOIDC_ForbiddenDiscoveryReturnsBootstrapReason(t 
 				},
 			},
 		},
-		reasons: InfraReasonPolicy{
-			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
-		},
 	}
 
 	_, err := r.resolveOIDC(context.Background(), cluster)
@@ -557,8 +543,8 @@ func TestInfraReconciler_ResolveOIDC_ForbiddenDiscoveryReturnsBootstrapReason(t 
 	}
 	reason, ok := operatorerrors.Reason(err)
 
-	if !ok || reason != OIDCBootstrapConfigurationInvalid {
-		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
+	if !ok || reason != constants.ReasonOIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, constants.ReasonOIDCBootstrapConfigurationInvalid)
 	}
 }
 
@@ -584,9 +570,6 @@ func TestInfraReconciler_ResolveOIDC_EmptyIssuerReturnsBootstrapReason(t *testin
 					return &OIDCConfig{JWKSURL: "https://issuer.example/keys"}, nil
 				},
 			},
-		},
-		reasons: InfraReasonPolicy{
-			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
 		},
 	}
 
@@ -617,9 +600,6 @@ func TestInfraReconciler_ResolveOIDC_NoJWTValidationMaterialReturnsBootstrapReas
 				},
 			},
 		},
-		reasons: InfraReasonPolicy{
-			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
-		},
 	}
 
 	_, err := r.resolveOIDC(context.Background(), cluster)
@@ -648,9 +628,6 @@ func TestInfraReconciler_ResolveOIDC_MalformedJWKSReturnsBootstrapReason(t *test
 					return nil, fmt.Errorf("failed to fetch JWKS keys: failed to parse jwks document: %w", malformedJSONError())
 				},
 			},
-		},
-		reasons: InfraReasonPolicy{
-			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
 		},
 	}
 
@@ -681,9 +658,6 @@ func TestInfraReconciler_ResolveOIDC_TransientJWKSFetchFailureStaysTransient(t *
 				},
 			},
 		},
-		reasons: InfraReasonPolicy{
-			OIDCBootstrapConfiguration: "OIDCBootstrapConfigurationInvalid",
-		},
 	}
 
 	_, err := r.resolveOIDC(context.Background(), cluster)
@@ -708,8 +682,8 @@ func assertOIDCBootstrapConfigurationError(t *testing.T, err error) {
 		t.Fatalf("expected permanent config error, got %v", err)
 	}
 	reason, ok := operatorerrors.Reason(err)
-	if !ok || reason != OIDCBootstrapConfigurationInvalid {
-		t.Fatalf("reason = %q,%v want %s,true", reason, ok, OIDCBootstrapConfigurationInvalid)
+	if !ok || reason != constants.ReasonOIDCBootstrapConfigurationInvalid {
+		t.Fatalf("reason = %q,%v want %s,true", reason, ok, constants.ReasonOIDCBootstrapConfigurationInvalid)
 	}
 }
 

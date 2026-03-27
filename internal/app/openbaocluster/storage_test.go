@@ -61,7 +61,6 @@ func TestStorageReconciler_ExpandsPVCs(t *testing.T) {
 			Resources: StorageResourceRuntime{Client: c},
 			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
 		},
-		StorageReasonPolicy{},
 	)
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -112,7 +111,6 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 			Resources: StorageResourceRuntime{Client: c},
 			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
 		},
-		StorageReasonPolicy{},
 	)
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -162,7 +160,6 @@ func TestStorageReconciler_RejectsStorageClassChangeWhenPVCClassIsUnset(t *testi
 			Resources: StorageResourceRuntime{Client: c},
 			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
 		},
-		StorageReasonPolicy{},
 	)
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -232,7 +229,6 @@ func TestStorageReconciler_IgnoresACMECachePVCForStorageClassValidation(t *testi
 			Resources: StorageResourceRuntime{Client: c},
 			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
 		},
-		StorageReasonPolicy{},
 	)
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -295,7 +291,6 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 				},
 			},
 		},
-		StorageReasonPolicy{},
 	)
 
 	res, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -372,7 +367,6 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 				},
 			},
 		},
-		StorageReasonPolicy{},
 	)
 
 	res, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -418,7 +412,6 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 			Resources: StorageResourceRuntime{Client: c, APIReader: c},
 			Events:    StorageEventRuntime{Recorder: events.NewFakeRecorder(10)},
 		},
-		StorageReasonPolicy{},
 	)
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)

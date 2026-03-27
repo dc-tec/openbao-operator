@@ -2,6 +2,15 @@ id: no-openbaocluster-controller-unapproved-service-imports
 snapshots:
   ? |
     package p
+    import certs "github.com/dc-tec/openbao-operator/internal/service/certs"
+    var _ = certs.Manager
+  : labels:
+    - source: certs "github.com/dc-tec/openbao-operator/internal/service/certs"
+      style: primary
+      start: 17
+      end: 82
+  ? |
+    package p
     import upgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade"
     var _ = upgrade.Service
   : labels:

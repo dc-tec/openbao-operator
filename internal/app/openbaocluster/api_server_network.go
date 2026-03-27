@@ -23,14 +23,6 @@ type APIServerNetworkDependencies struct {
 	Platform          string
 }
 
-// APIServerNetworkReasonPolicy configures low-cardinality reasons surfaced by
-// the controller for Kubernetes API egress readiness.
-type APIServerNetworkReasonPolicy struct {
-	Ready                string
-	Recommended          string
-	ConfigurationInvalid string
-}
-
 // APIServerNetworkResult is the controller-facing evaluation result for the
 // operator-managed Kubernetes API egress contract.
 type APIServerNetworkResult struct {
@@ -39,24 +31,11 @@ type APIServerNetworkResult struct {
 	Message string
 }
 
-func (p APIServerNetworkReasonPolicy) readyReason() string {
-	return fallbackReason(p.Ready, constants.ReasonAPIServerNetworkReady)
-}
-
-func (p APIServerNetworkReasonPolicy) recommendedReason() string {
-	return fallbackReason(p.Recommended, constants.ReasonAPIServerEndpointIPsRecommended)
-}
-
-func (p APIServerNetworkReasonPolicy) configurationInvalidReason() string {
-	return fallbackReason(p.ConfigurationInvalid, constants.ReasonAPIServerNetworkConfigurationInvalid)
-}
-
 // EvaluateAPIServerNetwork evaluates the operator-known Kubernetes API egress
 // contract for operator-managed NetworkPolicies.
 func EvaluateAPIServerNetwork(
 	ctx context.Context,
 	deps APIServerNetworkDependencies,
-	reasons APIServerNetworkReasonPolicy,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) APIServerNetworkResult {
 	manager := inframanager.NewManagerWithReaderAndOIDCConfig(
@@ -71,11 +50,11 @@ func EvaluateAPIServerNetwork(
 	readiness := manager.EvaluateAPIServerNetworkReadiness(ctx, logr.Discard(), cluster)
 	switch readiness.Status {
 	case metav1.ConditionTrue:
-		readiness.Reason = reasons.readyReason()
+		readiness.Reason = constants.ReasonAPIServerNetworkReady
 	case metav1.ConditionUnknown:
-		readiness.Reason = reasons.recommendedReason()
+		readiness.Reason = constants.ReasonAPIServerEndpointIPsRecommended
 	default:
-		readiness.Reason = reasons.configurationInvalidReason()
+		readiness.Reason = constants.ReasonAPIServerNetworkConfigurationInvalid
 	}
 
 	return APIServerNetworkResult{
