@@ -27,9 +27,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
 	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	provisionersvc "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 const operatorNamespace = "openbao-operator-system"
@@ -48,7 +48,10 @@ func startNamespaceProvisionerController(t *testing.T) client.Client {
 	t.Helper()
 
 	return startProvisionerManager(t, func(mgr ctrl.Manager) error {
-		provisionerManager, err := provisionersvc.NewManager(context.Background(), mgr.GetClient(), logr.Discard())
+		provisionerManager, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
+			Client: mgr.GetClient(),
+			Logger: logr.Discard(),
+		})
 		if err != nil {
 			return err
 		}
@@ -69,7 +72,10 @@ func startProvisionerControllers(t *testing.T) client.Client {
 	t.Helper()
 
 	return startProvisionerManager(t, func(mgr ctrl.Manager) error {
-		provisionerManager, err := provisionersvc.NewManager(context.Background(), mgr.GetClient(), logr.Discard())
+		provisionerManager, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
+			Client: mgr.GetClient(),
+			Logger: logr.Discard(),
+		})
 		if err != nil {
 			return err
 		}

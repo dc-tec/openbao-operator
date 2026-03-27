@@ -19,7 +19,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	provisionermanager "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 const admissionDependencyRequeueAfter = 10 * time.Second
@@ -30,7 +29,7 @@ type TenantRuntime struct {
 	APIReader                client.Reader
 	AdmissionTracker         *admission.Tracker
 	Recorder                 events.EventRecorder
-	Provisioner              *provisionermanager.Manager
+	Provisioner              Provisioner
 	OperatorNamespace        string
 	ConditionTypeProvisioned string
 	RequeueShort             time.Duration

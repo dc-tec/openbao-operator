@@ -12,8 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/service/restore"
 )
 
 func setAdmissionReady(t *testing.T) {
@@ -34,9 +34,9 @@ func TestOpenBaoRestoreReconciler_Reconcile_NotFound(t *testing.T) {
 
 	c := fake.NewClientBuilder().WithScheme(scheme).Build()
 	r := &OpenBaoRestoreReconciler{
-		Client:         c,
-		Scheme:         scheme,
-		RestoreManager: restore.NewManager(c, scheme, nil, nil, ""),
+		Client:            c,
+		Scheme:            scheme,
+		RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{Client: c, Scheme: scheme}),
 	}
 
 	req := ctrl.Request{

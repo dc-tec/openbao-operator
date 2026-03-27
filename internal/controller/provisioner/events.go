@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	serviceprovisioner "github.com/dc-tec/openbao-operator/internal/service/provisioner"
+	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
 )
 
 type secretRBACSnapshot struct {
@@ -36,19 +36,19 @@ func loadSecretRBACSnapshot(ctx context.Context, c client.Reader, namespace stri
 		return secretRBACSnapshot{}, nil
 	}
 
-	writerRole, writerRoleExists, err := loadRoleResourceNames(ctx, c, namespace, serviceprovisioner.TenantSecretsWriterRoleName)
+	writerRole, writerRoleExists, err := loadRoleResourceNames(ctx, c, namespace, appprovisioner.TenantSecretsWriterRoleName)
 	if err != nil {
 		return secretRBACSnapshot{}, err
 	}
-	writerRoleBindingExists, err := roleBindingExists(ctx, c, namespace, serviceprovisioner.TenantSecretsWriterRoleBindingName)
+	writerRoleBindingExists, err := roleBindingExists(ctx, c, namespace, appprovisioner.TenantSecretsWriterRoleBindingName)
 	if err != nil {
 		return secretRBACSnapshot{}, err
 	}
-	readerRole, readerRoleExists, err := loadRoleResourceNames(ctx, c, namespace, serviceprovisioner.TenantSecretsReaderRoleName)
+	readerRole, readerRoleExists, err := loadRoleResourceNames(ctx, c, namespace, appprovisioner.TenantSecretsReaderRoleName)
 	if err != nil {
 		return secretRBACSnapshot{}, err
 	}
-	readerRoleBindingExists, err := roleBindingExists(ctx, c, namespace, serviceprovisioner.TenantSecretsReaderRoleBindingName)
+	readerRoleBindingExists, err := roleBindingExists(ctx, c, namespace, appprovisioner.TenantSecretsReaderRoleBindingName)
 	if err != nil {
 		return secretRBACSnapshot{}, err
 	}

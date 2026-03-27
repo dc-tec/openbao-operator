@@ -2,9 +2,13 @@ id: no-openbaorestore-controller-unapproved-service-imports
 valid:
   - |
     package p
-    import restore "github.com/dc-tec/openbao-operator/internal/service/restore"
-    var _ = restore.Service
+    import app "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
+    var _ = app.NewRestoreReconciler
 invalid:
+  - |
+    package p
+    import restore "github.com/dc-tec/openbao-operator/internal/service/restore"
+    var _ = restore.Manager
   - |
     package p
     import infra "github.com/dc-tec/openbao-operator/internal/service/infra"
