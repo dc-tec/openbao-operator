@@ -1,0 +1,83 @@
+package certs
+
+import (
+	"context"
+	"fmt"
+	"reflect"
+
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+)
+
+// applySecret creates or patches a Secret using Server-Side Apply.
+func (m *Manager) applySecret(ctx context.Context, secret *corev1.Secret) error {
+	secret.TypeMeta = metav1.TypeMeta{
+		APIVersion: "v1",
+		Kind:       "Secret",
+	}
+
+	applyConfig, err := kube.ToApplyConfiguration(secret, m.client)
+	if err != nil {
+		return fmt.Errorf("failed to convert secret to ApplyConfiguration: %w", err)
+	}
+
+	return m.client.Apply(ctx, applyConfig, client.FieldOwner("openbao-cert-manager"), client.ForceOwnership)
+}
+
+func (m *Manager) ensureManagedSecretMetadata(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, secret *corev1.Secret) error {
+	before := secret.DeepCopy()
+
+	if secret.Labels == nil {
+		secret.Labels = make(map[string]string)
+	}
+	secret.Labels[constants.LabelAppManagedBy] = constants.LabelValueAppManagedByOpenBaoOperator
+	secret.Labels[constants.LabelOpenBaoCluster] = cluster.Name
+
+	if err := controllerutil.SetControllerReference(cluster, secret, m.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on Secret %s/%s: %w", secret.Namespace, secret.Name, err)
+	}
+
+	if reflect.DeepEqual(before.Labels, secret.Labels) && reflect.DeepEqual(before.OwnerReferences, secret.OwnerReferences) {
+		return nil
+	}
+
+	if err := m.client.Patch(ctx, secret, client.MergeFrom(before)); err != nil {
+		return fmt.Errorf("failed to patch Secret metadata %s/%s: %w", secret.Namespace, secret.Name, err)
+	}
+	return nil
+}
+
+func (m *Manager) getSecret(ctx context.Context, namespace, name, description string) (*corev1.Secret, bool, error) {
+	secret := &corev1.Secret{}
+	err := m.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, secret)
+	if err == nil {
+		return secret, true, nil
+	}
+	if apierrors.IsNotFound(err) {
+		return nil, false, nil
+	}
+	if apierrors.IsForbidden(err) {
+		return nil, false, operatorerrors.WrapTransientKubernetesAPI(
+			fmt.Errorf("failed to get %s %s/%s: %w", description, namespace, name, err),
+		)
+	}
+	return nil, false, fmt.Errorf("failed to get %s %s/%s: %w", description, namespace, name, err)
+}
+
+func (m *Manager) applyOwnedSecret(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, secret *corev1.Secret, description string) error {
+	if err := controllerutil.SetControllerReference(cluster, secret, m.scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on %s %s/%s: %w", description, secret.Namespace, secret.Name, err)
+	}
+	if err := m.applySecret(ctx, secret); err != nil {
+		return fmt.Errorf("failed to apply %s %s/%s: %w", description, secret.Namespace, secret.Name, err)
+	}
+	return nil
+}
