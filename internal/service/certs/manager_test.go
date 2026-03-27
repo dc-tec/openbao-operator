@@ -556,6 +556,103 @@ func TestReconcileRotatesNearExpiryCertAndSignalsReload(t *testing.T) {
 	}
 }
 
+func TestReconcileReissuesServerCertOnSANMismatch(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add core scheme: %v", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add OpenBao scheme: %v", err)
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "san-mismatch-cluster",
+			Namespace: "security",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
+			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled:        true,
+				RotationPeriod: "720h",
+			},
+			Ingress: &openbaov1alpha1.IngressConfig{
+				Enabled: true,
+				Host:    "bao.example.com",
+			},
+			Storage: openbaov1alpha1.StorageConfig{
+				Size: "10Gi",
+			},
+		},
+	}
+
+	staleCluster := cluster.DeepCopy()
+	staleCluster.Spec.Ingress = nil
+
+	now := time.Now()
+	caCertPEM, caKeyPEM, err := generateCA(cluster, now)
+	if err != nil {
+		t.Fatalf("generateCA() error = %v", err)
+	}
+	caCert, caKey, parsedCAPEM, err := parseCAFromSecret(&corev1.Secret{
+		Data: map[string][]byte{
+			caCertKey: caCertPEM,
+			caKeyKey:  caKeyPEM,
+		},
+	})
+	if err != nil {
+		t.Fatalf("parseCAFromSecret() error = %v", err)
+	}
+
+	staleDNSSANs := clusterpkg.ComputeRequiredDNSSANs(staleCluster)
+	staleServerCertPEM, staleServerKeyPEM, err := issueServerCertificate(staleCluster, caCert, caKey, now, staleDNSSANs)
+	if err != nil {
+		t.Fatalf("issueServerCertificate() error = %v", err)
+	}
+
+	caSecret := buildCASecret(cluster, caSecretName(cluster), caCertPEM, caKeyPEM)
+	serverSecret := buildServerSecret(cluster, serverSecretName(cluster), staleServerCertPEM, staleServerKeyPEM, parsedCAPEM)
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret, serverSecret).Build()
+	reloader := &recordingReloadSignaler{}
+	manager := NewManagerWithReloader(client, scheme, reloader)
+
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	if !reloader.called {
+		t.Fatalf("expected reload signaler to be called after SAN mismatch reissue")
+	}
+
+	updatedServerSecret := &corev1.Secret{}
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      serverSecretName(cluster),
+	}, updatedServerSecret); err != nil {
+		t.Fatalf("expected updated server TLS Secret to exist: %v", err)
+	}
+
+	if string(updatedServerSecret.Data[tlsCertKey]) == string(staleServerCertPEM) {
+		t.Fatalf("expected server TLS Secret certificate to be reissued")
+	}
+
+	updatedCert, err := parseServerCertificateFromSecret(updatedServerSecret)
+	if err != nil {
+		t.Fatalf("parseServerCertificateFromSecret() error = %v", err)
+	}
+	expectedDNSSANs := clusterpkg.ComputeRequiredDNSSANs(cluster)
+	expectedDNS, expectedIPs, err := buildServerSANs(cluster, expectedDNSSANs)
+	if err != nil {
+		t.Fatalf("buildServerSANs() error = %v", err)
+	}
+	if !certSANsMatch(updatedCert, expectedDNS, expectedIPs) {
+		t.Fatalf("updated certificate SANs do not match expected SANs")
+	}
+}
+
 func TestReconcileExternalModeWaitsForSecrets(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {

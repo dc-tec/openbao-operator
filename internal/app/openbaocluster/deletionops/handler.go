@@ -50,23 +50,21 @@ func Handle(ctx context.Context, logger logr.Logger, deps Dependencies, cluster 
 	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
-	infraMgr := inframanager.NewManagerWithReader(
+	infraMgr := inframanager.NewManagerWithReaderAndOIDCConfig(
 		deps.Client,
 		deps.APIReader,
 		deps.Scheme,
 		deps.OperatorNamespace,
-		deps.OIDCIssuer,
-		deps.OIDCJWTKeys,
+		&portauth.OIDCConfig{
+			IssuerURL:          deps.OIDCIssuer,
+			OIDCDiscoveryURL:   deps.OIDCDiscoveryURL,
+			OIDCDiscoveryCAPEM: deps.OIDCDiscoveryCAPEM,
+			JWKSURL:            deps.OIDCJWKSURL,
+			JWKSCAPEM:          deps.OIDCJWKSCAPEM,
+			JWKSKeys:           deps.OIDCJWTKeys,
+		},
 		deps.Platform,
 	)
-	infraMgr.SetOIDCConfig(&portauth.OIDCConfig{
-		IssuerURL:          deps.OIDCIssuer,
-		OIDCDiscoveryURL:   deps.OIDCDiscoveryURL,
-		OIDCDiscoveryCAPEM: deps.OIDCDiscoveryCAPEM,
-		JWKSURL:            deps.OIDCJWKSURL,
-		JWKSCAPEM:          deps.OIDCJWKSCAPEM,
-		JWKSKeys:           deps.OIDCJWTKeys,
-	})
 	if err := infraMgr.Cleanup(ctx, logger, cluster, policy); err != nil {
 		return err
 	}
