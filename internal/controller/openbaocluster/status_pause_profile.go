@@ -20,89 +20,54 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 
 	now := metav1.Now()
 
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionAvailable),
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             reasonPaused,
-		Message:            "Reconciliation is paused; availability is not being evaluated",
+	setPausedCondition(cluster, openbaov1alpha1.ConditionAvailable, metav1.ConditionUnknown, "Reconciliation is paused; availability is not being evaluated")
+	setPausedCondition(cluster, openbaov1alpha1.ConditionDegraded, metav1.ConditionFalse, "Cluster is paused; no new degradation has been evaluated")
+	setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+		Status:  metav1.ConditionUnknown,
+		Reason:  reasonPaused,
+		Message: "TLS readiness is not being evaluated while reconciliation is paused",
 	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionDegraded),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             reasonPaused,
-		Message:            "Cluster is paused; no new degradation has been evaluated",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionTLSReady),
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             reasonPaused,
-		Message:            "TLS readiness is not being evaluated while reconciliation is paused",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionAPIServerNetworkReady),
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             reasonPaused,
-		Message:            "Kubernetes API egress readiness is not being evaluated while reconciliation is paused",
+	setAPIServerNetworkReadyEvaluatedCondition(cluster, appopenbaocluster.APIServerNetworkResult{
+		Status:  metav1.ConditionUnknown,
+		Reason:  reasonPaused,
+		Message: "Kubernetes API egress readiness is not being evaluated while reconciliation is paused",
 	})
 
 	if portopenbao.UsesACMEMode(cluster) {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionACMEIntegrationReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonPaused,
-			Message:            "ACME integration prerequisites are not being evaluated while reconciliation is paused",
+		setACMEIntegrationReadyEvaluatedCondition(cluster, appopenbaocluster.ACMEIntegrationResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonPaused,
+			Message: "ACME integration prerequisites are not being evaluated while reconciliation is paused",
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionACMEIntegrationReady))
 	}
 
 	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionGatewayIntegrationReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonPaused,
-			Message:            "Gateway integration prerequisites are not being evaluated while reconciliation is paused",
+		setGatewayIntegrationReadyEvaluatedCondition(cluster, appopenbaocluster.GatewayIntegrationResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonPaused,
+			Message: "Gateway integration prerequisites are not being evaluated while reconciliation is paused",
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
 	}
 
 	if cluster.Spec.Backup != nil {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionBackupConfigurationReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonPaused,
-			Message:            "Backup Job prerequisites are not being evaluated while reconciliation is paused",
+		setBackupConfigurationReadyEvaluatedCondition(cluster, appopenbaocluster.BackupConfigurationResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonPaused,
+			Message: "Backup Job prerequisites are not being evaluated while reconciliation is paused",
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionBackupConfigurationReady))
 	}
 
 	if _, applicable := appopenbaocluster.DescribeCloudUnsealIdentity(cluster); applicable {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionCloudUnsealIdentityReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonPaused,
-			Message:            "Cloud KMS unseal identity prerequisites are not being evaluated while reconciliation is paused",
+		setCloudUnsealIdentityReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonPaused,
+			Message: "Cloud KMS unseal identity prerequisites are not being evaluated while reconciliation is paused",
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionCloudUnsealIdentityReady))
@@ -127,102 +92,60 @@ func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Cont
 		cluster.Status.Phase = openbaov1alpha1.ClusterPhaseInitializing
 	}
 
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionAvailable),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "spec.profile must be explicitly set to Hardened or Development; reconciliation is blocked until set",
+	setProfileNotSetCondition(cluster, openbaov1alpha1.ConditionAvailable, metav1.ConditionFalse, "spec.profile must be explicitly set to Hardened or Development; reconciliation is blocked until set")
+	setProfileNotSetCondition(cluster, openbaov1alpha1.ConditionDegraded, metav1.ConditionTrue, "spec.profile is not set; defaults may be inappropriate for production and could lead to insecure deployment")
+	setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+		Status:  metav1.ConditionUnknown,
+		Reason:  ReasonProfileNotSet,
+		Message: "TLS readiness is not being evaluated until spec.profile is set",
 	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionDegraded),
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "spec.profile is not set; defaults may be inappropriate for production and could lead to insecure deployment",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionTLSReady),
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "TLS readiness is not being evaluated until spec.profile is set",
-	})
-
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionAPIServerNetworkReady),
-		Status:             metav1.ConditionUnknown,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "Kubernetes API egress readiness is not being evaluated until spec.profile is set",
+	setAPIServerNetworkReadyEvaluatedCondition(cluster, appopenbaocluster.APIServerNetworkResult{
+		Status:  metav1.ConditionUnknown,
+		Reason:  ReasonProfileNotSet,
+		Message: "Kubernetes API egress readiness is not being evaluated until spec.profile is set",
 	})
 
 	if portopenbao.UsesACMEMode(cluster) {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionACMEIntegrationReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonProfileNotSet,
-			Message:            "ACME integration prerequisites are not being evaluated until spec.profile is set",
+		setACMEIntegrationReadyEvaluatedCondition(cluster, appopenbaocluster.ACMEIntegrationResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  ReasonProfileNotSet,
+			Message: "ACME integration prerequisites are not being evaluated until spec.profile is set",
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionACMEIntegrationReady))
 	}
 
 	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionGatewayIntegrationReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonProfileNotSet,
-			Message:            "Gateway integration prerequisites are not being evaluated until spec.profile is set",
+		setGatewayIntegrationReadyEvaluatedCondition(cluster, appopenbaocluster.GatewayIntegrationResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  ReasonProfileNotSet,
+			Message: "Gateway integration prerequisites are not being evaluated until spec.profile is set",
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
 	}
 
 	if cluster.Spec.Backup != nil {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionBackupConfigurationReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonProfileNotSet,
-			Message:            "Backup Job prerequisites are not being evaluated until spec.profile is set",
+		setBackupConfigurationReadyEvaluatedCondition(cluster, appopenbaocluster.BackupConfigurationResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  ReasonProfileNotSet,
+			Message: "Backup Job prerequisites are not being evaluated until spec.profile is set",
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionBackupConfigurationReady))
 	}
 
 	if _, applicable := appopenbaocluster.DescribeCloudUnsealIdentity(cluster); applicable {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionCloudUnsealIdentityReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonProfileNotSet,
-			Message:            "Cloud KMS unseal identity prerequisites are not being evaluated until spec.profile is set",
+		setCloudUnsealIdentityReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  ReasonProfileNotSet,
+			Message: "Cloud KMS unseal identity prerequisites are not being evaluated until spec.profile is set",
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionCloudUnsealIdentityReady))
 	}
 
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionProductionReady),
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: now,
-		Reason:             ReasonProfileNotSet,
-		Message:            "Cluster cannot be considered production-ready until spec.profile is explicitly set",
-	})
+	setProfileNotSetCondition(cluster, openbaov1alpha1.ConditionProductionReady, metav1.ConditionFalse, "Cluster cannot be considered production-ready until spec.profile is explicitly set")
 
 	userAccessCond := buildUserAccessBootstrapCondition(cluster)
 	userAccessCond.ObservedGeneration = cluster.Generation

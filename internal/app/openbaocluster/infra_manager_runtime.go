@@ -3,6 +3,7 @@ package openbaocluster
 import (
 	"errors"
 
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
@@ -39,17 +40,17 @@ func (r *infraReconciler) mapManagerReconcileError(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, inframanager.ErrOIDCBootstrapAudienceMismatch):
-		return operatorerrors.WithReason(r.reasons.oidcBootstrapConfigurationReason(), err)
+		return operatorerrors.WithReason(constants.ReasonOIDCBootstrapConfigurationInvalid, err)
 	case errors.Is(err, inframanager.ErrGatewayAPIMissing):
-		return operatorerrors.WithReason(r.reasons.gatewayAPIMissingReason(), err)
+		return operatorerrors.WithReason(constants.ReasonGatewayAPIMissing, err)
 	case errors.Is(err, inframanager.ErrAPIServerNetworkConfigurationInvalid):
-		return operatorerrors.WithReason(r.reasons.apiServerNetworkConfigurationReason(), err)
+		return operatorerrors.WithReason(constants.ReasonAPIServerNetworkConfigurationInvalid, err)
 	case errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing):
-		return operatorerrors.WithReason(r.reasons.prerequisitesMissingReason(), err)
+		return operatorerrors.WithReason(constants.ReasonPrerequisitesMissing, err)
 	case errors.Is(err, inframanager.ErrACMEDomainNotResolvable):
-		return operatorerrors.WithReason(r.reasons.acmeDomainNotResolvableReason(), err)
+		return operatorerrors.WithReason(constants.ReasonACMEDomainNotResolvable, err)
 	case errors.Is(err, inframanager.ErrACMEGatewayNotConfiguredForPassthrough):
-		return operatorerrors.WithReason(r.reasons.acmeGatewayNotConfiguredReason(), err)
+		return operatorerrors.WithReason(constants.ReasonACMEGatewayNotConfiguredForPassthrough, err)
 	default:
 		return err
 	}

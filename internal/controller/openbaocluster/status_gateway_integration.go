@@ -18,7 +18,6 @@ func (r *OpenBaoClusterReconciler) setGatewayIntegrationReadyCondition(ctx conte
 	result := appopenbaocluster.EvaluateGatewayIntegration(
 		ctx,
 		r.gatewayIntegrationDependencies(),
-		gatewayIntegrationReasonPolicy(),
 		cluster,
 	)
 	setGatewayIntegrationReadyEvaluatedCondition(cluster, result)

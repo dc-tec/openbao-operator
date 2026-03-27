@@ -44,6 +44,8 @@ var acmeIntegrationReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: ReasonACMEGatewayNotConfiguredForPassthrough, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: ReasonACMEDomainNotResolvable, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: ReasonPrerequisitesMissing, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
 )
 
@@ -60,6 +62,8 @@ var gatewayIntegrationReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: ReasonGatewayClassPending, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: ReasonGatewayCapabilitiesUnknown, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: ReasonGatewayProgrammingPending, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
 )
 
@@ -67,6 +71,27 @@ var apiServerNetworkReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: ReasonAPIServerNetworkReady, status: metav1.ConditionTrue},
 	conditionContractEntry{reason: ReasonAPIServerEndpointIPsRecommended, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: ReasonAPIServerNetworkConfigurationInvalid, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
+)
+
+var tlsReadyConditionContract = newConditionContract(
+	conditionContractEntry{reason: ReasonDisabled, status: metav1.ConditionTrue},
+	conditionContractEntry{reason: reasonReady, status: metav1.ConditionTrue},
+	conditionContractEntry{reason: ReasonTLSSecretMissing, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: ReasonTLSSecretInvalid, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
+)
+
+var acmeCacheReadyConditionContract = newConditionContract(
+	conditionContractEntry{reason: ReasonACMECacheReady, status: metav1.ConditionTrue},
+	conditionContractEntry{reason: ReasonACMECacheNotConfigured, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: ReasonACMECacheMissing, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: ReasonACMECachePending, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: ReasonACMECacheInvalidAccessMode, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
 )
 
@@ -78,6 +103,8 @@ var backupConfigurationReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: constants.ReasonTokenSecretMissing, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: constants.ReasonCredentialsSecretMissing, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: constants.ReasonNetworkEgressRulesRequired, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
 )
 
@@ -87,6 +114,8 @@ var cloudUnsealIdentityReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: constants.ReasonWorkloadIdentityConfigured, status: metav1.ConditionTrue},
 	conditionContractEntry{reason: constants.ReasonCredentialsSecretMissing, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: constants.ReasonPrerequisitesMissing, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
 )
 
@@ -105,6 +134,47 @@ func applyConditionContract(
 		LastTransitionTime: metav1.Now(),
 		Reason:             normalized.Reason,
 		Message:            normalized.Message,
+	})
+}
+
+func setClusterConditionResult(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	conditionType openbaov1alpha1.ConditionType,
+	result statusConditionResult,
+) {
+	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type:               string(conditionType),
+		Status:             result.Status,
+		ObservedGeneration: cluster.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             result.Reason,
+		Message:            result.Message,
+	})
+}
+
+func setPausedCondition(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	conditionType openbaov1alpha1.ConditionType,
+	status metav1.ConditionStatus,
+	message string,
+) {
+	setClusterConditionResult(cluster, conditionType, statusConditionResult{
+		Status:  status,
+		Reason:  reasonPaused,
+		Message: message,
+	})
+}
+
+func setProfileNotSetCondition(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	conditionType openbaov1alpha1.ConditionType,
+	status metav1.ConditionStatus,
+	message string,
+) {
+	setClusterConditionResult(cluster, conditionType, statusConditionResult{
+		Status:  status,
+		Reason:  ReasonProfileNotSet,
+		Message: message,
 	})
 }
 
@@ -175,6 +245,32 @@ func setAPIServerNetworkReadyEvaluatedCondition(
 		cluster.Generation,
 		statusConditionResult{Status: result.Status, Reason: result.Reason, Message: result.Message},
 		apiServerNetworkReadyConditionContract,
+	)
+}
+
+func setTLSReadyEvaluatedCondition(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	result statusConditionResult,
+) {
+	applyConditionContract(
+		&cluster.Status.Conditions,
+		openbaov1alpha1.ConditionTLSReady,
+		cluster.Generation,
+		result,
+		tlsReadyConditionContract,
+	)
+}
+
+func setACMECacheReadyEvaluatedCondition(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	result statusConditionResult,
+) {
+	applyConditionContract(
+		&cluster.Status.Conditions,
+		openbaov1alpha1.ConditionACMECacheReady,
+		cluster.Generation,
+		result,
+		acmeCacheReadyConditionContract,
 	)
 }
 

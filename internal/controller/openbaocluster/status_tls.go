@@ -5,7 +5,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -16,16 +15,11 @@ import (
 
 // setTLSReadyCondition evaluates and sets the TLSReady condition.
 func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) {
-	now := metav1.Now()
-
 	if !cluster.Spec.TLS.Enabled {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonDisabled,
-			Message:            "TLS is disabled",
+		setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonDisabled,
+			Message: "TLS is disabled",
 		})
 		return
 	}
@@ -36,13 +30,10 @@ func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, clu
 	}
 
 	if tlsMode == openbaov1alpha1.TLSModeACME {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonUnknown,
-			Message:            "TLS is managed by OpenBao via ACME; the operator does not evaluate certificate readiness",
+		setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "TLS is managed by OpenBao via ACME; the operator does not evaluate certificate readiness",
 		})
 		return
 	}
@@ -55,34 +46,25 @@ func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, clu
 		Name:      cluster.Name + constants.SuffixTLSCA,
 	}, caSecret); err != nil {
 		if apierrors.IsNotFound(err) {
-			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-				Type:               string(openbaov1alpha1.ConditionTLSReady),
-				Status:             metav1.ConditionFalse,
-				ObservedGeneration: cluster.Generation,
-				LastTransitionTime: now,
-				Reason:             ReasonTLSSecretMissing,
-				Message:            "CA TLS Secret is not present yet",
+			setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonTLSSecretMissing,
+				Message: "CA TLS Secret is not present yet",
 			})
 			return
 		}
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonUnknown,
-			Message:            "Failed to get CA TLS secret",
+		setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Failed to get CA TLS secret",
 		})
 		return
 	}
 	if err := openbaotls.ValidateCABundle(caSecret.Data["ca.crt"]); err != nil {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonTLSSecretInvalid,
-			Message:            "CA TLS Secret is invalid: " + err.Error(),
+		setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonTLSSecretInvalid,
+			Message: "CA TLS Secret is invalid: " + err.Error(),
 		})
 		return
 	}
@@ -94,68 +76,50 @@ func (r *OpenBaoClusterReconciler) setTLSReadyCondition(ctx context.Context, clu
 		Name:      cluster.Name + constants.SuffixTLSServer,
 	}, serverSecret); err != nil {
 		if apierrors.IsNotFound(err) {
-			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-				Type:               string(openbaov1alpha1.ConditionTLSReady),
-				Status:             metav1.ConditionFalse,
-				ObservedGeneration: cluster.Generation,
-				LastTransitionTime: now,
-				Reason:             ReasonTLSSecretMissing,
-				Message:            "Server TLS Secret is not present yet",
+			setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonTLSSecretMissing,
+				Message: "Server TLS Secret is not present yet",
 			})
 			return
 		}
 		// For other errors, mark as unknown.
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonUnknown,
-			Message:            "Failed to get TLS secret",
+		setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Failed to get TLS secret",
 		})
 		return
 	}
 
 	if tlsMode == openbaov1alpha1.TLSModeExternal {
 		if err := openbaotls.ValidateExternalServerSecret(cluster, caSecret, serverSecret); err != nil {
-			meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-				Type:               string(openbaov1alpha1.ConditionTLSReady),
-				Status:             metav1.ConditionFalse,
-				ObservedGeneration: cluster.Generation,
-				LastTransitionTime: now,
-				Reason:             ReasonTLSSecretInvalid,
-				Message:            "External TLS assets are invalid: " + err.Error(),
+			setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonTLSSecretInvalid,
+				Message: "External TLS assets are invalid: " + err.Error(),
 			})
 			return
 		}
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonReady,
-			Message:            "TLS assets are provisioned and valid",
+		setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionTrue,
+			Reason:  reasonReady,
+			Message: "TLS assets are provisioned and valid",
 		})
 		return
 	}
 
 	if _, err := openbaotls.ValidateServerSecret(serverSecret); err == nil {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionTrue,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             reasonReady,
-			Message:            "TLS assets are provisioned",
+		setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionTrue,
+			Reason:  reasonReady,
+			Message: "TLS assets are provisioned",
 		})
 	} else {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionTLSReady),
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: now,
-			Reason:             ReasonTLSSecretInvalid,
-			Message:            "Server TLS Secret is invalid: " + err.Error(),
+		setTLSReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonTLSSecretInvalid,
+			Message: "Server TLS Secret is invalid: " + err.Error(),
 		})
 	}
 }

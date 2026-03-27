@@ -15,7 +15,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
-	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 )
 
 type openBaoClusterWorkloadReconciler struct {
@@ -100,12 +99,11 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 	}
 
 	original := cluster.DeepCopy()
-	storageReasons := storageReasonPolicy()
 	reconcilers := []appopenbaocluster.SubReconciler{
-		certmanager.NewManagerWithReloader(r.parent.Client, r.parent.ControllerRuntime.Scheme, r.parent.TLSReload),
-		appopenbaocluster.NewInfraReconciler(r.parent.infraDependencies(), r.parent.infraReasonPolicy()),
-		appopenbaocluster.NewStorageReconciler(r.parent.storageDependencies(), storageReasons),
-		appopenbaocluster.NewStorageResizeRestartReconciler(r.parent.storageResizeRestartDependencies(), storageReasons),
+		appopenbaocluster.NewCertificatesReconciler(r.parent.certificatesDependencies()),
+		appopenbaocluster.NewInfraReconciler(r.parent.infraDependencies()),
+		appopenbaocluster.NewStorageReconciler(r.parent.storageDependencies()),
+		appopenbaocluster.NewStorageResizeRestartReconciler(r.parent.storageResizeRestartDependencies()),
 	}
 	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(
 		reconcilers,

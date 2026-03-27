@@ -10,13 +10,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/platform/openbaotls"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 )
 
 // ControllerRuntime groups the controller-runtime and operator process
@@ -49,7 +49,7 @@ type OIDCRuntime struct {
 
 // OpenBaoRuntime groups OpenBao-specific collaborators used by the controller.
 type OpenBaoRuntime struct {
-	TLSReload            certmanager.ReloadSignaler
+	TLSReload            appopenbaocluster.TLSReloadSignaler
 	InitManager          initmanagerport.Manager
 	SmartClientConfig    portopenbao.ClientConfig
 	OpenBaoClientFactory portopenbao.ClientFactory

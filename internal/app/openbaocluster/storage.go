@@ -31,50 +31,6 @@ const (
 	storageRequeueShort                = 5 * time.Second
 )
 
-// StorageReasonPolicy configures storage-related error reason values.
-type StorageReasonPolicy struct {
-	InvalidSize             string
-	ShrinkNotSupported      string
-	ResizeNotSupported      string
-	StorageClassChangeError string
-	RestartRequired         string
-}
-
-func (p StorageReasonPolicy) invalidSizeReason() string {
-	if strings.TrimSpace(p.InvalidSize) != "" {
-		return p.InvalidSize
-	}
-	return constants.ReasonStorageInvalidSize
-}
-
-func (p StorageReasonPolicy) shrinkNotSupportedReason() string {
-	if strings.TrimSpace(p.ShrinkNotSupported) != "" {
-		return p.ShrinkNotSupported
-	}
-	return constants.ReasonStorageShrinkNotSupported
-}
-
-func (p StorageReasonPolicy) resizeNotSupportedReason() string {
-	if strings.TrimSpace(p.ResizeNotSupported) != "" {
-		return p.ResizeNotSupported
-	}
-	return constants.ReasonStorageResizeNotSupported
-}
-
-func (p StorageReasonPolicy) storageClassChangeReason() string {
-	if strings.TrimSpace(p.StorageClassChangeError) != "" {
-		return p.StorageClassChangeError
-	}
-	return constants.ReasonStorageClassChangeNotSupported
-}
-
-func (p StorageReasonPolicy) restartRequiredReason() string {
-	if strings.TrimSpace(p.RestartRequired) != "" {
-		return p.RestartRequired
-	}
-	return constants.ReasonStorageRestartRequired
-}
-
 // StorageResourceRuntime groups Kubernetes clients used by storage reconciliation.
 type StorageResourceRuntime struct {
 	Client    client.Client
@@ -93,20 +49,16 @@ type StorageDependencies struct {
 }
 
 type storageReconciler struct {
-	deps    StorageDependencies
-	reasons StorageReasonPolicy
+	deps StorageDependencies
 }
 
 // NewStorageReconciler creates a SubReconciler that handles PVC storage expansion workflows.
-func NewStorageReconciler(deps StorageDependencies, reasons StorageReasonPolicy) SubReconciler {
-	return &storageReconciler{
-		deps:    deps,
-		reasons: reasons,
-	}
+func NewStorageReconciler(deps StorageDependencies) SubReconciler {
+	return &storageReconciler{deps: deps}
 }
 
 func (r *storageReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	return ReconcileStorage(ctx, logger, cluster, r.deps, r.reasons)
+	return ReconcileStorage(ctx, logger, cluster, r.deps)
 }
 
 // ReconcileStorage validates and applies supported PVC storage expansion changes.
@@ -115,7 +67,6 @@ func ReconcileStorage(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	deps StorageDependencies,
-	reasons StorageReasonPolicy,
 ) (recon.Result, error) {
 	if cluster == nil {
 		return recon.Result{}, nil
@@ -124,7 +75,7 @@ func ReconcileStorage(
 		return recon.Result{}, fmt.Errorf("storage client is required")
 	}
 
-	desiredQty, desiredStorageClassName, err := desiredStorageSpec(cluster, reasons)
+	desiredQty, desiredStorageClassName, err := desiredStorageSpec(cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -137,11 +88,11 @@ func ReconcileStorage(
 		return recon.Result{}, nil
 	}
 
-	if err := validateStorageChangeAllowed(desiredQty, desiredStorageClassName, pvcs, reasons); err != nil {
+	if err := validateStorageChangeAllowed(desiredQty, desiredStorageClassName, pvcs); err != nil {
 		return recon.Result{}, err
 	}
 
-	patched, err := expandPVCs(ctx, deps.Resources.Client, deps.Events.Recorder, cluster, logger, desiredQty, pvcs, reasons)
+	patched, err := expandPVCs(ctx, deps.Resources.Client, deps.Events.Recorder, cluster, logger, desiredQty, pvcs)
 	if err != nil {
 		return recon.Result{}, err
 	}
@@ -152,11 +103,11 @@ func ReconcileStorage(
 	return recon.Result{}, nil
 }
 
-func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster, reasons StorageReasonPolicy) (resource.Quantity, string, error) {
+func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster) (resource.Quantity, string, error) {
 	desiredQty, err := resource.ParseQuantity(cluster.Spec.Storage.Size)
 	if err != nil {
 		return resource.Quantity{}, "", operatorerrors.WithReason(
-			reasons.invalidSizeReason(),
+			constants.ReasonStorageInvalidSize,
 			operatorerrors.WrapPermanentConfig(fmt.Errorf("invalid spec.storage.size %q: %w", cluster.Spec.Storage.Size, err)),
 		)
 	}
@@ -197,7 +148,7 @@ func isManagedDataPVC(clusterName, pvcName string) bool {
 	return strings.HasPrefix(pvcName, storageVolumeDataPrefix+clusterName+"-")
 }
 
-func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageClassName string, pvcs []corev1.PersistentVolumeClaim, reasons StorageReasonPolicy) error {
+func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageClassName string, pvcs []corev1.PersistentVolumeClaim) error {
 	for i := range pvcs {
 		pvc := &pvcs[i]
 		currentStorageClassName := ""
@@ -207,7 +158,7 @@ func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageCl
 
 		if desiredStorageClassName != "" && currentStorageClassName != desiredStorageClassName {
 			return operatorerrors.WithReason(
-				reasons.storageClassChangeReason(),
+				constants.ReasonStorageClassChangeNotSupported,
 				operatorerrors.WrapPermanentConfig(fmt.Errorf(
 					"spec.storage.storageClassName cannot be changed for an existing cluster (PVC %s has %q, desired %q)",
 					pvc.Name, currentStorageClassName, desiredStorageClassName,
@@ -221,7 +172,7 @@ func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageCl
 		}
 		if desiredQty.Cmp(curr) < 0 {
 			return operatorerrors.WithReason(
-				reasons.shrinkNotSupportedReason(),
+				constants.ReasonStorageShrinkNotSupported,
 				operatorerrors.WrapPermanentConfig(fmt.Errorf(
 					"spec.storage.size cannot be decreased (requested %s but PVC %s already requests %s); revert the change",
 					desiredQty.String(), pvc.Name, curr.String(),
@@ -241,7 +192,6 @@ func expandPVCs(
 	logger logr.Logger,
 	desiredQty resource.Quantity,
 	pvcs []corev1.PersistentVolumeClaim,
-	reasons StorageReasonPolicy,
 ) (int, error) {
 	patched := 0
 	for i := range pvcs {
@@ -271,7 +221,7 @@ func expandPVCs(
 			}
 			if apierrors.IsInvalid(err) || apierrors.IsForbidden(err) {
 				return patched, operatorerrors.WithReason(
-					reasons.resizeNotSupportedReason(),
+					constants.ReasonStorageResizeNotSupported,
 					operatorerrors.WrapPermanentConfig(fmt.Errorf("PVC %s cannot be expanded to %s: %w", pvc.Name, desiredQty.String(), err)),
 				)
 			}
@@ -309,20 +259,16 @@ type StorageResizeRestartDependencies struct {
 }
 
 type storageResizeRestartReconciler struct {
-	deps    StorageResizeRestartDependencies
-	reasons StorageReasonPolicy
+	deps StorageResizeRestartDependencies
 }
 
 // NewStorageResizeRestartReconciler creates a SubReconciler that handles filesystem resize restarts.
-func NewStorageResizeRestartReconciler(deps StorageResizeRestartDependencies, reasons StorageReasonPolicy) SubReconciler {
-	return &storageResizeRestartReconciler{
-		deps:    deps,
-		reasons: reasons,
-	}
+func NewStorageResizeRestartReconciler(deps StorageResizeRestartDependencies) SubReconciler {
+	return &storageResizeRestartReconciler{deps: deps}
 }
 
 func (r *storageResizeRestartReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	return ReconcileStorageResizeRestart(ctx, logger, cluster, r.deps, r.reasons)
+	return ReconcileStorageResizeRestart(ctx, logger, cluster, r.deps)
 }
 
 // ReconcileStorageResizeRestart performs controlled pod restarts when PVC filesystem expansion is pending.
@@ -331,7 +277,6 @@ func ReconcileStorageResizeRestart(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	deps StorageResizeRestartDependencies,
-	reasons StorageReasonPolicy,
 ) (recon.Result, error) {
 	if cluster == nil || !cluster.Status.Initialized {
 		return recon.Result{}, nil
@@ -359,7 +304,7 @@ func ReconcileStorageResizeRestart(
 	if cluster.Spec.Maintenance == nil || !cluster.Spec.Maintenance.Enabled {
 		if anyPVCFileSystemResizePending(pvcList.Items) {
 			return recon.Result{}, operatorerrors.WithReason(
-				reasons.restartRequiredReason(),
+				constants.ReasonStorageRestartRequired,
 				operatorerrors.WrapPermanentPrerequisitesMissing(fmt.Errorf(
 					"PVC filesystem resize is pending and requires a pod restart; enable spec.maintenance.enabled=true to allow the operator to perform controlled restarts, or restart the pods manually",
 				)),
