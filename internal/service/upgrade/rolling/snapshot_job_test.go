@@ -167,6 +167,29 @@ func TestHandlePreUpgradeSnapshot_NoBackupConfig(t *testing.T) {
 	assert.Contains(t, err.Error(), "backup configuration is required")
 }
 
+func TestHandlePreUpgradeSnapshot_RequiresBackupRuntime(t *testing.T) {
+	cluster := newPreUpgradeSnapshotCluster()
+
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	assert.Error(t, err, "should return error when backup runtime is missing")
+	assert.False(t, complete, "should return complete=false on create-path bootstrap error")
+	assert.Contains(t, err.Error(), "backup runtime is not configured")
+}
+
 func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
