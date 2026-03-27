@@ -379,6 +379,11 @@ type imageVerificationOptions struct {
 	emitEventOnWarn      bool
 }
 
+type resolvedInfraImages struct {
+	mainImage string
+	initImage string
+}
+
 func (r *infraReconciler) verifyImageDigestWithPolicy(
 	ctx context.Context,
 	logger logr.Logger,
@@ -482,6 +487,66 @@ func (r *infraReconciler) verifyInitContainerImageDigest(ctx context.Context, lo
 	return r.verifyOperatorImageDigest(ctx, logger, cluster, initImage, r.reasons.initContainerImageVerificationReason(), "Init container image verification failed")
 }
 
+func oidcConfigForInfraManager(oidc *OIDCConfig) *portauth.OIDCConfig {
+	if oidc == nil {
+		return nil
+	}
+
+	return &portauth.OIDCConfig{
+		IssuerURL:          oidc.IssuerURL,
+		OIDCDiscoveryURL:   oidc.OIDCDiscoveryURL,
+		OIDCDiscoveryCAPEM: oidc.OIDCDiscoveryCAPEM,
+		JWKSURL:            oidc.JWKSURL,
+		JWKSCAPEM:          oidc.JWKSCAPEM,
+		JWKSKeys:           oidc.JWKSKeys,
+	}
+}
+
+func (r *infraReconciler) newInfraManager(effectiveOIDC *OIDCConfig) *inframanager.Manager {
+	return inframanager.NewManagerWithReaderAndOIDCConfig(
+		r.deps.Kubernetes.Client,
+		r.deps.Kubernetes.APIReader,
+		r.deps.Kubernetes.Scheme,
+		r.deps.Kubernetes.OperatorNamespace,
+		oidcConfigForInfraManager(effectiveOIDC),
+		r.deps.Kubernetes.Platform,
+	)
+}
+
+func (r *infraReconciler) resolveVerifiedImages(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (resolvedInfraImages, error) {
+	targetImage := r.resolveTargetMainImage(ctx, logger, cluster)
+
+	verifiedMainImage, err := r.verifyMainImageDigest(ctx, logger, cluster, targetImage)
+	if err != nil {
+		return resolvedInfraImages{}, err
+	}
+	if strings.TrimSpace(verifiedMainImage) == "" {
+		verifiedMainImage = targetImage
+	}
+
+	initImage, err := r.resolveInitContainerImage(cluster)
+	if err != nil {
+		return resolvedInfraImages{}, err
+	}
+
+	verifiedInitImage, err := r.verifyInitContainerImageDigest(ctx, logger, cluster, initImage)
+	if err != nil {
+		return resolvedInfraImages{}, err
+	}
+	if strings.TrimSpace(verifiedInitImage) == "" {
+		verifiedInitImage = initImage
+	}
+
+	return resolvedInfraImages{
+		mainImage: verifiedMainImage,
+		initImage: verifiedInitImage,
+	}, nil
+}
+
 // computeStatefulSetSpec computes the StatefulSetSpec from the cluster and verified image digests.
 func (r *infraReconciler) computeStatefulSetSpec(
 	logger logr.Logger,
@@ -553,6 +618,27 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 	return targetImage
 }
 
+func (r *infraReconciler) mapManagerReconcileError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, inframanager.ErrOIDCBootstrapAudienceMismatch):
+		return operatorerrors.WithReason(r.reasons.oidcBootstrapConfigurationReason(), err)
+	case errors.Is(err, inframanager.ErrGatewayAPIMissing):
+		return operatorerrors.WithReason(r.reasons.gatewayAPIMissingReason(), err)
+	case errors.Is(err, inframanager.ErrAPIServerNetworkConfigurationInvalid):
+		return operatorerrors.WithReason(r.reasons.apiServerNetworkConfigurationReason(), err)
+	case errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing):
+		return operatorerrors.WithReason(r.reasons.prerequisitesMissingReason(), err)
+	case errors.Is(err, inframanager.ErrACMEDomainNotResolvable):
+		return operatorerrors.WithReason(r.reasons.acmeDomainNotResolvableReason(), err)
+	case errors.Is(err, inframanager.ErrACMEGatewayNotConfiguredForPassthrough):
+		return operatorerrors.WithReason(r.reasons.acmeGatewayNotConfiguredReason(), err)
+	default:
+		return err
+	}
+}
+
 // Reconcile implements the controller's sub-reconciler contract for infrastructure reconciliation.
 // nolint:gocyclo
 func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
@@ -565,30 +651,12 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		return recon.Result{}, err
 	}
 
-	targetImage := r.resolveTargetMainImage(ctx, logger, cluster)
-
-	verifiedImageDigest, err := r.verifyMainImageDigest(ctx, logger, cluster, targetImage)
-	if err != nil {
-		return recon.Result{}, err
-	}
-	if strings.TrimSpace(verifiedImageDigest) == "" {
-		verifiedImageDigest = targetImage
-	}
-
-	initImage, err := r.resolveInitContainerImage(cluster)
+	resolvedImages, err := r.resolveVerifiedImages(ctx, logger, cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
 
-	verifiedInitContainerDigest, err := r.verifyInitContainerImageDigest(ctx, logger, cluster, initImage)
-	if err != nil {
-		return recon.Result{}, err
-	}
-	if strings.TrimSpace(verifiedInitContainerDigest) == "" {
-		verifiedInitContainerDigest = initImage
-	}
-
-	spec := r.computeStatefulSetSpec(logger, cluster, verifiedImageDigest, verifiedInitContainerDigest)
+	spec := r.computeStatefulSetSpec(logger, cluster, resolvedImages.mainImage, resolvedImages.initImage)
 
 	currentSTS := &appsv1.StatefulSet{}
 	if err := r.deps.Kubernetes.Client.Get(ctx, client.ObjectKey{Name: spec.Name, Namespace: cluster.Namespace}, currentSTS); err == nil {
@@ -603,61 +671,9 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		return recon.Result{}, err
 	}
 
-	manager := inframanager.NewManager(
-		r.deps.Kubernetes.Client,
-		r.deps.Kubernetes.Scheme,
-		r.deps.Kubernetes.OperatorNamespace,
-		effectiveOIDC.IssuerURL,
-		effectiveOIDC.JWKSKeys,
-		r.deps.Kubernetes.Platform,
-	)
-	manager.SetOIDCConfig(&portauth.OIDCConfig{
-		IssuerURL:          effectiveOIDC.IssuerURL,
-		OIDCDiscoveryURL:   effectiveOIDC.OIDCDiscoveryURL,
-		OIDCDiscoveryCAPEM: effectiveOIDC.OIDCDiscoveryCAPEM,
-		JWKSURL:            effectiveOIDC.JWKSURL,
-		JWKSCAPEM:          effectiveOIDC.JWKSCAPEM,
-		JWKSKeys:           effectiveOIDC.JWKSKeys,
-	})
-	if r.deps.Kubernetes.APIReader != nil {
-		manager = inframanager.NewManagerWithReader(
-			r.deps.Kubernetes.Client,
-			r.deps.Kubernetes.APIReader,
-			r.deps.Kubernetes.Scheme,
-			r.deps.Kubernetes.OperatorNamespace,
-			effectiveOIDC.IssuerURL,
-			effectiveOIDC.JWKSKeys,
-			r.deps.Kubernetes.Platform,
-		)
-		manager.SetOIDCConfig(&portauth.OIDCConfig{
-			IssuerURL:          effectiveOIDC.IssuerURL,
-			OIDCDiscoveryURL:   effectiveOIDC.OIDCDiscoveryURL,
-			OIDCDiscoveryCAPEM: effectiveOIDC.OIDCDiscoveryCAPEM,
-			JWKSURL:            effectiveOIDC.JWKSURL,
-			JWKSCAPEM:          effectiveOIDC.JWKSCAPEM,
-			JWKSKeys:           effectiveOIDC.JWKSKeys,
-		})
-	}
+	manager := r.newInfraManager(effectiveOIDC)
 	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
-		if errors.Is(err, inframanager.ErrOIDCBootstrapAudienceMismatch) {
-			return recon.Result{}, operatorerrors.WithReason(r.reasons.oidcBootstrapConfigurationReason(), err)
-		}
-		if errors.Is(err, inframanager.ErrGatewayAPIMissing) {
-			return recon.Result{}, operatorerrors.WithReason(r.reasons.gatewayAPIMissingReason(), err)
-		}
-		if errors.Is(err, inframanager.ErrAPIServerNetworkConfigurationInvalid) {
-			return recon.Result{}, operatorerrors.WithReason(r.reasons.apiServerNetworkConfigurationReason(), err)
-		}
-		if errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing) {
-			return recon.Result{}, operatorerrors.WithReason(r.reasons.prerequisitesMissingReason(), err)
-		}
-		if errors.Is(err, inframanager.ErrACMEDomainNotResolvable) {
-			return recon.Result{}, operatorerrors.WithReason(r.reasons.acmeDomainNotResolvableReason(), err)
-		}
-		if errors.Is(err, inframanager.ErrACMEGatewayNotConfiguredForPassthrough) {
-			return recon.Result{}, operatorerrors.WithReason(r.reasons.acmeGatewayNotConfiguredReason(), err)
-		}
-		return recon.Result{}, err
+		return recon.Result{}, r.mapManagerReconcileError(err)
 	}
 
 	return recon.Result{}, nil

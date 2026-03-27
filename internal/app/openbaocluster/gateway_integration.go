@@ -110,17 +110,11 @@ func EvaluateGatewayIntegration(
 	reasons GatewayIntegrationReasonPolicy,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) GatewayIntegrationResult {
-	reader := deps.APIReader
-	if reader == nil {
-		reader = deps.Client
-	}
-
-	manager := inframanager.NewManagerWithReader(
+	manager := inframanager.NewManagerWithReaderAndOIDCConfig(
 		deps.Client,
-		reader,
+		deps.APIReader,
 		deps.Scheme,
 		deps.OperatorNamespace,
-		"",
 		nil,
 		deps.Platform,
 	)
