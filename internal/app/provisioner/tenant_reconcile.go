@@ -16,6 +16,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	provisionermanager "github.com/dc-tec/openbao-operator/internal/service/provisioner"
@@ -180,7 +181,7 @@ func reconcileDeletion(
 		logger.Info("Waiting for OpenBaoClusters to be deleted before cleaning up RBAC",
 			"target_namespace", targetNS,
 			"cluster_count", len(clusterList.Items))
-		return recon.Result{RequeueAfter: 5 * time.Second}, nil
+		return recon.Result{RequeueAfter: resolveRequeueShort(runtime)}, nil
 	}
 
 	logger.Info("No OpenBaoClusters found; cleaning up tenant RBAC", "target_namespace", targetNS)
@@ -280,12 +281,12 @@ func resolveRequeueShort(runtime TenantRuntime) time.Duration {
 	if runtime.RequeueShort > 0 {
 		return runtime.RequeueShort
 	}
-	return 5 * time.Second
+	return constants.RequeueShort
 }
 
 func resolveRequeueStandard(runtime TenantRuntime) time.Duration {
 	if runtime.RequeueStandard > 0 {
 		return runtime.RequeueStandard
 	}
-	return 1 * time.Minute
+	return constants.RequeueStandard
 }

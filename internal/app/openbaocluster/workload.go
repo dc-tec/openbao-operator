@@ -16,6 +16,8 @@ import (
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 )
 
+const eventReasonAutopilotConfigJWTPrerequisitesMissing = "AutopilotConfigJWTPrerequisitesMissing"
+
 // WorkloadResultPolicy configures known workload error handling behavior.
 type WorkloadResultPolicy struct {
 	PrerequisitesMissingReason   string
@@ -189,7 +191,7 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 					"Error: %v"
 			}
 			r.recorder.Eventf(cluster, nil, corev1.EventTypeWarning,
-				"AutopilotConfigJWTPrerequisitesMissing", "AutopilotConfigJWTPrerequisitesMissing",
+				eventReasonAutopilotConfigJWTPrerequisitesMissing, eventReasonAutopilotConfigJWTPrerequisitesMissing,
 				eventMsg, err)
 			logger.Error(err, "Failed to reconcile autopilot config (permanent error - requires user intervention)")
 			return recon.Result{}, nil

@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-raw-reason-literals-runtime
+message: Use named constants for runtime reason values instead of raw string literals.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  any:
+    - pattern: '$TYPE{Reason: "$REASON", $$$POST}'
+    - pattern: '$TYPE{$$$PRE, Reason: "$REASON"}'
+    - pattern: '$TYPE{$$$PRE, Reason: "$REASON", $$$POST}'
+    - pattern: '$TARGET.Reason = "$REASON"'
+constraints:
+  REASON:
+    regex: '^[A-Z][A-Za-z0-9]+$'
+note: Centralize reason values so status, event, and readiness contracts do not drift across layers.

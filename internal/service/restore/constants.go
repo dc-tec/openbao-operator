@@ -37,6 +37,9 @@ const (
 	// ReasonOperationLockLost indicates restore lost the cluster lock while running.
 	ReasonOperationLockLost = "OperationLockLost"
 
+	// ReasonOperationLockOverride indicates a force override cleared an existing operation lock.
+	ReasonOperationLockOverride = "OperationLockOverride"
+
 	// ComponentRestore is the component name for restore resources.
 	ComponentRestore = "restore"
 )

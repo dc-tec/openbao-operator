@@ -4,6 +4,8 @@ package constants
 const (
 	// Error indicates a generic failure state.
 	ReasonError = "Error"
+	// ReasonPrerequisitesMissing indicates a required prerequisite is absent or invalid.
+	ReasonPrerequisitesMissing = "PrerequisitesMissing"
 	// ReasonAuthenticationRequired indicates an operator-managed auth path is missing.
 	ReasonAuthenticationRequired = "AuthenticationRequired"
 	// ReasonTokenSecretMissing indicates a referenced token Secret is missing.

@@ -42,6 +42,8 @@ const (
 	RestoreConditionType = constants.RestoreConditionType // This will need to be added to conditions.go if missed
 
 	restoreRequeueImmediately = 1 * time.Second
+	restoreRequeueJobPoll     = 15 * time.Second
+	restoreRequeueJobCheck    = 10 * time.Second
 )
 
 // Manager orchestrates restore operations for OpenBao clusters.
@@ -358,7 +360,7 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 // handleLockOverride records an event and sets a condition when a lock override occurs.
 func (m *Manager) handleLockOverride(restore *openbaov1alpha1.OpenBaoRestore, lockBefore *openbaov1alpha1.OperationLockStatus) {
 	if m.recorder != nil {
-		m.recorder.Eventf(restore, nil, corev1.EventTypeWarning, "OperationLockOverride", "OperationLockOverride",
+		m.recorder.Eventf(restore, nil, corev1.EventTypeWarning, ReasonOperationLockOverride, ReasonOperationLockOverride,
 			"OverrideOperationLock used; cleared existing lock operation=%s holder=%s", lockBefore.Operation, lockBefore.Holder)
 	}
 	meta.SetStatusCondition(&restore.Status.Conditions, metav1.Condition{
@@ -500,7 +502,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		return ctrl.Result{}, fmt.Errorf("failed to patch restore status while job is running: %w", err)
 	}
 
-	return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	return ctrl.Result{RequeueAfter: restoreRequeueJobPoll}, nil
 }
 
 func (m *Manager) createRestoreJob(
@@ -536,7 +538,7 @@ func (m *Manager) createRestoreJob(
 					if statusErr := m.patchStatus(ctx, restore, original); statusErr != nil {
 						return ctrl.Result{}, fmt.Errorf("failed to patch restore status after transient image verification failure: %w", statusErr)
 					}
-					return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+					return ctrl.Result{RequeueAfter: restoreRequeueJobPoll}, nil
 				}
 				return m.failRestore(
 					ctx,
@@ -565,7 +567,7 @@ func (m *Manager) createRestoreJob(
 	if err := m.client.Create(ctx, job); err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			logger.V(1).Info("Restore job already exists after create attempt; proceeding", "job", jobName)
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: restoreRequeueJobCheck}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to create restore job: %w", err)
 	}
@@ -588,7 +590,7 @@ func (m *Manager) createRestoreJob(
 	}
 
 	// Requeue to check job status.
-	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	return ctrl.Result{RequeueAfter: restoreRequeueJobCheck}, nil
 }
 
 // failRestore transitions the restore to Failed phase.

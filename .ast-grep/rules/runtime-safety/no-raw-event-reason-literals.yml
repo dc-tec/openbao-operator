@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-raw-event-reason-literals
+message: Use named constants for event reasons instead of string literals in Eventf calls.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  pattern: '$REC.Eventf($OBJ, $RELATED, $EVENT_TYPE, "$REASON", $ACTION, $$$ARGS)'
+constraints:
+  REASON:
+    regex: '^[A-Z][A-Za-z0-9]+$'
+note: Keep event reasons in a shared catalog so operator events stay low-cardinality and reviewable.

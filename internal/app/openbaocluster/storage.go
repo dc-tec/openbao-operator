@@ -28,6 +28,9 @@ const (
 	defaultReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
 	defaultReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
 	defaultReasonStorageRestartRequired         = "StorageRestartRequired"
+	eventReasonPVCResize                        = "PVCResize"
+	eventReasonPVCResizeLeaderStepDown          = "PVCResizeLeaderStepDown"
+	eventReasonPVCResizePodRestart              = "PVCResizePodRestart"
 	storageVolumeDataPrefix                     = "data-"
 	storageRequeueShort                         = 5 * time.Second
 )
@@ -281,7 +284,7 @@ func expandPVCs(
 
 		patched++
 		if recorder != nil {
-			recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResize", "PVCResize", "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
+			recorder.Eventf(cluster, nil, corev1.EventTypeNormal, eventReasonPVCResize, eventReasonPVCResize, "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
 		}
 	}
 
@@ -403,7 +406,7 @@ func ReconcileStorageResizeRestart(
 				return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to step down leader %s before restart: %w", targetPod.Name, err))
 			}
 			if deps.Events.Recorder != nil {
-				deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
+				deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, eventReasonPVCResizeLeaderStepDown, eventReasonPVCResizeLeaderStepDown, "Leader %s stepped down to complete filesystem resize", targetPod.Name)
 			}
 			return recon.Result{RequeueAfter: storageRequeueShort}, nil
 		}
@@ -419,7 +422,7 @@ func ReconcileStorageResizeRestart(
 	}
 
 	if deps.Events.Recorder != nil {
-		deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "PVCResizePodRestart", "Restarted pod %s to complete filesystem resize", targetPod.Name)
+		deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, eventReasonPVCResizePodRestart, eventReasonPVCResizePodRestart, "Restarted pod %s to complete filesystem resize", targetPod.Name)
 	}
 
 	return recon.Result{RequeueAfter: storageRequeueShort}, nil

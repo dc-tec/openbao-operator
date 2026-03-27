@@ -200,7 +200,7 @@ func EvaluateCloudUnsealIdentity(
 		return CloudUnsealIdentityReadiness{
 			Readiness: Readiness{
 				Status:  metav1.ConditionFalse,
-				Reason:  "PrerequisitesMissing",
+				Reason:  constants.ReasonPrerequisitesMissing,
 				Message: "OCI KMS credentialsSecretRef requires spec.unseal.ocikms.authTypeAPIKey=true because the operator only mounts OCI SDK config for API key authentication.",
 			},
 		}, true, nil
