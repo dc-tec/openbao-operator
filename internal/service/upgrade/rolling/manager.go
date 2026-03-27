@@ -3,7 +3,6 @@ package rolling
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -11,13 +10,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -109,11 +105,8 @@ func NewManagerWithClientFactory(
 //  4. Pod-by-Pod Update: Step down leader if needed, update each pod in reverse ordinal order
 //  5. Finalization: Clear upgrade state, update current version
 //
-// Returns (shouldRequeue, error) where shouldRequeue indicates if reconciliation should be requeued immediately.
-//
-//nolint:gocyclo // Upgrade reconciliation is an orchestrator with guard clauses and phase transitions.
+// Returns the reconcile result for follow-up scheduling along with any error.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-
 	logger = logger.WithValues(
 		"specVersion", cluster.Spec.Version,
 		"statusVersion", cluster.Status.CurrentVersion,
@@ -125,225 +118,18 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		strategy = string(cluster.Spec.Upgrade.Strategy)
 	}
 
-	// Check if cluster is initialized; upgrades can only proceed after initialization
-	if !cluster.Status.Initialized {
-		logger.V(1).Info("Cluster not initialized; skipping upgrade reconciliation")
-		return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
+	if result, done := m.shouldSkipUpgradeReconcile(logger, cluster); done {
+		return result, nil
 	}
 
-	// Skip rolling upgrade if strategy is BlueGreen
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		logger.V(1).Info("Skipping rolling upgrade reconciliation; BlueGreen strategy active")
-		return recon.Result{}, nil
-	}
-
-	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active && cluster.Spec.BreakGlassAck != cluster.Status.BreakGlass.Nonce {
-		logger.Info("Cluster is in break glass mode; halting upgrade reconciliation",
-			"breakGlassReason", cluster.Status.BreakGlass.Reason,
-			"breakGlassNonce", cluster.Status.BreakGlass.Nonce)
-		return recon.Result{RequeueAfter: constants.RequeueStandard}, nil
-	}
-
-	// Phase 1: Detection - determine if upgrade is needed
 	upgradeNeeded, resumeUpgrade := m.detectUpgradeState(logger, cluster)
-
-	if !upgradeNeeded && !resumeUpgrade {
-		if upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
-			if err := upgrade.ReleaseUpgradeOperationLock(ctx, m.client, cluster); err != nil && !upgrade.IsOperationLockHeld(err) {
-				logger.Error(err, "Failed to release stale upgrade operation lock")
-			} else if err == nil {
-				logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
-					"cluster_namespace": cluster.Namespace,
-					"cluster_name":      cluster.Name,
-					"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
-					"holder":            upgrade.UpgradeOperationLockHolder,
-				})
-			}
-		}
-
-		// No upgrade needed, ensure metrics reflect idle state
-		metrics.SetInProgress(false)
-		return recon.Result{}, nil
+	if result, done, err := m.ensureUpgradeLock(ctx, logger, cluster, metrics, strategy, upgradeNeeded, resumeUpgrade); done || err != nil {
+		return result, err
 	}
 
-	lockMessage := fmt.Sprintf("upgrade to %s", cluster.Spec.Version)
-	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.TargetVersion != "" {
-		lockMessage = fmt.Sprintf("upgrade to %s (in progress)", cluster.Status.Upgrade.TargetVersion)
-	}
-	lockHeldByUs := upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock)
-	if err := upgrade.AcquireUpgradeOperationLock(ctx, m.client, cluster, lockMessage); err != nil {
-		if upgrade.IsOperationLockHeld(err) {
-			fields := map[string]string{
-				"cluster_namespace": cluster.Namespace,
-				"cluster_name":      cluster.Name,
-				"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
-				"holder":            upgrade.UpgradeOperationLockHolder,
-			}
-			opslifecycle.AddHeldAuditFields(fields, err)
-			logging.LogAuditEvent(logger, logging.EventOperationLockBlocked, fields)
-			m.emitWarningEvent(cluster, upgrade.ReasonOperationLockBlocked, "Upgrade blocked by operation lock: %v", err)
-			if cluster.Status.Upgrade != nil {
-				firstFailure := cluster.Status.Upgrade.LastErrorAt == nil
-				upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, "upgrade halted due to concurrent operation lock")
-				metrics.SetStatus(upgrade.UpgradeStatusFailed)
-				if firstFailure {
-					metrics.IncrementFailure(strategy)
-					logging.LogAuditEvent(logger, logging.EventUpgradeFailed, map[string]string{
-						"cluster_namespace": cluster.Namespace,
-						"cluster_name":      cluster.Name,
-						"strategy":          strategy,
-						"reason":            upgrade.ReasonUpgradeFailed,
-					})
-					m.emitWarningEvent(cluster, upgrade.ReasonUpgradeFailed, upgrade.MessageUpgradeFailed, "upgrade halted due to concurrent operation lock")
-				}
-				return recon.Result{}, fmt.Errorf("upgrade in progress but operation lock is held by another operation: %w", err)
-			}
-			logger.Info("Upgrade blocked by operation lock", "error", err.Error())
-			// Use RequeueShort to check more frequently when waiting for backup/restore to complete
-			return recon.Result{RequeueAfter: opslifecycle.RequeueDelay(opslifecycle.RetryClassLockContention)}, nil
-		}
-		return recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
-	}
-	if !lockHeldByUs {
-		logging.LogAuditEvent(logger, logging.EventOperationLockAcquired, map[string]string{
-			"cluster_namespace": cluster.Namespace,
-			"cluster_name":      cluster.Name,
-			"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
-			"holder":            upgrade.UpgradeOperationLockHolder,
-		})
+	if result, done, err := m.prepareUpgradeExecution(ctx, logger, cluster, metrics, strategy, resumeUpgrade); done || err != nil {
+		return result, err
 	}
 
-	// Handle resume scenario where spec.version changed mid-upgrade
-	if resumeUpgrade && cluster.Status.Upgrade != nil {
-		if cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion {
-			logger.Info("Spec.Version changed during upgrade; clearing upgrade state and starting fresh",
-				"previousTarget", cluster.Status.Upgrade.TargetVersion,
-				"newTarget", cluster.Spec.Version)
-			upgrade.ClearUpgrade(&cluster.Status)
-			// Continuing will re-evaluate and start fresh
-		}
-
-		if _, err := m.prepareFailedUpgradeRetry(ctx, logger, cluster); err != nil {
-			return recon.Result{}, err
-		}
-	}
-
-	// Ensure upgrade ServiceAccount exists (for JWT Auth)
-	if err := upgrade.EnsureUpgradeServiceAccount(ctx, m.client, cluster, "openbao-operator"); err != nil {
-		return recon.Result{}, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
-	}
-
-	// Phase 2: Pre-upgrade Validation
-	if err := m.validateUpgrade(ctx, logger, cluster); err != nil {
-		if cluster.Status.Upgrade != nil {
-			if statusErr := m.patchStatusSSA(ctx, cluster); statusErr != nil {
-				return recon.Result{}, fmt.Errorf("failed to persist rolling upgrade status after validation failure: %w (validation error: %w)", statusErr, err)
-			}
-		}
-		return recon.Result{}, m.releaseUpgradeLockOnPreStartError(ctx, logger, cluster, err)
-	}
-
-	// Phase 3: Pre-upgrade Snapshot (if enabled)
-	// Note: This happens after validation to ensure cluster is healthy before snapshot
-	// If backup is in progress (snapshotComplete=false), this will return nil to requeue, preventing upgrade initialization
-	// We check this even if Status.Upgrade is set to handle edge cases where upgrade was initialized
-	// but snapshot is still running (shouldn't happen, but we check defensively)
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.PreUpgradeSnapshot {
-		// Check if pre-upgrade snapshot is required and complete
-		snapshotComplete, err := m.handlePreUpgradeSnapshot(ctx, logger, cluster)
-		if err != nil {
-			return recon.Result{}, err
-		}
-		if !snapshotComplete {
-			logger.Info("Pre-upgrade snapshot in progress, waiting...")
-			// If upgrade was already initialized, we should not proceed with pod updates
-			// Return early to wait for snapshot completion
-			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-		}
-	}
-
-	// Phase 4: Initialize Upgrade (if not resuming)
-	// Only reached if pre-upgrade snapshot is complete or not enabled
-	if cluster.Status.Upgrade == nil {
-		if err := m.initializeUpgrade(ctx, logger, cluster, metrics, strategy); err != nil {
-			return recon.Result{}, err
-		}
-	}
-
-	// Update metrics for in-progress upgrade
-	metrics.SetInProgress(true)
-	metrics.SetStatus(upgrade.UpgradeStatusRunning)
-	if cluster.Status.Upgrade != nil {
-		metrics.SetPodsCompleted(len(cluster.Status.Upgrade.CompletedPods))
-		metrics.SetTotalPods(int(cluster.Spec.Replicas))
-		metrics.SetPartition(cluster.Status.Upgrade.CurrentPartition)
-	}
-
-	// Phase 5: Pod-by-Pod Update
-	alreadyFailed := cluster.Status.Upgrade != nil && cluster.Status.Upgrade.LastErrorAt != nil
-	completed, err := m.performPodByPodUpgrade(ctx, logger, cluster, metrics)
-	if err != nil {
-		firstFailure := !alreadyFailed
-
-		// Some upgrade sub-steps (pod ready/health checks, step-down) set a specific
-		// failure reason/message on the status before returning an error. Preserve
-		// that context instead of clobbering it with a generic UpgradeFailed reason.
-		if cluster.Status.Upgrade == nil || cluster.Status.Upgrade.LastErrorReason == "" {
-			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonUpgradeFailed, err.Error())
-		}
-		metrics.SetStatus(upgrade.UpgradeStatusFailed)
-		if firstFailure {
-			metrics.IncrementFailure(strategy)
-			failureReason := upgrade.ReasonUpgradeFailed
-			if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.LastErrorReason != "" {
-				failureReason = cluster.Status.Upgrade.LastErrorReason
-			}
-			logging.LogAuditEvent(logger, logging.EventUpgradeFailed, map[string]string{
-				"cluster_namespace": cluster.Namespace,
-				"cluster_name":      cluster.Name,
-				"strategy":          strategy,
-				"reason":            failureReason,
-			})
-			failureMessage := err.Error()
-			if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.LastErrorMessage != "" {
-				failureMessage = cluster.Status.Upgrade.LastErrorMessage
-			}
-			m.emitWarningEvent(cluster, failureReason, upgrade.MessageUpgradeFailed, failureMessage)
-		}
-
-		// Update status using SSA (eliminates race conditions)
-		if statusErr := m.patchStatusSSA(ctx, cluster); statusErr != nil {
-			logger.Error(statusErr, "Failed to update status after upgrade failure")
-		}
-		return recon.Result{}, err
-	}
-
-	if !completed {
-		// Upgrade is still in progress; save state and requeue
-		// Update status using SSA (eliminates race conditions)
-		if err := m.patchStatusSSA(ctx, cluster); err != nil {
-			return recon.Result{}, fmt.Errorf("failed to update upgrade progress: %w", err)
-		}
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
-
-	// Pod-by-pod logic reached partition 0, but do not finalize until the
-	// StatefulSet and all pods have fully converged to the target revision/health.
-	converged, err := m.waitForFinalizationConverged(ctx, logger, cluster)
-	if err != nil {
-		return recon.Result{}, err
-	}
-	if !converged {
-		if err := m.patchStatusSSA(ctx, cluster); err != nil {
-			return recon.Result{}, fmt.Errorf("failed to persist upgrade progress while waiting for convergence: %w", err)
-		}
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
-
-	// Phase 6: Finalization
-	if err := m.finalizeUpgrade(ctx, logger, cluster, metrics, strategy); err != nil {
-		return recon.Result{}, err
-	}
-
-	return recon.Result{}, nil
+	return m.reconcileUpgradeExecution(ctx, logger, cluster, metrics, strategy)
 }

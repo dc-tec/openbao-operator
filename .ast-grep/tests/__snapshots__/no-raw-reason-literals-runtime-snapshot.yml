@@ -1,0 +1,24 @@
+id: no-raw-reason-literals-runtime
+snapshots:
+  ? |
+    package p
+    func f() {
+      cond := struct{ Reason string }{}
+      cond.Reason = "Ready"
+    }
+  : labels:
+    - source: cond.Reason = "Ready"
+      style: primary
+      start: 59
+      end: 80
+  ? |
+    package p
+    type condition struct{ Reason string }
+    func f() any {
+      return condition{Reason: "Ready"}
+    }
+  : labels:
+    - source: 'condition{Reason: "Ready"}'
+      style: primary
+      start: 73
+      end: 99

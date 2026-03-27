@@ -26,6 +26,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -440,6 +441,47 @@ func TestInfraReconciler_Reconcile_MapsAPIServerNetworkConfigurationError(t *tes
 	if !strings.Contains(err.Error(), "spec.network.apiServerEndpointIPs") {
 		t.Fatalf("error %q does not mention apiServerEndpointIPs", err)
 	}
+}
+
+func TestInfraReconciler_MapManagerReconcileError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		err        error
+		wantReason string
+	}{
+		{name: "oidc bootstrap audience mismatch", err: inframanager.ErrOIDCBootstrapAudienceMismatch, wantReason: constants.ReasonOIDCBootstrapConfigurationInvalid},
+		{name: "gateway api missing", err: inframanager.ErrGatewayAPIMissing, wantReason: constants.ReasonGatewayAPIMissing},
+		{name: "api server network invalid", err: inframanager.ErrAPIServerNetworkConfigurationInvalid, wantReason: constants.ReasonAPIServerNetworkConfigurationInvalid},
+		{name: "prerequisites missing", err: inframanager.ErrStatefulSetPrerequisitesMissing, wantReason: constants.ReasonPrerequisitesMissing},
+		{name: "acme domain not resolvable", err: inframanager.ErrACMEDomainNotResolvable, wantReason: constants.ReasonACMEDomainNotResolvable},
+		{name: "acme gateway not configured", err: inframanager.ErrACMEGatewayNotConfiguredForPassthrough, wantReason: constants.ReasonACMEGatewayNotConfiguredForPassthrough},
+	}
+
+	r := &infraReconciler{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := r.mapManagerReconcileError(tt.err)
+			reason, ok := operatorerrors.Reason(got)
+			if !ok {
+				t.Fatalf("expected reasoned error, got %v", got)
+			}
+			if reason != tt.wantReason {
+				t.Fatalf("reason = %q, want %q", reason, tt.wantReason)
+			}
+			if !errors.Is(got, tt.err) {
+				t.Fatalf("wrapped error %v should preserve %v", got, tt.err)
+			}
+		})
+	}
+
+	t.Run("unmapped error passes through", func(t *testing.T) {
+		original := errors.New("boom")
+		if got := r.mapManagerReconcileError(original); got != original {
+			t.Fatalf("got %v, want original %v", got, original)
+		}
+	})
 }
 
 func TestInfraReconciler_ResolveOIDC_MissingRestConfigReturnsBootstrapReason(t *testing.T) {

@@ -758,7 +758,7 @@ func buildInitializedCondition(initialized, present bool) metav1.Condition {
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionOpenBaoInitialized),
 			Status:  metav1.ConditionTrue,
-			Reason:  "Initialized",
+			Reason:  ReasonInitialized,
 			Message: "OpenBao reports initialized",
 		}
 	}
@@ -766,7 +766,7 @@ func buildInitializedCondition(initialized, present bool) metav1.Condition {
 	return metav1.Condition{
 		Type:    string(openbaov1alpha1.ConditionOpenBaoInitialized),
 		Status:  metav1.ConditionFalse,
-		Reason:  "NotInitialized",
+		Reason:  ReasonNotInitialized,
 		Message: "OpenBao reports not initialized",
 	}
 }
@@ -787,7 +787,7 @@ func buildSealedCondition(sealed, present bool) metav1.Condition {
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionOpenBaoSealed),
 			Status:  metav1.ConditionTrue,
-			Reason:  "Sealed",
+			Reason:  ReasonSealed,
 			Message: "OpenBao reports sealed",
 		}
 	}
@@ -795,7 +795,7 @@ func buildSealedCondition(sealed, present bool) metav1.Condition {
 	return metav1.Condition{
 		Type:    string(openbaov1alpha1.ConditionOpenBaoSealed),
 		Status:  metav1.ConditionFalse,
-		Reason:  "Unsealed",
+		Reason:  ReasonUnsealed,
 		Message: "OpenBao reports unsealed",
 	}
 }
@@ -959,7 +959,7 @@ func applyNodeSecurityCapabilityMismatchCondition(cluster *openbaov1alpha1.OpenB
 			msg := strings.ToLower(ssCond.Message)
 			if strings.Contains(msg, "apparmor") {
 				cond.Status = metav1.ConditionTrue
-				cond.Reason = "AppArmorUnsupported"
+				cond.Reason = ReasonAppArmorUnsupported
 				cond.Message = "AppArmor is enabled (spec.workloadHardening.appArmorEnabled=true) but the workload cannot be admitted/scheduled due to AppArmor support mismatch: " + ssCond.Message
 				break
 			}

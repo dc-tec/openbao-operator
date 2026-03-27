@@ -332,7 +332,7 @@ kubectl -n <namespace> annotate openbaocluster <cluster-name> \\
   openbao.org/trigger-backup="$(date -u +%Y-%m-%dT%H:%M:%SZ)" --overwrite
 
 kubectl -n <namespace> get openbaocluster <cluster-name> \\
-  -o jsonpath='{.status.backup.lastBackupName}{"\\n"}{.status.backup.lastBackupTime}{"\\n"}{.status.backup.lastFailureReason}{"\\n"}'`}
+  -o jsonpath='{.status.backup.lastBackupName}{"\\n"}{.status.backup.lastBackupTime}{"\\n"}{.status.backup.lastFailureReason}{"\\n"}{.status.backup.lastFailureMessage}{"\\n"}'`}
 />
 
 <NextActions

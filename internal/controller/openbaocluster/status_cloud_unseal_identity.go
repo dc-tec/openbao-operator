@@ -19,23 +19,17 @@ func (r *OpenBaoClusterReconciler) setCloudUnsealIdentityReadyCondition(ctx cont
 	}
 
 	if err != nil {
-		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-			Type:               string(openbaov1alpha1.ConditionCloudUnsealIdentityReady),
-			Status:             metav1.ConditionUnknown,
-			ObservedGeneration: cluster.Generation,
-			LastTransitionTime: metav1.Now(),
-			Reason:             reasonUnknown,
-			Message:            fmt.Sprintf("Failed to evaluate cloud KMS unseal identity prerequisites: %v", err),
+		setCloudUnsealIdentityReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: fmt.Sprintf("Failed to evaluate cloud KMS unseal identity prerequisites: %v", err),
 		})
 		return
 	}
 
-	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type:               string(openbaov1alpha1.ConditionCloudUnsealIdentityReady),
-		Status:             result.Status,
-		ObservedGeneration: cluster.Generation,
-		LastTransitionTime: metav1.Now(),
-		Reason:             result.Reason,
-		Message:            result.Message,
+	setCloudUnsealIdentityReadyEvaluatedCondition(cluster, statusConditionResult{
+		Status:  result.Status,
+		Reason:  result.Reason,
+		Message: result.Message,
 	})
 }

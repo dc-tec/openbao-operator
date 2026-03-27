@@ -343,8 +343,11 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 	if afterFailure.Status.Backup.ConsecutiveFailures != 1 {
 		t.Fatalf("expected consecutiveFailures=1 after failed job, got %d", afterFailure.Status.Backup.ConsecutiveFailures)
 	}
-	if afterFailure.Status.Backup.LastFailureReason == "" {
-		t.Fatalf("expected lastFailureReason to be set after failed job")
+	if afterFailure.Status.Backup.LastFailureReason != backup.ReasonBackupFailed {
+		t.Fatalf("expected lastFailureReason=%q after failed job, got %q", backup.ReasonBackupFailed, afterFailure.Status.Backup.LastFailureReason)
+	}
+	if afterFailure.Status.Backup.LastFailureMessage == "" {
+		t.Fatalf("expected lastFailureMessage to be set after failed job")
 	}
 
 	// Backup manager selects the most recent completed job by creation timestamp.
@@ -377,6 +380,9 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 	}
 	if afterRecovery.Status.Backup.LastFailureReason != "" {
 		t.Fatalf("expected lastFailureReason to be cleared after recovery, got %q", afterRecovery.Status.Backup.LastFailureReason)
+	}
+	if afterRecovery.Status.Backup.LastFailureMessage != "" {
+		t.Fatalf("expected lastFailureMessage to be cleared after recovery, got %q", afterRecovery.Status.Backup.LastFailureMessage)
 	}
 	if afterRecovery.Status.Backup.LastBackupName != "recovery-key" {
 		t.Fatalf("expected lastBackupName to be updated to recovery-key, got %q", afterRecovery.Status.Backup.LastBackupName)

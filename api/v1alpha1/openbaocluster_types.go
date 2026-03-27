@@ -2013,9 +2013,12 @@ type BackupStatus struct {
 	// ConsecutiveFailures is the number of consecutive backup failures.
 	// +optional
 	ConsecutiveFailures int32 `json:"consecutiveFailures,omitempty"`
-	// LastFailureReason describes why the last backup failed (if applicable).
+	// LastFailureReason is the low-cardinality reason code for the last backup failure (if applicable).
 	// +optional
 	LastFailureReason string `json:"lastFailureReason,omitempty"`
+	// LastFailureMessage is the detailed message for the last backup failure (if applicable).
+	// +optional
+	LastFailureMessage string `json:"lastFailureMessage,omitempty"`
 }
 
 // DriftStatus tracks drift detection and correction events for a cluster.

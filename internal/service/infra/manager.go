@@ -111,6 +111,28 @@ func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Sche
 	return m
 }
 
+// NewManagerWithReaderAndOIDCConfig constructs a Manager with a dedicated reader
+// and overlays the runtime OIDC configuration when one is available.
+func NewManagerWithReaderAndOIDCConfig(
+	c client.Client,
+	r client.Reader,
+	scheme *runtime.Scheme,
+	operatorNamespace string,
+	oidcConfig *portauth.OIDCConfig,
+	platform string,
+) *Manager {
+	issuer := ""
+	var jwtKeys []string
+	if oidcConfig != nil {
+		issuer = oidcConfig.IssuerURL
+		jwtKeys = oidcConfig.JWKSKeys
+	}
+
+	m := NewManagerWithReader(c, r, scheme, operatorNamespace, issuer, jwtKeys, platform)
+	m.SetOIDCConfig(oidcConfig)
+	return m
+}
+
 // SetOIDCConfig overlays dynamic JWT validation settings discovered at runtime.
 // This preserves compatibility with older tests and call sites that still pass
 // static JWT keys through the constructor while letting production code prefer

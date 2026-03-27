@@ -17,6 +17,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -116,7 +117,7 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), defaultReasonStorageShrinkNotSupported)
+	require.Contains(t, err.Error(), constants.ReasonStorageShrinkNotSupported)
 }
 
 func TestStorageReconciler_RejectsStorageClassChangeWhenPVCClassIsUnset(t *testing.T) {
@@ -166,7 +167,7 @@ func TestStorageReconciler_RejectsStorageClassChangeWhenPVCClassIsUnset(t *testi
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), defaultReasonStorageClassChangeNotSupported)
+	require.Contains(t, err.Error(), constants.ReasonStorageClassChangeNotSupported)
 }
 
 func TestStorageReconciler_IgnoresACMECachePVCForStorageClassValidation(t *testing.T) {
@@ -422,5 +423,5 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 
 	_, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), defaultReasonStorageRestartRequired)
+	require.Contains(t, err.Error(), constants.ReasonStorageRestartRequired)
 }

@@ -1,6 +1,10 @@
 package upgrade
 
-import "time"
+import (
+	"time"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+)
 
 // Default timeouts and intervals for upgrade operations.
 const (
@@ -34,16 +38,16 @@ const (
 // These are used to set the Reason field in Kubernetes Conditions.
 const (
 	// ReasonUpgradeStarted indicates the upgrade process has begun.
-	ReasonUpgradeStarted = "UpgradeStarted"
+	ReasonUpgradeStarted = constants.ReasonUpgradeStarted
 
 	// ReasonUpgradeInProgress indicates the rolling update is in progress.
 	ReasonUpgradeInProgress = "UpgradeInProgress"
 
 	// ReasonUpgradeComplete indicates the upgrade finished successfully.
-	ReasonUpgradeComplete = "UpgradeComplete"
+	ReasonUpgradeComplete = constants.ReasonUpgradeComplete
 
 	// ReasonUpgradeFailed indicates the upgrade process failed.
-	ReasonUpgradeFailed = "UpgradeFailed"
+	ReasonUpgradeFailed = constants.ReasonUpgradeFailed
 
 	// ReasonUpgradePaused indicates the upgrade was paused.
 	ReasonUpgradePaused = "UpgradePaused"
@@ -54,7 +58,7 @@ const (
 
 	// ReasonLeaderUnknown indicates the operator could not determine the
 	// cluster leader, possibly due to split-brain or network issues.
-	ReasonLeaderUnknown = "LeaderUnknown"
+	ReasonLeaderUnknown = constants.ReasonLeaderUnknown
 
 	// ReasonStepDownTimeout indicates a leader step-down operation timed out.
 	ReasonStepDownTimeout = "StepDownTimeout"
@@ -87,19 +91,19 @@ const (
 	ReasonVersionMismatch = "VersionMismatch"
 
 	// ReasonInvalidVersion indicates the target version is invalid.
-	ReasonInvalidVersion = "InvalidVersion"
+	ReasonInvalidVersion = constants.ReasonInvalidVersion
 
 	// ReasonDowngradeBlocked indicates a downgrade was attempted but blocked.
-	ReasonDowngradeBlocked = "DowngradeBlocked"
+	ReasonDowngradeBlocked = constants.ReasonDowngradeBlocked
 
 	// ReasonImageVersionMismatch indicates spec.image conflicts with spec.version.
-	ReasonImageVersionMismatch = "ImageVersionMismatch"
+	ReasonImageVersionMismatch = constants.ReasonImageVersionMismatch
 
 	// ReasonClusterNotReady indicates the cluster is not in a healthy state for upgrade.
 	ReasonClusterNotReady = "ClusterNotReady"
 
 	// ReasonOperationLockBlocked indicates an upgrade could not acquire the cluster operation lock.
-	ReasonOperationLockBlocked = "OperationLockBlocked"
+	ReasonOperationLockBlocked = constants.ReasonOperationLockBlocked
 
 	// ReasonRollingRetryRequested indicates a failed rolling upgrade retry was requested.
 	ReasonRollingRetryRequested = "RollingRetryRequested"

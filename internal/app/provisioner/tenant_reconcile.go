@@ -16,17 +16,13 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	provisionermanager "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
-const (
-	// ReasonSecurityViolation indicates self-service tenant provisioning guardrail failure.
-	ReasonSecurityViolation = "SecurityViolation"
-
-	admissionDependencyRequeueAfter = 10 * time.Second
-)
+const admissionDependencyRequeueAfter = 10 * time.Second
 
 // TenantRuntime captures dependencies needed for OpenBaoTenant provisioning orchestration.
 type TenantRuntime struct {
@@ -72,7 +68,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 			"tenant_namespace": tenant.Namespace,
 			"tenant_name":      tenant.Name,
 			"target_namespace": targetNS,
-			"reason":           ReasonSecurityViolation,
+			"reason":           constants.ReasonSecurityViolation,
 		})
 		runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked for namespace %s: %v", targetNS, err))
 
@@ -83,7 +79,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 			Type:               conditionTypeProvisioned(runtime),
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: tenant.Generation,
-			Reason:             ReasonSecurityViolation,
+			Reason:             constants.ReasonSecurityViolation,
 			Message:            err.Error(),
 		})
 		if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {
@@ -180,7 +176,7 @@ func reconcileDeletion(
 		logger.Info("Waiting for OpenBaoClusters to be deleted before cleaning up RBAC",
 			"target_namespace", targetNS,
 			"cluster_count", len(clusterList.Items))
-		return recon.Result{RequeueAfter: 5 * time.Second}, nil
+		return recon.Result{RequeueAfter: resolveRequeueShort(runtime)}, nil
 	}
 
 	logger.Info("No OpenBaoClusters found; cleaning up tenant RBAC", "target_namespace", targetNS)
@@ -280,12 +276,12 @@ func resolveRequeueShort(runtime TenantRuntime) time.Duration {
 	if runtime.RequeueShort > 0 {
 		return runtime.RequeueShort
 	}
-	return 5 * time.Second
+	return constants.RequeueShort
 }
 
 func resolveRequeueStandard(runtime TenantRuntime) time.Duration {
 	if runtime.RequeueStandard > 0 {
 		return runtime.RequeueStandard
 	}
-	return 1 * time.Minute
+	return constants.RequeueStandard
 }

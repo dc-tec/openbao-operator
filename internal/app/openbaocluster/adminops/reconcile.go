@@ -135,23 +135,21 @@ func Reconcile(
 }
 
 func buildReconcilers(deps Dependencies) []subReconciler {
-	infraMgr := inframanager.NewManagerWithReader(
+	infraMgr := inframanager.NewManagerWithReaderAndOIDCConfig(
 		deps.Client,
 		deps.APIReader,
 		deps.Scheme,
 		deps.OperatorNamespace,
-		deps.OIDCIssuer,
-		deps.OIDCJWTKeys,
+		&portauth.OIDCConfig{
+			IssuerURL:          deps.OIDCIssuer,
+			OIDCDiscoveryURL:   deps.OIDCDiscoveryURL,
+			OIDCDiscoveryCAPEM: deps.OIDCDiscoveryCAPEM,
+			JWKSURL:            deps.OIDCJWKSURL,
+			JWKSCAPEM:          deps.OIDCJWKSCAPEM,
+			JWKSKeys:           deps.OIDCJWTKeys,
+		},
 		deps.Platform,
 	)
-	infraMgr.SetOIDCConfig(&portauth.OIDCConfig{
-		IssuerURL:          deps.OIDCIssuer,
-		OIDCDiscoveryURL:   deps.OIDCDiscoveryURL,
-		OIDCDiscoveryCAPEM: deps.OIDCDiscoveryCAPEM,
-		JWKSURL:            deps.OIDCJWKSURL,
-		JWKSCAPEM:          deps.OIDCJWKSCAPEM,
-		JWKSKeys:           deps.OIDCJWTKeys,
-	})
 	backupRuntime := backupmanager.NewUpgradeStrategyRuntime(deps.Client, deps.Scheme)
 
 	return []subReconciler{

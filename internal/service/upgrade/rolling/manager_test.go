@@ -20,6 +20,7 @@ import (
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
@@ -872,6 +873,122 @@ func TestReconcile_NoUpgradeNeeded(t *testing.T) {
 	// Should return nil without doing anything
 	if err != nil {
 		t.Errorf("Reconcile() error = %v, want nil", err)
+	}
+}
+
+func TestReconcile_SkipsBlueGreenStrategy(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.0",
+		},
+	}
+
+	m := &Manager{}
+	result, err := m.Reconcile(context.Background(), testLogger(), cluster)
+
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v, want nil", err)
+	}
+	if result != (recon.Result{}) {
+		t.Fatalf("Reconcile() result = %+v, want empty result", result)
+	}
+}
+
+func TestReconcile_HaltsDuringBreakGlassWithoutAck(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:       "2.5.0",
+			Replicas:      3,
+			BreakGlassAck: "stale-ack",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.0",
+			BreakGlass: &openbaov1alpha1.BreakGlassStatus{
+				Active: true,
+				Nonce:  "expected-ack",
+			},
+		},
+	}
+
+	m := &Manager{}
+	result, err := m.Reconcile(context.Background(), testLogger(), cluster)
+
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v, want nil", err)
+	}
+	if result.RequeueAfter != constants.RequeueStandard {
+		t.Fatalf("Reconcile() RequeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueStandard)
+	}
+}
+
+func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	now := metav1.Now()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.0",
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation:  openbaov1alpha1.ClusterOperationUpgrade,
+				Holder:     upgrade.UpgradeOperationLockHolder,
+				Message:    "stale upgrade lock",
+				AcquiredAt: &now,
+				RenewedAt:  &now,
+			},
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
+	mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
+
+	result, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v, want nil", err)
+	}
+	if result != (recon.Result{}) {
+		t.Fatalf("Reconcile() result = %+v, want empty result", result)
+	}
+
+	latest := &openbaov1alpha1.OpenBaoCluster{}
+	if getErr := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), latest); getErr != nil {
+		t.Fatalf("failed to get cluster: %v", getErr)
+	}
+	if latest.Status.OperationLock != nil {
+		t.Fatalf("expected operation lock to be released, got %+v", latest.Status.OperationLock)
+	}
+	if cluster.Status.OperationLock != nil {
+		t.Fatalf("expected in-memory operation lock to be released, got %+v", cluster.Status.OperationLock)
 	}
 }
 

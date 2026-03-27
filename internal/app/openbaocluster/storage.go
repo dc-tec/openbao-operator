@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
@@ -23,13 +24,11 @@ import (
 )
 
 const (
-	defaultReasonStorageInvalidSize             = "StorageInvalidSize"
-	defaultReasonStorageShrinkNotSupported      = "StorageShrinkNotSupported"
-	defaultReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
-	defaultReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
-	defaultReasonStorageRestartRequired         = "StorageRestartRequired"
-	storageVolumeDataPrefix                     = "data-"
-	storageRequeueShort                         = 5 * time.Second
+	eventReasonPVCResize               = "PVCResize"
+	eventReasonPVCResizeLeaderStepDown = "PVCResizeLeaderStepDown"
+	eventReasonPVCResizePodRestart     = "PVCResizePodRestart"
+	storageVolumeDataPrefix            = "data-"
+	storageRequeueShort                = 5 * time.Second
 )
 
 // StorageReasonPolicy configures storage-related error reason values.
@@ -45,35 +44,35 @@ func (p StorageReasonPolicy) invalidSizeReason() string {
 	if strings.TrimSpace(p.InvalidSize) != "" {
 		return p.InvalidSize
 	}
-	return defaultReasonStorageInvalidSize
+	return constants.ReasonStorageInvalidSize
 }
 
 func (p StorageReasonPolicy) shrinkNotSupportedReason() string {
 	if strings.TrimSpace(p.ShrinkNotSupported) != "" {
 		return p.ShrinkNotSupported
 	}
-	return defaultReasonStorageShrinkNotSupported
+	return constants.ReasonStorageShrinkNotSupported
 }
 
 func (p StorageReasonPolicy) resizeNotSupportedReason() string {
 	if strings.TrimSpace(p.ResizeNotSupported) != "" {
 		return p.ResizeNotSupported
 	}
-	return defaultReasonStorageResizeNotSupported
+	return constants.ReasonStorageResizeNotSupported
 }
 
 func (p StorageReasonPolicy) storageClassChangeReason() string {
 	if strings.TrimSpace(p.StorageClassChangeError) != "" {
 		return p.StorageClassChangeError
 	}
-	return defaultReasonStorageClassChangeNotSupported
+	return constants.ReasonStorageClassChangeNotSupported
 }
 
 func (p StorageReasonPolicy) restartRequiredReason() string {
 	if strings.TrimSpace(p.RestartRequired) != "" {
 		return p.RestartRequired
 	}
-	return defaultReasonStorageRestartRequired
+	return constants.ReasonStorageRestartRequired
 }
 
 // StorageResourceRuntime groups Kubernetes clients used by storage reconciliation.
@@ -281,7 +280,7 @@ func expandPVCs(
 
 		patched++
 		if recorder != nil {
-			recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResize", "PVCResize", "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
+			recorder.Eventf(cluster, nil, corev1.EventTypeNormal, eventReasonPVCResize, eventReasonPVCResize, "Resizing PVC %s from %s to %s", pvc.Name, currentQty.String(), desiredQty.String())
 		}
 	}
 
@@ -403,7 +402,7 @@ func ReconcileStorageResizeRestart(
 				return recon.Result{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to step down leader %s before restart: %w", targetPod.Name, err))
 			}
 			if deps.Events.Recorder != nil {
-				deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizeLeaderStepDown", "PVCResizeLeaderStepDown", "Leader %s stepped down to complete filesystem resize", targetPod.Name)
+				deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, eventReasonPVCResizeLeaderStepDown, eventReasonPVCResizeLeaderStepDown, "Leader %s stepped down to complete filesystem resize", targetPod.Name)
 			}
 			return recon.Result{RequeueAfter: storageRequeueShort}, nil
 		}
@@ -419,7 +418,7 @@ func ReconcileStorageResizeRestart(
 	}
 
 	if deps.Events.Recorder != nil {
-		deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, "PVCResizePodRestart", "PVCResizePodRestart", "Restarted pod %s to complete filesystem resize", targetPod.Name)
+		deps.Events.Recorder.Eventf(cluster, nil, corev1.EventTypeNormal, eventReasonPVCResizePodRestart, eventReasonPVCResizePodRestart, "Restarted pod %s to complete filesystem resize", targetPod.Name)
 	}
 
 	return recon.Result{RequeueAfter: storageRequeueShort}, nil

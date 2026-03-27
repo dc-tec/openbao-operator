@@ -1,0 +1,16 @@
+id: no-bare-requeueafter-duration-literals
+snapshots:
+  ? |
+    package p
+    import (
+      "time"
+      recon "example.com/recon"
+    )
+    func f() recon.Result {
+      return recon.Result{RequeueAfter: 5 * time.Second}
+    }
+  : labels:
+    - source: 'recon.Result{RequeueAfter: 5 * time.Second}'
+      style: primary
+      start: 91
+      end: 134

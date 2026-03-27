@@ -849,6 +849,9 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	if cluster.Status.Backup.LastFailureReason != "" {
 		t.Errorf("processBackupJobResult() LastFailureReason = %v, want empty", cluster.Status.Backup.LastFailureReason)
 	}
+	if cluster.Status.Backup.LastFailureMessage != "" {
+		t.Errorf("processBackupJobResult() LastFailureMessage = %v, want empty", cluster.Status.Backup.LastFailureMessage)
+	}
 }
 
 func TestProcessBackupJobResult_JobFailed(t *testing.T) {
@@ -886,18 +889,21 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 		t.Errorf("processBackupJobResult() ConsecutiveFailures = %v, want 1", cluster.Status.Backup.ConsecutiveFailures)
 	}
 
-	if cluster.Status.Backup.LastFailureReason == "" {
-		t.Error("processBackupJobResult() should set LastFailureReason")
+	if cluster.Status.Backup.LastFailureReason != ReasonBackupFailed {
+		t.Fatalf("LastFailureReason = %q, want %q", cluster.Status.Backup.LastFailureReason, ReasonBackupFailed)
 	}
-	if !strings.Contains(cluster.Status.Backup.LastFailureReason, "kubectl logs job/") {
-		t.Fatalf("LastFailureReason = %q, want log guidance", cluster.Status.Backup.LastFailureReason)
+	if cluster.Status.Backup.LastFailureMessage == "" {
+		t.Fatal("processBackupJobResult() should set LastFailureMessage")
 	}
-	if !strings.Contains(cluster.Status.Backup.LastFailureReason, "generated ServiceAccount") {
-		t.Fatalf("LastFailureReason = %q, want identity guidance", cluster.Status.Backup.LastFailureReason)
+	if !strings.Contains(cluster.Status.Backup.LastFailureMessage, "kubectl logs job/") {
+		t.Fatalf("LastFailureMessage = %q, want log guidance", cluster.Status.Backup.LastFailureMessage)
+	}
+	if !strings.Contains(cluster.Status.Backup.LastFailureMessage, "generated ServiceAccount") {
+		t.Fatalf("LastFailureMessage = %q, want identity guidance", cluster.Status.Backup.LastFailureMessage)
 	}
 }
 
-func TestBackupJobFailureReason_AppendsFailureHint(t *testing.T) {
+func TestBackupJobFailureMessage_AppendsFailureHint(t *testing.T) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "backup-demo",
@@ -908,7 +914,7 @@ func TestBackupJobFailureReason_AppendsFailureHint(t *testing.T) {
 		},
 	}
 
-	message := backupJobFailureReason(job, "Verify the generated ServiceAccount identity binding.")
+	message := backupJobFailureMessage(job, "Verify the generated ServiceAccount identity binding.")
 	if !strings.Contains(message, "kubectl logs job/backup-demo -n default") {
 		t.Fatalf("message = %q, want log guidance", message)
 	}
@@ -967,7 +973,7 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 	}
 }
 
-func TestBackupJobFailureReason_UsesJobConditionMessage(t *testing.T) {
+func TestBackupJobFailureMessage_UsesJobConditionMessage(t *testing.T) {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "backup-test-cluster-20250115-030000",
@@ -984,7 +990,7 @@ func TestBackupJobFailureReason_UsesJobConditionMessage(t *testing.T) {
 		},
 	}
 
-	message := backupJobFailureReason(job, "")
+	message := backupJobFailureMessage(job, "")
 	assert.Contains(t, message, "snapshot upload failed")
 	assert.Contains(t, message, "kubectl logs job/backup-test-cluster-20250115-030000 -n default")
 }

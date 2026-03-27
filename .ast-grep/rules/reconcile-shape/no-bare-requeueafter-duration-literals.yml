@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-bare-requeueafter-duration-literals
+message: Use named retry constants or policy helpers instead of bare RequeueAfter duration literals.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  any:
+    - pattern: 'ctrl.Result{RequeueAfter: $COUNT * time.$UNIT}'
+    - pattern: 'recon.Result{RequeueAfter: $COUNT * time.$UNIT}'
+constraints:
+  COUNT:
+    regex: '^[0-9]+$'
+  UNIT:
+    regex: '^(Nanosecond|Microsecond|Millisecond|Second|Minute|Hour)$'
+note: Named requeue policies make retry semantics easier to audit and keep aligned across controllers.

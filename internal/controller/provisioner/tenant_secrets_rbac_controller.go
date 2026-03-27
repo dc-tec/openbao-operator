@@ -16,8 +16,11 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
+
+const tenantSecretRBACRequeueAdmissionBlocked = 10 * time.Second
 
 // TenantSecretsRBACReconciler keeps tenant Secret access scoped to explicit allowlists.
 //
@@ -67,12 +70,12 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		cancel()
 		if err != nil {
 			logger.Info("Admission policy dependencies not ready; delaying tenant Secret RBAC sync", "error", err)
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: tenantSecretRBACRequeueAdmissionBlocked}, nil
 		}
 
 		if !status.OverallReady {
 			logger.Info("Admission policy dependencies not ready; delaying tenant Secret RBAC sync", "summary", status.SummaryMessage())
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: tenantSecretRBACRequeueAdmissionBlocked}, nil
 		}
 	}
 
@@ -87,7 +90,7 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		// If an OpenBaoCluster exists, we generally expect the namespace to be provisioned soon.
 		// We requeue with a delay to wait for the Provisioner to complete the base RBAC setup.
 		logger.V(1).Info("Tenant namespace not yet provisioned; requeueing to sync secrets RBAC")
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	reader := r.APIReader
