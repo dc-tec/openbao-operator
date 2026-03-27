@@ -48,19 +48,6 @@ func providerPrerequisitesError(err error) error {
 	return transitPrerequisitesError(err)
 }
 
-func mountedCredentialsSecret(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	return cluster != nil &&
-		cluster.Spec.Unseal != nil &&
-		cluster.Spec.Unseal.CredentialsSecretRef != nil
-}
-
-func credentialsSecretRefName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	if !mountedCredentialsSecret(cluster) {
-		return ""
-	}
-	return cluster.Spec.Unseal.CredentialsSecretRef.Name
-}
-
 func missingSecretKeyError(namespace, secretName, provider, key string) error {
 	return fmt.Errorf("%s credentials Secret %s/%s is missing required key %q", provider, namespace, secretName, key)
 }

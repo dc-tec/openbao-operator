@@ -87,7 +87,6 @@ func NewManagerWithReloader(c client.Client, scheme *runtime.Scheme, r ReloadSig
 // When Mode is External, the operator does not generate or rotate certificates.
 // It only waits for external Secrets to exist and triggers hot-reload when they change.
 // When Mode is ACME, OpenBao manages certificates internally via its native ACME client.
-//
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	if !cluster.Spec.TLS.Enabled {
 		logger.Info("TLS is disabled for OpenBaoCluster; skipping certificate reconciliation")

@@ -23,7 +23,6 @@ type caMaterial struct {
 
 // reconcileOperatorManagedTLS handles the OperatorManaged TLS mode reconciliation.
 // additionalDNSNames are DNS names computed by the controller layer (e.g., upgrade-strategy-specific pod names).
-//
 func (m *Manager) reconcileOperatorManagedTLS(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *tlsMetrics, additionalDNSNames []string) (recon.Result, error) {
 	now := time.Now()
 
