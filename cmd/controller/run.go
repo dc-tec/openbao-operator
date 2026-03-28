@@ -77,20 +77,26 @@ func Run(args []string) {
 	singleTenantMode := watchNamespace != ""
 	logTenancyMode(watchNamespace)
 
-	mgrOpts := newManagerOptions(scheme, buildMetricsServerOptions(cfg), cfg.probeAddr, cfg.enableLeaderElection, watchNamespace)
+	mgrOpts := newManagerOptions(
+		scheme,
+		buildMetricsServerOptions(cfg),
+		cfg.probeAddr,
+		cfg.enableLeaderElection,
+		watchNamespace,
+	)
 	mgr, err := ctrl.NewManager(config, mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	runtime, err := buildControllerProcessRuntime(mgr, cfg, platform, singleTenantMode)
+	processRuntime, err := buildControllerProcessRuntime(mgr, cfg, platform, singleTenantMode)
 	if err != nil {
 		setupLog.Error(err, "unable to initialize controller runtime")
 		os.Exit(1)
 	}
 
-	if err := setupControllers(mgr, runtime); err != nil {
+	if err := setupControllers(mgr, processRuntime); err != nil {
 		setupLog.Error(err, "unable to register controllers")
 		os.Exit(1)
 	}

@@ -70,13 +70,13 @@ func Run(args []string) {
 		os.Exit(1)
 	}
 
-	runtime, err := buildProvisionerProcessRuntime(mgr, cfg)
+	processRuntime, err := buildProvisionerProcessRuntime(mgr, cfg)
 	if err != nil {
 		setupLog.Error(err, "unable to initialize provisioner runtime")
 		os.Exit(1)
 	}
 
-	if err := setupControllers(mgr, runtime); err != nil {
+	if err := setupControllers(mgr, processRuntime); err != nil {
 		setupLog.Error(err, "unable to register provisioner controllers")
 		os.Exit(1)
 	}

@@ -18,7 +18,11 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 )
 
-func newManagerOptions(metricsServerOptions metricsserver.Options, probeAddr string, enableLeaderElection bool) ctrl.Options {
+func newManagerOptions(
+	metricsServerOptions metricsserver.Options,
+	probeAddr string,
+	enableLeaderElection bool,
+) ctrl.Options {
 	return ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,

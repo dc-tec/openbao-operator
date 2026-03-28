@@ -78,7 +78,10 @@ func waitForPodIP(podIP string) (string, error) {
 		)
 	}
 
-	return "", fmt.Errorf("POD_IP environment variable is required but not available after waiting (must be set from pod status.podIP)")
+	return "", fmt.Errorf(
+		"POD_IP environment variable is required but not available after waiting " +
+			"(must be set from pod status.podIP)",
+	)
 }
 
 func replacePlaceholders(content, hostname, podIP string) string {

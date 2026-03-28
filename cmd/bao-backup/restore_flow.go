@@ -99,7 +99,10 @@ func findRestoreLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (s
 	return findLeader(leaderCtx, cfg)
 }
 
-func buildRestoreExecutorConfig(cfg *backupconfig.ExecutorConfig, settings restoreSettings) backupconfig.ExecutorConfig {
+func buildRestoreExecutorConfig(
+	cfg *backupconfig.ExecutorConfig,
+	settings restoreSettings,
+) backupconfig.ExecutorConfig {
 	restoreCfg := *cfg
 	restoreCfg.BackupBucket = settings.bucket
 	restoreCfg.BackupEndpoint = settings.endpoint

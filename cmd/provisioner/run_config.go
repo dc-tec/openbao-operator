@@ -25,7 +25,13 @@ type runConfig struct {
 func parseRunConfig() (runConfig, error) {
 	cfg := runConfig{}
 
-	entrypoint.BindManagerFlags(flag.CommandLine, &cfg.metricsAddr, &cfg.probeAddr, &cfg.enableLeaderElection, &cfg.secureMetrics)
+	entrypoint.BindManagerFlags(
+		flag.CommandLine,
+		&cfg.metricsAddr,
+		&cfg.probeAddr,
+		&cfg.enableLeaderElection,
+		&cfg.secureMetrics,
+	)
 	entrypoint.BindAdmissionFlags(flag.CommandLine, &cfg.admissionEnforcement, &cfg.admissionStartupTimeout)
 	flag.BoolVar(&cfg.admissionCanary, "admission-canary", false,
 		"If set, perform an admission canary (dry-run) that must be denied "+

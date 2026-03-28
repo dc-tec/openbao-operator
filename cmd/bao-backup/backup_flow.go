@@ -115,7 +115,11 @@ func uploadBackupSnapshot(
 	return nil
 }
 
-func verifyBackupUpload(ctx context.Context, storageClient blobstore.BlobStore, backupKey string) (*blobstore.ObjectInfo, error) {
+func verifyBackupUpload(
+	ctx context.Context,
+	storageClient blobstore.BlobStore,
+	backupKey string,
+) (*blobstore.ObjectInfo, error) {
 	objInfo, err := storageClient.Head(ctx, backupKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify backup upload: %w", err)
