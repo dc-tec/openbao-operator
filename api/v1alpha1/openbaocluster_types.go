@@ -2024,6 +2024,10 @@ type BackupStatus struct {
 // DriftStatus tracks drift detection and correction events for a cluster.
 // OpenBaoClusterStatus defines the observed state of an OpenBaoCluster.
 type OpenBaoClusterStatus struct {
+	// ObservedGeneration is the most recent metadata.generation that has been
+	// reconciled into this status.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// Phase is a high-level summary of the cluster state.
 	// +optional
 	Phase ClusterPhase `json:"phase,omitempty"`
@@ -2162,6 +2166,10 @@ type BreakGlassStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=openbaoclusters,scope=Namespaced,shortName=bao;baoc
+// +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".spec.version"
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // OpenBaoCluster is the Schema for the openbaoclusters API.
 type OpenBaoCluster struct {

@@ -37,6 +37,9 @@ func TestUpdateStatusForProfileNotSet(t *testing.T) {
 		if cluster.Status.Phase != openbaov1alpha1.ClusterPhaseInitializing {
 			t.Fatalf("phase = %s, want Initializing", cluster.Status.Phase)
 		}
+		if cluster.Status.ObservedGeneration != cluster.Generation {
+			t.Fatalf("observedGeneration = %d, want %d", cluster.Status.ObservedGeneration, cluster.Generation)
+		}
 		productionReady := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionProductionReady))
 		if productionReady == nil || productionReady.Reason != ReasonProfileNotSet {
 			t.Fatalf("production-ready condition = %#v, want reason %q", productionReady, ReasonProfileNotSet)
@@ -70,6 +73,9 @@ func TestUpdateStatusForProfileNotSet(t *testing.T) {
 		if err := reconciler.updateStatusForProfileNotSet(context.Background(), logr.Discard(), cluster); err != nil {
 			t.Fatalf("updateStatusForProfileNotSet() error = %v", err)
 		}
+		if cluster.Status.ObservedGeneration != cluster.Generation {
+			t.Fatalf("observedGeneration = %d, want %d", cluster.Status.ObservedGeneration, cluster.Generation)
+		}
 		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionACMEIntegrationReady))
 		if cond == nil || cond.Reason != ReasonProfileNotSet {
 			t.Fatalf("acme integration condition = %#v, want reason %q", cond, ReasonProfileNotSet)
@@ -96,6 +102,9 @@ func TestUpdateStatusForProfileNotSet(t *testing.T) {
 
 		if err := reconciler.updateStatusForProfileNotSet(context.Background(), logr.Discard(), cluster); err != nil {
 			t.Fatalf("updateStatusForProfileNotSet() error = %v", err)
+		}
+		if cluster.Status.ObservedGeneration != cluster.Generation {
+			t.Fatalf("observedGeneration = %d, want %d", cluster.Status.ObservedGeneration, cluster.Generation)
 		}
 		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
 		if cond == nil || cond.Reason != ReasonProfileNotSet {
