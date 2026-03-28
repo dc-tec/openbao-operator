@@ -17,55 +17,21 @@ limitations under the License.
 package controller
 
 import (
-	"context"
-	"crypto/tls"
-	"flag"
-	"fmt"
 	"os"
-	"strings"
-	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
-	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
-	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
-	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
-	"github.com/dc-tec/openbao-operator/internal/platform/admission"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
-	initmanager "github.com/dc-tec/openbao-operator/internal/service/init"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
-
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
-	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 )
 
 var (
@@ -81,47 +47,6 @@ const (
 	controllerNameOpenBaoRestore = "openbaorestore"
 )
 
-func detectPlatform(cfg *rest.Config) string {
-	clientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return platformKubernetes
-	}
-
-	groups, err := clientset.Discovery().ServerGroups()
-	if err != nil {
-		return platformKubernetes
-	}
-
-	for _, g := range groups.Groups {
-		if g.Name == "security.openshift.io" {
-			return platformOpenShift
-		}
-	}
-
-	return platformKubernetes
-}
-
-func unavailableHelperImageDefaultFields() []string {
-	checks := []struct {
-		field string
-		fn    func() (string, error)
-	}{
-		{field: "spec.initContainer.image", fn: constants.DefaultInitImage},
-		{field: "spec.backup.image", fn: constants.DefaultBackupImage},
-		{field: "spec.upgrade.image", fn: constants.DefaultUpgradeImage},
-	}
-
-	missing := make([]string, 0, len(checks))
-	for _, check := range checks {
-		if _, err := check.fn(); err == nil {
-			continue
-		}
-		missing = append(missing, check.field)
-	}
-
-	return missing
-}
-
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(openbaov1alpha1.AddToScheme(scheme))
@@ -129,450 +54,55 @@ func init() {
 	utilruntime.Must(gatewayv1alpha2.Install(scheme))
 }
 
-func newManagerOptions(
-	scheme *runtime.Scheme,
-	metricsServerOptions metricsserver.Options,
-	probeAddr string,
-	enableLeaderElection bool,
-	watchNamespace string,
-) ctrl.Options {
-	singleTenantMode := watchNamespace != ""
-	mgrOpts := ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                metricsServerOptions,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "openbao-controller-leader.openbao.org",
-	}
-
-	if singleTenantMode {
-		mgrOpts.Cache = cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				watchNamespace: {},
-			},
-		}
-		return mgrOpts
-	}
-
-	disableForCache := []client.Object{
-		&corev1.Secret{},
-		&batchv1.Job{},
-		&appsv1.StatefulSet{},
-		&corev1.Service{},
-		&corev1.ConfigMap{},
-		&corev1.Namespace{},
-		&networkingv1.Ingress{},
-		&networkingv1.NetworkPolicy{},
-		&rbacv1.Role{},
-		&rbacv1.RoleBinding{},
-		&corev1.ServiceAccount{},
-		&corev1.Pod{},
-		&corev1.PersistentVolumeClaim{},
-		&discoveryv1.EndpointSlice{},
-		&gatewayv1.HTTPRoute{},
-		&gatewayv1alpha2.TLSRoute{},
-		&gatewayv1.BackendTLSPolicy{},
-	}
-	mgrOpts.Client = client.Options{
-		Cache: &client.CacheOptions{
-			DisableFor: disableForCache,
-		},
-	}
-	return mgrOpts
-}
-
-func discoverStartupOIDC(config *rest.Config) *portauth.OIDCConfig {
-	oidcConfig, err := auth.DiscoverConfig(context.Background(), config, "")
-	if err != nil {
-		setupLog.Error(err, "Failed to discover Kubernetes OIDC configuration. Hardened profile requires OIDC.")
-		if oidcConfig == nil {
-			oidcConfig = &portauth.OIDCConfig{}
-		}
-	} else {
-		setupLog.Info("Discovered Kubernetes OIDC configuration", "issuer", oidcConfig.IssuerURL)
-		if oidcConfig.JWKSURL != "" {
-			setupLog.Info("Selected OIDC JWKS URL for operator bootstrap", "jwksURL", oidcConfig.JWKSURL)
-		}
-		if len(oidcConfig.JWKSKeys) > 0 {
-			setupLog.Info("Fetched OIDC JWKS public keys", "count", len(oidcConfig.JWKSKeys))
-		}
-	}
-	if err != nil && oidcConfig.IssuerURL != "" {
-		setupLog.Info("Continuing with partial OIDC discovery results", "issuer", oidcConfig.IssuerURL)
-	}
-	return oidcConfig
-}
-
-func initializeAdmissionTracker(
-	mgr ctrl.Manager,
-	admissionEnforcement string,
-	admissionStartupTimeout time.Duration,
-) *admission.Tracker {
-	admissionTracker := admission.NewTracker(
-		mgr.GetAPIReader(),
-		admission.DefaultDependencies(),
-		admission.DefaultNamePrefixes(),
-		30*time.Second,
-	)
-
-	if admission.UnsafeAdmissionDisabled() {
-		setupLog.Info("UNSAFE MODE: admission policy enforcement disabled; skipping dependency checks")
-		logging.LogAuditEvent(setupLog, logging.EventAdmissionUnsafeModeEnabled, map[string]string{
-			"component":             "controller",
-			"admission_enforcement": admissionEnforcement,
-		})
-		admission.SetAdmissionDependenciesReady(true)
-		admissionTracker.MarkReadyForUnsafeMode()
-		return admissionTracker
-	}
-
-	var admissionStatus admission.Status
-	switch admissionEnforcement {
-	case entrypoint.AdmissionEnforcementFail:
-		setupLog.Info("Waiting for admission policy dependencies", "timeout", admissionStartupTimeout)
-		status, err := admission.WaitForDependencies(
-			context.Background(),
-			mgr.GetAPIReader(),
-			admission.DefaultDependencies(),
-			admission.DefaultNamePrefixes(),
-			admissionStartupTimeout,
-			2*time.Second,
-		)
-		admissionStatus = status
-		if !admissionStatus.OverallReady {
-			if err == nil {
-				err = fmt.Errorf("admission policy dependencies not ready")
-			}
-			logging.LogAuditEvent(setupLog, logging.EventAdmissionStartupBlocked, map[string]string{
-				"component":             "controller",
-				"admission_enforcement": admissionEnforcement,
-				"summary":               admissionStatus.SummaryMessage(),
-			})
-			setupLog.Error(
-				err,
-				"Admission policy dependencies not ready; refusing to start",
-				"summary",
-				admissionStatus.SummaryMessage(),
-			)
-			os.Exit(1)
-		}
-	default:
-		admissionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		status, err := admission.CheckDependencies(
-			admissionCtx,
-			mgr.GetAPIReader(),
-			admission.DefaultDependencies(),
-			admission.DefaultNamePrefixes(),
-		)
-		admissionStatus = status
-		if err != nil {
-			setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
-			admissionStatus.OverallReady = false
-		}
-	}
-
-	admission.SetAdmissionDependenciesReady(admissionStatus.OverallReady)
-	admissionTracker.Set(admissionStatus)
-	if admissionStatus.OverallReady {
-		setupLog.Info("Admission policy dependencies ready")
-		logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesReady, map[string]string{
-			"component":             "controller",
-			"admission_enforcement": admissionEnforcement,
-		})
-	} else {
-		setupLog.Info("Admission policy dependencies not ready", "summary", admissionStatus.SummaryMessage())
-		logging.LogAuditEvent(setupLog, logging.EventAdmissionDependenciesNotReady, map[string]string{
-			"component":             "controller",
-			"admission_enforcement": admissionEnforcement,
-			"summary":               admissionStatus.SummaryMessage(),
-		})
-	}
-
-	return admissionTracker
-}
-
 // Run starts the OpenBaoCluster controller manager.
 // The Controller is responsible for reconciling OpenBaoCluster resources,
 // managing StatefulSets, and executing upgrades.
 // args are the command-line arguments (typically os.Args[2:] after the command name).
 func Run(args []string) {
-	// Set os.Args for flag parsing
 	oldArgs := os.Args
 	os.Args = append([]string{oldArgs[0]}, args...)
 	defer func() { os.Args = oldArgs }()
-	var metricsAddr string
-	var metricsCertPath, metricsCertName, metricsCertKey string
-	var enableLeaderElection bool
-	var probeAddr string
-	var secureMetrics bool
-	var enableHTTP2 bool
-	var tlsOpts []func(*tls.Config)
-	var platform string
 
-	// Smart Client Limits
-	var clientQPS float64
-	var clientBurst int
-	var clientCBFailureThreshold int
-	var clientCBOpenDuration time.Duration
-
-	// Admission policy enforcement
-	var admissionEnforcement string
-	var admissionStartupTimeout time.Duration
-
-	entrypoint.BindManagerFlags(flag.CommandLine, &metricsAddr, &probeAddr, &enableLeaderElection, &secureMetrics)
-	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
-		"The directory that contains the metrics server certificate.")
-	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
-	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
-	flag.BoolVar(&enableHTTP2, "enable-http2", false,
-		"If set, HTTP/2 will be enabled for the metrics server")
-	flag.StringVar(&platform, "platform", "auto",
-		"The target platform (auto, kubernetes, openshift). Defaults to auto. "+
-			"This flag is deprecated and will be removed in a future release. "+
-			"Use the OPERATOR_PLATFORM environment variable instead.")
-
-	flag.Float64Var(&clientQPS, "openbao-client-qps", 50.0,
-		"The queries per second (QPS) limit for OpenBao API clients.")
-	flag.IntVar(&clientBurst, "openbao-client-burst", 100,
-		"The burst limit for OpenBao API clients.")
-	flag.IntVar(&clientCBFailureThreshold, "openbao-client-cb-failure-threshold", 50,
-		"The number of consecutive failures before opening the circuit breaker.")
-	flag.DurationVar(&clientCBOpenDuration, "openbao-client-cb-open-duration", 30*time.Second,
-		"The duration the circuit breaker remains open before testing the connection.")
-
-	entrypoint.BindAdmissionFlags(flag.CommandLine, &admissionEnforcement, &admissionStartupTimeout)
-
-	opts := zap.Options{
-		Development: false,
-	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
-
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-
-	var err error
-
-	platform = strings.ToLower(strings.TrimSpace(platform))
-	admissionEnforcement, err = entrypoint.NormalizeAdmissionEnforcement(admissionEnforcement)
+	cfg, err := parseRunConfig()
 	if err != nil {
 		setupLog.Error(err, entrypoint.AdmissionEnforcementExpectedMsg)
 		os.Exit(2)
 	}
 
-	// Allow environment variable to override flag (useful for Helm charts).
-	if envPlatform := strings.TrimSpace(os.Getenv("OPERATOR_PLATFORM")); envPlatform != "" {
-		platform = strings.ToLower(envPlatform)
-	}
-
-	if platform == "" {
-		platform = platformAuto
-	}
-
-	if platform == platformAuto {
-		detected := detectPlatform(ctrl.GetConfigOrDie())
-		setupLog.Info("Auto-detected target platform", "platform", detected)
-		platform = detected
-	}
+	config := ctrl.GetConfigOrDie()
+	platform := resolvePlatform(config, cfg.platform)
 	setupLog.Info("Target platform configured", "platform", platform)
 
-	// if the enable-http2 flag is false (the default), http/2 should be disabled
-	// due to its vulnerabilities. More specifically, disabling http/2 will
-	// prevent from being vulnerable to the HTTP/2 Stream Cancellation and
-	// Rapid Reset CVEs. For more information see:
-	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
-	// - https://github.com/advisories/GHSA-4374-p667-p6c8
-	disableHTTP2 := func(c *tls.Config) {
-		setupLog.Info("disabling http/2")
-		c.NextProtos = []string{"http/1.1"}
-	}
-
-	if !enableHTTP2 {
-		tlsOpts = append(tlsOpts, disableHTTP2)
-	}
-
-	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
-	metricsServerOptions := metricsserver.Options{
-		BindAddress:   metricsAddr,
-		SecureServing: secureMetrics,
-		TLSOpts:       tlsOpts,
-	}
-
-	if secureMetrics {
-		// FilterProvider is used to protect the metrics endpoint with authn/authz.
-		// These configurations ensure that only authorized users and service accounts
-		// can access the metrics endpoint. The RBAC are configured in 'config/rbac/kustomization.yaml'.
-		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
-	}
-
-	if len(metricsCertPath) > 0 {
-		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
-			"metrics-cert-path", metricsCertPath, "metrics-cert-name", metricsCertName, "metrics-cert-key", metricsCertKey)
-
-		metricsServerOptions.CertDir = metricsCertPath
-		metricsServerOptions.CertName = metricsCertName
-		metricsServerOptions.KeyName = metricsCertKey
-	}
-
-	// Detect single-tenant mode via WATCH_NAMESPACE environment variable.
-	// When set, the controller operates in single-tenant mode with:
-	// - Namespace-scoped caching (higher performance)
-	// - Event-driven reconciliation via Owns() watches
-	// - Simplified RBAC (no Provisioner required)
-	watchNamespace := os.Getenv("WATCH_NAMESPACE")
+	watchNamespace := watchNamespaceFromEnv()
 	singleTenantMode := watchNamespace != ""
+	logTenancyMode(watchNamespace)
 
-	if singleTenantMode {
-		setupLog.Info("Running in single-tenant mode",
-			"watch_namespace", watchNamespace,
-			"caching", "enabled",
-			"reconciliation", "event-driven",
-		)
-	} else {
-		setupLog.Info("Running in multi-tenant mode",
-			"caching", "disabled",
-			"reconciliation", "polling-based",
-		)
-	}
-
-	// Configure manager options based on tenancy mode
-	mgrOpts := newManagerOptions(scheme, metricsServerOptions, probeAddr, enableLeaderElection, watchNamespace)
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
+	mgrOpts := newManagerOptions(
+		scheme,
+		buildMetricsServerOptions(cfg),
+		cfg.probeAddr,
+		cfg.enableLeaderElection,
+		watchNamespace,
+	)
+	mgr, err := ctrl.NewManager(config, mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	// Create Kubernetes clientset for ReloadSignaler
-	config := mgr.GetConfig()
-	clientset, err := kubernetes.NewForConfig(config)
+	processRuntime, err := buildControllerProcessRuntime(mgr, cfg, platform, singleTenantMode)
 	if err != nil {
-		setupLog.Error(err, "unable to create Kubernetes clientset")
+		setupLog.Error(err, "unable to initialize controller runtime")
 		os.Exit(1)
 	}
 
-	// Create TLS reload signaler that annotates pods with the active TLS
-	// certificate hash. A sidecar running inside the pod can watch this
-	// annotation or the mounted TLS volume and send SIGHUP locally, avoiding
-	// the need for pods/exec privileges in the operator.
-	reloadSignaler := certmanager.NewKubernetesReloadSignaler(clientset)
-
-	// Create smart client configuration
-	smartClientConfig := portopenbao.ClientConfig{
-		RateLimitQPS:                   clientQPS,
-		RateLimitBurst:                 clientBurst,
-		CircuitBreakerFailureThreshold: clientCBFailureThreshold,
-		CircuitBreakerOpenDuration:     clientCBOpenDuration,
-	}
-
-	// Create ClientManager for OpenBao client lifecycle with explicit state management.
-	// This replaces the global sync.Map with per-manager state for better test isolation.
-	clientMgr := openbao.NewClientManager(smartClientConfig)
-	// Note: clientMgr.Close() is not deferred here because the manager should live
-	// for the lifetime of the operator process.
-
-	// Create initialization manager
-	initMgr := initmanager.NewManager(config, clientset, clientMgr, mgr.GetEventRecorder(controllerNameOpenBaoCluster))
-	imageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("image-verifier"), mgr.GetClient(), nil)
-	operatorImageVerifier := security.NewImageVerifier(
-		mgr.GetLogger().WithName("operator-image-verifier"),
-		mgr.GetClient(),
-		nil,
-	)
-
-	// Get operator namespace from POD_NAMESPACE environment variable (set by Kubernetes)
-	// Default to "openbao-operator-system" for backward compatibility
-	operatorNamespace := os.Getenv("POD_NAMESPACE")
-	if operatorNamespace == "" {
-		operatorNamespace = "openbao-operator-system"
-		setupLog.Info("POD_NAMESPACE not set, using default", "namespace", operatorNamespace)
-	} else {
-		setupLog.Info("Using operator namespace from POD_NAMESPACE", "namespace", operatorNamespace)
-	}
-
-	if missingHelperImages := unavailableHelperImageDefaultFields(); len(missingHelperImages) > 0 {
-		setupLog.Info(
-			"Operator-managed default helper images are unavailable until OPERATOR_VERSION is configured; "+
-				"clusters can still override helper images explicitly in the cluster spec",
-			"fields",
-			missingHelperImages,
-		)
-	}
-
-	// Discover OIDC configuration immediately at startup
-	config = mgr.GetConfig()
-	oidcConfig := discoverStartupOIDC(config)
-
-	// Admission policy dependency check (release-critical security boundary).
-	admissionTracker := initializeAdmissionTracker(mgr, admissionEnforcement, admissionStartupTimeout)
-
-	// Pass these values into the Reconciler struct
-	if err := (&openbaoclustercontroller.OpenBaoClusterReconciler{
-		Client: mgr.GetClient(),
-		ControllerRuntime: openbaoclustercontroller.ControllerRuntime{
-			APIReader:         mgr.GetAPIReader(),
-			Scheme:            mgr.GetScheme(),
-			RestConfig:        mgr.GetConfig(),
-			OperatorNamespace: operatorNamespace,
-			AdmissionTracker:  admissionTracker,
-			Recorder:          mgr.GetEventRecorder(controllerNameOpenBaoCluster),
-			Platform:          platform,
-			SingleTenantMode:  singleTenantMode,
-		},
-		OIDCRuntime: openbaoclustercontroller.OIDCRuntime{
-			OIDCIssuer:         oidcConfig.IssuerURL,
-			OIDCDiscoveryURL:   oidcConfig.OIDCDiscoveryURL,
-			OIDCDiscoveryCAPEM: oidcConfig.OIDCDiscoveryCAPEM,
-			OIDCJWKSURL:        oidcConfig.JWKSURL,
-			OIDCJWKSCAPEM:      oidcConfig.JWKSCAPEM,
-			OIDCJWTKeys:        oidcConfig.JWKSKeys,
-			DiscoverOIDCConfig: auth.DiscoverConfig,
-			OIDCStatusCode:     portauth.DiscoveryStatusCode,
-		},
-		OpenBaoRuntime: openbaoclustercontroller.OpenBaoRuntime{
-			TLSReload:         reloadSignaler,
-			InitManager:       initMgr,
-			SmartClientConfig: smartClientConfig,
-			OpenBaoClientFactory: func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
-				return openbao.NewClient(config)
-			},
-		},
-		ImageVerificationRuntime: openbaoclustercontroller.ImageVerificationRuntime{
-			ImageVerifier:         imageVerifier,
-			OperatorImageVerifier: operatorImageVerifier,
-		},
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoCluster")
+	if err := setupControllers(mgr, processRuntime); err != nil {
+		setupLog.Error(err, "unable to register controllers")
 		os.Exit(1)
 	}
 
-	// Set up OpenBaoRestore controller
-	if err := (&openbaorestorecontroller.OpenBaoRestoreReconciler{
-		Client:           mgr.GetClient(),
-		Scheme:           mgr.GetScheme(),
-		AdmissionTracker: admissionTracker,
-		Recorder:         mgr.GetEventRecorder(controllerNameOpenBaoRestore),
-		RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{
-			Client:                mgr.GetClient(),
-			Scheme:                mgr.GetScheme(),
-			Recorder:              mgr.GetEventRecorder(controllerNameOpenBaoRestore),
-			OperatorImageVerifier: operatorImageVerifier,
-			Platform:              platform,
-		}),
-		OperatorImageVerifier: operatorImageVerifier,
-		Platform:              platform,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpenBaoRestore")
-		os.Exit(1)
-	}
-
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
+	if err := addManagerHealthChecks(mgr); err != nil {
+		setupLog.Error(err, "unable to configure manager probes")
 		os.Exit(1)
 	}
 
