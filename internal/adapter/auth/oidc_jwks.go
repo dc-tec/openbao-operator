@@ -87,7 +87,7 @@ func fetchJWKSKeysWithClient(ctx context.Context, httpClient *http.Client, jwksU
 }
 
 func pemPublicKeysFromJWKS(jwks jwksDocument) ([]string, error) {
-	var pemKeys []string
+	pemKeys := make([]string, 0, len(jwks.Keys))
 	seen := make(map[string]struct{}, len(jwks.Keys))
 
 	for _, key := range jwks.Keys {
