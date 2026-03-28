@@ -18,7 +18,20 @@ spec:
     singular: openbaocluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.version
+      name: Version
+      type: string
+    - jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: OpenBaoCluster is the Schema for the openbaoclusters API.
@@ -3469,6 +3482,12 @@ spec:
                   Deprecated: Use Backup.LastBackupTime instead.
                 format: date-time
                 type: string
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the most recent metadata.generation that has been
+                  reconciled into this status.
+                format: int64
+                type: integer
               operationLock:
                 description: |-
                   OperationLock prevents concurrent long-running operations (upgrade/backup/restore)

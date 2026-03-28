@@ -18,8 +18,11 @@ import (
 // SSA eliminates race conditions by having the API server merge changes,
 // rather than requiring the client to refresh and merge manually.
 // This function patches only the fields owned by the Status controller:
-// phase, activeLeader, readyReplicas, currentVersion, conditions, lastBackupTime.
+// observedGeneration, phase, activeLeader, readyReplicas, currentVersion,
+// conditions, lastBackupTime.
 func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	cluster.Status.ObservedGeneration = cluster.Generation
+
 	// Create an apply configuration with just the status fields owned by Status controller.
 	applyCluster := &openbaov1alpha1.OpenBaoCluster{
 		TypeMeta: metav1.TypeMeta{
@@ -31,12 +34,13 @@ func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *
 			Namespace: cluster.Namespace,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			Phase:          cluster.Status.Phase,
-			ActiveLeader:   cluster.Status.ActiveLeader,
-			ReadyReplicas:  cluster.Status.ReadyReplicas,
-			CurrentVersion: cluster.Status.CurrentVersion,
-			LastBackupTime: cluster.Status.LastBackupTime,
-			Conditions:     cluster.Status.Conditions,
+			ObservedGeneration: cluster.Status.ObservedGeneration,
+			Phase:              cluster.Status.Phase,
+			ActiveLeader:       cluster.Status.ActiveLeader,
+			ReadyReplicas:      cluster.Status.ReadyReplicas,
+			CurrentVersion:     cluster.Status.CurrentVersion,
+			LastBackupTime:     cluster.Status.LastBackupTime,
+			Conditions:         cluster.Status.Conditions,
 		},
 	}
 

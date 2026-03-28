@@ -36,6 +36,9 @@ func TestUpdateStatusForPaused(t *testing.T) {
 		if cluster.Status.Phase != openbaov1alpha1.ClusterPhaseInitializing {
 			t.Fatalf("phase = %s, want Initializing", cluster.Status.Phase)
 		}
+		if cluster.Status.ObservedGeneration != cluster.Generation {
+			t.Fatalf("observedGeneration = %d, want %d", cluster.Status.ObservedGeneration, cluster.Generation)
+		}
 		for _, conditionType := range []openbaov1alpha1.ConditionType{
 			openbaov1alpha1.ConditionAvailable,
 			openbaov1alpha1.ConditionDegraded,
@@ -65,6 +68,9 @@ func TestUpdateStatusForPaused(t *testing.T) {
 		if err := reconciler.updateStatusForPaused(context.Background(), logr.Discard(), cluster); err != nil {
 			t.Fatalf("updateStatusForPaused() error = %v", err)
 		}
+		if cluster.Status.ObservedGeneration != cluster.Generation {
+			t.Fatalf("observedGeneration = %d, want %d", cluster.Status.ObservedGeneration, cluster.Generation)
+		}
 		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionACMEIntegrationReady))
 		if cond == nil || cond.Reason != reasonPaused {
 			t.Fatalf("acme integration condition = %#v, want paused reason", cond)
@@ -90,6 +96,9 @@ func TestUpdateStatusForPaused(t *testing.T) {
 
 		if err := reconciler.updateStatusForPaused(context.Background(), logr.Discard(), cluster); err != nil {
 			t.Fatalf("updateStatusForPaused() error = %v", err)
+		}
+		if cluster.Status.ObservedGeneration != cluster.Generation {
+			t.Fatalf("observedGeneration = %d, want %d", cluster.Status.ObservedGeneration, cluster.Generation)
 		}
 		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
 		if cond == nil || cond.Reason != reasonPaused {

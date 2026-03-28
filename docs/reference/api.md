@@ -949,6 +949,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `observedGeneration` _integer_ | ObservedGeneration is the most recent metadata.generation that has been<br />reconciled into this status. |  | Optional: \{\} <br /> |
 | `phase` _[ClusterPhase](#clusterphase)_ | Phase is a high-level summary of the cluster state. |  | Enum: [Initializing Running Upgrading BackingUp Failed] <br />Optional: \{\} <br /> |
 | `activeLeader` _string_ | ActiveLeader is the current Raft leader pod name, for example "prod-cluster-0". |  | Optional: \{\} <br /> |
 | `readyReplicas` _integer_ | ReadyReplicas is the number of replicas that are currently Ready. |  | Optional: \{\} <br /> |
