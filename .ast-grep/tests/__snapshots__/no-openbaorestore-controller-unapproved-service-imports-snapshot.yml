@@ -9,3 +9,12 @@ snapshots:
       style: primary
       start: 17
       end: 82
+  ? |
+    package p
+    import restore "github.com/dc-tec/openbao-operator/internal/service/restore"
+    var _ = restore.Manager
+  : labels:
+    - source: restore "github.com/dc-tec/openbao-operator/internal/service/restore"
+      style: primary
+      start: 17
+      end: 86

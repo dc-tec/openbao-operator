@@ -35,7 +35,6 @@ import (
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
 	operatorpredicates "github.com/dc-tec/openbao-operator/internal/platform/predicates"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 // NamespaceProvisionerReconciler reconciles OpenBaoTenant objects to provision
@@ -55,7 +54,7 @@ type NamespaceProvisionerReconciler struct {
 	APIReader         client.Reader
 	Scheme            *runtime.Scheme
 	Recorder          events.EventRecorder
-	Provisioner       *provisioner.Manager
+	Provisioner       appprovisioner.Provisioner
 	OperatorNamespace string
 	AdmissionTracker  *admission.Tracker
 }
@@ -106,6 +105,17 @@ func controllerResult(result recon.Result) ctrl.Result {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NamespaceProvisionerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Provisioner == nil {
+		provisionerRuntime, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
+			Client: r.Client,
+			Logger: log.Log.WithName(controllerNameNamespaceProvisioner),
+		})
+		if err != nil {
+			return err
+		}
+		r.Provisioner = provisionerRuntime
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoTenant{}).
 		WithEventFilter(operatorpredicates.OpenBaoTenantPredicate()).

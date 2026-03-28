@@ -99,8 +99,7 @@ controllerBoundaries:
       - internal/adapter/revision
       - internal/platform/logging
     appFacadeRoot: internal/app/openbaorestore
-    allowServiceImports:
-      - internal/service/restore
+    allowServiceImports: []
     allowAdapterImports: []
   - name: provisioner
     displayName: Provisioner
@@ -114,8 +113,7 @@ controllerBoundaries:
       - internal/adapter/revision
       - internal/platform/logging
     appFacadeRoot: internal/app/provisioner
-    allowServiceImports:
-      - internal/service/provisioner
+    allowServiceImports: []
     allowAdapterImports: []
 
 globalImportBoundaries:

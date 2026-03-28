@@ -15,9 +15,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 const tenantSecretRBACRequeueAdmissionBlocked = 10 * time.Second
@@ -32,7 +32,7 @@ type TenantSecretsRBACReconciler struct {
 	APIReader        client.Reader
 	Scheme           *runtime.Scheme
 	Recorder         events.EventRecorder
-	Provisioner      *provisioner.Manager
+	Provisioner      appprovisioner.Provisioner
 }
 
 func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -120,6 +120,17 @@ func (r *TenantSecretsRBACReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 func (r *TenantSecretsRBACReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Provisioner == nil {
+		provisionerRuntime, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
+			Client: r.Client,
+			Logger: log.Log.WithName(controllerNameTenantSecretsRBAC),
+		})
+		if err != nil {
+			return err
+		}
+		r.Provisioner = provisionerRuntime
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
 		WithOptions(controller.Options{

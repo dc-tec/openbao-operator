@@ -41,11 +41,11 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
 	provisionercontroller "github.com/dc-tec/openbao-operator/internal/controller/provisioner"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
@@ -264,9 +264,10 @@ func Run(args []string) {
 	}
 
 	// Create provisioner manager for namespace onboarding
-	provisionerMgr, err := provisioner.NewManager(context.Background(),
-		mgr.GetClient(),
-		setupLog.WithName("provisioner"))
+	provisionerMgr, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
+		Client: mgr.GetClient(),
+		Logger: setupLog.WithName("provisioner"),
+	})
 	if err != nil {
 		setupLog.Error(err, "unable to create provisioner manager")
 		os.Exit(1)

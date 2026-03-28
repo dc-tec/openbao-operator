@@ -2,9 +2,13 @@ id: no-provisioner-controller-unapproved-service-imports
 valid:
   - |
     package p
-    import service "github.com/dc-tec/openbao-operator/internal/service/provisioner"
-    var _ = service.Reconciler
+    import app "github.com/dc-tec/openbao-operator/internal/app/provisioner"
+    var _ = app.NewProvisioner
 invalid:
+  - |
+    package p
+    import service "github.com/dc-tec/openbao-operator/internal/service/provisioner"
+    var _ = service.Manager
   - |
     package p
     import upgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade"

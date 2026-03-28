@@ -50,6 +50,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
+	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
 	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
@@ -60,7 +61,6 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	certmanager "github.com/dc-tec/openbao-operator/internal/service/certs"
 	initmanager "github.com/dc-tec/openbao-operator/internal/service/init"
-	"github.com/dc-tec/openbao-operator/internal/service/restore"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
@@ -553,13 +553,13 @@ func Run(args []string) {
 		Scheme:           mgr.GetScheme(),
 		AdmissionTracker: admissionTracker,
 		Recorder:         mgr.GetEventRecorder(controllerNameOpenBaoRestore),
-		RestoreManager: restore.NewManager(
-			mgr.GetClient(),
-			mgr.GetScheme(),
-			mgr.GetEventRecorder(controllerNameOpenBaoRestore),
-			operatorImageVerifier,
-			platform,
-		),
+		RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{
+			Client:                mgr.GetClient(),
+			Scheme:                mgr.GetScheme(),
+			Recorder:              mgr.GetEventRecorder(controllerNameOpenBaoRestore),
+			OperatorImageVerifier: operatorImageVerifier,
+			Platform:              platform,
+		}),
 		OperatorImageVerifier: operatorImageVerifier,
 		Platform:              platform,
 	}).SetupWithManager(mgr); err != nil {

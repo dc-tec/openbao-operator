@@ -60,7 +60,7 @@ func newTenantRuntime(t *testing.T, objs ...client.Object) TenantRuntime {
 		builder = builder.WithObjects(objs...)
 	}
 	c := builder.Build()
-	mgr, err := provisionermanager.NewManager(context.Background(), c, logr.Discard())
+	mgr, err := provisionermanager.NewManager(c, logr.Discard())
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
 	}

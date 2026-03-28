@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
@@ -36,10 +37,13 @@ func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...s
 	}
 }
 
-func newProvisionerManager(t *testing.T, ctx context.Context, k8sClient client.Client) *provisioner.Manager {
+func newProvisionerManager(t *testing.T, k8sClient client.Client) appprovisioner.Provisioner {
 	t.Helper()
 
-	manager, err := provisioner.NewManager(ctx, k8sClient, logr.Discard())
+	manager, err := appprovisioner.NewProvisioner(appprovisioner.ProvisionerDependencies{
+		Client: k8sClient,
+		Logger: logr.Discard(),
+	})
 	if err != nil {
 		t.Fatalf("failed to create provisioner manager: %v", err)
 	}
@@ -74,7 +78,7 @@ func TestTenantSecretsRBACReconcile_AdmissionDependenciesNotReady(t *testing.T) 
 		Client:      k8sClient,
 		APIReader:   k8sClient,
 		Scheme:      testScheme,
-		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 
 	result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -100,7 +104,7 @@ func TestTenantSecretsRBACReconcile_UnprovisionedNamespace(t *testing.T) {
 		Client:      k8sClient,
 		APIReader:   k8sClient,
 		Scheme:      testScheme,
-		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 
 	result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -159,7 +163,7 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 		APIReader:   k8sClient,
 		Scheme:      testScheme,
 		Recorder:    recorder,
-		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 
 	result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -244,7 +248,7 @@ func TestTenantSecretsRBACReconcile_RemovesStaleSecretRBAC(t *testing.T) {
 		Client:      k8sClient,
 		APIReader:   k8sClient,
 		Scheme:      testScheme,
-		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 
 	result, err := reconciler.Reconcile(ctx, reconcile.Request{
@@ -299,7 +303,7 @@ func TestTenantSecretsRBACReconcile_UnsafeAdmissionDisabledBypassesDependencyChe
 		Client:      k8sClient,
 		APIReader:   k8sClient,
 		Scheme:      testScheme,
-		Provisioner: newProvisionerManager(t, ctx, k8sClient),
+		Provisioner: newProvisionerManager(t, k8sClient),
 	}
 
 	result, err := reconciler.Reconcile(ctx, reconcile.Request{

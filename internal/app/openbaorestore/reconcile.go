@@ -13,10 +13,6 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
-type restoreReconciler interface {
-	Reconcile(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (recon.Result, error)
-}
-
 // ReconcileOpenBaoRestore loads the restore resource and delegates lifecycle
 // orchestration to the restore manager.
 func ReconcileOpenBaoRestore(
@@ -24,7 +20,7 @@ func ReconcileOpenBaoRestore(
 	c client.Client,
 	key types.NamespacedName,
 	logger logr.Logger,
-	restoreManager restoreReconciler,
+	restoreManager RestoreReconciler,
 ) (recon.Result, error) {
 	if restoreManager == nil {
 		return recon.Result{}, fmt.Errorf("restore manager is required")

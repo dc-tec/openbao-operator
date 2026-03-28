@@ -34,9 +34,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
-	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	"github.com/dc-tec/openbao-operator/internal/service/restore"
 )
 
 // OpenBaoRestoreReconciler reconciles a OpenBaoRestore object.
@@ -44,22 +42,13 @@ type OpenBaoRestoreReconciler struct {
 	client.Client
 	Scheme                *runtime.Scheme
 	AdmissionTracker      *admission.Tracker
-	RestoreManager        *restore.Manager
+	RestoreReconciler     appopenbaorestore.RestoreReconciler
 	Recorder              events.EventRecorder
 	OperatorImageVerifier imageverify.Verifier
 	Platform              string
 }
 
 const controllerNameOpenBaoRestore = "openbaorestore"
-
-type restoreManagerAdapter struct {
-	manager *restore.Manager
-}
-
-func (a restoreManagerAdapter) Reconcile(ctx context.Context, logger logr.Logger, restoreResource *openbaov1alpha1.OpenBaoRestore) (recon.Result, error) {
-	result, err := a.manager.Reconcile(ctx, logger, restoreResource)
-	return recon.Result{RequeueAfter: result.RequeueAfter}, err
-}
 
 // SECURITY: RBAC is provided via namespace-scoped tenant Roles, not cluster-wide.
 // The controller uses direct API calls for Jobs (GET, not list/watch) to check status,
@@ -90,8 +79,8 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	logger := log.FromContext(ctx).WithName("openbaorestore")
 
-	if r.RestoreManager == nil {
-		return ctrl.Result{}, fmt.Errorf("restore manager is not configured")
+	if r.RestoreReconciler == nil {
+		return ctrl.Result{}, fmt.Errorf("restore reconciler is not configured")
 	}
 	if result, blocked := r.pauseForAdmissionDependencyLoss(ctx, logger); blocked {
 		return result, nil
@@ -102,7 +91,7 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.Client,
 		req.NamespacedName,
 		logger,
-		restoreManagerAdapter{manager: r.RestoreManager},
+		r.RestoreReconciler,
 	)
 	result = ctrl.Result{RequeueAfter: appResult.RequeueAfter}
 	err = appErr
@@ -142,8 +131,14 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
 		r.Recorder = mgr.GetEventRecorder("openbaorestore")
 	}
-	if r.RestoreManager == nil {
-		r.RestoreManager = restore.NewManager(r.Client, r.Scheme, r.Recorder, r.OperatorImageVerifier, r.Platform)
+	if r.RestoreReconciler == nil {
+		r.RestoreReconciler = appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{
+			Client:                r.Client,
+			Scheme:                r.Scheme,
+			Recorder:              r.Recorder,
+			OperatorImageVerifier: r.OperatorImageVerifier,
+			Platform:              r.Platform,
+		})
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
