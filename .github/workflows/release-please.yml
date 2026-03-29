@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      release_as:
+        description: "Optional semver override for the release PR (for example 0.1.0-rc.6)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -32,9 +37,53 @@ jobs:
           permission-issues: write
 
       - name: Run release-please (PR only)
+        id: release
         uses: googleapis/release-please-action@16a9c90856f42705d54a6fda1823352bdc62cf38 # v4.4.0
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          release-as: ${{ github.event_name == 'workflow_dispatch' && inputs.release_as || '' }}
           skip-github-release: true
+
+      - name: Check out release PR branch
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Sync Chart metadata on release PR branch
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        env:
+          OWNER: ${{ github.repository_owner }}
+          RELEASE_PR_BRANCH: release-please--branches--${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if ! git ls-remote --exit-code --heads origin "${RELEASE_PR_BRANCH}" >/dev/null 2>&1; then
+            echo "Release PR branch '${RELEASE_PR_BRANCH}' not found; skipping Chart metadata sync."
+            exit 0
+          fi
+
+          git fetch origin "${RELEASE_PR_BRANCH}"
+          git checkout -B "${RELEASE_PR_BRANCH}" "origin/${RELEASE_PR_BRANCH}"
+
+          chart_version="$(sed -nE 's/^version:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*(#.*)?$/\1/p' charts/openbao-operator/Chart.yaml | head -n1)"
+          if [[ -z "${chart_version}" ]]; then
+            echo "failed to parse charts/openbao-operator/Chart.yaml version" >&2
+            exit 1
+          fi
+
+          CHART_DIR="charts/openbao-operator" CHART_VERSION="${chart_version}" OWNER="${OWNER}" bash hack/ci/prepare-release-chart.sh
+
+          if git diff --quiet -- charts/openbao-operator/Chart.yaml; then
+            echo "Chart metadata already in sync."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add charts/openbao-operator/Chart.yaml
+          git commit -s -m "chore(release): sync chart metadata"
+          git push origin "HEAD:${RELEASE_PR_BRANCH}"
