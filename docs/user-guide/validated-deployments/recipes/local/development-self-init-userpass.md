@@ -6,16 +6,12 @@ journey: validated-deployments
 description: Reproduce the validated local development lane with self-init, operator-managed TLS, a shared terminating edge, demo login, JWT admin access, and RustFS backups.
 ---
 
-<PageHero
-  eyebrow="Validated Deployments / Local Baselines / k3d Development"
+<PageHeader
   title="Reproduce the validated local development lane without turning a quick-start cluster into a pile of one-off overrides."
   lede="This recipe stands up the local development baseline with tenant onboarding, operator-managed TLS, a shared terminating edge, JWT bootstrap, an optional demo login, and an S3-compatible backup path backed by RustFS."
-  actions={[
-    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs", variant: "primary"},
-    {label: "Open backup operations", docId: "user-guide/openbaocluster/operations/backups", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="This recipe should leave you with"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
@@ -24,7 +20,7 @@ description: Reproduce the validated local development lane with self-init, oper
       "a RustFS-backed backup configuration you can verify before the first upgrade rehearsal",
     ]}
   />
-</PageHero>
+
 
 <Callout type="success" title="Validated lane">
 

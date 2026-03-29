@@ -7,25 +7,12 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Cluster controls"
+<PageHeader
   title="Use cluster controls deliberately when you need to change the platform underneath OpenBao."
   lede="Planned maintenance is where Kubernetes disruption rules, Raft quorum, and admission-policy guardrails all meet. Use this page to prepare drains and restarts, scale safely, and confirm the cluster is still healthy before you hand it back to normal operations."
-  actions={[
-    {label: 'Pause reconciliation', docId: 'user-guide/openbaocluster/operations/pausing', variant: 'primary'},
-    {label: 'Open recovery and restore', docId: 'user-guide/openbaocluster/recovery/index', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'drain nodes that currently host OpenBao Pods',
-      'scale the cluster up or down deliberately',
-      'enable maintenance mode for controlled restarts under strict admission policy',
-      'restart or repair the workload without turning a planned change into an incident',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Choose the right control"

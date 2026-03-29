@@ -6,26 +6,12 @@ journey: architecture
 description: Backup and restore lifecycle for live clusters, including snapshot scheduling, status surfaces, retention, and explicit restore requests.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Lifecycle / Day N"
+<PageHeader
   title="Protect live clusters with scheduled snapshots and explicit restore requests."
   lede="Once the cluster is running in production, durability becomes its own lifecycle. The backup manager schedules and records snapshot Jobs, the restore manager handles destructive restore requests through a separate CRD path, and both rely on shared operation-lock coordination so they do not collide with upgrades."
-  actions={[
-    {label: 'Open backups guide', docId: 'user-guide/openbaocluster/operations/backups', variant: 'primary'},
-    {label: 'Open restore guide', docId: 'user-guide/openbaorestore/restore', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'see how scheduled backups and explicit restore requests fit into the live-cluster lifecycle',
-      'understand which status and CRD surfaces track durability work',
-      'trace how backup, restore, and upgrade avoid stepping on each other',
-      'connect the internal durability model back to the operator-facing backup and restore guides',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <JourneyRail
   current={4}

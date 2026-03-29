@@ -7,25 +7,12 @@ pageType: task
 journey: get-started
 ---
 
-<PageHero
-  eyebrow="Supporting decision"
+<PageHeader
   title="Use single-tenant mode when one team owns one namespace."
   lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. It is a good fit for dedicated team environments, but it is a branch from the default platform path rather than the starting point for every install."
-  actions={[
-    {label: 'Return to the decision guide', docId: 'user-guide/operator/deployment-decision-guide', variant: 'primary'},
-    {label: 'Install the operator', docId: 'user-guide/operator/installation', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'run one operator for one team-owned namespace',
-      'remove tenant onboarding and provisioner-driven namespace orchestration',
-      'keep direct controller access scoped to a single target namespace',
-      'verify how Helm or raw manifests render the target namespace and controller identity',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Stay on multi-tenant unless this is true"
@@ -96,7 +83,8 @@ journey: get-started
   language="bash"
   label="apply"
   title="Install the operator in single-tenant mode with Helm"
-  code={`helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  code={`helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  --version <chart-version> \\
   --namespace openbao-operator-system \\
   --create-namespace \\
   --set tenancy.mode=single \\
@@ -104,6 +92,13 @@ journey: get-started
 >
   Replace `openbao-operator-system` and `openbao` with the namespaces you actually intend to keep operating. In this mode the target namespace is the controller watch scope, not just an example value.
 </CommandBlock>
+
+<Callout type="note" title="Single-tenant still needs a real target namespace">
+
+Create the target namespace through your normal platform workflow before you apply the first `OpenBaoCluster`.
+Single-tenant mode skips `OpenBaoTenant`, but it does not invent the namespace for you.
+
+</Callout>
 
 <DecisionTable
   kind="reference"

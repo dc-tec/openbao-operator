@@ -7,17 +7,12 @@ pageType: runbook
 journey: operate
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Operate / Incident recovery"
+<PageHeader
   title="Treat seal failures as trust and reachability problems first."
   lede="A sealed cluster usually means the Pods can start but cannot complete the trust or unseal path they need to serve traffic. Start with the operator-visible conditions, then narrow the problem by seal mode before you reach for emergency manual unseal."
-  actions={[
-    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'primary'},
-    {label: 'Recover from no leader', docId: 'user-guide/openbaocluster/recovery/no-leader', variant: 'secondary'},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="Use this runbook when"
     items={[
       'Pods are running but remain sealed and not ready',
@@ -26,7 +21,7 @@ journey: operate
       'you need to decide whether this is a seal problem or a broader quorum problem',
     ]}
   />
-</PageHero>
+
 
 <DecisionTable
   title="Read the first conditions before you dig into logs"
@@ -119,7 +114,7 @@ Use this path when the cluster reads its unseal key from a Kubernetes Secret.
   code={`kubectl get secret -n <namespace> <cluster-name>-unseal-key
 kubectl get secret -n <namespace> <cluster-name>-unseal-key -o jsonpath='{.data}'`}
 >
-  The Secret must exist and use the expected key name, typically `bao-root` unless you intentionally changed the configuration.
+  The Secret must exist and use the expected key name `key`.
 </CommandBlock>
 
 <CommandBlock
@@ -127,7 +122,7 @@ kubectl get secret -n <namespace> <cluster-name>-unseal-key -o jsonpath='{.data}
   label="apply"
   title="Create or replace the static unseal Secret"
   code={`kubectl create secret generic <cluster-name>-unseal-key -n <namespace> \\
-  --from-literal=bao-root=<UNSEAL_KEY> \\
+  --from-literal=key=<UNSEAL_KEY> \\
   --dry-run=client -o yaml | kubectl apply -f -`}
 />
 
@@ -262,6 +257,11 @@ If the cluster unseals but only reaches standby state or still cannot elect a le
 <NextActions
   title="Continue with the right recovery path"
   items={[
+    {
+      label: 'Unseal configuration',
+      description: 'Return to the exact provider and Secret contract when the incident came from wrong credential shape or mounted file paths.',
+      docId: 'user-guide/openbaocluster/configuration/unseal',
+    },
     {
       label: 'Recover from no leader',
       description: 'Switch here when sealing is fixed but the cluster still cannot elect or keep a leader.',

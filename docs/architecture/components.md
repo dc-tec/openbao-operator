@@ -6,26 +6,12 @@ journey: architecture
 description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant, including controller boundaries, manager orchestration, and service-layer coordination.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Component Design"
+<PageHeader
   title="Split the control plane so pod churn, long-running operations, and status writes stay separate."
   lede="OpenBao Operator avoids a single reconciliation loop. The control plane is divided into focused controllers, then delegated into app-layer orchestration and narrower domain managers so the system can react quickly without mixing unrelated responsibilities."
-  actions={[
-    {label: 'Read the invariants', docId: 'architecture/operator-invariants', variant: 'primary'},
-    {label: 'Open lifecycle architecture', docId: 'architecture/lifecycle/index', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand which controller owns a change',
-      'see why upgrades and backups do not live in the workload loop',
-      'trace how app packages delegate into managers and shared services',
-      'choose the right deep dive before changing the code',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 ## Controller Split
 

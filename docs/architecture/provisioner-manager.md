@@ -6,26 +6,12 @@ journey: architecture
 description: Provision tenant namespaces with scoped RBAC, Secret allowlists, Pod Security labels, and quota defaults for OpenBaoTenant.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Provisioning"
+<PageHeader
   title="Provision tenant namespaces with scoped RBAC, Secret allowlists, and policy defaults."
   lede="The provisioner manager owns the tenant-onboarding contract for `OpenBaoTenant`. It creates namespace-scoped permissions for the operator, applies Pod Security and quota defaults, and keeps Secret access narrowed to explicit allowlists derived from managed clusters."
-  actions={[
-    {label: 'Open tenant onboarding', docId: 'user-guide/openbaotenant/onboarding', variant: 'primary'},
-    {label: 'Open day 0 lifecycle flow', docId: 'architecture/lifecycle/day0-provisioning', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand how tenant namespaces become safe onboarding targets for OpenBaoCluster',
-      'trace namespace RBAC, Secret allowlists, and quota defaults back to one manager',
-      'reason about why tenant cleanup waits until managed clusters are gone',
-      'connect tenant provisioning to admission dependencies and multi-tenant security boundaries',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <ManagerAtAGlance
   sections={[

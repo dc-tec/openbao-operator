@@ -7,25 +7,12 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Upgrades"
+<PageHeader
   title="Treat version changes as planned operations, not a quick spec patch."
   lede="The operator supports rolling and blue-green upgrades, but both paths depend on cluster health, backup posture, and explicit authentication for the executor Jobs. Use this page to choose the strategy, stage the right config, and verify the rollout cleanly."
-  actions={[
-    {label: 'Open backup operations', docId: 'user-guide/openbaocluster/operations/backups', variant: 'primary'},
-    {label: 'Open upgrade manager architecture', docId: 'architecture/upgrade-manager', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'move a cluster to a newer OpenBao version',
-      'decide between rolling and blue-green rollout strategies',
-      'wire executor auth before the first production upgrade window',
-      'recover cleanly from an upgrade hold, retry, or rollback decision',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Choose the upgrade strategy"
@@ -50,6 +37,12 @@ journey: operate
     },
   ]}
 />
+
+<Callout type="warning" title="Do not switch strategies on an existing cluster">
+
+Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a supported in-place transition today. Choose the strategy before the next rollout and keep it stable for that cluster.
+
+</Callout>
 
 <DiagramFrame
   title="Upgrade control flow"

@@ -6,16 +6,12 @@ journey: validated-deployments
 description: Stand up the validated local disaster-recovery proving ground with separate infra, source, and target clusters, shared Transit, RustFS storage, and passthrough ingress.
 ---
 
-<PageHero
-  eyebrow="Validated Deployments / Local Baselines / k3d Cross-Cluster DR"
+<PageHeader
   title="Bootstrap the DR proving ground before you test the restore event itself."
   lede="This recipe prepares the validated local disaster-recovery lane: a shared trust-services cluster, a source cluster, and a target cluster, all wired so the restore event will cross the same kinds of trust, storage, and ingress boundaries you expect in a real DR rehearsal."
-  actions={[
-    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs", variant: "primary"},
-    {label: "Open DR restore runbook", docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="This recipe should leave you with"
     items={[
       "an infra cluster that hosts shared trust services and the shared Transit key",
@@ -24,7 +20,7 @@ description: Stand up the validated local disaster-recovery proving ground with 
       "known pre-restore state on both sides so the restore event can be verified later",
     ]}
   />
-</PageHero>
+
 
 <Callout type="success" title="Validated lane">
 

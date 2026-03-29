@@ -10,16 +10,12 @@ journeyStep: 2
 
 <!-- id: installation-guide -->
 
-<PageHero
-  eyebrow="Step 2"
+<PageHeader
   title="Install the operator in the mode you actually intend to run."
   lede="Choose a supported install path, keep the rendered namespace and identity explicit, and verify the controller wiring before you create your first OpenBaoCluster."
-  actions={[
-    {label: 'Onboard the target namespace', docId: 'user-guide/openbaotenant/onboarding', variant: 'primary'},
-    {label: 'Review single-tenant mode', docId: 'user-guide/operator/single-tenant-mode', variant: 'secondary'},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="Preflight before you install"
     items={[
       'confirm Kubernetes compatibility and cluster-admin access for CRDs, RBAC, and admission policies',
@@ -29,7 +25,7 @@ journeyStep: 2
       'pin a released operator version for production instead of relying on floating tags',
     ]}
   />
-</PageHero>
+
 
 <JourneyRail
   title="Installation is the handoff between design choices and a working control plane"
@@ -94,7 +90,7 @@ Use this table to choose the supported install path before you start changing va
   columns={['Intent', 'Recommended path', 'Change these settings', 'Verify these outputs']}
   rows={[
     {
-      cells: ['Default shared production install', 'Helm, multi-tenant mode', 'release namespace, image tag, controller/provisioner sizing', 'controller and provisioner pods in the rendered operator namespace'],
+      cells: ['Default shared production install', 'Helm, multi-tenant mode', 'release namespace, chart version, controller/provisioner sizing', 'controller and provisioner pods in the rendered operator namespace'],
       emphasis: 'recommended',
     },
     {
@@ -127,7 +123,7 @@ Use `config/overlays/single-tenant-custom-identity` when you also need a custom 
 
 <Callout type="info" title="Default recommendation">
 
-Start with Helm, keep the default multi-tenant mode, pin the image tag for production,
+Start with Helm, keep the default multi-tenant mode, pin the chart release for production,
 and leave admission policies enabled. Deviate from that path only when raw-manifest
 control or single-tenant namespace ownership is an explicit requirement.
 
@@ -139,7 +135,7 @@ control or single-tenant namespace ownership is an explicit requirement.
 
 <TabItem value="helm-recommended" label="Helm (Recommended)">
 
-Install the operator using the official Helm chart:
+Install the operator using the official Helm chart. For production, pin the chart release explicitly with `--version`.
 
 <Callout type="note" title="Rendered operator namespace">
 
@@ -151,7 +147,8 @@ The examples below use the default release namespace `openbao-operator-system`. 
   language="bash"
   label="apply"
   title="Install the Helm chart"
-  code={`helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  code={`helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  --version <chart-version> \\
   --namespace openbao-operator-system \\
   --create-namespace`}
 />
@@ -161,18 +158,25 @@ The examples below use the default release namespace `openbao-operator-system`. 
 <CommandBlock
   language="bash"
   label="configure"
-  title="Pin a release and right-size the controller"
-  code={`helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  title="Pin the chart release and right-size the controller"
+  code={`helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  --version <chart-version> \\
   --namespace openbao-operator-system \\
   --create-namespace \\
-  --set image.tag=1.0.0 \\
   --set controller.replicas=2 \\
   --set controller.resources.limits.memory=512Mi`}
 />
 
-1. Pin to a specific version for production deployments.
+1. Pin the chart release with `--version` for production deployments.
 2. Run multiple replicas for high availability.
 3. Adjust resource limits based on cluster size.
+
+<Callout type="note" title="Chart release pinning vs image override">
+
+For normal installs, pin the chart with `--version` and let the chart's `appVersion` select the matching operator image.
+Use `image.tag` only when you intentionally need a non-default operator image for that chart, such as prerelease validation or a controlled override.
+
+</Callout>
 
 ### Single-Tenant With Custom Helm Identity
 
@@ -182,7 +186,8 @@ Helm already supports the equivalent of the raw-manifest custom-identity overlay
   language="bash"
   label="configure"
   title="Install in single-tenant mode with a custom identity"
-  code={`helm install team-bao oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  code={`helm upgrade --install team-bao oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  --version <chart-version> \\
   --namespace platform-operators \\
   --create-namespace \\
   --set tenancy.mode=single \\
@@ -252,7 +257,8 @@ You can optionally force the platform mode to ensure compatibility with Security
   language="bash"
   label="configure"
   title="Force OpenShift platform mode"
-  code={`helm install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  code={`helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  --version <chart-version> \\
   --namespace openbao-operator-system \\
   --create-namespace \\
   --set platform=openshift`}
@@ -268,18 +274,18 @@ This setting instructs the chart/operator to omit pinned `runAsUser` / `fsGroup`
 
 <TabItem value="yaml-manifests" label="YAML Manifests">
 
-Apply the installer manifest directly from the GitHub Release:
+Apply the installer manifest directly from a pinned GitHub Release:
 
 <CommandBlock
   language="bash"
   label="apply"
-  title="Apply the released installer manifest"
-  code={`kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml`}
+  title="Apply the pinned installer manifest"
+  code={`kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml`}
 />
 
 <Callout type="note">
 
-This installs CRDs, RBAC, ValidatingAdmissionPolicies, and the operator deployments in `openbao-operator-system`.
+Replace `X.Y.Z` with the exact release you intend to run. Use `latest` only for throwaway evaluation, not for production installs.
 
 </Callout>
 
@@ -448,6 +454,7 @@ Helm does not automatically upgrade CRDs. For releases with CRD changes:
 2. Then upgrade the Helm release:
     ```bash
     helm upgrade openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
+      --version X.Y.Z \
       --namespace openbao-operator-system
     ```
 
@@ -485,7 +492,7 @@ kubectl delete crd openbaoclusters.openbao.org openbaorestores.openbao.org openb
 <TabItem value="yaml-manifests" label="YAML Manifests">
 
 ```bash
-kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml
+kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
 ```
 
 </TabItem>

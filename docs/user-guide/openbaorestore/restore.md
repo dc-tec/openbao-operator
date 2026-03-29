@@ -6,31 +6,54 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Restore from backup"
+<PageHeader
   title="Run a restore only when you are ready to overwrite the target cluster."
   lede="The operator restores snapshot state through an explicit `OpenBaoRestore` request. That request validates the target, acquires the restore operation lock, launches a dedicated restore Job, and records the outcome for audit. Use this page when restore is the right answer, not as a substitute for ordinary troubleshooting."
-  actions={[
-    {label: 'Open backup operations', docId: 'user-guide/openbaocluster/operations/backups', variant: 'primary'},
-    {label: 'Open restore overview', docId: 'user-guide/openbaorestore/overview', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'restore a cluster from a known snapshot in object storage',
-      'choose the restore auth path before the first real incident',
-      'verify restore phases and lock behavior instead of guessing what the controller is doing',
-      'recover safely after disaster, migration, or an intentional environment clone',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <Callout type="danger" title="Restore overwrites the target cluster">
 
 Restore replaces the target cluster state with the contents of the selected snapshot. All current secrets, policies, auth methods, and keys in that cluster are treated as replaceable state. Confirm the target namespace, target cluster, and snapshot key before you apply the request.
 
 </Callout>
+
+<DecisionTable
+  title="First successful restore path"
+  columns={['Step', 'What to do first', 'What proves you are ready']}
+  rows={[
+    {
+      cells: [
+        '1. Prove the backup path first',
+        'Do not start here if the snapshot was never validated. Use the backup guide to confirm the object exists and the storage/auth path is already known-good.',
+        'You know the exact snapshot key and can point to a successful backup object in storage.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '2. Prepare the target cluster deliberately',
+        'Keep the target `OpenBaoCluster` in the same namespace, and make sure it already exists and can be reached by the restore Job.',
+        'The target cluster resource exists, the namespace is correct, and the restore Job can reach object storage.',
+      ],
+    },
+    {
+      cells: [
+        '3. Choose restore auth',
+        'Prefer JWT auth through `spec.selfInit.oidc.enabled=true` or a deliberate restore role. Use a static token only as a compatibility fallback.',
+        'You know whether the restore Job will use `jwtAuthRole` or `tokenSecretRef` and the referenced auth path already exists.',
+      ],
+    },
+    {
+      cells: [
+        '4. Watch the restore and cluster together',
+        'Apply the `OpenBaoRestore`, then inspect both the restore resource and the target cluster until the destructive step and follow-up recovery state are clear.',
+        'The restore reaches a terminal phase and you know whether the next step is normal service, unseal recovery, or Raft repair.',
+      ],
+    },
+  ]}
+/>
 
 <DecisionTable
   title="Choose the restore auth path"
@@ -87,6 +110,13 @@ Restore replaces the target cluster state with the contents of the selected snap
 <Callout type="note" title="Same-namespace requirement">
 
 The `OpenBaoRestore`, the target `OpenBaoCluster`, and any referenced token Secrets all live in the same namespace. Cross-namespace references are intentionally blocked for security reasons.
+
+</Callout>
+
+<Callout type="tip" title="For most first-time restores">
+
+If the target cluster already uses `spec.selfInit.oidc.enabled=true`, start with `jwtAuthRole: openbao-operator-restore` and the same object-storage provider shape you already proved in the backup flow.
+That is the shortest path from a tested backup to a tested restore.
 
 </Callout>
 

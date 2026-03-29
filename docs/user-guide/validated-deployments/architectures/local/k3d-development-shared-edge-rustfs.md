@@ -6,17 +6,12 @@ journey: validated-deployments
 description: Validated local baseline for a development-profile OpenBao deployment on k3d with operator-managed TLS, a shared terminating edge, RustFS backups, and blue/green upgrades.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Validated Deployments / Local Baselines"
+<PageHeader
   title="Use this lane to validate operator bring-up, shared-edge routing, and backup flows without pretending a dev profile is production."
   lede="This local baseline is the lowest-friction validated path for development work on k3d. It keeps the edge simple, keeps TLS operator-managed, keeps backups pointed at an S3-compatible store, and still exercises the cluster lifecycle with a realistic control-plane shape."
-  actions={[
-    {label: "Open deployment recipe", docId: "user-guide/validated-deployments/recipes/local/development-self-init-userpass", variant: "primary"},
-    {label: "Review backup operations", docId: "user-guide/openbaocluster/operations/backups", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="This lane proves"
     items={[
       "a Development-profile cluster can bootstrap cleanly on k3d without extra cloud dependencies",
@@ -25,7 +20,7 @@ description: Validated local baseline for a development-profile OpenBao deployme
       "blue/green upgrades can be rehearsed locally before you touch a hardened or cloud baseline",
     ]}
   />
-</PageHero>
+
 
 <Callout type="note" title="Classification">
 

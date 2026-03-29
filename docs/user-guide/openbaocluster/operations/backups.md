@@ -7,25 +7,12 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Backups"
+<PageHeader
   title="Make snapshots routine before you need them for a restore."
   lede="OpenBao Operator runs backups as transient Jobs that authenticate separately from the main workload, stream Raft snapshots directly to object storage, and record schedule and failure state on the cluster."
-  actions={[
-    {label: 'Open restore guide', docId: 'user-guide/openbaorestore/restore', variant: 'primary'},
-    {label: 'Open backup manager architecture', docId: 'architecture/backup-manager', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'wire scheduled snapshots before the first risky upgrade',
-      'choose backup auth and storage credentials deliberately',
-      'verify retention, status, and manual backup behavior',
-      'prepare for restore workflows without guessing how jobs are launched',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DiagramFrame
   title="Backup execution path"
@@ -86,6 +73,55 @@ journey: operate
 The main OpenBao Pods and backup Jobs use different ServiceAccounts.
 Cloud KMS unseal identity on the main workload does not automatically apply to backup or restore Jobs.
 Check `CloudUnsealIdentityReady` for the main Pods and `BackupConfigurationReady` for the generated backup Job identity path.
+
+</Callout>
+
+## First successful backup path
+
+<DecisionTable
+  title="Use this order the first time you wire backups"
+  columns={['Step', 'What to do', 'What proves success']}
+  rows={[
+    {
+      cells: [
+        '1. Pick the auth path',
+        'Use JWT auth when `spec.selfInit.oidc.enabled=true` or deliberately create the equivalent restore/backup roles yourself. Fall back to a static token only when JWT auth is not available.',
+        'You know whether the Job will authenticate with a projected ServiceAccount token or a Secret-backed token.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '2. Configure storage target',
+        'Choose S3, GCS, or Azure and make the credentials or workload identity path explicit.',
+        'The cluster spec contains a complete `spec.backup.target` and the referenced Secret or workload identity metadata already exists.',
+      ],
+    },
+    {
+      cells: [
+        '3. Wait for backup readiness',
+        'Apply the updated `OpenBaoCluster` and check status before assuming the CronJob can run.',
+        '`BackupConfigurationReady=True` and no storage or identity validation failures remain.',
+      ],
+    },
+    {
+      cells: [
+        '4. Force one manual run',
+        'Trigger a backup from the generated CronJob before the first upgrade window.',
+        'A real snapshot lands in object storage and `status.backup.lastSuccessfulBackup` advances.',
+      ],
+    },
+  ]}
+/>
+
+<Callout type="tip" title="For most first-time production users">
+
+The cleanest first backup path is:
+
+1. enable `spec.selfInit.oidc.enabled: true`
+2. configure `spec.backup.target`
+3. wait for `BackupConfigurationReady=True`
+4. trigger one manual backup and confirm the object exists in storage
 
 </Callout>
 
@@ -375,6 +411,36 @@ spec:
 
 </Tabs>
 
+## Minimal working example
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Use a minimal JWT-backed S3 backup baseline"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: my-cluster
+  namespace: openbao-prod
+spec:
+  selfInit:
+    enabled: true
+    oidc:
+      enabled: true
+  backup:
+    schedule: "0 3 * * *"
+    target:
+      provider: s3
+      endpoint: "https://s3.amazonaws.com"
+      bucket: "openbao-backups"
+      region: "us-east-1"
+      pathPrefix: "clusters/my-cluster"
+      credentialsSecretRef:
+        name: s3-credentials`}
+>
+  This is the smallest supported production-oriented starting point. The namespace must already contain the referenced Secret, and the backup Job still needs network egress to the object storage endpoint.
+</CommandBlock>
+
 ## Advanced backup settings
 
 ### Provider-specific options
@@ -585,6 +651,16 @@ Confirm backup status before you start the upgrade rather than assuming the pre-
 </Callout>
 
 ## Verify and operate
+
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check backup readiness before you wait for the schedule"
+  code={`kubectl get openbaocluster my-cluster -n <namespace> \\
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status}{\"\\n\"}{end}'`}
+>
+  Confirm `BackupConfigurationReady=True` before you rely on the schedule or trigger a manual run.
+</CommandBlock>
 
 <CommandBlock
   language="bash"

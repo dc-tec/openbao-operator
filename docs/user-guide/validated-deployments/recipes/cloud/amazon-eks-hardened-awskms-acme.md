@@ -6,16 +6,12 @@ journey: validated-deployments
 description: Reproduce the validated hardened baseline on Amazon EKS with AWS KMS auto-unseal, a dedicated public passthrough Gateway, OpenBao-managed ACME, and S3 backups.
 ---
 
-<PageHero
-  eyebrow="Validated Deployments / Cloud Baselines / EKS Hardened"
+<PageHeader
   title="Reproduce the validated hardened EKS lane without diluting the public-edge and ACME assumptions it depends on."
   lede="This recipe applies the hardened cloud baseline with KMS auto-unseal, a dedicated public passthrough Gateway, OpenBao-managed ACME, JWT bootstrap, and S3 backups. Use it when you want the production-style EKS path the project has actually validated."
-  actions={[
-    {label: "Open reference architecture", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme", variant: "primary"},
-    {label: "Open troubleshooting", docId: "user-guide/openbaocluster/operations/troubleshooting", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="This recipe should leave you with"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
@@ -24,7 +20,7 @@ description: Reproduce the validated hardened baseline on Amazon EKS with AWS KM
       "manual and scheduled S3 backups using a backup identity distinct from the main workload identity",
     ]}
   />
-</PageHero>
+
 
 <Callout type="success" title="Validated lane">
 

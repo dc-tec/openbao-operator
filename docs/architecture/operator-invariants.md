@@ -6,26 +6,12 @@ pageType: concept
 journey: architecture
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Invariants"
+<PageHeader
   title="Start design changes from the contracts the operator is trying to preserve."
   lede="These invariants are the cross-cutting rules behind the rest of the architecture. They explain why some designs are intentionally split, why certain shortcuts are blocked, and which safety properties should survive refactors, new features, or operational changes."
-  actions={[
-    {label: 'Open component design', docId: 'architecture/components', variant: 'primary'},
-    {label: 'Open operation lifecycle', docId: 'architecture/operation-lifecycle', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'evaluate whether a proposed change weakens a core contract',
-      'understand why the operator separates identities, controllers, and disruptive workflows',
-      'map architecture choices back to security and lifecycle guarantees',
-      'review a change set for contract drift rather than only code correctness',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <Callout type="note" title="Lifecycle contract">
 

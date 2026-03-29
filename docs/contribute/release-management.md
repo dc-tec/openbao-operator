@@ -10,6 +10,12 @@ journey: contribute
   lede="OpenBao Operator uses a build-once, promote-everywhere release model. `release-please` owns versioning, changelog state, and release orchestration, while publish workflows own build, verification, signing, docs deployment, and release evidence."
 />
 
+<Callout type="note" title="This page is the maintainer workflow, not the public cadence contract">
+
+Use [Release Policy](pathname:///docs/next/reference/release-policy) for the public release cadence, channel rules, and stable release gates. Use this page for the operational workflow maintainers follow once a release is actually being executed.
+
+</Callout>
+
 <DiagramFrame
   title="Build once, promote everywhere"
   caption="Release workflows build immutable artifacts first, then gate, sign, and publish by digest."
@@ -158,6 +164,11 @@ The tag app should be the only actor with semver tag ruleset bypass. A PAT fallb
 <NextActions
   title="After release execution"
   items={[
+    {
+      label: "Release policy",
+      description: "Go back to the public cadence and release-gate contract when the release rules themselves need to change.",
+      to: "/docs/next/reference/release-policy",
+    },
     {
       label: "Distribution",
       description: "Open the public-distribution model when you need to update Artifact Hub metadata, chart publishing assumptions, or deferred OLM posture.",

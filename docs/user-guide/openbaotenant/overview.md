@@ -7,26 +7,12 @@ pageType: concept
 journey: get-started
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Tenant Onboarding"
+<PageHeader
   title="Introduce namespaces deliberately instead of letting the operator discover them."
   lede="`OpenBaoTenant` is the namespace-introduction contract in the default multi-tenant model. It tells the operator which namespace should become an authorized tenant and lets the control plane create the RBAC and guardrails that make shared operation safe."
-  actions={[
-    {label: 'Onboard the target namespace', docId: 'user-guide/openbaotenant/onboarding', variant: 'primary'},
-    {label: 'Review multi-tenant security', docId: 'user-guide/openbaotenant/multi-tenancy', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand why the default operator model does not discover namespaces implicitly',
-      'explain what OpenBaoTenant introduces before the first cluster appears',
-      'choose between self-service and centrally managed onboarding',
-      'reason about tenant guardrails separately from cluster configuration',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DiagramFrame
   title="OpenBaoTenant is the namespace introduction point"

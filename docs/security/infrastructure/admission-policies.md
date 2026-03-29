@@ -6,26 +6,12 @@ journey: security
 description: How ValidatingAdmissionPolicy guardrails enforce managed-resource ownership, tenant onboarding boundaries, and fail-closed startup and runtime checks.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Platform Controls"
+<PageHeader
   title="Reject unsafe intent before it becomes persisted state."
   lede="The operator uses Kubernetes `ValidatingAdmissionPolicy` to enforce key safety rules at the API boundary. These policies are not a replacement for reconciliation logic; they are the front line that prevents invalid, privileged, or drifted state from landing in etcd in the first place."
-  actions={[
-    {label: 'Open RBAC architecture', docId: 'security/infrastructure/rbac', variant: 'primary'},
-    {label: 'Open network security', docId: 'security/infrastructure/network-security', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand which unsafe changes are blocked before persistence',
-      'review why the operator fails closed when required policies are missing',
-      'see how provisioner and controller identities are constrained beyond plain RBAC',
-      'check which policy family protects a given workflow or resource type',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DiagramFrame
   title="Admission enforcement flow"

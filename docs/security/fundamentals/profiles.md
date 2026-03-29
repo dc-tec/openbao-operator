@@ -6,26 +6,12 @@ journey: security
 description: What Development and Hardened mean as security contracts, and why Hardened is the supported production posture for OpenBao Operator.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Security Model"
+<PageHeader
   title="Treat security profiles as operating contracts, not just presets."
   lede="`Development` and `Hardened` are different security contracts, not cosmetic defaults. This page explains what each one is optimizing for, what Hardened requires in production, and why the configuration task belongs in the user guide rather than here."
-  actions={[
-    {label: 'Configure security profiles', docId: 'user-guide/openbaocluster/configuration/security-profiles', variant: 'primary'},
-    {label: 'Open secrets and trust material', docId: 'security/fundamentals/secrets-management', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand what Hardened is actually promising',
-      'review what Development deliberately relaxes for testing',
-      'decide whether an environment still meets the production contract',
-      'separate conceptual posture from the configuration task page',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Profile intent"

@@ -7,17 +7,12 @@ pageType: runbook
 journey: operate
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Operate / Incident recovery"
+<PageHeader
   title="Use safe mode to stop risky automation and recover control."
   lede="Break glass or safe mode is the operator's explicit stop signal when continuing rollback automation could make availability or Raft safety worse. Use this page to inspect the break-glass state, stabilize the cluster, repair the failure, and only then let automation resume."
-  actions={[
-    {label: 'Recover from failed rollback', docId: 'user-guide/openbaocluster/recovery/failed-rollback', variant: 'primary'},
-    {label: 'Run planned maintenance', docId: 'user-guide/openbaocluster/operations/maintenance', variant: 'secondary'},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="Use this runbook when"
     items={[
       'the operator reports break glass or safe mode on the cluster',
@@ -26,7 +21,7 @@ journey: operate
       'you are ready to acknowledge a nonce only after the underlying issue is fixed',
     ]}
   />
-</PageHero>
+
 
 <DecisionTable
   title="What safe mode means"

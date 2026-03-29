@@ -7,25 +7,12 @@ journey: configure
 description: Choose how clients reach OpenBao, decide where TLS terminates, and map that choice to Gateway API, Ingress, or direct service exposure.
 ---
 
-<PageHero
-  eyebrow="Configure / Service Boundary"
+<PageHeader
   title="Choose how traffic reaches the service before you optimize the edge."
   lede="OpenBao can be exposed through Gateway API, Ingress, or a direct L4 Service. The important decision is not just which Kubernetes resource you use, but where TLS terminates, who owns certificate lifecycle, and whether the edge path matches the production posture you actually want to operate."
-  actions={[
-    {label: "Open Gateway API support", docId: "user-guide/openbaocluster/configuration/gateway-api", variant: "primary"},
-    {label: "Review TLS and workload identity", docId: "security/workload/tls", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "choose the exposure pattern for a new cluster before users depend on it",
-      "decide whether OpenBao or the edge should terminate TLS",
-      "match the exposure path to the Hardened or Development profile you selected",
-      "connect the edge configuration back to network policy and service ownership",
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Choose the access path deliberately"
@@ -196,6 +183,25 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
   ]}
 />
 
+## External TLS Secret contract
+
+<Callout type="note" title="What `tls.mode: External` actually expects">
+
+For the cluster-facing TLS path, the operator reads fixed same-namespace Secret names:
+
+- `<cluster-name>-tls-ca` with key `ca.crt`
+- `<cluster-name>-tls-server` with keys `tls.crt` and `tls.key`
+
+The server certificate must chain to the CA bundle and cover the internal service name `openbao-cluster-<cluster-name>.local`, plus any configured ingress hostname, gateway hostname, and `spec.tls.extraSANs`.
+
+</Callout>
+
+<Callout type="tip" title="Do not confuse edge TLS Secrets with the cluster server TLS Secrets">
+
+`spec.ingress.tlsSecretName` only controls the Secret referenced by the managed Ingress resource. It does not rename the Secrets that the OpenBao Pods use for their own listener certificate and CA trust.
+
+</Callout>
+
 <Callout type="note" title="Traefik v3 backend trust">
 
 If you use Traefik v3 with backend TLS validation, configure a `ServersTransport` that trusts the generated CA Secret for the cluster. This is an implementation detail of the ingress path, not a reason to change the underlying TLS model.
@@ -214,6 +220,11 @@ If you use Traefik v3 with backend TLS validation, configure a `ServersTransport
       label: "Network configuration",
       description: "Align ingress peers, DNS, API-server egress, and external service egress with the exposure path you chose.",
       docId: "user-guide/openbaocluster/configuration/network",
+    },
+    {
+      label: "Unseal configuration",
+      description: "Use the exact Secret and mounted-file contract page when external TLS and unseal credentials both depend on the same trust workflow.",
+      docId: "user-guide/openbaocluster/configuration/unseal",
     },
     {
       label: "TLS and workload identity",

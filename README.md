@@ -75,7 +75,10 @@ For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openba
 
 ## Quick Start
 
-Once the operator is running, you can launch an OpenBao cluster quickly.
+Once the operator is running, the next move depends on the tenancy mode you chose:
+
+- **Multi-tenant (default)**: Create the target namespace, onboard it through `OpenBaoTenant`, then apply the first `OpenBaoCluster`.
+- **Single-tenant**: Skip `OpenBaoTenant` and create the first `OpenBaoCluster` directly in the controller's watched namespace.
 
 ### Option A: Evaluation (Development Profile)
 
@@ -87,7 +90,7 @@ metadata:
   name: my-cluster
   namespace: openbao-demo
 spec:
-  version: "2.4.4"
+  version: "2.5.0"
   replicas: 1
   profile: Development
   tls:
@@ -99,6 +102,22 @@ spec:
 
 ```bash
 kubectl create namespace openbao-demo
+
+# Default multi-tenant mode only: onboard the target namespace first.
+# Single-tenant mode: skip this OpenBaoTenant and apply cluster.yaml
+# directly in the controller's watched namespace instead.
+kubectl apply -f - <<'EOF'
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoTenant
+metadata:
+  name: openbao-demo
+  namespace: openbao-demo
+spec:
+  targetNamespace: openbao-demo
+EOF
+
+kubectl -n openbao-demo get openbaotenant openbao-demo -w
+
 kubectl apply -f cluster.yaml
 
 # Watch status and pods
@@ -117,6 +136,7 @@ kubectl -n openbao-demo get secret my-cluster-root-token -o jsonpath='{.data.tok
 The default production path is:
 
 - Multi-tenant mode
+- Target namespace onboarded through `OpenBaoTenant` before the first cluster
 - `Hardened` profile
 - `spec.selfInit.enabled: true`
 - `spec.tls.mode: External` or `ACME`
@@ -130,6 +150,9 @@ The `Hardened` profile enforces:
 
 Start with:
 - [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/docs/get-started/deployment-decision-guide)
+- [Operator Installation](https://dc-tec.github.io/openbao-operator/docs/get-started/install)
+- [Onboard the Target Namespace](https://dc-tec.github.io/openbao-operator/docs/get-started/onboard-target-namespace)
+- [Create Your First Cluster](https://dc-tec.github.io/openbao-operator/docs/get-started/first-cluster)
 - [Security Profiles](https://dc-tec.github.io/openbao-operator/docs/user-guide/openbaocluster/configuration/security-profiles)
 - [Production Checklist](https://dc-tec.github.io/openbao-operator/docs/operate/production-checklist)
 - Production samples in `config/samples/production/`
@@ -157,11 +180,13 @@ Find the chart in Artifact Hub (indexing may lag shortly after releases):
 
 ### Option 2: Plain YAML
 
-Apply the latest release manifest directly.
+Apply a pinned release manifest directly.
 
 ```bash
-kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml
+kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
 ```
+
+Replace `X.Y.Z` with the exact release you intend to run. Use `latest` only for throwaway evaluation, not for production installs.
 
 ## Uninstall
 
@@ -174,7 +199,7 @@ helm uninstall openbao-operator --namespace openbao-operator-system
 ### Plain YAML
 
 ```bash
-kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/latest/download/install.yaml
+kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
 ```
 
 > [!NOTE]

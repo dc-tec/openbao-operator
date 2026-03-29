@@ -6,17 +6,12 @@ journey: validated-deployments
 description: Validated cloud baseline for a development-profile OpenBao deployment on Amazon EKS with AWS KMS auto-unseal, a shared terminating edge, JWT bootstrap, and S3 backups.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Validated Deployments / Cloud Baselines"
+<PageHeader
   title="Use this lane to validate the EKS bring-up path with real AWS integrations before you move to a hardened public endpoint."
   lede="This cloud baseline keeps the posture intentionally Development, but it proves the integrations that matter for cloud bring-up: KMS auto-unseal, workload identity, shared-edge exposure, JWT bootstrap, and snapshot upload to S3."
-  actions={[
-    {label: "Open deployment recipe", docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
-    {label: "Review security profiles", docId: "user-guide/openbaocluster/configuration/security-profiles", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="This lane proves"
     items={[
       "a Development-profile cluster can bootstrap on EKS with AWS KMS auto-unseal and no static root-token workflow",
@@ -25,7 +20,7 @@ description: Validated cloud baseline for a development-profile OpenBao deployme
       "backup Jobs can authenticate separately from the main workload and write snapshots to S3 successfully",
     ]}
   />
-</PageHero>
+
 
 <Callout type="note" title="Classification">
 

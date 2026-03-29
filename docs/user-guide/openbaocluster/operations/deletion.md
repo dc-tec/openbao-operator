@@ -7,16 +7,12 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  eyebrow="Operate / Cluster controls"
+<PageHeader
   title="Decommission the cluster without guessing what will be retained."
   lede="Deleting an `OpenBaoCluster` is not just removing Pods. The deletion policy determines whether PVC-backed data stays behind, whether critical secrets are preserved, and what still requires manual cleanup after the control plane is gone."
-  actions={[
-    {label: 'Run planned maintenance', docId: 'user-guide/openbaocluster/operations/maintenance', variant: 'primary'},
-    {label: 'Open restore operations', docId: 'user-guide/openbaorestore/restore', variant: 'secondary'},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="Use this page before you"
     items={[
       'tear down a dev, staging, or production cluster intentionally',
@@ -25,7 +21,7 @@ journey: operate
       'confirm whether snapshot backups still need manual cleanup afterward',
     ]}
   />
-</PageHero>
+
 
 <DecisionTable
   title="Choose the deletion policy"

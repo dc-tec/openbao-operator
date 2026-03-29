@@ -6,26 +6,12 @@ journey: architecture
 description: Operational lifecycle for upgrades, maintenance controls, and long-running admin operations after the cluster is live.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Lifecycle / Day 2"
+<PageHeader
   title="Hand off from cluster creation into upgrades, maintenance, and long-running operational work."
   lede="Day 2 starts once the cluster is initialized and the workload path is steady. From that point on, long-running operations such as upgrades and backups move through the admin operations path, while maintenance controls gate how much automation is allowed to continue during manual intervention."
-  actions={[
-    {label: 'Open upgrade manager', docId: 'architecture/upgrade-manager', variant: 'primary'},
-    {label: 'Open operate docs', docId: 'user-guide/openbaocluster/operations/index', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand how Day 2 work moves from the workload path into admin operations',
-      'compare rolling and blue-green upgrades at the lifecycle level',
-      'see how pause, maintenance mode, and break-glass relate to normal operations',
-      'connect internal operation state back to the operator-facing operate guides',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <JourneyRail
   current={3}

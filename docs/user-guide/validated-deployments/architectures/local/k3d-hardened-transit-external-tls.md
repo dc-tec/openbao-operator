@@ -6,17 +6,12 @@ journey: validated-deployments
 description: Validated local baseline for a hardened OpenBao deployment on k3d with Transit auto-unseal, external TLS Secrets, and user-managed passthrough access.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Validated Deployments / Local Baselines"
+<PageHeader
   title="Use this lane to rehearse a hardened deployment with external certificates and a separate unseal root."
   lede="This local baseline is the closest validated rehearsal path to a hardened deployment that keeps TLS outside the operator, keeps the seal dependency external, and exposes OpenBao through user-managed TCP passthrough instead of a shared terminating edge."
-  actions={[
-    {label: "Open deployment recipe", docId: "user-guide/validated-deployments/recipes/local/hardened-transit-external-tls", variant: "primary"},
-    {label: "Review security profiles", docId: "user-guide/openbaocluster/configuration/security-profiles", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="This lane proves"
     items={[
       "a Hardened cluster can bootstrap locally without falling back to operator-managed TLS or static unseal",
@@ -25,7 +20,7 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
       "the local environment can rehearse a production-style trust split without pretending k3d itself is the production target",
     ]}
   />
-</PageHero>
+
 
 <Callout type="note" title="Classification">
 

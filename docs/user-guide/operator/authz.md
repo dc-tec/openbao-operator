@@ -7,26 +7,12 @@ pageType: concept
 journey: get-started
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Supporting decision"
+<PageHeader
   title="Keep each operator capability on its own policy surface."
   lede="Authentication answers who a workload is. Authorization answers what that workload can do. OpenBao Operator stays safer when controller, backup, restore, and upgrade work authenticate separately and only receive the policies each path actually needs."
-  actions={[
-    {label: 'Review identity mapping', docId: 'user-guide/operator/identity-and-access', variant: 'primary'},
-    {label: 'Open backup operations', docId: 'user-guide/openbaocluster/operations/backups', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand why backup, restore, and upgrade jobs do not share the controller role',
-      'review the destructive surfaces before you approve a production auth model',
-      'debug capability errors on a job that authenticates successfully',
-      'keep manual policy wiring aligned with the lifecycle capability that needs it',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DiagramFrame
   title="Policies stay attached to job-specific identities"
