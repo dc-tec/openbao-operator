@@ -45,7 +45,7 @@ Use [Release Policy](pathname:///docs/next/reference/release-policy) for the pub
     {
       cells: [
         "Prerelease",
-        "Merge the release-please PR with an explicit prerelease target such as `-rc.1` or `-beta.1` so the tag workflow creates the prerelease tag and draft GitHub Release.",
+        "Run the `Release Please PR` workflow with an explicit `release_as` target such as `0.1.0-rc.6`, then merge the resulting release-please PR so the tag workflow creates the prerelease tag and draft GitHub Release.",
         "GitHub Release assets, OCI Helm chart, signed images, docs site deployment, and provenance evidence.",
         "Prereleases use `/docs/next` plus release notes; do not create a permanent versioned docs snapshot unless there is a deliberate preview exception.",
       ],
@@ -85,14 +85,21 @@ Before merging a stable release PR, snapshot the docs for the outgoing version a
 </CommandBlock>
 
 <CommandBlock
-  language="bash"
+  language="text"
   label="configure"
-  title="Cut an explicit prerelease with Release-As"
-  code={`git commit --allow-empty -m "chore: release 0.2.0-beta.1" -m "Release-As: 0.2.0-beta.1"
-git push`}
+  title="Cut an explicit prerelease with workflow_dispatch"
+  code={`Workflow: Release Please PR
+Branch: main
+Input: release_as=0.1.0-rc.6`}
 >
-  Use this when you need a specific `-alpha`, `-beta`, or `-rc` target instead of the bump inferred from normal Conventional Commits.
+  Use this when you need a specific `-alpha`, `-beta`, or `-rc` target instead of the bump inferred from normal Conventional Commits. The workflow updates the release-please PR and then re-syncs `Chart.yaml` Artifact Hub metadata to the same release version.
 </CommandBlock>
+
+<Callout type="note" title="`Release-As` empty commits are now a fallback, not the primary path">
+
+If workflow dispatch is unavailable, you can still use an empty commit with a `Release-As:` trailer. Prefer the workflow input first so the release intent is explicit without creating a throwaway commit on `main`.
+
+</Callout>
 
 <DecisionTable
   title="Release manager checklist"
