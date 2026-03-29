@@ -13,6 +13,12 @@ spec:
   variables:
     - name: has_backup
       expression: has(object.spec.backup)
+    - name: requested_upgrade_strategy
+      expression: >-
+        has(object.spec.upgrade) && has(object.spec.upgrade.strategy) && object.spec.upgrade.strategy != "" ? object.spec.upgrade.strategy : "RollingUpdate"
+    - name: previous_upgrade_strategy
+      expression: >-
+        oldObject != null && has(oldObject.spec.upgrade) && has(oldObject.spec.upgrade.strategy) && oldObject.spec.upgrade.strategy != "" ? oldObject.spec.upgrade.strategy : "RollingUpdate"
     - name: has_pre_upgrade_snapshot
       expression: has(object.spec.upgrade) && has(object.spec.upgrade.preUpgradeSnapshot) && object.spec.upgrade.preUpgradeSnapshot == true
     - name: has_bluegreen_pre_upgrade_snapshot
@@ -226,6 +232,10 @@ spec:
           ((has(object.spec.backup.jwtAuthRole) && object.spec.backup.jwtAuthRole != "") || has(object.spec.backup.tokenSecretRef) || ((!has(object.spec.backup.jwtAuthRole) || object.spec.backup.jwtAuthRole == "") && has(object.spec.selfInit) && object.spec.selfInit.enabled == true && has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled == true)) &&
           object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
       message: spec.backup requires schedule, OpenBao auth (jwtAuthRole or tokenSecretRef, or self-init OIDC bootstrap enabled when jwtAuthRole is empty/unset for auto-creation of "openbao-operator-backup" role), and a 5-field cron expression. Storage credentials may come from target.credentialsSecretRef, target.roleArn, or the pod's ambient workload identity/default credential chain.
+    - expression: >-
+        oldObject == null ||
+        variables.requested_upgrade_strategy == variables.previous_upgrade_strategy
+      message: "spec.upgrade.strategy is immutable after creation; switching between RollingUpdate and BlueGreen is not supported."
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||

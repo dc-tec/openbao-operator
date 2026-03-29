@@ -194,6 +194,138 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	}
 }
 
+func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
+		gvk := u.GroupVersionKind()
+		return gvk.Group == "admissionregistration.k8s.io" &&
+			gvk.Kind == "ValidatingAdmissionPolicy" &&
+			strings.HasSuffix(u.GetName(), "openbao-validate-openbaocluster")
+	})
+
+	if len(objs) != 1 {
+		t.Fatalf("expected exactly one openbao-validate-openbaocluster policy, got %d", len(objs))
+	}
+
+	variables, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "variables")
+	if err != nil || !found {
+		t.Fatalf("read policy variables: found=%v err=%v", found, err)
+	}
+
+	var hasRequestedStrategy bool
+	var hasPreviousStrategy bool
+	for _, variable := range variables {
+		variableMap, ok := variable.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := variableMap["name"].(string)
+		switch name {
+		case "requested_upgrade_strategy":
+			hasRequestedStrategy = true
+		case "previous_upgrade_strategy":
+			hasPreviousStrategy = true
+		}
+	}
+
+	if !hasRequestedStrategy || !hasPreviousStrategy {
+		t.Fatalf("expected strategy transition variables in openbao-validate-openbaocluster policy, got requested=%v previous=%v", hasRequestedStrategy, hasPreviousStrategy)
+	}
+
+	validations, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "validations")
+	if err != nil || !found {
+		t.Fatalf("read policy validations: found=%v err=%v", found, err)
+	}
+
+	const wantMessage = "spec.upgrade.strategy is immutable after creation; switching between RollingUpdate and BlueGreen is not supported."
+	var foundRule bool
+	for _, validation := range validations {
+		validationMap, ok := validation.(map[string]any)
+		if !ok {
+			continue
+		}
+		message, _ := validationMap["message"].(string)
+		expression, _ := validationMap["expression"].(string)
+		if message == wantMessage &&
+			strings.Contains(expression, "variables.requested_upgrade_strategy") &&
+			strings.Contains(expression, "variables.previous_upgrade_strategy") {
+			foundRule = true
+			break
+		}
+	}
+
+	if !foundRule {
+		t.Fatalf("openbao-validate-openbaocluster policy is missing the upgrade strategy immutability rule")
+	}
+}
+
+func TestKustomizeDefault_OpenBaoClusterCRDRejectsUpgradeStrategySwitches(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
+		return u.GetAPIVersion() == "apiextensions.k8s.io/v1" &&
+			u.GetKind() == "CustomResourceDefinition" &&
+			u.GetName() == "openbaoclusters.openbao.org"
+	})
+
+	if len(objs) != 1 {
+		t.Fatalf("expected exactly one openbaoclusters CRD, got %d", len(objs))
+	}
+
+	versions, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "versions")
+	if err != nil || !found {
+		t.Fatalf("read CRD versions: found=%v err=%v", found, err)
+	}
+
+	const wantMessage = "spec.upgrade.strategy is immutable after creation; switching between RollingUpdate and BlueGreen is not supported."
+	for _, version := range versions {
+		versionMap, ok := version.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := versionMap["name"].(string)
+		if name != "v1alpha1" {
+			continue
+		}
+
+		schemaMap, ok := versionMap["schema"].(map[string]any)
+		if !ok {
+			t.Fatalf("v1alpha1 version missing schema")
+		}
+		openAPIV3Schema, ok := schemaMap["openAPIV3Schema"].(map[string]any)
+		if !ok {
+			t.Fatalf("v1alpha1 version missing openAPIV3Schema")
+		}
+		properties, ok := openAPIV3Schema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("CRD root schema missing properties")
+		}
+		specSchema, ok := properties["spec"].(map[string]any)
+		if !ok {
+			t.Fatalf("CRD root schema missing spec property")
+		}
+		validations, ok := specSchema["x-kubernetes-validations"].([]any)
+		if !ok {
+			t.Fatal("spec schema missing x-kubernetes-validations")
+		}
+
+		for _, validation := range validations {
+			validationMap, ok := validation.(map[string]any)
+			if !ok {
+				continue
+			}
+			message, _ := validationMap["message"].(string)
+			rule, _ := validationMap["rule"].(string)
+			if message == wantMessage && strings.Contains(rule, "oldSelf.upgrade.strategy") {
+				return
+			}
+		}
+
+		t.Fatalf("v1alpha1 CRD schema is missing the upgrade strategy transition rule")
+	}
+
+	t.Fatal("v1alpha1 version not found in openbaoclusters CRD")
+}
+
 func TestKustomizeDefault_ControllerOpenBaoAudienceMatchesProjection(t *testing.T) {
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
