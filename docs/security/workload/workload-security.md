@@ -6,26 +6,12 @@ journey: security
 description: Pod hardening, projected-token handling, and runtime guardrails for operator-managed OpenBao workloads and lifecycle Jobs.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Workload Protections"
+<PageHeader
   title="Keep OpenBao Pods inside the restricted runtime baseline from the first reconcile."
   lede="The operator assumes runtime hardening is the default, not an optional add-on. OpenBao Pods, init containers, and transient lifecycle Jobs are expected to run non-root, use explicit writable volumes, and consume only the identities and Linux privileges they actually need."
-  actions={[
-    {label: "Review TLS and identity", docId: "security/workload/tls", variant: "primary"},
-    {label: "Open network security", docId: "security/infrastructure/network-security", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "verify the default pod-security posture before moving into production",
-      "understand how Kubernetes API tokens are exposed to the workload",
-      "check which runtime exceptions exist for init, backup, restore, and upgrade paths",
-      "connect namespace hardening back to the wider tenant-isolation model",
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Runtime protections at a glance"

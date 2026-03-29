@@ -6,17 +6,12 @@ journey: validated-deployments
 description: Restore the validated local disaster-recovery target from a source snapshot stored in RustFS while preserving the shared Transit seal-root assumptions the lane depends on.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Validated Deployments / Local Baselines / k3d Cross-Cluster DR"
+<PageHeader
   title="Run the destructive restore step only after the source snapshot, target health, and shared seal root are all known-good."
   lede="This runbook restores the target cluster in the validated local DR lane from a source snapshot stored in RustFS. It assumes the source and target already share the same external Transit key and that you are ready to overwrite the target bootstrap state."
-  actions={[
-    {label: "Open bootstrap recipe", docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap", variant: "primary"},
-    {label: "Open restore overview", docId: "user-guide/openbaorestore/overview", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="This runbook should leave you with"
     items={[
       "a fresh source snapshot written to shared RustFS storage",
@@ -25,7 +20,7 @@ description: Restore the validated local disaster-recovery target from a source 
       "post-restore proof that source credentials and source data replaced the target bootstrap state",
     ]}
   />
-</PageHero>
+
 
 <Callout type="danger" title="Destructive operation">
 

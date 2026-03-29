@@ -6,25 +6,12 @@ journey: configure
 description: Configure server-runtime defaults such as UI, listener behavior, audit devices, plugins, and Raft autopilot without mixing in unrelated exposure or observability concerns.
 ---
 
-<PageHero
-  eyebrow="Configure / Cluster Baseline"
+<PageHeader
   title="Tune the server runtime without turning this page into a dump of every field."
   lede="Use this page for the settings that shape how the OpenBao server itself runs: listener and lease behavior, Raft autopilot, audit devices, and plugin registration. Exposure, observability, and mirrored-image strategy each have their own configuration paths."
-  actions={[
-    {label: "Open observability", docId: "user-guide/openbaocluster/configuration/observability", variant: "primary"},
-    {label: "Review air-gapped setup", docId: "user-guide/openbaocluster/configuration/air-gapped", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "set the core `spec.configuration` defaults for the server runtime",
-      "understand the autopilot values the operator manages automatically",
-      "configure audit devices or plugins declaratively",
-      "avoid mixing server settings with observability or image-mirroring concerns that belong elsewhere",
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="What this page owns"

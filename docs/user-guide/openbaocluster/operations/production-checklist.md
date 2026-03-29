@@ -7,26 +7,10 @@ pageType: task
 journey: operate
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Operate / Production readiness"
+<PageHeader
   title="Make the cluster boring before you call it production."
   lede="Use this checklist after the first cluster path succeeds and before teams depend on the service. The goal is to lock down the security posture, protect data, prove observability, and confirm that the operator reports a clean converged state."
-  actions={[
-    {label: 'Configure backups', docId: 'user-guide/openbaocluster/operations/backups', variant: 'primary'},
-    {label: 'Review security profiles', docId: 'user-guide/openbaocluster/configuration/security-profiles', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page before you"
-    items={[
-      'route production traffic to a newly created cluster',
-      'announce the cluster as a supported tenant destination',
-      'schedule the first upgrade window or maintenance event',
-      'treat backups and recovery as established operational paths',
-    ]}
-  />
-</PageHero>
+/>
 
 <DecisionTable
   title="Production gates"

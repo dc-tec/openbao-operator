@@ -6,26 +6,12 @@ journey: security
 description: How the provisioner and controller identities stay separate, narrow, and mutation-locked across tenant onboarding and workload reconciliation.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Platform Controls"
+<PageHeader
   title="Keep the identity that grants access separate from the identity that uses it."
   lede="The operator's RBAC model is built around a split-controller design. The provisioner introduces tenant access and namespace guardrails, while the controller consumes tenant-scoped permissions to manage workloads. Neither long-running identity should be able to do both jobs."
-  actions={[
-    {label: 'Review admission policies', docId: 'security/infrastructure/admission-policies', variant: 'primary'},
-    {label: 'Open tenant isolation', docId: 'security/multi-tenancy/tenant-isolation', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand which operator identity owns tenant onboarding versus workload management',
-      'review why the controller cannot discover or manage arbitrary namespaces',
-      'check how Secret access stays name-scoped and non-enumerating',
-      'evaluate whether a proposed RBAC change weakens the multi-tenant boundary',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DiagramFrame
   title="Split-controller RBAC model"

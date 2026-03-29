@@ -121,6 +121,11 @@ const sidebars: SidebarsConfig = {
             },
             {
               type: 'doc',
+              id: 'user-guide/openbaocluster/configuration/unseal',
+              label: 'Unseal configuration',
+            },
+            {
+              type: 'doc',
               id: 'user-guide/openbaocluster/configuration/server',
               label: 'Server configuration',
             },

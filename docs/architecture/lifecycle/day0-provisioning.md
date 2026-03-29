@@ -6,26 +6,12 @@ journey: architecture
 description: Tenant provisioning flow from OpenBaoTenant creation through namespace-scoped RBAC, policy defaults, and the handoff to cluster creation.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Lifecycle / Day 0"
+<PageHeader
   title="Provision the tenant boundary before any cluster exists."
   lede="Day 0 is the namespace and tenancy setup phase. The provisioner controller takes an `OpenBaoTenant` request, applies tenant-scoped RBAC and policy defaults, and leaves behind a namespace that is safe for later `OpenBaoCluster` creation."
-  actions={[
-    {label: 'Open provisioner manager', docId: 'architecture/provisioner-manager', variant: 'primary'},
-    {label: 'Open tenant onboarding', docId: 'user-guide/openbaotenant/onboarding', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand how OpenBaoTenant becomes a provisioned namespace boundary',
-      'see where tenant RBAC, Secret allowlists, and Pod Security defaults are applied',
-      'trace the Day 0 handoff into later cluster creation',
-      'connect multi-tenant security constraints back to the provisioning path',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <JourneyRail
   current={1}

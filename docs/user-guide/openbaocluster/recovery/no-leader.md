@@ -7,17 +7,12 @@ pageType: runbook
 journey: operate
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Operate / Incident recovery"
+<PageHeader
   title="Repair quorum before you change Raft membership."
   lede="A no-leader incident is not one thing. Sometimes the cluster cannot elect because pods are crash-looping or the cluster port is blocked. Sometimes a dead peer still counts toward quorum. Only when those narrower fixes are exhausted should you move into manual quorum recovery."
-  actions={[
-    {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'primary'},
-    {label: 'Recover a sealed cluster', docId: 'user-guide/openbaocluster/recovery/sealed-cluster', variant: 'secondary'},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="Use this runbook when"
     items={[
       'the cluster cannot elect or keep a leader',
@@ -26,7 +21,7 @@ journey: operate
       'you need to decide whether a stale peer, network break, or manual recovery path is required',
     ]}
   />
-</PageHero>
+
 
 <DecisionTable
   title="Match the failure before you repair it"

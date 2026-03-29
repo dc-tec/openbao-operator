@@ -8,16 +8,12 @@ journey: get-started
 journeyStep: 4
 ---
 
-<PageHero
-  eyebrow="Step 4"
+<PageHeader
   title="Create the first cluster you can keep operating."
   lede="By the time you reach this step, the operator is installed and the target namespace is already onboarded when you are in the default multi-tenant mode. Start with the closest safe baseline, verify the cluster becomes healthy, and then move directly into the next operating concern."
-  actions={[
-    {label: 'Prepare for day 2', docId: 'user-guide/openbaocluster/next-steps', variant: 'primary'},
-    {label: 'Open validated deployments', docId: 'user-guide/validated-deployments/index', variant: 'secondary'},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="Before you apply the cluster manifest"
     items={[
       'confirm the operator install is healthy in the namespace model you chose',
@@ -26,7 +22,14 @@ journeyStep: 4
       'decide whether this cluster is only for evaluation or intended to become production',
     ]}
   />
-</PageHero>
+
+
+<Callout type="note" title="Choose the namespace handoff first">
+
+- In the default multi-tenant mode, create the target namespace and finish [OpenBaoTenant onboarding](../openbaotenant/onboarding.md) before you apply `OpenBaoCluster`.
+- In single-tenant mode, skip `OpenBaoTenant` and create the cluster only in the controller's watched namespace.
+
+</Callout>
 
 <JourneyRail
   title="The first five moves"
@@ -106,7 +109,7 @@ journeyStep: 4
 kind: OpenBaoCluster
 metadata:
   name: dev-cluster
-  namespace: default
+  namespace: openbao-demo
 spec:
   version: "2.5.0"
   replicas: 3
@@ -118,6 +121,13 @@ spec:
   storage:
     size: "10Gi"`}
 />
+
+<Callout type="note" title="Namespace choice still follows tenancy mode">
+
+If you are on the default multi-tenant path, `openbao-demo` must already be onboarded through `OpenBaoTenant`.
+If you are on the single-tenant path, replace `openbao-demo` with the namespace watched by the controller.
+
+</Callout>
 
 <Callout type="warning" title="Evaluation only">
 
@@ -138,7 +148,7 @@ Use it for local testing and CI, not for real environments.
 kind: OpenBaoCluster
 metadata:
   name: prod-cluster
-  namespace: openbao
+  namespace: openbao-prod
 spec:
   version: "2.5.0"
   replicas: 3
@@ -160,10 +170,20 @@ spec:
     # configure cloud or transit auto-unseal before first reconcile`}
 />
 
-<Callout type="danger" title="Do not enable self-init without user access bootstrap">
+<Callout type="warning" title="Do not apply the hardened example unchanged">
+
+Complete these before the first production reconcile:
+
+1. finish the full `selfInit` contract so it includes both `oidc.enabled: true` for operator lifecycle auth and at least one human login path in `selfInit.requests`, using [Self-Initialization](../openbaocluster/configuration/self-init.md) and [Operator Authentication](../operator/authn.md)
+2. finish `unseal` with an external trust path such as cloud KMS, transit, KMIP, OCI KMS, or PKCS#11 in [Unseal Configuration](../openbaocluster/configuration/unseal.md)
+3. finish the namespace handoff for your tenancy mode so `openbao-prod` is already onboarded in multi-tenant mode or is the watched namespace in single-tenant mode
+
+</Callout>
+
+<Callout type="danger" title="Do not treat human auth as a post-bootstrap step">
 
 `spec.selfInit.oidc.enabled: true` gives the operator a JWT-based control path. It does not create a human login path.
-Before you expose a hardened cluster, add at least one human auth method through `selfInit.requests`.
+If the cluster will self-initialize, include at least one human auth method in `selfInit.requests` before the first reconcile so the cluster is usable after the root token is revoked.
 
 </Callout>
 

@@ -6,25 +6,12 @@ journey: configure
 description: Configure bootstrap requests, operator OIDC setup, and verification for self-initializing OpenBao clusters without leaving a persistent root token behind.
 ---
 
-<PageHero
-  eyebrow="Configure / Cluster Baseline"
+<PageHeader
   title="Bootstrap the cluster declaratively and avoid carrying a root token forward."
   lede="Self-initialization lets the cluster bring up auth methods, policies, audit devices, and other bootstrap state as part of the `OpenBaoCluster` manifest. It is the supported production bootstrap path because it avoids leaving a long-lived root token in a Kubernetes Secret."
-  actions={[
-    {label: "Choose the profile", docId: "user-guide/openbaocluster/configuration/security-profiles", variant: "primary"},
-    {label: "Review operator authentication", docId: "user-guide/operator/authn", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "enable self-init as part of the initial cluster baseline",
-      "understand why self-init is safer than standard initialization for production",
-      "bootstrap operator OIDC roles for backup, upgrade, and restore",
-      "avoid locking yourself out after the root token is revoked",
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Choose the bootstrap path deliberately"
@@ -77,6 +64,35 @@ Self-init is safer only if you plan the access path up front. If you enable it w
 
 </Callout>
 
+<DecisionTable
+  title="Bootstrap both access surfaces together"
+  columns={["Access surface", "Where it lives", "What must be true before first reconcile"]}
+  rows={[
+    {
+      cells: [
+        "Operator lifecycle auth",
+        "`spec.selfInit.oidc.enabled`",
+        "Enable it when you want the operator to bootstrap JWT auth for backup, restore, and upgrade work.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Human login path",
+        "`spec.selfInit.requests`",
+        "Create at least one usable auth method and policy path for people before the root token is revoked.",
+      ],
+    },
+  ]}
+/>
+
+<Callout type="tip" title="Self-init is the whole bootstrap contract">
+
+Do not think of operator auth as step one and human auth as something to add later.
+If the cluster will self-initialize, define the human login path in `selfInit.requests` as part of the same manifest that enables self-init.
+
+</Callout>
+
 ## Enable self-init
 
 <CommandBlock
@@ -96,6 +112,35 @@ Self-init is safer only if you plan the access path up front. If you enable it w
             filePath: /tmp/audit.log`}
 >
   Treat `requests` as part of the bootstrap contract. They should create the minimum auth, policy, and audit state required for the cluster to be useful after bootstrap.
+</CommandBlock>
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Pair operator OIDC bootstrap with a human auth path"
+  code={`spec:
+  selfInit:
+    enabled: true
+    oidc:
+      enabled: true
+    requests:
+      - name: enable-userpass-auth
+        operation: update
+        path: sys/auth/userpass
+        authMethod:
+          type: userpass
+      - name: create-admin-policy
+        operation: update
+        path: sys/policies/acl/admin
+        policy:
+          policy: |
+            path "*" {
+              capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+            }
+      # Add your user, JWT role, or Kubernetes auth role here so a real human
+      # login path exists before the root token is revoked.`}
+>
+  The exact human auth method is your choice, but it belongs inside the same `selfInit` contract. For a complete worked example, see the [development self-init userpass recipe](../../validated-deployments/recipes/local/development-self-init-userpass.md).
 </CommandBlock>
 
 ## What belongs in `requests`

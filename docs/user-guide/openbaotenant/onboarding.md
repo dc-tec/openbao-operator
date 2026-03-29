@@ -8,29 +8,20 @@ journey: get-started
 journeyStep: 3
 ---
 
-<PageHero
-  eyebrow="Step 3"
+<PageHeader
   title="Introduce the target namespace before you create the first cluster."
   lede="In the default multi-tenant model, the operator does not discover namespaces implicitly. You onboard a namespace with `OpenBaoTenant`, which gives the control plane the RBAC and tenant guardrails it needs before the first cluster lands there."
-  actions={[
-    {label: 'Create your first cluster', docId: 'user-guide/openbaocluster/getting-started', variant: 'primary'},
-    {label: 'Review tenancy & governance', docId: 'user-guide/openbaotenant/overview', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this step when"
-    items={[
-      'you stayed on the default multi-tenant operator path',
-      'the operator install is already healthy in its rendered namespace',
-      'the target namespace already exists and has an owner',
-      'you know whether onboarding is self-service or centrally managed',
-    ]}
-  />
-</PageHero>
+/>
 
 <Callout type="note" title="Skip this in single-tenant mode">
 
 If you intentionally chose [Single-Tenant Mode](../operator/single-tenant-mode.md), the controller watches one namespace directly and you do not use `OpenBaoTenant` for the first cluster path.
+
+</Callout>
+
+<Callout type="tip" title="OpenBaoTenant introduces a namespace; it does not create one">
+
+Create the Kubernetes namespace through your normal platform workflow first, then apply `OpenBaoTenant` so the operator can install the namespace-scoped guardrails it depends on.
 
 </Callout>
 
@@ -142,7 +133,7 @@ spec:
 kind: OpenBaoTenant
 metadata:
   name: team-b-authorization
-  namespace: openbao-operator-system
+  namespace: <rendered-operator-namespace>
 spec:
   targetNamespace: team-b-prod
   # Optional centrally managed guardrails:

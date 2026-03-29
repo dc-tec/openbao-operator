@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Reference / Constraints & Caveats"
-  title="Use this page when you need to know whether a behavior is unsupported, unfinished, or intentionally out of scope."
-  lede="Not every missing feature is an accidental gap. This page captures the current constraints and deliberate non-goals for the pre-GA line so operators and contributors can separate unsupported assumptions from issues the project actually intends to solve."
-  actions={[
-    {label: 'Open support policy', docId: 'reference/support-policy', variant: 'primary'},
-    {label: 'Open upgrade compatibility', docId: 'reference/operator-upgrade-compatibility', variant: 'secondary'},
-  ]}
+<PageHeader
+  title="Know which operator boundaries are real today."
+  lede="Not every missing feature is an accidental gap. This page captures the current constraints and explicit non-goals for the pre-GA line so operators and contributors can separate unsupported assumptions from issues the project actually intends to solve."
 />
 
 <DecisionTable
@@ -25,11 +19,14 @@ journey: reference
       cells: ['CRD versioning', 'The current served and storage API is `openbao.org/v1alpha1`; multi-version conversion webhooks are out of scope today.', 'Treat API evolution through the pre-GA contract and review release notes carefully.'],
     },
     {
+      cells: ['Cluster adoption', 'The operator assumes it manages clusters it created and reconciles; generic import of arbitrary unmanaged OpenBao clusters is out of scope.', 'Create operator-managed clusters directly, or use backup and restore workflows when you need to move data into a new operator-managed cluster.'],
+    },
+    {
       cells: ['Operator downgrade', 'Downgrades are not treated as a normal rollback path.', 'Use the recovery and restore guidance when a release cannot move forward safely.'],
       emphasis: 'caution',
     },
     {
-      cells: ['External backup cleanup', '`DeleteAll` removes PVC-backed data but does not delete external object storage backups.', 'Clean external backup objects explicitly as part of decommission procedures.'],
+      cells: ['External backup cleanup', '`DeleteAll` removes PVC-backed data but does not delete snapshot objects already written to external object storage.', 'Clean external backup objects explicitly as part of decommission procedures.'],
     },
     {
       cells: ['etcd encryption verification', 'The operator cannot directly prove cluster-level etcd encryption at rest and surfaces a warning condition instead.', 'Validate cluster-level encryption controls outside the operator.'],
@@ -38,18 +35,17 @@ journey: reference
       cells: ['Helm CRD lifecycle', 'Helm does not automatically upgrade or delete CRDs.', 'Use release `crds.yaml` assets for CRD lifecycle operations.'],
     },
     {
-      cells: ['Validation channels', '`edge` and `nightly` are not production support channels.', 'Pin explicit stable versions for production environments.'],
-      emphasis: 'recommended',
+      cells: ['Built-in upgrade authentication', 'Built-in rolling and blue/green upgrade orchestration do not support `spec.upgrade.tokenSecretRef`; upgrade Jobs use JWT authentication only.', 'Configure `spec.upgrade.jwtAuthRole` or enable `spec.selfInit.oidc.enabled` so the operator can bootstrap the upgrade auth path.'],
+    },
+    {
+      cells: ['Upgrade strategy switching', 'Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a supported in-place transition today.', 'Choose the upgrade strategy before the next rollout and keep it stable for that cluster.'],
+      emphasis: 'caution',
     },
   ]}
 />
 
-## Support window
-
-Support is focused on the latest stable release line. See [Support Policy](support-policy.md) for the current maintenance contract.
-
 <NextActions
-  title="Related caveat and support pages"
+  title="Related caveat and recovery pages"
   items={[
     {
       label: 'Support policy',
@@ -57,14 +53,19 @@ Support is focused on the latest stable release line. See [Support Policy](suppo
       docId: 'reference/support-policy',
     },
     {
-      label: 'Deprecation policy',
-      description: 'Use the lifecycle policy when a limitation is really part of the pre-GA API evolution story.',
-      docId: 'reference/deprecation-policy',
+      label: 'Upgrade compatibility',
+      description: 'Use the exact operator upgrade-path contract when the next question is rollback stance or CRD sequencing.',
+      docId: 'reference/operator-upgrade-compatibility',
     },
     {
       label: 'Decommission a cluster',
       description: 'Return to the operational decommission workflow for the data-path caveats around external backups.',
       docId: 'user-guide/openbaocluster/operations/deletion',
+    },
+    {
+      label: 'Restore from backup',
+      description: 'Use the restore workflow when a limitation turns the next safe move into recovery or migration rather than in-place change.',
+      docId: 'user-guide/openbaorestore/restore',
     },
   ]}
 />

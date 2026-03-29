@@ -7,26 +7,12 @@ pageType: concept
 journey: get-started
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Supporting decision"
+<PageHeader
   title="Keep controller auth short-lived, bound, and boring."
   lede="The operator authenticates to OpenBao with a projected Kubernetes ServiceAccount token by default. That path is safer than static root credentials, but it only stays safe when the rendered controller identity, JWT audience, and OpenBao-side role binding still match."
-  actions={[
-    {label: 'Review operator authorization', docId: 'user-guide/operator/authz', variant: 'primary'},
-    {label: 'Review identity mapping', docId: 'user-guide/operator/identity-and-access', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'explain how the controller authenticates without a long-lived root token',
-      'verify the audience and role binding after custom namespace or name changes',
-      'bootstrap JWT auth with self-init instead of manual token handling',
-      'debug why controller auth fails while the cluster itself stays healthy',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DiagramFrame
   title="Default operator auth path"
@@ -85,9 +71,31 @@ journey: get-started
 
 `spec.selfInit.oidc.enabled: true` bootstraps the controller auth path only.
 It does not create a human login method by itself.
-If people need access after first boot, add that through `selfInit.requests` or another explicit access path.
+If you use self-init, human access should be created in the same bootstrap contract through `selfInit.requests`, not bolted on later as an afterthought.
 
 </Callout>
+
+<DecisionTable
+  title="Treat bootstrap auth as two access surfaces"
+  columns={['Surface', 'Where it is defined', 'Why it exists']}
+  rows={[
+    {
+      cells: [
+        'Operator lifecycle auth',
+        '`spec.selfInit.oidc.enabled` or an equivalent manually managed JWT role',
+        'Lets the operator perform backup, restore, upgrade, and maintenance work with a short-lived scoped identity.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Human login path',
+        '`spec.selfInit.requests` or another deliberate bootstrap path in the same cluster bring-up plan',
+        'Ensures someone can actually sign in after the root token is revoked.',
+      ],
+    },
+  ]}
+/>
 
 ## Self-init and manual bootstrap
 
@@ -100,7 +108,7 @@ If people need access after first boot, add that through `selfInit.requests` or 
         'Self-init with OIDC',
         'You want the supported production path and the cluster is allowed to bootstrap its own operator auth surface.',
         'The operator configures JWT auth, discovery, the `openbao-operator` policy, and the bound role automatically.',
-        'Still add a human login path separately before you expose the cluster.',
+        'Bootstrap a human login path in `selfInit.requests` at the same time so the cluster is usable after root-token revocation.',
       ],
       emphasis: 'recommended',
     },

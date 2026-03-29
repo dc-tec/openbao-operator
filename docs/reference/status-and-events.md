@@ -5,15 +5,9 @@ pageType: reference
 journey: reference
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Reference / Quick Checks"
+<PageHeader
   title="Use this page to decode what the operator is telling you through conditions, events, and lifecycle signals."
   lede="This is the exact lookup surface for status conditions and emitted events across `OpenBaoCluster`, `OpenBaoRestore`, and `OpenBaoTenant`. Use it when a cluster is stalled, degraded, upgrading, backing up, restoring, or otherwise behaving in a way that needs precise interpretation rather than a generic troubleshooting step."
-  actions={[
-    {label: 'Open troubleshooting', to: '/docs/operate/troubleshooting', variant: 'primary'},
-    {label: 'Open recovery and restore', to: '/docs/recover', variant: 'secondary'},
-  ]}
 />
 
 <CommandBlock
@@ -214,6 +208,11 @@ Condition **types** are part of the API surface. Reason and event values may exp
 <NextActions
   title="Related lookup surfaces"
   items={[
+    {
+      label: 'Unseal configuration',
+      description: 'Open the provider and Secret contract page when `CloudUnsealIdentityReady` or seal-mode setup is the real problem.',
+      docId: 'user-guide/openbaocluster/configuration/unseal',
+    },
     {
       label: 'Troubleshoot the cluster',
       description: 'Use the operational troubleshooting page when you know something is wrong but do not yet know which signal matters.',

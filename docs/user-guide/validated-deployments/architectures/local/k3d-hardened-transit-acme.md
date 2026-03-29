@@ -6,17 +6,12 @@ journey: validated-deployments
 description: Validated local baseline for a hardened OpenBao deployment on k3d with Transit auto-unseal, an internal ACME issuer, and user-managed TLS passthrough.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Validated Deployments / Local Baselines"
+<PageHeader
   title="Use this lane to rehearse hardened ACME issuance locally without swapping in public internet dependencies."
   lede="This local baseline keeps the hardened posture, keeps the unseal root external, and keeps OpenBao as the TLS endpoint while an internal ACME CA proves certificate issuance through a user-managed passthrough edge."
-  actions={[
-    {label: "Open deployment recipe", docId: "user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls", variant: "primary"},
-    {label: "Review TLS guidance", docId: "security/workload/tls", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="This lane proves"
     items={[
       "a Hardened cluster can bootstrap locally while keeping the seal dependency outside the tenant namespace",
@@ -25,7 +20,7 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
       "local rehearsal can cover ACME readiness and probe behavior before you move to a public cloud baseline",
     ]}
   />
-</PageHero>
+
 
 <Callout type="note" title="Classification">
 

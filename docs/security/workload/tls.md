@@ -6,26 +6,12 @@ journey: security
 description: How peer trust, certificate rotation, and workload-facing TLS identity work across operator-managed, external, and ACME-backed deployments.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Workload Protections"
+<PageHeader
   title="Keep peer trust, edge exposure, and workload identity on deliberate paths."
   lede="TLS in the operator is not just an ingress feature. It defines how pods trust each other, how clients verify the service, where certificate authority material lives, and whether the private key ever touches Kubernetes Secrets at all."
-  actions={[
-    {label: "Open external access", docId: "user-guide/openbaocluster/configuration/external-access", variant: "primary"},
-    {label: "Review pod security", docId: "security/workload/workload-security", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "choose the right TLS source for an evaluation, internal production, or internet-facing deployment",
-      "understand where CA and server-key material live in each mode",
-      "review how rotation and hot reload work without forcing downtime",
-      "connect edge exposure guidance back to the Hardened profile",
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Choose the TLS mode deliberately"
@@ -184,6 +170,7 @@ This page explains the TLS security model. Use the configuration guides when you
 - <SiteLink docId="user-guide/openbaocluster/configuration/external-access">External access</SiteLink>
 - <SiteLink docId="user-guide/openbaocluster/configuration/gateway-api">Gateway API support</SiteLink>
 - <SiteLink docId="user-guide/openbaocluster/configuration/network">Network configuration</SiteLink>
+- <SiteLink docId="user-guide/openbaocluster/configuration/unseal">Unseal configuration</SiteLink>
 
 </Callout>
 

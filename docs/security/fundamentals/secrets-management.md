@@ -6,26 +6,12 @@ journey: security
 description: How root tokens, unseal keys, TLS material, and generated job identities are created, avoided, or bounded across the OpenBao Operator lifecycle.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Security / Security Model"
+<PageHeader
   title="Treat trust material as lifecycle state, not just as Kubernetes Secrets."
   lede="The operator manages or coordinates several high-value trust surfaces: bootstrap credentials, unseal roots, TLS material, and the identities used by backup, restore, and upgrade workflows. The most important question is not only where they live, but whether the operating model can avoid creating them in the first place."
-  actions={[
-    {label: 'Open production posture', docId: 'security/fundamentals/profiles', variant: 'primary'},
-    {label: 'Open backup operations', docId: 'user-guide/openbaocluster/operations/backups', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand which trust material the operator may create or avoid',
-      'decide whether static unseal or persisted bootstrap secrets are acceptable',
-      'review how backup, restore, and upgrade jobs authenticate',
-      'connect lifecycle workflows back to the trust model instead of treating them as isolated features',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   kind="reference"

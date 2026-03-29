@@ -6,26 +6,12 @@ pageType: concept
 journey: operate
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Operate / Restore from backup"
+<PageHeader
   title="Treat restore as an explicit destructive workflow."
   lede="Restore is modeled as `OpenBaoRestore`, an immutable request object that keeps disaster recovery visible, auditable, and separate from normal cluster reconciliation. Use this page to understand when restore is appropriate and what boundaries it enforces before you run it."
-  actions={[
-    {label: 'Run a restore', docId: 'user-guide/openbaorestore/restore', variant: 'primary'},
-    {label: 'Open restore manager architecture', docId: 'architecture/restore-manager', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'decide whether restore is the right answer to an incident',
-      'understand why the operator uses OpenBaoRestore instead of hiding restore inside OpenBaoCluster',
-      'reason about lock ownership, auth, and destructive overwrite before acting',
-      'connect backups, restore, and post-incident recovery into one operating model',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Use restore when"

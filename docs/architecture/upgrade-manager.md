@@ -6,26 +6,12 @@ journey: architecture
 description: Orchestrate rolling and blue-green upgrades, status-backed resumability, and rollback safety without violating Raft consensus.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Operations Manager"
+<PageHeader
   title="Change workload versions without violating Raft safety."
   lede="The upgrade manager owns disruptive version changes. It keeps upgrade orchestration out of the workload loop, persists state in status so upgrades survive controller restarts, and prioritizes cluster availability over finishing quickly."
-  actions={[
-    {label: 'Open operation lifecycle', docId: 'architecture/operation-lifecycle', variant: 'primary'},
-    {label: 'Open upgrades guide', docId: 'user-guide/openbaocluster/operations/upgrades', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'compare rolling and blue-green at the manager boundary',
-      'understand which status fields make upgrades resumable',
-      'see where retries, rollback, and break-glass decisions happen',
-      'connect user-facing upgrade choices back to controller behavior',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <ManagerAtAGlance
   sections={[

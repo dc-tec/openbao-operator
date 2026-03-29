@@ -7,17 +7,12 @@ journey: configure
 description: Understand what OpenBaoCluster owns, what the operator protects automatically, and how to read the Configure section as one cluster-shaping system.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Configure / Read This First"
+<PageHeader
   title="Read OpenBaoCluster as the contract for the whole service, not just a CRD."
   lede="`OpenBaoCluster` is the declarative contract for the running OpenBao service on Kubernetes. It sets the cluster shape, service boundary, storage path, and day 2 capabilities the operator will keep reconciling. Use this page to orient the rest of Configure before you start editing individual fields."
-  actions={[
-    {label: "Review security profiles", docId: "user-guide/openbaocluster/configuration/security-profiles", variant: "primary"},
-    {label: "Open resources and storage", docId: "user-guide/openbaocluster/configuration/resources-storage", variant: "secondary"},
-  ]}
->
-  <Checklist
+/>
+
+<Checklist
     title="A good read of this page should leave you with"
     items={[
       "a clear view of what the operator owns versus what the platform still expects from you",
@@ -26,7 +21,7 @@ description: Understand what OpenBaoCluster owns, what the operator protects aut
       "the confidence to shape the first cluster without treating the CR as an arbitrary field dump",
     ]}
   />
-</PageHero>
+
 
 <Callout type="note" title="Profile is an explicit part of the contract">
 

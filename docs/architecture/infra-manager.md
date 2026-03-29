@@ -6,26 +6,12 @@ journey: architecture
 description: Render OpenBaoCluster into converged configuration, StatefulSet resources, and rollout triggers for the workload path.
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Architecture / Workload Manager"
+<PageHeader
   title="Render the cluster spec into a converged StatefulSet and configuration."
   lede="The infrastructure manager is the workload path that turns `OpenBaoCluster` into running Kubernetes resources. It owns rendered configuration, StatefulSet-facing infrastructure, and the rollout triggers that keep configuration drift and pod lifecycle changes in sync."
-  actions={[
-    {label: 'Open component design', docId: 'architecture/components', variant: 'primary'},
-    {label: 'Open cluster overview', docId: 'user-guide/openbaocluster/overview', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'understand how spec changes become rendered workload resources',
-      'trace config, Services, and StatefulSet ownership back to one manager',
-      'see how TLS, unseal, and image verification feed into workload rendering',
-      'reason about rollout triggers and workload-side safety boundaries',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <ManagerAtAGlance
   sections={[

@@ -7,25 +7,12 @@ journey: configure
 description: Choose the cluster posture first, including bootstrap, unseal, TLS, and image-verification expectations for development versus Hardened production.
 ---
 
-<PageHero
-  eyebrow="Configure / Cluster Baseline"
+<PageHeader
   title="Choose the operating posture before you tune anything else."
   lede="`spec.profile` is the top-level decision that shapes bootstrap, unseal, TLS, image verification, and failure tolerance. Pick the posture you plan to keep operating, then let the rest of the cluster baseline follow from that choice."
-  actions={[
-    {label: "Configure self-initialization", docId: "user-guide/openbaocluster/configuration/self-init", variant: "primary"},
-    {label: "Review production posture", docId: "security/fundamentals/profiles", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "decide whether the cluster is only for evaluation or intended for production",
-      "understand how profile choice changes bootstrap and root-token handling",
-      "choose an unseal root of trust that matches the platform you actually run",
-      "set expectations for TLS, networking, and image-verification guardrails up front",
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DecisionTable
   title="Choose the profile deliberately"
@@ -333,6 +320,11 @@ The dangerous part of the Development profile is not that it exists; it is that 
 <NextActions
   title="Continue cluster baseline"
   items={[
+    {
+      label: "Unseal configuration",
+      description: "Use the provider-by-provider Secret and mounted-file contract page once you know which root of trust you want.",
+      docId: "user-guide/openbaocluster/configuration/unseal",
+    },
     {
       label: "Self-initialization",
       description: "Configure the bootstrap requests and operator OIDC flow that follow from the profile choice.",

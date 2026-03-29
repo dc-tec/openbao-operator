@@ -7,26 +7,12 @@ pageType: concept
 journey: security
 ---
 
-<PageHero
-  variant="compact"
-  eyebrow="Tenant Onboarding / Security"
+<PageHeader
   title="Understand the shared-operator boundary before you rely on multi-tenancy."
   lede="Multi-tenant mode is the default production model because namespace introduction is explicit, the Provisioner and Controller stay separate, tenant access stays scoped, and guardrails are applied before a cluster ever lands in the namespace."
-  actions={[
-    {label: 'Review RBAC architecture', docId: 'security/infrastructure/rbac', variant: 'primary'},
-    {label: 'Return to tenant onboarding', docId: 'user-guide/openbaotenant/onboarding', variant: 'secondary'},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      'explain why the default model uses both a Provisioner and a Controller',
-      'review the isolation assumptions before approving shared production use',
-      'understand what tenant onboarding does and does not grant',
-      'validate that guardrails stay in place after onboarding and first cluster creation',
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <Callout type="success" title="Default production model">
 

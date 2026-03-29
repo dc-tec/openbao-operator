@@ -61,6 +61,42 @@ journeyStep: 5
   ]}
 />
 
+<DecisionTable
+  title="Recommended first order after the cluster is healthy"
+  columns={['If this is your situation', 'Do this next', 'Why first']}
+  rows={[
+    {
+      cells: [
+        'Default production rollout',
+        'Production checklist',
+        'It turns a merely working cluster into one with explicit security, durability, and readiness gates before teams depend on it.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'You have not yet proven backup or restore',
+        'Backups',
+        'The first risky upgrade should not be the first time object storage, backup auth, and restore assumptions are tested.',
+      ],
+    },
+    {
+      cells: [
+        'You need user or edge access now',
+        'External access',
+        'TLS mode, exposure path, and user auth assumptions should be settled before traffic and clients grow around a temporary shortcut.',
+      ],
+    },
+    {
+      cells: [
+        'You are already planning the first version change',
+        'Upgrades',
+        'Upgrade strategy and pre-upgrade snapshot expectations need to be deliberate, not improvised after the version field changes.',
+      ],
+    },
+  ]}
+/>
+
 <RouteList
   title="Pick the next operating concern"
   items={[

@@ -6,25 +6,12 @@ journey: configure
 description: Configure the operator-managed NetworkPolicy contract, including DNS, Kubernetes API egress, trusted ingress peers, and external dependency paths for backups and restore.
 ---
 
-<PageHero
-  eyebrow="Configure / Service Boundary"
+<PageHeader
   title="Treat NetworkPolicy as part of the cluster contract, not as an afterthought."
   lede="The operator uses a deny-by-default posture and then adds the ingress and egress paths the cluster needs to function. That means DNS, Kubernetes API access, edge peers, and backup or restore dependencies should be configured intentionally rather than discovered during an outage."
-  actions={[
-    {label: "Open external access", docId: "user-guide/openbaocluster/configuration/external-access", variant: "primary"},
-    {label: "Review network security", docId: "security/infrastructure/network-security", variant: "secondary"},
-  ]}
->
-  <Checklist
-    title="Use this page when you need to"
-    items={[
-      "understand which ingress and egress paths the operator creates automatically",
-      "wire DNS and Kubernetes API access for clusters with strict NetworkPolicy enforcement",
-      "allow ingress-controller or Gateway data-plane traffic without opening the namespace broadly",
-      "configure backup, restore, transit, or other external dependencies before day 2 workflows need them",
-    ]}
-  />
-</PageHero>
+/>
+
+
 
 <DiagramFrame
   title="Default network posture"
