@@ -36,7 +36,7 @@ Use [Release Policy](pathname:///docs/next/reference/release-policy) for the pub
     {
       cells: [
         "Stable release",
-        "Merge the release-please PR so the `Release Tag` workflow can resolve the merged release PR, create the stable version tag, and create the draft GitHub Release from `main`.",
+        "Merge the release-please PR so the `Release Tag` workflow can resolve the merged release PR, create the signed stable version tag, and create the draft GitHub Release from `main`.",
         "GitHub Release assets, OCI Helm chart, signed images, stable docs snapshot, docs deployment, and provenance evidence.",
         "Stable releases become permanent versioned docs and own the default `/docs` route.",
       ],
@@ -45,7 +45,7 @@ Use [Release Policy](pathname:///docs/next/reference/release-policy) for the pub
     {
       cells: [
         "Prerelease",
-        "Prefer a tiny PR that carries an empty commit with `Release-As: 0.1.0-rc.6`, then merge the resulting release-please PR so the `Release Tag` workflow creates the prerelease tag and draft GitHub Release.",
+        "Prefer a tiny PR that carries an empty commit with `Release-As: 0.1.0-rc.6`, then merge the resulting release-please PR so the `Release Tag` workflow creates the signed prerelease tag and draft GitHub Release.",
         "GitHub Release assets, OCI Helm chart, signed images, docs site deployment, and provenance evidence.",
         "Prereleases use `/docs/next` plus release notes; do not create a permanent versioned docs snapshot unless there is a deliberate preview exception.",
       ],
@@ -163,7 +163,16 @@ Release automation must use non-default tokens so the resulting tag and GitHub R
 - `OPENBAO_OPERATOR_RELEASE_PR_APP_ID` and `OPENBAO_OPERATOR_RELEASE_PR_PRIVATE_KEY` for PR-only `release-please`
 - `OPENBAO_OPERATOR_RELEASE_TAG_APP_ID` and `OPENBAO_OPERATOR_RELEASE_TAG_PRIVATE_KEY` for the custom `Release Tag` workflow
 
-The tag app should be the only actor with semver tag ruleset bypass, and it only needs repository `contents: write`. A PAT fallback is possible through `RELEASE_PLEASE_TOKEN`, but a bot identity is safer than a maintainer’s personal token.
+The tag app should be the only actor with semver tag ruleset bypass, and it only needs repository `contents: write`.
+
+Signed release tags also require these repo secrets:
+
+- `OPENBAO_OPERATOR_RELEASE_TAG_GPG_PRIVATE_KEY` - armored private key for the dedicated release-signing identity
+- `OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE` - passphrase for that private key
+- `OPENBAO_OPERATOR_RELEASE_TAG_GPG_NAME` - tagger name to write into signed release tags
+- `OPENBAO_OPERATOR_RELEASE_TAG_GPG_EMAIL` - tagger email to write into signed release tags
+
+Upload the matching public key to the GitHub identity that should show the `Verified` badge for release tags. Prefer a dedicated release-signing key instead of a day-to-day maintainer key. A PAT fallback is possible through `RELEASE_PLEASE_TOKEN`, but a bot identity is safer than a maintainer’s personal token.
 
 </Callout>
 

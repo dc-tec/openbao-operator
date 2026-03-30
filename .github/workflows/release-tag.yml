@@ -41,9 +41,60 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
+      - name: Import release tag signing key
+        env:
+          OPENBAO_OPERATOR_RELEASE_TAG_GPG_PRIVATE_KEY: ${{ secrets.OPENBAO_OPERATOR_RELEASE_TAG_GPG_PRIVATE_KEY }}
+          OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE: ${{ secrets.OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE }}
+          OPENBAO_OPERATOR_RELEASE_TAG_GPG_NAME: ${{ secrets.OPENBAO_OPERATOR_RELEASE_TAG_GPG_NAME }}
+          OPENBAO_OPERATOR_RELEASE_TAG_GPG_EMAIL: ${{ secrets.OPENBAO_OPERATOR_RELEASE_TAG_GPG_EMAIL }}
+        run: |
+          set -euo pipefail
+
+          for var in \
+            OPENBAO_OPERATOR_RELEASE_TAG_GPG_PRIVATE_KEY \
+            OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE \
+            OPENBAO_OPERATOR_RELEASE_TAG_GPG_NAME \
+            OPENBAO_OPERATOR_RELEASE_TAG_GPG_EMAIL
+          do
+            if [[ -z "${!var}" ]]; then
+              echo "${var} is required for signed release tags" >&2
+              exit 1
+            fi
+          done
+
+          export GNUPGHOME="${RUNNER_TEMP}/release-tag-gnupg"
+          mkdir -p "${GNUPGHOME}"
+          chmod 700 "${GNUPGHOME}"
+
+          printf '%s' "${OPENBAO_OPERATOR_RELEASE_TAG_GPG_PRIVATE_KEY}" | gpg --batch --import
+
+          fingerprint="$(gpg --batch --list-secret-keys --with-colons | awk -F: '$1=="fpr"{print $10; exit}')"
+          if [[ -z "${fingerprint}" ]]; then
+            echo "failed to resolve imported GPG signing key fingerprint" >&2
+            exit 1
+          fi
+
+          gpg_wrapper="${RUNNER_TEMP}/gpg-loopback.sh"
+          printf '%s\n' \
+            "#!/usr/bin/env bash" \
+            "exec gpg --batch --yes --pinentry-mode loopback --passphrase \"\${OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE}\" \"\$@\"" \
+            > "${gpg_wrapper}"
+          chmod 700 "${gpg_wrapper}"
+
+          git config --global user.name "${OPENBAO_OPERATOR_RELEASE_TAG_GPG_NAME}"
+          git config --global user.email "${OPENBAO_OPERATOR_RELEASE_TAG_GPG_EMAIL}"
+          git config --global user.signingkey "${fingerprint}"
+          git config --global gpg.program "${gpg_wrapper}"
+
+          {
+            echo "GNUPGHOME=${GNUPGHOME}"
+            echo "RELEASE_TAG_SIGNING_FINGERPRINT=${fingerprint}"
+          } >> "${GITHUB_ENV}"
+
       - name: Create tag and draft release
         env:
           REPO: ${{ github.repository }}
           GH_READ_TOKEN: ${{ github.token }}
           GH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
+          OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE: ${{ secrets.OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE }}
         run: bash hack/ci/create-release-tag-and-draft.sh

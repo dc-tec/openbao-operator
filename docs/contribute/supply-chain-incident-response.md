@@ -39,8 +39,8 @@ journey: contribute
     {
       cells: [
         "4",
-        "Rotate app private keys and any affected repository secrets.",
-        "Assumes any app key or workflow-level credential may already have leaked.",
+        "Rotate app private keys, the release-tag signing key, and any affected repository secrets.",
+        "Assumes any app key, signing key, or workflow-level credential may already have leaked.",
       ],
     },
   ]}
@@ -117,8 +117,8 @@ crane ls ghcr.io/dc-tec/openbao-upgrade | tail -n 20`}
     {
       cells: [
         "Credential hygiene",
-        "Suspicious app keys, tokens, PATs, sessions, or SSH keys have been revoked or rotated.",
-        "GitHub account sessions, SSH keys, app private keys, and repo/org secrets.",
+        "Suspicious app keys, release-signing keys, tokens, PATs, sessions, or SSH keys have been revoked or rotated.",
+        "GitHub account sessions, SSH keys, GPG signing keys, app private keys, and repo/org secrets.",
       ],
     },
   ]}
