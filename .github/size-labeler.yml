@@ -1,0 +1,24 @@
+thresholds:
+  - label: size/XS
+    max: 10
+  - label: size/S
+    max: 100
+  - label: size/M
+    max: 500
+  - label: size/L
+    max: 1000
+  - label: size/XL
+
+ignore:
+  - go.mod
+  - go.sum
+  - '*_test.go'
+  - api/v1alpha1/zz_generated.deepcopy.go
+  - dist/install.yaml
+  - config/crd/bases/*.yaml
+  - config/rbac/*.yaml
+
+comment:
+  marker: "<!-- managed:pr-size-label -->"
+  body: |
+    This PR is large (over 1000 lines). Consider breaking it down into smaller PRs.

@@ -11,58 +11,52 @@ concurrency:
 permissions: {}
 
 jobs:
-  labeler:
-    name: Auto Label PR
+  sync-labels:
+    name: Sync PR Labels
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: read
       issues: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4.1.7
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-          sparse-checkout: |
-            .github/labeler.yml
-          sparse-checkout-cone-mode: false
+      - name: Fetch trusted labeler script and config
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
 
-      - name: Label PR
-        uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
-        with:
-          configuration-path: .github/labeler.yml
-          sync-labels: true
+          workdir="$(mktemp -d)"
+          echo "WORKDIR=${workdir}" >> "${GITHUB_ENV}"
 
-  size-label:
-    name: Size Label
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-      issues: write
-    steps:
-      - name: Add size label
-        uses: codelytv/pr-size-labeler@4ec67706cd878fbc1c8db0a5dcd28b6bb412e85a # v1.8.1
+          fetch_file() {
+            local path="$1"
+            local destination="$2"
+            mkdir -p "$(dirname "${destination}")"
+            gh api "repos/${REPO}/contents/${path}?ref=${BASE_SHA}" --jq '.content' \
+              | tr -d '\n' \
+              | base64 --decode > "${destination}"
+          }
+
+          fetch_file ".github/scripts/sync_pr_labels.go" "${workdir}/sync_pr_labels.go"
+          fetch_file ".github/labeler.yml" "${workdir}/labeler.yml"
+          fetch_file ".github/size-labeler.yml" "${workdir}/size-labeler.yml"
+          fetch_file "go.mod" "${workdir}/go.mod"
+          fetch_file "go.sum" "${workdir}/go.sum"
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          xs_label: 'size/XS'
-          xs_max_size: 10
-          s_label: 'size/S'
-          s_max_size: 100
-          m_label: 'size/M'
-          m_max_size: 500
-          l_label: 'size/L'
-          l_max_size: 1000
-          xl_label: 'size/XL'
-          fail_if_xl: false
-          message_if_xl: |
-            This PR is large (over 1000 lines). Consider breaking it down into smaller PRs.
-          files_to_ignore: |
-            go.mod
-            go.sum
-            *_test.go
-            api/v1alpha1/zz_generated.deepcopy.go
-            dist/install.yaml
-            config/crd/bases/*.yaml
-            config/rbac/*.yaml
+          go-version-file: ${{ env.WORKDIR }}/go.mod
+
+      - name: Sync PR labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          LABELER_CONFIG_PATH: ${{ env.WORKDIR }}/labeler.yml
+          SIZE_CONFIG_PATH: ${{ env.WORKDIR }}/size-labeler.yml
+        run: |
+          cd "${WORKDIR}"
+          go run ./sync_pr_labels.go
