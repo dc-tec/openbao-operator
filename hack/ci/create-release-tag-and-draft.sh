@@ -82,6 +82,18 @@ gh_write() {
   GH_TOKEN="${GH_WRITE_TOKEN}" gh "$@"
 }
 
+require_git_tag_signing() {
+  if [[ -z "$(git config --get user.signingkey || true)" ]]; then
+    echo "git user.signingkey is not configured; signed release tags require the release-tag GPG key setup" >&2
+    exit 1
+  fi
+
+  if [[ -z "$(git config --get gpg.program || true)" ]]; then
+    echo "git gpg.program is not configured; signed release tags require the release-tag GPG wrapper" >&2
+    exit 1
+  fi
+}
+
 require_file "${MANIFEST_FILE}"
 require_file "${CHART_FILE}"
 
@@ -177,11 +189,10 @@ elif git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null 2
   fi
 else
   if [[ "${DRY_RUN}" == "1" ]]; then
-    echo "[dry-run] would create annotated tag ${version} at ${merge_oid}"
+    echo "[dry-run] would create signed annotated tag ${version} at ${merge_oid}"
   else
-    git config user.name "github-actions[bot]"
-    git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-    git tag -a "${version}" "${merge_oid}" -m "${version}"
+    require_git_tag_signing
+    git tag -s "${version}" "${merge_oid}" -m "Release ${version}"
     git push origin "refs/tags/${version}"
   fi
 fi

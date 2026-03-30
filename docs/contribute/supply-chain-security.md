@@ -79,7 +79,7 @@ journey: contribute
       cells: [
         "Governance",
         "Branch, tag, and change-management expectations for release-critical paths.",
-        "Repository rulesets, CODEOWNERS, PR checks, and pinned GitHub Actions usage.",
+        "Repository rulesets, signed semver tags, CODEOWNERS, PR checks, and pinned GitHub Actions usage.",
       ],
     },
     {

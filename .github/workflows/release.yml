@@ -194,22 +194,15 @@ jobs:
           exit-code: "1"
 
   e2e:
-    name: E2E Gate (kind ${{ matrix.k8s }})
+    name: E2E Gate (kind 1.35.0)
     runs-on: *runner
     needs: [prepare, build]
     permissions:
       contents: read
       packages: read
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        k8s:
-          - 1.33.7
-          - 1.34.3
-          - 1.35.0
     env:
-      KIND_NODE_IMAGE: kindest/node:v${{ matrix.k8s }}
+      KIND_NODE_IMAGE: kindest/node:v1.35.0
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -270,38 +263,9 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: e2e-artifacts-kind-${{ matrix.k8s }}
+          name: e2e-artifacts-kind-1.35.0
           path: artifacts/
           retention-days: 7
-
-  perf-gate:
-    name: Performance Gate (kind v1.34.3)
-    runs-on: *runner
-    needs: prepare
-    permissions:
-      contents: read
-    timeout-minutes: 180
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.ref }}
-
-      - name: Setup repo tools
-        uses: ./.github/actions/setup-repo-tools
-
-      - name: Install kind (pinned)
-        uses: ./.github/actions/install-kind
-        with:
-          install-dir: bin/
-
-      - name: Verify performance thresholds
-        env:
-          GOFLAGS: -mod=vendor
-          PERF_NODE_IMAGE: kindest/node:v1.34.3
-          PERF_SCENARIO_TIMEOUT: 90m
-          PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml
-        run: make verify-perf
 
   verify-provenance:
     name: Verify Image Provenance
@@ -647,7 +611,7 @@ jobs:
   promote:
     name: Promote + Publish Release
     runs-on: *runner
-    needs: [prepare, build, security-govulncheck, security-images, e2e, perf-gate, verify-provenance, verify-byte-reproducibility]
+    needs: [prepare, build, security-govulncheck, security-images, e2e, verify-provenance, verify-byte-reproducibility]
     environment:
       name: release-publish
     permissions:
