@@ -48,7 +48,7 @@ test('version dropdown switches from next docs to the archived release', async (
   await expect(archivedRelease).toBeVisible();
   await archivedRelease.click();
 
-  await expect(page).toHaveURL(/\/openbao-operator\/docs\/get-started\/deployment-decision-guide$/);
+  await expect(page).toHaveURL(/\/openbao-operator\/docs\/0\.1\.0-rc\.5\/get-started\/deployment-decision-guide$/);
   await expect(page.getByText('Prerelease documentation')).toBeVisible();
   await expect(page.getByText('Version: 0.1.0-rc.5')).toBeVisible();
 });

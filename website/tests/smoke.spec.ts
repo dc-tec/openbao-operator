@@ -49,8 +49,8 @@ test('stable docs expose the current release banner', async ({page}) => {
   await page.goto('docs');
 
   await expect(page.getByRole('heading', {name: 'Choose the route that matches the work.'})).toBeVisible();
-  await expect(page.getByText('Prerelease documentation')).toBeVisible();
-  await expect(page.getByText('Version: 0.1.0-rc.5')).toBeVisible();
+  await expect(page.getByText('Published release documentation')).toBeVisible();
+  await expect(page.getByText('Version: 0.1.0')).toBeVisible();
 });
 
 test('architecture section exposes grouped local navigation', async ({page}) => {

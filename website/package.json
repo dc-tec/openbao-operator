@@ -34,7 +34,7 @@
     "react-dom": "^19.1.0"
   },
   "overrides": {
-    "serialize-javascript": "7.0.3"
+    "serialize-javascript": "7.0.5"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.9.2",
