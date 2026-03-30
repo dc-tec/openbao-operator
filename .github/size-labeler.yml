@@ -10,13 +10,20 @@ thresholds:
   - label: size/XL
 
 ignore:
-  - go.mod
   - go.sum
-  - '*_test.go'
+  - website/package-lock.json
+  - vendor/**/*
   - api/v1alpha1/zz_generated.deepcopy.go
+  - docs/reference/api.md
   - dist/install.yaml
-  - config/crd/bases/*.yaml
-  - config/rbac/*.yaml
+  - config/crd/bases/**/*
+  - charts/openbao-operator/crds/**/*
+  - charts/openbao-operator/templates/rbac/**/*
+  - charts/openbao-operator/templates/admission/**/*
+  - .ast-grep/rules/generated/**/*
+  - internal/adapter/config/testdata/**/*
+  - website/versioned_docs/**/*
+  - website/versioned_sidebars/**/*
 
 comment:
   marker: "<!-- managed:pr-size-label -->"
