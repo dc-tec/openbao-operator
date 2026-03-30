@@ -2,14 +2,33 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
-## Unreleased
-
 ## [0.1.0](https://github.com/dc-tec/openbao-operator/compare/0.1.0-rc.7...0.1.0) (2026-03-30)
 
+The first stable pre-GA release of OpenBao Operator. This release rolls up the
+`0.1.0-rc.1` through `0.1.0-rc.7` line into the initial `0.1.0` baseline.
 
-### Miscellaneous Chores
+### Highlights
 
-* **release:** release 0.1.0 ([#302](https://github.com/dc-tec/openbao-operator/issues/302)) ([ebcaf03](https://github.com/dc-tec/openbao-operator/commit/ebcaf03b7ca60a02d56e64135a45e6f1e20be424))
+* cluster lifecycle management for OpenBao on Kubernetes, including bootstrap,
+  self-init, and day-2 operations
+* rolling and blue/green upgrade workflows, with backup and restore support
+* tenant onboarding for the default multi-tenant model, plus supported
+  single-tenant installation paths
+* hardened security posture with image verification, admission guardrails, RBAC
+  hardening, and stronger lifecycle validation
+* improved observability and operator-facing status, events, and operational
+  guidance
+* stable Helm chart packaging, signed release tags, signed artifacts, SBOMs,
+  and published attestations
+
+### Operational Notes
+
+* The served API remains `openbao.org/v1alpha1`; pre-`1.0` minor releases may
+  still carry breaking changes.
+* See the `0.1.0-rc.1` through `0.1.0-rc.7` entries below for the detailed
+  incremental history behind this release.
+* See the project documentation for current compatibility, support policy, and
+  known limitations.
 
 ## [0.1.0-rc.7](https://github.com/dc-tec/openbao-operator/compare/0.1.0-rc.6...0.1.0-rc.7) (2026-03-30)
 
