@@ -4,6 +4,20 @@ Release notes are generated and maintained via **release-please** based on **Con
 
 ## Unreleased
 
+## [0.1.0-rc.7](https://github.com/dc-tec/openbao-operator/compare/0.1.0-rc.6...0.1.0-rc.7) (2026-03-30)
+
+
+### Bug Fixes
+
+* **release:** grant tag workflow comment permissions ([#295](https://github.com/dc-tec/openbao-operator/issues/295)) ([61ec413](https://github.com/dc-tec/openbao-operator/commit/61ec413d7b640e446d135e67e98bbc17c85badec))
+* **release:** remove unsupported tag app scope ([#296](https://github.com/dc-tec/openbao-operator/issues/296)) ([e794a76](https://github.com/dc-tec/openbao-operator/commit/e794a7629f3ad31083834a7d5b0f63d64cc4b93e))
+* **release:** sign release tags and trim release gates ([#298](https://github.com/dc-tec/openbao-operator/issues/298)) ([33a687b](https://github.com/dc-tec/openbao-operator/commit/33a687b9b93537bffd944791d7f02fc7d48fe855))
+
+
+### Miscellaneous Chores
+
+* **release:** release 0.1.0-rc.7 ([#299](https://github.com/dc-tec/openbao-operator/issues/299)) ([f1aa990](https://github.com/dc-tec/openbao-operator/commit/f1aa990e7ac08d4cf203d61ede7fd8b3448419bd))
+
 ## [0.1.0-rc.6](https://github.com/dc-tec/openbao-operator/compare/0.1.0-rc.5...0.1.0-rc.6) (2026-03-30)
 
 
