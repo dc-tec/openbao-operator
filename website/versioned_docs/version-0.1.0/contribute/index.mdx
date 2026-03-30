@@ -1,0 +1,84 @@
+---
+title: Contribute
+slug: /
+description: Contributor and maintainer documentation for OpenBao Operator, covering local setup, coding standards, testing, release flow, and project governance.
+pageType: landing
+journey: contribute
+---
+
+<PageHero
+  eyebrow="Contribute"
+  title="Choose the contributor path that matches the work you need to do."
+  lede="Use this section to get a workstation ready, understand the codebase rules, run the right local checks, and handle release or governance work without guessing where the project keeps those policies."
+  actions={[
+    {label: "Start here", to: "/contribute/getting-started", variant: "primary"},
+    {label: "Open testing strategy", to: "/contribute/testing", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this section to"
+    items={[
+      "set up a clean contributor environment before your first change",
+      "follow the project conventions for code, docs, tests, and generated artifacts",
+      "run the right local checks before you ask CI or maintainers to validate your work",
+      "understand release, supply-chain, and policy material when you are maintaining the project itself",
+    ]}
+  />
+</PageHero>
+
+<RouteList
+  title="Contributor routes"
+  items={[
+    {
+      eyebrow: "01",
+      title: "Start Here",
+      description: "First-time contributor setup, local tooling, and the shortest path to a clean branch with passing baseline checks.",
+      to: "/contribute/getting-started",
+    },
+    {
+      eyebrow: "02",
+      title: "Build & Change",
+      description: "Coding standards, project conventions, docs rules, and generated-artifact guidance for day-to-day development work.",
+      to: "/contribute/standards",
+    },
+    {
+      eyebrow: "03",
+      title: "Validate & Ship",
+      description: "Testing strategy, CI behavior, release execution, and distribution guidance for contributor and maintainer workflows.",
+      to: "/contribute/validate-and-ship",
+    },
+    {
+      eyebrow: "04",
+      title: "Project Governance",
+      description: "SDLC, supply-chain controls, and dependency policy for maintainers changing how the project is run and published.",
+      to: "/contribute/project-governance",
+    },
+  ]}
+/>
+
+<Callout type="note" title="AI-assisted contributions">
+
+AI assistance is welcome, but the submitter remains responsible for correctness, security, testing, and adherence to project standards.
+
+</Callout>
+
+<NextActions
+  title="Common starting points"
+  items={[
+    {
+      label: "Set up environment",
+      description: "Bootstrap the repo-managed tools and verify your workstation before you make a change.",
+      to: "/contribute/getting-started/development",
+    },
+    {
+      label: "Coding standards",
+      description: "Learn the project rules that go beyond normal Go style before you open a PR.",
+      to: "/contribute/standards",
+    },
+    {
+      label: "Testing strategy",
+      description: "Use the project testing model and local PR-equivalent checks before asking CI to prove the same thing again.",
+      to: "/contribute/testing",
+    },
+  ]}
+/>

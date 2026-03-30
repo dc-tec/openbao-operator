@@ -1,0 +1,72 @@
+---
+title: Validate & Ship
+description: Contributor and maintainer workflow for local checks, CI behavior, release execution, and distribution decisions in OpenBao Operator.
+pageType: landing
+journey: contribute
+---
+
+<PageHero
+  eyebrow="Contribute / Validate & Ship"
+  title="Run the right checks before you ask CI or release automation to prove the same thing."
+  lede="Use this section when you are validating a branch, understanding CI outcomes, preparing a release, or changing how OpenBao Operator is distributed. It groups the execution side of contribution work instead of scattering it across policy pages."
+  actions={[
+    {label: "Open testing strategy", to: "/contribute/testing", variant: "primary"},
+    {label: "Open release management", to: "/contribute/release-management", variant: "secondary"},
+  ]}
+>
+  <Checklist
+    title="Use this section when you need to"
+    items={[
+      "pick the right local test depth before you push a branch",
+      "understand how CI maps to local commands and why a workflow failed",
+      "run or review release flow, artifact publication, and distribution mechanics",
+      "distinguish contributor checks from maintainer-only release responsibilities",
+    ]}
+  />
+</PageHero>
+
+<RouteList
+  title="Validate & ship guides"
+  items={[
+    {
+      eyebrow: "01",
+      title: "Testing strategy",
+      description: "Map your change to unit, contract, integration, E2E, fuzzing, or manual validation work.",
+      to: "/contribute/testing",
+    },
+    {
+      eyebrow: "02",
+      title: "Continuous integration",
+      description: "Understand local command parity, CI stages, and the workflow gates maintainers expect to stay green.",
+      to: "/contribute/ci",
+    },
+    {
+      eyebrow: "03",
+      title: "Release management",
+      description: "Follow the release flow, promotion rules, and provenance requirements used for published builds.",
+      to: "/contribute/release-management",
+    },
+    {
+      eyebrow: "04",
+      title: "Distribution",
+      description: "Review how the project publishes charts and artifacts and what is intentionally deferred.",
+      to: "/contribute/distribution",
+    },
+  ]}
+/>
+
+<NextActions
+  title="After the execution path"
+  items={[
+    {
+      label: "Project governance",
+      description: "Move into SDLC, supply-chain, and dependency policy when your change affects project policy rather than just execution.",
+      to: "/contribute/project-governance",
+    },
+    {
+      label: "Coding standards",
+      description: "Go back to the change rules if CI is failing because the implementation itself still violates project conventions.",
+      to: "/contribute/standards",
+    },
+  ]}
+/>
