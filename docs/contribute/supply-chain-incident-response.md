@@ -63,7 +63,7 @@ gh run list \
 gh run list \
   --repo dc-tec/openbao-operator \
   --limit 30 \
-  --workflow "Release Please Tag"
+  --workflow "Release Tag"
 
 gh run list \
   --repo dc-tec/openbao-operator \

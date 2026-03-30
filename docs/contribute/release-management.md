@@ -36,7 +36,7 @@ Use [Release Policy](pathname:///docs/next/reference/release-policy) for the pub
     {
       cells: [
         "Stable release",
-        "Merge the release-please PR so the tag workflow creates the stable version tag and draft GitHub Release from `main`.",
+        "Merge the release-please PR so the `Release Tag` workflow can resolve the merged release PR, create the stable version tag, and create the draft GitHub Release from `main`.",
         "GitHub Release assets, OCI Helm chart, signed images, stable docs snapshot, docs deployment, and provenance evidence.",
         "Stable releases become permanent versioned docs and own the default `/docs` route.",
       ],
@@ -45,7 +45,7 @@ Use [Release Policy](pathname:///docs/next/reference/release-policy) for the pub
     {
       cells: [
         "Prerelease",
-        "Run the `Release Please PR` workflow with an explicit `release_as` target such as `0.1.0-rc.6`, then merge the resulting release-please PR so the tag workflow creates the prerelease tag and draft GitHub Release.",
+        "Prefer a tiny PR that carries an empty commit with `Release-As: 0.1.0-rc.6`, then merge the resulting release-please PR so the `Release Tag` workflow creates the prerelease tag and draft GitHub Release.",
         "GitHub Release assets, OCI Helm chart, signed images, docs site deployment, and provenance evidence.",
         "Prereleases use `/docs/next` plus release notes; do not create a permanent versioned docs snapshot unless there is a deliberate preview exception.",
       ],
@@ -85,19 +85,18 @@ Before merging a stable release PR, snapshot the docs for the outgoing version a
 </CommandBlock>
 
 <CommandBlock
-  language="text"
+  language="bash"
   label="configure"
-  title="Cut an explicit prerelease with workflow_dispatch"
-  code={`Workflow: Release Please PR
-Branch: main
-Input: release_as=0.1.0-rc.6`}
+  title="Cut an explicit prerelease with a Release-As PR"
+  code={`git switch -c chore/release-as-0.1.0-rc.6
+git commit --allow-empty -m $'chore: release 0.1.0-rc.6\n\nRelease-As: 0.1.0-rc.6\nSigned-off-by: Your Name <you@example.com>'`}
 >
-  Use this when you need a specific `-alpha`, `-beta`, or `-rc` target instead of the bump inferred from normal Conventional Commits. The workflow updates the release-please PR and then re-syncs `Chart.yaml` Artifact Hub metadata to the same release version.
+  Open a tiny PR with only this empty commit, merge it, and let `Release Please PR` recreate the release PR on `main`. Use this when you need a specific `-alpha`, `-beta`, or `-rc` target instead of the bump inferred from normal Conventional Commits.
 </CommandBlock>
 
-<Callout type="note" title="`Release-As` empty commits are now a fallback, not the primary path">
+<Callout type="note" title="workflow_dispatch `release_as` is still optional, not the authoritative path">
 
-If workflow dispatch is unavailable, you can still use an empty commit with a `Release-As:` trailer. Prefer the workflow input first so the release intent is explicit without creating a throwaway commit on `main`.
+`Release Please PR` still exposes a `workflow_dispatch` `release_as` input, and it is useful when it produces the expected release PR. Keep the `Release-As:` PR path as the reliable fallback until the dispatch path proves consistently correct for your release line.
 
 </Callout>
 
@@ -159,12 +158,12 @@ Use the verification skeleton above as the default post-release evidence pack. K
 
 <Callout type="note" title="release-please token requirements">
 
-`release-please` must use non-default tokens so the resulting tag and GitHub Release can trigger downstream workflows. Use two repo-scoped GitHub Apps:
+Release automation must use non-default tokens so the resulting tag and GitHub Release can trigger downstream workflows. Use two repo-scoped GitHub Apps:
 
 - `OPENBAO_OPERATOR_RELEASE_PR_APP_ID` and `OPENBAO_OPERATOR_RELEASE_PR_PRIVATE_KEY` for PR-only `release-please`
-- `OPENBAO_OPERATOR_RELEASE_TAG_APP_ID` and `OPENBAO_OPERATOR_RELEASE_TAG_PRIVATE_KEY` for tag-only `release-please`
+- `OPENBAO_OPERATOR_RELEASE_TAG_APP_ID` and `OPENBAO_OPERATOR_RELEASE_TAG_PRIVATE_KEY` for the custom `Release Tag` workflow
 
-The tag app should be the only actor with semver tag ruleset bypass. A PAT fallback is possible through `RELEASE_PLEASE_TOKEN`, but a bot identity is safer than a maintainer’s personal token.
+The tag app should be the only actor with semver tag ruleset bypass, and it only needs repository `contents: write`. A PAT fallback is possible through `RELEASE_PLEASE_TOKEN`, but a bot identity is safer than a maintainer’s personal token.
 
 </Callout>
 
