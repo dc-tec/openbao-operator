@@ -3211,6 +3211,12 @@ spec:
               rule: self.tls.mode != 'ACME' || ((self.replicas <= 1) && (!has(self.upgrade)
                 || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) &&
                 has(self.tls.acme.sharedCache))
+            - message: spec.upgrade.strategy is immutable after creation; switching
+                between RollingUpdate and BlueGreen is not supported.
+              rule: '((!has(self.upgrade) || !has(self.upgrade.strategy) || size(self.upgrade.strategy)
+                == 0) ? ''RollingUpdate'' : self.upgrade.strategy) == ((!has(oldSelf.upgrade)
+                || !has(oldSelf.upgrade.strategy) || size(oldSelf.upgrade.strategy)
+                == 0) ? ''RollingUpdate'' : oldSelf.upgrade.strategy)'
             - message: spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true
               rule: '!has(self.unseal) || self.unseal.type != ''ocikms'' || !has(self.unseal.credentialsSecretRef)
                 || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey)
@@ -4894,7 +4900,7 @@ spec:
           value: 0.0.0
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:722350826c96f3ba580166ed6a43ee5c632730e480691f17f50c65ad1eebcc20
+        image: ghcr.io/dc-tec/openbao-operator@sha256:0153b5550d7bac2870edf9ee4c637a0bba4d8087712c2aff362686c87c3eacf6
         livenessProbe:
           httpGet:
             path: /healthz
@@ -5010,7 +5016,7 @@ spec:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
           value: 0.0.0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:722350826c96f3ba580166ed6a43ee5c632730e480691f17f50c65ad1eebcc20
+        image: ghcr.io/dc-tec/openbao-operator@sha256:0153b5550d7bac2870edf9ee4c637a0bba4d8087712c2aff362686c87c3eacf6
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6512,6 +6518,9 @@ spec:
       of "openbao-operator-backup" role), and a 5-field cron expression. Storage credentials
       may come from target.credentialsSecretRef, target.roleArn, or the pod's ambient
       workload identity/default credential chain.
+  - expression: oldObject == null || variables.requested_upgrade_strategy == variables.previous_upgrade_strategy
+    message: spec.upgrade.strategy is immutable after creation; switching between
+      RollingUpdate and BlueGreen is not supported.
   - expression: |-
       !has(object.spec.profile) || object.spec.profile != "Hardened" || !(variables.has_backup || variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot) || (has(object.spec.network) &&
 
@@ -6596,6 +6605,13 @@ spec:
   variables:
   - expression: has(object.spec.backup)
     name: has_backup
+  - expression: 'has(object.spec.upgrade) && has(object.spec.upgrade.strategy) &&
+      object.spec.upgrade.strategy != "" ? object.spec.upgrade.strategy : "RollingUpdate"'
+    name: requested_upgrade_strategy
+  - expression: 'oldObject != null && has(oldObject.spec.upgrade) && has(oldObject.spec.upgrade.strategy)
+      && oldObject.spec.upgrade.strategy != "" ? oldObject.spec.upgrade.strategy :
+      "RollingUpdate"'
+    name: previous_upgrade_strategy
   - expression: has(object.spec.upgrade) && has(object.spec.upgrade.preUpgradeSnapshot)
       && object.spec.upgrade.preUpgradeSnapshot == true
     name: has_pre_upgrade_snapshot
