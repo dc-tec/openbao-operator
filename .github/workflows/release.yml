@@ -777,6 +777,33 @@ jobs:
           CHART_DIGEST: ${{ steps.chart-digest.outputs.chart_digest }}
         run: bash hack/ci/verify-release-artifact-attestations.sh
 
+      - name: Export Scorecard-compatible release signature assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Keep the existing bundle name for current consumers, and also publish
+          # Scorecard-recognized names for the same signature/provenance material.
+          cp dist/checksums.txt.bundle dist/checksums.txt.sigstore.json
+
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "${tmpdir}"' EXIT
+
+          (
+            cd "${tmpdir}"
+            gh attestation download "${GITHUB_WORKSPACE}/dist/checksums.txt" --repo "${REPO}"
+          )
+
+          intoto_bundle="$(find "${tmpdir}" -maxdepth 1 -type f -name '*.jsonl' | head -n1)"
+          if [[ -z "${intoto_bundle}" ]]; then
+            echo "failed to export checksums attestation bundle" >&2
+            exit 1
+          fi
+
+          cp "${intoto_bundle}" dist/checksums.intoto.jsonl
+
       - name: Setup repo tools (for provenance tooling)
         uses: ./.github/actions/setup-repo-tools
         with:
@@ -824,6 +851,8 @@ jobs:
             dist/crds.yaml
             dist/checksums.txt
             dist/checksums.txt.bundle
+            dist/checksums.txt.sigstore.json
+            dist/checksums.intoto.jsonl
             dist/sbom-openbao-operator.spdx.json
             dist/sbom-openbao-init.spdx.json
             dist/sbom-openbao-backup.spdx.json
