@@ -2,6 +2,15 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.1.1](https://github.com/dc-tec/openbao-operator/compare/0.1.0...0.1.1) (2026-03-31)
+
+
+### Bug Fixes
+
+* **ci:** allow PR label sync to write labels ([#307](https://github.com/dc-tec/openbao-operator/issues/307)) ([51591d8](https://github.com/dc-tec/openbao-operator/commit/51591d8a212019134cb290d3c876385b08745e01))
+* **ci:** replace dangerous PR labeling workflow ([#304](https://github.com/dc-tec/openbao-operator/issues/304)) ([b3740f8](https://github.com/dc-tec/openbao-operator/commit/b3740f89f65379b734ac70e8db5cd5982e479939))
+* **upgrade:** verify default helper images for hardened clusters ([#308](https://github.com/dc-tec/openbao-operator/issues/308)) ([8bfeabb](https://github.com/dc-tec/openbao-operator/commit/8bfeabb6b79a8d897617b0aac63d89be9530ef16))
+
 ## [0.1.0](https://github.com/dc-tec/openbao-operator/compare/0.1.0-rc.7...0.1.0) (2026-03-30)
 
 The first stable pre-GA release of OpenBao Operator. This release rolls up the
