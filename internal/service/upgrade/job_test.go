@@ -7,6 +7,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,18 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
+
+type captureImageVerifier struct {
+	imageRef string
+	digest   string
+	called   bool
+}
+
+func (v *captureImageVerifier) Verify(_ context.Context, imageRef string, _ imageverify.VerifyConfig) (string, error) {
+	v.called = true
+	v.imageRef = imageRef
+	return v.digest, nil
+}
 
 func TestBuildUpgradeExecutorJob_SecurityContext(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
@@ -300,4 +313,59 @@ func TestEnsureExecutorJob_CreateAlreadyExists(t *testing.T) {
 	assert.True(t, result.Running)
 	assert.False(t, result.Succeeded)
 	assert.False(t, result.Failed)
+}
+
+func TestEnsureExecutorJob_VerifiesDefaultUpgradeExecutorImageForHardenedCluster(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "0.1.0")
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileHardened,
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				JWTAuthRole: "upgrade-role",
+			},
+		},
+	}
+
+	verifier := &captureImageVerifier{
+		digest: constants.DefaultUpgradeImageRepository + "@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+	}
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	result, err := EnsureExecutorJob(
+		context.Background(),
+		k8sClient,
+		scheme,
+		logr.Discard(),
+		cluster,
+		ExecutorActionRollingStepDownLeader,
+		"run-1",
+		"",
+		"",
+		portopenbao.ClientConfig{},
+		verifier,
+		"",
+	)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, verifier.called)
+	require.Equal(t, constants.DefaultUpgradeImageRepository+":0.1.0", verifier.imageRef)
+
+	job := &batchv1.Job{}
+	err = k8sClient.Get(context.Background(), client.ObjectKey{
+		Namespace: cluster.Namespace,
+		Name:      result.Name,
+	}, job)
+	require.NoError(t, err)
+	require.Len(t, job.Spec.Template.Spec.Containers, 1)
+	assert.Equal(t, verifier.digest, job.Spec.Template.Spec.Containers[0].Image)
 }

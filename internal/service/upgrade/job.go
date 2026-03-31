@@ -3,7 +3,6 @@ package upgrade
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
@@ -111,29 +110,31 @@ func ensureUpgradeExecutorJob(
 		}
 
 		verifiedExecutorDigest := ""
-		if cluster.Spec.Upgrade != nil {
-			executorImage := strings.TrimSpace(cluster.Spec.Upgrade.Image)
-			if executorImage != "" && security.IsOperatorImageVerificationEnabled(cluster) {
-				verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
-				defer cancel()
+		if security.IsOperatorImageVerificationEnabled(cluster) {
+			executorImage, err := resolveUpgradeExecutorImage(cluster, "")
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve upgrade executor image for verification: %w", err)
+			}
 
-				digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, operatorImageVerifier, cluster, executorImage)
-				if err != nil {
-					failurePolicy := ""
-					if cluster.Spec.OperatorImageVerification != nil {
-						failurePolicy = cluster.Spec.OperatorImageVerification.FailurePolicy
-					}
-					if failurePolicy == "" {
-						failurePolicy = constants.ImageVerificationFailurePolicyBlock
-					}
-					if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-						return nil, fmt.Errorf("upgrade executor image verification failed (policy=Block): %w", err)
-					}
-					logger.Error(err, "Upgrade executor image verification failed but proceeding due to Warn policy", "image", executorImage)
-				} else {
-					verifiedExecutorDigest = digest
-					logger.Info("Upgrade executor image verified successfully", "digest", digest)
+			verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
+			defer cancel()
+
+			digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, operatorImageVerifier, cluster, executorImage)
+			if err != nil {
+				failurePolicy := ""
+				if cluster.Spec.OperatorImageVerification != nil {
+					failurePolicy = cluster.Spec.OperatorImageVerification.FailurePolicy
 				}
+				if failurePolicy == "" {
+					failurePolicy = constants.ImageVerificationFailurePolicyBlock
+				}
+				if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
+					return nil, fmt.Errorf("upgrade executor image verification failed (policy=Block): %w", err)
+				}
+				logger.Error(err, "Upgrade executor image verification failed but proceeding due to Warn policy", "image", executorImage)
+			} else {
+				verifiedExecutorDigest = digest
+				logger.Info("Upgrade executor image verified successfully", "digest", digest)
 			}
 		}
 

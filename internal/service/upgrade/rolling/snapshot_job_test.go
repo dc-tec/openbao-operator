@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,10 +25,23 @@ import (
 	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
+
+type captureOperatorImageVerifier struct {
+	imageRef string
+	digest   string
+	called   bool
+}
+
+func (v *captureOperatorImageVerifier) Verify(_ context.Context, imageRef string, _ imageverify.VerifyConfig) (string, error) {
+	v.called = true
+	v.imageRef = imageRef
+	return v.digest, nil
+}
 
 func newPreUpgradeSnapshotCluster() *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
@@ -253,6 +267,69 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, jobList.Items, 1, "should have created one backup job")
 	assert.Contains(t, jobList.Items[0].Name, "pre-upgrade-backup", "job name should contain pre-upgrade-backup")
+}
+
+func TestHandlePreUpgradeSnapshot_VerifiesDefaultBackupExecutorImageForHardenedCluster(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "0.1.0")
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-ns",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileHardened,
+			Version:  "2.4.4",
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				PreUpgradeSnapshot: true,
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				JWTAuthRole: "backup",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+			Network: &openbaov1alpha1.NetworkConfig{
+				EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.3",
+			Initialized:    true,
+		},
+	}
+
+	scheme := runtime.NewScheme()
+	_ = batchv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		WithReturnManagedFields().
+		Build()
+	verifier := &captureOperatorImageVerifier{
+		digest: constants.DefaultBackupImageRepository + "@sha256:2222222222222222222222222222222222222222222222222222222222222222",
+	}
+	manager := NewManager(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), portopenbao.ClientConfig{}, verifier, "")
+
+	complete, err := manager.handlePreUpgradeSnapshot(context.Background(), testLogger(), cluster)
+	require.NoError(t, err)
+	require.False(t, complete)
+	require.True(t, verifier.called)
+	require.Equal(t, constants.DefaultBackupImageRepository+":0.1.0", verifier.imageRef)
+
+	jobList := &batchv1.JobList{}
+	err = k8sClient.List(context.Background(), jobList, client.InNamespace("test-ns"))
+	require.NoError(t, err)
+	require.Len(t, jobList.Items, 1)
+	require.Len(t, jobList.Items[0].Spec.Template.Spec.Containers, 1)
+	assert.Equal(t, verifier.digest, jobList.Items[0].Spec.Template.Spec.Containers[0].Image)
 }
 
 func TestHandlePreUpgradeSnapshot_CreateAlreadyExists(t *testing.T) {
