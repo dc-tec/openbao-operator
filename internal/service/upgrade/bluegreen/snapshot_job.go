@@ -14,6 +14,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	servicebackup "github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -69,11 +70,16 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 	}
 
 	return ensureJob(ctx, m.client, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
-		verifiedExecutorDigest, err := m.verifyImageDigest(
+		executorImage, err := servicebackup.GetBackupExecutorImage(cluster)
+		if err != nil {
+			return nil, err
+		}
+
+		verifiedExecutorDigest, err := m.verifyOperatorImageDigest(
 			ctx,
 			logger,
 			cluster,
-			cluster.Spec.Backup.Image,
+			executorImage,
 			constants.ReasonBlueGreenSnapshotImageVerificationFailed,
 			"Pre-upgrade snapshot executor image verification failed",
 		)

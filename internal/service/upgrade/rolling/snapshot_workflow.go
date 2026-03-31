@@ -3,7 +3,6 @@ package rolling
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
@@ -16,6 +15,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
+	servicebackup "github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -184,9 +184,16 @@ func (m *Manager) resolvePreUpgradeBackupExecutorDigest(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (string, error) {
-	executorImage := strings.TrimSpace(cluster.Spec.Backup.Image)
-	if executorImage == "" || !security.IsOperatorImageVerificationEnabled(cluster) {
+	if !security.IsOperatorImageVerificationEnabled(cluster) {
 		return "", nil
+	}
+
+	executorImage, err := servicebackup.GetBackupExecutorImage(cluster)
+	if err != nil {
+		return "", operatorerrors.WithReason(
+			upgrade.ReasonPreUpgradeBackupFailed,
+			fmt.Errorf("failed to determine pre-upgrade backup executor image: %w", err),
+		)
 	}
 
 	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)

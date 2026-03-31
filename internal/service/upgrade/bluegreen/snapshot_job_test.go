@@ -9,18 +9,33 @@ import (
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 )
+
+type captureOperatorVerifier struct {
+	imageRef string
+	digest   string
+	called   bool
+}
+
+func (v *captureOperatorVerifier) Verify(_ context.Context, imageRef string, _ imageverify.VerifyConfig) (string, error) {
+	v.called = true
+	v.imageRef = imageRef
+	return v.digest, nil
+}
 
 func TestBuildSnapshotJob_PodSecurityContext_Platform(t *testing.T) {
 	testScheme := runtime.NewScheme()
@@ -159,6 +174,64 @@ func TestEnsurePreUpgradeSnapshotJob_AllowsOIDCDefaultRole(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.True(t, result.Running)
+}
+
+func TestEnsurePreUpgradeSnapshotJob_VerifiesDefaultBackupExecutorImageForHardenedCluster(t *testing.T) {
+	t.Setenv(constants.EnvOperatorVersion, "0.1.0")
+
+	scheme := runtime.NewScheme()
+	_ = openbaov1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = rbacv1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+			Backup: &openbaov1alpha1.BackupSchedule{
+				JWTAuthRole: "backup",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "http://test-endpoint",
+					Bucket:   "test-bucket",
+				},
+			},
+			Network: &openbaov1alpha1.NetworkConfig{
+				EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+			},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	operatorVerifier := &captureOperatorVerifier{
+		digest: constants.DefaultBackupImageRepository + "@sha256:3333333333333333333333333333333333333333333333333333333333333333",
+	}
+	mgr := NewManager(
+		fakeClient,
+		scheme,
+		nil,
+		backup.NewUpgradeStrategyRuntime(fakeClient, scheme),
+		portopenbao.ClientConfig{},
+		security.NewImageVerifier(testLogger(), fakeClient, nil),
+		operatorVerifier,
+		"kubernetes",
+	)
+
+	result, err := mgr.ensurePreUpgradeSnapshotJob(context.Background(), testLogger(), cluster, "pre-upgrade-snapshot")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Running)
+	require.True(t, operatorVerifier.called)
+	require.Equal(t, constants.DefaultBackupImageRepository+":0.1.0", operatorVerifier.imageRef)
+
+	job := &batchv1.Job{}
+	err = fakeClient.Get(context.Background(), client.ObjectKey{Name: "pre-upgrade-snapshot", Namespace: cluster.Namespace}, job)
+	require.NoError(t, err)
+	require.Len(t, job.Spec.Template.Spec.Containers, 1)
+	assert.Equal(t, operatorVerifier.digest, job.Spec.Template.Spec.Containers[0].Image)
 }
 
 func TestHandlePhaseIdle_BlocksOnFailedSnapshot(t *testing.T) {
