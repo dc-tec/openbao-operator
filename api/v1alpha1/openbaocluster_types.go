@@ -2132,11 +2132,12 @@ type OperationLockStatus struct {
 }
 
 // BreakGlassReason describes why the operator required manual intervention.
-// +kubebuilder:validation:Enum=RollbackConsensusRepairFailed
+// +kubebuilder:validation:Enum=RollbackConsensusRepairFailed;RollbackCleanupPeerRemovalFailed
 type BreakGlassReason string
 
 const (
-	BreakGlassReasonRollbackConsensusRepairFailed BreakGlassReason = "RollbackConsensusRepairFailed"
+	BreakGlassReasonRollbackConsensusRepairFailed    BreakGlassReason = "RollbackConsensusRepairFailed"
+	BreakGlassReasonRollbackCleanupPeerRemovalFailed BreakGlassReason = "RollbackCleanupPeerRemovalFailed"
 )
 
 // BreakGlassStatus captures safe-mode / break-glass state and recovery guidance.

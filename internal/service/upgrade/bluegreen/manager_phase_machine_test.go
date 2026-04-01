@@ -17,6 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 func newPhaseMachineCluster() *openbaov1alpha1.OpenBaoCluster {
@@ -84,6 +85,22 @@ func succeededExecutorJobWithRunID(cluster *openbaov1alpha1.OpenBaoCluster, acti
 				Status: corev1.ConditionTrue,
 			}},
 			Succeeded: 1,
+		},
+	}
+}
+
+func failedExecutorJobWithRunID(cluster *openbaov1alpha1.OpenBaoCluster, action upgrade.ExecutorAction, runID string) *batchv1.Job {
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      upgrade.ExecutorJobName(cluster.Name, action, runID, cluster.Status.BlueGreen.BlueRevision, cluster.Status.BlueGreen.GreenRevision),
+			Namespace: cluster.Namespace,
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobFailed,
+				Status: corev1.ConditionTrue,
+			}},
+			Failed: 1,
 		},
 	}
 }
@@ -543,11 +560,11 @@ func TestHandlePhaseDemotingBlue_Branches(t *testing.T) {
 		if outcome.kind != phaseOutcomeAdvance || outcome.nextPhase != openbaov1alpha1.PhaseCleanup {
 			t.Fatalf("handlePhaseDemotingBlue() outcome = %+v, want advance to Cleanup", outcome)
 		}
-		state, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name)
-		if !ok || !state.stepDownCounted {
+		state, ok := core.GetUpgradeMetricsSession(cluster.Namespace, cluster.Name)
+		if !ok || !state.StepDownCounted {
 			t.Fatal("expected step-down metrics state to be recorded")
 		}
-		deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
+		core.DeleteUpgradeMetricsSession(cluster.Namespace, cluster.Name)
 	})
 }
 
@@ -617,7 +634,7 @@ func TestHandlePhaseCleanup_Branches(t *testing.T) {
 		expectedBlueRevision := cluster.Status.BlueGreen.GreenRevision
 		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 			Operation: openbaov1alpha1.ClusterOperationUpgrade,
-			Holder:    upgrade.UpgradeOperationLockHolder,
+			Holder:    core.UpgradeOperationLockHolder,
 			Message:   "blue/green upgrade phase Cleanup",
 		}
 		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
@@ -688,7 +705,7 @@ func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
 	cluster.Status.BlueGreen.RollbackReason = "cleanup failed"
 	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 		Operation: openbaov1alpha1.ClusterOperationUpgrade,
-		Holder:    upgrade.UpgradeOperationLockHolder,
+		Holder:    core.UpgradeOperationLockHolder,
 		Message:   "blue/green upgrade phase RollbackCleanup",
 	}
 	job := succeededExecutorJobWithRunID(cluster, ActionRemoveGreenPeers, rollbackRunID(cluster))
@@ -719,5 +736,36 @@ func TestHandlePhaseRollbackCleanup_FinalizesRollback(t *testing.T) {
 	}
 	if cluster.Status.OperationLock != nil {
 		t.Fatal("expected operation lock to be released")
+	}
+}
+
+func TestHandlePhaseRollbackCleanup_EntersBreakGlassWhenPeerRemovalFails(t *testing.T) {
+	t.Parallel()
+
+	scheme := newBlueGreenTestScheme(t)
+	cluster := newPhaseMachineCluster()
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollbackCleanup
+	job := failedExecutorJobWithRunID(cluster, ActionRemoveGreenPeers, rollbackRunID(cluster))
+
+	manager := &Manager{
+		client: fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(cluster, job).
+			Build(),
+		scheme: scheme,
+	}
+
+	outcome, err := manager.handlePhaseRollbackCleanup(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("handlePhaseRollbackCleanup() error = %v", err)
+	}
+	if outcome.kind != phaseOutcomeHold {
+		t.Fatalf("handlePhaseRollbackCleanup() outcome = %+v, want hold", outcome)
+	}
+	if cluster.Status.BreakGlass == nil || !cluster.Status.BreakGlass.Active {
+		t.Fatal("expected break glass to be active")
+	}
+	if cluster.Status.BreakGlass.Reason != openbaov1alpha1.BreakGlassReasonRollbackCleanupPeerRemovalFailed {
+		t.Fatalf("break glass reason = %q, want %q", cluster.Status.BreakGlass.Reason, openbaov1alpha1.BreakGlassReasonRollbackCleanupPeerRemovalFailed)
 	}
 }

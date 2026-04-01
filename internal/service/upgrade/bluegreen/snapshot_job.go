@@ -3,7 +3,6 @@ package bluegreen
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
@@ -14,8 +13,8 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	servicebackup "github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	snapshothelpers "github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
 )
 
 // ensurePreUpgradeSnapshotJob creates or checks the status of the pre-upgrade snapshot Job.
@@ -25,61 +24,30 @@ func (m *Manager) ensurePreUpgradeSnapshotJob(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	jobName string,
 ) (*JobResult, error) {
-	if cluster.Spec.Backup == nil || cluster.Spec.Backup.Target.Endpoint == "" {
-		return nil, fmt.Errorf("backup configuration required for pre-upgrade snapshot")
-	}
-
-	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened &&
-		(cluster.Spec.Network == nil || len(cluster.Spec.Network.EgressRules) == 0) {
-		return nil, operatorerrors.WithReason(
-			constants.ReasonNetworkEgressRulesRequired,
-			operatorerrors.WrapPermanentConfig(fmt.Errorf(
-				"hardened profile with pre-upgrade snapshots enabled requires explicit spec.network.egressRules so snapshot Jobs can reach the object storage endpoint",
-			)),
-		)
-	}
-
-	backupCfg := cluster.Spec.Backup
-	hasJWTAuth := strings.TrimSpace(backupCfg.JWTAuthRole) != ""
-	if !hasJWTAuth &&
-		cluster.Spec.SelfInit != nil &&
-		cluster.Spec.SelfInit.OIDC != nil &&
-		cluster.Spec.SelfInit.OIDC.Enabled {
-		hasJWTAuth = true
-	}
-	hasTokenSecret := backupCfg.TokenSecretRef != nil && strings.TrimSpace(backupCfg.TokenSecretRef.Name) != ""
-	if !hasJWTAuth && !hasTokenSecret {
+	if err := snapshothelpers.ValidatePreUpgradeSnapshotPrerequisites(ctx, m.client, cluster, snapshothelpers.ValidationOptions{
+		MissingBackupMessage:  "backup configuration required for pre-upgrade snapshot",
+		RequireEndpoint:       true,
+		RequireTokenSecret:    false,
+		NetworkErrorMessage:   "hardened profile with pre-upgrade snapshots enabled requires explicit spec.network.egressRules so snapshot Jobs can reach the object storage endpoint",
+		AuthenticationMessage: "backup authentication is required: set spec.backup.jwtAuthRole or spec.backup.tokenSecretRef (or enable spec.selfInit.oidc.enabled=true)",
+	}); err != nil {
 		return nil, operatorerrors.WithReason(
 			upgrade.ReasonPreUpgradeBackupFailed,
-			operatorerrors.WrapPermanentConfig(fmt.Errorf(
-				"backup authentication is required: set spec.backup.jwtAuthRole or spec.backup.tokenSecretRef (or enable spec.selfInit.oidc.enabled=true)",
-			)),
+			operatorerrors.WrapPermanentConfig(err),
 		)
 	}
 
 	// Image defaults to constants.DefaultBackupImage() when not specified
-	if m.backupRuntime == nil {
-		return nil, fmt.Errorf("backup runtime is not configured")
-	}
-
-	if err := m.backupRuntime.EnsureServiceAccount(ctx, cluster); err != nil {
-		return nil, fmt.Errorf("failed to ensure backup ServiceAccount for snapshot job: %w", err)
-	}
-	if err := m.backupRuntime.EnsureRBAC(ctx, cluster); err != nil {
-		return nil, fmt.Errorf("failed to ensure backup RBAC for snapshot job: %w", err)
+	if err := snapshothelpers.EnsureRuntime(ctx, m.backupRuntime, cluster); err != nil {
+		return nil, err
 	}
 
 	return ensureJob(ctx, m.client, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
-		executorImage, err := servicebackup.GetBackupExecutorImage(cluster)
-		if err != nil {
-			return nil, err
-		}
-
-		verifiedExecutorDigest, err := m.verifyOperatorImageDigest(
+		verifiedExecutorDigest, err := snapshothelpers.ResolvePreUpgradeSnapshotExecutorDigest(
 			ctx,
 			logger,
+			m.operatorImageVerifier,
 			cluster,
-			executorImage,
 			constants.ReasonBlueGreenSnapshotImageVerificationFailed,
 			"Pre-upgrade snapshot executor image verification failed",
 		)

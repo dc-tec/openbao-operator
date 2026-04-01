@@ -17,7 +17,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 func newBlueGreenTestScheme(t *testing.T) *runtime.Scheme {
@@ -197,7 +197,7 @@ func TestMaybeAbortUpgrade_CleansUpGreenAndReleasesLock(t *testing.T) {
 	cluster.Status.BlueGreen.GreenRevision = DeploymentNameSuffix
 	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 		Operation: openbaov1alpha1.ClusterOperationUpgrade,
-		Holder:    upgrade.UpgradeOperationLockHolder,
+		Holder:    upgradecore.UpgradeOperationLockHolder,
 		Message:   "blue/green upgrade phase Syncing",
 	}
 
@@ -261,7 +261,7 @@ func TestFinalizeUpgradeTerminalStatePromotesGreenToBlue(t *testing.T) {
 	}
 	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 		Operation: openbaov1alpha1.ClusterOperationUpgrade,
-		Holder:    upgrade.UpgradeOperationLockHolder,
+		Holder:    upgradecore.UpgradeOperationLockHolder,
 		Message:   "blue/green upgrade phase Cleanup",
 	}
 

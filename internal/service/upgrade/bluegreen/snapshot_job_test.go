@@ -2,6 +2,7 @@ package bluegreen
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -24,6 +25,20 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 )
+
+type failingGetClient struct {
+	client.Client
+	failNamespace string
+	failName      string
+	err           error
+}
+
+func (c *failingGetClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if key.Namespace == c.failNamespace && key.Name == c.failName {
+		return c.err
+	}
+	return c.Client.Get(ctx, key, obj, opts...)
+}
 
 type captureOperatorVerifier struct {
 	imageRef string
@@ -372,6 +387,63 @@ func TestHandlePhaseIdle_RespectsTopLevelPreUpgradeSnapshot(t *testing.T) {
 	outcome, err := mgr.handlePhaseIdle(context.Background(), testLogger(), cluster, "")
 	require.NoError(t, err)
 	require.Equal(t, phaseOutcomeRequeueAfter, outcome.kind, "should requeue while pre-upgrade snapshot is running")
+}
+
+func TestHandlePhaseIdle_FailsWhenSnapshotStatusLookupFails(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = openbaov1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+			Image:    "openbao:2.5.0",
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy:           openbaov1alpha1.UpdateStrategyBlueGreen,
+				PreUpgradeSnapshot: true,
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.0",
+			Initialized:    true,
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				Phase:        openbaov1alpha1.PhaseIdle,
+				BlueRevision: "rev-blue",
+			},
+		},
+	}
+
+	jobName := preUpgradeSnapshotJobName(cluster)
+	cluster.Status.BlueGreen.PreUpgradeSnapshotJobName = jobName
+
+	baseClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	mgr := NewManager(
+		&failingGetClient{
+			Client:        baseClient,
+			failNamespace: cluster.Namespace,
+			failName:      jobName,
+			err:           errors.New("boom"),
+		},
+		scheme,
+		nil,
+		nil,
+		portopenbao.ClientConfig{},
+		nil,
+		nil,
+		"kubernetes",
+	)
+
+	outcome, err := mgr.handlePhaseIdle(context.Background(), testLogger(), cluster, "")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "failed to check pre-upgrade snapshot job status")
+	require.Equal(t, phaseOutcome{}, outcome)
+	require.Empty(t, cluster.Status.BlueGreen.GreenRevision)
 }
 
 func testLogger() logr.Logger {
