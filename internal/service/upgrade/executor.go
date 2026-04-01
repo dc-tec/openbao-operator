@@ -3,17 +3,9 @@ package upgrade
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 	"github.com/go-logr/logr"
-)
-
-const (
-	leaderElectionWaitDuration      = 5 * time.Second
-	defaultLeaderSearchMaxAttempts  = 10
-	defaultLeaderSearchWaitInterval = 2 * time.Second
-	defaultLeaderTransferMaxRetries = 10
-	singleLeaderSearchAttempt       = 1
 )
 
 // RunExecutor runs the upgrade executor action.
@@ -37,21 +29,21 @@ func RunExecutor(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) e
 
 	switch cfg.Action {
 	case ExecutorActionBlueGreenJoinGreenNonVoters:
-		return runBlueGreenJoinGreenNonVoters(ctx, logger, cfg)
+		return raftops.RunBlueGreenJoinGreenNonVoters(ctx, logger, cfg)
 	case ExecutorActionBlueGreenWaitGreenSynced:
-		return runBlueGreenWaitGreenSynced(ctx, logger, cfg)
+		return raftops.RunBlueGreenWaitGreenSynced(ctx, logger, cfg)
 	case ExecutorActionBlueGreenPromoteGreenVoters:
-		return runBlueGreenPromoteGreenVoters(ctx, logger, cfg)
+		return raftops.RunBlueGreenPromoteGreenVoters(ctx, logger, cfg)
 	case ExecutorActionBlueGreenDemoteBlueNonVotersStepDown:
-		return runBlueGreenDemoteBlueNonVotersStepDown(ctx, logger, cfg)
+		return raftops.RunBlueGreenDemoteBlueNonVotersStepDown(ctx, logger, cfg)
 	case ExecutorActionBlueGreenRemoveBluePeers:
-		return runBlueGreenRemoveBluePeers(ctx, logger, cfg)
+		return raftops.RunBlueGreenRemoveBluePeers(ctx, logger, cfg)
 	case ExecutorActionBlueGreenRemoveGreenPeers:
-		return runBlueGreenRemoveGreenPeers(ctx, logger, cfg)
+		return raftops.RunBlueGreenRemoveGreenPeers(ctx, logger, cfg)
 	case ExecutorActionBlueGreenRepairConsensus:
-		return runBlueGreenRepairConsensus(ctx, logger, cfg)
+		return raftops.RunBlueGreenRepairConsensus(ctx, logger, cfg)
 	case ExecutorActionRollingStepDownLeader:
-		return runRollingStepDownLeader(ctx, logger, cfg)
+		return raftops.RunRollingStepDownLeader(ctx, logger, cfg)
 	default:
 		return fmt.Errorf("unsupported action: %q", cfg.Action)
 	}

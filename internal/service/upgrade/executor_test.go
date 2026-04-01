@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 	"github.com/go-logr/logr"
 )
 
@@ -83,8 +84,8 @@ func TestIsBenignDemoteError(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := isBenignDemoteError(tt.err); got != tt.want {
-				t.Fatalf("isBenignDemoteError() = %v, want %v", got, tt.want)
+			if got := raftops.IsBenignDemoteError(tt.err); got != tt.want {
+				t.Fatalf("raftops.IsBenignDemoteError() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -108,13 +109,13 @@ func TestDemoteAllBluePods(t *testing.T) {
 			},
 		}
 
-		err := demoteAllBluePods(context.Background(), logr.Discard(), cfg, demoter)
+		err := raftops.DemoteAllBluePods(context.Background(), logr.Discard(), cfg, demoter)
 		if err != nil {
-			t.Fatalf("demoteAllBluePods() unexpected error: %v", err)
+			t.Fatalf("raftops.DemoteAllBluePods() unexpected error: %v", err)
 		}
 
 		if len(demoter.calls) != int(cfg.ClusterReplicas) {
-			t.Fatalf("demoteAllBluePods() called DemoteRaftPeer %d times, want %d", len(demoter.calls), cfg.ClusterReplicas)
+			t.Fatalf("raftops.DemoteAllBluePods() called DemoteRaftPeer %d times, want %d", len(demoter.calls), cfg.ClusterReplicas)
 		}
 	})
 
@@ -132,14 +133,14 @@ func TestDemoteAllBluePods(t *testing.T) {
 			},
 		}
 
-		err := demoteAllBluePods(context.Background(), logr.Discard(), cfg, demoter)
+		err := raftops.DemoteAllBluePods(context.Background(), logr.Discard(), cfg, demoter)
 		if err == nil {
-			t.Fatalf("demoteAllBluePods() expected error, got nil")
+			t.Fatalf("raftops.DemoteAllBluePods() expected error, got nil")
 		}
 
 		wantSnippet := "cluster-blue-1"
 		if !strings.Contains(err.Error(), wantSnippet) {
-			t.Fatalf("demoteAllBluePods() error = %q, want snippet %q", err.Error(), wantSnippet)
+			t.Fatalf("raftops.DemoteAllBluePods() error = %q, want snippet %q", err.Error(), wantSnippet)
 		}
 	})
 }
@@ -171,16 +172,16 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 		},
 	}
 
-	err := demoteBlueVotersExceptLeader(context.Background(), logr.Discard(), cfg, demoter, config, leaderID, bluePrefix)
+	err := raftops.DemoteBlueVotersExceptLeader(context.Background(), logr.Discard(), cfg, demoter, config, leaderID, bluePrefix)
 	if err != nil {
-		t.Fatalf("demoteBlueVotersExceptLeader() unexpected error: %v", err)
+		t.Fatalf("raftops.DemoteBlueVotersExceptLeader() unexpected error: %v", err)
 	}
 
 	if len(demoter.calls) != 1 {
-		t.Fatalf("demoteBlueVotersExceptLeader() called DemoteRaftPeer %d times, want 1", len(demoter.calls))
+		t.Fatalf("raftops.DemoteBlueVotersExceptLeader() called DemoteRaftPeer %d times, want 1", len(demoter.calls))
 	}
 	if demoter.calls[0] != "cluster-blue-1" {
-		t.Fatalf("demoteBlueVotersExceptLeader() called DemoteRaftPeer for %q, want %q", demoter.calls[0], "cluster-blue-1")
+		t.Fatalf("raftops.DemoteBlueVotersExceptLeader() called DemoteRaftPeer for %q, want %q", demoter.calls[0], "cluster-blue-1")
 	}
 }
 
@@ -205,7 +206,7 @@ func TestDemoteBlueVotersExceptLeaderFatal(t *testing.T) {
 		},
 	}
 
-	err := demoteBlueVotersExceptLeader(
+	err := raftops.DemoteBlueVotersExceptLeader(
 		context.Background(),
 		logr.Discard(),
 		cfg,
@@ -215,10 +216,10 @@ func TestDemoteBlueVotersExceptLeaderFatal(t *testing.T) {
 		"cluster-blue-",
 	)
 	if err == nil {
-		t.Fatalf("demoteBlueVotersExceptLeader() error=nil, want fatal demote error")
+		t.Fatalf("raftops.DemoteBlueVotersExceptLeader() error=nil, want fatal demote error")
 	}
-	if gotReason := reasonCodeFromError(err); gotReason != reasonDemoteFatal {
-		t.Fatalf("demoteBlueVotersExceptLeader() reason=%q, want %q", gotReason, reasonDemoteFatal)
+	if gotReason := raftops.ReasonCodeFromError(err); gotReason != raftops.ReasonDemoteFatal {
+		t.Fatalf("raftops.DemoteBlueVotersExceptLeader() reason=%q, want %q", gotReason, raftops.ReasonDemoteFatal)
 	}
 }
 
@@ -228,30 +229,30 @@ func TestClassifyDemoteError(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
-		want benignErrorClassification
+		want raftops.BenignErrorClassification
 	}{
 		{
 			name: "benign already non-voter",
 			err:  errors.New("already non-voter"),
-			want: benignErrorClassificationBenign,
+			want: raftops.BenignErrorClassificationBenign,
 		},
 		{
 			name: "fatal permission denied",
 			err:  errors.New("permission denied"),
-			want: benignErrorClassificationFatal,
+			want: raftops.BenignErrorClassificationFatal,
 		},
 		{
 			name: "retryable transport failure",
 			err:  errors.New("connection reset by peer"),
-			want: benignErrorClassificationRetryable,
+			want: raftops.BenignErrorClassificationRetryable,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := classifyDemoteError(tt.err); got != tt.want {
-				t.Fatalf("classifyDemoteError()=%q, want %q", got, tt.want)
+			if got := raftops.ClassifyDemoteError(tt.err); got != tt.want {
+				t.Fatalf("raftops.ClassifyDemoteError()=%q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -263,30 +264,30 @@ func TestClassifyStepDownError(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
-		want benignErrorClassification
+		want raftops.BenignErrorClassification
 	}{
 		{
 			name: "fatal forbidden",
 			err:  errors.New("forbidden"),
-			want: benignErrorClassificationFatal,
+			want: raftops.BenignErrorClassificationFatal,
 		},
 		{
 			name: "retryable io timeout",
 			err:  errors.New("i/o timeout"),
-			want: benignErrorClassificationRetryable,
+			want: raftops.BenignErrorClassificationRetryable,
 		},
 		{
 			name: "nil",
 			err:  nil,
-			want: benignErrorClassificationBenign,
+			want: raftops.BenignErrorClassificationBenign,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := classifyStepDownError(tt.err); got != tt.want {
-				t.Fatalf("classifyStepDownError()=%q, want %q", got, tt.want)
+			if got := raftops.ClassifyStepDownError(tt.err); got != tt.want {
+				t.Fatalf("raftops.ClassifyStepDownError()=%q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -330,7 +331,7 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 			},
 		}
 
-		resolveClient := func(context.Context, string) (leaderTransferClient, error) {
+		resolveClient := func(context.Context, string) (raftops.LeaderTransferClient, error) {
 			return fakeClient, nil
 		}
 		waitForLeader := func(context.Context, logr.Logger, *ExecutorConfig, string) (string, error) {
@@ -338,20 +339,20 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 			return "https://cluster-blue-0", nil
 		}
 
-		_, err := ensureGreenLeaderBySteppingDownBlueWithFuncs(
+		_, err := raftops.EnsureGreenLeaderBySteppingDownBlueWithFuncs(
 			context.Background(),
 			logr.Discard(),
 			cfg,
 			"https://cluster-blue-0",
-			retryPolicy{MaxAttempts: 2},
+			raftops.RetryPolicy{MaxAttempts: 2},
 			resolveClient,
 			waitForLeader,
 		)
 		if err == nil {
-			t.Fatalf("ensureGreenLeaderBySteppingDownBlueWithFuncs() error=nil, want retries exhausted")
+			t.Fatalf("raftops.EnsureGreenLeaderBySteppingDownBlueWithFuncs() error=nil, want retries exhausted")
 		}
-		if gotReason := reasonCodeFromError(err); gotReason != reasonLeaderTransferRetriesExhausted {
-			t.Fatalf("ensureGreenLeaderBySteppingDownBlueWithFuncs() reason=%q, want %q", gotReason, reasonLeaderTransferRetriesExhausted)
+		if gotReason := raftops.ReasonCodeFromError(err); gotReason != raftops.ReasonLeaderTransferRetriesExhausted {
+			t.Fatalf("raftops.EnsureGreenLeaderBySteppingDownBlueWithFuncs() reason=%q, want %q", gotReason, raftops.ReasonLeaderTransferRetriesExhausted)
 		}
 		if demoteCalls != 2 {
 			t.Fatalf("demoteCalls=%d, want 2", demoteCalls)
@@ -395,7 +396,7 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 			},
 		}
 
-		resolveClient := func(context.Context, string) (leaderTransferClient, error) {
+		resolveClient := func(context.Context, string) (raftops.LeaderTransferClient, error) {
 			return fakeClient, nil
 		}
 		waitForLeader := func(context.Context, logr.Logger, *ExecutorConfig, string) (string, error) {
@@ -403,20 +404,20 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 			return "", nil
 		}
 
-		_, err := ensureGreenLeaderBySteppingDownBlueWithFuncs(
+		_, err := raftops.EnsureGreenLeaderBySteppingDownBlueWithFuncs(
 			context.Background(),
 			logr.Discard(),
 			cfg,
 			"https://cluster-blue-0",
-			retryPolicy{MaxAttempts: 3},
+			raftops.RetryPolicy{MaxAttempts: 3},
 			resolveClient,
 			waitForLeader,
 		)
 		if err == nil {
-			t.Fatalf("ensureGreenLeaderBySteppingDownBlueWithFuncs() error=nil, want stepdown fatal")
+			t.Fatalf("raftops.EnsureGreenLeaderBySteppingDownBlueWithFuncs() error=nil, want stepdown fatal")
 		}
-		if gotReason := reasonCodeFromError(err); gotReason != reasonStepDownFatal {
-			t.Fatalf("ensureGreenLeaderBySteppingDownBlueWithFuncs() reason=%q, want %q", gotReason, reasonStepDownFatal)
+		if gotReason := raftops.ReasonCodeFromError(err); gotReason != raftops.ReasonStepDownFatal {
+			t.Fatalf("raftops.EnsureGreenLeaderBySteppingDownBlueWithFuncs() reason=%q, want %q", gotReason, raftops.ReasonStepDownFatal)
 		}
 		if waitCalls != 0 {
 			t.Fatalf("waitCalls=%d, want 0", waitCalls)

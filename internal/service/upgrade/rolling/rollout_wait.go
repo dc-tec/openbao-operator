@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -15,13 +14,11 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
-// setStatefulSetPartition updates the StatefulSet's partition value using strategic merge patch.
-// We use MergeFrom instead of SSA because StatefulSet validation requires all required fields
-// (selector, serviceName, template labels) to be present in SSA patches, but MergeFrom only
-// sends the diff and doesn't have this limitation.
+// setStatefulSetPartition updates only the StatefulSet rolling-update partition.
+// MergeFrom avoids the full-object validation burden of SSA for StatefulSets.
 func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, partition int32) error {
 	sts := &appsv1.StatefulSet{}
 	stsName := types.NamespacedName{
@@ -33,18 +30,12 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 		return fmt.Errorf("failed to get StatefulSet: %w", err)
 	}
 
-	// Create a patch that only updates the partition field.
-	// We use client.MergeFrom instead of Server-Side Apply (SSA) because SSA requires
-	// all required StatefulSet fields (selector, serviceName, template labels) to be present,
-	// which causes validation errors. MergeFrom generates a strategic merge patch that only
-	// touches the modified fields.
 	newSts := sts.DeepCopy()
 	newSts.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
 	newSts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
 		Partition: &partition,
 	}
 
-	// Patch using MergeFrom to send only the differences
 	if err := m.client.Patch(ctx, newSts, client.MergeFrom(sts)); err != nil {
 		return fmt.Errorf("failed to update StatefulSet partition: %w", err)
 	}
@@ -52,19 +43,11 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 	return nil
 }
 
-// waitForPodRevisionUpdated checks whether a pod has rolled to the StatefulSet update revision.
-// Returns:
-//   - (true, nil) if the pod revision matches StatefulSet UpdateRevision
-//   - (false, nil) if not updated yet (caller should requeue)
-//   - (false, error) if timeout exceeded or fatal error
+// waitForPodRevisionUpdated checks whether a pod has rolled to the StatefulSet
+// update revision.
 func (m *Manager) waitForPodRevisionUpdated(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
-	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
-		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
-		if elapsed > upgrade.DefaultPodReadyTimeout {
-			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonPodNotReady,
-				fmt.Sprintf(upgrade.MessagePodNotReady, podName, upgrade.DefaultPodReadyTimeout))
-			return false, fmt.Errorf("pod %s did not roll to update revision within %v", podName, upgrade.DefaultPodReadyTimeout)
-		}
+	if err := failUpgradeIfStartedTimeout(cluster, podRevisionTimeout(podName)); err != nil {
+		return false, err
 	}
 
 	sts := &appsv1.StatefulSet{}
@@ -133,14 +116,8 @@ func (m *Manager) waitForPodRevisionUpdated(ctx context.Context, logger logr.Log
 //   - (false, nil) if pod is not ready yet (caller should requeue)
 //   - (false, error) if timeout exceeded or fatal error
 func (m *Manager) waitForPodReady(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
-	// Check timeout based on when the upgrade started
-	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
-		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
-		if elapsed > upgrade.DefaultPodReadyTimeout {
-			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonPodNotReady,
-				fmt.Sprintf(upgrade.MessagePodNotReady, podName, upgrade.DefaultPodReadyTimeout))
-			return false, fmt.Errorf("pod %s did not become ready within %v", podName, upgrade.DefaultPodReadyTimeout)
-		}
+	if err := failUpgradeIfStartedTimeout(cluster, podReadyTimeout(podName)); err != nil {
+		return false, err
 	}
 
 	pod := &corev1.Pod{}
@@ -172,26 +149,18 @@ func (m *Manager) waitForPodReady(ctx context.Context, logger logr.Logger, clust
 //   - (false, nil) if pod is not healthy yet (caller should requeue)
 //   - (false, error) if timeout exceeded or fatal error
 func (m *Manager) waitForPodHealthy(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
-	// Check timeout based on when the upgrade started - health check should complete
-	// within a reasonable window after the pod becomes ready
-	// We use DefaultPodReadyTimeout + DefaultHealthCheckTimeout as total budget
-	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
-		elapsed := time.Since(cluster.Status.Upgrade.StartedAt.Time)
-		if elapsed > upgrade.DefaultPodReadyTimeout+upgrade.DefaultHealthCheckTimeout {
-			upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonHealthCheckFailed,
-				fmt.Sprintf(upgrade.MessageHealthCheckFailed, podName, "timeout"))
-			return false, fmt.Errorf("OpenBao health check timeout for pod %s", podName)
-		}
+	if err := failUpgradeIfStartedTimeout(cluster, podHealthTimeout(podName)); err != nil {
+		return false, err
 	}
 
-	caCert, err := m.getClusterCACert(ctx, cluster)
+	caCert, err := raftops.LoadClusterCACert(ctx, m.client, cluster)
 	if err != nil {
 		// CA cert not available yet, requeue
 		logger.V(1).Info("CA certificate not available yet", "error", err)
 		return false, nil // Requeue
 	}
 
-	apiClient, err := m.newPodClient(cluster, podName, caCert)
+	apiClient, err := raftops.NewClusterPodClient(cluster, podName, caCert, m.clientFactory, raftops.ClusterPodClientOptions{})
 	if err != nil {
 		// Wrap connection errors as transient and requeue
 		if operatorerrors.IsTransientConnection(err) {

@@ -2,147 +2,40 @@ package rolling
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/platform/logging"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
-// initializeUpgrade sets up the upgrade state and locks the StatefulSet partition.
-func (m *Manager) initializeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *upgrade.Metrics, strategy string) error {
-	fromVersion := cluster.Status.CurrentVersion
-	toVersion := cluster.Spec.Version
-
-	logger.Info("Initializing upgrade",
-		"from", fromVersion,
-		"to", toVersion,
-		"replicas", cluster.Spec.Replicas)
-
-	// Set upgrade state
-	upgrade.SetUpgradeStarted(&cluster.Status, fromVersion, toVersion, cluster.Spec.Replicas)
-
-	// Lock StatefulSet by setting partition to replicas (prevents all updates)
-	if err := m.setStatefulSetPartition(ctx, cluster, cluster.Spec.Replicas); err != nil {
-		return fmt.Errorf("failed to lock StatefulSet partition: %w", err)
-	}
-
-	// Update status using SSA
-	if err := m.patchStatusSSA(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to update status after initializing upgrade: %w", err)
-	}
-	// Only increment after the upgrade start state has been persisted successfully.
-	if metrics != nil {
-		metrics.IncrementTotal(strategy)
-	}
-	logging.LogAuditEvent(logger, logging.EventUpgradeStarted, map[string]string{
-		"cluster_namespace": cluster.Namespace,
-		"cluster_name":      cluster.Name,
-		"strategy":          strategy,
-		"from_version":      fromVersion,
-		"to_version":        toVersion,
-	})
-	m.emitNormalEvent(cluster, upgrade.ReasonUpgradeStarted, upgrade.MessageUpgradeStarted, fromVersion, toVersion)
-
-	logger.Info("Upgrade initialized; StatefulSet partition locked",
-		"partition", cluster.Spec.Replicas)
-
-	return nil
-}
-
-// finalizeUpgrade completes the upgrade process.
-func (m *Manager) finalizeUpgrade(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, metrics *upgrade.Metrics, strategy string) error {
-	var upgradeDuration float64
-	var fromVersion string
-
-	if cluster.Status.Upgrade != nil && cluster.Status.Upgrade.StartedAt != nil {
-		upgradeDuration = time.Since(cluster.Status.Upgrade.StartedAt.Time).Seconds()
-		fromVersion = cluster.Status.Upgrade.FromVersion
-	}
-
-	// Mark upgrade complete
-	upgrade.SetUpgradeComplete(&cluster.Status, cluster.Spec.Version)
-
-	if err := m.patchFinalizedUpgradeStatus(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to update status after completing upgrade: %w", err)
-	}
-
-	// Record metrics
-	if upgradeDuration > 0 {
-		metrics.RecordDuration(upgradeDuration, fromVersion, cluster.Spec.Version)
-	}
-	metrics.SetInProgress(false)
-	metrics.SetStatus(upgrade.UpgradeStatusSuccess)
-	metrics.IncrementSuccess(strategy)
-	metrics.SetPodsCompleted(0)
-	metrics.SetTotalPods(0)
-	metrics.SetPartition(0)
-	logging.LogAuditEvent(logger, logging.EventUpgradeCompleted, map[string]string{
-		"cluster_namespace": cluster.Namespace,
-		"cluster_name":      cluster.Name,
-		"strategy":          strategy,
-		"version":           cluster.Spec.Version,
-	})
-	m.emitNormalEvent(cluster, upgrade.ReasonUpgradeComplete, upgrade.MessageUpgradeComplete, fromVersion, cluster.Spec.Version)
-
-	logger.Info("Upgrade completed successfully",
-		"version", cluster.Spec.Version,
-		"duration", upgradeDuration)
-
-	return nil
-}
-
-func (m *Manager) releaseUpgradeLockOnPreStartError(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, cause error) error {
-	if cause == nil || cluster == nil || cluster.Status.Upgrade != nil {
-		return cause
-	}
-	if !upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
-		return cause
-	}
-	if err := upgrade.ReleaseUpgradeOperationLock(ctx, m.client, cluster); err != nil {
-		if upgrade.IsOperationLockHeld(err) {
-			logger.V(1).Info("Upgrade operation lock changed ownership before release")
-			return cause
-		}
-		return errors.Join(cause, fmt.Errorf("failed to release upgrade operation lock after pre-start failure: %w", err))
-	}
-	logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
-		"cluster_namespace": cluster.Namespace,
-		"cluster_name":      cluster.Name,
-		"operation":         string(openbaov1alpha1.ClusterOperationUpgrade),
-		"holder":            upgrade.UpgradeOperationLockHolder,
-	})
-	return cause
-}
-
 func (m *Manager) patchFinalizedUpgradeStatus(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	latest := &openbaov1alpha1.OpenBaoCluster{}
 	clusterKey := types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      cluster.Name,
 	}
-	if err := m.client.Get(ctx, clusterKey, latest); err != nil {
-		return fmt.Errorf("failed to get cluster for final status patch: %w", err)
-	}
-
-	desired := latest.DeepCopy()
-	desired.Status.Upgrade = nil
-	desired.Status.CurrentVersion = cluster.Spec.Version
-
-	if err := m.client.Status().Patch(ctx, desired, client.MergeFrom(latest)); err != nil {
+	desired, err := statusapply.FinalizeRootUpgradeStatusMerge(ctx, m.client, clusterKey, cluster.Spec.Version)
+	if err != nil {
 		return fmt.Errorf("failed to patch finalized rolling upgrade status: %w", err)
 	}
 
-	cluster.Status.Upgrade = nil
-	cluster.Status.CurrentVersion = cluster.Spec.Version
+	cluster.Status.Upgrade = desired.Status.Upgrade
+	cluster.Status.CurrentVersion = desired.Status.CurrentVersion
+	return nil
+}
+
+// patchStatusSSA updates the cluster status using Server-Side Apply.
+// SSA eliminates race conditions by having the API server merge changes,
+// rather than requiring the client to refresh and merge manually.
+func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if err := statusapply.ApplyOpenBaoClusterAdminOpsStatus(ctx, m.client, cluster, statusapply.OpenBaoClusterAdminOpsStatusApplyOptions{}); err != nil {
+		return fmt.Errorf("failed to apply adminops status plane for rolling upgrade status: %w", err)
+	}
 	return nil
 }
 
@@ -216,13 +109,13 @@ func (m *Manager) waitForFinalizationConverged(ctx context.Context, logger logr.
 }
 
 func (m *Manager) isPodHealthyForFinalization(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
-	caCert, err := m.getClusterCACert(ctx, cluster)
+	caCert, err := raftops.LoadClusterCACert(ctx, m.client, cluster)
 	if err != nil {
 		logger.V(1).Info("CA certificate not available yet while checking finalization health", "pod", podName, "error", err)
 		return false, nil
 	}
 
-	apiClient, err := m.newPodClient(cluster, podName, caCert)
+	apiClient, err := raftops.NewClusterPodClient(cluster, podName, caCert, m.clientFactory, raftops.ClusterPodClientOptions{})
 	if err != nil {
 		if operatorerrors.IsTransientConnection(err) {
 			logger.V(1).Info("Transient connection error creating client while checking finalization health", "pod", podName, "error", err)

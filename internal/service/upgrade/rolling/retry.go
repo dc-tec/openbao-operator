@@ -12,11 +12,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -51,40 +51,30 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 		return false, err
 	}
 
-	latest := &openbaov1alpha1.OpenBaoCluster{}
-	if err := m.client.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, latest); err != nil {
-		return false, fmt.Errorf("failed to refresh cluster before retry status patch: %w", err)
-	}
-	if latest.Status.Upgrade == nil {
-		return false, nil
-	}
-
-	if err := m.patchRetryStatusMerge(ctx, latest, retryRequest); err != nil {
+	if err := m.patchRetryStatusMerge(ctx, cluster, retryRequest); err != nil {
 		return false, fmt.Errorf("failed to clear failed upgrade state for retry: %w", err)
 	}
-	cluster.Status.Upgrade = latest.Status.Upgrade
+	if cluster.Status.Upgrade == nil {
+		return false, nil
+	}
 	upgrade.MarkRetryRequestHandled(&cluster.Status, retryRequest)
 
 	logger.Info("Cleared failed rolling upgrade state and resumed upgrade")
-	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryAccepted, "Rolling upgrade retry accepted for target version %s", latest.Status.Upgrade.TargetVersion)
+	m.emitNormalEvent(cluster, upgrade.ReasonRollingRetryAccepted, "Rolling upgrade retry accepted for target version %s", cluster.Status.Upgrade.TargetVersion)
 	return true, nil
 }
 
 func (m *Manager) patchRetryStatusMerge(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, retryRequest string) error {
-	current := &openbaov1alpha1.OpenBaoCluster{}
 	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
-	if err := m.client.Get(ctx, key, current); err != nil {
-		return fmt.Errorf("failed to refresh cluster before retry status patch: %w", err)
-	}
-	if current.Status.Upgrade == nil {
-		cluster.Status.Upgrade = nil
+	desired, err := statusapply.PatchOpenBaoClusterStatusMerge(ctx, m.client, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+		if obj.Status.Upgrade == nil {
+			return nil
+		}
+		clearUpgradeFailureForRetry(obj)
+		upgrade.MarkRetryRequestHandled(&obj.Status, retryRequest)
 		return nil
-	}
-
-	desired := current.DeepCopy()
-	clearUpgradeFailureForRetry(desired)
-	upgrade.MarkRetryRequestHandled(&desired.Status, retryRequest)
-	if err := m.client.Status().Patch(ctx, desired, client.MergeFrom(current)); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to patch cleared retry status: %w", err)
 	}
 

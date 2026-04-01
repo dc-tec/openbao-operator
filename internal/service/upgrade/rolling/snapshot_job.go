@@ -15,11 +15,12 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	snapshothelpers "github.com/dc-tec/openbao-operator/internal/service/upgrade/snapshot"
 )
 
 // findExistingPreUpgradeBackupJob finds an existing pre-upgrade backup job for this cluster.
 // It returns the job name and classified state when present, or an empty name when no current-attempt Job exists.
-func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, preUpgradeBackupJobState, error) {
+func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, snapshothelpers.JobState, error) {
 	expectedJobName := m.backupJobName(cluster)
 	job := &batchv1.Job{}
 
@@ -28,18 +29,12 @@ func (m *Manager) findExistingPreUpgradeBackupJob(ctx context.Context, cluster *
 		Namespace: cluster.Namespace,
 	}, job); err != nil {
 		if apierrors.IsNotFound(err) {
-			return "", preUpgradeBackupJobStateNone, nil
+			return "", snapshothelpers.JobStateNone, nil
 		}
-		return "", preUpgradeBackupJobStateNone, fmt.Errorf("failed to get backup job %s: %w", expectedJobName, err)
+		return "", snapshothelpers.JobStateNone, fmt.Errorf("failed to get backup job %s: %w", expectedJobName, err)
 	}
 
-	if kube.JobSucceeded(job) {
-		return job.Name, preUpgradeBackupJobStateSucceeded, nil
-	}
-	if kube.JobFailed(job) {
-		return job.Name, preUpgradeBackupJobStateFailed, nil
-	}
-	return job.Name, preUpgradeBackupJobStateRunning, nil
+	return job.Name, snapshothelpers.JobStateFromBatchJob(job), nil
 }
 
 // backupJobName generates a deterministic name for a pre-upgrade backup job.

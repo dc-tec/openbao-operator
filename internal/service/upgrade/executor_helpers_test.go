@@ -9,6 +9,7 @@ import (
 
 	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
 type ordinalNumber interface {
@@ -61,12 +62,12 @@ func TestReasonCodeFromContextError(t *testing.T) {
 		{
 			name: "context canceled",
 			err:  context.Canceled,
-			want: reasonContextCanceled,
+			want: raftops.ReasonContextCanceled,
 		},
 		{
 			name: "deadline exceeded",
 			err:  context.DeadlineExceeded,
-			want: reasonDeadlineExceeded,
+			want: raftops.ReasonDeadlineExceeded,
 		},
 		{
 			name: "non-context error",
@@ -78,8 +79,8 @@ func TestReasonCodeFromContextError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := reasonCodeFromContextError(tt.err); got != tt.want {
-				t.Fatalf("reasonCodeFromContextError()=%q, want %q", got, tt.want)
+			if got := raftops.ReasonCodeFromContextError(tt.err); got != tt.want {
+				t.Fatalf("raftops.ReasonCodeFromContextError()=%q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -89,10 +90,10 @@ func TestExecutorReasonedError(t *testing.T) {
 	t.Parallel()
 
 	cause := context.DeadlineExceeded
-	err := newExecutorReasonedError(reasonDeadlineExceeded, "wrapped message", cause)
+	err := raftops.NewExecutorReasonedError(raftops.ReasonDeadlineExceeded, "wrapped message", cause)
 
-	if got := reasonCodeFromError(err); got != reasonDeadlineExceeded {
-		t.Fatalf("reasonCodeFromError()=%q, want %q", got, reasonDeadlineExceeded)
+	if got := raftops.ReasonCodeFromError(err); got != raftops.ReasonDeadlineExceeded {
+		t.Fatalf("raftops.ReasonCodeFromError()=%q, want %q", got, raftops.ReasonDeadlineExceeded)
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("errors.Is(err, context.DeadlineExceeded)=false, want true")
@@ -112,31 +113,31 @@ func TestDecisionPathFromReasonCode(t *testing.T) {
 	}{
 		{
 			name:   "context canceled",
-			reason: reasonContextCanceled,
-			want:   decisionPathContextCanceled,
+			reason: raftops.ReasonContextCanceled,
+			want:   raftops.DecisionPathContextCanceled,
 		},
 		{
 			name:   "deadline exceeded",
-			reason: reasonDeadlineExceeded,
-			want:   decisionPathDeadlineExceeded,
+			reason: raftops.ReasonDeadlineExceeded,
+			want:   raftops.DecisionPathDeadlineExceeded,
 		},
 		{
 			name:   "election timeout",
-			reason: reasonElectionTimeout,
-			want:   decisionPathElectionTimeout,
+			reason: raftops.ReasonElectionTimeout,
+			want:   raftops.DecisionPathElectionTimeout,
 		},
 		{
 			name:   "unknown reason",
 			reason: "reason_unknown",
-			want:   decisionPathPrimaryFailedFallbackFailed,
+			want:   raftops.DecisionPathPrimaryFailedFallbackFailed,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := decisionPathFromReasonCode(tt.reason); got != tt.want {
-				t.Fatalf("decisionPathFromReasonCode()=%q, want %q", got, tt.want)
+			if got := raftops.DecisionPathFromReasonCode(tt.reason); got != tt.want {
+				t.Fatalf("raftops.DecisionPathFromReasonCode()=%q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -175,9 +176,9 @@ func TestNewLeaderSearchPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := newLeaderSearchPolicy(tt.primaryRevision, tt.fallbackRevision, "primary", "fallback")
+			got := raftops.NewLeaderSearchPolicy(tt.primaryRevision, tt.fallbackRevision, "primary", "fallback")
 			if got.AllowFallback != tt.wantAllowFallback {
-				t.Fatalf("newLeaderSearchPolicy() AllowFallback=%v, want %v", got.AllowFallback, tt.wantAllowFallback)
+				t.Fatalf("raftops.NewLeaderSearchPolicy() AllowFallback=%v, want %v", got.AllowFallback, tt.wantAllowFallback)
 			}
 		})
 	}
@@ -188,38 +189,38 @@ func TestNormalizeRetryPolicy(t *testing.T) {
 
 	tests := []struct {
 		name string
-		in   retryPolicy
-		want retryPolicy
+		in   raftops.RetryPolicy
+		want raftops.RetryPolicy
 	}{
 		{
 			name: "sets default attempts",
-			in: retryPolicy{
+			in: raftops.RetryPolicy{
 				MaxAttempts:     0,
 				AttemptInterval: 2 * time.Second,
 			},
-			want: retryPolicy{
-				MaxAttempts:     singleLeaderSearchAttempt,
+			want: raftops.RetryPolicy{
+				MaxAttempts:     1,
 				AttemptInterval: 2 * time.Second,
 			},
 		},
 		{
 			name: "normalizes negative interval",
-			in: retryPolicy{
+			in: raftops.RetryPolicy{
 				MaxAttempts:     3,
 				AttemptInterval: -1 * time.Second,
 			},
-			want: retryPolicy{
+			want: raftops.RetryPolicy{
 				MaxAttempts:     3,
 				AttemptInterval: 0,
 			},
 		},
 		{
 			name: "keeps valid values",
-			in: retryPolicy{
+			in: raftops.RetryPolicy{
 				MaxAttempts:     4,
 				AttemptInterval: 500 * time.Millisecond,
 			},
-			want: retryPolicy{
+			want: raftops.RetryPolicy{
 				MaxAttempts:     4,
 				AttemptInterval: 500 * time.Millisecond,
 			},
@@ -230,7 +231,7 @@ func TestNormalizeRetryPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := normalizeRetryPolicy(tt.in)
+			got := raftops.NormalizeRetryPolicy(tt.in)
 			if got.MaxAttempts != tt.want.MaxAttempts {
 				t.Fatalf("normalizeRetryPolicy() MaxAttempts=%d, want %d", got.MaxAttempts, tt.want.MaxAttempts)
 			}
@@ -246,19 +247,19 @@ func TestMaxLeaderSearchAttempts(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		policy leaderSearchPolicy
+		policy raftops.LeaderSearchPolicy
 		want   int
 	}{
 		{
 			name: "fallback enabled",
-			policy: leaderSearchPolicy{
+			policy: raftops.LeaderSearchPolicy{
 				AllowFallback: true,
 			},
 			want: 2,
 		},
 		{
 			name: "fallback disabled",
-			policy: leaderSearchPolicy{
+			policy: raftops.LeaderSearchPolicy{
 				AllowFallback: false,
 			},
 			want: 1,
@@ -268,8 +269,8 @@ func TestMaxLeaderSearchAttempts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := maxLeaderSearchAttempts(tt.policy); got != tt.want {
-				t.Fatalf("maxLeaderSearchAttempts()=%d, want %d", got, tt.want)
+			if got := raftops.MaxLeaderSearchAttempts(tt.policy); got != tt.want {
+				t.Fatalf("raftops.MaxLeaderSearchAttempts()=%d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -278,13 +279,13 @@ func TestMaxLeaderSearchAttempts(t *testing.T) {
 func TestReplicaOrdinals(t *testing.T) {
 	t.Parallel()
 
-	runOrdinalTests(t, "replicaOrdinals", replicaOrdinals, ordinalCases[int32]())
+	runOrdinalTests(t, "raftops.ReplicaOrdinals", raftops.ReplicaOrdinals, ordinalCases[int32]())
 }
 
 func TestAttemptOrdinals(t *testing.T) {
 	t.Parallel()
 
-	runOrdinalTests(t, "attemptOrdinals", attemptOrdinals, ordinalCases[int]())
+	runOrdinalTests(t, "raftops.AttemptOrdinals", raftops.AttemptOrdinals, ordinalCases[int]())
 }
 
 func TestRevisionPodName(t *testing.T) {
@@ -316,8 +317,8 @@ func TestRevisionPodName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := revisionPodName(tt.cluster, tt.revision, tt.ordinal); got != tt.wantValue {
-				t.Fatalf("revisionPodName()=%q, want %q", got, tt.wantValue)
+			if got := raftops.RevisionPodName(tt.cluster, tt.revision, tt.ordinal); got != tt.wantValue {
+				t.Fatalf("raftops.RevisionPodName()=%q, want %q", got, tt.wantValue)
 			}
 		})
 	}
@@ -373,8 +374,8 @@ func TestRaftServerMatchesRevision(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := raftServerMatchesRevision(tt.nodeID, tt.address, tt.cluster, tt.revision, tt.replicas); got != tt.wantMatch {
-				t.Fatalf("raftServerMatchesRevision()=%v, want %v", got, tt.wantMatch)
+			if got := raftops.RaftServerMatchesRevision(tt.nodeID, tt.address, tt.cluster, tt.revision, tt.replicas); got != tt.wantMatch {
+				t.Fatalf("raftops.RaftServerMatchesRevision()=%v, want %v", got, tt.wantMatch)
 			}
 		})
 	}
@@ -456,12 +457,12 @@ func TestRaftAutopilotLeaderLastIndex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			gotIndex, gotFound := raftAutopilotLeaderLastIndex(tt.state)
+			gotIndex, gotFound := raftops.RaftAutopilotLeaderLastIndex(tt.state)
 			if gotIndex != tt.wantIndex {
-				t.Fatalf("raftAutopilotLeaderLastIndex() index=%d, want %d", gotIndex, tt.wantIndex)
+				t.Fatalf("raftops.RaftAutopilotLeaderLastIndex() index=%d, want %d", gotIndex, tt.wantIndex)
 			}
 			if gotFound != tt.wantFound {
-				t.Fatalf("raftAutopilotLeaderLastIndex() found=%v, want %v", gotFound, tt.wantFound)
+				t.Fatalf("raftops.RaftAutopilotLeaderLastIndex() found=%v, want %v", gotFound, tt.wantFound)
 			}
 		})
 	}
@@ -503,8 +504,8 @@ func TestRaftAutopilotMaxLastIndex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := raftAutopilotMaxLastIndex(tt.state); got != tt.want {
-				t.Fatalf("raftAutopilotMaxLastIndex()=%d, want %d", got, tt.want)
+			if got := raftops.RaftAutopilotMaxLastIndex(tt.state); got != tt.want {
+				t.Fatalf("raftops.RaftAutopilotMaxLastIndex()=%d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -554,8 +555,8 @@ func TestRaftAutopilotServerMatchesPod(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := raftAutopilotServerMatchesPod(tt.server, tt.podName); got != tt.want {
-				t.Fatalf("raftAutopilotServerMatchesPod()=%v, want %v", got, tt.want)
+			if got := raftops.RaftAutopilotServerMatchesPod(tt.server, tt.podName); got != tt.want {
+				t.Fatalf("raftops.RaftAutopilotServerMatchesPod()=%v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -652,7 +653,7 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := evaluateGreenSyncFromAutopilot(cfg, tt.state, tt.targetIndex)
+			got := raftops.EvaluateGreenSyncFromAutopilot(cfg, tt.state, tt.targetIndex)
 			if got.AllSynced != tt.wantAllSynced {
 				t.Fatalf("AllSynced=%v, want %v", got.AllSynced, tt.wantAllSynced)
 			}
@@ -686,17 +687,17 @@ func TestFindAutopilotServerForPod(t *testing.T) {
 		},
 	}
 
-	server, found := findAutopilotServerForPod(state, "openbao-green-0")
+	server, found := raftops.FindAutopilotServerForPod(state, "openbao-green-0")
 	if !found {
-		t.Fatalf("findAutopilotServerForPod() found=false, want true")
+		t.Fatalf("raftops.FindAutopilotServerForPod() found=false, want true")
 	}
 	if server.ID != "openbao-green-0" {
-		t.Fatalf("findAutopilotServerForPod() server.ID=%q, want %q", server.ID, "openbao-green-0")
+		t.Fatalf("raftops.FindAutopilotServerForPod() server.ID=%q, want %q", server.ID, "openbao-green-0")
 	}
 
-	_, found = findAutopilotServerForPod(state, "openbao-green-1")
+	_, found = raftops.FindAutopilotServerForPod(state, "openbao-green-1")
 	if found {
-		t.Fatalf("findAutopilotServerForPod() found=true for missing pod, want false")
+		t.Fatalf("raftops.FindAutopilotServerForPod() found=true for missing pod, want false")
 	}
 }
 
@@ -710,17 +711,17 @@ func TestAutopilotServerDebugNames(t *testing.T) {
 		},
 	}
 
-	got := autopilotServerDebugNames(state)
+	got := raftops.AutopilotServerDebugNames(state)
 	want := []string{
 		"a(id=id-a,name=pod-a,addr=https://pod-a)",
 		"z(id=id-z,name=pod-z,addr=https://pod-z)",
 	}
 	if len(got) != len(want) {
-		t.Fatalf("len(autopilotServerDebugNames)=%d, want %d", len(got), len(want))
+		t.Fatalf("len(raftops.AutopilotServerDebugNames)=%d, want %d", len(got), len(want))
 	}
 	for i := range want {
 		if got[i] != want[i] {
-			t.Fatalf("autopilotServerDebugNames[%d]=%q, want %q", i, got[i], want[i])
+			t.Fatalf("raftops.AutopilotServerDebugNames[%d]=%q, want %q", i, got[i], want[i])
 		}
 	}
 }
@@ -781,8 +782,8 @@ func TestCountMissingGreenServers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := countMissingGreenServers(tt.cfg, tt.config); got != tt.want {
-				t.Fatalf("countMissingGreenServers()=%d, want %d", got, tt.want)
+			if got := raftops.CountMissingGreenServers(tt.cfg, tt.config); got != tt.want {
+				t.Fatalf("raftops.CountMissingGreenServers()=%d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -819,8 +820,8 @@ func TestExecutorPodURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := podURL(cfg, tt.revision, tt.ordinal); got != tt.want {
-				t.Fatalf("podURL()=%q, want %q", got, tt.want)
+			if got := raftops.PodURL(cfg, tt.revision, tt.ordinal); got != tt.want {
+				t.Fatalf("raftops.PodURL()=%q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -854,8 +855,8 @@ func TestIsBenignJoinError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := isBenignJoinError(tt.err); got != tt.want {
-				t.Fatalf("isBenignJoinError()=%v, want %v", got, tt.want)
+			if got := raftops.IsBenignJoinError(tt.err); got != tt.want {
+				t.Fatalf("raftops.IsBenignJoinError()=%v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -867,35 +868,35 @@ func TestClassifyJoinError(t *testing.T) {
 	tests := []struct {
 		name string
 		err  error
-		want benignErrorClassification
+		want raftops.BenignErrorClassification
 	}{
 		{
 			name: "nil",
 			err:  nil,
-			want: benignErrorClassificationBenign,
+			want: raftops.BenignErrorClassificationBenign,
 		},
 		{
 			name: "already joined is benign",
 			err:  errors.New("node already joined cluster"),
-			want: benignErrorClassificationBenign,
+			want: raftops.BenignErrorClassificationBenign,
 		},
 		{
 			name: "permission denied is fatal",
 			err:  errors.New("permission denied"),
-			want: benignErrorClassificationFatal,
+			want: raftops.BenignErrorClassificationFatal,
 		},
 		{
 			name: "unknown defaults to fatal",
 			err:  errors.New("some other join error"),
-			want: benignErrorClassificationFatal,
+			want: raftops.BenignErrorClassificationFatal,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := classifyJoinError(tt.err); got != tt.want {
-				t.Fatalf("classifyJoinError()=%q, want %q", got, tt.want)
+			if got := raftops.ClassifyJoinError(tt.err); got != tt.want {
+				t.Fatalf("raftops.ClassifyJoinError()=%q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -930,25 +931,25 @@ func TestNewOpenBaoClientFactory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			factory, cleanup, err := newOpenBaoClientFactory(tt.cfg)
+			factory, cleanup, err := raftops.NewOpenBaoClientFactory(tt.cfg)
 			if tt.wantErr != "" {
 				if err == nil {
-					t.Fatalf("newOpenBaoClientFactory() error=nil, want contains %q", tt.wantErr)
+					t.Fatalf("raftops.NewOpenBaoClientFactory() error=nil, want contains %q", tt.wantErr)
 				}
 				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("newOpenBaoClientFactory() error=%q, want contains %q", err.Error(), tt.wantErr)
+					t.Fatalf("raftops.NewOpenBaoClientFactory() error=%q, want contains %q", err.Error(), tt.wantErr)
 				}
 				return
 			}
 
 			if err != nil {
-				t.Fatalf("newOpenBaoClientFactory() unexpected error: %v", err)
+				t.Fatalf("raftops.NewOpenBaoClientFactory() unexpected error: %v", err)
 			}
 			if factory == nil {
-				t.Fatalf("newOpenBaoClientFactory() returned nil factory")
+				t.Fatalf("raftops.NewOpenBaoClientFactory() returned nil factory")
 			}
 			if cleanup == nil {
-				t.Fatalf("newOpenBaoClientFactory() returned nil cleanup")
+				t.Fatalf("raftops.NewOpenBaoClientFactory() returned nil cleanup")
 			}
 
 			client, err := factory.New("https://openbao-0.openbao.default.svc:8200")

@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
 func FuzzRollingHelpers(f *testing.F) {
@@ -50,9 +51,9 @@ func FuzzRollingHelpers(f *testing.F) {
 			}
 		}
 
-		url := upgrade.PodURLForService("default", "cluster-internal", sanitizeRollingName(podName, "cluster-0"))
+		url := raftops.ClusterPodURLForService("default", "cluster-internal", sanitizeRollingName(podName, "cluster-0"))
 		if !strings.HasPrefix(url, "https://") {
-			t.Fatalf("PodURLForService() should return https URL")
+			t.Fatalf("ClusterPodURLForService() should return https URL")
 		}
 	})
 }

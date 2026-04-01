@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
 func FuzzExecutorPolicyHelpers(f *testing.F) {
@@ -12,8 +14,8 @@ func FuzzExecutorPolicyHelpers(f *testing.F) {
 	f.Add("rev-a", "rev-a", "", "", uint8(1))
 
 	f.Fuzz(func(t *testing.T, primaryRevision, fallbackRevision, primaryLabel, fallbackLabel string, outcomeSeed uint8) {
-		policy := newLeaderSearchPolicy(primaryRevision, fallbackRevision, primaryLabel, fallbackLabel)
-		_ = maxLeaderSearchAttempts(policy)
+		policy := raftops.NewLeaderSearchPolicy(primaryRevision, fallbackRevision, primaryLabel, fallbackLabel)
+		_ = raftops.MaxLeaderSearchAttempts(policy)
 
 		cfg := &ExecutorConfig{
 			ClusterNamespace: "default",
@@ -27,7 +29,7 @@ func FuzzExecutorPolicyHelpers(f *testing.F) {
 			Timeout:          1,
 		}
 
-		outcome := resolveLeaderWithPolicyUsing(context.Background(), cfg, policy, func(_ context.Context, _ *ExecutorConfig, revision string) (string, error) {
+		outcome := raftops.ResolveLeaderWithPolicyUsing(context.Background(), cfg, policy, func(_ context.Context, _ *ExecutorConfig, revision string) (string, error) {
 			switch outcomeSeed % 4 {
 			case 0:
 				return "https://" + sanitizeUpgradeToken(revision, "leader"), nil
@@ -47,9 +49,9 @@ func FuzzExecutorPolicyHelpers(f *testing.F) {
 			t.Fatalf("expected either leader value or reason code")
 		}
 		if outcome.PrimaryError != nil {
-			_ = reasonCodeFromError(newExecutorReasonedError(reasonCodeFromContextError(outcome.PrimaryError), "wrapped", outcome.PrimaryError))
+			_ = raftops.ReasonCodeFromError(raftops.NewExecutorReasonedError(raftops.ReasonCodeFromContextError(outcome.PrimaryError), "wrapped", outcome.PrimaryError))
 		}
-		_ = decisionPathFromReasonCode(outcome.ReasonCode)
+		_ = raftops.DecisionPathFromReasonCode(outcome.ReasonCode)
 	})
 }
 

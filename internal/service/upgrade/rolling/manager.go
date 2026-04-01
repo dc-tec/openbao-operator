@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
 const (
@@ -33,7 +34,7 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
 	recorder              events.EventRecorder
-	clientFactory         upgrade.OpenBaoClientFactory
+	clientFactory         raftops.OpenBaoClientFactory
 	clientConfig          portopenbao.ClientConfig
 	operatorImageVerifier imageverify.Verifier
 	Platform              string
@@ -58,7 +59,7 @@ func NewManager(
 		scheme:                scheme,
 		backupRuntime:         backupRuntime,
 		recorder:              eventRecorder,
-		clientFactory:         upgrade.DefaultOpenBaoClientFactory,
+		clientFactory:         raftops.DefaultOpenBaoClientFactory,
 		clientConfig:          clientConfig,
 		operatorImageVerifier: operatorImageVerifier,
 		Platform:              platform,
@@ -71,14 +72,14 @@ func NewManagerWithClientFactory(
 	c client.Client,
 	scheme *runtime.Scheme,
 	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
-	factory upgrade.OpenBaoClientFactory,
+	factory raftops.OpenBaoClientFactory,
 	clientConfig portopenbao.ClientConfig,
 	operatorImageVerifier imageverify.Verifier,
 	platform string,
 	recorder ...events.EventRecorder,
 ) *Manager {
 	if factory == nil {
-		factory = upgrade.DefaultOpenBaoClientFactory
+		factory = raftops.DefaultOpenBaoClientFactory
 	}
 	var eventRecorder events.EventRecorder
 	if len(recorder) > 0 {

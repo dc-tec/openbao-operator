@@ -19,10 +19,12 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
-// currentLeaderPodByLabel returns the pod name labeled as the current leader, if available.
-// Returns an empty string if no leader label is observed.
+// currentLeaderPodByLabel returns the current leader from pod labels, if the
+// label state is unambiguous.
 func (m *Manager) currentLeaderPodByLabel(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	podList := &corev1.PodList{}
 	if err := m.client.List(ctx, podList,
@@ -35,36 +37,18 @@ func (m *Manager) currentLeaderPodByLabel(ctx context.Context, cluster *openbaov
 		return "", fmt.Errorf("failed to list pods: %w", err)
 	}
 
-	leaders := make([]string, 0, 1)
-	for i := range podList.Items {
-		pod := &podList.Items[i]
-		leader, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelActive)
-		if err != nil || !present {
-			continue
-		}
-		if leader {
-			leaders = append(leaders, pod.Name)
-		}
+	leaderPod, found, err := raftops.FindLeaderPodByLabel(podList.Items)
+	if err != nil {
+		return "", err
 	}
-
-	switch len(leaders) {
-	case 0:
+	if !found {
 		return "", nil
-	case 1:
-		return leaders[0], nil
-	default:
-		return "", fmt.Errorf("multiple leaders detected via pod labels (%d)", len(leaders))
 	}
+	return leaderPod, nil
 }
 
-// stepDownLeader performs a leader step-down check using level-triggered semantics.
-// Instead of blocking with a ticker loop, it checks the condition once and returns
-// a result indicating whether to requeue.
-//
-// Returns:
-//   - (true, nil) if step-down is complete
-//   - (false, nil) if step-down is in progress (caller should requeue)
-//   - (false, error) if step-down failed fatally
+// stepDownLeader advances the level-triggered leader step-down flow and lets
+// the caller decide when to requeue.
 func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string, metrics *upgrade.Metrics) (bool, error) {
 	if cluster.Status.Upgrade == nil {
 		return false, fmt.Errorf("upgrade state is nil")
@@ -84,7 +68,6 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	// Record step-down attempt only once per pod by keying off Job existence.
-	// This avoids inflating metrics and audit events during requeues.
 	if !jobExists {
 		targetIsLeader, err := m.isTargetPodLeader(ctx, cluster, podName)
 		if err != nil {
@@ -98,7 +81,6 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 
 		metrics.IncrementStepDownTotal()
 
-		// Audit log: Leader step-down operation
 		logging.LogAuditEvent(logger, logging.EventStepDownStarted, map[string]string{
 			"cluster_namespace": cluster.Namespace,
 			"cluster_name":      cluster.Name,
@@ -108,7 +90,6 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		})
 	}
 
-	// Ensure step-down Job exists/is running
 	result, err := upgrade.EnsureExecutorJob(
 		ctx,
 		m.client,
@@ -135,15 +116,9 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		// A completed Job may still be observed on subsequent reconciles while
 		// pod labels/API leadership settle; that must not be treated as timeout.
 		if jobExists && !stepDownJob.CreationTimestamp.IsZero() {
-			elapsed := time.Since(stepDownJob.CreationTimestamp.Time)
-			if elapsed > upgrade.DefaultStepDownTimeout {
+			if err := failUpgradeIfTimestampTimeout(cluster, &stepDownJob.CreationTimestamp, stepDownTimeout(podName)); err != nil {
 				metrics.IncrementStepDownFailures()
-				upgrade.SetUpgradeFailed(
-					&cluster.Status,
-					upgrade.ReasonStepDownTimeout,
-					fmt.Sprintf(upgrade.MessageStepDownTimeout, podName),
-				)
-				return false, fmt.Errorf("step-down timeout for pod %s: exceeded %v", podName, upgrade.DefaultStepDownTimeout)
+				return false, err
 			}
 		}
 		logger.V(1).Info("Step-down job still running", "pod", podName)
@@ -168,7 +143,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 
 	if present && !stillLeader {
 		logger.Info("Leadership transferred successfully", "previousLeader", podName)
-		upgrade.SetStepDownPerformed(&cluster.Status)
+		core.SetStepDownPerformed(&cluster.Status)
 		logging.LogAuditEvent(logger, logging.EventStepDownCompleted, map[string]string{
 			"cluster_namespace": cluster.Namespace,
 			"cluster_name":      cluster.Name,
@@ -178,13 +153,13 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	// Labels can lag behind reality; confirm leadership via the OpenBao API.
-	caCert, err := m.getClusterCACert(ctx, cluster)
+	caCert, err := raftops.LoadClusterCACert(ctx, m.client, cluster)
 	if err != nil {
 		logger.V(1).Info("CA certificate not available yet while checking leader transfer", "error", err)
 		return false, nil // Requeue
 	}
 
-	apiClient, err := m.newPodClient(cluster, podName, caCert)
+	apiClient, err := raftops.NewClusterPodClient(cluster, podName, caCert, m.clientFactory, raftops.ClusterPodClientOptions{})
 	if err != nil {
 		if operatorerrors.IsTransientConnection(err) {
 			logger.V(1).Info("Transient connection error creating client while checking leader transfer", "error", err)
@@ -200,7 +175,7 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 	}
 	if !isLeader {
 		logger.Info("Leadership transferred successfully (verified via API)", "previousLeader", podName)
-		upgrade.SetStepDownPerformed(&cluster.Status)
+		core.SetStepDownPerformed(&cluster.Status)
 		logging.LogAuditEvent(logger, logging.EventStepDownCompleted, map[string]string{
 			"cluster_namespace": cluster.Namespace,
 			"cluster_name":      cluster.Name,
@@ -238,22 +213,12 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 }
 
 func (m *Manager) isTargetPodLeader(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
-	caCert, err := m.getClusterCACert(ctx, cluster)
-	if err != nil {
-		return false, fmt.Errorf("failed to get CA certificate for leader check: %w", err)
-	}
-
-	apiClient, err := m.newPodClient(cluster, podName, caCert)
+	isLeader, err := raftops.IsClusterPodLeader(ctx, m.client, m.clientFactory, cluster, podName, raftops.ClusterPodClientOptions{})
 	if err != nil {
 		if operatorerrors.IsTransientConnection(err) {
 			return false, err
 		}
-		return false, fmt.Errorf("failed to create OpenBao client for leader check: %w", err)
-	}
-
-	isLeader, err := apiClient.IsLeader(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to check leadership for pod %s: %w", podName, err)
+		return false, err
 	}
 
 	return isLeader, nil
