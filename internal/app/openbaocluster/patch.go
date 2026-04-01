@@ -10,11 +10,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
 )
 
 const (
-	workloadFieldOwner        = "openbao-workload-controller"
-	adminOpsSupportFieldOwner = "openbao-adminops-support-controller"
+	workloadFieldOwner = "openbao-workload-controller"
 )
 
 // PatchWorkloadOwnedFields patches only workload-controller owned status fields.
@@ -57,7 +58,7 @@ func PatchWorkloadOwnedFields(
 		},
 	}
 
-	applyConfig, err := toApplyConfiguration(applyCluster, c)
+	applyConfig, err := statusapply.ToApplyConfiguration(applyCluster, c)
 	if err != nil {
 		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
 	}
@@ -82,9 +83,11 @@ func PatchAdminOpsOwnedFields(
 		return nil
 	}
 
+	// Backup-only diffs are persisted by the backup manager. When we do patch
+	// adminops status for other reasons, we still apply the full current adminops
+	// plane so shared SSA ownership does not clear backup or peer fields by omission.
 	if reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
 		reflect.DeepEqual(original.Status.UpgradeRequests, cluster.Status.UpgradeRequests) &&
-		reflect.DeepEqual(original.Status.Backup, cluster.Status.Backup) &&
 		reflect.DeepEqual(original.Status.BreakGlass, cluster.Status.BreakGlass) &&
 		reflect.DeepEqual(original.Status.AdminOps, cluster.Status.AdminOps) {
 		return nil
@@ -95,32 +98,12 @@ func PatchAdminOpsOwnedFields(
 		adminOps = &openbaov1alpha1.AdminOpsControllerStatus{}
 	}
 
-	applyCluster := &openbaov1alpha1.OpenBaoCluster{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: openbaov1alpha1.GroupVersion.String(),
-			Kind:       "OpenBaoCluster",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			BlueGreen:       cluster.Status.BlueGreen,
-			UpgradeRequests: cluster.Status.UpgradeRequests,
-			Backup:          cluster.Status.Backup,
-			BreakGlass:      cluster.Status.BreakGlass,
-			AdminOps:        adminOps,
-		},
-	}
-
-	applyConfig, err := toApplyConfiguration(applyCluster, c)
-	if err != nil {
-		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
-	}
-
-	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner(adminOpsSupportFieldOwner), client.ForceOwnership); err != nil {
+	cluster.Status.AdminOps = adminOps
+	if err := statusapply.ApplyOpenBaoClusterAdminOpsStatus(ctx, c, cluster, statusapply.OpenBaoClusterAdminOpsStatusApplyOptions{
+		ForceOwnership: true,
+	}); err != nil {
 		return fmt.Errorf("failed to patch adminops status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
-	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", adminOpsSupportFieldOwner)
+	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", constants.FieldOwnerAdminOpsStatus)
 	return nil
 }

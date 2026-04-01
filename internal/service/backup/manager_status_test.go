@@ -5,20 +5,35 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
 	cluster := newTestClusterWithBackup("record-attempt", "backup-ns")
 	cluster.Status.Backup = nil
+	var capturedOptions client.SubResourceApplyOptions
+	var sawStatusApply bool
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithStatusSubresource(cluster).
 		WithObjects(cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceApply: func(ctx context.Context, c client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+				if subResource == "status" {
+					sawStatusApply = true
+					capturedOptions = *(&client.SubResourceApplyOptions{}).ApplyOpts(opts)
+				}
+				return c.Status().Apply(ctx, obj, opts...)
+			},
+		}).
 		Build()
 
 	manager := newBackupManager(k8sClient)
@@ -48,5 +63,14 @@ func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
 	}
 	if updated.Status.Backup == nil || updated.Status.Backup.LastAttemptTime == nil || !updated.Status.Backup.LastAttemptTime.Time.Equal(now) {
 		t.Fatalf("persisted LastAttemptTime = %#v, want %v", updated.Status.Backup, now)
+	}
+	if !sawStatusApply {
+		t.Fatal("expected backup status persistence to use status apply")
+	}
+	if capturedOptions.FieldManager != constants.FieldOwnerAdminOpsStatus {
+		t.Fatalf("FieldManager = %q, want %q", capturedOptions.FieldManager, constants.FieldOwnerAdminOpsStatus)
+	}
+	if capturedOptions.Force == nil || !*capturedOptions.Force {
+		t.Fatalf("Force = %v, want true", capturedOptions.Force)
 	}
 }

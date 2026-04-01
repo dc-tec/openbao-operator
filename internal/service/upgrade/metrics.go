@@ -259,6 +259,52 @@ func (m *Metrics) SetPodsCompleted(count int) {
 	upgradePodsCompletedGauge.WithLabelValues(m.namespace, m.name).Set(float64(count))
 }
 
+// SetRunningProgressMetrics updates the common progress gauges for an in-flight upgrade.
+func SetRunningProgressMetrics(metrics *Metrics, replicas int32, completedPods int, partition int32) {
+	if metrics == nil {
+		return
+	}
+
+	metrics.SetInProgress(true)
+	metrics.SetStatus(UpgradeStatusRunning)
+	metrics.SetTotalPods(int(replicas))
+	metrics.SetPodsCompleted(completedPods)
+	metrics.SetPartition(partition)
+}
+
+// SetInactiveProgressMetrics marks the upgrade as not in progress and clears
+// progress-only gauges while leaving the current terminal status untouched.
+func SetInactiveProgressMetrics(metrics *Metrics) {
+	if metrics == nil {
+		return
+	}
+
+	metrics.SetInProgress(false)
+	ClearProgressMetrics(metrics)
+}
+
+// SetTerminalProgressMetrics records a terminal upgrade status and clears the
+// progress-only gauges.
+func SetTerminalProgressMetrics(metrics *Metrics, status UpgradeStatus) {
+	if metrics == nil {
+		return
+	}
+
+	SetInactiveProgressMetrics(metrics)
+	metrics.SetStatus(status)
+}
+
+// ClearProgressMetrics clears the progress-only gauges for an upgrade.
+func ClearProgressMetrics(metrics *Metrics) {
+	if metrics == nil {
+		return
+	}
+
+	metrics.SetPodsCompleted(0)
+	metrics.SetTotalPods(0)
+	metrics.SetPartition(0)
+}
+
 // SetTotalPods sets the total number of pods to be upgraded.
 func (m *Metrics) SetTotalPods(count int) {
 	upgradeTotalPodsGauge.WithLabelValues(m.namespace, m.name).Set(float64(count))
