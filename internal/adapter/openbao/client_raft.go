@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -87,7 +88,11 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return portopenbao.NewAPIError("raft join request failed", resp.StatusCode, body)
+		apiErr := portopenbao.NewAPIError("raft join request failed", resp.StatusCode, body)
+		if raftJoinResponseAlreadyJoined(body) {
+			return fmt.Errorf("%w: %w", portopenbao.ErrAlreadyJoined, apiErr)
+		}
+		return apiErr
 	}
 
 	var joinResp JoinRaftClusterResponse
@@ -95,7 +100,7 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 		return nil
 	}
 	if !joinResp.Joined {
-		return fmt.Errorf("node was not joined to cluster (already initialized as standalone)")
+		return fmt.Errorf("%w: node was not joined to cluster (already initialized as standalone)", portopenbao.ErrAlreadyJoined)
 	}
 
 	return nil
@@ -228,7 +233,11 @@ func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, pat
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), resp.StatusCode, body)
+		apiErr := portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), resp.StatusCode, body)
+		if action == "demote" && raftDemoteResponseAlreadyNonVoter(body) {
+			return fmt.Errorf("%w: %w", portopenbao.ErrAlreadyNonVoter, apiErr)
+		}
+		return apiErr
 	}
 
 	return nil
@@ -280,4 +289,29 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopen
 	}
 
 	return nil
+}
+
+func raftJoinResponseAlreadyJoined(responseBody []byte) bool {
+	return raftResponseContainsAny(responseBody,
+		"already joined",
+		"already initialized as standalone",
+	)
+}
+
+func raftDemoteResponseAlreadyNonVoter(responseBody []byte) bool {
+	return raftResponseContainsAny(responseBody,
+		"already a non-voter",
+		"already non-voter",
+		"already non voter",
+	)
+}
+
+func raftResponseContainsAny(responseBody []byte, patterns ...string) bool {
+	message := strings.ToLower(string(responseBody))
+	for _, pattern := range patterns {
+		if strings.Contains(message, pattern) {
+			return true
+		}
+	}
+	return false
 }

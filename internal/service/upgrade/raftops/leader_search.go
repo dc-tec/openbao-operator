@@ -2,7 +2,9 @@ package raftops
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -268,7 +270,7 @@ func IsBenignJoinError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(err.Error(), "already joined")
+	return errors.Is(err, portopenbao.ErrAlreadyJoined)
 }
 
 // ClassifyJoinError classifies a join failure.
@@ -280,10 +282,7 @@ func ClassifyJoinError(err error) BenignErrorClassification {
 		return BenignErrorClassificationBenign
 	}
 
-	message := strings.ToLower(err.Error())
-	if strings.Contains(message, "permission denied") ||
-		strings.Contains(message, "forbidden") ||
-		strings.Contains(message, "unauthorized") {
+	if isOpenBaoAuthzError(err) {
 		return BenignErrorClassificationFatal
 	}
 
@@ -297,10 +296,7 @@ func IsBenignDemoteError(err error) bool {
 		return false
 	}
 
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "already a non-voter") ||
-		strings.Contains(message, "already non-voter") ||
-		strings.Contains(message, "already non voter")
+	return errors.Is(err, portopenbao.ErrAlreadyNonVoter)
 }
 
 // ClassifyDemoteError classifies a demote failure.
@@ -312,10 +308,7 @@ func ClassifyDemoteError(err error) BenignErrorClassification {
 		return BenignErrorClassificationBenign
 	}
 
-	message := strings.ToLower(err.Error())
-	if strings.Contains(message, "permission denied") ||
-		strings.Contains(message, "forbidden") ||
-		strings.Contains(message, "unauthorized") {
+	if isOpenBaoAuthzError(err) {
 		return BenignErrorClassificationFatal
 	}
 
@@ -328,14 +321,15 @@ func ClassifyStepDownError(err error) BenignErrorClassification {
 		return BenignErrorClassificationBenign
 	}
 
-	message := strings.ToLower(err.Error())
-	if strings.Contains(message, "permission denied") ||
-		strings.Contains(message, "forbidden") ||
-		strings.Contains(message, "unauthorized") {
+	if isOpenBaoAuthzError(err) {
 		return BenignErrorClassificationFatal
 	}
 
 	return BenignErrorClassificationRetryable
+}
+
+func isOpenBaoAuthzError(err error) bool {
+	return portopenbao.IsStatus(err, http.StatusUnauthorized) || portopenbao.IsStatus(err, http.StatusForbidden)
 }
 
 // NewOpenBaoClientFactory constructs a client factory for executor-side pod

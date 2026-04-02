@@ -3,7 +3,10 @@ package raftops
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
+
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestResolveLeaderWithPolicyUsing(t *testing.T) {
@@ -110,22 +113,22 @@ func TestErrorClassificationHelpers(t *testing.T) {
 	}{
 		{
 			name: "join already joined is benign",
-			got:  ClassifyJoinError(errors.New("node already joined to cluster")),
+			got:  ClassifyJoinError(portopenbao.ErrAlreadyJoined),
 			want: BenignErrorClassificationBenign,
 		},
 		{
-			name: "join permission denied is fatal",
-			got:  ClassifyJoinError(errors.New("permission denied")),
+			name: "join forbidden status is fatal",
+			got:  ClassifyJoinError(portopenbao.NewAPIError("raft join request failed", http.StatusForbidden, nil)),
 			want: BenignErrorClassificationFatal,
 		},
 		{
 			name: "demote already non voter is benign",
-			got:  ClassifyDemoteError(errors.New("peer is already a non-voter")),
+			got:  ClassifyDemoteError(portopenbao.ErrAlreadyNonVoter),
 			want: BenignErrorClassificationBenign,
 		},
 		{
 			name: "demote forbidden is fatal",
-			got:  ClassifyDemoteError(errors.New("forbidden")),
+			got:  ClassifyDemoteError(portopenbao.NewAPIError("raft demote request failed", http.StatusForbidden, nil)),
 			want: BenignErrorClassificationFatal,
 		},
 		{
@@ -140,7 +143,7 @@ func TestErrorClassificationHelpers(t *testing.T) {
 		},
 		{
 			name: "stepdown unauthorized is fatal",
-			got:  ClassifyStepDownError(errors.New("unauthorized")),
+			got:  ClassifyStepDownError(portopenbao.NewAPIError("step-down request failed", http.StatusUnauthorized, nil)),
 			want: BenignErrorClassificationFatal,
 		},
 	}

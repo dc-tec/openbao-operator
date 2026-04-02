@@ -398,6 +398,95 @@ func TestClient_StepDown(t *testing.T) {
 	}
 }
 
+func TestClient_JoinRaftCluster_AlreadyJoinedStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != constants.APIPathRaftJoin {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPut {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":["node already joined to cluster"]}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL: server.URL,
+		Token:   "s.test-token",
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	err = client.JoinRaftCluster(context.Background(), "https://leader.example:8200", true, true)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, portopenbao.ErrAlreadyJoined) {
+		t.Fatalf("expected ErrAlreadyJoined, got %v", err)
+	}
+	assertStatusCode(t, err, http.StatusBadRequest)
+}
+
+func TestClient_JoinRaftCluster_NotJoinedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != constants.APIPathRaftJoin {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"joined":false}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL: server.URL,
+		Token:   "s.test-token",
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	err = client.JoinRaftCluster(context.Background(), "https://leader.example:8200", true, true)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, portopenbao.ErrAlreadyJoined) {
+		t.Fatalf("expected ErrAlreadyJoined, got %v", err)
+	}
+}
+
+func TestClient_DemoteRaftPeer_AlreadyNonVoterStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != constants.APIPathRaftDemotePeer {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":["peer is already a non-voter"]}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL: server.URL,
+		Token:   "s.test-token",
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	err = client.DemoteRaftPeer(context.Background(), "node-1")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, portopenbao.ErrAlreadyNonVoter) {
+		t.Fatalf("expected ErrAlreadyNonVoter, got %v", err)
+	}
+	assertStatusCode(t, err, http.StatusBadRequest)
+}
+
 func TestClient_IsHealthy(t *testing.T) {
 	tests := []healthBoolTestCase{
 		{

@@ -11,6 +11,10 @@ const apiErrorBodyLimit = 2048
 var (
 	// ErrAlreadyInitialized indicates OpenBao rejected init because the cluster is already initialized.
 	ErrAlreadyInitialized = errors.New("OpenBao cluster already initialized")
+	// ErrAlreadyJoined indicates a raft join request was a no-op because the node is already in the cluster.
+	ErrAlreadyJoined = errors.New("OpenBao raft node already joined")
+	// ErrAlreadyNonVoter indicates a raft demote request was a no-op because the node is already a non-voter.
+	ErrAlreadyNonVoter = errors.New("OpenBao raft node already non-voter")
 )
 
 // APIError captures an OpenBao API failure with a machine-readable HTTP status.
