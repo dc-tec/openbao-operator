@@ -11,10 +11,14 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
-func (m *Manager) ensureRollbackConsensusRepaired(
+func (m *Manager) ensureRollbackExecutorJob(
 	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
+	action ExecutorAction,
+	runningMessage string,
+	failureMessage string,
+	onFailed func(logr.Logger, *openbaov1alpha1.OpenBaoCluster, string),
 ) (phaseOutcome, bool, error) {
 	blueRevision := cluster.Status.BlueGreen.BlueRevision
 	greenRevision := cluster.Status.BlueGreen.GreenRevision
@@ -25,7 +29,7 @@ func (m *Manager) ensureRollbackConsensusRepaired(
 		m.scheme,
 		logger,
 		cluster,
-		ActionRepairConsensus,
+		action,
 		rollbackRunID(cluster),
 		blueRevision,
 		greenRevision,
@@ -37,16 +41,32 @@ func (m *Manager) ensureRollbackConsensusRepaired(
 		return phaseOutcome{}, true, err
 	}
 	if result.Running {
-		logger.Info("Rollback job in progress: repairing consensus", "job", result.Name)
+		logger.Info(runningMessage, "job", result.Name)
 		return requeueAfterOutcome(constants.RequeueShort), true, nil
 	}
 	if result.Failed {
-		logger.Info("Rollback consensus repair job failed; entering break glass mode", "job", result.Name)
-		m.enterBreakGlassRollbackConsensusRepairFailed(logger, cluster, result.Name)
+		logger.Info(failureMessage, "job", result.Name)
+		onFailed(logger, cluster, result.Name)
 		return hold(), true, nil
 	}
 
 	return phaseOutcome{}, false, nil
+}
+
+func (m *Manager) ensureRollbackConsensusRepaired(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (phaseOutcome, bool, error) {
+	return m.ensureRollbackExecutorJob(
+		ctx,
+		logger,
+		cluster,
+		ActionRepairConsensus,
+		"Rollback job in progress: repairing consensus",
+		"Rollback consensus repair job failed; entering break glass mode",
+		m.enterBreakGlassRollbackConsensusRepairFailed,
+	)
 }
 
 func (m *Manager) ensureBlueLeaderDuringRollback(
@@ -74,37 +94,15 @@ func (m *Manager) ensureGreenPeersRemovedDuringRollbackCleanup(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (phaseOutcome, bool, error) {
-	greenRevision := cluster.Status.BlueGreen.GreenRevision
-	blueRevision := cluster.Status.BlueGreen.BlueRevision
-
-	result, err := upgrade.EnsureExecutorJob(
+	return m.ensureRollbackExecutorJob(
 		ctx,
-		m.client,
-		m.scheme,
 		logger,
 		cluster,
 		ActionRemoveGreenPeers,
-		rollbackRunID(cluster),
-		blueRevision,
-		greenRevision,
-		m.clientConfig,
-		m.operatorImageVerifier,
-		m.Platform,
+		"Rollback job in progress: removing Green peers",
+		"Rollback cleanup peer-removal job failed; entering break glass mode",
+		m.enterBreakGlassRollbackCleanupPeerRemovalFailed,
 	)
-	if err != nil {
-		return phaseOutcome{}, true, err
-	}
-	if result.Running {
-		logger.Info("Rollback job in progress: removing Green peers", "job", result.Name)
-		return requeueAfterOutcome(constants.RequeueShort), true, nil
-	}
-	if result.Failed {
-		logger.Info("Rollback cleanup peer-removal job failed; entering break glass mode", "job", result.Name)
-		m.enterBreakGlassRollbackCleanupPeerRemovalFailed(logger, cluster, result.Name)
-		return hold(), true, nil
-	}
-
-	return phaseOutcome{}, false, nil
 }
 
 func (m *Manager) ensureGreenPodsRemovedDuringRollback(

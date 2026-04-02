@@ -59,7 +59,7 @@ func (m *Manager) handlePhaseDemotingBlue(ctx context.Context, logger logr.Logge
 		return phaseOutcome{}, fmt.Errorf("blue/green status is nil")
 	}
 
-	metrics := m.markBlueGreenStepDown(logger, cluster)
+	metrics := m.markBlueGreenStepDown(cluster)
 
 	greenSnapshots, err := m.ensureGreenReadyForBlueDemotion(ctx, logger, cluster)
 	if err != nil {

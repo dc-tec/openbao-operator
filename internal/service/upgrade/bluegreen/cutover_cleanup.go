@@ -16,7 +16,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
-func (m *Manager) markBlueGreenStepDown(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) *upgrade.Metrics {
+func (m *Manager) markBlueGreenStepDown(cluster *openbaov1alpha1.OpenBaoCluster) *upgrade.Metrics {
 	metrics := upgrade.NewMetrics(cluster.Namespace, cluster.Name)
 	_, counted := core.MarkUpgradeMetricsStepDownCounted(cluster.Namespace, cluster.Name, time.Now())
 	if counted {
