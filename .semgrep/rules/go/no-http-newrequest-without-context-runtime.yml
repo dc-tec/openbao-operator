@@ -1,0 +1,17 @@
+rules:
+  - id: no-http-newrequest-without-context-runtime
+    message: >-
+      Use http.NewRequestWithContext in runtime code so cancellation and deadlines
+      flow through network boundaries.
+    severity: WARNING
+    languages:
+      - go
+    paths:
+      include:
+        - /cmd/**/*.go
+        - /internal/**/*.go
+        - /api/**/*.go
+      exclude:
+        - '**/*_test.go'
+        - '**/testing_*.go'
+    pattern: http.NewRequest(...)

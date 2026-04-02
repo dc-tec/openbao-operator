@@ -144,6 +144,13 @@ make tilt-down`}
     },
     {
       cells: [
+        "Security static analysis",
+        "`make semgrep-scan`, `make security-ci`",
+        "Semgrep report-only scans or the full CI-equivalent security lane with vulncheck, license checks, Semgrep, and Trivy.",
+      ],
+    },
+    {
+      cells: [
         "Controller debugging",
         "`make air-controller`, `make debug-controller`, `make debug-test PKG=... TEST=...`",
         "Live reload or Delve-based debugging for controller and test work.",

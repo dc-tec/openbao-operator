@@ -1,7 +1,7 @@
 ##@ Development
 
 .PHONY: bootstrap
-bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint ginkgo govulncheck go-licenses gomu gotestsum dlv air benchstat ## Install repo-managed tools and local development dependencies.
+bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint ginkgo govulncheck go-licenses gomu gotestsum dlv air benchstat semgrep ## Install repo-managed tools and local development dependencies.
 	@if command -v "$(NPM)" >/dev/null 2>&1; then \
 		$(MAKE) ast-grep; \
 	else \
@@ -579,6 +579,10 @@ go_licenses_empty :=
 go_licenses_space := $(go_licenses_empty) $(go_licenses_empty)
 go_licenses_comma := ,
 GO_LICENSES_ALLOWED_CSV := $(subst $(go_licenses_space),$(go_licenses_comma),$(strip $(GO_LICENSES_ALLOWED)))
+SEMGREP_ARTIFACT_DIR ?= dist/semgrep
+SEMGREP_CONFIG_FLAGS ?= --config p/golang --config p/gosec --config .semgrep/rules
+SEMGREP_TARGETS ?= ./cmd ./internal ./api
+SEMGREP_OUTPUT_JSON ?= $(SEMGREP_ARTIFACT_DIR)/semgrep.json
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
@@ -599,6 +603,19 @@ lint-ci: lint-config lint verify-arch-policy test-ast lint-ast ## Run CI lint ga
 vulncheck: govulncheck ## Run govulncheck to scan for known vulnerabilities (production code only). Findings listed in .govulnignore are ignored. Set VULNCHECK_SHOW_IGNORED=true to print traces even if all findings are ignored.
 	@go run ./hack/govulncheck_wrapper/ -govulncheck "$(GOVULNCHECK)" -ignore .govulnignore -show-ignored="$${VULNCHECK_SHOW_IGNORED:-false}" ./...
 
+.PHONY: semgrep-rules-test
+semgrep-rules-test: semgrep ## Validate repo-local Semgrep custom rules against test fixtures.
+	"$(SEMGREP)" scan --test --config .semgrep/rules .semgrep/tests
+
+.PHONY: semgrep-scan
+semgrep-scan: semgrep ## Run Semgrep against runtime Go code (report-only).
+	"$(SEMGREP)" scan --metrics=off $(SEMGREP_CONFIG_FLAGS) $(SEMGREP_TARGETS)
+
+.PHONY: semgrep-ci
+semgrep-ci: semgrep semgrep-rules-test ## Run the CI-equivalent Semgrep scan and write JSON output.
+	@mkdir -p "$(SEMGREP_ARTIFACT_DIR)"
+	"$(SEMGREP)" scan --metrics=off --error --json --output "$(SEMGREP_OUTPUT_JSON)" $(SEMGREP_CONFIG_FLAGS) $(SEMGREP_TARGETS)
+
 .PHONY: license-check
 license-check: verify-vendor go-licenses ## Verify shipped Go dependencies use approved licenses.
 	@GOFLAGS="$(GOFLAGS_VENDOR)" "$(GO_LICENSES)" check \
@@ -617,7 +634,7 @@ license-report: verify-vendor go-licenses ## Write a CSV inventory for shipped G
 	@echo "License report written to $(LICENSE_REPORT_DIR)/go-licenses-report.csv"
 
 .PHONY: security-ci
-security-ci: vulncheck license-check security-scan-fs ## Run CI-equivalent security checks.
+security-ci: vulncheck license-check semgrep-ci security-scan-fs ## Run CI-equivalent security checks.
 
 .PHONY: security-scan
 security-scan: security-scan-fs security-scan-image ## Run Trivy security scans (filesystem and container image).

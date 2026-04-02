@@ -23,6 +23,8 @@ GOTESTSUM ?= $(LOCALBIN)/gotestsum
 DLV ?= $(LOCALBIN)/dlv
 AIR ?= $(LOCALBIN)/air
 BENCHSTAT ?= $(LOCALBIN)/benchstat
+SEMGREP ?= $(LOCALBIN)/semgrep
+SEMGREP_VENV ?= $(LOCALBIN)/semgrep-venv
 AST_GREP_PREFIX ?= .github/tools
 AST_GREP_LOCAL_BIN ?= $(abspath $(AST_GREP_PREFIX)/node_modules/.bin/ast-grep)
 AST_GREP ?= $(AST_GREP_LOCAL_BIN)
@@ -66,6 +68,7 @@ GOTESTSUM_VERSION ?= v1.13.0
 DLV_VERSION ?= v1.26.1
 AIR_VERSION ?= v1.64.5
 BENCHSTAT_VERSION ?= v0.0.0-20260211190930-8161c38c6cdc
+SEMGREP_VERSION ?= 1.157.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -139,6 +142,25 @@ $(AIR): $(LOCALBIN)
 benchstat: $(BENCHSTAT) ## Download benchstat locally if necessary.
 $(BENCHSTAT): $(LOCALBIN)
 	$(call go-install-tool,$(BENCHSTAT),golang.org/x/perf/cmd/benchstat,$(BENCHSTAT_VERSION))
+
+.PHONY: semgrep
+semgrep: $(SEMGREP) ## Install Semgrep locally in the repo tool cache if necessary.
+$(SEMGREP): $(LOCALBIN)
+	@command -v python3 >/dev/null 2>&1 || { \
+		echo "python3 is required to install Semgrep. Install Python 3.11+ and retry."; \
+		exit 1; \
+	}
+	@current_version=""; \
+	if [ -x "$(SEMGREP_VENV)/bin/semgrep" ]; then \
+		current_version="$$(\"$(SEMGREP_VENV)/bin/semgrep\" --version 2>/dev/null || true)"; \
+	fi; \
+	if [ "$$current_version" != "$(SEMGREP_VERSION)" ]; then \
+		rm -rf "$(SEMGREP_VENV)"; \
+		python3 -m venv "$(SEMGREP_VENV)"; \
+		"$(SEMGREP_VENV)/bin/pip" install --upgrade pip >/dev/null; \
+		"$(SEMGREP_VENV)/bin/pip" install "semgrep==$(SEMGREP_VERSION)"; \
+	fi
+	@ln -sf "$$(realpath "$(SEMGREP_VENV)/bin/semgrep")" "$(SEMGREP)"
 
 .PHONY: ast-grep
 ast-grep: $(AST_GREP_LOCAL_BIN) ## Install ast-grep locally via npm if necessary.

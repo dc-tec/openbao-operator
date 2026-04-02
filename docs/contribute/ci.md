@@ -69,9 +69,9 @@ make ci-core`}
     },
     {
       cells: [
-        "Image and filesystem security scans",
+        "Static security and filesystem scans",
         "`make security-ci` and `make security-scan-built-images`",
-        "Run these when images, dependencies, or container-facing surfaces changed.",
+        "Run these when dependencies, network-facing code, or container-facing surfaces changed. `make security-ci` now includes vulncheck, license policy, Semgrep, and the Trivy filesystem scan.",
       ],
     },
     {
