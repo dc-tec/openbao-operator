@@ -1,4 +1,4 @@
-package openbaocluster
+package statusapply
 
 import (
 	"fmt"
@@ -9,11 +9,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type gvkResolver interface {
+// GVKResolver resolves an object's GroupVersionKind when it is not already set.
+type GVKResolver interface {
 	GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error)
 }
 
-func toApplyConfiguration(obj client.Object, resolver gvkResolver) (runtime.ApplyConfiguration, error) {
+// ToApplyConfiguration converts a typed object into an apply configuration for
+// controller-runtime server-side apply operations.
+func ToApplyConfiguration(obj client.Object, resolver GVKResolver) (runtime.ApplyConfiguration, error) {
 	if obj == nil {
 		return nil, fmt.Errorf("object cannot be nil")
 	}

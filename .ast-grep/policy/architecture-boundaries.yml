@@ -42,6 +42,7 @@ layerCoverage:
       - platform/openbaotls
       - platform/predicates
       - platform/reconcile
+      - platform/statusapply
       - platform/testutil
 
 controllerCoverage:

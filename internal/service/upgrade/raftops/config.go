@@ -1,0 +1,222 @@
+package raftops
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+)
+
+// ExecutorAction selects which upgrade operation the upgrade executor performs.
+type ExecutorAction string
+
+const (
+	ExecutorActionBlueGreenJoinGreenNonVoters          ExecutorAction = "bluegreen-join-green-nonvoters"
+	ExecutorActionBlueGreenWaitGreenSynced             ExecutorAction = "bluegreen-wait-green-synced"
+	ExecutorActionBlueGreenPromoteGreenVoters          ExecutorAction = "bluegreen-promote-green-voters"
+	ExecutorActionBlueGreenDemoteBlueNonVotersStepDown ExecutorAction = "bluegreen-demote-blue-nonvoters-stepdown"
+	ExecutorActionBlueGreenRemoveBluePeers             ExecutorAction = "bluegreen-remove-blue-peers"
+	ExecutorActionBlueGreenRemoveGreenPeers            ExecutorAction = "bluegreen-remove-green-peers"
+	ExecutorActionBlueGreenRepairConsensus             ExecutorAction = "bluegreen-repair-consensus"
+	ExecutorActionRollingStepDownLeader                ExecutorAction = "rolling-stepdown-leader"
+)
+
+// ExecutorConfig holds the configuration for the upgrade executor Job.
+type ExecutorConfig struct {
+	ClusterNamespace string
+	ClusterName      string
+	ClusterReplicas  int32
+
+	Action ExecutorAction
+
+	JWTAuthRole string
+	JWTToken    string
+
+	TLSCACert     []byte
+	TLSServerName string
+
+	BlueRevision  string
+	GreenRevision string
+
+	SyncThreshold uint64
+	Timeout       time.Duration
+
+	ClientQPS                            float64
+	ClientBurst                          int
+	ClientCircuitBreakerFailureThreshold int
+	ClientCircuitBreakerOpenDuration     time.Duration
+}
+
+// Validate validates the executor configuration.
+func (c *ExecutorConfig) Validate() error {
+	if strings.TrimSpace(c.ClusterNamespace) == "" {
+		return fmt.Errorf("cluster namespace is required")
+	}
+	if strings.TrimSpace(c.ClusterName) == "" {
+		return fmt.Errorf("cluster name is required")
+	}
+	if c.ClusterReplicas <= 0 {
+		return fmt.Errorf("cluster replicas must be greater than 0")
+	}
+	if strings.TrimSpace(string(c.Action)) == "" {
+		return fmt.Errorf("upgrade action is required")
+	}
+	if strings.TrimSpace(c.JWTAuthRole) == "" {
+		return fmt.Errorf("JWT auth role is required")
+	}
+	if strings.TrimSpace(c.JWTToken) == "" {
+		return fmt.Errorf("JWT token is required")
+	}
+
+	switch c.Action {
+	case ExecutorActionBlueGreenJoinGreenNonVoters,
+		ExecutorActionBlueGreenWaitGreenSynced,
+		ExecutorActionBlueGreenPromoteGreenVoters,
+		ExecutorActionBlueGreenDemoteBlueNonVotersStepDown,
+		ExecutorActionBlueGreenRemoveBluePeers,
+		ExecutorActionBlueGreenRemoveGreenPeers,
+		ExecutorActionBlueGreenRepairConsensus:
+		if strings.TrimSpace(c.BlueRevision) == "" {
+			return fmt.Errorf("blue revision is required for blue/green actions")
+		}
+		if strings.TrimSpace(c.GreenRevision) == "" {
+			return fmt.Errorf("green revision is required for blue/green actions")
+		}
+	case ExecutorActionRollingStepDownLeader:
+	default:
+		return fmt.Errorf("unknown upgrade action: %q", c.Action)
+	}
+
+	if c.SyncThreshold == 0 {
+		return fmt.Errorf("sync threshold must be greater than 0")
+	}
+	if c.Timeout <= 0 {
+		return fmt.Errorf("timeout must be greater than 0")
+	}
+
+	return nil
+}
+
+// LoadExecutorConfig loads the executor configuration from environment variables
+// and mounted files.
+func LoadExecutorConfig() (*ExecutorConfig, error) {
+	cfg := &ExecutorConfig{
+		SyncThreshold: 100,
+		Timeout:       10 * time.Minute,
+	}
+
+	cfg.ClusterNamespace = strings.TrimSpace(os.Getenv(constants.EnvClusterNamespace))
+	if cfg.ClusterNamespace == "" {
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterNamespace)
+	}
+	cfg.ClusterName = strings.TrimSpace(os.Getenv(constants.EnvClusterName))
+	if cfg.ClusterName == "" {
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterName)
+	}
+
+	replicasStr := strings.TrimSpace(os.Getenv(constants.EnvClusterReplicas))
+	if replicasStr == "" {
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvClusterReplicas)
+	}
+	replicas, err := strconv.ParseInt(replicasStr, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClusterReplicas, replicasStr, err)
+	}
+	cfg.ClusterReplicas = int32(replicas)
+
+	cfg.Action = ExecutorAction(strings.TrimSpace(os.Getenv(constants.EnvUpgradeAction)))
+	if cfg.Action == "" {
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvUpgradeAction)
+	}
+
+	cfg.JWTAuthRole = strings.TrimSpace(os.Getenv(constants.EnvUpgradeJWTAuthRole))
+	if cfg.JWTAuthRole == "" {
+		return nil, fmt.Errorf("%s environment variable is required", constants.EnvUpgradeJWTAuthRole)
+	}
+
+	jwtTokenPath := constants.PathUpgradeJWTToken
+	if envPath := strings.TrimSpace(os.Getenv(constants.EnvJWTTokenPath)); envPath != "" {
+		jwtTokenPath = envPath
+	}
+	jwtToken, err := os.ReadFile(jwtTokenPath) // #nosec G304 -- Path from constant or environment variable
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JWT token from %q: %w", jwtTokenPath, err)
+	}
+	cfg.JWTToken = strings.TrimSpace(string(jwtToken))
+
+	if envPath, ok := os.LookupEnv(constants.EnvTLSCAPath); ok {
+		caCertPath := strings.TrimSpace(envPath)
+		if caCertPath != "" {
+			caCert, err := os.ReadFile(caCertPath) // #nosec G304 -- Path from environment variable
+			if err != nil {
+				return nil, fmt.Errorf("failed to read TLS CA certificate from %q: %w", caCertPath, err)
+			}
+			cfg.TLSCACert = caCert
+		}
+	} else {
+		caCert, err := os.ReadFile(constants.PathTLSCACert) // #nosec G304 -- Constant path
+		if err == nil {
+			cfg.TLSCACert = caCert
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("failed to read TLS CA certificate from %q: %w", constants.PathTLSCACert, err)
+		}
+	}
+	cfg.TLSServerName = strings.TrimSpace(os.Getenv(constants.EnvTLSServerName))
+
+	cfg.BlueRevision = strings.TrimSpace(os.Getenv(constants.EnvUpgradeBlueRevision))
+	cfg.GreenRevision = strings.TrimSpace(os.Getenv(constants.EnvUpgradeGreenRevision))
+
+	if thresholdStr := strings.TrimSpace(os.Getenv(constants.EnvUpgradeSyncThreshold)); thresholdStr != "" {
+		threshold, err := strconv.ParseUint(thresholdStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvUpgradeSyncThreshold, thresholdStr, err)
+		}
+		cfg.SyncThreshold = threshold
+	}
+
+	if timeoutStr := strings.TrimSpace(os.Getenv(constants.EnvUpgradeTimeout)); timeoutStr != "" {
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvUpgradeTimeout, timeoutStr, err)
+		}
+		cfg.Timeout = timeout
+	}
+
+	if qpsStr := strings.TrimSpace(os.Getenv(constants.EnvClientQPS)); qpsStr != "" {
+		qps, err := strconv.ParseFloat(qpsStr, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClientQPS, qpsStr, err)
+		}
+		cfg.ClientQPS = qps
+	}
+
+	if burstStr := strings.TrimSpace(os.Getenv(constants.EnvClientBurst)); burstStr != "" {
+		burst, err := strconv.Atoi(burstStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClientBurst, burstStr, err)
+		}
+		cfg.ClientBurst = burst
+	}
+
+	if thresholdStr := strings.TrimSpace(os.Getenv(constants.EnvClientCircuitBreakerFailureThreshold)); thresholdStr != "" {
+		threshold, err := strconv.Atoi(thresholdStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClientCircuitBreakerFailureThreshold, thresholdStr, err)
+		}
+		cfg.ClientCircuitBreakerFailureThreshold = threshold
+	}
+
+	if durationStr := strings.TrimSpace(os.Getenv(constants.EnvClientCircuitBreakerOpenDuration)); durationStr != "" {
+		duration, err := time.ParseDuration(durationStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value %q: %w", constants.EnvClientCircuitBreakerOpenDuration, durationStr, err)
+		}
+		cfg.ClientCircuitBreakerOpenDuration = duration
+	}
+
+	return cfg, nil
+}
