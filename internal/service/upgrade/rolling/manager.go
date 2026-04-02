@@ -18,11 +18,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
-const (
-	// headlessServiceSuffix is appended to cluster name for the headless service.
-	headlessServiceSuffix = ""
-)
-
 var (
 	// ErrNoUpgradeToken indicates that no suitable upgrade JWT role is configured.
 	ErrNoUpgradeToken = errors.New("no upgrade JWT role configured: set spec.upgrade.jwtAuthRole or enable spec.selfInit.oidc.enabled")
