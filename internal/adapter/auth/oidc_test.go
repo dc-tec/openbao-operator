@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,8 @@ import (
 	"time"
 
 	"k8s.io/client-go/rest"
+
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 func TestPemPublicKeysFromJWKS_UsesX5C(t *testing.T) {
@@ -133,6 +136,7 @@ func TestDiscoverConfig(t *testing.T) {
 		wantJWKS   bool
 		baseURL    string
 		statusCode int
+		wantErrIs  error
 	}{
 		{
 			name:       "successful discovery with JWKS",
@@ -165,6 +169,7 @@ func TestDiscoverConfig(t *testing.T) {
 			wantErr:    true,
 			wantJWKS:   false,
 			statusCode: http.StatusOK,
+			wantErrIs:  portauth.ErrDiscoveryContentInvalid,
 		},
 	}
 
@@ -256,6 +261,9 @@ func TestDiscoverConfig(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("DiscoverConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			if tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs) {
+				t.Fatalf("DiscoverConfig() error = %v, want errors.Is(..., %v)", err, tt.wantErrIs)
+			}
 
 			if !tt.wantErr {
 				if config == nil {
@@ -272,6 +280,27 @@ func TestDiscoverConfig(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFetchJWKSKeys_InvalidDocumentReturnsContentError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != legacyOIDCJWKSPath {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"keys":[`))
+	}))
+	defer server.Close()
+
+	cfg := &rest.Config{Host: server.URL}
+	_, err := FetchJWKSKeys(context.Background(), cfg, server.URL+legacyOIDCJWKSPath)
+	if err == nil {
+		t.Fatal("FetchJWKSKeys() expected error, got nil")
+	}
+	if !errors.Is(err, portauth.ErrDiscoveryContentInvalid) {
+		t.Fatalf("FetchJWKSKeys() error = %v, want ErrDiscoveryContentInvalid", err)
 	}
 }
 
