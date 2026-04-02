@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -173,13 +175,7 @@ func (p *HTTPProber) CheckReadiness(ctx context.Context) error {
 			break
 		}
 
-		// Check if this is a connection reset error that we should retry
-		errStr := err.Error()
-		isConnectionReset := strings.Contains(errStr, "connection reset") ||
-			strings.Contains(errStr, "EOF") ||
-			strings.Contains(errStr, "broken pipe")
-
-		if !isConnectionReset || attempt == maxRetries-1 {
+		if !shouldRetryReadinessProbeError(err) || attempt == maxRetries-1 {
 			// Not a connection reset error, or we've exhausted retries
 			break
 		}
@@ -206,6 +202,19 @@ func (p *HTTPProber) CheckReadiness(ctx context.Context) error {
 	default:
 		return fmt.Errorf("readiness check failed with status %d", resp.StatusCode)
 	}
+}
+
+func shouldRetryReadinessProbeError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.ECONNABORTED) ||
+		errors.Is(err, syscall.EPIPE)
 }
 
 func newHTTPClient(
