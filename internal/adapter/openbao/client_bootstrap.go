@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
@@ -134,7 +135,11 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, portopenbao.NewAPIError("init request failed", resp.StatusCode, respBody)
+		apiErr := portopenbao.NewAPIError("init request failed", resp.StatusCode, respBody)
+		if resp.StatusCode == http.StatusBadRequest && initResponseAlreadyInitialized(respBody) {
+			return nil, fmt.Errorf("%w: %w", portopenbao.ErrAlreadyInitialized, apiErr)
+		}
+		return nil, apiErr
 	}
 
 	var initResp InitResponse
@@ -192,4 +197,9 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, i
 	}
 
 	return authResp.Auth.ClientToken, authResp.Auth.TTL, nil
+}
+
+func initResponseAlreadyInitialized(responseBody []byte) bool {
+	// OpenBao exposes this init state via the opaque HTTP 400 response body.
+	return strings.Contains(strings.ToLower(string(responseBody)), "already initialized")
 }

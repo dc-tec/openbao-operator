@@ -2,6 +2,7 @@ package init
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // initializeCluster explicitly initializes OpenBao using the HTTP API (PUT /v1/sys/init).
@@ -60,7 +62,7 @@ func (m *Manager) initializeCluster(ctx context.Context, logger logr.Logger, clu
 	})
 	if err != nil {
 		logger.Info("Init API call returned error", "cluster", cluster.Name, "error", err)
-		if contains(err.Error(), "already initialized") {
+		if errors.Is(err, portopenbao.ErrAlreadyInitialized) {
 			logger.Info("OpenBao cluster is already initialized (detected during HTTP init attempt)", "cluster", cluster.Name)
 			if secretErr := m.ensureRootTokenSecretPresent(ctx, cluster); secretErr != nil {
 				logger.Info("OpenBao is initialized but root token Secret is not available yet; will retry", "cluster", cluster.Name, "error", secretErr)
