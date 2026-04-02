@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
-	"strings"
 )
 
 const (
@@ -52,22 +52,18 @@ func exitCodeForError(err error) int {
 		return exitSuccess
 	}
 
-	errStr := err.Error()
 	switch {
-	case strings.Contains(errStr, "failed to load configuration"):
+	case errors.Is(err, errConfigCategory):
 		return exitConfigError
-	case strings.Contains(errStr, "failed to authenticate"):
+	case errors.Is(err, errAuthCategory):
 		return exitAuthError
-	case strings.Contains(errStr, "failed to find leader"):
+	case errors.Is(err, errLeaderCategory):
 		return exitLeaderDiscovery
-	case strings.Contains(errStr, "failed to get snapshot") ||
-		strings.Contains(errStr, "failed to restore snapshot"):
+	case errors.Is(err, errSnapshotCategory):
 		return exitSnapshotError
-	case strings.Contains(errStr, "failed to upload backup") ||
-		strings.Contains(errStr, "failed to download snapshot") ||
-		strings.Contains(errStr, "failed to create storage client"):
+	case errors.Is(err, errStorageCategory):
 		return exitStorageError
-	case strings.Contains(errStr, "failed to verify"):
+	case errors.Is(err, errVerificationCategory):
 		return exitVerificationError
 	default:
 		return exitConfigError
