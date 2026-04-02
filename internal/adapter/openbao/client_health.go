@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // LeaderStatusResponse represents the response from GET /v1/sys/leader.
@@ -31,7 +33,9 @@ func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("health check forbidden (403): check operator permissions")
+		return nil, fmt.Errorf("health check forbidden: check operator permissions: %w",
+			portopenbao.NewAPIError("health check request failed", resp.StatusCode, body),
+		)
 	}
 
 	var health HealthResponse
@@ -68,7 +72,7 @@ func (c *Client) StepDown(ctx context.Context) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("step-down request failed with status %d: %s", resp.StatusCode, string(body))
+		return portopenbao.NewAPIError("step-down request failed", resp.StatusCode, body)
 	}
 
 	return nil

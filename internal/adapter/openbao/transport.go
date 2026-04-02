@@ -265,9 +265,7 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 			if c.state != nil {
 				c.state.after(req, false)
 			}
-			return nil, nil, operatorerrors.WrapTransientRemoteOverloaded(
-				fmt.Errorf("%s: OpenBao API overloaded (status %d): %s", op, resp.StatusCode, string(body)),
-			)
+			return nil, nil, operatorerrors.WrapTransientRemoteOverloaded(portopenbao.NewAPIError(op, resp.StatusCode, body))
 		}
 	}
 

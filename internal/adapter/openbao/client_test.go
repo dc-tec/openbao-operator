@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"k8s.io/utils/ptr"
 )
 
@@ -321,6 +322,7 @@ func TestClient_StepDown(t *testing.T) {
 		token      string
 		statusCode int
 		wantErr    bool
+		wantStatus int
 	}{
 		{
 			name:       "successful step-down with 204",
@@ -345,12 +347,14 @@ func TestClient_StepDown(t *testing.T) {
 			token:      "s.invalid-token",
 			statusCode: http.StatusForbidden,
 			wantErr:    true,
+			wantStatus: http.StatusForbidden,
 		},
 		{
 			name:       "internal error",
 			token:      "s.valid-token",
 			statusCode: http.StatusInternalServerError,
 			wantErr:    true,
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 
@@ -385,6 +389,10 @@ func TestClient_StepDown(t *testing.T) {
 			err = client.StepDown(context.Background())
 			if (err != nil) != tt.wantErr {
 				t.Errorf("StepDown() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantStatus != 0 {
+				assertStatusCode(t, err, tt.wantStatus)
 			}
 		})
 	}
@@ -482,6 +490,7 @@ func TestClient_Init(t *testing.T) {
 		wantShares     int
 		wantThreshold  int
 		wantErrMessage string
+		wantStatusCode int
 	}{
 		{
 			name: "successful init",
@@ -509,6 +518,7 @@ func TestClient_Init(t *testing.T) {
 			responseBody:   map[string]string{"error": "already initialized"},
 			wantErr:        true,
 			wantErrMessage: "already initialized",
+			wantStatusCode: http.StatusBadRequest,
 		},
 		{
 			name: "invalid shares",
@@ -579,8 +589,11 @@ func TestClient_Init(t *testing.T) {
 			}
 
 			if tt.wantErr {
-				if tt.wantErrMessage != "" && !errors.Is(err, nil) && !containsError(err, tt.wantErrMessage) {
+				if tt.wantErrMessage != "" && !containsError(err, tt.wantErrMessage) {
 					t.Fatalf("Init() error = %v, want message containing %q", err, tt.wantErrMessage)
+				}
+				if tt.wantStatusCode != 0 {
+					assertStatusCode(t, err, tt.wantStatusCode)
 				}
 				return
 			}
@@ -650,6 +663,18 @@ func containsError(err error, substr string) bool {
 	return strings.Contains(err.Error(), substr)
 }
 
+func assertStatusCode(t *testing.T, err error, want int) {
+	t.Helper()
+
+	got, ok := portopenbao.StatusCode(err)
+	if !ok {
+		t.Fatalf("expected API status %d, got non-API error %v", want, err)
+	}
+	if got != want {
+		t.Fatalf("status code = %d, want %d (err=%v)", got, want, err)
+	}
+}
+
 func TestClient_LoginJWT(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -660,6 +685,7 @@ func TestClient_LoginJWT(t *testing.T) {
 		wantErr        bool
 		wantToken      string
 		wantErrMessage string
+		wantStatusCode int
 	}{
 		{
 			name:       "successful authentication",
@@ -706,6 +732,7 @@ func TestClient_LoginJWT(t *testing.T) {
 			},
 			wantErr:        true,
 			wantErrMessage: "status 403",
+			wantStatusCode: http.StatusForbidden,
 		},
 		{
 			name:       "authentication failed - invalid token",
@@ -717,6 +744,7 @@ func TestClient_LoginJWT(t *testing.T) {
 			},
 			wantErr:        true,
 			wantErrMessage: "status 400",
+			wantStatusCode: http.StatusBadRequest,
 		},
 		{
 			name:       "missing client_token in response",
@@ -795,6 +823,9 @@ func TestClient_LoginJWT(t *testing.T) {
 				if tt.wantErrMessage != "" && !containsError(err, tt.wantErrMessage) {
 					t.Errorf("LoginJWT() error = %v, want message containing %q", err, tt.wantErrMessage)
 				}
+				if tt.wantStatusCode != 0 {
+					assertStatusCode(t, err, tt.wantStatusCode)
+				}
 				return
 			}
 
@@ -803,4 +834,32 @@ func TestClient_LoginJWT(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestClient_ReadRaftAutopilotState_NotFoundPreservesStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != constants.APIPathRaftAutopilotState {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"errors":["autopilot not enabled"]}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL: server.URL,
+		Token:   "s.test-token",
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	_, err = client.ReadRaftAutopilotState(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrAutopilotNotAvailable) {
+		t.Fatalf("expected ErrAutopilotNotAvailable, got %v", err)
+	}
+	assertStatusCode(t, err, http.StatusNotFound)
 }
