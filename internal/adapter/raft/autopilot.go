@@ -3,6 +3,7 @@ package raft
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -313,7 +314,7 @@ func (m *Manager) getJWTToken(logger logr.Logger) (string, error) {
 
 // handleJWTAuthError provides helpful error messages for common JWT auth failures.
 func (m *Manager) handleJWTAuthError(cluster *openbaov1alpha1.OpenBaoCluster, err error) error {
-	if strings.Contains(err.Error(), "status 404") {
+	if portopenbao.IsStatus(err, http.StatusNotFound) {
 		guidance := "Enable JWT auth via spec.selfInit.oidc.enabled: true or configure JWT via self-init requests"
 		if cluster.Status.Initialized {
 			guidance = "Manually configure JWT authentication via OpenBao API/CLI"
@@ -323,7 +324,7 @@ func (m *Manager) handleJWTAuthError(cluster *openbaov1alpha1.OpenBaoCluster, er
 				cluster.Namespace, cluster.Name, guidance),
 		)
 	}
-	if strings.Contains(err.Error(), "status 400") {
+	if portopenbao.IsStatus(err, http.StatusBadRequest) {
 		guidance := fmt.Sprintf("Ensure JWT role '%s' is configured", roleNameOperator)
 		if cluster.Status.Initialized {
 			guidance = "Manually configure JWT role via OpenBao API/CLI"
