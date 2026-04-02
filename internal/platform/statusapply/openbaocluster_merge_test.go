@@ -13,6 +13,8 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+const testMergedCurrentVersion = "2.5.0"
+
 func TestPatchOpenBaoClusterStatusMerge_MutatesStatus(t *testing.T) {
 	t.Parallel()
 
@@ -41,7 +43,7 @@ func TestPatchOpenBaoClusterStatusMerge_MutatesStatus(t *testing.T) {
 		client.ObjectKeyFromObject(cluster),
 		func(obj *openbaov1alpha1.OpenBaoCluster) error {
 			obj.Status.Upgrade = nil
-			obj.Status.CurrentVersion = "2.5.0"
+			obj.Status.CurrentVersion = testMergedCurrentVersion
 			return nil
 		},
 	)
@@ -52,8 +54,8 @@ func TestPatchOpenBaoClusterStatusMerge_MutatesStatus(t *testing.T) {
 	if desired.Status.Upgrade != nil {
 		t.Fatalf("desired.Status.Upgrade = %#v, want nil", desired.Status.Upgrade)
 	}
-	if desired.Status.CurrentVersion != "2.5.0" {
-		t.Fatalf("desired.Status.CurrentVersion = %q, want 2.5.0", desired.Status.CurrentVersion)
+	if desired.Status.CurrentVersion != testMergedCurrentVersion {
+		t.Fatalf("desired.Status.CurrentVersion = %q, want %s", desired.Status.CurrentVersion, testMergedCurrentVersion)
 	}
 
 	stored := &openbaov1alpha1.OpenBaoCluster{}
@@ -63,8 +65,8 @@ func TestPatchOpenBaoClusterStatusMerge_MutatesStatus(t *testing.T) {
 	if stored.Status.Upgrade != nil {
 		t.Fatalf("stored.Status.Upgrade = %#v, want nil", stored.Status.Upgrade)
 	}
-	if stored.Status.CurrentVersion != "2.5.0" {
-		t.Fatalf("stored.Status.CurrentVersion = %q, want 2.5.0", stored.Status.CurrentVersion)
+	if stored.Status.CurrentVersion != testMergedCurrentVersion {
+		t.Fatalf("stored.Status.CurrentVersion = %q, want %s", stored.Status.CurrentVersion, testMergedCurrentVersion)
 	}
 }
 
@@ -124,7 +126,7 @@ func TestFinalizeRootUpgradeStatusMerge(t *testing.T) {
 		context.Background(),
 		k8sClient,
 		client.ObjectKeyFromObject(cluster),
-		"2.5.0",
+		testMergedCurrentVersion,
 	)
 	if err != nil {
 		t.Fatalf("FinalizeRootUpgradeStatusMerge() error = %v", err)
@@ -132,7 +134,7 @@ func TestFinalizeRootUpgradeStatusMerge(t *testing.T) {
 	if desired.Status.Upgrade != nil {
 		t.Fatalf("desired.Status.Upgrade = %#v, want nil", desired.Status.Upgrade)
 	}
-	if desired.Status.CurrentVersion != "2.5.0" {
-		t.Fatalf("desired.Status.CurrentVersion = %q, want 2.5.0", desired.Status.CurrentVersion)
+	if desired.Status.CurrentVersion != testMergedCurrentVersion {
+		t.Fatalf("desired.Status.CurrentVersion = %q, want %s", desired.Status.CurrentVersion, testMergedCurrentVersion)
 	}
 }

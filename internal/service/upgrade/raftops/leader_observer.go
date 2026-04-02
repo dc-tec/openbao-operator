@@ -83,7 +83,7 @@ func eligibleLeaderProbePod(pod *corev1.Pod) bool {
 	}
 
 	sealed, present, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelSealed)
-	return !(err == nil && present && sealed)
+	return err != nil || !present || !sealed
 }
 
 func isPodReadyConditionTrue(pod *corev1.Pod) bool {

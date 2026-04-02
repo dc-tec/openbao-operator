@@ -59,10 +59,8 @@ func ValidateBackupAuth(cluster *openbaov1alpha1.OpenBaoCluster, message string)
 		hasJWTAuth = true
 	}
 
-	hasTokenSecret := false
-	if cluster.Spec.Backup.TokenSecretRef != nil && strings.TrimSpace(cluster.Spec.Backup.TokenSecretRef.Name) != "" {
-		hasTokenSecret = true
-	}
+	hasTokenSecret := cluster.Spec.Backup.TokenSecretRef != nil &&
+		strings.TrimSpace(cluster.Spec.Backup.TokenSecretRef.Name) != ""
 
 	if hasJWTAuth || hasTokenSecret {
 		return nil

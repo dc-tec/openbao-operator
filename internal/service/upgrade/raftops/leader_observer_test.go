@@ -12,6 +12,8 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
+const testLeaderCandidateB = "candidate-b"
+
 func TestFindLeaderPodByLabel(t *testing.T) {
 	t.Parallel()
 
@@ -106,7 +108,7 @@ func TestProbeLeaderPod(t *testing.T) {
 				Status:     corev1.PodStatus{Phase: corev1.PodRunning, Conditions: ready},
 			},
 			{
-				ObjectMeta: metav1.ObjectMeta{Name: "candidate-b"},
+				ObjectMeta: metav1.ObjectMeta{Name: testLeaderCandidateB},
 				Status:     corev1.PodStatus{Phase: corev1.PodRunning, Conditions: ready},
 			},
 		}
@@ -114,14 +116,14 @@ func TestProbeLeaderPod(t *testing.T) {
 		probed := make([]string, 0, 2)
 		got, ok := ProbeLeaderPod(context.Background(), logr.Discard(), pods, func(_ context.Context, pod *corev1.Pod) (bool, error) {
 			probed = append(probed, pod.Name)
-			return pod.Name == "candidate-b", nil
+			return pod.Name == testLeaderCandidateB, nil
 		})
 
-		if !ok || got != "candidate-b" {
-			t.Fatalf("ProbeLeaderPod() = %q, %v, want candidate-b, true", got, ok)
+		if !ok || got != testLeaderCandidateB {
+			t.Fatalf("ProbeLeaderPod() = %q, %v, want %s, true", got, ok, testLeaderCandidateB)
 		}
-		if len(probed) != 2 || probed[0] != "candidate-a" || probed[1] != "candidate-b" {
-			t.Fatalf("probed pods = %v, want [candidate-a candidate-b]", probed)
+		if len(probed) != 2 || probed[0] != "candidate-a" || probed[1] != testLeaderCandidateB {
+			t.Fatalf("probed pods = %v, want [candidate-a %s]", probed, testLeaderCandidateB)
 		}
 	})
 
@@ -137,7 +139,7 @@ func TestProbeLeaderPod(t *testing.T) {
 				},
 			},
 			{
-				ObjectMeta: metav1.ObjectMeta{Name: "candidate-b"},
+				ObjectMeta: metav1.ObjectMeta{Name: testLeaderCandidateB},
 				Status: corev1.PodStatus{
 					Phase:      corev1.PodRunning,
 					Conditions: ready,
@@ -152,8 +154,8 @@ func TestProbeLeaderPod(t *testing.T) {
 			return true, nil
 		})
 
-		if !ok || got != "candidate-b" {
-			t.Fatalf("ProbeLeaderPod() = %q, %v, want candidate-b, true", got, ok)
+		if !ok || got != testLeaderCandidateB {
+			t.Fatalf("ProbeLeaderPod() = %q, %v, want %s, true", got, ok, testLeaderCandidateB)
 		}
 	})
 }

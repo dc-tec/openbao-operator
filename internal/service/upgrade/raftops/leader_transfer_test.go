@@ -11,6 +11,13 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
+const (
+	testBlueRevision    = "blue"
+	testGreenRevision   = "green"
+	testGreenLeaderURL0 = "https://vault-green-0"
+	testGreenLeaderURL1 = "https://vault-green-1"
+)
+
 type demoterStub struct {
 	calls []string
 	errs  map[string]error
@@ -29,7 +36,7 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 
 	cfg := &ExecutorConfig{
 		ClusterName:     "vault",
-		BlueRevision:    "blue",
+		BlueRevision:    testBlueRevision,
 		ClusterReplicas: 3,
 	}
 	config := &portopenbao.RaftConfigurationResponse{
@@ -92,8 +99,8 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 	t.Parallel()
 
 	cfg := &ExecutorConfig{
-		BlueRevision:  "blue",
-		GreenRevision: "green",
+		BlueRevision:  testBlueRevision,
+		GreenRevision: testGreenRevision,
 	}
 
 	t.Run("observes new green leader", func(t *testing.T) {
@@ -105,8 +112,8 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 			"https://vault-blue-0",
 			RetryPolicy{AttemptInterval: time.Millisecond, ElectionWait: 10 * time.Millisecond},
 			func(_ context.Context, _ *ExecutorConfig, revision string) (string, bool) {
-				if revision == "green" {
-					return "https://vault-green-0", true
+				if revision == testGreenRevision {
+					return testGreenLeaderURL0, true
 				}
 				return "", false
 			},
@@ -118,7 +125,7 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 		if outcome.ReasonCode != ReasonElectionNewLeaderFound {
 			t.Fatalf("ReasonCode = %q, want %q", outcome.ReasonCode, ReasonElectionNewLeaderFound)
 		}
-		if outcome.Value != "https://vault-green-0" {
+		if outcome.Value != testGreenLeaderURL0 {
 			t.Fatalf("Value = %q, want green leader URL", outcome.Value)
 		}
 	})
@@ -132,7 +139,7 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 			"https://vault-blue-0",
 			RetryPolicy{AttemptInterval: time.Millisecond, ElectionWait: 3 * time.Millisecond},
 			func(_ context.Context, _ *ExecutorConfig, revision string) (string, bool) {
-				if revision == "blue" {
+				if revision == testBlueRevision {
 					return "https://vault-blue-0", true
 				}
 				return "", false
@@ -155,8 +162,8 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 	t.Parallel()
 
 	cfg := &ExecutorConfig{
-		BlueRevision:  "blue",
-		GreenRevision: "green",
+		BlueRevision:  testBlueRevision,
+		GreenRevision: testGreenRevision,
 	}
 
 	t.Run("returns observed leader without fallback", func(t *testing.T) {
@@ -169,7 +176,7 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 			"https://vault-blue-0",
 			func(context.Context, *ExecutorConfig, string) LeaderElectionOutcome {
 				return LeaderElectionOutcome{
-					Value:        "https://vault-green-0",
+					Value:        testGreenLeaderURL0,
 					DecisionPath: DecisionPathElectionObservedNewLeader,
 					ReasonCode:   ReasonElectionNewLeaderFound,
 				}
@@ -181,7 +188,7 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("WaitForNewLeaderURLWithFuncs() error = %v, want nil", err)
 		}
-		if leaderURL != "https://vault-green-0" {
+		if leaderURL != testGreenLeaderURL0 {
 			t.Fatalf("leaderURL = %q, want green leader URL", leaderURL)
 		}
 	})
@@ -202,13 +209,13 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				}
 			},
 			func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
-				return "https://vault-green-1", nil
+				return testGreenLeaderURL1, nil
 			},
 		)
 		if err != nil {
 			t.Fatalf("WaitForNewLeaderURLWithFuncs() error = %v, want nil", err)
 		}
-		if leaderURL != "https://vault-green-1" {
+		if leaderURL != testGreenLeaderURL1 {
 			t.Fatalf("leaderURL = %q, want fallback leader URL", leaderURL)
 		}
 	})
@@ -229,7 +236,7 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				}
 			},
 			func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
-				return "https://vault-green-1", nil
+				return testGreenLeaderURL1, nil
 			},
 		)
 		if err == nil {

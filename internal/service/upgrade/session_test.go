@@ -18,20 +18,20 @@ func TestRootUpgradeSessionStartApply(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:  "2.5.0",
+			Version:  testToVersion,
 			Replicas: 3,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			CurrentVersion: "2.4.4",
+			CurrentVersion: testFromVersion,
 		},
 	}
 
 	start := NewRootUpgradeSessionStart(cluster)
-	if start.FromVersion != "2.4.4" {
-		t.Fatalf("FromVersion=%q, want 2.4.4", start.FromVersion)
+	if start.FromVersion != testFromVersion {
+		t.Fatalf("FromVersion=%q, want %s", start.FromVersion, testFromVersion)
 	}
-	if start.ToVersion != "2.5.0" {
-		t.Fatalf("ToVersion=%q, want 2.5.0", start.ToVersion)
+	if start.ToVersion != testToVersion {
+		t.Fatalf("ToVersion=%q, want %s", start.ToVersion, testToVersion)
 	}
 	if start.Replicas != 3 {
 		t.Fatalf("Replicas=%d, want 3", start.Replicas)
@@ -41,11 +41,11 @@ func TestRootUpgradeSessionStartApply(t *testing.T) {
 	if cluster.Status.Upgrade == nil {
 		t.Fatal("expected upgrade status to be initialized")
 	}
-	if cluster.Status.Upgrade.FromVersion != "2.4.4" {
-		t.Fatalf("status.Upgrade.FromVersion=%q, want 2.4.4", cluster.Status.Upgrade.FromVersion)
+	if cluster.Status.Upgrade.FromVersion != testFromVersion {
+		t.Fatalf("status.Upgrade.FromVersion=%q, want %s", cluster.Status.Upgrade.FromVersion, testFromVersion)
 	}
-	if cluster.Status.Upgrade.TargetVersion != "2.5.0" {
-		t.Fatalf("status.Upgrade.TargetVersion=%q, want 2.5.0", cluster.Status.Upgrade.TargetVersion)
+	if cluster.Status.Upgrade.TargetVersion != testToVersion {
+		t.Fatalf("status.Upgrade.TargetVersion=%q, want %s", cluster.Status.Upgrade.TargetVersion, testToVersion)
 	}
 	if cluster.Status.Upgrade.CurrentPartition != 3 {
 		t.Fatalf("status.Upgrade.CurrentPartition=%d, want 3", cluster.Status.Upgrade.CurrentPartition)
@@ -58,17 +58,17 @@ func TestCompleteRootUpgradeSession(t *testing.T) {
 	startedAt := metav1.NewTime(time.Now().Add(-3 * time.Minute))
 	status := &openbaov1alpha1.OpenBaoClusterStatus{
 		Upgrade: &openbaov1alpha1.UpgradeProgress{
-			FromVersion: "2.4.4",
+			FromVersion: testFromVersion,
 			StartedAt:   &startedAt,
 		},
 	}
 
-	completion := CompleteRootUpgradeSession(status, "2.5.0", time.Now())
-	if completion.FromVersion != "2.4.4" {
-		t.Fatalf("completion.FromVersion=%q, want 2.4.4", completion.FromVersion)
+	completion := CompleteRootUpgradeSession(status, testToVersion, time.Now())
+	if completion.FromVersion != testFromVersion {
+		t.Fatalf("completion.FromVersion=%q, want %s", completion.FromVersion, testFromVersion)
 	}
-	if completion.ToVersion != "2.5.0" {
-		t.Fatalf("completion.ToVersion=%q, want 2.5.0", completion.ToVersion)
+	if completion.ToVersion != testToVersion {
+		t.Fatalf("completion.ToVersion=%q, want %s", completion.ToVersion, testToVersion)
 	}
 	if completion.Duration <= 0 {
 		t.Fatalf("completion.Duration=%v, want > 0", completion.Duration)
@@ -76,8 +76,8 @@ func TestCompleteRootUpgradeSession(t *testing.T) {
 	if status.Upgrade != nil {
 		t.Fatalf("status.Upgrade=%#v, want nil", status.Upgrade)
 	}
-	if status.CurrentVersion != "2.5.0" {
-		t.Fatalf("status.CurrentVersion=%q, want 2.5.0", status.CurrentVersion)
+	if status.CurrentVersion != testToVersion {
+		t.Fatalf("status.CurrentVersion=%q, want %s", status.CurrentVersion, testToVersion)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestUpgradeAuditFields(t *testing.T) {
 		},
 	}
 
-	started := UpgradeStartedAuditFields(cluster, "rolling", "2.4.4", "2.5.0")
+	started := UpgradeStartedAuditFields(cluster, "rolling", testFromVersion, testToVersion)
 	if started["cluster_namespace"] != "default" {
 		t.Fatalf("cluster_namespace=%q, want default", started["cluster_namespace"])
 	}
@@ -101,16 +101,16 @@ func TestUpgradeAuditFields(t *testing.T) {
 	if started["strategy"] != "rolling" {
 		t.Fatalf("strategy=%q, want rolling", started["strategy"])
 	}
-	if started["from_version"] != "2.4.4" {
-		t.Fatalf("from_version=%q, want 2.4.4", started["from_version"])
+	if started["from_version"] != testFromVersion {
+		t.Fatalf("from_version=%q, want %s", started["from_version"], testFromVersion)
 	}
-	if started["to_version"] != "2.5.0" {
-		t.Fatalf("to_version=%q, want 2.5.0", started["to_version"])
+	if started["to_version"] != testToVersion {
+		t.Fatalf("to_version=%q, want %s", started["to_version"], testToVersion)
 	}
 
-	completed := UpgradeCompletedAuditFields(cluster, "bluegreen", "2.5.0")
-	if completed["version"] != "2.5.0" {
-		t.Fatalf("version=%q, want 2.5.0", completed["version"])
+	completed := UpgradeCompletedAuditFields(cluster, "bluegreen", testToVersion)
+	if completed["version"] != testToVersion {
+		t.Fatalf("version=%q, want %s", completed["version"], testToVersion)
 	}
 	if completed["strategy"] != "bluegreen" {
 		t.Fatalf("strategy=%q, want bluegreen", completed["strategy"])

@@ -12,6 +12,11 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+const (
+	testFromVersion = "2.4.4"
+	testToVersion   = "2.5.0"
+)
+
 func TestStartRootUpgradeLifecycle(t *testing.T) {
 	t.Parallel()
 
@@ -21,11 +26,11 @@ func TestStartRootUpgradeLifecycle(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:  "2.5.0",
+			Version:  testToVersion,
 			Replicas: 3,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			CurrentVersion: "2.4.4",
+			CurrentVersion: testFromVersion,
 		},
 	}
 
@@ -61,8 +66,8 @@ func TestStartRootUpgradeLifecycle(t *testing.T) {
 	if !persisted {
 		t.Fatal("expected persist callback to run")
 	}
-	if emittedFrom != "2.4.4" || emittedTo != "2.5.0" {
-		t.Fatalf("emit event args = (%q, %q), want (2.4.4, 2.5.0)", emittedFrom, emittedTo)
+	if emittedFrom != testFromVersion || emittedTo != testToVersion {
+		t.Fatalf("emit event args = (%q, %q), want (%s, %s)", emittedFrom, emittedTo, testFromVersion, testToVersion)
 	}
 }
 
@@ -75,7 +80,7 @@ func TestStartRootUpgradeLifecycle_PropagatesPersistError(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:  "2.5.0",
+			Version:  testToVersion,
 			Replicas: 3,
 		},
 	}
@@ -108,11 +113,11 @@ func TestCompleteRootUpgradeLifecycle(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version: "2.5.0",
+			Version: testToVersion,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Upgrade: &openbaov1alpha1.UpgradeProgress{
-				FromVersion: "2.4.4",
+				FromVersion: testFromVersion,
 				StartedAt:   &startedAt,
 			},
 		},
@@ -130,11 +135,11 @@ func TestCompleteRootUpgradeLifecycle(t *testing.T) {
 		RootUpgradeCompletionOptions{
 			Persist: func(ctx context.Context, got *openbaov1alpha1.OpenBaoCluster, completion RootUpgradeSessionCompletion) error {
 				persisted = true
-				if completion.FromVersion != "2.4.4" {
-					t.Fatalf("completion.FromVersion=%q, want 2.4.4", completion.FromVersion)
+				if completion.FromVersion != testFromVersion {
+					t.Fatalf("completion.FromVersion=%q, want %s", completion.FromVersion, testFromVersion)
 				}
-				if completion.ToVersion != "2.5.0" {
-					t.Fatalf("completion.ToVersion=%q, want 2.5.0", completion.ToVersion)
+				if completion.ToVersion != testToVersion {
+					t.Fatalf("completion.ToVersion=%q, want %s", completion.ToVersion, testToVersion)
 				}
 				return nil
 			},
@@ -150,8 +155,8 @@ func TestCompleteRootUpgradeLifecycle(t *testing.T) {
 	if !persisted {
 		t.Fatal("expected persist callback to run")
 	}
-	if emittedFrom != "2.4.4" || emittedTo != "2.5.0" {
-		t.Fatalf("emit event args = (%q, %q), want (2.4.4, 2.5.0)", emittedFrom, emittedTo)
+	if emittedFrom != testFromVersion || emittedTo != testToVersion {
+		t.Fatalf("emit event args = (%q, %q), want (%s, %s)", emittedFrom, emittedTo, testFromVersion, testToVersion)
 	}
 }
 
@@ -164,11 +169,11 @@ func TestCompleteRootUpgradeLifecycle_PropagatesPersistError(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version: "2.5.0",
+			Version: testToVersion,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Upgrade: &openbaov1alpha1.UpgradeProgress{
-				FromVersion: "2.4.4",
+				FromVersion: testFromVersion,
 			},
 		},
 	}
