@@ -580,8 +580,8 @@ go_licenses_space := $(go_licenses_empty) $(go_licenses_empty)
 go_licenses_comma := ,
 GO_LICENSES_ALLOWED_CSV := $(subst $(go_licenses_space),$(go_licenses_comma),$(strip $(GO_LICENSES_ALLOWED)))
 SEMGREP_ARTIFACT_DIR ?= dist/semgrep
-SEMGREP_CONFIG_FLAGS ?= --config p/golang --config p/gosec --config .semgrep/rules
-SEMGREP_TARGETS ?= ./cmd ./internal ./api
+SEMGREP_CONFIG_FLAGS ?= --config p/default --config .semgrep/rules
+SEMGREP_TARGETS ?= ./cmd ./internal ./api ./hack
 SEMGREP_OUTPUT_JSON ?= $(SEMGREP_ARTIFACT_DIR)/semgrep.json
 
 .PHONY: lint

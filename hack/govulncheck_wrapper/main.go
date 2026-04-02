@@ -123,6 +123,7 @@ func run(out io.Writer, errOut io.Writer, govulncheckPath, ignorePath string, sh
 }
 
 func runGovulncheck(path string, args ...string) (combined []byte, rc int, err error) {
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.Command(path, args...)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf

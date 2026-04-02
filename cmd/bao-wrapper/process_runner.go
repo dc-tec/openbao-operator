@@ -30,7 +30,8 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("no command specified to run")
 	}
 
-	// #nosec G204 -- This wrapper intentionally executes user-provided commands
+	// #nosec G204 -- This wrapper intentionally executes user-provided commands.
+	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

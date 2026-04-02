@@ -233,9 +233,10 @@ func newHTTPClient(
 		// to handle this case.
 		if allowInsecureLoopbackFallback {
 			// Use insecure fallback with manual certificate verification for loopback connections
-			tlsConfig := &tls.Config{
-				MinVersion:         tls.VersionTLS12,
-				InsecureSkipVerify: true, // #nosec G402 -- InsecureSkipVerify is required for certificate acquisition phase or TLS handshake retries, but we perform manual certificate verification via VerifyPeerCertificate to ensure we're connecting to the expected loopback service.
+			tlsConfig := &tls.Config{ // nosemgrep
+				MinVersion: tls.VersionTLS12,
+				// #nosec G402 -- InsecureSkipVerify is required for certificate acquisition phase or TLS handshake retries, but we perform manual certificate verification via VerifyPeerCertificate to ensure we're connecting to the expected loopback service.
+				InsecureSkipVerify: true, // nosemgrep
 				VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 					return verifyLoopbackCertificate(rawCerts)
 				},
@@ -273,9 +274,10 @@ func newHTTPClient(
 				roots = nil
 			} else if allowInsecureLoopbackFallback && os.IsNotExist(err) {
 				// Fallback for non-ACME loopback probes when CA file is missing
-				tlsConfig := &tls.Config{
-					MinVersion:         tls.VersionTLS12,
-					InsecureSkipVerify: true, // #nosec G402 -- InsecureSkipVerify is required for loopback fallback, but we perform manual certificate verification via VerifyPeerCertificate to ensure we're connecting to the expected loopback service.
+				tlsConfig := &tls.Config{ // nosemgrep
+					MinVersion: tls.VersionTLS12,
+					// #nosec G402 -- InsecureSkipVerify is required for loopback fallback, but we perform manual certificate verification via VerifyPeerCertificate to ensure we're connecting to the expected loopback service.
+					InsecureSkipVerify: true, // nosemgrep
 					VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 						return verifyLoopbackCertificate(rawCerts)
 					},
