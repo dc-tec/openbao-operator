@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
 // Default timeouts and intervals for upgrade operations.
@@ -133,19 +134,19 @@ const (
 )
 
 // ExecutorAction selects which upgrade operation the upgrade executor performs.
-type ExecutorAction string
+type ExecutorAction = raftops.ExecutorAction
 
 const (
-	ExecutorActionBlueGreenJoinGreenNonVoters          ExecutorAction = "bluegreen-join-green-nonvoters"
-	ExecutorActionBlueGreenWaitGreenSynced             ExecutorAction = "bluegreen-wait-green-synced"
-	ExecutorActionBlueGreenPromoteGreenVoters          ExecutorAction = "bluegreen-promote-green-voters"
-	ExecutorActionBlueGreenDemoteBlueNonVotersStepDown ExecutorAction = "bluegreen-demote-blue-nonvoters-stepdown"
-	ExecutorActionBlueGreenRemoveBluePeers             ExecutorAction = "bluegreen-remove-blue-peers"
-	ExecutorActionBlueGreenRemoveGreenPeers            ExecutorAction = "bluegreen-remove-green-peers"
+	ExecutorActionBlueGreenJoinGreenNonVoters          ExecutorAction = raftops.ExecutorActionBlueGreenJoinGreenNonVoters
+	ExecutorActionBlueGreenWaitGreenSynced             ExecutorAction = raftops.ExecutorActionBlueGreenWaitGreenSynced
+	ExecutorActionBlueGreenPromoteGreenVoters          ExecutorAction = raftops.ExecutorActionBlueGreenPromoteGreenVoters
+	ExecutorActionBlueGreenDemoteBlueNonVotersStepDown ExecutorAction = raftops.ExecutorActionBlueGreenDemoteBlueNonVotersStepDown
+	ExecutorActionBlueGreenRemoveBluePeers             ExecutorAction = raftops.ExecutorActionBlueGreenRemoveBluePeers
+	ExecutorActionBlueGreenRemoveGreenPeers            ExecutorAction = raftops.ExecutorActionBlueGreenRemoveGreenPeers
 
 	// ExecutorActionBlueGreenRepairConsensus repairs Raft consensus during rollback by
 	// ensuring Blue nodes are voters and Green nodes are non-voters in a single pass.
-	ExecutorActionBlueGreenRepairConsensus ExecutorAction = "bluegreen-repair-consensus"
+	ExecutorActionBlueGreenRepairConsensus ExecutorAction = raftops.ExecutorActionBlueGreenRepairConsensus
 
-	ExecutorActionRollingStepDownLeader ExecutorAction = "rolling-stepdown-leader"
+	ExecutorActionRollingStepDownLeader ExecutorAction = raftops.ExecutorActionRollingStepDownLeader
 )

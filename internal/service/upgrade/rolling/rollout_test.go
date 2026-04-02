@@ -2,9 +2,11 @@ package rolling
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -566,5 +568,84 @@ func TestWaitForPodRevisionUpdated_DeletesStalePodWhenImageMismatchesTemplate(t 
 	getErr := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: podName}, deletedPod)
 	if !apierrors.IsNotFound(getErr) {
 		t.Fatalf("expected stale pod to be deleted, got err=%v", getErr)
+	}
+}
+
+func TestRollingWaitStages_TimeoutsMarkUpgradeFailed(t *testing.T) {
+	tests := []struct {
+		name       string
+		startedAgo time.Duration
+		wait       func(*Manager, context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster, string) (bool, error)
+		wantReason string
+		wantMsg    string
+	}{
+		{
+			name:       "revision update timeout",
+			startedAgo: upgrade.DefaultPodReadyTimeout + time.Minute,
+			wait: func(m *Manager, ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+				return m.waitForPodRevisionUpdated(ctx, logger, cluster, podName)
+			},
+			wantReason: upgrade.ReasonPodNotReady,
+			wantMsg:    fmt.Sprintf(upgrade.MessagePodNotReady, "c1-0", upgrade.DefaultPodReadyTimeout),
+		},
+		{
+			name:       "pod ready timeout",
+			startedAgo: upgrade.DefaultPodReadyTimeout + time.Minute,
+			wait: func(m *Manager, ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+				return m.waitForPodReady(ctx, logger, cluster, podName)
+			},
+			wantReason: upgrade.ReasonPodNotReady,
+			wantMsg:    fmt.Sprintf(upgrade.MessagePodNotReady, "c1-0", upgrade.DefaultPodReadyTimeout),
+		},
+		{
+			name:       "pod health timeout",
+			startedAgo: upgrade.DefaultPodReadyTimeout + upgrade.DefaultHealthCheckTimeout + time.Minute,
+			wait: func(m *Manager, ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (bool, error) {
+				return m.waitForPodHealthy(ctx, logger, cluster, podName)
+			},
+			wantReason: upgrade.ReasonHealthCheckFailed,
+			wantMsg:    fmt.Sprintf(upgrade.MessageHealthCheckFailed, "c1-0", "timeout"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := runtime.NewScheme()
+			_ = appsv1.AddToScheme(scheme)
+			_ = corev1.AddToScheme(scheme)
+			_ = openbaov1alpha1.AddToScheme(scheme)
+
+			startedAt := metav1.NewTime(time.Now().Add(-tt.startedAgo))
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "c1", Namespace: testNamespace},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					Upgrade: &openbaov1alpha1.UpgradeProgress{
+						StartedAt: &startedAt,
+					},
+				},
+			}
+
+			c := fake.NewClientBuilder().WithScheme(scheme).Build()
+			mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+				return &openbaoapi.MockClusterActions{}, nil
+			}, portopenbao.ClientConfig{}, nil, "")
+
+			ok, err := tt.wait(mgr, context.Background(), testr.New(t), cluster, "c1-0")
+			if err == nil {
+				t.Fatal("expected timeout error")
+			}
+			if ok {
+				t.Fatal("expected wait stage to remain incomplete")
+			}
+			if cluster.Status.Upgrade == nil {
+				t.Fatal("expected upgrade status to remain present")
+			}
+			if cluster.Status.Upgrade.LastErrorReason != tt.wantReason {
+				t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, tt.wantReason)
+			}
+			if cluster.Status.Upgrade.LastErrorMessage != tt.wantMsg {
+				t.Fatalf("LastErrorMessage=%q, want %q", cluster.Status.Upgrade.LastErrorMessage, tt.wantMsg)
+			}
+		})
 	}
 }

@@ -3,8 +3,6 @@ package rolling
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -14,7 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
 type clusterHealthCounts struct {
@@ -172,19 +170,13 @@ func (m *Manager) requireHealthyLeaderQuorum(
 }
 
 func markResumeUpgradeTimeout(cluster *openbaov1alpha1.OpenBaoCluster, podName string) error {
-	if cluster == nil || cluster.Status.Upgrade == nil || cluster.Status.Upgrade.StartedAt == nil {
+	if cluster == nil || cluster.Status.Upgrade == nil {
 		return nil
 	}
-	if time.Since(cluster.Status.Upgrade.StartedAt.Time) <= upgrade.DefaultPodReadyTimeout {
-		return nil
-	}
-
-	if strings.TrimSpace(podName) == "" {
+	if podName == "" {
 		podName = "upgrade-target"
 	}
-	upgrade.SetUpgradeFailed(&cluster.Status, upgrade.ReasonPodNotReady,
-		fmt.Sprintf(upgrade.MessagePodNotReady, podName, upgrade.DefaultPodReadyTimeout))
-	return fmt.Errorf("pod %s did not become ready within %v", podName, upgrade.DefaultPodReadyTimeout)
+	return failUpgradeIfStartedTimeout(cluster, podReadyTimeout(podName))
 }
 
 func (m *Manager) verifyNonTargetPodsReadyAndHealthy(
@@ -200,7 +192,7 @@ func (m *Manager) verifyNonTargetPodsReadyAndHealthy(
 		podsByName[pod.Name] = pod
 	}
 
-	caCert, err := m.getClusterCACert(ctx, cluster)
+	caCert, err := raftops.LoadClusterCACert(ctx, m.client, cluster)
 	if err != nil {
 		return fmt.Errorf("failed to get CA certificate: %w", err)
 	}
@@ -219,7 +211,7 @@ func (m *Manager) verifyNonTargetPodsReadyAndHealthy(
 			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is not ready; current target is %s", podName, targetPodName)
 		}
 
-		apiClient, err := m.newPodClient(cluster, podName, caCert)
+		apiClient, err := raftops.NewClusterPodClient(cluster, podName, caCert, m.clientFactory, raftops.ClusterPodClientOptions{})
 		if err != nil {
 			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is unavailable: %w", podName, err)
 		}
@@ -244,7 +236,7 @@ func (m *Manager) checkPodHealth(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pods []corev1.Pod,
 ) (clusterHealthCounts, error) {
-	caCert, err := m.getClusterCACert(ctx, cluster)
+	caCert, err := raftops.LoadClusterCACert(ctx, m.client, cluster)
 	if err != nil {
 		return clusterHealthCounts{}, fmt.Errorf("failed to get CA certificate: %w", err)
 	}
@@ -255,7 +247,7 @@ func (m *Manager) checkPodHealth(
 			continue
 		}
 
-		apiClient, err := m.newPodClient(cluster, pod.Name, caCert)
+		apiClient, err := raftops.NewClusterPodClient(cluster, pod.Name, caCert, m.clientFactory, raftops.ClusterPodClientOptions{})
 		if err != nil {
 			logger.V(1).Info("Failed to create client for pod", "pod", pod.Name, "error", err)
 			continue

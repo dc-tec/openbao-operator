@@ -8,6 +8,7 @@ import (
 	"time"
 
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 	"github.com/go-logr/logr"
 )
 
@@ -185,7 +186,7 @@ func TestFindLeaderWithPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			leaderURL, err := findPreferredLeaderWithFallback(
+			leaderURL, err := raftops.FindPreferredLeaderWithFallback(
 				ctx,
 				logr.Discard(),
 				cfg,
@@ -195,13 +196,13 @@ func TestFindLeaderWithPolicy(t *testing.T) {
 				tt.fallbackLabel,
 			)
 			if err == nil {
-				t.Fatalf("findPreferredLeaderWithFallback() err=nil, want contains %q", tt.wantErr)
+				t.Fatalf("raftops.FindPreferredLeaderWithFallback() err=nil, want contains %q", tt.wantErr)
 			}
 			if leaderURL != "" {
-				t.Fatalf("findPreferredLeaderWithFallback() leaderURL=%q, want empty", leaderURL)
+				t.Fatalf("raftops.FindPreferredLeaderWithFallback() leaderURL=%q, want empty", leaderURL)
 			}
 			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("findPreferredLeaderWithFallback() error=%q, want contains %q", err.Error(), tt.wantErr)
+				t.Fatalf("raftops.FindPreferredLeaderWithFallback() error=%q, want contains %q", err.Error(), tt.wantErr)
 			}
 		})
 	}
@@ -282,9 +283,9 @@ func TestFindLeaderWithPolicyUsingFallbackBehavior(t *testing.T) {
 				return "", errors.New("unexpected revision")
 			}
 
-			policy := newLeaderSearchPolicy(tt.primaryRevision, tt.fallbackRevision, "Green", "Blue")
+			policy := raftops.NewLeaderSearchPolicy(tt.primaryRevision, tt.fallbackRevision, "Green", "Blue")
 
-			gotURL, err := findLeaderWithPolicyUsing(
+			gotURL, err := raftops.FindLeaderWithPolicyUsing(
 				context.Background(),
 				logr.Discard(),
 				cfg,
@@ -294,17 +295,17 @@ func TestFindLeaderWithPolicyUsingFallbackBehavior(t *testing.T) {
 
 			if tt.wantErr == "" {
 				if err != nil {
-					t.Fatalf("findLeaderWithPolicyUsing() unexpected error: %v", err)
+					t.Fatalf("raftops.FindLeaderWithPolicyUsing() unexpected error: %v", err)
 				}
 				if gotURL != tt.wantURL {
-					t.Fatalf("findLeaderWithPolicyUsing() url=%q, want %q", gotURL, tt.wantURL)
+					t.Fatalf("raftops.FindLeaderWithPolicyUsing() url=%q, want %q", gotURL, tt.wantURL)
 				}
 			} else {
 				if err == nil {
-					t.Fatalf("findLeaderWithPolicyUsing() error=nil, want contains %q", tt.wantErr)
+					t.Fatalf("raftops.FindLeaderWithPolicyUsing() error=nil, want contains %q", tt.wantErr)
 				}
 				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("findLeaderWithPolicyUsing() error=%q, want contains %q", err.Error(), tt.wantErr)
+					t.Fatalf("raftops.FindLeaderWithPolicyUsing() error=%q, want contains %q", err.Error(), tt.wantErr)
 				}
 			}
 
@@ -328,7 +329,7 @@ func TestFindLeaderWithPolicyUsing(t *testing.T) {
 		blueRevision  = "blue"
 	)
 
-	policy := newLeaderSearchPolicy("green", "blue", "Green", "Blue")
+	policy := raftops.NewLeaderSearchPolicy("green", "blue", "Green", "Blue")
 	calls := make([]string, 0, 2)
 	finder := func(_ context.Context, _ *ExecutorConfig, revision string) (string, error) {
 		calls = append(calls, revision)
@@ -341,7 +342,7 @@ func TestFindLeaderWithPolicyUsing(t *testing.T) {
 		return "", errors.New("unexpected revision")
 	}
 
-	gotURL, err := findLeaderWithPolicyUsing(
+	gotURL, err := raftops.FindLeaderWithPolicyUsing(
 		context.Background(),
 		logr.Discard(),
 		baseExecutorTestConfig(),
@@ -349,10 +350,10 @@ func TestFindLeaderWithPolicyUsing(t *testing.T) {
 		finder,
 	)
 	if err != nil {
-		t.Fatalf("findLeaderWithPolicyUsing() unexpected error: %v", err)
+		t.Fatalf("raftops.FindLeaderWithPolicyUsing() unexpected error: %v", err)
 	}
 	if gotURL != "https://blue-leader" {
-		t.Fatalf("findLeaderWithPolicyUsing() url=%q, want %q", gotURL, "https://blue-leader")
+		t.Fatalf("raftops.FindLeaderWithPolicyUsing() url=%q, want %q", gotURL, "https://blue-leader")
 	}
 	if len(calls) != 2 {
 		t.Fatalf("find calls=%v, want [green blue]", calls)
@@ -372,7 +373,7 @@ func TestResolveLeaderWithPolicyUsing(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		policy          leaderSearchPolicy
+		policy          raftops.LeaderSearchPolicy
 		resultsByRev    map[string]findResult
 		wantValue       string
 		wantDecision    string
@@ -383,72 +384,72 @@ func TestResolveLeaderWithPolicyUsing(t *testing.T) {
 	}{
 		{
 			name:         "primary success",
-			policy:       newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			policy:       raftops.NewLeaderSearchPolicy("green", "blue", "Green", "Blue"),
 			resultsByRev: map[string]findResult{"green": {url: "https://green-leader"}},
 			wantValue:    "https://green-leader",
-			wantDecision: decisionPathPrimarySuccess,
-			wantReason:   reasonPrimaryLeaderFound,
+			wantDecision: raftops.DecisionPathPrimarySuccess,
+			wantReason:   raftops.ReasonPrimaryLeaderFound,
 			wantAttempts: 1,
 		},
 		{
 			name:   "primary fail fallback success",
-			policy: newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			policy: raftops.NewLeaderSearchPolicy("green", "blue", "Green", "Blue"),
 			resultsByRev: map[string]findResult{
 				"green": {err: errors.New("no green leader")},
 				"blue":  {url: "https://blue-leader"},
 			},
 			wantValue:      "https://blue-leader",
-			wantDecision:   decisionPathPrimaryFailedFallbackSuccess,
-			wantReason:     reasonFallbackLeaderFound,
+			wantDecision:   raftops.DecisionPathPrimaryFailedFallbackSuccess,
+			wantReason:     raftops.ReasonFallbackLeaderFound,
 			wantAttempts:   2,
 			wantPrimaryErr: true,
 		},
 		{
 			name:   "both fail",
-			policy: newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			policy: raftops.NewLeaderSearchPolicy("green", "blue", "Green", "Blue"),
 			resultsByRev: map[string]findResult{
 				"green": {err: errors.New("no green leader")},
 				"blue":  {err: errors.New("no blue leader")},
 			},
-			wantDecision:    decisionPathPrimaryFailedFallbackFailed,
-			wantReason:      reasonFallbackLeaderNotFound,
+			wantDecision:    raftops.DecisionPathPrimaryFailedFallbackFailed,
+			wantReason:      raftops.ReasonFallbackLeaderNotFound,
 			wantAttempts:    2,
 			wantPrimaryErr:  true,
 			wantFallbackErr: true,
 		},
 		{
 			name:   "fallback disabled",
-			policy: newLeaderSearchPolicy("green", "", "Green", "Blue"),
+			policy: raftops.NewLeaderSearchPolicy("green", "", "Green", "Blue"),
 			resultsByRev: map[string]findResult{
 				"green": {err: errors.New("no green leader")},
 			},
-			wantDecision:   decisionPathPrimaryFailedNoFallback,
-			wantReason:     reasonPrimaryLeaderNotFound,
+			wantDecision:   raftops.DecisionPathPrimaryFailedNoFallback,
+			wantReason:     raftops.ReasonPrimaryLeaderNotFound,
 			wantAttempts:   1,
 			wantPrimaryErr: true,
 		},
 		{
 			name:   "context canceled classified deterministically",
-			policy: newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			policy: raftops.NewLeaderSearchPolicy("green", "blue", "Green", "Blue"),
 			resultsByRev: map[string]findResult{
 				"green": {err: errors.New("no green leader")},
 				"blue":  {err: context.Canceled},
 			},
-			wantDecision:    decisionPathContextCanceled,
-			wantReason:      reasonContextCanceled,
+			wantDecision:    raftops.DecisionPathContextCanceled,
+			wantReason:      raftops.ReasonContextCanceled,
 			wantAttempts:    2,
 			wantPrimaryErr:  true,
 			wantFallbackErr: true,
 		},
 		{
 			name:   "deadline exceeded classified deterministically",
-			policy: newLeaderSearchPolicy("green", "blue", "Green", "Blue"),
+			policy: raftops.NewLeaderSearchPolicy("green", "blue", "Green", "Blue"),
 			resultsByRev: map[string]findResult{
 				"green": {err: errors.New("no green leader")},
 				"blue":  {err: context.DeadlineExceeded},
 			},
-			wantDecision:    decisionPathDeadlineExceeded,
-			wantReason:      reasonDeadlineExceeded,
+			wantDecision:    raftops.DecisionPathDeadlineExceeded,
+			wantReason:      raftops.ReasonDeadlineExceeded,
 			wantAttempts:    2,
 			wantPrimaryErr:  true,
 			wantFallbackErr: true,
@@ -466,7 +467,7 @@ func TestResolveLeaderWithPolicyUsing(t *testing.T) {
 				return "", errors.New("unexpected revision")
 			}
 
-			got := resolveLeaderWithPolicyUsing(context.Background(), baseExecutorTestConfig(), tt.policy, finder)
+			got := raftops.ResolveLeaderWithPolicyUsing(context.Background(), baseExecutorTestConfig(), tt.policy, finder)
 
 			if got.Value != tt.wantValue {
 				t.Fatalf("value=%q, want %q", got.Value, tt.wantValue)
@@ -498,7 +499,7 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 	tests := []struct {
 		name            string
 		ctx             context.Context
-		waitFn          func(context.Context, *ExecutorConfig, string) leaderElectionOutcome
+		waitFn          func(context.Context, *ExecutorConfig, string) raftops.LeaderElectionOutcome
 		fallbackFn      func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error)
 		wantURL         string
 		wantErr         string
@@ -508,11 +509,11 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 		{
 			name: "wait function returns new leader directly",
 			ctx:  context.Background(),
-			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
-				return leaderElectionOutcome{
+			waitFn: func(context.Context, *ExecutorConfig, string) raftops.LeaderElectionOutcome {
+				return raftops.LeaderElectionOutcome{
 					Value:        "https://green-leader",
-					DecisionPath: decisionPathElectionObservedNewLeader,
-					ReasonCode:   reasonElectionNewLeaderFound,
+					DecisionPath: raftops.DecisionPathElectionObservedNewLeader,
+					ReasonCode:   raftops.ReasonElectionNewLeaderFound,
 				}
 			},
 			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
@@ -524,10 +525,10 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 		{
 			name: "deadline exceeded falls back to finder",
 			ctx:  context.Background(),
-			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
-				return leaderElectionOutcome{
-					DecisionPath: decisionPathDeadlineExceeded,
-					ReasonCode:   reasonDeadlineExceeded,
+			waitFn: func(context.Context, *ExecutorConfig, string) raftops.LeaderElectionOutcome {
+				return raftops.LeaderElectionOutcome{
+					DecisionPath: raftops.DecisionPathDeadlineExceeded,
+					ReasonCode:   raftops.ReasonDeadlineExceeded,
 					WaitError:    context.DeadlineExceeded,
 				}
 			},
@@ -540,11 +541,11 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 		{
 			name: "same leader observation returns observed leader without fallback",
 			ctx:  context.Background(),
-			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
-				return leaderElectionOutcome{
+			waitFn: func(context.Context, *ExecutorConfig, string) raftops.LeaderElectionOutcome {
+				return raftops.LeaderElectionOutcome{
 					Value:        "https://previous-leader",
-					DecisionPath: decisionPathElectionObservedSameLeader,
-					ReasonCode:   reasonElectionSameLeaderSeen,
+					DecisionPath: raftops.DecisionPathElectionObservedSameLeader,
+					ReasonCode:   raftops.ReasonElectionSameLeaderSeen,
 				}
 			},
 			fallbackFn: func(context.Context, logr.Logger, *ExecutorConfig, string, string) (string, error) {
@@ -556,10 +557,10 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 		{
 			name: "unexpected wait error is returned",
 			ctx:  context.Background(),
-			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
-				return leaderElectionOutcome{
-					DecisionPath: decisionPathElectionTimeout,
-					ReasonCode:   reasonElectionTimeout,
+			waitFn: func(context.Context, *ExecutorConfig, string) raftops.LeaderElectionOutcome {
+				return raftops.LeaderElectionOutcome{
+					DecisionPath: raftops.DecisionPathElectionTimeout,
+					ReasonCode:   raftops.ReasonElectionTimeout,
 					WaitError:    errors.New("wait exploded"),
 				}
 			},
@@ -567,16 +568,16 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				return fallbackLeaderURL, nil
 			},
 			wantErr:         "failed while waiting for new leader election",
-			wantReasonCode:  reasonElectionTimeout,
+			wantReasonCode:  raftops.ReasonElectionTimeout,
 			wantFallbackRun: false,
 		},
 		{
 			name: "fallback failure is wrapped when context is active",
 			ctx:  context.Background(),
-			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
-				return leaderElectionOutcome{
-					DecisionPath: decisionPathContextCanceled,
-					ReasonCode:   reasonContextCanceled,
+			waitFn: func(context.Context, *ExecutorConfig, string) raftops.LeaderElectionOutcome {
+				return raftops.LeaderElectionOutcome{
+					DecisionPath: raftops.DecisionPathContextCanceled,
+					ReasonCode:   raftops.ReasonContextCanceled,
 					WaitError:    context.Canceled,
 				}
 			},
@@ -584,16 +585,16 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				return "", errors.New("could not find fallback leader")
 			},
 			wantErr:         "failed to find new leader after step-down",
-			wantReasonCode:  reasonFallbackLeaderNotFound,
+			wantReasonCode:  raftops.ReasonFallbackLeaderNotFound,
 			wantFallbackRun: true,
 		},
 		{
 			name: "parent context cancellation fails fast without fallback",
 			ctx:  canceledContext(),
-			waitFn: func(context.Context, *ExecutorConfig, string) leaderElectionOutcome {
-				return leaderElectionOutcome{
-					DecisionPath: decisionPathContextCanceled,
-					ReasonCode:   reasonContextCanceled,
+			waitFn: func(context.Context, *ExecutorConfig, string) raftops.LeaderElectionOutcome {
+				return raftops.LeaderElectionOutcome{
+					DecisionPath: raftops.DecisionPathContextCanceled,
+					ReasonCode:   raftops.ReasonContextCanceled,
 					WaitError:    context.Canceled,
 				}
 			},
@@ -601,7 +602,7 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 				return fallbackLeaderURL, nil
 			},
 			wantErr:         "failed while waiting for new leader election",
-			wantReasonCode:  reasonContextCanceled,
+			wantReasonCode:  raftops.ReasonContextCanceled,
 			wantFallbackRun: false,
 		},
 	}
@@ -616,7 +617,7 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 			if testCtx == nil {
 				testCtx = context.Background()
 			}
-			gotURL, err := waitForNewLeaderURLWithFuncs(
+			gotURL, err := raftops.WaitForNewLeaderURLWithFuncs(
 				testCtx,
 				logr.Discard(),
 				cfg,
@@ -630,21 +631,21 @@ func TestWaitForNewLeaderURLWithFuncs(t *testing.T) {
 
 			if tt.wantErr == "" {
 				if err != nil {
-					t.Fatalf("waitForNewLeaderURLWithFuncs() unexpected error: %v", err)
+					t.Fatalf("raftops.WaitForNewLeaderURLWithFuncs() unexpected error: %v", err)
 				}
 				if gotURL != tt.wantURL {
-					t.Fatalf("waitForNewLeaderURLWithFuncs() url=%q, want %q", gotURL, tt.wantURL)
+					t.Fatalf("raftops.WaitForNewLeaderURLWithFuncs() url=%q, want %q", gotURL, tt.wantURL)
 				}
 			} else {
 				if err == nil {
-					t.Fatalf("waitForNewLeaderURLWithFuncs() error=nil, want contains %q", tt.wantErr)
+					t.Fatalf("raftops.WaitForNewLeaderURLWithFuncs() error=nil, want contains %q", tt.wantErr)
 				}
 				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("waitForNewLeaderURLWithFuncs() error=%q, want contains %q", err.Error(), tt.wantErr)
+					t.Fatalf("raftops.WaitForNewLeaderURLWithFuncs() error=%q, want contains %q", err.Error(), tt.wantErr)
 				}
 				if tt.wantReasonCode != "" {
-					if gotReason := reasonCodeFromError(err); gotReason != tt.wantReasonCode {
-						t.Fatalf("waitForNewLeaderURLWithFuncs() reason=%q, want %q", gotReason, tt.wantReasonCode)
+					if gotReason := raftops.ReasonCodeFromError(err); gotReason != tt.wantReasonCode {
+						t.Fatalf("raftops.WaitForNewLeaderURLWithFuncs() reason=%q, want %q", gotReason, tt.wantReasonCode)
 					}
 				}
 			}
@@ -666,8 +667,8 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 		name             string
 		ctx              context.Context
 		previousLeader   string
-		policy           retryPolicy
-		finder           leaderOnceFinder
+		policy           raftops.RetryPolicy
+		finder           raftops.LeaderOnceFinder
 		wantDecisionPath string
 		wantReasonCode   string
 		wantValue        string
@@ -678,7 +679,7 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 			name:           "green leader observed",
 			ctx:            context.Background(),
 			previousLeader: "https://blue-0",
-			policy: retryPolicy{
+			policy: raftops.RetryPolicy{
 				AttemptInterval: time.Millisecond,
 				ElectionWait:    20 * time.Millisecond,
 			},
@@ -688,15 +689,15 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 				}
 				return "", false
 			},
-			wantDecisionPath: decisionPathElectionObservedNewLeader,
-			wantReasonCode:   reasonElectionNewLeaderFound,
+			wantDecisionPath: raftops.DecisionPathElectionObservedNewLeader,
+			wantReasonCode:   raftops.ReasonElectionNewLeaderFound,
 			wantValue:        "https://green-0",
 		},
 		{
 			name:           "blue leader changed from previous",
 			ctx:            context.Background(),
 			previousLeader: "https://blue-0",
-			policy: retryPolicy{
+			policy: raftops.RetryPolicy{
 				AttemptInterval: time.Millisecond,
 				ElectionWait:    20 * time.Millisecond,
 			},
@@ -706,15 +707,15 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 				}
 				return "", false
 			},
-			wantDecisionPath: decisionPathElectionObservedNewLeader,
-			wantReasonCode:   reasonElectionNewLeaderFound,
+			wantDecisionPath: raftops.DecisionPathElectionObservedNewLeader,
+			wantReasonCode:   raftops.ReasonElectionNewLeaderFound,
 			wantValue:        "https://blue-1",
 		},
 		{
 			name:           "same blue leader times out and is classified",
 			ctx:            context.Background(),
 			previousLeader: "https://blue-0",
-			policy: retryPolicy{
+			policy: raftops.RetryPolicy{
 				AttemptInterval: time.Millisecond,
 				ElectionWait:    5 * time.Millisecond,
 			},
@@ -724,8 +725,8 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 				}
 				return "", false
 			},
-			wantDecisionPath: decisionPathElectionObservedSameLeader,
-			wantReasonCode:   reasonElectionSameLeaderSeen,
+			wantDecisionPath: raftops.DecisionPathElectionObservedSameLeader,
+			wantReasonCode:   raftops.ReasonElectionSameLeaderSeen,
 			wantValue:        "https://blue-0",
 			wantWaitErr:      true,
 			wantErrIs:        context.DeadlineExceeded,
@@ -734,15 +735,15 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 			name:           "no leader observed and timed out",
 			ctx:            context.Background(),
 			previousLeader: "https://blue-0",
-			policy: retryPolicy{
+			policy: raftops.RetryPolicy{
 				AttemptInterval: time.Millisecond,
 				ElectionWait:    5 * time.Millisecond,
 			},
 			finder: func(_ context.Context, _ *ExecutorConfig, _ string) (string, bool) {
 				return "", false
 			},
-			wantDecisionPath: decisionPathElectionTimeout,
-			wantReasonCode:   reasonElectionTimeout,
+			wantDecisionPath: raftops.DecisionPathElectionTimeout,
+			wantReasonCode:   raftops.ReasonElectionTimeout,
 			wantWaitErr:      true,
 			wantErrIs:        context.DeadlineExceeded,
 		},
@@ -750,15 +751,15 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 			name:           "context canceled is propagated deterministically",
 			ctx:            canceledContext(),
 			previousLeader: "https://blue-0",
-			policy: retryPolicy{
+			policy: raftops.RetryPolicy{
 				AttemptInterval: time.Millisecond,
 				ElectionWait:    20 * time.Millisecond,
 			},
 			finder: func(_ context.Context, _ *ExecutorConfig, _ string) (string, bool) {
 				return "", false
 			},
-			wantDecisionPath: decisionPathContextCanceled,
-			wantReasonCode:   reasonContextCanceled,
+			wantDecisionPath: raftops.DecisionPathContextCanceled,
+			wantReasonCode:   raftops.ReasonContextCanceled,
 			wantWaitErr:      true,
 			wantErrIs:        context.Canceled,
 		},
@@ -768,7 +769,7 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			outcome := waitForLeaderElectionWithFinderAndPolicy(
+			outcome := raftops.WaitForLeaderElectionWithFinderAndPolicy(
 				tt.ctx,
 				baseExecutorTestConfig(),
 				tt.previousLeader,
@@ -798,15 +799,15 @@ func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 func TestWaitForLeaderElectionOutcome(t *testing.T) {
 	t.Parallel()
 
-	outcome := waitForLeaderElectionOutcome(canceledContext(), baseExecutorTestConfig(), "previous-leader")
+	outcome := raftops.WaitForLeaderElectionOutcome(canceledContext(), baseExecutorTestConfig(), "previous-leader")
 	if outcome.WaitError == nil {
-		t.Fatalf("waitForLeaderElectionOutcome() WaitError=nil, want context cancellation")
+		t.Fatalf("raftops.WaitForLeaderElectionOutcome() WaitError=nil, want context cancellation")
 	}
 	if !errors.Is(outcome.WaitError, context.Canceled) && !errors.Is(outcome.WaitError, context.DeadlineExceeded) {
-		t.Fatalf("waitForLeaderElectionOutcome() error=%v, want context canceled/deadline exceeded", outcome.WaitError)
+		t.Fatalf("raftops.WaitForLeaderElectionOutcome() error=%v, want context canceled/deadline exceeded", outcome.WaitError)
 	}
 	if outcome.Value != "" {
-		t.Fatalf("waitForLeaderElectionOutcome() value=%q, want empty", outcome.Value)
+		t.Fatalf("raftops.WaitForLeaderElectionOutcome() value=%q, want empty", outcome.Value)
 	}
 }
 
@@ -814,18 +815,18 @@ func TestWaitForNewLeaderURL(t *testing.T) {
 	t.Parallel()
 
 	cfg := baseExecutorTestConfig()
-	newLeaderURL, err := waitForNewLeaderURL(canceledContext(), logr.Discard(), cfg, "previous-leader")
+	newLeaderURL, err := raftops.WaitForNewLeaderURL(canceledContext(), logr.Discard(), cfg, "previous-leader")
 	if err == nil {
-		t.Fatalf("waitForNewLeaderURL() error=nil, want failure")
+		t.Fatalf("raftops.WaitForNewLeaderURL() error=nil, want failure")
 	}
 	if newLeaderURL != "" {
-		t.Fatalf("waitForNewLeaderURL() newLeaderURL=%q, want empty", newLeaderURL)
+		t.Fatalf("raftops.WaitForNewLeaderURL() newLeaderURL=%q, want empty", newLeaderURL)
 	}
 	if !strings.Contains(err.Error(), "failed while waiting for new leader election") {
-		t.Fatalf("waitForNewLeaderURL() error=%q, want wait interruption failure", err.Error())
+		t.Fatalf("raftops.WaitForNewLeaderURL() error=%q, want wait interruption failure", err.Error())
 	}
-	if gotReason := reasonCodeFromError(err); gotReason != reasonContextCanceled {
-		t.Fatalf("waitForNewLeaderURL() reason=%q, want %q", gotReason, reasonContextCanceled)
+	if gotReason := raftops.ReasonCodeFromError(err); gotReason != raftops.ReasonContextCanceled {
+		t.Fatalf("raftops.WaitForNewLeaderURL() reason=%q, want %q", gotReason, raftops.ReasonContextCanceled)
 	}
 }
 
@@ -850,15 +851,15 @@ func TestFindInitialLeader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			leaderURL, err := findInitialLeader(tt.ctx, logr.Discard(), tt.cfg)
+			leaderURL, err := raftops.FindInitialLeader(tt.ctx, logr.Discard(), tt.cfg)
 			if err == nil {
-				t.Fatalf("findInitialLeader() error=nil, want contains %q", tt.wantErr)
+				t.Fatalf("raftops.FindInitialLeader() error=nil, want contains %q", tt.wantErr)
 			}
 			if leaderURL != "" {
-				t.Fatalf("findInitialLeader() leaderURL=%q, want empty", leaderURL)
+				t.Fatalf("raftops.FindInitialLeader() leaderURL=%q, want empty", leaderURL)
 			}
 			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("findInitialLeader() error=%q, want contains %q", err.Error(), tt.wantErr)
+				t.Fatalf("raftops.FindInitialLeader() error=%q, want contains %q", err.Error(), tt.wantErr)
 			}
 		})
 	}
@@ -895,12 +896,12 @@ func TestRunBlueGreenRepairConsensusValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := runBlueGreenRepairConsensus(context.Background(), logr.Discard(), tt.cfg)
+			err := raftops.RunBlueGreenRepairConsensus(context.Background(), logr.Discard(), tt.cfg)
 			if err == nil {
-				t.Fatalf("runBlueGreenRepairConsensus() error=nil, want contains %q", tt.wantErr)
+				t.Fatalf("RunBlueGreenRepairConsensus() error=nil, want contains %q", tt.wantErr)
 			}
 			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("runBlueGreenRepairConsensus() error=%q, want contains %q", err.Error(), tt.wantErr)
+				t.Fatalf("RunBlueGreenRepairConsensus() error=%q, want contains %q", err.Error(), tt.wantErr)
 			}
 		})
 	}
@@ -909,7 +910,7 @@ func TestRunBlueGreenRepairConsensusValidation(t *testing.T) {
 func TestRunBlueGreenRemovePeersValidation(t *testing.T) {
 	t.Parallel()
 
-	err := runBlueGreenRemovePeers(
+	err := raftops.RunBlueGreenRemovePeers(
 		context.Background(),
 		logr.Discard(),
 		baseExecutorTestConfig(),
@@ -919,30 +920,30 @@ func TestRunBlueGreenRemovePeersValidation(t *testing.T) {
 		"Blue",
 	)
 	if err == nil {
-		t.Fatalf("runBlueGreenRemovePeers() error=nil, want validation error")
+		t.Fatalf("RunBlueGreenRemovePeers() error=nil, want validation error")
 	}
 	if !strings.Contains(err.Error(), "revision to remove is required") {
-		t.Fatalf("runBlueGreenRemovePeers() error=%q, want revision validation error", err.Error())
+		t.Fatalf("RunBlueGreenRemovePeers() error=%q, want revision validation error", err.Error())
 	}
 }
 
 func TestFindLeaderAndFindLeaderOnceValidation(t *testing.T) {
 	t.Parallel()
 
-	leaderURL, ok := findLeaderOnce(context.Background(), nil, "")
+	leaderURL, ok := raftops.FindLeaderOnce(context.Background(), nil, "")
 	if ok {
-		t.Fatalf("findLeaderOnce() ok=true, want false")
+		t.Fatalf("raftops.FindLeaderOnce() ok=true, want false")
 	}
 	if leaderURL != "" {
-		t.Fatalf("findLeaderOnce() leaderURL=%q, want empty", leaderURL)
+		t.Fatalf("raftops.FindLeaderOnce() leaderURL=%q, want empty", leaderURL)
 	}
 
-	_, err := findLeader(context.Background(), nil, "")
+	_, err := raftops.FindLeader(context.Background(), nil, "")
 	if err == nil {
-		t.Fatalf("findLeader() error=nil, want config validation error")
+		t.Fatalf("raftops.FindLeader() error=nil, want config validation error")
 	}
 	if !strings.Contains(err.Error(), "config is required") {
-		t.Fatalf("findLeader() error=%q, want contains %q", err.Error(), "config is required")
+		t.Fatalf("raftops.FindLeader() error=%q, want contains %q", err.Error(), "config is required")
 	}
 }
 
@@ -1024,12 +1025,12 @@ func TestRaftLeaderInfo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			gotID, gotBlue := raftLeaderInfo(tt.config, tt.bluePrefix)
+			gotID, gotBlue := raftops.RaftLeaderInfo(tt.config, tt.bluePrefix)
 			if gotID != tt.wantID {
-				t.Fatalf("raftLeaderInfo() id=%q, want %q", gotID, tt.wantID)
+				t.Fatalf("raftops.RaftLeaderInfo() id=%q, want %q", gotID, tt.wantID)
 			}
 			if gotBlue != tt.wantBlue {
-				t.Fatalf("raftLeaderInfo() isBlue=%v, want %v", gotBlue, tt.wantBlue)
+				t.Fatalf("raftops.RaftLeaderInfo() isBlue=%v, want %v", gotBlue, tt.wantBlue)
 			}
 		})
 	}

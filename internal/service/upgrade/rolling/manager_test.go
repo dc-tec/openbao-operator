@@ -23,6 +23,8 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
 // testLogger returns a no-op logger for testing.
@@ -817,10 +819,9 @@ func TestGetPodURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &Manager{}
-			got := m.getPodURL(tt.cluster, tt.podName)
+			got := raftops.ClusterPodURL(tt.cluster, tt.podName)
 			if got != tt.wantURL {
-				t.Errorf("getPodURL() = %q, want %q", got, tt.wantURL)
+				t.Errorf("ClusterPodURL() = %q, want %q", got, tt.wantURL)
 			}
 		})
 	}
@@ -957,7 +958,7 @@ func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
 			CurrentVersion: "2.4.0",
 			OperationLock: &openbaov1alpha1.OperationLockStatus{
 				Operation:  openbaov1alpha1.ClusterOperationUpgrade,
-				Holder:     upgrade.UpgradeOperationLockHolder,
+				Holder:     upgradecore.UpgradeOperationLockHolder,
 				Message:    "stale upgrade lock",
 				AcquiredAt: &now,
 				RenewedAt:  &now,
@@ -989,6 +990,68 @@ func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
 	}
 	if cluster.Status.OperationLock != nil {
 		t.Fatalf("expected in-memory operation lock to be released, got %+v", cluster.Status.OperationLock)
+	}
+}
+
+func TestReconcile_PersistsFailureWhenUpgradeLockIsBlockedMidUpgrade(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	now := metav1.Now()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.4",
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				FromVersion:      "2.4.4",
+				TargetVersion:    "2.5.0",
+				CurrentPartition: 2,
+			},
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation:  openbaov1alpha1.ClusterOperationBackup,
+				Holder:     "openbao-backup-controller",
+				Message:    "scheduled backup in progress",
+				AcquiredAt: &now,
+				RenewedAt:  &now,
+			},
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
+	mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
+
+	_, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
+	if err == nil || !strings.Contains(err.Error(), "operation lock is held by another operation") {
+		t.Fatalf("Reconcile() error = %v, want blocked-operation-lock error", err)
+	}
+
+	latest := &openbaov1alpha1.OpenBaoCluster{}
+	if getErr := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), latest); getErr != nil {
+		t.Fatalf("failed to get cluster: %v", getErr)
+	}
+	if latest.Status.Upgrade == nil {
+		t.Fatal("expected persisted rolling upgrade status")
+	}
+	if latest.Status.Upgrade.LastErrorReason != upgrade.ReasonUpgradeFailed {
+		t.Fatalf("persisted LastErrorReason=%q, want %q", latest.Status.Upgrade.LastErrorReason, upgrade.ReasonUpgradeFailed)
+	}
+	if !strings.Contains(latest.Status.Upgrade.LastErrorMessage, "concurrent operation lock") {
+		t.Fatalf("persisted LastErrorMessage=%q, want lock-contention message", latest.Status.Upgrade.LastErrorMessage)
+	}
+	if latest.Status.Upgrade.LastErrorAt == nil {
+		t.Fatal("expected persisted LastErrorAt timestamp")
 	}
 }
 
@@ -1305,7 +1368,7 @@ func TestVersionMismatchDuringUpgrade(t *testing.T) {
 
 			// If we should clear, verify the clear function works
 			if tt.shouldClearState {
-				upgrade.ClearUpgrade(status)
+				upgradecore.ClearUpgrade(status)
 				if status.Upgrade != nil {
 					t.Error("expected Upgrade to be cleared")
 				}
@@ -1441,13 +1504,13 @@ func TestWaitForPodHealthy_LevelTriggered(t *testing.T) {
 	}
 }
 
-// TestPerformPodByPodUpgrade_ReturnsCorrectly tests that performPodByPodUpgrade
-// returns the correct values when partition is 0 (complete).
-func TestPerformPodByPodUpgrade_ReturnsCorrectly(t *testing.T) {
+func TestNextRolloutTargetPod(t *testing.T) {
 	tests := []struct {
 		name             string
 		currentPartition int32
 		wantComplete     bool
+		wantPodName      string
+		wantPartition    int32
 	}{
 		{
 			name:             "partition 0 - complete",
@@ -1458,11 +1521,15 @@ func TestPerformPodByPodUpgrade_ReturnsCorrectly(t *testing.T) {
 			name:             "partition 3 - incomplete",
 			currentPartition: 3,
 			wantComplete:     false,
+			wantPodName:      "test-cluster-2",
+			wantPartition:    2,
 		},
 		{
 			name:             "partition 1 - incomplete",
 			currentPartition: 1,
 			wantComplete:     false,
+			wantPodName:      "test-cluster-0",
+			wantPartition:    0,
 		},
 	}
 
@@ -1483,11 +1550,21 @@ func TestPerformPodByPodUpgrade_ReturnsCorrectly(t *testing.T) {
 				},
 			}
 
-			// Verify partition completion logic
-			isComplete := cluster.Status.Upgrade.CurrentPartition == 0
-
-			if isComplete != tt.wantComplete {
-				t.Errorf("completion check: got %v, want %v", isComplete, tt.wantComplete)
+			target, completed, err := nextRolloutTargetPod(cluster)
+			if err != nil {
+				t.Fatalf("nextRolloutTargetPod() error = %v", err)
+			}
+			if completed != tt.wantComplete {
+				t.Fatalf("completed = %v, want %v", completed, tt.wantComplete)
+			}
+			if tt.wantComplete {
+				return
+			}
+			if target.Name != tt.wantPodName {
+				t.Fatalf("target.Name = %q, want %q", target.Name, tt.wantPodName)
+			}
+			if target.NextPartition != tt.wantPartition {
+				t.Fatalf("target.NextPartition = %d, want %d", target.NextPartition, tt.wantPartition)
 			}
 		})
 	}
@@ -1595,7 +1672,7 @@ func TestValidateBackupConfig(t *testing.T) {
 			k8sClient := builder.Build()
 			m := &Manager{client: k8sClient}
 
-			err := m.validateBackupConfig(context.Background(), tt.cluster)
+			err := m.validatePreUpgradeSnapshotPrerequisites(context.Background(), tt.cluster)
 
 			if tt.expectError {
 				if err == nil {
@@ -1635,7 +1712,7 @@ func newScheme() *runtime.Scheme {
 	return scheme
 }
 
-func rollingTestClientFactory() upgrade.OpenBaoClientFactory {
+func rollingTestClientFactory() raftops.OpenBaoClientFactory {
 	return func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		mock := &openbaoapi.MockClusterActions{
 			IsHealthyFunc: func(ctx context.Context) (bool, error) {

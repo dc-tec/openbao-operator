@@ -1,0 +1,160 @@
+package rolling
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/go-logr/logr"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
+)
+
+func (m *Manager) prepareUpgradeExecution(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	metrics *upgrade.Metrics,
+	strategy string,
+	resumeUpgrade bool,
+) (recon.Result, bool, error) {
+	if err := m.resumeUpgradeState(ctx, logger, cluster, resumeUpgrade); err != nil {
+		return recon.Result{}, false, err
+	}
+
+	if err := m.ensureUpgradePrerequisites(ctx, logger, cluster); err != nil {
+		return recon.Result{}, false, m.handlePreStartUpgradeFailure(ctx, logger, cluster, err)
+	}
+
+	if result, waiting, err := m.ensurePreUpgradeSnapshotComplete(ctx, logger, cluster); waiting || err != nil {
+		return result, waiting, err
+	}
+
+	if err := m.startUpgradeExecutionIfNeeded(ctx, logger, cluster, metrics, strategy); err != nil {
+		return recon.Result{}, false, err
+	}
+
+	m.recordInProgressMetrics(metrics, cluster)
+	return recon.Result{}, false, nil
+}
+
+func (m *Manager) ensureUpgradePrerequisites(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if err := upgrade.EnsureUpgradeServiceAccount(ctx, m.client, cluster, "openbao-operator"); err != nil {
+		return fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
+	}
+	if err := m.validateUpgrade(ctx, logger, cluster); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *Manager) handlePreStartUpgradeFailure(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	cause error,
+) error {
+	if persistErr := m.persistValidationFailure(ctx, cluster, cause); persistErr != nil {
+		return persistErr
+	}
+
+	return core.ReleaseUpgradeLockOnErrorIfHeld(
+		ctx,
+		m.client,
+		logger,
+		cluster,
+		cluster.Status.Upgrade == nil,
+		cause,
+		"failed to release upgrade operation lock after pre-start failure",
+	)
+}
+
+func (m *Manager) startUpgradeExecutionIfNeeded(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	metrics *upgrade.Metrics,
+	strategy string,
+) error {
+	if cluster.Status.Upgrade != nil {
+		return nil
+	}
+	return upgrade.StartRootUpgradeLifecycle(ctx, logger, cluster, metrics, strategy, upgrade.RootUpgradeStartOptions{
+		Persist: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, start upgrade.RootUpgradeSessionStart) error {
+			if err := m.setStatefulSetPartition(ctx, cluster, start.Replicas); err != nil {
+				return fmt.Errorf("failed to lock StatefulSet partition: %w", err)
+			}
+			if err := m.patchUpgradeStatus(ctx, cluster); err != nil {
+				return fmt.Errorf("failed to update status after initializing upgrade: %w", err)
+			}
+			return nil
+		},
+		EmitEvent: func(fromVersion, toVersion string) {
+			m.emitNormalEvent(cluster, upgrade.ReasonUpgradeStarted, upgrade.MessageUpgradeStarted, fromVersion, toVersion)
+		},
+	})
+}
+
+func (m *Manager) resumeUpgradeState(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, resumeUpgrade bool) error {
+	if !resumeUpgrade || cluster.Status.Upgrade == nil {
+		return nil
+	}
+
+	if cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion {
+		logger.Info("Spec.Version changed during upgrade; clearing upgrade state and starting fresh",
+			"previousTarget", cluster.Status.Upgrade.TargetVersion,
+			"newTarget", cluster.Spec.Version)
+		core.ClearUpgrade(&cluster.Status)
+	}
+
+	_, err := m.prepareFailedUpgradeRetry(ctx, logger, cluster)
+	return err
+}
+
+func (m *Manager) persistValidationFailure(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, validationErr error) error {
+	if cluster.Status.Upgrade == nil {
+		return nil
+	}
+	if err := m.patchUpgradeStatus(ctx, cluster); err != nil {
+		return fmt.Errorf("failed to persist rolling upgrade status after validation failure: %w (validation error: %w)", err, validationErr)
+	}
+	return nil
+}
+
+func (m *Manager) ensurePreUpgradeSnapshotComplete(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (recon.Result, bool, error) {
+	if cluster.Spec.Upgrade == nil || !cluster.Spec.Upgrade.PreUpgradeSnapshot {
+		return recon.Result{}, false, nil
+	}
+
+	snapshotComplete, err := m.handlePreUpgradeSnapshot(ctx, logger, cluster)
+	if err != nil {
+		return recon.Result{}, false, err
+	}
+	if snapshotComplete {
+		return recon.Result{}, false, nil
+	}
+
+	logger.Info("Pre-upgrade snapshot in progress, waiting...")
+	return recon.Result{RequeueAfter: constants.RequeueShort}, true, nil
+}
+
+func (m *Manager) recordInProgressMetrics(metrics *upgrade.Metrics, cluster *openbaov1alpha1.OpenBaoCluster) {
+	if cluster.Status.Upgrade == nil {
+		upgrade.SetRunningProgressMetrics(metrics, cluster.Spec.Replicas, 0, 0)
+		return
+	}
+
+	upgrade.SetRunningProgressMetrics(
+		metrics,
+		cluster.Spec.Replicas,
+		len(cluster.Status.Upgrade.CompletedPods),
+		cluster.Status.Upgrade.CurrentPartition,
+	)
+}

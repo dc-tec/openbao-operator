@@ -22,7 +22,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
@@ -180,7 +180,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 			g.Expect(updated.Status.Upgrade).NotTo(BeNil())
 			g.Expect(updated.Status.OperationLock).NotTo(BeNil())
 			g.Expect(updated.Status.OperationLock.Operation).To(Equal(openbaov1alpha1.ClusterOperationUpgrade))
-			g.Expect(updated.Status.OperationLock.Holder).To(Equal(upgrade.UpgradeOperationLockHolder))
+			g.Expect(updated.Status.OperationLock.Holder).To(Equal(upgradecore.UpgradeOperationLockHolder))
 
 			upgrading := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionUpgrading))
 			g.Expect(upgrading).NotTo(BeNil())
@@ -209,7 +209,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 			g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
 			g.Expect(updated.Status.OperationLock).NotTo(BeNil())
 			g.Expect(updated.Status.OperationLock.Operation).To(Equal(openbaov1alpha1.ClusterOperationUpgrade))
-			g.Expect(updated.Status.OperationLock.Holder).To(Equal(upgrade.UpgradeOperationLockHolder))
+			g.Expect(updated.Status.OperationLock.Holder).To(Equal(upgradecore.UpgradeOperationLockHolder))
 			g.Expect(updated.Annotations).To(HaveKey(constants.AnnotationTriggerBackup))
 
 			jobs := &batchv1.JobList{}

@@ -100,8 +100,25 @@ func TestInitializeUpgrade_EmitsUpgradeStartedEvent(t *testing.T) {
 		recorder: recorder,
 	}
 
-	if err := manager.initializeUpgrade(context.Background(), logr.Discard(), cluster, nil, "rolling"); err != nil {
-		t.Fatalf("initializeUpgrade() error = %v", err)
+	if err := upgrade.StartRootUpgradeLifecycle(
+		context.Background(),
+		logr.Discard(),
+		cluster,
+		nil,
+		"rolling",
+		upgrade.RootUpgradeStartOptions{
+			Persist: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, start upgrade.RootUpgradeSessionStart) error {
+				if err := manager.setStatefulSetPartition(ctx, cluster, start.Replicas); err != nil {
+					return err
+				}
+				return manager.patchUpgradeStatus(ctx, cluster)
+			},
+			EmitEvent: func(fromVersion, toVersion string) {
+				manager.emitNormalEvent(cluster, upgrade.ReasonUpgradeStarted, upgrade.MessageUpgradeStarted, fromVersion, toVersion)
+			},
+		},
+	); err != nil {
+		t.Fatalf("StartRootUpgradeLifecycle() error = %v", err)
 	}
 
 	expectEventContains(t, recorder, "Normal", upgrade.ReasonUpgradeStarted)
