@@ -64,13 +64,11 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 		if c.state != nil {
 			if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 				c.state.after(req, false)
-				return operatorerrors.WrapTransientRemoteOverloaded(
-					fmt.Errorf("snapshot request failed due to remote overload (status %d): %s", resp.StatusCode, string(body)),
-				)
+				return operatorerrors.WrapTransientRemoteOverloaded(portopenbao.NewAPIError("snapshot request failed", resp.StatusCode, body))
 			}
 			c.state.after(req, true)
 		}
-		return fmt.Errorf("snapshot request failed with status %d: %s", resp.StatusCode, string(body))
+		return portopenbao.NewAPIError("snapshot request failed", resp.StatusCode, body)
 	}
 
 	if _, err := io.Copy(writer, resp.Body); err != nil {
@@ -112,7 +110,7 @@ func (c *Client) Restore(ctx context.Context, reader io.Reader) error {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("restore request failed with status %d: %s", resp.StatusCode, string(body))
+		return portopenbao.NewAPIError("restore request failed", resp.StatusCode, body)
 	}
 
 	return nil
@@ -136,7 +134,7 @@ func (c *Client) Init(ctx context.Context, req InitRequest) (*InitResponse, erro
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("init request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, portopenbao.NewAPIError("init request failed", resp.StatusCode, respBody)
 	}
 
 	var initResp InitResponse
@@ -182,7 +180,7 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, i
 		return "", 0, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", 0, fmt.Errorf("JWT auth request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return "", 0, portopenbao.NewAPIError("JWT auth request failed", resp.StatusCode, respBody)
 	}
 
 	var authResp JWTAuthLoginResponse

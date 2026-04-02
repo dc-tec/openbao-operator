@@ -87,7 +87,7 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("raft join request failed with status %d: %s", resp.StatusCode, string(body))
+		return portopenbao.NewAPIError("raft join request failed", resp.StatusCode, body)
 	}
 
 	var joinResp JoinRaftClusterResponse
@@ -118,7 +118,7 @@ func (c *Client) ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftCo
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("raft configuration request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, portopenbao.NewAPIError("raft configuration request failed", resp.StatusCode, body)
 	}
 
 	type raftConfigEnvelope struct {
@@ -153,10 +153,10 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStat
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrAutopilotNotAvailable
+		return nil, fmt.Errorf("%w: %w", ErrAutopilotNotAvailable, portopenbao.NewAPIError("raft autopilot state request failed", resp.StatusCode, body))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("raft autopilot state request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, portopenbao.NewAPIError("raft autopilot state request failed", resp.StatusCode, body)
 	}
 
 	type raftAutopilotEnvelope struct {
@@ -197,7 +197,7 @@ func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("autopilot config request failed with status %d: %s", resp.StatusCode, string(body))
+		return portopenbao.NewAPIError("autopilot config request failed", resp.StatusCode, body)
 	}
 
 	return nil
@@ -228,7 +228,7 @@ func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, pat
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("raft %s request failed with status %d: %s", action, resp.StatusCode, string(body))
+		return portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), resp.StatusCode, body)
 	}
 
 	return nil
@@ -276,7 +276,7 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopen
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("raft configuration update request failed with status %d: %s", resp.StatusCode, string(body))
+		return portopenbao.NewAPIError("raft configuration update request failed", resp.StatusCode, body)
 	}
 
 	return nil

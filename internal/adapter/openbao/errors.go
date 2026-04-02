@@ -1,6 +1,8 @@
 package openbao
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	// ErrAutopilotNotAvailable indicates the Raft Autopilot state endpoint is not available.

@@ -3,6 +3,8 @@ package raft
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -18,6 +20,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestAutopilotBaseURL(t *testing.T) {
@@ -48,23 +51,35 @@ func TestHandleJWTAuthError(t *testing.T) {
 		{
 			name:        "404 maps to prerequisite missing guidance",
 			initialized: false,
-			err:         errors.New("login failed: status 404"),
-			wantPerm:    true,
-			wantText:    "Enable JWT auth",
+			err: fmt.Errorf("failed to authenticate using JWT Auth: %w", &portopenbao.APIError{
+				Operation:    "JWT auth request failed",
+				StatusCode:   http.StatusNotFound,
+				ResponseBody: `{"errors":["no handler for route"]}`,
+			}),
+			wantPerm: true,
+			wantText: "Enable JWT auth",
 		},
 		{
 			name:        "400 maps to role guidance",
 			initialized: false,
-			err:         errors.New("login failed: status 400"),
-			wantPerm:    true,
-			wantText:    "Ensure JWT role",
+			err: fmt.Errorf("failed to authenticate using JWT Auth: %w", &portopenbao.APIError{
+				Operation:    "JWT auth request failed",
+				StatusCode:   http.StatusBadRequest,
+				ResponseBody: `{"errors":["invalid JWT token"]}`,
+			}),
+			wantPerm: true,
+			wantText: "Ensure JWT role",
 		},
 		{
 			name:        "initialized cluster uses manual guidance",
 			initialized: true,
-			err:         errors.New("login failed: status 400"),
-			wantPerm:    true,
-			wantText:    "Manually configure JWT role",
+			err: fmt.Errorf("failed to authenticate using JWT Auth: %w", &portopenbao.APIError{
+				Operation:    "JWT auth request failed",
+				StatusCode:   http.StatusBadRequest,
+				ResponseBody: `{"errors":["invalid JWT token"]}`,
+			}),
+			wantPerm: true,
+			wantText: "Manually configure JWT role",
 		},
 		{
 			name:        "other error remains generic",
