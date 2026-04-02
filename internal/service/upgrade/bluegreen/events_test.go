@@ -179,6 +179,22 @@ func TestBreakGlassEvents(t *testing.T) {
 		expectEventContains(t, recorder, "Warning", ReasonBreakGlassEntered)
 	})
 
+	t.Run("entered for rollback cleanup peer removal", func(t *testing.T) {
+		t.Parallel()
+
+		cluster := newBlueGreenCluster()
+		recorder := events.NewFakeRecorder(10)
+		manager := &Manager{recorder: recorder}
+
+		manager.enterBreakGlassRollbackCleanupPeerRemovalFailed(logr.Discard(), cluster, "rollback-cleanup-job")
+
+		if cluster.Status.BreakGlass == nil || !cluster.Status.BreakGlass.Active {
+			t.Fatal("break glass not activated")
+		}
+
+		expectEventContains(t, recorder, "Warning", ReasonBreakGlassEntered)
+	})
+
 	t.Run("acknowledged", func(t *testing.T) {
 		t.Parallel()
 

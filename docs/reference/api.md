@@ -410,7 +410,7 @@ _Underlying type:_ _string_
 BreakGlassReason describes why the operator required manual intervention.
 
 _Validation:_
-- Enum: [RollbackConsensusRepairFailed]
+- Enum: [RollbackConsensusRepairFailed RollbackCleanupPeerRemovalFailed]
 
 _Appears in:_
 - [BreakGlassStatus](#breakglassstatus)
@@ -418,6 +418,7 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `RollbackConsensusRepairFailed` |  |
+| `RollbackCleanupPeerRemovalFailed` |  |
 
 
 #### BreakGlassStatus
@@ -434,7 +435,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `active` _boolean_ | Active indicates whether break glass mode is currently active. |  | Optional: \{\} <br /> |
-| `reason` _[BreakGlassReason](#breakglassreason)_ | Reason is a stable, typed reason for entering break glass mode. |  | Enum: [RollbackConsensusRepairFailed] <br />Optional: \{\} <br /> |
+| `reason` _[BreakGlassReason](#breakglassreason)_ | Reason is a stable, typed reason for entering break glass mode. |  | Enum: [RollbackConsensusRepairFailed RollbackCleanupPeerRemovalFailed] <br />Optional: \{\} <br /> |
 | `message` _string_ | Message provides a short summary of the detected unsafe state. |  | Optional: \{\} <br /> |
 | `nonce` _string_ | Nonce is the acknowledgment token required to resume automation. |  | Optional: \{\} <br /> |
 | `enteredAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | EnteredAt is when break glass mode became active. |  | Optional: \{\} <br /> |

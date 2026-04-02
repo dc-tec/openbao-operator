@@ -73,6 +73,11 @@ kubectl get openbaocluster <name> -n <namespace> \\
   The expected break-glass pattern here is `reason=RollbackConsensusRepairFailed` while the blue-green phase is still in `RollingBack`.
 </CommandBlock>
 
+Break-glass reasons during rollback now map to two distinct failure surfaces:
+
+- `RollbackConsensusRepairFailed` usually means the rollback repair Job failed while the phase is still `RollingBack`.
+- `RollbackCleanupPeerRemovalFailed` usually means the cleanup Job that removes stale green peers failed while the phase is `RollbackCleanup`.
+
 ## Inspect the failed rollback job and live cluster state
 
 <CommandBlock
@@ -86,6 +91,8 @@ kubectl exec -n <namespace> -it <pod-name> -- bao operator raft list-peers`}
 >
   Look for network isolation between blue and green Pods, stuck or sealed Pods, peer membership that no longer matches the intended rollback topology, or executor-job failures that prevented the rollback from completing.
 </CommandBlock>
+
+If the break-glass reason is `RollbackCleanupPeerRemovalFailed`, spend extra time verifying that no stale green peers remain in Raft membership before you acknowledge the nonce. A retry will create a fresh rollback-cleanup attempt, so the live peer list needs to match the rollback intent first.
 
 <Callout type="note" title="Use maintenance mode before disruptive manual repair">
 

@@ -20,6 +20,7 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 func TestManager_ShouldReconcileBlueGreen(t *testing.T) {
@@ -146,7 +147,7 @@ func TestManager_MaybeAcquireUpgradeLock_SuccessAndNoop(t *testing.T) {
 		if result != (recon.Result{}) {
 			t.Fatalf("result=%v, want zero", result)
 		}
-		if !upgrade.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
+		if !core.IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock) {
 			t.Fatalf("expected upgrade lock to be held by the blue/green manager, got %+v", cluster.Status.OperationLock)
 		}
 	})
@@ -307,7 +308,7 @@ func TestManager_MaybeHandleTargetRevisionDrift(t *testing.T) {
 		cluster.Status.BlueGreen.GreenRevision = "green-old"
 		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 			Operation: openbaov1alpha1.ClusterOperationUpgrade,
-			Holder:    upgrade.UpgradeOperationLockHolder,
+			Holder:    core.UpgradeOperationLockHolder,
 			Message:   "blue/green upgrade phase Syncing",
 		}
 
@@ -458,7 +459,7 @@ func TestManager_ReleaseUpgradeLockIfHeld(t *testing.T) {
 		cluster := newBlueGreenCluster()
 		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 			Operation: openbaov1alpha1.ClusterOperationUpgrade,
-			Holder:    upgrade.UpgradeOperationLockHolder,
+			Holder:    core.UpgradeOperationLockHolder,
 			Message:   "blue/green upgrade phase Syncing",
 		}
 		client := fake.NewClientBuilder().
@@ -563,13 +564,13 @@ func TestManager_FinalizeBlueGreenMetrics_StateTransitions(t *testing.T) {
 		cluster.Namespace = "metrics-start"
 		cluster.Name = strings.ReplaceAll(t.Name(), "/", "-")
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
-		deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
-		defer deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
+		core.DeleteUpgradeMetricsSession(cluster.Namespace, cluster.Name)
+		defer core.DeleteUpgradeMetricsSession(cluster.Namespace, cluster.Name)
 
 		mgr := &Manager{}
 		mgr.finalizeBlueGreenMetrics(upgrade.NewMetrics(cluster.Namespace, cluster.Name), strategy, cluster, openbaov1alpha1.PhaseIdle, false)
 
-		if _, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name); !ok {
+		if _, ok := core.GetUpgradeMetricsSession(cluster.Namespace, cluster.Name); !ok {
 			t.Fatal("expected upgrade metrics state to be initialized")
 		}
 	})
@@ -581,17 +582,17 @@ func TestManager_FinalizeBlueGreenMetrics_StateTransitions(t *testing.T) {
 		now := metav1.NewTime(time.Now())
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRollingBack
 		cluster.Status.BlueGreen.RollbackStartTime = &now
-		setUpgradeMetricsState(cluster.Namespace, cluster.Name, upgradeMetricsState{startedAt: time.Now().Add(-2 * time.Minute)})
-		defer deleteUpgradeMetricsState(cluster.Namespace, cluster.Name)
+		core.SetUpgradeMetricsSession(cluster.Namespace, cluster.Name, core.UpgradeMetricsSessionState{StartedAt: time.Now().Add(-2 * time.Minute)})
+		defer core.DeleteUpgradeMetricsSession(cluster.Namespace, cluster.Name)
 
 		mgr := &Manager{}
 		mgr.finalizeBlueGreenMetrics(upgrade.NewMetrics(cluster.Namespace, cluster.Name), strategy, cluster, openbaov1alpha1.PhaseSyncing, false)
 
-		state, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name)
+		state, ok := core.GetUpgradeMetricsSession(cluster.Namespace, cluster.Name)
 		if !ok {
 			t.Fatal("expected upgrade metrics state to exist")
 		}
-		if !state.lastRollbackSeen {
+		if !state.RollbackSeen {
 			t.Fatal("expected rollback marker to be recorded")
 		}
 	})
@@ -602,12 +603,12 @@ func TestManager_FinalizeBlueGreenMetrics_StateTransitions(t *testing.T) {
 		cluster.Name = strings.ReplaceAll(t.Name(), "/", "-")
 		cluster.Status.CurrentVersion = "2.4.4"
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-		setUpgradeMetricsState(cluster.Namespace, cluster.Name, upgradeMetricsState{startedAt: time.Now().Add(-5 * time.Minute)})
+		core.SetUpgradeMetricsSession(cluster.Namespace, cluster.Name, core.UpgradeMetricsSessionState{StartedAt: time.Now().Add(-5 * time.Minute)})
 
 		mgr := &Manager{}
 		mgr.finalizeBlueGreenMetrics(upgrade.NewMetrics(cluster.Namespace, cluster.Name), strategy, cluster, openbaov1alpha1.PhaseCleanup, false)
 
-		if _, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name); ok {
+		if _, ok := core.GetUpgradeMetricsSession(cluster.Namespace, cluster.Name); ok {
 			t.Fatal("expected upgrade metrics state to be cleared after successful completion")
 		}
 	})
@@ -618,12 +619,12 @@ func TestManager_FinalizeBlueGreenMetrics_StateTransitions(t *testing.T) {
 		cluster.Name = strings.ReplaceAll(t.Name(), "/", "-")
 		cluster.Status.CurrentVersion = "2.4.4"
 		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseIdle
-		setUpgradeMetricsState(cluster.Namespace, cluster.Name, upgradeMetricsState{startedAt: time.Now().Add(-5 * time.Minute)})
+		core.SetUpgradeMetricsSession(cluster.Namespace, cluster.Name, core.UpgradeMetricsSessionState{StartedAt: time.Now().Add(-5 * time.Minute)})
 
 		mgr := &Manager{}
 		mgr.finalizeBlueGreenMetrics(upgrade.NewMetrics(cluster.Namespace, cluster.Name), strategy, cluster, openbaov1alpha1.PhaseSyncing, false)
 
-		if _, ok := getUpgradeMetricsState(cluster.Namespace, cluster.Name); ok {
+		if _, ok := core.GetUpgradeMetricsSession(cluster.Namespace, cluster.Name); ok {
 			t.Fatal("expected upgrade metrics state to be cleared after failed completion")
 		}
 	})

@@ -233,6 +233,31 @@ func TestHandleBreakGlassAck_TableDriven(t *testing.T) {
 			wantLastFailure:     "",
 		},
 		{
+			name: "acknowledges rollback cleanup peer-removal breakglass and bumps rollback attempt",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{BreakGlassAck: "nonce-b"},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					BreakGlass: &openbaov1alpha1.BreakGlassStatus{
+						Active: true,
+						Nonce:  "nonce-b",
+						Reason: openbaov1alpha1.BreakGlassReasonRollbackCleanupPeerRemovalFailed,
+					},
+					BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+						Phase:           openbaov1alpha1.PhaseRollbackCleanup,
+						RollbackAttempt: 2,
+						JobFailureCount: 1,
+						LastJobFailure:  "remove green peers failed",
+					},
+				},
+			},
+			wantHandled:         true,
+			wantRequeueShort:    true,
+			wantActive:          false,
+			wantRollbackAttempt: 3,
+			wantFailureCount:    0,
+			wantLastFailure:     "",
+		},
+		{
 			name: "acknowledges rollback reason without bluegreen status",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{BreakGlassAck: "nonce-a"},
@@ -440,6 +465,59 @@ func TestEnterBreakGlassRollbackConsensusRepairFailed_TableDriven(t *testing.T) 
 				if tt.cluster.Status.BreakGlass.EnteredAt == nil {
 					t.Fatalf("EnteredAt should be set")
 				}
+			}
+		})
+	}
+}
+
+func TestEnterBreakGlassRollbackCleanupPeerRemovalFailed_TableDriven(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		cluster             *openbaov1alpha1.OpenBaoCluster
+		jobName             string
+		wantReason          openbaov1alpha1.BreakGlassReason
+		wantMessageContains string
+		wantStepContains    string
+	}{
+		{
+			name: "sets breakglass details for rollback cleanup peer removal",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster-b", Namespace: "tenant-b"},
+			},
+			jobName:             "remove-green-peers-job",
+			wantReason:          openbaov1alpha1.BreakGlassReasonRollbackCleanupPeerRemovalFailed,
+			wantMessageContains: "remove-green-peers-job failed",
+			wantStepContains:    "Remove any stale Green peers manually",
+		},
+	}
+
+	mgr := &Manager{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mgr.enterBreakGlassRollbackCleanupPeerRemovalFailed(logr.Discard(), tt.cluster, tt.jobName)
+
+			if tt.cluster.Status.BreakGlass == nil {
+				t.Fatalf("BreakGlass status should be initialized")
+			}
+			if tt.cluster.Status.BreakGlass.Reason != tt.wantReason {
+				t.Fatalf("Reason = %q, want %q", tt.cluster.Status.BreakGlass.Reason, tt.wantReason)
+			}
+			if !strings.Contains(tt.cluster.Status.BreakGlass.Message, tt.wantMessageContains) {
+				t.Fatalf("Message = %q, want substring %q", tt.cluster.Status.BreakGlass.Message, tt.wantMessageContains)
+			}
+			stepsJoined := strings.Join(tt.cluster.Status.BreakGlass.Steps, "\n")
+			if !strings.Contains(stepsJoined, tt.wantStepContains) {
+				t.Fatalf("Steps missing expected substring %q", tt.wantStepContains)
+			}
+			if tt.cluster.Status.BreakGlass.Nonce == "" {
+				t.Fatalf("Nonce should be initialized")
+			}
+			if tt.cluster.Status.BreakGlass.EnteredAt == nil {
+				t.Fatalf("EnteredAt should be set")
 			}
 		})
 	}

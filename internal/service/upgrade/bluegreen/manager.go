@@ -3,7 +3,6 @@ package bluegreen
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -18,7 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portinfra "github.com/dc-tec/openbao-operator/internal/port/infra"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
 var (
@@ -35,7 +34,7 @@ type Manager struct {
 	infraRuntime          portinfra.BlueGreenRuntime
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
 	recorder              events.EventRecorder
-	clientFactory         upgrade.OpenBaoClientFactory
+	clientFactory         raftops.OpenBaoClientFactory
 	clusterOps            ClusterOps
 	clientConfig          portopenbao.ClientConfig
 	imageVerifier         imageverify.Verifier
@@ -65,7 +64,7 @@ func NewManager(
 		infraRuntime:          infraRuntime,
 		backupRuntime:         backupRuntime,
 		recorder:              eventRecorder,
-		clientFactory:         upgrade.DefaultOpenBaoClientFactory,
+		clientFactory:         raftops.DefaultOpenBaoClientFactory,
 		clientConfig:          clientConfig,
 		imageVerifier:         imageVerifier,
 		operatorImageVerifier: operatorImageVerifier,
@@ -80,7 +79,7 @@ func NewManagerWithClientFactory(
 	scheme *runtime.Scheme,
 	infraRuntime portinfra.BlueGreenRuntime,
 	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
-	clientFactory upgrade.OpenBaoClientFactory,
+	clientFactory raftops.OpenBaoClientFactory,
 	clientConfig portopenbao.ClientConfig,
 	imageVerifier imageverify.Verifier,
 	operatorImageVerifier imageverify.Verifier,
@@ -127,12 +126,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		"currentVersion", cluster.Status.CurrentVersion,
 		"specVersion", cluster.Spec.Version,
 		"initialized", cluster.Status.Initialized,
-		"blueGreenPhase", func() string {
-			if cluster.Status.BlueGreen == nil {
-				return "nil"
-			}
-			return string(cluster.Status.BlueGreen.Phase)
-		}())
+		"blueGreenPhase", blueGreenPhaseString(cluster))
 
 	// Use spec image (infra reconciler handles verification)
 	verifiedImageDigest := cluster.Spec.Image
@@ -147,49 +141,4 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	return m.reconcileBlueGreen(ctx, logger, cluster, verifiedImageDigest)
-}
-
-func (m *Manager) handleManualRollbackRequest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
-	if !upgrade.RollbackRequestPending(cluster) {
-		return false, recon.Result{}, nil
-	}
-
-	rollbackRequest := upgrade.RollbackRequestValue(cluster)
-
-	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
-		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
-		logger.Info("Ignoring rollback request because no blue/green upgrade is active",
-			"rollbackRequest", rollbackRequest,
-			"rollbackRequestField", upgrade.RequestRollbackFieldPath)
-		return false, recon.Result{}, nil
-	}
-
-	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack ||
-		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollbackCleanup {
-		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
-		logger.Info("Ignoring rollback request because rollback is already in progress",
-			"rollbackRequest", rollbackRequest,
-			"phase", cluster.Status.BlueGreen.Phase,
-			"rollbackRequestField", upgrade.RequestRollbackFieldPath)
-		return false, recon.Result{}, nil
-	}
-
-	logger.Info("Manual rollback requested",
-		"rollbackRequest", rollbackRequest,
-		"phase", cluster.Status.BlueGreen.Phase,
-		"rollbackRequestField", upgrade.RequestRollbackFieldPath)
-
-	if cluster.Status.BlueGreen.GreenRevision == "" {
-		if err := m.abortUpgrade(ctx, logger, cluster); err != nil {
-			return false, recon.Result{}, fmt.Errorf("failed to abort upgrade via %s: %w", upgrade.RequestRollbackFieldPath, err)
-		}
-		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
-		return true, recon.Result{}, nil
-	}
-
-	result, err := m.triggerRollback(logger, cluster, fmt.Sprintf("manual rollback request via %s", upgrade.RequestRollbackFieldPath))
-	if err == nil {
-		upgrade.MarkRollbackRequestHandled(&cluster.Status, rollbackRequest)
-	}
-	return true, result, err
 }

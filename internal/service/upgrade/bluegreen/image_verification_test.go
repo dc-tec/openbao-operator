@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 type failurePolicyTestCase struct {
@@ -84,7 +85,7 @@ func TestImageVerificationFailurePolicy_TableDriven(t *testing.T) {
 func TestOperatorImageVerificationFailurePolicy_TableDriven(t *testing.T) {
 	t.Parallel()
 
-	runFailurePolicyTests(t, "operatorImageVerificationFailurePolicy", operatorImageVerificationFailurePolicy, buildFailurePolicyCases(
+	runFailurePolicyTests(t, "OperatorImageVerificationFailurePolicy", upgrade.OperatorImageVerificationFailurePolicy, buildFailurePolicyCases(
 		func(spec *openbaov1alpha1.OpenBaoClusterSpec, cfg *openbaov1alpha1.ImageVerificationConfig) {
 			spec.OperatorImageVerification = cfg
 		},

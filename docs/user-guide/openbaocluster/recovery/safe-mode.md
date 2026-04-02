@@ -77,8 +77,13 @@ journey: operate
   ]
 }`}
 >
-  The `reason`, `message`, and `steps` fields are the fastest way to decide whether you are looking at an upgrade rollback problem, a Raft recovery problem, or a broader cluster-health issue.
+  The `reason`, `message`, and `steps` fields are the fastest way to decide whether you are looking at an upgrade rollback problem, a cleanup failure after rollback, a Raft recovery problem, or a broader cluster-health issue.
 </CommandBlock>
+
+For blue-green rollback incidents, the most common reasons are:
+
+- `RollbackConsensusRepairFailed`: the operator could not complete the rollback repair path while the cluster was still in `RollingBack`.
+- `RollbackCleanupPeerRemovalFailed`: the rollback itself converged far enough to enter `RollbackCleanup`, but the peer-removal cleanup job failed and automation stopped before stale green peers were safely removed.
 
 ## Repair the underlying issue before you acknowledge
 

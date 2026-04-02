@@ -49,9 +49,7 @@ func (m *Manager) handleBreakGlassAck(logger logr.Logger, cluster *openbaov1alph
 	})
 	m.emitNormalEvent(cluster, ReasonBreakGlassAcknowledged, "Break glass acknowledged for reason %s", cluster.Status.BreakGlass.Reason)
 
-	if cluster.Status.BlueGreen != nil &&
-		cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack &&
-		cluster.Status.BreakGlass.Reason == openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed {
+	if shouldResumeBlueGreenRollbackAfterBreakGlassAck(cluster) {
 		cluster.Status.BlueGreen.RollbackAttempt++
 		cluster.Status.BlueGreen.JobFailureCount = 0
 		cluster.Status.BlueGreen.LastJobFailure = ""
@@ -70,27 +68,78 @@ func rollbackRunID(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return fmt.Sprintf("rollback-retry-%d", cluster.Status.BlueGreen.RollbackAttempt)
 }
 
+func shouldResumeBlueGreenRollbackAfterBreakGlassAck(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster == nil || cluster.Status.BlueGreen == nil || cluster.Status.BreakGlass == nil {
+		return false
+	}
+
+	switch cluster.Status.BreakGlass.Reason {
+	case openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed:
+		return cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollingBack
+	case openbaov1alpha1.BreakGlassReasonRollbackCleanupPeerRemovalFailed:
+		return cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseRollbackCleanup
+	default:
+		return false
+	}
+}
+
 func (m *Manager) enterBreakGlassRollbackConsensusRepairFailed(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) {
+	m.enterBreakGlassForRollbackJobFailure(
+		logger,
+		cluster,
+		jobName,
+		openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed,
+		"Rollback consensus repair Job %s failed; manual intervention required",
+		[]string{
+			fmt.Sprintf("Inspect rollback Job logs: kubectl -n %s logs job/%s", cluster.Namespace, jobName),
+			fmt.Sprintf("Inspect pod status: kubectl -n %s get pods -l %s=%s -o wide", cluster.Namespace, constants.LabelOpenBaoCluster, cluster.Name),
+			fmt.Sprintf("Attempt to identify Raft leader: kubectl -n %s exec -it %s-0 -- bao operator raft list-peers", cluster.Namespace, cluster.Name),
+			"Perform any required Raft recovery steps (peer removal, snapshot restore) per the user-guide runbook.",
+		},
+		"Break glass entered after rollback consensus repair Job %s failed",
+	)
+}
+
+func (m *Manager) enterBreakGlassRollbackCleanupPeerRemovalFailed(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) {
+	m.enterBreakGlassForRollbackJobFailure(
+		logger,
+		cluster,
+		jobName,
+		openbaov1alpha1.BreakGlassReasonRollbackCleanupPeerRemovalFailed,
+		"Rollback cleanup peer-removal Job %s failed; manual intervention required",
+		[]string{
+			fmt.Sprintf("Inspect rollback cleanup Job logs: kubectl -n %s logs job/%s", cluster.Namespace, jobName),
+			fmt.Sprintf("Inspect pod status: kubectl -n %s get pods -l %s=%s -o wide", cluster.Namespace, constants.LabelOpenBaoCluster, cluster.Name),
+			fmt.Sprintf("Inspect remaining Raft peers from the Blue leader: kubectl -n %s exec -it %s-0 -- bao operator raft list-peers", cluster.Namespace, cluster.Name),
+			"Remove any stale Green peers manually if required, then verify the Blue cluster is healthy before resuming automation.",
+		},
+		"Break glass entered after rollback cleanup peer-removal Job %s failed",
+	)
+}
+
+func (m *Manager) enterBreakGlassForRollbackJobFailure(
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	jobName string,
+	reason openbaov1alpha1.BreakGlassReason,
+	messageFormat string,
+	steps []string,
+	eventMessageFormat string,
+) {
 	if cluster.Status.BreakGlass != nil && cluster.Status.BreakGlass.Active {
 		return
 	}
 
 	now := metav1.Now()
-
 	nonce := newBreakGlassNonce()
-	message := fmt.Sprintf("Rollback consensus repair Job %s failed; manual intervention required", jobName)
-
-	steps := []string{
-		fmt.Sprintf("Inspect rollback Job logs: kubectl -n %s logs job/%s", cluster.Namespace, jobName),
-		fmt.Sprintf("Inspect pod status: kubectl -n %s get pods -l %s=%s -o wide", cluster.Namespace, constants.LabelOpenBaoCluster, cluster.Name),
-		fmt.Sprintf("Attempt to identify Raft leader: kubectl -n %s exec -it %s-0 -- bao operator raft list-peers", cluster.Namespace, cluster.Name),
-		"Perform any required Raft recovery steps (peer removal, snapshot restore) per the user-guide runbook.",
+	message := fmt.Sprintf(messageFormat, jobName)
+	steps = append(steps,
 		fmt.Sprintf("Acknowledge break glass to retry rollback automation: kubectl -n %s patch openbaocluster %s --type merge -p '{\"spec\":{\"breakGlassAck\":\"%s\"}}'", cluster.Namespace, cluster.Name, nonce),
-	}
+	)
 
 	cluster.Status.BreakGlass = &openbaov1alpha1.BreakGlassStatus{
 		Active:    true,
-		Reason:    openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed,
+		Reason:    reason,
 		Message:   message,
 		Nonce:     nonce,
 		EnteredAt: &now,
@@ -99,10 +148,10 @@ func (m *Manager) enterBreakGlassRollbackConsensusRepairFailed(logger logr.Logge
 	logging.LogAuditEvent(logger, logging.EventBreakGlassEntered, map[string]string{
 		"cluster_namespace": cluster.Namespace,
 		"cluster_name":      cluster.Name,
-		"reason":            string(openbaov1alpha1.BreakGlassReasonRollbackConsensusRepairFailed),
+		"reason":            string(reason),
 		"job":               jobName,
 	})
-	m.emitWarningEvent(cluster, ReasonBreakGlassEntered, "Break glass entered after rollback consensus repair Job %s failed", jobName)
+	m.emitWarningEvent(cluster, ReasonBreakGlassEntered, eventMessageFormat, jobName)
 }
 
 func newBreakGlassNonce() string {

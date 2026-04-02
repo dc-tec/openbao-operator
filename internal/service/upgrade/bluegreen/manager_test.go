@@ -17,7 +17,7 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/infra"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
 )
 
 func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
@@ -89,7 +89,7 @@ func TestEnsureIdleAndCleanupGreen_CleansStaleGreenAndReleasesLock(t *testing.T)
 			},
 			OperationLock: &openbaov1alpha1.OperationLockStatus{
 				Operation: openbaov1alpha1.ClusterOperationUpgrade,
-				Holder:    upgrade.UpgradeOperationLockHolder,
+				Holder:    upgradecore.UpgradeOperationLockHolder,
 				Message:   "blue/green upgrade phase Idle",
 			},
 		},

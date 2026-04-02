@@ -11,6 +11,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -18,18 +19,6 @@ func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) str
 		return constants.ImageVerificationFailurePolicyBlock
 	}
 	failurePolicy := cluster.Spec.ImageVerification.FailurePolicy
-	if failurePolicy == "" {
-		return constants.ImageVerificationFailurePolicyBlock
-	}
-	return failurePolicy
-}
-
-func operatorImageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	config := cluster.Spec.OperatorImageVerification
-	if config == nil {
-		return constants.ImageVerificationFailurePolicyBlock
-	}
-	failurePolicy := config.FailurePolicy
 	if failurePolicy == "" {
 		return constants.ImageVerificationFailurePolicyBlock
 	}
@@ -67,27 +56,5 @@ func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, clu
 }
 
 func (m *Manager) verifyOperatorImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {
-	if !security.IsOperatorImageVerificationEnabled(cluster) {
-		return "", nil
-	}
-	if imageRef == "" {
-		return "", nil
-	}
-
-	verifyCtx, cancel := context.WithTimeout(ctx, constants.ImageVerificationTimeout)
-	defer cancel()
-
-	digest, err := security.VerifyOperatorImageForCluster(verifyCtx, logger, m.operatorImageVerifier, cluster, imageRef)
-	if err == nil {
-		logger.Info("Operator image verified successfully", "digest", digest)
-		return digest, nil
-	}
-
-	failurePolicy := operatorImageVerificationFailurePolicy(cluster)
-	if failurePolicy == constants.ImageVerificationFailurePolicyBlock {
-		return "", operatorerrors.WithReason(failureReason, fmt.Errorf("%s (policy=Block): %w", failureMessagePrefix, err))
-	}
-
-	logger.Error(err, failureMessagePrefix+" but proceeding due to Warn policy", "image", imageRef)
-	return "", nil
+	return upgrade.VerifyOperatorImageDigest(ctx, logger, m.operatorImageVerifier, cluster, imageRef, failureReason, failureMessagePrefix)
 }

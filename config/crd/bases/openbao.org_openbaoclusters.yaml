@@ -3403,6 +3403,7 @@ spec:
                       glass mode.
                     enum:
                     - RollbackConsensusRepairFailed
+                    - RollbackCleanupPeerRemovalFailed
                     type: string
                   steps:
                     description: Steps provides deterministic recovery guidance.

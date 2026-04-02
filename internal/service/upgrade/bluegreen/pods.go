@@ -26,6 +26,16 @@ func isPodReady(pod *corev1.Pod) bool {
 	return false
 }
 
+func countActivePods(pods []corev1.Pod) int {
+	activePods := 0
+	for _, pod := range pods {
+		if pod.DeletionTimestamp == nil {
+			activePods++
+		}
+	}
+	return activePods
+}
+
 // getPodsByRevision returns all pods belonging to the specified revision.
 // This is a unified helper used for both Blue and Green pod lookup.
 func (m *Manager) getPodsByRevision(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, rev string) ([]corev1.Pod, error) {

@@ -21,20 +21,21 @@ description: Orchestrate rolling and blue-green upgrades, status-backed resumabi
         'adminops reconciler',
         'internal/app/openbaocluster/adminops',
         'internal/service/upgrade/rolling and internal/service/upgrade/bluegreen',
+        'shared seams in internal/service/upgrade/core, snapshot, and raftops',
       ],
     },
     {
       label: 'Owns',
       items: [
-        'rolling and blue-green orchestration state',
-        'upgrade executor jobs and phase transitions',
-        'status-backed retry and rollback coordination',
+        'strategy-specific rolling and blue-green phase orchestration',
+        'shared lock, status, metrics, and root-lifecycle mechanics',
+        'upgrade executor jobs, snapshot prerequisites, and Raft coordination',
       ],
     },
     {
       label: 'Writes',
       items: [
-        'status.upgrade and status.blueGreen state',
+        'status.upgrade, status.blueGreen, and status.breakGlass through shared status helpers',
         'partition changes, green revision resources, and executor jobs',
         'break-glass and failure state when rollback safety is compromised',
       ],
@@ -57,8 +58,39 @@ Upgrade execution belongs to the AdminOps orchestration path:
 1. `internal/controller/openbaocluster` receives an adminops reconcile event.
 2. The controller delegates to `internal/app/openbaocluster`.
 3. AdminOps orchestration invokes either the rolling or blue-green upgrade manager flow.
+4. Strategy packages delegate shared mechanics to `internal/service/upgrade/core`,
+   `internal/service/upgrade/snapshot`, `internal/service/upgrade/raftops`, and
+   `internal/platform/statusapply`.
 
 That keeps upgrade state machines out of the workload loop and lets long-running transitions own their own retry model.
+
+## Package Shape
+
+The upgrade subsystem is split so strategy packages keep workflow ownership while
+shared mechanics live behind narrower seams:
+
+- `internal/service/upgrade` keeps root helpers that are shared by both
+  strategies but are not strategy-specific or executor-specific, such as
+  request parsing, version and image policy, shared metrics types, pod client
+  helpers, and root lifecycle helpers.
+- `internal/service/upgrade/rolling` owns the rolling state machine: partition
+  progression, leader step-down sequencing, per-pod rollout, convergence, and
+  rolling-specific retry/failure handling.
+- `internal/service/upgrade/bluegreen` owns the blue-green phase machine:
+  green deployment, sync/promotion/cutover, rollback, and break-glass handling.
+- `internal/service/upgrade/core` owns shared lifecycle mechanics used by
+  strategy code, including upgrade locks, common status mutators, metrics
+  session bookkeeping, and blue-green status/state helpers that are not tied to
+  a single phase.
+- `internal/service/upgrade/snapshot` owns shared pre-upgrade snapshot
+  preparation: prerequisite validation, runtime bootstrap, Job state modeling,
+  and common existing-Job result handling.
+- `internal/service/upgrade/raftops` owns executor-side Raft and OpenBao
+  coordination such as leader discovery, leader transfer, peer
+  join/promote/demote/remove, and autopilot capability fallback.
+- `internal/platform/statusapply` owns the shared AdminOps status apply and
+  merge-patch helpers so upgrade, backup, and adminops flows use the same
+  status-subresource ownership rules.
 
 <DecisionTable
   kind="decision"
