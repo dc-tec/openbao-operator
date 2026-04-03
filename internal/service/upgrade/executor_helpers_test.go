@@ -3,6 +3,7 @@ package upgrade
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -842,7 +843,7 @@ func TestIsBenignJoinError(t *testing.T) {
 		},
 		{
 			name: "already joined",
-			err:  errors.New("node already joined cluster"),
+			err:  portopenbao.ErrAlreadyJoined,
 			want: true,
 		},
 		{
@@ -877,12 +878,12 @@ func TestClassifyJoinError(t *testing.T) {
 		},
 		{
 			name: "already joined is benign",
-			err:  errors.New("node already joined cluster"),
+			err:  portopenbao.ErrAlreadyJoined,
 			want: raftops.BenignErrorClassificationBenign,
 		},
 		{
 			name: "permission denied is fatal",
-			err:  errors.New("permission denied"),
+			err:  portopenbao.NewAPIError("raft join request failed", http.StatusForbidden, nil),
 			want: raftops.BenignErrorClassificationFatal,
 		},
 		{
