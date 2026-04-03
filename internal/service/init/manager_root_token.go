@@ -199,8 +199,3 @@ func buildRootTokenSecret(cluster *openbaov1alpha1.OpenBaoCluster, token string)
 		},
 	}
 }
-
-// contains checks if a string contains a substring (case-insensitive).
-func contains(s, substr string) bool {
-	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
-}
