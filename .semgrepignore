@@ -1,3 +1,15 @@
+# Test-only code and fixtures.
 **/*_test.go
 **/testing_*.go
 internal/platform/testutil/**
+
+# Generated or vendored outputs that are not meaningful Semgrep targets.
+**/zz_generated*.go
+config/crd/bases/**
+vendor/**
+
+# Build artifacts and published content are intentionally out of scope.
+dist/**
+docs/**
+releases/**
+website/**

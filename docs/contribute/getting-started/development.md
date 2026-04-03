@@ -145,8 +145,8 @@ make tilt-down`}
     {
       cells: [
         "Security static analysis",
-        "`make semgrep-scan`, `make security-ci`",
-        "Semgrep report-only scans or the full CI-equivalent security lane with vulncheck, license checks, Semgrep, and Trivy.",
+        "`make semgrep-scan`, `make semgrep-ci`, `make security-ci`",
+        "Use `make semgrep-scan` for a report-only pass, `make semgrep-ci` for the blocking repo-wide Semgrep gate across runtime, config, and CI surfaces, or `make security-ci` for the full CI-equivalent security lane with vulncheck, license checks, Semgrep, and Trivy.",
       ],
     },
     {

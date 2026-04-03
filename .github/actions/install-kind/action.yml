@@ -16,11 +16,14 @@ runs:
   steps:
     - name: Install kind
       shell: bash
+      env:
+        KIND_VERSION: ${{ inputs.kind-version }}
+        INSTALL_DIR_INPUT: ${{ inputs.install-dir }}
       run: |
         set -euo pipefail
 
-        version="${{ inputs.kind-version }}"
-        install_dir="${{ inputs.install-dir }}"
+        version="${KIND_VERSION}"
+        install_dir="${INSTALL_DIR_INPUT}"
         # Expand ~ to home directory
         install_dir="${install_dir/#\~/$HOME}"
 
@@ -41,19 +44,19 @@ runs:
         fi
 
         install -d "${install_dir}"
-        
+
         # Download if not present or version mismatch
         # Check if kind binary already exists and is the correct version
         if [[ -f "${install_dir}/kind" ]]; then
           echo "Found existing kind binary at ${install_dir}/kind"
           if "${install_dir}/kind" version | grep -q "${version}"; then
             echo "Kind version ${version} already installed. Skipping download."
-            
+
             # Setup environment for cached binary
             echo "${install_dir}" >> "${GITHUB_PATH}"
             kind_path="$(realpath "${install_dir}/kind")"
             echo "KIND=${kind_path}" >> "${GITHUB_ENV}"
-            
+
             # Verify version and exit
             "${install_dir}/kind" version
             exit 0
@@ -63,8 +66,8 @@ runs:
         fi
 
         install -d "${install_dir}"
-        
-        echo "️Downloading kind ${version}..." 
+
+        echo "Downloading kind ${version}..."
         curl -fsSLo "${bin}" "https://github.com/kubernetes-sigs/kind/releases/download/${version}/${bin}"
         curl -fsSLo "${bin}.sha256sum" "https://github.com/kubernetes-sigs/kind/releases/download/${version}/${bin}.sha256sum"
         sha256sum -c "${bin}.sha256sum"

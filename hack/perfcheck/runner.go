@@ -254,8 +254,8 @@ func runScenarioTests(ctx context.Context, opts options, cluster string, scenari
 }
 
 func runCommand(ctx context.Context, env map[string]string, name string, args ...string) (string, error) {
-	// nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-	cmd := exec.CommandContext(ctx, name, args...)
+	// This helper runs only repo-managed tools selected by validated perfcheck options.
+	cmd := exec.CommandContext(ctx, name, args...) // nosemgrep: semgrep.rules.go.no-dynamic-exec-command-in-repo-tooling, go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	cmd.Env = os.Environ()
 	if len(env) > 0 {
 		keys := make([]string, 0, len(env))

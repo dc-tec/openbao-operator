@@ -581,7 +581,7 @@ go_licenses_comma := ,
 GO_LICENSES_ALLOWED_CSV := $(subst $(go_licenses_space),$(go_licenses_comma),$(strip $(GO_LICENSES_ALLOWED)))
 SEMGREP_ARTIFACT_DIR ?= dist/semgrep
 SEMGREP_CONFIG_FLAGS ?= --config p/default --config .semgrep/rules
-SEMGREP_TARGETS ?= ./cmd ./internal ./api ./hack
+SEMGREP_TARGETS ?= ./cmd ./internal ./api ./hack ./config ./.github
 SEMGREP_OUTPUT_JSON ?= $(SEMGREP_ARTIFACT_DIR)/semgrep.json
 
 .PHONY: lint
@@ -608,11 +608,11 @@ semgrep-rules-test: semgrep ## Validate repo-local Semgrep custom rules against 
 	"$(SEMGREP)" scan --test --config .semgrep/rules .semgrep/tests
 
 .PHONY: semgrep-scan
-semgrep-scan: semgrep ## Run Semgrep against runtime Go code (report-only).
+semgrep-scan: semgrep ## Run Semgrep against security-relevant code, config, and CI surfaces (report-only).
 	"$(SEMGREP)" scan --metrics=off $(SEMGREP_CONFIG_FLAGS) $(SEMGREP_TARGETS)
 
 .PHONY: semgrep-ci
-semgrep-ci: semgrep semgrep-rules-test ## Run the CI-equivalent Semgrep scan and write JSON output.
+semgrep-ci: semgrep semgrep-rules-test ## Run the blocking CI-equivalent Semgrep scan and write JSON output.
 	@mkdir -p "$(SEMGREP_ARTIFACT_DIR)"
 	"$(SEMGREP)" scan --metrics=off --error --json --output "$(SEMGREP_OUTPUT_JSON)" $(SEMGREP_CONFIG_FLAGS) $(SEMGREP_TARGETS)
 
