@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -94,17 +95,65 @@ func TestExitCodeForError(t *testing.T) {
 		want int
 	}{
 		{name: "nil", err: nil, want: exitSuccess},
-		{name: "config", err: errors.New("config error"), want: exitConfigError},
-		{name: "load config text", err: wrapErr("failed to load configuration"), want: exitConfigError},
-		{name: "auth", err: wrapErr("failed to authenticate"), want: exitAuthError},
-		{name: "leader", err: wrapErr("failed to find leader"), want: exitLeaderDiscovery},
-		{name: "snapshot", err: wrapErr("failed to get snapshot"), want: exitSnapshotError},
-		{name: "restore snapshot", err: wrapErr("failed to restore snapshot"), want: exitSnapshotError},
-		{name: "upload", err: wrapErr("failed to upload backup"), want: exitStorageError},
-		{name: "download", err: wrapErr("failed to download snapshot"), want: exitStorageError},
-		{name: "storage client", err: wrapErr("failed to create storage client"), want: exitStorageError},
-		{name: "verify", err: wrapErr("failed to verify"), want: exitVerificationError},
-		{name: "fallback", err: wrapErr("unexpected"), want: exitConfigError},
+		{
+			name: "config category",
+			err: categorizef(
+				errConfigCategory,
+				"failed to generate backup key: %w",
+				errors.New("bad prefix"),
+			),
+			want: exitConfigError,
+		},
+		{
+			name: "auth category",
+			err: categorizef(
+				errAuthCategory,
+				"unexpected auth text: %w",
+				errors.New("denied"),
+			),
+			want: exitAuthError,
+		},
+		{
+			name: "leader category",
+			err:  categorizef(errLeaderCategory, "no leader found among replicas"),
+			want: exitLeaderDiscovery,
+		},
+		{
+			name: "snapshot category",
+			err: categorizef(
+				errSnapshotCategory,
+				"failed to restore snapshot: %w",
+				errors.New("restore failed"),
+			),
+			want: exitSnapshotError,
+		},
+		{
+			name: "storage category",
+			err: categorizef(
+				errStorageCategory,
+				"failed to create storage client: %w",
+				errors.New("s3 unavailable"),
+			),
+			want: exitStorageError,
+		},
+		{
+			name: "verification category",
+			err: categorizef(
+				errVerificationCategory,
+				"snapshot not found: %s",
+				"demo.snap",
+			),
+			want: exitVerificationError,
+		},
+		{
+			name: "nested category",
+			err: fmt.Errorf(
+				"outer context: %w",
+				categorizef(errAuthCategory, "jwt login failed"),
+			),
+			want: exitAuthError,
+		},
+		{name: "fallback", err: errors.New("unexpected"), want: exitConfigError},
 	}
 
 	for _, tt := range tests {
@@ -268,8 +317,4 @@ func TestBuildStorageConfig(t *testing.T) {
 		require.Error(t, err)
 		assert.True(t, strings.Contains(err.Error(), "unknown storage provider"))
 	})
-}
-
-func wrapErr(msg string) error {
-	return errors.New(msg)
 }

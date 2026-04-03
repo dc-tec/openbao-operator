@@ -30,33 +30,33 @@ func runRestore(ctx context.Context) error {
 
 	cfg, err := backupconfig.LoadExecutorConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return categorizef(errConfigCategory, "failed to load configuration: %w", err)
 	}
 	fmt.Printf("Configuration loaded - cluster=%s, namespace=%s, replicas=%d\n",
 		cfg.ClusterName, cfg.ClusterNamespace, cfg.ClusterReplicas)
 
 	settings, err := resolveRestoreSettings(cfg)
 	if err != nil {
-		return err
+		return categorize(errConfigCategory, err)
 	}
 	fmt.Printf("Restore key: %s\n", settings.key)
 
 	leaderURL, err := findRestoreLeader(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("failed to find leader: %w", err)
+		return categorizef(errLeaderCategory, "failed to find leader: %w", err)
 	}
 	fmt.Printf("Found leader at: %s\n", leaderURL)
 
 	fmt.Printf("Authenticating to leader (method=%s)...\n", cfg.AuthMethod)
 	token, err := authenticate(ctx, cfg, leaderURL)
 	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
+		return categorizef(errAuthCategory, "failed to authenticate: %w", err)
 	}
 	fmt.Println("Authentication successful")
 
 	baoClient, closeClient, err := openClusterClient(cfg, "restore", leaderURL, token)
 	if err != nil {
-		return err
+		return categorize(errConfigCategory, err)
 	}
 	defer closeClient()
 
@@ -65,7 +65,7 @@ func runRestore(ctx context.Context) error {
 	fmt.Println("Creating storage client...")
 	storageClient, err := openStorageClient(ctx, &restoreCfg)
 	if err != nil {
-		return fmt.Errorf("failed to create storage client: %w", err)
+		return categorizef(errStorageCategory, "failed to create storage client: %w", err)
 	}
 	defer func() {
 		_ = storageClient.Close()
@@ -84,7 +84,7 @@ func runRestore(ctx context.Context) error {
 	fmt.Println("Snapshot downloaded successfully")
 	fmt.Println("Restoring snapshot to cluster...")
 	if err := baoClient.Restore(ctx, reader); err != nil {
-		return fmt.Errorf("failed to restore snapshot: %w", err)
+		return categorizef(errSnapshotCategory, "failed to restore snapshot: %w", err)
 	}
 
 	_, _ = fmt.Fprintf(os.Stdout, "Restore completed successfully from: %s\n", settings.key)
@@ -135,16 +135,16 @@ func downloadRestoreSnapshot(
 	fmt.Printf("Verifying snapshot exists: %s\n", key)
 	objInfo, err := storageClient.Head(ctx, key)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to verify snapshot exists: %w", err)
+		return nil, nil, categorizef(errVerificationCategory, "failed to verify snapshot exists: %w", err)
 	}
 	if objInfo == nil {
-		return nil, nil, fmt.Errorf("snapshot not found: %s", key)
+		return nil, nil, categorize(errVerificationCategory, fmt.Errorf("snapshot not found: %s", key))
 	}
 
 	fmt.Println("Downloading snapshot from storage...")
 	reader, err := storageClient.Download(ctx, key)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to download snapshot: %w", err)
+		return nil, nil, categorizef(errStorageCategory, "failed to download snapshot: %w", err)
 	}
 
 	return reader, objInfo, nil
