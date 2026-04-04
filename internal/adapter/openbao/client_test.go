@@ -491,6 +491,7 @@ func TestClient_Init(t *testing.T) {
 		wantThreshold  int
 		wantErrMessage string
 		wantStatusCode int
+		wantErrIs      error
 	}{
 		{
 			name: "successful init",
@@ -519,6 +520,7 @@ func TestClient_Init(t *testing.T) {
 			wantErr:        true,
 			wantErrMessage: "already initialized",
 			wantStatusCode: http.StatusBadRequest,
+			wantErrIs:      portopenbao.ErrAlreadyInitialized,
 		},
 		{
 			name: "invalid shares",
@@ -594,6 +596,9 @@ func TestClient_Init(t *testing.T) {
 				}
 				if tt.wantStatusCode != 0 {
 					assertStatusCode(t, err, tt.wantStatusCode)
+				}
+				if tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs) {
+					t.Fatalf("Init() error = %v, want errors.Is(..., %v)", err, tt.wantErrIs)
 				}
 				return
 			}

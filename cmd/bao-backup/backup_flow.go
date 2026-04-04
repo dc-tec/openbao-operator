@@ -18,33 +18,33 @@ func run(ctx context.Context) error {
 
 	cfg, err := backupconfig.LoadExecutorConfig()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return categorizef(errConfigCategory, "failed to load configuration: %w", err)
 	}
 
 	leaderURL, err := findBackupLeader(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("failed to find leader: %w", err)
+		return categorizef(errLeaderCategory, "failed to find leader: %w", err)
 	}
 
 	token, err := authenticate(ctx, cfg, leaderURL)
 	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
+		return categorizef(errAuthCategory, "failed to authenticate: %w", err)
 	}
 
 	baoClient, closeClient, err := openClusterClient(cfg, "backup", leaderURL, token)
 	if err != nil {
-		return err
+		return categorize(errConfigCategory, err)
 	}
 	defer closeClient()
 
 	backupKey, err := resolveBackupKey(cfg, time.Now().UTC())
 	if err != nil {
-		return fmt.Errorf("failed to generate backup key: %w", err)
+		return categorizef(errConfigCategory, "failed to generate backup key: %w", err)
 	}
 
 	storageClient, err := openStorageClient(ctx, cfg)
 	if err != nil {
-		return fmt.Errorf("failed to create storage client: %w", err)
+		return categorizef(errStorageCategory, "failed to create storage client: %w", err)
 	}
 	defer func() {
 		_ = storageClient.Close()
@@ -104,12 +104,12 @@ func uploadBackupSnapshot(
 	if err := storageClient.Upload(ctx, backupKey, pr); err != nil {
 		_ = pr.Close()
 		_ = pw.Close()
-		return fmt.Errorf("failed to upload backup: %w", err)
+		return categorizef(errStorageCategory, "failed to upload backup: %w", err)
 	}
 
 	_ = pr.Close()
 	if err := <-snapshotErrCh; err != nil {
-		return fmt.Errorf("failed to get snapshot: %w", err)
+		return categorizef(errSnapshotCategory, "failed to get snapshot: %w", err)
 	}
 
 	return nil
@@ -122,13 +122,19 @@ func verifyBackupUpload(
 ) (*blobstore.ObjectInfo, error) {
 	objInfo, err := storageClient.Head(ctx, backupKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify backup upload: %w", err)
+		return nil, categorizef(errVerificationCategory, "failed to verify backup upload: %w", err)
 	}
 	if objInfo == nil {
-		return nil, fmt.Errorf("backup verification failed: object not found after upload")
+		return nil, categorize(
+			errVerificationCategory,
+			fmt.Errorf("backup verification failed: object not found after upload"),
+		)
 	}
 	if objInfo.Size == 0 {
-		return nil, fmt.Errorf("backup verification failed: uploaded object has zero size")
+		return nil, categorize(
+			errVerificationCategory,
+			fmt.Errorf("backup verification failed: uploaded object has zero size"),
+		)
 	}
 
 	return objInfo, nil

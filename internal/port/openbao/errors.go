@@ -8,6 +8,11 @@ import (
 
 const apiErrorBodyLimit = 2048
 
+var (
+	// ErrAlreadyInitialized indicates OpenBao rejected init because the cluster is already initialized.
+	ErrAlreadyInitialized = errors.New("OpenBao cluster already initialized")
+)
+
 // APIError captures an OpenBao API failure with a machine-readable HTTP status.
 type APIError struct {
 	Operation    string
