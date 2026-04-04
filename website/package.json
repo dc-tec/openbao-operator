@@ -42,7 +42,7 @@
     "@docusaurus/module-type-aliases": "3.9.2",
     "@docusaurus/tsconfig": "3.9.2",
     "@docusaurus/types": "3.9.2",
-    "@playwright/test": "^1.53.0",
+    "@playwright/test": "^1.59.1",
     "typescript": "~6.0.2"
   },
   "browserslist": {
