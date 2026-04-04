@@ -451,9 +451,40 @@ func TestClient_JoinRaftCluster_NotJoinedResponse(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !errors.Is(err, portopenbao.ErrAlreadyJoined) {
-		t.Fatalf("expected ErrAlreadyJoined, got %v", err)
+	if errors.Is(err, portopenbao.ErrAlreadyJoined) {
+		t.Fatalf("did not expect ErrAlreadyJoined for joined=false response, got %v", err)
 	}
+}
+
+func TestClient_JoinRaftCluster_StandaloneStatusIsNotAlreadyJoined(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != constants.APIPathRaftJoin {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPut {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":["node already initialized as standalone"]}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		BaseURL: server.URL,
+		Token:   "s.test-token",
+	})
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	err = client.JoinRaftCluster(context.Background(), "https://leader.example:8200", true, true)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if errors.Is(err, portopenbao.ErrAlreadyJoined) {
+		t.Fatalf("did not expect ErrAlreadyJoined for standalone error, got %v", err)
+	}
+	assertStatusCode(t, err, http.StatusBadRequest)
 }
 
 func TestClient_DemoteRaftPeer_AlreadyNonVoterStatus(t *testing.T) {

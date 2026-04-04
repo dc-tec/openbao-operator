@@ -100,7 +100,7 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 		return nil
 	}
 	if !joinResp.Joined {
-		return fmt.Errorf("%w: node was not joined to cluster (already initialized as standalone)", portopenbao.ErrAlreadyJoined)
+		return fmt.Errorf("node was not joined to cluster (already initialized as standalone)")
 	}
 
 	return nil
@@ -294,7 +294,6 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopen
 func raftJoinResponseAlreadyJoined(responseBody []byte) bool {
 	return raftResponseContainsAny(responseBody,
 		"already joined",
-		"already initialized as standalone",
 	)
 }
 
