@@ -145,7 +145,10 @@ var _ = Describe("OpenBaoCluster OIDC Bootstrap", func() {
 			}
 
 			reconciler := newReconciler(func(ctx context.Context, cfg *rest.Config, baseURL string) (*portauth.OIDCConfig, error) {
-				return nil, fmt.Errorf("failed to fetch JWKS keys: failed to parse jwks document: %w", malformedOIDCDiscoveryJSON())
+				return nil, fmt.Errorf(
+					"failed to fetch JWKS keys: %w",
+					fmt.Errorf("%w: failed to parse jwks document: %w", portauth.ErrDiscoveryContentInvalid, malformedOIDCDiscoveryJSON()),
+				)
 			})
 
 			_, err := reconciler.Reconcile(ctx, req)
