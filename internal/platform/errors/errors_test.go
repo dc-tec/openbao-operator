@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"reflect"
+	"syscall"
 	"testing"
 	"time"
 
@@ -52,6 +54,42 @@ func newNoResourceMatchError() error {
 
 func newNotRegisteredTypeError() error {
 	return runtime.NewNotRegisteredErrForType("test-scheme", reflect.TypeOf(testUnregisteredType{}))
+}
+
+func newConnectionRefusedError() error {
+	return &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: os.NewSyscallError("connect", syscall.ECONNREFUSED),
+	}
+}
+
+func newConnectionResetError() error {
+	return &net.OpError{
+		Op:  "read",
+		Net: "tcp",
+		Err: os.NewSyscallError("read", syscall.ECONNRESET),
+	}
+}
+
+func newConnectionTimeoutError() error {
+	return &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: os.NewSyscallError("connect", syscall.ETIMEDOUT),
+	}
+}
+
+func newDNSError() error {
+	return &net.DNSError{Err: "no such host", Name: "example.com"}
+}
+
+func newNetworkUnreachableError() error {
+	return &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: os.NewSyscallError("connect", syscall.ENETUNREACH),
+	}
 }
 
 type transientWrapTestCase struct {
@@ -117,47 +155,47 @@ func TestIsTransientConnection(t *testing.T) {
 		},
 		{
 			name: "connection refused",
-			err:  errors.New("connection refused"),
+			err:  newConnectionRefusedError(),
 			want: true,
 		},
 		{
 			name: "connection reset",
-			err:  errors.New("connection reset by peer"),
+			err:  newConnectionResetError(),
 			want: true,
 		},
 		{
 			name: "connection timeout",
-			err:  errors.New("connection timeout"),
+			err:  newConnectionTimeoutError(),
 			want: true,
 		},
 		{
 			name: "context deadline exceeded",
-			err:  errors.New("context deadline exceeded"),
+			err:  context.DeadlineExceeded,
 			want: true,
 		},
 		{
 			name: "i/o timeout",
-			err:  errors.New("i/o timeout"),
+			err:  &timeoutError{},
 			want: true,
 		},
 		{
 			name: "no such host",
-			err:  errors.New("no such host"),
+			err:  newDNSError(),
 			want: true,
 		},
 		{
 			name: "network is unreachable",
-			err:  errors.New("network is unreachable"),
+			err:  newNetworkUnreachableError(),
 			want: true,
 		},
 		{
 			name: "dial tcp error",
-			err:  errors.New("dial tcp 127.0.0.1:8080: connect: connection refused"),
+			err:  newConnectionRefusedError(),
 			want: true,
 		},
 		{
 			name: "DNS error",
-			err:  &net.DNSError{Err: "no such host", Name: "example.com"},
+			err:  newDNSError(),
 			want: true,
 		},
 		{
@@ -255,7 +293,7 @@ func TestIsTransientKubernetesAPI(t *testing.T) {
 		},
 		{
 			name: "connection error (not K8s API)",
-			err:  errors.New("connection refused"),
+			err:  newConnectionRefusedError(),
 			want: false,
 		},
 	}
@@ -351,7 +389,7 @@ func TestIsCRDMissingError(t *testing.T) {
 		},
 		{
 			name: "connection error",
-			err:  errors.New("connection refused"),
+			err:  newConnectionRefusedError(),
 			want: false,
 		},
 	}
@@ -382,7 +420,7 @@ func TestWrapTransientConnection(t *testing.T) {
 		},
 		{
 			name:            "connection refused (already detected as transient)",
-			err:             errors.New("connection refused"),
+			err:             newConnectionRefusedError(),
 			wantWrapped:     false, // Already detected as transient, so returned as-is
 			wantIsTransient: true,
 		},
@@ -576,7 +614,7 @@ func TestWrapCRDMissing(t *testing.T) {
 		},
 		{
 			name:        "non-CRD error",
-			err:         errors.New("connection refused"),
+			err:         newConnectionRefusedError(),
 			wantWrapped: false,
 			wantIsErr:   true,
 		},
@@ -629,7 +667,7 @@ func TestIsTransient(t *testing.T) {
 		},
 		{
 			name: "connection refused",
-			err:  errors.New("connection refused"),
+			err:  newConnectionRefusedError(),
 			want: true,
 		},
 		{
@@ -734,7 +772,7 @@ func TestShouldRequeue(t *testing.T) {
 		},
 		{
 			name:        "connection refused",
-			err:         errors.New("connection refused"),
+			err:         newConnectionRefusedError(),
 			wantRequeue: true,
 			wantAfter:   5 * time.Second,
 		},
@@ -824,14 +862,23 @@ func TestIsTransientConnection_ContextTimeout(t *testing.T) {
 
 // Test real network errors
 func TestIsTransientConnection_RealNetworkError(t *testing.T) {
-	// Try to dial a non-existent address
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:99999", 10*time.Millisecond)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to open listener: %v", err)
+	}
+	addr := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatalf("failed to close listener: %v", err)
+	}
+
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Millisecond)
 	if conn != nil {
 		_ = conn.Close()
 	}
-	if err != nil {
-		if !IsTransientConnection(err) {
-			t.Errorf("real network error should be detected as transient: %v", err)
-		}
+	if err == nil {
+		t.Fatal("expected dial error")
+	}
+	if !IsTransientConnection(err) {
+		t.Errorf("real network error should be detected as transient: %v", err)
 	}
 }

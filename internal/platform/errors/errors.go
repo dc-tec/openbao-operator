@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -99,26 +101,22 @@ func IsTransientConnection(err error) bool {
 		return true
 	}
 
-	errStr := strings.ToLower(err.Error())
-
-	// Check for common transient connection error patterns
-	transientPatterns := []string{
-		"connection refused",
-		"connection reset",
-		"connection timeout",
-		"context deadline exceeded",
-		"timeout",
-		"i/o timeout",
-		"no such host",
-		"network is unreachable",
-		"temporary failure",
-		"dial tcp",
-		"connection closed",
-		"broken pipe",
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, net.ErrClosed) {
+		return true
 	}
 
-	for _, pattern := range transientPatterns {
-		if strings.Contains(errStr, pattern) {
+	// Check for common transient network errno values.
+	transientErrnos := []error{
+		syscall.ECONNREFUSED,
+		syscall.ECONNRESET,
+		syscall.ECONNABORTED,
+		syscall.ETIMEDOUT,
+		syscall.EHOSTUNREACH,
+		syscall.ENETUNREACH,
+		syscall.EPIPE,
+	}
+	for _, errno := range transientErrnos {
+		if errors.Is(err, errno) {
 			return true
 		}
 	}
