@@ -109,7 +109,7 @@ func (s *NamespacesService) GetNamespace(id any, options ...RequestOptionFunc) (
 		return nil, nil, err
 	}
 	return do[*Namespace](s.client,
-		withPath("namespaces/%s", PathEscape(namespace)),
+		withPath("namespaces/%s", namespace),
 		withRequestOpts(options...),
 	)
 }

@@ -19,12 +19,9 @@ package gitlab
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
-
-	"github.com/hashicorp/go-retryablehttp"
 )
 
 type (
@@ -33,59 +30,295 @@ type (
 	//
 	// GitLab API docs: https://docs.gitlab.com/api/projects/
 	ProjectsServiceInterface interface {
+		// ListProjects gets a list of projects accessible by the authenticated user.
+		//
+		// GitLab API docs: https://docs.gitlab.com/api/projects/#list-all-projects
 		ListProjects(opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error)
+		// ListUserProjects gets a list of projects for the given user.
+		//
+		// uid can be either a user ID (int) or a username (string). If a username
+		// is provided with a leading "@" (e.g., "@johndoe"), it will be trimmed.
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#list-a-users-projects
 		ListUserProjects(uid any, opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error)
+		// ListUserContributedProjects gets a list of visible projects a given user
+		// has contributed to.
+		//
+		// uid can be either a user ID (int) or a username (string). If a username
+		// is provided with a leading "@" (e.g., "@johndoe"), it will be trimmed.
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#list-projects-a-user-has-contributed-to
 		ListUserContributedProjects(uid any, opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error)
+		// ListUserStarredProjects gets a list of projects starred by the given user.
+		//
+		// uid can be either a user ID (int) or a username (string). If a username
+		// is provided with a leading "@" (e.g., "@johndoe"), it will be trimmed.
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_starring/#list-projects-starred-by-a-user
 		ListUserStarredProjects(uid any, opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error)
+		// ListProjectsUsers gets a list of users for the given project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#list-users
 		ListProjectsUsers(pid any, opt *ListProjectUserOptions, options ...RequestOptionFunc) ([]*ProjectUser, *Response, error)
+		// ListProjectsGroups gets a list of groups for the given project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#list-groups
 		ListProjectsGroups(pid any, opt *ListProjectGroupOptions, options ...RequestOptionFunc) ([]*ProjectGroup, *Response, error)
+		// GetProjectLanguages gets a list of languages used by the project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#list-programming-languages-used
 		GetProjectLanguages(pid any, options ...RequestOptionFunc) (*ProjectLanguages, *Response, error)
+		// GetProject gets a specific project, identified by project ID or
+		// NAMESPACE/PROJECT_NAME, which is owned by the authenticated user.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#get-a-single-project
 		GetProject(pid any, opt *GetProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error)
+		// CreateProject creates a new project owned by the authenticated user.
+		//
+		// GitLab API docs: https://docs.gitlab.com/api/projects/#create-a-project
 		CreateProject(opt *CreateProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error)
+		// CreateProjectForUser creates a new project owned by the specified user.
+		// Available only for admins.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#create-a-project-for-a-user
 		CreateProjectForUser(user int64, opt *CreateProjectForUserOptions, options ...RequestOptionFunc) (*Project, *Response, error)
+		// EditProject updates an existing project.
+		//
+		// GitLab API docs: https://docs.gitlab.com/api/projects/#edit-a-project
 		EditProject(pid any, opt *EditProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error)
+		// ForkProject forks a project into the user namespace of the authenticated
+		// user.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_forks/#fork-a-project
 		ForkProject(pid any, opt *ForkProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error)
+		// StarProject stars a given project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_starring/#star-a-project
 		StarProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error)
+		// ListProjectsInvitedGroups lists invited groups of a project
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#list-a-projects-invited-groups
 		ListProjectsInvitedGroups(pid any, opt *ListProjectInvitedGroupOptions, options ...RequestOptionFunc) ([]*ProjectGroup, *Response, error)
+		// UnstarProject unstars a given project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_starring/#unstar-a-project
 		UnstarProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error)
+		// ArchiveProject archives the project if the user is either admin or the
+		// project owner of this project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#archive-a-project
 		ArchiveProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error)
+		// UnarchiveProject unarchives the project if the user is either admin or
+		// the project owner of this project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#unarchive-a-project
 		UnarchiveProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error)
+		// RestoreProject restores a project that is marked for deletion.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#restore-a-project-marked-for-deletion
 		RestoreProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error)
+		// DeleteProject removes a project including all associated resources
+		// (issues, merge requests etc.)
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#delete-a-project
 		DeleteProject(pid any, opt *DeleteProjectOptions, options ...RequestOptionFunc) (*Response, error)
+		// ShareProjectWithGroup allows to share a project with a group.
+		//
+		// GitLab API docs: https://docs.gitlab.com/api/projects/#share-a-project-with-a-group
 		ShareProjectWithGroup(pid any, opt *ShareWithGroupOptions, options ...RequestOptionFunc) (*Response, error)
+		// DeleteSharedProjectFromGroup allows to unshare a project from a group.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#delete-a-shared-project-link-in-a-group
 		DeleteSharedProjectFromGroup(pid any, groupID int64, options ...RequestOptionFunc) (*Response, error)
+		// ListProjectHooks gets a list of project hooks.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#list-webhooks-for-a-project
 		ListProjectHooks(pid any, opt *ListProjectHooksOptions, options ...RequestOptionFunc) ([]*ProjectHook, *Response, error)
+		// GetProjectHook gets a specific hook for a project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#get-a-project-webhook
 		GetProjectHook(pid any, hook int64, options ...RequestOptionFunc) (*ProjectHook, *Response, error)
+		// AddProjectHook adds a hook to a specified project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#add-a-webhook-to-a-project
 		AddProjectHook(pid any, opt *AddProjectHookOptions, options ...RequestOptionFunc) (*ProjectHook, *Response, error)
+		// EditProjectHook edits a hook for a specified project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#edit-a-project-webhook
 		EditProjectHook(pid any, hook int64, opt *EditProjectHookOptions, options ...RequestOptionFunc) (*ProjectHook, *Response, error)
+		// DeleteProjectHook removes a hook from a project. This is an idempotent
+		// method and can be called multiple times. Either the hook is available or not.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#delete-project-webhook
 		DeleteProjectHook(pid any, hook int64, options ...RequestOptionFunc) (*Response, error)
+		// TriggerTestProjectHook Trigger a test hook for a specified project.
+		//
+		// In GitLab 17.0 and later, this endpoint has a special rate limit.
+		// In GitLab 17.0 the rate was three requests per minute for each project hook.
+		// In GitLab 17.1 this was changed to five requests per minute for each project
+		// and authenticated user.
+		//
+		// To disable this limit on self-managed GitLab and GitLab Dedicated,
+		// an administrator can disable the feature flag named web_hook_test_api_endpoint_rate_limit.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#trigger-a-test-project-webhook
 		TriggerTestProjectHook(pid any, hook int64, event ProjectHookEvent, options ...RequestOptionFunc) (*Response, error)
+		// SetProjectCustomHeader creates or updates a project custom webhook header.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#set-a-custom-header
 		SetProjectCustomHeader(pid any, hook int64, key string, opt *SetHookCustomHeaderOptions, options ...RequestOptionFunc) (*Response, error)
+		// DeleteProjectCustomHeader deletes a project custom webhook header.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#delete-a-custom-header
 		DeleteProjectCustomHeader(pid any, hook int64, key string, options ...RequestOptionFunc) (*Response, error)
+		// SetProjectWebhookURLVariable creates or updates a project webhook URL variable.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#set-a-url-variable
 		SetProjectWebhookURLVariable(pid any, hook int64, key string, opt *SetProjectWebhookURLVariableOptions, options ...RequestOptionFunc) (*Response, error)
+		// DeleteProjectWebhookURLVariable deletes a project webhook URL variable.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_webhooks/#delete-a-url-variable
 		DeleteProjectWebhookURLVariable(pid any, hook int64, key string, options ...RequestOptionFunc) (*Response, error)
+		// CreateProjectForkRelation creates a forked from/to relation between
+		// existing projects.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_forks/#create-a-fork-relationship-between-projects
 		CreateProjectForkRelation(pid any, fork int64, options ...RequestOptionFunc) (*ProjectForkRelation, *Response, error)
+		// DeleteProjectForkRelation deletes an existing forked from relationship.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_forks/#delete-a-fork-relationship-between-projects
 		DeleteProjectForkRelation(pid any, options ...RequestOptionFunc) (*Response, error)
+		// UploadAvatar uploads an avatar.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#upload-a-project-avatar
 		UploadAvatar(pid any, avatar io.Reader, filename string, options ...RequestOptionFunc) (*Project, *Response, error)
+		// DownloadAvatar downloads an avatar.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#download-a-project-avatar
 		DownloadAvatar(pid any, options ...RequestOptionFunc) (*bytes.Reader, *Response, error)
+		// ListProjectForks gets a list of project forks.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_forks/#list-forks-of-a-project
 		ListProjectForks(pid any, opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error)
+		// GetProjectPushRules gets the push rules of a project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_push_rules/#get-project-push-rules
 		GetProjectPushRules(pid any, options ...RequestOptionFunc) (*ProjectPushRules, *Response, error)
+		// AddProjectPushRule adds a push rule to a specified project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_push_rules/#add-a-project-push-rule
 		AddProjectPushRule(pid any, opt *AddProjectPushRuleOptions, options ...RequestOptionFunc) (*ProjectPushRules, *Response, error)
+		// EditProjectPushRule edits a push rule for a specified project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_push_rules/#edit-project-push-rule
 		EditProjectPushRule(pid any, opt *EditProjectPushRuleOptions, options ...RequestOptionFunc) (*ProjectPushRules, *Response, error)
+		// DeleteProjectPushRule removes a push rule from a project. This is an
+		// idempotent method and can be called multiple times. Either the push rule is
+		// available or not.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_push_rules/#delete-project-push-rule
 		DeleteProjectPushRule(pid any, options ...RequestOptionFunc) (*Response, error)
+		// GetApprovalConfiguration get the approval configuration for a project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/merge_request_approvals/#project-approval-rules
 		GetApprovalConfiguration(pid any, options ...RequestOptionFunc) (*ProjectApprovals, *Response, error)
+		// ChangeApprovalConfiguration updates the approval configuration for a project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/merge_request_approvals/#change-configuration
 		ChangeApprovalConfiguration(pid any, opt *ChangeApprovalConfigurationOptions, options ...RequestOptionFunc) (*ProjectApprovals, *Response, error)
+		// GetProjectApprovalRules looks up the list of project level approver rules.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/merge_request_approvals/#get-all-approval-rules-for-project
 		GetProjectApprovalRules(pid any, opt *GetProjectApprovalRulesListsOptions, options ...RequestOptionFunc) ([]*ProjectApprovalRule, *Response, error)
+		// GetProjectApprovalRule gets the project level approvers.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/merge_request_approvals/#get-single-approval-rule-for-project
 		GetProjectApprovalRule(pid any, ruleID int64, options ...RequestOptionFunc) (*ProjectApprovalRule, *Response, error)
+		// CreateProjectApprovalRule creates a new project-level approval rule.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/merge_request_approvals/#create-project-approval-rule
 		CreateProjectApprovalRule(pid any, opt *CreateProjectLevelRuleOptions, options ...RequestOptionFunc) (*ProjectApprovalRule, *Response, error)
+		// UpdateProjectApprovalRule updates an existing approval rule with new options.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/merge_request_approvals/#update-project-approval-rule
 		UpdateProjectApprovalRule(pid any, approvalRule int64, opt *UpdateProjectLevelRuleOptions, options ...RequestOptionFunc) (*ProjectApprovalRule, *Response, error)
+		// DeleteProjectApprovalRule deletes a project-level approval rule.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/merge_request_approvals/#delete-project-approval-rule
 		DeleteProjectApprovalRule(pid any, approvalRule int64, options ...RequestOptionFunc) (*Response, error)
+		// GetProjectPullMirrorDetails returns the pull mirror details.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_pull_mirroring/#get-a-projects-pull-mirror-details
 		GetProjectPullMirrorDetails(pid any, options ...RequestOptionFunc) (*ProjectPullMirrorDetails, *Response, error)
+		// ConfigureProjectPullMirror configures pull mirroring settings.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_pull_mirroring/#configure-pull-mirroring-for-a-project
 		ConfigureProjectPullMirror(pid any, opt *ConfigureProjectPullMirrorOptions, options ...RequestOptionFunc) (*ProjectPullMirrorDetails, *Response, error)
+		// StartMirroringProject start the pull mirroring process for a project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_pull_mirroring/#start-the-pull-mirroring-process-for-a-project
 		StartMirroringProject(pid any, options ...RequestOptionFunc) (*Response, error)
+		// TransferProject transfer a project into the specified namespace
+		//
+		// GitLab API docs: https://docs.gitlab.com/api/projects/#transfer-a-project-to-a-new-namespace
 		TransferProject(pid any, opt *TransferProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error)
+		// StartHousekeepingProject start the Housekeeping task for a project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#start-the-housekeeping-task-for-a-project
 		StartHousekeepingProject(pid any, options ...RequestOptionFunc) (*Response, error)
+		// GetRepositoryStorage Get the path to repository storage.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/projects/#get-the-path-to-repository-storage
 		GetRepositoryStorage(pid any, options ...RequestOptionFunc) (*ProjectRepositoryStorage, *Response, error)
+		// ListProjectStarrers gets users who starred a project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/project_starring/#list-users-who-starred-a-project
 		ListProjectStarrers(pid any, opts *ListProjectStarrersOptions, options ...RequestOptionFunc) ([]*ProjectStarrer, *Response, error)
 	}
 
@@ -453,9 +686,6 @@ type ListProjectsOptions struct {
 	WithProgrammingLanguage  *string           `url:"with_programming_language,omitempty" json:"with_programming_language,omitempty"`
 }
 
-// ListProjects gets a list of projects accessible by the authenticated user.
-//
-// GitLab API docs: https://docs.gitlab.com/api/projects/#list-all-projects
 func (s *ProjectsService) ListProjects(opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error) {
 	return do[[]*Project](s.client,
 		withPath("projects"),
@@ -464,10 +694,6 @@ func (s *ProjectsService) ListProjects(opt *ListProjectsOptions, options ...Requ
 	)
 }
 
-// ListUserProjects gets a list of projects for the given user.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#list-a-users-projects
 func (s *ProjectsService) ListUserProjects(uid any, opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error) {
 	return do[[]*Project](s.client,
 		withPath("users/%s/projects", UserID{uid}),
@@ -476,7 +702,11 @@ func (s *ProjectsService) ListUserProjects(uid any, opt *ListProjectsOptions, op
 	)
 }
 
-// ListUserContributedProjects gets a list of visible projects a given user has contributed to.
+// ListUserContributedProjects gets a list of visible projects a given user has
+// contributed to.
+//
+// uid can be either a user ID (int) or a username (string). If a username
+// is provided with a leading "@" (e.g., "@johndoe"), it will be trimmed.
 //
 // GitLab API docs:
 // https://docs.gitlab.com/api/projects/#list-projects-a-user-has-contributed-to
@@ -488,10 +718,6 @@ func (s *ProjectsService) ListUserContributedProjects(uid any, opt *ListProjects
 	)
 }
 
-// ListUserStarredProjects gets a list of projects starred by the given user.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_starring/#list-projects-starred-by-a-user
 func (s *ProjectsService) ListUserStarredProjects(uid any, opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error) {
 	return do[[]*Project](s.client,
 		withPath("users/%s/starred_projects", UserID{uid}),
@@ -518,10 +744,6 @@ type ListProjectUserOptions struct {
 	Search *string `url:"search,omitempty" json:"search,omitempty"`
 }
 
-// ListProjectsUsers gets a list of users for the given project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#list-users
 func (s *ProjectsService) ListProjectsUsers(pid any, opt *ListProjectUserOptions, options ...RequestOptionFunc) ([]*ProjectUser, *Response, error) {
 	return do[[]*ProjectUser](s.client,
 		withPath("projects/%s/users", ProjectID{pid}),
@@ -553,10 +775,6 @@ type ListProjectGroupOptions struct {
 	WithShared           *bool             `url:"with_shared,omitempty" json:"with_shared,omitempty"`
 }
 
-// ListProjectsGroups gets a list of groups for the given project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#list-groups
 func (s *ProjectsService) ListProjectsGroups(pid any, opt *ListProjectGroupOptions, options ...RequestOptionFunc) ([]*ProjectGroup, *Response, error) {
 	return do[[]*ProjectGroup](s.client,
 		withPath("projects/%s/groups", ProjectID{pid}),
@@ -571,10 +789,6 @@ func (s *ProjectsService) ListProjectsGroups(pid any, opt *ListProjectGroupOptio
 // https://docs.gitlab.com/api/projects/#list-programming-languages-used
 type ProjectLanguages map[string]float32
 
-// GetProjectLanguages gets a list of languages used by the project
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#list-programming-languages-used
 func (s *ProjectsService) GetProjectLanguages(pid any, options ...RequestOptionFunc) (*ProjectLanguages, *Response, error) {
 	return do[*ProjectLanguages](s.client,
 		withPath("projects/%s/languages", ProjectID{pid}),
@@ -591,11 +805,6 @@ type GetProjectOptions struct {
 	WithCustomAttributes *bool `url:"with_custom_attributes,omitempty" json:"with_custom_attributes,omitempty"`
 }
 
-// GetProject gets a specific project, identified by project ID or
-// NAMESPACE/PROJECT_NAME, which is owned by the authenticated user.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#get-a-single-project
 func (s *ProjectsService) GetProject(pid any, opt *GetProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error) {
 	return do[*Project](s.client,
 		withPath("projects/%s", ProjectID{pid}),
@@ -744,9 +953,6 @@ func (a *ProjectAvatar) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*alias)(a))
 }
 
-// CreateProject creates a new project owned by the authenticated user.
-//
-// GitLab API docs: https://docs.gitlab.com/api/projects/#create-a-project
 func (s *ProjectsService) CreateProject(opt *CreateProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error) {
 	if opt.ContainerExpirationPolicyAttributes != nil {
 		// This is needed to satisfy the API. Should be deleted
@@ -754,33 +960,16 @@ func (s *ProjectsService) CreateProject(opt *CreateProjectOptions, options ...Re
 		opt.ContainerExpirationPolicyAttributes.NameRegex = opt.ContainerExpirationPolicyAttributes.NameRegexDelete
 	}
 
-	var err error
-	var req *retryablehttp.Request
-
-	if opt.Avatar == nil {
-		req, err = s.client.NewRequest(http.MethodPost, "projects", opt, options)
-	} else {
-		req, err = s.client.UploadRequest(
-			http.MethodPost,
-			"projects",
-			opt.Avatar.Image,
-			opt.Avatar.Filename,
-			UploadAvatar,
-			opt,
-			options,
-		)
+	reqOpts := []doOption{
+		withMethod(http.MethodPost),
+		withPath("projects"),
+		withAPIOpts(opt),
+		withRequestOpts(options...),
 	}
-	if err != nil {
-		return nil, nil, err
+	if opt.Avatar != nil {
+		reqOpts = append(reqOpts, withUpload(opt.Avatar.Image, opt.Avatar.Filename, UploadAvatar))
 	}
-
-	p := new(Project)
-	resp, err := s.client.Do(req, p)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return p, resp, nil
+	return do[*Project](s.client, reqOpts...)
 }
 
 // CreateProjectForUserOptions represents the available CreateProjectForUser()
@@ -790,11 +979,6 @@ func (s *ProjectsService) CreateProject(opt *CreateProjectOptions, options ...Re
 // https://docs.gitlab.com/api/projects/#create-a-project-for-a-user
 type CreateProjectForUserOptions CreateProjectOptions
 
-// CreateProjectForUser creates a new project owned by the specified user.
-// Available only for admins.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#create-a-project-for-a-user
 func (s *ProjectsService) CreateProjectForUser(user int64, opt *CreateProjectForUserOptions, options ...RequestOptionFunc) (*Project, *Response, error) {
 	if opt.ContainerExpirationPolicyAttributes != nil {
 		// This is needed to satisfy the API. Should be deleted
@@ -802,34 +986,16 @@ func (s *ProjectsService) CreateProjectForUser(user int64, opt *CreateProjectFor
 		opt.ContainerExpirationPolicyAttributes.NameRegex = opt.ContainerExpirationPolicyAttributes.NameRegexDelete
 	}
 
-	var err error
-	var req *retryablehttp.Request
-	u := fmt.Sprintf("projects/user/%d", user)
-
-	if opt.Avatar == nil {
-		req, err = s.client.NewRequest(http.MethodPost, u, opt, options)
-	} else {
-		req, err = s.client.UploadRequest(
-			http.MethodPost,
-			u,
-			opt.Avatar.Image,
-			opt.Avatar.Filename,
-			UploadAvatar,
-			opt,
-			options,
-		)
+	reqOpts := []doOption{
+		withMethod(http.MethodPost),
+		withPath("projects/user/%d", user),
+		withAPIOpts(opt),
+		withRequestOpts(options...),
 	}
-	if err != nil {
-		return nil, nil, err
+	if opt.Avatar != nil {
+		reqOpts = append(reqOpts, withUpload(opt.Avatar.Image, opt.Avatar.Filename, UploadAvatar))
 	}
-
-	p := new(Project)
-	resp, err := s.client.Do(req, p)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return p, resp, nil
+	return do[*Project](s.client, reqOpts...)
 }
 
 // EditProjectOptions represents the available EditProject() options.
@@ -950,9 +1116,6 @@ type EditProjectOptions struct {
 	WikiEnabled *bool `url:"wiki_enabled,omitempty" json:"wiki_enabled,omitempty"`
 }
 
-// EditProject updates an existing project.
-//
-// GitLab API docs: https://docs.gitlab.com/api/projects/#edit-a-project
 func (s *ProjectsService) EditProject(pid any, opt *EditProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error) {
 	if opt.ContainerExpirationPolicyAttributes != nil {
 		// This is needed to satisfy the API. Should be deleted
@@ -960,38 +1123,16 @@ func (s *ProjectsService) EditProject(pid any, opt *EditProjectOptions, options 
 		opt.ContainerExpirationPolicyAttributes.NameRegex = opt.ContainerExpirationPolicyAttributes.NameRegexDelete
 	}
 
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
+	reqOpts := []doOption{
+		withMethod(http.MethodPut),
+		withPath("projects/%s", ProjectID{pid}),
+		withAPIOpts(opt),
+		withRequestOpts(options...),
 	}
-	u := fmt.Sprintf("projects/%s", PathEscape(project))
-
-	var req *retryablehttp.Request
-
-	if opt.Avatar == nil || (opt.Avatar.Filename == "" && opt.Avatar.Image == nil) {
-		req, err = s.client.NewRequest(http.MethodPut, u, opt, options)
-	} else {
-		req, err = s.client.UploadRequest(
-			http.MethodPut,
-			u,
-			opt.Avatar.Image,
-			opt.Avatar.Filename,
-			UploadAvatar,
-			opt,
-			options,
-		)
+	if opt.Avatar != nil && (opt.Avatar.Filename != "" || opt.Avatar.Image != nil) {
+		reqOpts = append(reqOpts, withUpload(opt.Avatar.Image, opt.Avatar.Filename, UploadAvatar))
 	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	p := new(Project)
-	resp, err := s.client.Do(req, p)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return p, resp, nil
+	return do[*Project](s.client, reqOpts...)
 }
 
 // ForkProjectOptions represents the available ForkProject() options.
@@ -1012,11 +1153,6 @@ type ForkProjectOptions struct {
 	Namespace *string `url:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
-// ForkProject forks a project into the user namespace of the authenticated
-// user.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_forks/#fork-a-project
 func (s *ProjectsService) ForkProject(pid any, opt *ForkProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error) {
 	return do[*Project](s.client,
 		withMethod(http.MethodPost),
@@ -1026,10 +1162,6 @@ func (s *ProjectsService) ForkProject(pid any, opt *ForkProjectOptions, options 
 	)
 }
 
-// StarProject stars a given the project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_starring/#star-a-project
 func (s *ProjectsService) StarProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error) {
 	return do[*Project](s.client,
 		withMethod(http.MethodPost),
@@ -1051,10 +1183,6 @@ type ListProjectInvitedGroupOptions struct {
 	WithCustomAttributes *bool             `url:"with_custom_attributes,omitempty" json:"with_custom_attributes,omitempty"`
 }
 
-// ListProjectsInvitedGroups lists invited groups of a project
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#list-a-projects-invited-groups
 func (s *ProjectsService) ListProjectsInvitedGroups(pid any, opt *ListProjectInvitedGroupOptions, options ...RequestOptionFunc) ([]*ProjectGroup, *Response, error) {
 	return do[[]*ProjectGroup](s.client,
 		withPath("projects/%s/invited_groups", ProjectID{pid}),
@@ -1063,10 +1191,6 @@ func (s *ProjectsService) ListProjectsInvitedGroups(pid any, opt *ListProjectInv
 	)
 }
 
-// UnstarProject unstars a given project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_starring/#unstar-a-project
 func (s *ProjectsService) UnstarProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error) {
 	return do[*Project](s.client,
 		withMethod(http.MethodPost),
@@ -1075,11 +1199,6 @@ func (s *ProjectsService) UnstarProject(pid any, options ...RequestOptionFunc) (
 	)
 }
 
-// ArchiveProject archives the project if the user is either admin or the
-// project owner of this project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#archive-a-project
 func (s *ProjectsService) ArchiveProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error) {
 	return do[*Project](s.client,
 		withMethod(http.MethodPost),
@@ -1088,11 +1207,6 @@ func (s *ProjectsService) ArchiveProject(pid any, options ...RequestOptionFunc) 
 	)
 }
 
-// UnarchiveProject unarchives the project if the user is either admin or
-// the project owner of this project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#unarchive-a-project
 func (s *ProjectsService) UnarchiveProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error) {
 	return do[*Project](s.client,
 		withMethod(http.MethodPost),
@@ -1101,10 +1215,6 @@ func (s *ProjectsService) UnarchiveProject(pid any, options ...RequestOptionFunc
 	)
 }
 
-// RestoreProject restores a project that is marked for deletion.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#restore-a-project-marked-for-deletion
 func (s *ProjectsService) RestoreProject(pid any, options ...RequestOptionFunc) (*Project, *Response, error) {
 	return do[*Project](s.client,
 		withMethod(http.MethodPost),
@@ -1122,11 +1232,6 @@ type DeleteProjectOptions struct {
 	PermanentlyRemove *bool   `url:"permanently_remove" json:"permanently_remove"`
 }
 
-// DeleteProject removes a project including all associated resources
-// (issues, merge requests etc.)
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#delete-a-project
 func (s *ProjectsService) DeleteProject(pid any, opt *DeleteProjectOptions, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -1146,9 +1251,6 @@ type ShareWithGroupOptions struct {
 	GroupID     *int64            `url:"group_id" json:"group_id"`
 }
 
-// ShareProjectWithGroup allows to share a project with a group.
-//
-// GitLab API docs: https://docs.gitlab.com/api/projects/#share-a-project-with-a-group
 func (s *ProjectsService) ShareProjectWithGroup(pid any, opt *ShareWithGroupOptions, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodPost),
@@ -1159,10 +1261,6 @@ func (s *ProjectsService) ShareProjectWithGroup(pid any, opt *ShareWithGroupOpti
 	return resp, err
 }
 
-// DeleteSharedProjectFromGroup allows to unshare a project from a group.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#delete-a-shared-project-link-in-a-group
 func (s *ProjectsService) DeleteSharedProjectFromGroup(pid any, groupID int64, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -1234,10 +1332,6 @@ type ListProjectHooksOptions struct {
 	ListOptions
 }
 
-// ListProjectHooks gets a list of project hooks.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#list-webhooks-for-a-project
 func (s *ProjectsService) ListProjectHooks(pid any, opt *ListProjectHooksOptions, options ...RequestOptionFunc) ([]*ProjectHook, *Response, error) {
 	return do[[]*ProjectHook](s.client,
 		withPath("projects/%s/hooks", ProjectID{pid}),
@@ -1246,10 +1340,6 @@ func (s *ProjectsService) ListProjectHooks(pid any, opt *ListProjectHooksOptions
 	)
 }
 
-// GetProjectHook gets a specific hook for a project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#get-a-project-webhook
 func (s *ProjectsService) GetProjectHook(pid any, hook int64, options ...RequestOptionFunc) (*ProjectHook, *Response, error) {
 	return do[*ProjectHook](s.client,
 		withPath("projects/%s/hooks/%d", ProjectID{pid}, hook),
@@ -1288,10 +1378,6 @@ type AddProjectHookOptions struct {
 	BranchFilterStrategy      *string              `url:"branch_filter_strategy,omitempty" json:"branch_filter_strategy,omitempty"`
 }
 
-// AddProjectHook adds a hook to a specified project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#add-a-webhook-to-a-project
 func (s *ProjectsService) AddProjectHook(pid any, opt *AddProjectHookOptions, options ...RequestOptionFunc) (*ProjectHook, *Response, error) {
 	return do[*ProjectHook](s.client,
 		withMethod(http.MethodPost),
@@ -1332,10 +1418,6 @@ type EditProjectHookOptions struct {
 	BranchFilterStrategy      *string              `url:"branch_filter_strategy,omitempty" json:"branch_filter_strategy,omitempty"`
 }
 
-// EditProjectHook edits a hook for a specified project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#edit-a-project-webhook
 func (s *ProjectsService) EditProjectHook(pid any, hook int64, opt *EditProjectHookOptions, options ...RequestOptionFunc) (*ProjectHook, *Response, error) {
 	return do[*ProjectHook](s.client,
 		withMethod(http.MethodPut),
@@ -1345,11 +1427,6 @@ func (s *ProjectsService) EditProjectHook(pid any, hook int64, opt *EditProjectH
 	)
 }
 
-// DeleteProjectHook removes a hook from a project. This is an idempotent
-// method and can be called multiple times. Either the hook is available or not.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#delete-project-webhook
 func (s *ProjectsService) DeleteProjectHook(pid any, hook int64, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -1389,10 +1466,6 @@ type SetHookCustomHeaderOptions struct {
 	Value *string `json:"value,omitempty"`
 }
 
-// SetProjectCustomHeader creates or updates a project custom webhook header.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#set-a-custom-header
 func (s *ProjectsService) SetProjectCustomHeader(pid any, hook int64, key string, opt *SetHookCustomHeaderOptions, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodPut),
@@ -1403,10 +1476,6 @@ func (s *ProjectsService) SetProjectCustomHeader(pid any, hook int64, key string
 	return resp, err
 }
 
-// DeleteProjectCustomHeader deletes a project custom webhook header.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#delete-a-custom-header
 func (s *ProjectsService) DeleteProjectCustomHeader(pid any, hook int64, key string, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -1425,10 +1494,6 @@ type SetProjectWebhookURLVariableOptions struct {
 	Value *string `json:"value,omitempty"`
 }
 
-// SetProjectWebhookURLVariable creates or updates a project webhook URL variable.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#set-a-url-variable
 func (s *ProjectsService) SetProjectWebhookURLVariable(pid any, hook int64, key string, opt *SetProjectWebhookURLVariableOptions, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodPut),
@@ -1439,10 +1504,6 @@ func (s *ProjectsService) SetProjectWebhookURLVariable(pid any, hook int64, key 
 	return resp, err
 }
 
-// DeleteProjectWebhookURLVariable deletes a project webhook URL variable.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_webhooks/#delete-a-url-variable
 func (s *ProjectsService) DeleteProjectWebhookURLVariable(pid any, hook int64, key string, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -1464,11 +1525,6 @@ type ProjectForkRelation struct {
 	UpdatedAt           *time.Time `json:"updated_at"`
 }
 
-// CreateProjectForkRelation creates a forked from/to relation between
-// existing projects.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_forks/#create-a-fork-relationship-between-projects
 func (s *ProjectsService) CreateProjectForkRelation(pid any, fork int64, options ...RequestOptionFunc) (*ProjectForkRelation, *Response, error) {
 	return do[*ProjectForkRelation](s.client,
 		withMethod(http.MethodPost),
@@ -1477,10 +1533,6 @@ func (s *ProjectsService) CreateProjectForkRelation(pid any, fork int64, options
 	)
 }
 
-// DeleteProjectForkRelation deletes an existing forked from relationship.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_forks/#delete-a-fork-relationship-between-projects
 func (s *ProjectsService) DeleteProjectForkRelation(pid any, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -1490,68 +1542,26 @@ func (s *ProjectsService) DeleteProjectForkRelation(pid any, options ...RequestO
 	return resp, err
 }
 
-// UploadAvatar uploads an avatar.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#upload-a-project-avatar
 func (s *ProjectsService) UploadAvatar(pid any, avatar io.Reader, filename string, options ...RequestOptionFunc) (*Project, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("projects/%s", PathEscape(project))
+	return do[*Project](s.client,
+		withMethod(http.MethodPut),
+		withPath("projects/%s", ProjectID{pid}),
+		withUpload(avatar, filename, UploadAvatar),
+		withRequestOpts(options...),
+	)
+}
 
-	req, err := s.client.UploadRequest(
-		http.MethodPut,
-		u,
-		avatar,
-		filename,
-		UploadAvatar,
-		nil,
-		options,
+func (s *ProjectsService) DownloadAvatar(pid any, options ...RequestOptionFunc) (*bytes.Reader, *Response, error) {
+	buf, resp, err := do[bytes.Buffer](s.client,
+		withPath("projects/%s/avatar", ProjectID{pid}),
+		withRequestOpts(options...),
 	)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	p := new(Project)
-	resp, err := s.client.Do(req, p)
-	if err != nil {
 		return nil, resp, err
 	}
-
-	return p, resp, nil
+	return bytes.NewReader(buf.Bytes()), resp, nil
 }
 
-// DownloadAvatar downloads an avatar.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#download-a-project-avatar
-func (s *ProjectsService) DownloadAvatar(pid any, options ...RequestOptionFunc) (*bytes.Reader, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("projects/%s/avatar", PathEscape(project))
-
-	req, err := s.client.NewRequest(http.MethodGet, u, nil, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	avatar := new(bytes.Buffer)
-	resp, err := s.client.Do(req, avatar)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return bytes.NewReader(avatar.Bytes()), resp, err
-}
-
-// ListProjectForks gets a list of project forks.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_forks/#list-forks-of-a-project
 func (s *ProjectsService) ListProjectForks(pid any, opt *ListProjectsOptions, options ...RequestOptionFunc) ([]*Project, *Response, error) {
 	return do[[]*Project](s.client,
 		withPath("projects/%s/forks", ProjectID{pid}),
@@ -1583,10 +1593,6 @@ type ProjectPushRules struct {
 	RejectNonDCOCommits        bool       `json:"reject_non_dco_commits"`
 }
 
-// GetProjectPushRules gets the push rules of a project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_push_rules/#get-project-push-rules
 func (s *ProjectsService) GetProjectPushRules(pid any, options ...RequestOptionFunc) (*ProjectPushRules, *Response, error) {
 	return do[*ProjectPushRules](s.client,
 		withPath("projects/%s/push_rule", ProjectID{pid}),
@@ -1615,10 +1621,6 @@ type AddProjectPushRuleOptions struct {
 	RejectNonDCOCommits        *bool   `url:"reject_non_dco_commits,omitempty" json:"reject_non_dco_commits,omitempty"`
 }
 
-// AddProjectPushRule adds a push rule to a specified project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_push_rules/#add-a-project-push-rule
 func (s *ProjectsService) AddProjectPushRule(pid any, opt *AddProjectPushRuleOptions, options ...RequestOptionFunc) (*ProjectPushRules, *Response, error) {
 	return do[*ProjectPushRules](s.client,
 		withMethod(http.MethodPost),
@@ -1649,10 +1651,6 @@ type EditProjectPushRuleOptions struct {
 	RejectNonDCOCommits        *bool   `url:"reject_non_dco_commits,omitempty" json:"reject_non_dco_commits,omitempty"`
 }
 
-// EditProjectPushRule edits a push rule for a specified project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_push_rules/#edit-project-push-rule
 func (s *ProjectsService) EditProjectPushRule(pid any, opt *EditProjectPushRuleOptions, options ...RequestOptionFunc) (*ProjectPushRules, *Response, error) {
 	return do[*ProjectPushRules](s.client,
 		withMethod(http.MethodPut),
@@ -1662,12 +1660,6 @@ func (s *ProjectsService) EditProjectPushRule(pid any, opt *EditProjectPushRuleO
 	)
 }
 
-// DeleteProjectPushRule removes a push rule from a project. This is an
-// idempotent method and can be called multiple times. Either the push rule is
-// available or not.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_push_rules/#delete-project-push-rule
 func (s *ProjectsService) DeleteProjectPushRule(pid any, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -1695,10 +1687,6 @@ type ProjectApprovals struct {
 	ApprovalsBeforeMerge int64 `json:"approvals_before_merge"`
 }
 
-// GetApprovalConfiguration get the approval configuration for a project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/merge_request_approvals/#project-approval-rules
 func (s *ProjectsService) GetApprovalConfiguration(pid any, options ...RequestOptionFunc) (*ProjectApprovals, *Response, error) {
 	return do[*ProjectApprovals](s.client,
 		withPath("projects/%s/approvals", ProjectID{pid}),
@@ -1723,10 +1711,6 @@ type ChangeApprovalConfigurationOptions struct {
 	ApprovalsBeforeMerge *int64 `url:"approvals_before_merge,omitempty" json:"approvals_before_merge,omitempty"`
 }
 
-// ChangeApprovalConfiguration updates the approval configuration for a project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/merge_request_approvals/#change-configuration
 func (s *ProjectsService) ChangeApprovalConfiguration(pid any, opt *ChangeApprovalConfigurationOptions, options ...RequestOptionFunc) (*ProjectApprovals, *Response, error) {
 	return do[*ProjectApprovals](s.client,
 		withMethod(http.MethodPost),
@@ -1745,10 +1729,6 @@ type GetProjectApprovalRulesListsOptions struct {
 	ListOptions
 }
 
-// GetProjectApprovalRules looks up the list of project level approver rules.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/merge_request_approvals/#get-all-approval-rules-for-project
 func (s *ProjectsService) GetProjectApprovalRules(pid any, opt *GetProjectApprovalRulesListsOptions, options ...RequestOptionFunc) ([]*ProjectApprovalRule, *Response, error) {
 	return do[[]*ProjectApprovalRule](s.client,
 		withPath("projects/%s/approval_rules", ProjectID{pid}),
@@ -1757,10 +1737,6 @@ func (s *ProjectsService) GetProjectApprovalRules(pid any, opt *GetProjectApprov
 	)
 }
 
-// GetProjectApprovalRule gets the project level approvers.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/merge_request_approvals/#get-single-approval-rule-for-project
 func (s *ProjectsService) GetProjectApprovalRule(pid any, ruleID int64, options ...RequestOptionFunc) (*ProjectApprovalRule, *Response, error) {
 	return do[*ProjectApprovalRule](s.client,
 		withPath("projects/%s/approval_rules/%d", ProjectID{pid}, ruleID),
@@ -1785,10 +1761,6 @@ type CreateProjectLevelRuleOptions struct {
 	Usernames                     *[]string `url:"usernames,omitempty" json:"usernames,omitempty"`
 }
 
-// CreateProjectApprovalRule creates a new project-level approval rule.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/merge_request_approvals/#create-project-approval-rule
 func (s *ProjectsService) CreateProjectApprovalRule(pid any, opt *CreateProjectLevelRuleOptions, options ...RequestOptionFunc) (*ProjectApprovalRule, *Response, error) {
 	return do[*ProjectApprovalRule](s.client,
 		withMethod(http.MethodPost),
@@ -1813,10 +1785,6 @@ type UpdateProjectLevelRuleOptions struct {
 	Usernames                     *[]string `url:"usernames,omitempty" json:"usernames,omitempty"`
 }
 
-// UpdateProjectApprovalRule updates an existing approval rule with new options.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/merge_request_approvals/#update-project-approval-rule
 func (s *ProjectsService) UpdateProjectApprovalRule(pid any, approvalRule int64, opt *UpdateProjectLevelRuleOptions, options ...RequestOptionFunc) (*ProjectApprovalRule, *Response, error) {
 	return do[*ProjectApprovalRule](s.client,
 		withMethod(http.MethodPut),
@@ -1826,10 +1794,6 @@ func (s *ProjectsService) UpdateProjectApprovalRule(pid any, approvalRule int64,
 	)
 }
 
-// DeleteProjectApprovalRule deletes a project-level approval rule.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/merge_request_approvals/#delete-project-approval-rule
 func (s *ProjectsService) DeleteProjectApprovalRule(pid any, approvalRule int64, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -1859,10 +1823,6 @@ type ProjectPullMirrorDetails struct {
 	MirrorBranchRegex                string     `json:"mirror_branch_regex"`
 }
 
-// GetProjectPullMirrorDetails returns the pull mirror details.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_pull_mirroring/#get-a-projects-pull-mirror-details
 func (s *ProjectsService) GetProjectPullMirrorDetails(pid any, options ...RequestOptionFunc) (*ProjectPullMirrorDetails, *Response, error) {
 	return do[*ProjectPullMirrorDetails](s.client,
 		withPath("projects/%s/mirror/pull", ProjectID{pid}),
@@ -1885,10 +1845,6 @@ type ConfigureProjectPullMirrorOptions struct {
 	MirrorBranchRegex                *string `url:"mirror_branch_regex,omitempty" json:"mirror_branch_regex,omitempty"`
 }
 
-// ConfigureProjectPullMirror configures pull mirroring settings.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_pull_mirroring/#configure-pull-mirroring-for-a-project
 func (s *ProjectsService) ConfigureProjectPullMirror(pid any, opt *ConfigureProjectPullMirrorOptions, options ...RequestOptionFunc) (*ProjectPullMirrorDetails, *Response, error) {
 	return do[*ProjectPullMirrorDetails](s.client,
 		withMethod(http.MethodPut),
@@ -1898,10 +1854,6 @@ func (s *ProjectsService) ConfigureProjectPullMirror(pid any, opt *ConfigureProj
 	)
 }
 
-// StartMirroringProject start the pull mirroring process for a project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_pull_mirroring/#start-the-pull-mirroring-process-for-a-project
 func (s *ProjectsService) StartMirroringProject(pid any, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodPost),
@@ -1919,9 +1871,6 @@ type TransferProjectOptions struct {
 	Namespace any `url:"namespace,omitempty" json:"namespace,omitempty"`
 }
 
-// TransferProject transfer a project into the specified namespace
-//
-// GitLab API docs: https://docs.gitlab.com/api/projects/#transfer-a-project-to-a-new-namespace
 func (s *ProjectsService) TransferProject(pid any, opt *TransferProjectOptions, options ...RequestOptionFunc) (*Project, *Response, error) {
 	return do[*Project](s.client,
 		withMethod(http.MethodPut),
@@ -1931,10 +1880,6 @@ func (s *ProjectsService) TransferProject(pid any, opt *TransferProjectOptions, 
 	)
 }
 
-// StartHousekeepingProject start the Housekeeping task for a project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#start-the-housekeeping-task-for-a-project
 func (s *ProjectsService) StartHousekeepingProject(pid any, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodPost),
@@ -1955,10 +1900,6 @@ type ProjectRepositoryStorage struct {
 	RepositoryStorage string     `json:"repository_storage"`
 }
 
-// GetRepositoryStorage Get the path to repository storage.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/projects/#get-the-path-to-repository-storage
 func (s *ProjectsService) GetRepositoryStorage(pid any, options ...RequestOptionFunc) (*ProjectRepositoryStorage, *Response, error) {
 	return do[*ProjectRepositoryStorage](s.client,
 		withPath("projects/%s/storage", ProjectID{pid}),
@@ -1984,10 +1925,6 @@ type ListProjectStarrersOptions struct {
 	Search *string `url:"search,omitempty" json:"search,omitempty"`
 }
 
-// ListProjectStarrers gets users who starred a project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/project_starring/#list-users-who-starred-a-project
 func (s *ProjectsService) ListProjectStarrers(pid any, opts *ListProjectStarrersOptions, options ...RequestOptionFunc) ([]*ProjectStarrer, *Response, error) {
 	return do[[]*ProjectStarrer](s.client,
 		withPath("projects/%s/starrers", ProjectID{pid}),

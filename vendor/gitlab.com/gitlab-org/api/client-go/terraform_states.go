@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -140,45 +141,25 @@ func (s *TerraformStatesService) Get(projectFullPath string, name string, option
 }
 
 func (s *TerraformStatesService) DownloadLatest(pid any, name string, options ...RequestOptionFunc) (io.Reader, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	uri := fmt.Sprintf("projects/%s/terraform/state/%s", PathEscape(project), PathEscape(name))
-
-	req, err := s.client.NewRequest(http.MethodGet, uri, nil, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	preserver := &bodyPreserver{}
-	resp, err := s.client.Do(req, preserver)
+	buf, resp, err := do[bytes.Buffer](s.client,
+		withPath("projects/%s/terraform/state/%s", ProjectID{pid}, name),
+		withRequestOpts(options...),
+	)
 	if err != nil {
 		return nil, resp, err
 	}
-
-	return preserver.body, resp, nil
+	return &buf, resp, nil
 }
 
 func (s *TerraformStatesService) Download(pid any, name string, serial uint64, options ...RequestOptionFunc) (io.Reader, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	uri := fmt.Sprintf("projects/%s/terraform/state/%s/versions/%d", PathEscape(project), PathEscape(name), serial)
-
-	req, err := s.client.NewRequest(http.MethodGet, uri, nil, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	preserver := &bodyPreserver{}
-	resp, err := s.client.Do(req, preserver)
+	buf, resp, err := do[bytes.Buffer](s.client,
+		withPath("projects/%s/terraform/state/%s/versions/%d", ProjectID{pid}, name, serial),
+		withRequestOpts(options...),
+	)
 	if err != nil {
 		return nil, resp, err
 	}
-
-	return preserver.body, resp, nil
+	return &buf, resp, nil
 }
 
 // Delete deletes a single Terraform state

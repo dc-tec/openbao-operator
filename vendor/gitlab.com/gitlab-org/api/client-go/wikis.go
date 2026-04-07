@@ -16,7 +16,6 @@
 package gitlab
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 )
@@ -199,22 +198,11 @@ type UploadWikiAttachmentOptions struct {
 }
 
 func (s *WikisService) UploadWikiAttachment(pid any, content io.Reader, filename string, opt *UploadWikiAttachmentOptions, options ...RequestOptionFunc) (*WikiAttachment, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("projects/%s/wikis/attachments", PathEscape(project))
-
-	req, err := s.client.UploadRequest(http.MethodPost, u, content, filename, UploadFile, opt, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	attachment := new(WikiAttachment)
-	resp, err := s.client.Do(req, attachment)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return attachment, resp, nil
+	return do[*WikiAttachment](s.client,
+		withMethod(http.MethodPost),
+		withPath("projects/%s/wikis/attachments", ProjectID{pid}),
+		withUpload(content, filename, UploadFile),
+		withAPIOpts(opt),
+		withRequestOpts(options...),
+	)
 }
