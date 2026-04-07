@@ -179,7 +179,7 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 			logger.V(1).Info("CA Secret not found; skipping Gateway CA ConfigMap creation", "secret", caSecretName)
 			return nil
 		}
-		if apierrors.IsForbidden(err) || strings.Contains(strings.ToLower(err.Error()), "forbidden") {
+		if apierrors.IsForbidden(err) {
 			logger.V(1).Info("CA Secret access forbidden (likely waiting for RBAC); skipping Gateway CA ConfigMap creation", "secret", caSecretName)
 			return nil
 		}

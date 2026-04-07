@@ -4,8 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -232,6 +236,77 @@ func TestHTTPProber_CheckReadiness(t *testing.T) {
 	}
 }
 
+func TestHTTPProber_CheckReadiness_RetriesTypedTransientConnectionErrors(t *testing.T) {
+	t.Parallel()
+
+	prober, err := NewProber(ProberConfig{
+		Addr:          "https://localhost:8200",
+		Timeout:       4 * time.Second,
+		LivenessPath:  "/v1/sys/health",
+		ReadinessPath: "/v1/sys/health?standbyok=true",
+	})
+	if err != nil {
+		t.Fatalf("NewProber() error = %v", err)
+	}
+
+	attempts := 0
+	httpProber := prober.(*HTTPProber)
+	httpProber.client = &http.Client{
+		Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			attempts++
+			switch attempts {
+			case 1:
+				return nil, &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}
+			case 2:
+				return nil, io.ErrUnexpectedEOF
+			default:
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       http.NoBody,
+				}, nil
+			}
+		}),
+	}
+
+	if err := prober.CheckReadiness(context.Background()); err != nil {
+		t.Fatalf("CheckReadiness() error = %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("CheckReadiness() attempts = %d, want 3", attempts)
+	}
+}
+
+func TestHTTPProber_CheckReadiness_DoesNotRetryNonTransientErrors(t *testing.T) {
+	t.Parallel()
+
+	prober, err := NewProber(ProberConfig{
+		Addr:          "https://localhost:8200",
+		Timeout:       4 * time.Second,
+		LivenessPath:  "/v1/sys/health",
+		ReadinessPath: "/v1/sys/health?standbyok=true",
+	})
+	if err != nil {
+		t.Fatalf("NewProber() error = %v", err)
+	}
+
+	attempts := 0
+	httpProber := prober.(*HTTPProber)
+	httpProber.client = &http.Client{
+		Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+			attempts++
+			return nil, errors.New("boom")
+		}),
+	}
+
+	err = prober.CheckReadiness(context.Background())
+	if err == nil {
+		t.Fatal("CheckReadiness() expected error, got nil")
+	}
+	if attempts != 1 {
+		t.Fatalf("CheckReadiness() attempts = %d, want 1", attempts)
+	}
+}
+
 func TestParseAddr(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -345,4 +420,10 @@ func TestVerifyLoopbackCertificate(t *testing.T) {
 	if err == nil {
 		t.Error("verifyLoopbackCertificate() expected error for empty certificates, got nil")
 	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
