@@ -3,6 +3,7 @@ package raftops
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 	"time"
 
@@ -82,7 +83,7 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 
 		demoter := &demoterStub{
 			errs: map[string]error{
-				"vault-blue-1": errors.New("forbidden"),
+				"vault-blue-1": portopenbao.NewAPIError("raft demote request failed", http.StatusForbidden, nil),
 			},
 		}
 		err := DemoteBlueVotersExceptLeader(context.Background(), logr.Discard(), cfg, demoter, config, "vault-blue-0", "vault-blue-")

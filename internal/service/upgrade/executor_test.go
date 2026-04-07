@@ -3,6 +3,7 @@ package upgrade
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -66,12 +67,12 @@ func TestIsBenignDemoteError(t *testing.T) {
 		},
 		{
 			name: "already a non-voter",
-			err:  errors.New("OpenBao API overloaded (status 500): server is already a non-voter"),
+			err:  portopenbao.ErrAlreadyNonVoter,
 			want: true,
 		},
 		{
 			name: "already non-voter",
-			err:  errors.New("raft demote failed: already non-voter"),
+			err:  portopenbao.ErrAlreadyNonVoter,
 			want: true,
 		},
 		{
@@ -104,8 +105,8 @@ func TestDemoteAllBluePods(t *testing.T) {
 		}
 		demoter := &fakeRaftPeerDemoter{
 			errByServerID: map[string]error{
-				"cluster-blue-0": errors.New("server is already a non-voter"),
-				"cluster-blue-1": errors.New("already non-voter"),
+				"cluster-blue-0": portopenbao.ErrAlreadyNonVoter,
+				"cluster-blue-1": portopenbao.ErrAlreadyNonVoter,
 			},
 		}
 
@@ -129,7 +130,7 @@ func TestDemoteAllBluePods(t *testing.T) {
 		}
 		demoter := &fakeRaftPeerDemoter{
 			errByServerID: map[string]error{
-				"cluster-blue-1": errors.New("permission denied"),
+				"cluster-blue-1": portopenbao.NewAPIError("raft demote request failed", http.StatusForbidden, nil),
 			},
 		}
 
@@ -168,7 +169,7 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 
 	demoter := &fakeRaftPeerDemoter{
 		errByServerID: map[string]error{
-			"cluster-blue-1": errors.New("server is already a non-voter"),
+			"cluster-blue-1": portopenbao.ErrAlreadyNonVoter,
 		},
 	}
 
@@ -202,7 +203,7 @@ func TestDemoteBlueVotersExceptLeaderFatal(t *testing.T) {
 	}
 	demoter := &fakeRaftPeerDemoter{
 		errByServerID: map[string]error{
-			"cluster-blue-1": errors.New("permission denied"),
+			"cluster-blue-1": portopenbao.NewAPIError("raft demote request failed", http.StatusForbidden, nil),
 		},
 	}
 
@@ -233,12 +234,12 @@ func TestClassifyDemoteError(t *testing.T) {
 	}{
 		{
 			name: "benign already non-voter",
-			err:  errors.New("already non-voter"),
+			err:  portopenbao.ErrAlreadyNonVoter,
 			want: raftops.BenignErrorClassificationBenign,
 		},
 		{
 			name: "fatal permission denied",
-			err:  errors.New("permission denied"),
+			err:  portopenbao.NewAPIError("raft demote request failed", http.StatusForbidden, nil),
 			want: raftops.BenignErrorClassificationFatal,
 		},
 		{
@@ -268,7 +269,7 @@ func TestClassifyStepDownError(t *testing.T) {
 	}{
 		{
 			name: "fatal forbidden",
-			err:  errors.New("forbidden"),
+			err:  portopenbao.NewAPIError("step-down request failed", http.StatusForbidden, nil),
 			want: raftops.BenignErrorClassificationFatal,
 		},
 		{
@@ -392,7 +393,7 @@ func TestEnsureGreenLeaderBySteppingDownBlueWithFuncs(t *testing.T) {
 				return nil
 			},
 			stepDownFn: func(context.Context) error {
-				return errors.New("permission denied")
+				return portopenbao.NewAPIError("step-down request failed", http.StatusForbidden, nil)
 			},
 		}
 

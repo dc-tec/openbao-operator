@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -84,10 +86,17 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft join request")
 	if err != nil {
+		if translatedErr := translateRaftAPIErrorFromChain(err, portopenbao.ErrAlreadyJoined, "already joined"); translatedErr != nil {
+			return translatedErr
+		}
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return portopenbao.NewAPIError("raft join request failed", resp.StatusCode, body)
+		apiErr := portopenbao.NewAPIError("raft join request failed", resp.StatusCode, body)
+		if translatedErr := translateRaftAPIErrorFromChain(apiErr, portopenbao.ErrAlreadyJoined, "already joined"); translatedErr != nil {
+			return translatedErr
+		}
+		return apiErr
 	}
 
 	var joinResp JoinRaftClusterResponse
@@ -225,10 +234,29 @@ func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, pat
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, fmt.Sprintf("failed to execute raft %s request", action))
 	if err != nil {
+		if action == "demote" {
+			if translatedErr := translateRaftAPIErrorFromChain(err, portopenbao.ErrAlreadyNonVoter,
+				"already a non-voter",
+				"already non-voter",
+				"already non voter",
+			); translatedErr != nil {
+				return translatedErr
+			}
+		}
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		return portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), resp.StatusCode, body)
+		apiErr := portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), resp.StatusCode, body)
+		if action == "demote" {
+			if translatedErr := translateRaftAPIErrorFromChain(apiErr, portopenbao.ErrAlreadyNonVoter,
+				"already a non-voter",
+				"already non-voter",
+				"already non voter",
+			); translatedErr != nil {
+				return translatedErr
+			}
+		}
+		return apiErr
 	}
 
 	return nil
@@ -280,4 +308,31 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopen
 	}
 
 	return nil
+}
+
+func raftResponseContainsAny(responseBody []byte, patterns ...string) bool {
+	message := strings.ToLower(string(responseBody))
+	for _, pattern := range patterns {
+		if strings.Contains(message, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func translateRaftAPIErrorFromChain(err error, sentinel error, patterns ...string) error {
+	if err == nil || sentinel == nil {
+		return nil
+	}
+
+	var apiErr *portopenbao.APIError
+	if !errors.As(err, &apiErr) || apiErr == nil {
+		return nil
+	}
+
+	if !raftResponseContainsAny([]byte(apiErr.ResponseBody), patterns...) {
+		return nil
+	}
+
+	return fmt.Errorf("%w: %w", sentinel, apiErr)
 }
