@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -85,12 +86,15 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft join request")
 	if err != nil {
+		if translatedErr := translateRaftAPIErrorFromChain(err, portopenbao.ErrAlreadyJoined, "already joined"); translatedErr != nil {
+			return translatedErr
+		}
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		apiErr := portopenbao.NewAPIError("raft join request failed", resp.StatusCode, body)
-		if raftJoinResponseAlreadyJoined(body) {
-			return fmt.Errorf("%w: %w", portopenbao.ErrAlreadyJoined, apiErr)
+		if translatedErr := translateRaftAPIErrorFromChain(apiErr, portopenbao.ErrAlreadyJoined, "already joined"); translatedErr != nil {
+			return translatedErr
 		}
 		return apiErr
 	}
@@ -230,12 +234,27 @@ func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, pat
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, fmt.Sprintf("failed to execute raft %s request", action))
 	if err != nil {
+		if action == "demote" {
+			if translatedErr := translateRaftAPIErrorFromChain(err, portopenbao.ErrAlreadyNonVoter,
+				"already a non-voter",
+				"already non-voter",
+				"already non voter",
+			); translatedErr != nil {
+				return translatedErr
+			}
+		}
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		apiErr := portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), resp.StatusCode, body)
-		if action == "demote" && raftDemoteResponseAlreadyNonVoter(body) {
-			return fmt.Errorf("%w: %w", portopenbao.ErrAlreadyNonVoter, apiErr)
+		if action == "demote" {
+			if translatedErr := translateRaftAPIErrorFromChain(apiErr, portopenbao.ErrAlreadyNonVoter,
+				"already a non-voter",
+				"already non-voter",
+				"already non voter",
+			); translatedErr != nil {
+				return translatedErr
+			}
 		}
 		return apiErr
 	}
@@ -291,20 +310,6 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopen
 	return nil
 }
 
-func raftJoinResponseAlreadyJoined(responseBody []byte) bool {
-	return raftResponseContainsAny(responseBody,
-		"already joined",
-	)
-}
-
-func raftDemoteResponseAlreadyNonVoter(responseBody []byte) bool {
-	return raftResponseContainsAny(responseBody,
-		"already a non-voter",
-		"already non-voter",
-		"already non voter",
-	)
-}
-
 func raftResponseContainsAny(responseBody []byte, patterns ...string) bool {
 	message := strings.ToLower(string(responseBody))
 	for _, pattern := range patterns {
@@ -313,4 +318,21 @@ func raftResponseContainsAny(responseBody []byte, patterns ...string) bool {
 		}
 	}
 	return false
+}
+
+func translateRaftAPIErrorFromChain(err error, sentinel error, patterns ...string) error {
+	if err == nil || sentinel == nil {
+		return nil
+	}
+
+	var apiErr *portopenbao.APIError
+	if !errors.As(err, &apiErr) || apiErr == nil {
+		return nil
+	}
+
+	if !raftResponseContainsAny([]byte(apiErr.ResponseBody), patterns...) {
+		return nil
+	}
+
+	return fmt.Errorf("%w: %w", sentinel, apiErr)
 }
