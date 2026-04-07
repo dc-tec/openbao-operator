@@ -2,6 +2,7 @@ package security
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -127,6 +128,35 @@ func TestVerifyOperatorImageForCluster_AppliesDefaultsForEdgeTag(t *testing.T) {
 	}
 	if got := verifier.config.SubjectRegExp; got != operatorSubjectRegExp {
 		t.Fatalf("subjectRegExp = %q, want %q", got, operatorSubjectRegExp)
+	}
+}
+
+func TestOperatorSubjectRegExp_TrustedWorkflowIdentities(t *testing.T) {
+	t.Parallel()
+
+	re := regexp.MustCompile(operatorSubjectRegExp)
+
+	trusted := []string{
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.3",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-edge.yml@refs/heads/main",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-nightly.yml@refs/heads/main",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/main",
+	}
+	for _, subject := range trusted {
+		if !re.MatchString(subject) {
+			t.Fatalf("trusted subject %q did not match %q", subject, operatorSubjectRegExp)
+		}
+	}
+
+	untrusted := []string{
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/feature",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/ci.yml@refs/heads/main",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/heads/main",
+	}
+	for _, subject := range untrusted {
+		if re.MatchString(subject) {
+			t.Fatalf("untrusted subject %q unexpectedly matched %q", subject, operatorSubjectRegExp)
+		}
 	}
 }
 
