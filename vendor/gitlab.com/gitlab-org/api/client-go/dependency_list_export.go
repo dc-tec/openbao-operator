@@ -1,7 +1,7 @@
 package gitlab
 
 import (
-	"fmt"
+	"bytes"
 	"io"
 	"net/http"
 )
@@ -99,19 +99,12 @@ func (s *DependencyListExportService) GetDependencyListExport(id int64, options 
 }
 
 func (s *DependencyListExportService) DownloadDependencyListExport(id int64, options ...RequestOptionFunc) (io.Reader, *Response, error) {
-	// GET /dependency_list_exports/:id/download
-	downloadExportPath := fmt.Sprintf("dependency_list_exports/%d/download", id)
-
-	req, err := s.client.NewRequest(http.MethodGet, downloadExportPath, nil, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	preserver := &bodyPreserver{}
-	resp, err := s.client.Do(req, preserver)
+	buf, resp, err := do[bytes.Buffer](s.client,
+		withPath("dependency_list_exports/%d/download", id),
+		withRequestOpts(options...),
+	)
 	if err != nil {
 		return nil, resp, err
 	}
-
-	return preserver.body, resp, nil
+	return &buf, resp, nil
 }

@@ -20,14 +20,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
-
-	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
 
 type (
@@ -188,10 +185,11 @@ type SharedWithGroup struct {
 // GitLab API docs:
 // https://docs.gitlab.com/api/groups/#options-for-default_branch_protection_defaults
 type BranchProtectionDefaults struct {
-	AllowedToPush           []*GroupAccessLevel `json:"allowed_to_push,omitempty"`
-	AllowForcePush          bool                `json:"allow_force_push,omitempty"`
-	AllowedToMerge          []*GroupAccessLevel `json:"allowed_to_merge,omitempty"`
-	DeveloperCanInitialPush bool                `json:"developer_can_initial_push,omitempty"`
+	AllowedToPush             []*GroupAccessLevel `json:"allowed_to_push,omitempty"`
+	AllowForcePush            bool                `json:"allow_force_push,omitempty"`
+	AllowedToMerge            []*GroupAccessLevel `json:"allowed_to_merge,omitempty"`
+	DeveloperCanInitialPush   bool                `json:"developer_can_initial_push,omitempty"`
+	CodeOwnerApprovalRequired bool                `json:"code_owner_approval_required,omitempty"`
 }
 
 // GroupAccessLevel represents default branch protection defaults access levels.
@@ -238,6 +236,7 @@ type SAMLGroupLink struct {
 	Name         string           `json:"name"`
 	AccessLevel  AccessLevelValue `json:"access_level"`
 	MemberRoleID int64            `json:"member_role_id,omitempty"`
+	Provider     string           `json:"provider,omitempty"`
 }
 
 // ListGroupsOptions represents the available ListGroups() options.
@@ -251,11 +250,15 @@ type ListGroupsOptions struct {
 	OrderBy              *string           `url:"order_by,omitempty" json:"order_by,omitempty"`
 	Sort                 *string           `url:"sort,omitempty" json:"sort,omitempty"`
 	Statistics           *bool             `url:"statistics,omitempty" json:"statistics,omitempty"`
+	Visibility           *VisibilityValue  `url:"visibility,omitempty" json:"visibility,omitempty"`
 	WithCustomAttributes *bool             `url:"with_custom_attributes,omitempty" json:"with_custom_attributes,omitempty"`
 	Owned                *bool             `url:"owned,omitempty" json:"owned,omitempty"`
 	MinAccessLevel       *AccessLevelValue `url:"min_access_level,omitempty" json:"min_access_level,omitempty"`
 	TopLevelOnly         *bool             `url:"top_level_only,omitempty" json:"top_level_only,omitempty"`
 	RepositoryStorage    *string           `url:"repository_storage,omitempty" json:"repository_storage,omitempty"`
+	MarkedForDeletionOn  *ISOTime          `url:"marked_for_deletion_on,omitempty" json:"marked_for_deletion_on,omitempty"`
+	Active               *bool             `url:"active,omitempty" json:"active,omitempty"`
+	Archived             *bool             `url:"archived,omitempty" json:"archived,omitempty"`
 }
 
 // ListGroups gets a list of groups (as user: my groups, as admin: all groups).
@@ -371,24 +374,14 @@ func (s *GroupsService) GetGroup(gid any, opt *GetGroupOptions, options ...Reque
 // GitLab API docs:
 // https://docs.gitlab.com/api/groups/#download-a-group-avatar
 func (s *GroupsService) DownloadAvatar(gid any, options ...RequestOptionFunc) (*bytes.Reader, *Response, error) {
-	group, err := parseID(gid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("groups/%s/avatar", PathEscape(group))
-
-	req, err := s.client.NewRequest(http.MethodGet, u, nil, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	avatar := new(bytes.Buffer)
-	resp, err := s.client.Do(req, avatar)
+	buf, resp, err := do[bytes.Buffer](s.client,
+		withPath("groups/%s/avatar", GroupID{gid}),
+		withRequestOpts(options...),
+	)
 	if err != nil {
 		return nil, resp, err
 	}
-
-	return bytes.NewReader(avatar.Bytes()), resp, err
+	return bytes.NewReader(buf.Bytes()), resp, nil
 }
 
 // CreateGroupOptions represents the available CreateGroup() options.
@@ -423,6 +416,11 @@ type CreateGroupOptions struct {
 
 	// Deprecated: User DefaultBranchProtectionDefaults instead
 	DefaultBranchProtection *int64 `url:"default_branch_protection,omitempty" json:"default_branch_protection,omitempty"`
+
+	EnabledGitAccessProtocol  *EnabledGitAccessProtocolValue `url:"enabled_git_access_protocol,omitempty" json:"enabled_git_access_protocol,omitempty"`
+	OrganizationID            *int64                         `url:"organization_id,omitempty" json:"organization_id,omitempty"`
+	DuoAvailability           *DuoAvailabilityValue          `url:"duo_availability,omitempty" json:"duo_availability,omitempty"`
+	ExperimentFeaturesEnabled *bool                          `url:"experiment_features_enabled,omitempty" json:"experiment_features_enabled,omitempty"`
 }
 
 // DefaultBranchProtectionDefaultsOptions represents the available options for
@@ -431,10 +429,11 @@ type CreateGroupOptions struct {
 // GitLab API docs:
 // https://docs.gitlab.com/api/groups/#options-for-default_branch_protection_defaults
 type DefaultBranchProtectionDefaultsOptions struct {
-	AllowedToPush           *[]*GroupAccessLevel `url:"allowed_to_push,omitempty" json:"allowed_to_push,omitempty"`
-	AllowForcePush          *bool                `url:"allow_force_push,omitempty" json:"allow_force_push,omitempty"`
-	AllowedToMerge          *[]*GroupAccessLevel `url:"allowed_to_merge,omitempty" json:"allowed_to_merge,omitempty"`
-	DeveloperCanInitialPush *bool                `url:"developer_can_initial_push,omitempty" json:"developer_can_initial_push,omitempty"`
+	AllowedToPush             *[]*GroupAccessLevel `url:"allowed_to_push,omitempty" json:"allowed_to_push,omitempty"`
+	AllowForcePush            *bool                `url:"allow_force_push,omitempty" json:"allow_force_push,omitempty"`
+	AllowedToMerge            *[]*GroupAccessLevel `url:"allowed_to_merge,omitempty" json:"allowed_to_merge,omitempty"`
+	DeveloperCanInitialPush   *bool                `url:"developer_can_initial_push,omitempty" json:"developer_can_initial_push,omitempty"`
+	CodeOwnerApprovalRequired *bool                `url:"code_owner_approval_required,omitempty" json:"code_owner_approval_required,omitempty"`
 }
 
 // EncodeValues implements the query.Encoder interface
@@ -444,6 +443,9 @@ func (d *DefaultBranchProtectionDefaultsOptions) EncodeValues(key string, v *url
 	}
 	if d.DeveloperCanInitialPush != nil {
 		v.Add(key+"[developer_can_initial_push]", strconv.FormatBool(*d.DeveloperCanInitialPush))
+	}
+	if d.CodeOwnerApprovalRequired != nil {
+		v.Add(key+"[code_owner_approval_required]", strconv.FormatBool(*d.CodeOwnerApprovalRequired))
 	}
 	// The GitLab API only accepts one value for `allowed_to_merge` even when multiples are
 	// provided on the request.  The API will take the highest permission level.  For instance,
@@ -465,6 +467,7 @@ func (d *DefaultBranchProtectionDefaultsOptions) EncodeValues(key string, v *url
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -479,38 +482,19 @@ func (d *DefaultBranchProtectionDefaultsOptions) EncodeValues(key string, v *url
 //
 // GitLab API docs: https://docs.gitlab.com/api/groups/#create-a-group
 func (s *GroupsService) CreateGroup(opt *CreateGroupOptions, options ...RequestOptionFunc) (*Group, *Response, error) {
-	var err error
-	var req *retryablehttp.Request
-
-	if opt.Avatar == nil {
-		req, err = s.client.NewRequest(http.MethodPost, "groups", opt, options)
-	} else {
-		// since the Avatar is provided, check allowed_to_push and
-		// allowed_to_merge access levels and error if multiples are provided
+	reqOpts := []doOption{
+		withMethod(http.MethodPost),
+		withPath("groups"),
+		withAPIOpts(opt),
+		withRequestOpts(options...),
+	}
+	if opt.Avatar != nil {
 		if opt.DefaultBranchProtectionDefaults != nil && (len(*opt.DefaultBranchProtectionDefaults.AllowedToMerge) > 1 || len(*opt.DefaultBranchProtectionDefaults.AllowedToPush) > 1) {
 			return nil, nil, errors.New("multiple access levels for allowed_to_merge or allowed_to_push are not permitted when an Avatar is also specified as it will result in unexpected behavior")
 		}
-		req, err = s.client.UploadRequest(
-			http.MethodPost,
-			"groups",
-			opt.Avatar.Image,
-			opt.Avatar.Filename,
-			UploadAvatar,
-			opt,
-			options,
-		)
+		reqOpts = append(reqOpts, withUpload(opt.Avatar.Image, opt.Avatar.Filename, UploadAvatar))
 	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	g := new(Group)
-	resp, err := s.client.Do(req, g)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return g, resp, nil
+	return do[*Group](s.client, reqOpts...)
 }
 
 // TransferGroup transfers a project to the Group namespace. Available only
@@ -589,7 +573,25 @@ type UpdateGroupOptions struct {
 	EmailsDisabled *bool `url:"emails_disabled,omitempty" json:"emails_disabled,omitempty"`
 
 	// Deprecated: Use DefaultBranchProtectionDefaults instead
-	DefaultBranchProtection *int64 `url:"default_branch_protection,omitempty" json:"default_branch_protection,omitempty"`
+	DefaultBranchProtection         *int64                         `url:"default_branch_protection,omitempty" json:"default_branch_protection,omitempty"`
+	EnabledGitAccessProtocol        *EnabledGitAccessProtocolValue `url:"enabled_git_access_protocol,omitempty" json:"enabled_git_access_protocol,omitempty"`
+	StepUpAuthRequiredOAuthProvider *string                        `url:"step_up_auth_required_oauth_provider,omitempty" json:"step_up_auth_required_oauth_provider,omitempty"`
+	// The following fields are Premium and Ultimate only.
+	UniqueProjectDownloadLimit                  *int64    `url:"unique_project_download_limit,omitempty" json:"unique_project_download_limit,omitempty"`
+	UniqueProjectDownloadLimitIntervalInSeconds *int64    `url:"unique_project_download_limit_interval_in_seconds,omitempty" json:"unique_project_download_limit_interval_in_seconds,omitempty"`
+	UniqueProjectDownloadLimitAllowlist         *[]string `url:"unique_project_download_limit_allowlist,omitempty" json:"unique_project_download_limit_allowlist,omitempty"`
+	UniqueProjectDownloadLimitAlertlist         *[]int64  `url:"unique_project_download_limit_alertlist,omitempty" json:"unique_project_download_limit_alertlist,omitempty"`
+	AutoBanUserOnExcessiveProjectsDownload      *bool     `url:"auto_ban_user_on_excessive_projects_download,omitempty" json:"auto_ban_user_on_excessive_projects_download,omitempty"`
+
+	DuoAvailability                *DuoAvailabilityValue `url:"duo_availability,omitempty" json:"duo_availability,omitempty"`
+	ExperimentFeaturesEnabled      *bool                 `url:"experiment_features_enabled,omitempty" json:"experiment_features_enabled,omitempty"`
+	MathRenderingLimitsEnabled     *bool                 `url:"math_rendering_limits_enabled,omitempty" json:"math_rendering_limits_enabled,omitempty"`
+	LockMathRenderingLimitsEnabled *bool                 `url:"lock_math_rendering_limits_enabled,omitempty" json:"lock_math_rendering_limits_enabled,omitempty"`
+	DuoFeaturesEnabled             *bool                 `url:"duo_features_enabled,omitempty" json:"duo_features_enabled,omitempty"`
+	LockDuoFeaturesEnabled         *bool                 `url:"lock_duo_features_enabled,omitempty" json:"lock_duo_features_enabled,omitempty"`
+
+	WebBasedCommitSigningEnabled *bool `url:"web_based_commit_signing_enabled,omitempty" json:"web_based_commit_signing_enabled,omitempty"`
+	AllowPersonalSnippets        *bool `url:"allow_personal_snippets,omitempty" json:"allow_personal_snippets,omitempty"`
 }
 
 // UpdateGroup updates an existing group; only available to group owners and
@@ -603,43 +605,19 @@ type UpdateGroupOptions struct {
 //
 // GitLab API docs: https://docs.gitlab.com/api/groups/#update-group-attributes
 func (s *GroupsService) UpdateGroup(gid any, opt *UpdateGroupOptions, options ...RequestOptionFunc) (*Group, *Response, error) {
-	group, err := parseID(gid)
-	if err != nil {
-		return nil, nil, err
+	reqOpts := []doOption{
+		withMethod(http.MethodPut),
+		withPath("groups/%s", GroupID{gid}),
+		withAPIOpts(opt),
+		withRequestOpts(options...),
 	}
-	u := fmt.Sprintf("groups/%s", PathEscape(group))
-
-	var req *retryablehttp.Request
-
-	if opt.Avatar == nil || (opt.Avatar.Filename == "" && opt.Avatar.Image == nil) {
-		req, err = s.client.NewRequest(http.MethodPut, u, opt, options)
-	} else {
-		// since the Avatar is provided, check allowed_to_push and
-		// allowed_to_merge access levels and error if multiples are provided
+	if opt.Avatar != nil && (opt.Avatar.Filename != "" || opt.Avatar.Image != nil) {
 		if opt.DefaultBranchProtectionDefaults != nil && (len(*opt.DefaultBranchProtectionDefaults.AllowedToMerge) > 1 || len(*opt.DefaultBranchProtectionDefaults.AllowedToPush) > 1) {
 			return nil, nil, errors.New("multiple access levels for allowed_to_merge or allowed_to_push are not permitted when an Avatar is also specified as it will result in unexpected behavior")
 		}
-		req, err = s.client.UploadRequest(
-			http.MethodPut,
-			u,
-			opt.Avatar.Image,
-			opt.Avatar.Filename,
-			UploadAvatar,
-			opt,
-			options,
-		)
+		reqOpts = append(reqOpts, withUpload(opt.Avatar.Image, opt.Avatar.Filename, UploadAvatar))
 	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	g := new(Group)
-	resp, err := s.client.Do(req, g)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return g, resp, nil
+	return do[*Group](s.client, reqOpts...)
 }
 
 // UploadAvatar uploads a group avatar.
@@ -647,32 +625,12 @@ func (s *GroupsService) UpdateGroup(gid any, opt *UpdateGroupOptions, options ..
 // GitLab API docs:
 // https://docs.gitlab.com/api/groups/#upload-a-group-avatar
 func (s *GroupsService) UploadAvatar(gid any, avatar io.Reader, filename string, options ...RequestOptionFunc) (*Group, *Response, error) {
-	group, err := parseID(gid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("groups/%s", PathEscape(group))
-
-	req, err := s.client.UploadRequest(
-		http.MethodPut,
-		u,
-		avatar,
-		filename,
-		UploadAvatar,
-		nil,
-		options,
+	return do[*Group](s.client,
+		withMethod(http.MethodPut),
+		withPath("groups/%s", GroupID{gid}),
+		withUpload(avatar, filename, UploadAvatar),
+		withRequestOpts(options...),
 	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	g := new(Group)
-	resp, err := s.client.Do(req, g)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return g, resp, nil
 }
 
 // DeleteGroupOptions represents the available DeleteGroup() options.
@@ -906,6 +864,7 @@ type AddGroupSAMLLinkOptions struct {
 	SAMLGroupName *string           `url:"saml_group_name,omitempty" json:"saml_group_name,omitempty"`
 	AccessLevel   *AccessLevelValue `url:"access_level,omitempty" json:"access_level,omitempty"`
 	MemberRoleID  *int64            `url:"member_role_id,omitempty" json:"member_role_id,omitempty"`
+	Provider      *string           `url:"provider,omitempty" json:"provider,omitempty"`
 }
 
 // AddGroupSAMLLink creates a new group SAML link. Available only for users who

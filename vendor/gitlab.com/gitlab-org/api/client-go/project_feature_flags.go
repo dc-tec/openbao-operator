@@ -7,10 +7,30 @@ import (
 
 type (
 	ProjectFeatureFlagServiceInterface interface {
+		// ListProjectFeatureFlags returns a list with the feature flags of a project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/feature_flags/#list-feature-flags-for-a-project
 		ListProjectFeatureFlags(pid any, opt *ListProjectFeatureFlagOptions, options ...RequestOptionFunc) ([]*ProjectFeatureFlag, *Response, error)
+		// GetProjectFeatureFlag gets a single feature flag for the specified project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/feature_flags/#get-a-single-feature-flag
 		GetProjectFeatureFlag(pid any, name string, options ...RequestOptionFunc) (*ProjectFeatureFlag, *Response, error)
+		// CreateProjectFeatureFlag creates a feature flag.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/feature_flags/#create-a-feature-flag
 		CreateProjectFeatureFlag(pid any, opt *CreateProjectFeatureFlagOptions, options ...RequestOptionFunc) (*ProjectFeatureFlag, *Response, error)
+		// UpdateProjectFeatureFlag updates a feature flag.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/feature_flags/#update-a-feature-flag
 		UpdateProjectFeatureFlag(pid any, name string, opt *UpdateProjectFeatureFlagOptions, options ...RequestOptionFunc) (*ProjectFeatureFlag, *Response, error)
+		// DeleteProjectFeatureFlag deletes a feature flag.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/feature_flags/#delete-a-feature-flag
 		DeleteProjectFeatureFlag(pid any, name string, options ...RequestOptionFunc) (*Response, error)
 	}
 
@@ -85,10 +105,6 @@ type ListProjectFeatureFlagOptions struct {
 	Scope *string `url:"scope,omitempty" json:"scope,omitempty"`
 }
 
-// ListProjectFeatureFlags returns a list with the feature flags of a project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/feature_flags/#list-feature-flags-for-a-project
 func (s *ProjectFeatureFlagService) ListProjectFeatureFlags(pid any, opt *ListProjectFeatureFlagOptions, options ...RequestOptionFunc) ([]*ProjectFeatureFlag, *Response, error) {
 	return do[[]*ProjectFeatureFlag](s.client,
 		withPath("projects/%s/feature_flags", ProjectID{pid}),
@@ -97,10 +113,6 @@ func (s *ProjectFeatureFlagService) ListProjectFeatureFlags(pid any, opt *ListPr
 	)
 }
 
-// GetProjectFeatureFlag gets a single feature flag for the specified project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/feature_flags/#get-a-single-feature-flag
 func (s *ProjectFeatureFlagService) GetProjectFeatureFlag(pid any, name string, options ...RequestOptionFunc) (*ProjectFeatureFlag, *Response, error) {
 	return do[*ProjectFeatureFlag](s.client,
 		withPath("projects/%s/feature_flags/%s", ProjectID{pid}, name),
@@ -143,10 +155,6 @@ type ProjectFeatureFlagScopeOptions struct {
 	EnvironmentScope *string `url:"id,omitempty" json:"environment_scope,omitempty"`
 }
 
-// CreateProjectFeatureFlag creates a feature flag
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/feature_flags/#create-a-feature-flag
 func (s *ProjectFeatureFlagService) CreateProjectFeatureFlag(pid any, opt *CreateProjectFeatureFlagOptions, options ...RequestOptionFunc) (*ProjectFeatureFlag, *Response, error) {
 	return do[*ProjectFeatureFlag](s.client,
 		withMethod(http.MethodPost),
@@ -168,10 +176,6 @@ type UpdateProjectFeatureFlagOptions struct {
 	Strategies  *[]*FeatureFlagStrategyOptions `url:"strategies,omitempty" json:"strategies,omitempty"`
 }
 
-// UpdateProjectFeatureFlag updates a feature flag
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/feature_flags/#update-a-feature-flag
 func (s *ProjectFeatureFlagService) UpdateProjectFeatureFlag(pid any, name string, opt *UpdateProjectFeatureFlagOptions, options ...RequestOptionFunc) (*ProjectFeatureFlag, *Response, error) {
 	return do[*ProjectFeatureFlag](s.client,
 		withMethod(http.MethodPut),
@@ -181,10 +185,6 @@ func (s *ProjectFeatureFlagService) UpdateProjectFeatureFlag(pid any, name strin
 	)
 }
 
-// DeleteProjectFeatureFlag deletes a feature flag
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/feature_flags/#delete-a-feature-flag
 func (s *ProjectFeatureFlagService) DeleteProjectFeatureFlag(pid any, name string, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),

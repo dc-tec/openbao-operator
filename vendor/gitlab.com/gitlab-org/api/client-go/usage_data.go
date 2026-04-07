@@ -65,19 +65,13 @@ func (s *UsageDataService) GetServicePing(options ...RequestOptionFunc) (*Servic
 }
 
 func (s *UsageDataService) GetMetricDefinitionsAsYAML(options ...RequestOptionFunc) (io.Reader, *Response, error) {
-	req, err := s.client.NewRequest(http.MethodGet, "usage_data/metric_definitions", nil, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	req.Header.Set("Accept", "text/yaml")
-
-	var buf bytes.Buffer
-	resp, err := s.client.Do(req, &buf)
+	buf, resp, err := do[bytes.Buffer](s.client,
+		withPath("usage_data/metric_definitions"),
+		withRequestOpts(append([]RequestOptionFunc{WithHeader("Accept", "text/yaml")}, options...)...),
+	)
 	if err != nil {
 		return nil, resp, err
 	}
-
 	return &buf, resp, nil
 }
 
