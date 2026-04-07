@@ -2,7 +2,6 @@ package openbaocluster
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -78,7 +77,7 @@ func (r *infraReconciler) oidcDiscoveryError(err error) error {
 		return operatorerrors.WrapTransientKubernetesAPI(operatorerrors.WrapTransientConnection(err))
 	}
 
-	if isOIDCDiscoveryContentError(err) {
+	if errors.Is(err, portauth.ErrDiscoveryContentInvalid) {
 		return r.oidcBootstrapConfigurationError(err)
 	}
 
@@ -123,38 +122,4 @@ func (r *infraReconciler) resolveOIDC(ctx context.Context, cluster *openbaov1alp
 	}
 
 	return discovered, nil
-}
-
-func isOIDCDiscoveryContentError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	var syntaxErr *json.SyntaxError
-	if errors.As(err, &syntaxErr) {
-		return true
-	}
-
-	var typeErr *json.UnmarshalTypeError
-	if errors.As(err, &typeErr) {
-		return true
-	}
-
-	message := strings.ToLower(err.Error())
-	patterns := []string{
-		"oidc config missing issuer",
-		"oidc discovery returned empty issuer",
-		"oidc discovery returned no jwt validation material",
-		"failed to parse jwks document",
-		"failed to extract public keys from jwks",
-		"failed to fetch jwks keys",
-	}
-
-	for _, pattern := range patterns {
-		if strings.Contains(message, pattern) {
-			return true
-		}
-	}
-
-	return false
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
@@ -625,7 +626,7 @@ func TestInfraReconciler_ResolveOIDC_MalformedJWKSReturnsBootstrapReason(t *test
 			OIDC: InfraOIDCRuntime{
 				RestConfig: &rest.Config{Host: "https://kubernetes.default.svc"},
 				DiscoverOIDCConfig: func(ctx context.Context, cfg *rest.Config) (*OIDCConfig, error) {
-					return nil, fmt.Errorf("failed to fetch JWKS keys: failed to parse jwks document: %w", malformedJSONError())
+					return nil, fmt.Errorf("%w: failed to parse jwks document: %w", portauth.ErrDiscoveryContentInvalid, malformedJSONError())
 				},
 			},
 		},

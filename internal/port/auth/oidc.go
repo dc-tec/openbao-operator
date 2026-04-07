@@ -7,6 +7,12 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+var (
+	// ErrDiscoveryContentInvalid indicates OIDC discovery or JWKS content was syntactically valid enough to fetch
+	// but semantically unusable for JWT bootstrap.
+	ErrDiscoveryContentInvalid = errors.New("OIDC discovery content invalid")
+)
+
 // OIDCConfig contains discovered issuer and JWT validation material for
 // operator bootstrap. OIDCDiscoveryURL is preferred for dynamic verification
 // and key rotation; JWKSURL and JWKSKeys are retained as compatibility

@@ -37,7 +37,7 @@ func DiscoverConfig(ctx context.Context, cfg *rest.Config, baseURL string) (*por
 		return nil, err
 	}
 	if oidcConfig.Issuer == "" {
-		return nil, fmt.Errorf("OIDC config missing issuer")
+		return nil, fmt.Errorf("%w: OIDC config missing issuer", portauth.ErrDiscoveryContentInvalid)
 	}
 
 	return buildDiscoveredOIDCConfig(ctx, cfg, baseURL, oidcConfig)
@@ -138,7 +138,7 @@ func fetchOIDCWellKnown(ctx context.Context, httpClient *http.Client, wellKnownU
 
 	var oidcConfig oidcWellKnownDocument
 	if err := json.NewDecoder(resp.Body).Decode(&oidcConfig); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: failed to parse OIDC discovery document: %w", portauth.ErrDiscoveryContentInvalid, err)
 	}
 
 	return &oidcConfig, nil

@@ -14,6 +14,8 @@ import (
 	"net/http"
 
 	"k8s.io/client-go/rest"
+
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 type jwksDocument struct {
@@ -75,12 +77,12 @@ func fetchJWKSKeysWithClient(ctx context.Context, httpClient *http.Client, jwksU
 
 	var jwks jwksDocument
 	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
-		return nil, fmt.Errorf("failed to parse jwks document: %w", err)
+		return nil, fmt.Errorf("%w: failed to parse jwks document: %w", portauth.ErrDiscoveryContentInvalid, err)
 	}
 
 	keys, err := pemPublicKeysFromJWKS(jwks)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract public keys from jwks: %w", err)
+		return nil, fmt.Errorf("%w: failed to extract public keys from jwks: %w", portauth.ErrDiscoveryContentInvalid, err)
 	}
 
 	return keys, nil
