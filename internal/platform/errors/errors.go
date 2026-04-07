@@ -1,11 +1,16 @@
 package errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // ReasonedError wraps an error with a low-cardinality reason string that can be
@@ -143,26 +148,13 @@ func IsTransientKubernetesAPI(err error) bool {
 		return true
 	}
 
-	errStr := strings.ToLower(err.Error())
-
-	// Check for Kubernetes API transient error patterns
-	transientPatterns := []string{
-		"rate limit",
-		"too many requests",
-		"server error",
-		"service unavailable",
-		"internal server error",
-		"context deadline exceeded",
-		"timeout",
-	}
-
-	for _, pattern := range transientPatterns {
-		if strings.Contains(errStr, pattern) {
-			return true
-		}
-	}
-
-	return false
+	return apierrors.IsTooManyRequests(err) ||
+		apierrors.IsServiceUnavailable(err) ||
+		apierrors.IsInternalError(err) ||
+		apierrors.IsTimeout(err) ||
+		apierrors.IsServerTimeout(err) ||
+		apierrors.IsUnexpectedServerError(err) ||
+		errors.Is(err, context.DeadlineExceeded)
 }
 
 // IsTransientRemoteOverloaded checks if an error indicates a remote service overload condition.
@@ -288,10 +280,12 @@ func IsCRDMissingError(err error) bool {
 		return false
 	}
 
+	if meta.IsNoMatchError(err) || isRuntimeNotRegisteredError(err) {
+		return true
+	}
+
 	errStr := strings.ToLower(err.Error())
-	return strings.Contains(errStr, "no matches for kind") ||
-		strings.Contains(errStr, "no kind is registered for the type") ||
-		strings.Contains(errStr, "could not find the requested resource")
+	return strings.Contains(errStr, "could not find the requested resource")
 }
 
 // WrapCRDMissing wraps an error as a permanent config error for missing CRDs.
@@ -305,4 +299,13 @@ func WrapCRDMissing(err error) error {
 	}
 
 	return err
+}
+
+func isRuntimeNotRegisteredError(err error) bool {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if runtime.IsNotRegisteredError(current) {
+			return true
+		}
+	}
+	return false
 }

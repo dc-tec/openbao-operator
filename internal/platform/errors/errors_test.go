@@ -5,9 +5,54 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"testing"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+type testUnregisteredType struct{}
+
+func newTooManyRequestsError() error {
+	return apierrors.NewTooManyRequests("too many requests", 1)
+}
+
+func newServiceUnavailableError() error {
+	return apierrors.NewServiceUnavailable("service unavailable")
+}
+
+func newInternalServerError() error {
+	return apierrors.NewInternalError(errors.New("boom"))
+}
+
+func newTimeoutError() error {
+	return apierrors.NewTimeoutError("request timed out", 1)
+}
+
+func newServerTimeoutError() error {
+	return apierrors.NewServerTimeout(schema.GroupResource{Group: "apps", Resource: "deployments"}, "list", 1)
+}
+
+func newNoKindMatchError() error {
+	return &meta.NoKindMatchError{
+		GroupKind:        schema.GroupKind{Group: "gateway.networking.k8s.io", Kind: "Gateway"},
+		SearchedVersions: []string{"v1"},
+	}
+}
+
+func newNoResourceMatchError() error {
+	return &meta.NoResourceMatchError{
+		PartialResource: schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"},
+	}
+}
+
+func newNotRegisteredTypeError() error {
+	return runtime.NewNotRegisteredErrForType("test-scheme", reflect.TypeOf(testUnregisteredType{}))
+}
 
 type transientWrapTestCase struct {
 	name            string
@@ -169,38 +214,38 @@ func TestIsTransientKubernetesAPI(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "rate limit",
-			err:  errors.New("rate limit exceeded"),
-			want: true,
-		},
-		{
 			name: "too many requests",
-			err:  errors.New("too many requests"),
-			want: true,
-		},
-		{
-			name: "server error",
-			err:  errors.New("server error"),
+			err:  newTooManyRequestsError(),
 			want: true,
 		},
 		{
 			name: "service unavailable",
-			err:  errors.New("service unavailable"),
+			err:  newServiceUnavailableError(),
 			want: true,
 		},
 		{
 			name: "internal server error",
-			err:  errors.New("internal server error"),
+			err:  newInternalServerError(),
+			want: true,
+		},
+		{
+			name: "request timeout",
+			err:  newTimeoutError(),
+			want: true,
+		},
+		{
+			name: "server timeout",
+			err:  newServerTimeoutError(),
 			want: true,
 		},
 		{
 			name: "context deadline exceeded",
-			err:  errors.New("context deadline exceeded"),
+			err:  context.DeadlineExceeded,
 			want: true,
 		},
 		{
-			name: "timeout",
-			err:  errors.New("timeout"),
+			name: "wrapped well-known timeout",
+			err:  fmt.Errorf("wrapped: %w", newTooManyRequestsError()),
 			want: true,
 		},
 		{
@@ -276,22 +321,27 @@ func TestIsCRDMissingError(t *testing.T) {
 		},
 		{
 			name: "no matches for kind",
-			err:  errors.New("no matches for kind"),
+			err:  newNoKindMatchError(),
+			want: true,
+		},
+		{
+			name: "no matches for resource",
+			err:  newNoResourceMatchError(),
 			want: true,
 		},
 		{
 			name: "no kind is registered",
-			err:  errors.New("no kind is registered for the type"),
+			err:  newNotRegisteredTypeError(),
 			want: true,
 		},
 		{
-			name: "could not find the requested resource",
+			name: "wrapped not registered error",
+			err:  fmt.Errorf("wrapped: %w", newNotRegisteredTypeError()),
+			want: true,
+		},
+		{
+			name: "requested resource fallback",
 			err:  errors.New("could not find the requested resource"),
-			want: true,
-		},
-		{
-			name: "case insensitive",
-			err:  errors.New("NO MATCHES FOR KIND"),
 			want: true,
 		},
 		{
@@ -418,8 +468,8 @@ func TestWrapTransientKubernetesAPI(t *testing.T) {
 			wantIsTransient: true,
 		},
 		{
-			name:            "rate limit error (already detected as transient)",
-			err:             errors.New("rate limit exceeded"),
+			name:            "too many requests error (already detected as transient)",
+			err:             newTooManyRequestsError(),
 			wantWrapped:     false, // Already detected as transient, so returned as-is
 			wantIsTransient: true,
 		},
@@ -520,7 +570,7 @@ func TestWrapCRDMissing(t *testing.T) {
 		},
 		{
 			name:        "CRD missing error",
-			err:         errors.New("no matches for kind"),
+			err:         newNoKindMatchError(),
 			wantWrapped: true,
 			wantIsErr:   true,
 		},
@@ -584,7 +634,7 @@ func TestIsTransient(t *testing.T) {
 		},
 		{
 			name: "rate limit",
-			err:  errors.New("rate limit exceeded"),
+			err:  newTooManyRequestsError(),
 			want: true,
 		},
 		{
@@ -690,7 +740,7 @@ func TestShouldRequeue(t *testing.T) {
 		},
 		{
 			name:        "rate limit",
-			err:         errors.New("rate limit exceeded"),
+			err:         newTooManyRequestsError(),
 			wantRequeue: true,
 			wantAfter:   5 * time.Second,
 		},

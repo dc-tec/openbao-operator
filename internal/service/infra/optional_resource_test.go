@@ -8,11 +8,19 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func newHTTPRouteNoKindMatchError() error {
+	return &meta.NoKindMatchError{
+		GroupKind:        schema.GroupKind{Group: "gateway.networking.k8s.io", Kind: "HTTPRoute"},
+		SearchedVersions: []string{"v1"},
+	}
+}
 
 func newGatewayOptionalResourceOptions(degradeOnCRDMissing bool, applyErr error) optionalResourceOptions {
 	return optionalResourceOptions{
@@ -253,7 +261,7 @@ func TestReconcileOptionalResource_Enabled_BuildError_Propagates(t *testing.T) {
 func TestReconcileOptionalResource_CRDMissingOnApply_DegradesWhenConfigured(t *testing.T) {
 	t.Parallel()
 
-	crdMissingErr := errors.New("no matches for kind \"HTTPRoute\" in version \"gateway.networking.k8s.io/v1\"")
+	crdMissingErr := newHTTPRouteNoKindMatchError()
 	err := reconcileOptionalResource(context.Background(), newGatewayOptionalResourceOptions(true, crdMissingErr))
 	if !errors.Is(err, ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
@@ -263,7 +271,7 @@ func TestReconcileOptionalResource_CRDMissingOnApply_DegradesWhenConfigured(t *t
 func TestReconcileOptionalResource_CRDMissingOnApply_DoesNotDegradeWhenDisabled(t *testing.T) {
 	t.Parallel()
 
-	crdMissingErr := errors.New("no matches for kind \"HTTPRoute\" in version \"gateway.networking.k8s.io/v1\"")
+	crdMissingErr := newHTTPRouteNoKindMatchError()
 
 	opts := optionalResourceOptions{
 		kind:       "HTTPRoute",
