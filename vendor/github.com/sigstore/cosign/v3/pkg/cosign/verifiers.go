@@ -22,9 +22,9 @@ import (
 	"fmt"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	in_toto "github.com/in-toto/attestation/go/v1"
 	"github.com/secure-systems-lab/go-securesystemslib/dsse"
 
+	"github.com/sigstore/cosign/v3/pkg/cosign/attestation"
 	"github.com/sigstore/cosign/v3/pkg/oci"
 	"github.com/sigstore/sigstore/pkg/signature/payload"
 )
@@ -72,8 +72,8 @@ func IntotoSubjectClaimVerifier(sig oci.Signature, imageDigest v1.Hash, annotati
 		return err
 	}
 
-	st := in_toto.Statement{}
-	if err := json.Unmarshal(stBytes, &st); err != nil {
+	st := &attestation.Statement{}
+	if err := st.UnmarshalJSON(stBytes); err != nil {
 		return err
 	}
 	for _, subj := range st.Subject {

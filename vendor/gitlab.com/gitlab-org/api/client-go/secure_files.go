@@ -14,7 +14,7 @@
 package gitlab
 
 import (
-	"fmt"
+	"bytes"
 	"io"
 	"net/http"
 	"time"
@@ -143,24 +143,13 @@ type CreateSecureFileOptions struct {
 // GitLab API docs:
 // https://docs.gitlab.com/api/secure_files/#create-secure-file
 func (s SecureFilesService) CreateSecureFile(pid any, content io.Reader, opt *CreateSecureFileOptions, options ...RequestOptionFunc) (*SecureFile, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("projects/%s/secure_files", PathEscape(project))
-
-	req, err := s.client.UploadRequest(http.MethodPost, u, content, *opt.Name, UploadFile, opt, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	file := new(SecureFile)
-	resp, err := s.client.Do(req, file)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return file, resp, nil
+	return do[*SecureFile](s.client,
+		withMethod(http.MethodPost),
+		withPath("projects/%s/secure_files", ProjectID{pid}),
+		withUpload(content, *opt.Name, UploadFile),
+		withAPIOpts(opt),
+		withRequestOpts(options...),
+	)
 }
 
 // DownloadSecureFile downloads the contents of a project's secure file.
@@ -168,24 +157,14 @@ func (s SecureFilesService) CreateSecureFile(pid any, content io.Reader, opt *Cr
 // GitLab API docs:
 // https://docs.gitlab.com/api/secure_files/#download-secure-file
 func (s SecureFilesService) DownloadSecureFile(pid any, id int64, options ...RequestOptionFunc) (io.Reader, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("projects/%s/secure_files/%d/download", PathEscape(project), id)
-
-	req, err := s.client.NewRequest(http.MethodGet, u, nil, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	preserver := &bodyPreserver{}
-	resp, err := s.client.Do(req, preserver)
+	buf, resp, err := do[bytes.Buffer](s.client,
+		withPath("projects/%s/secure_files/%d/download", ProjectID{pid}, id),
+		withRequestOpts(options...),
+	)
 	if err != nil {
 		return nil, resp, err
 	}
-
-	return preserver.body, resp, err
+	return &buf, resp, nil
 }
 
 // RemoveSecureFile removes a project's secure file.

@@ -23,12 +23,40 @@ import (
 
 type (
 	ProjectMirrorServiceInterface interface {
+		// ListProjectMirror gets a list of mirrors configured on the project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/remote_mirrors/#list-a-projects-remote-mirrors
 		ListProjectMirror(pid any, opt *ListProjectMirrorOptions, options ...RequestOptionFunc) ([]*ProjectMirror, *Response, error)
+		// GetProjectMirror gets a single mirror configured on the project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/remote_mirrors/#get-a-single-projects-remote-mirror
 		GetProjectMirror(pid any, mirror int64, options ...RequestOptionFunc) (*ProjectMirror, *Response, error)
+		// GetProjectMirrorPublicKey gets the SSH public key for a single mirror configured on the project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/remote_mirrors/#get-a-single-projects-remote-mirror-public-key
 		GetProjectMirrorPublicKey(pid any, mirror int64, options ...RequestOptionFunc) (*ProjectMirrorPublicKey, *Response, error)
+		// AddProjectMirror creates a new mirror on the project.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/remote_mirrors/#create-a-push-mirror
 		AddProjectMirror(pid any, opt *AddProjectMirrorOptions, options ...RequestOptionFunc) (*ProjectMirror, *Response, error)
+		// EditProjectMirror updates a remote mirror's attributes.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/remote_mirrors/#update-a-remote-mirrors-attributes
 		EditProjectMirror(pid any, mirror int64, opt *EditProjectMirrorOptions, options ...RequestOptionFunc) (*ProjectMirror, *Response, error)
+		// DeleteProjectMirror deletes a project mirror.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/remote_mirrors/#delete-a-remote-mirror
 		DeleteProjectMirror(pid any, mirror int64, options ...RequestOptionFunc) (*Response, error)
+		// ForcePushMirrorUpdate triggers a manual update for a project mirror.
+		//
+		// GitLab API docs:
+		// https://docs.gitlab.com/api/remote_mirrors/#force-push-mirror-update
 		ForcePushMirrorUpdate(pid any, mirror int64, options ...RequestOptionFunc) (*Response, error)
 	}
 
@@ -70,10 +98,6 @@ type ListProjectMirrorOptions struct {
 	ListOptions
 }
 
-// ListProjectMirror gets a list of mirrors configured on the project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/remote_mirrors/#list-a-projects-remote-mirrors
 func (s *ProjectMirrorService) ListProjectMirror(pid any, opt *ListProjectMirrorOptions, options ...RequestOptionFunc) ([]*ProjectMirror, *Response, error) {
 	return do[[]*ProjectMirror](s.client,
 		withPath("projects/%s/remote_mirrors", ProjectID{pid}),
@@ -82,10 +106,6 @@ func (s *ProjectMirrorService) ListProjectMirror(pid any, opt *ListProjectMirror
 	)
 }
 
-// GetProjectMirror gets a single mirror configured on the project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/remote_mirrors/#get-a-single-projects-remote-mirror
 func (s *ProjectMirrorService) GetProjectMirror(pid any, mirror int64, options ...RequestOptionFunc) (*ProjectMirror, *Response, error) {
 	return do[*ProjectMirror](s.client,
 		withPath("projects/%s/remote_mirrors/%d", ProjectID{pid}, mirror),
@@ -93,10 +113,6 @@ func (s *ProjectMirrorService) GetProjectMirror(pid any, mirror int64, options .
 	)
 }
 
-// GetProjectMirrorPublicKey gets the SSH public key for a single mirror configured on the project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/remote_mirrors/#get-a-single-projects-remote-mirror-public-key
 func (s *ProjectMirrorService) GetProjectMirrorPublicKey(pid any, mirror int64, options ...RequestOptionFunc) (*ProjectMirrorPublicKey, *Response, error) {
 	return do[*ProjectMirrorPublicKey](s.client,
 		withPath("projects/%s/remote_mirrors/%d/public_key", ProjectID{pid}, mirror),
@@ -118,10 +134,6 @@ type AddProjectMirrorOptions struct {
 	AuthMethod            *string `url:"auth_method,omitempty" json:"auth_method,omitempty"`
 }
 
-// AddProjectMirror creates a new mirror on the project.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/remote_mirrors/#create-a-push-mirror
 func (s *ProjectMirrorService) AddProjectMirror(pid any, opt *AddProjectMirrorOptions, options ...RequestOptionFunc) (*ProjectMirror, *Response, error) {
 	return do[*ProjectMirror](s.client,
 		withMethod(http.MethodPost),
@@ -144,10 +156,6 @@ type EditProjectMirrorOptions struct {
 	AuthMethod            *string `url:"auth_method,omitempty" json:"auth_method,omitempty"`
 }
 
-// EditProjectMirror updates a project team member to a specified access level..
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/remote_mirrors/#update-a-remote-mirrors-attributes
 func (s *ProjectMirrorService) EditProjectMirror(pid any, mirror int64, opt *EditProjectMirrorOptions, options ...RequestOptionFunc) (*ProjectMirror, *Response, error) {
 	return do[*ProjectMirror](s.client,
 		withMethod(http.MethodPut),
@@ -157,10 +165,6 @@ func (s *ProjectMirrorService) EditProjectMirror(pid any, mirror int64, opt *Edi
 	)
 }
 
-// DeleteProjectMirror deletes a project mirror.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/remote_mirrors/#delete-a-remote-mirror
 func (s *ProjectMirrorService) DeleteProjectMirror(pid any, mirror int64, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodDelete),
@@ -170,10 +174,6 @@ func (s *ProjectMirrorService) DeleteProjectMirror(pid any, mirror int64, option
 	return resp, err
 }
 
-// ForcePushMirrorUpdate triggers a manual update for a project mirror.
-//
-// GitLab API docs:
-// https://docs.gitlab.com/api/remote_mirrors/#force-push-mirror-update
 func (s *ProjectMirrorService) ForcePushMirrorUpdate(pid any, mirror int64, options ...RequestOptionFunc) (*Response, error) {
 	_, resp, err := do[none](s.client,
 		withMethod(http.MethodPost),

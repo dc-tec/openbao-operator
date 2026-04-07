@@ -17,7 +17,6 @@
 package gitlab
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 )
@@ -77,32 +76,12 @@ type (
 )
 
 func (s *ProjectMarkdownUploadsService) UploadProjectMarkdown(pid any, content io.Reader, filename string, options ...RequestOptionFunc) (*ProjectMarkdownUploadedFile, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("projects/%s/uploads", PathEscape(project))
-
-	req, err := s.client.UploadRequest(
-		http.MethodPost,
-		u,
-		content,
-		filename,
-		UploadFile,
-		nil,
-		options,
+	return do[*ProjectMarkdownUploadedFile](s.client,
+		withMethod(http.MethodPost),
+		withPath("projects/%s/uploads", ProjectID{pid}),
+		withUpload(content, filename, UploadFile),
+		withRequestOpts(options...),
 	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	f := new(ProjectMarkdownUploadedFile)
-	resp, err := s.client.Do(req, f)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return f, resp, nil
 }
 
 func (s *ProjectMarkdownUploadsService) ListProjectMarkdownUploads(pid any, options ...RequestOptionFunc) ([]*ProjectMarkdownUpload, *Response, error) {

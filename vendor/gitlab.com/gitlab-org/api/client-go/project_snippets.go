@@ -18,7 +18,6 @@ package gitlab
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
 )
 
@@ -152,22 +151,12 @@ func (s *ProjectSnippetsService) DeleteSnippet(pid any, snippet int64, options .
 // GitLab API docs:
 // https://docs.gitlab.com/api/project_snippets/#snippet-content
 func (s *ProjectSnippetsService) SnippetContent(pid any, snippet int64, options ...RequestOptionFunc) ([]byte, *Response, error) {
-	project, err := parseID(pid)
-	if err != nil {
-		return nil, nil, err
-	}
-	u := fmt.Sprintf("projects/%s/snippets/%d/raw", PathEscape(project), snippet)
-
-	req, err := s.client.NewRequest(http.MethodGet, u, nil, options)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var b bytes.Buffer
-	resp, err := s.client.Do(req, &b)
+	buf, resp, err := do[bytes.Buffer](s.client,
+		withPath("projects/%s/snippets/%d/raw", ProjectID{pid}, snippet),
+		withRequestOpts(options...),
+	)
 	if err != nil {
 		return nil, resp, err
 	}
-
-	return b.Bytes(), resp, err
+	return buf.Bytes(), resp, nil
 }
