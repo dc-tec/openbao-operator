@@ -3,6 +3,6 @@
   "private": true,
   "description": "Pinned CI tooling for OpenBao Operator workflows.",
   "devDependencies": {
-    "@ast-grep/cli": "0.42.0"
+    "@ast-grep/cli": "0.42.1"
   }
 }
