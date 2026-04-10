@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-error-string-classification
+message: Do not classify errors by matching err.Error(); prefer typed sentinels, status helpers, or explicit adapter-boundary translation.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+  - 'internal/platform/admission/canary.go'
+  - 'internal/adapter/security/image_verifier_verify.go'
+rule:
+  any:
+    - pattern: strings.Contains($ERR.Error(), $MSG)
+    - pattern: strings.Contains(strings.ToLower($ERR.Error()), $MSG)
+    - pattern: strings.EqualFold($ERR.Error(), $MSG)
+    - pattern: strings.HasPrefix($ERR.Error(), $MSG)
+    - pattern: strings.HasPrefix(strings.ToLower($ERR.Error()), $MSG)
+    - pattern: strings.HasSuffix($ERR.Error(), $MSG)
+    - pattern: strings.HasSuffix(strings.ToLower($ERR.Error()), $MSG)
+note: Keep string parsing at explicit opaque boundaries only; elsewhere preserve error chains and branch on typed errors or status values.

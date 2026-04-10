@@ -1,0 +1,38 @@
+id: no-error-string-classification
+valid:
+  - |
+    package p
+    import "errors"
+    func f(err error, sentinel error) bool {
+      return errors.Is(err, sentinel)
+    }
+  - |
+    package p
+    import "strings"
+    func f(message string) bool {
+      return strings.Contains(message, "forbidden")
+    }
+  - |
+    package p
+    func f(err error) string {
+      return err.Error()
+    }
+invalid:
+  - |
+    package p
+    import "strings"
+    func f(err error) bool {
+      return strings.Contains(err.Error(), "forbidden")
+    }
+  - |
+    package p
+    import "strings"
+    func f(err error) bool {
+      return strings.Contains(strings.ToLower(err.Error()), "forbidden")
+    }
+  - |
+    package p
+    import "strings"
+    func f(err error) bool {
+      return strings.EqualFold(err.Error(), "already initialized")
+    }
