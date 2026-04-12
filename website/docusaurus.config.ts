@@ -18,7 +18,13 @@ const config: Config = {
   favicon: 'img/brand/favicon.png',
 
   future: {
-    v4: true,
+    v4: {
+      removeLegacyPostBuildHeadAttribute: true,
+      useCssCascadeLayers: true,
+      siteStorageNamespacing: true,
+      fasterByDefault: true,
+      mdx1CompatDisabledByDefault: false,
+    },
   },
 
   url: 'https://dc-tec.github.io',
