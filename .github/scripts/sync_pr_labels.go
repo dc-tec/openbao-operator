@@ -629,8 +629,8 @@ func escapePathSegment(value string) string {
 
 func fetchRepoFile(repo, ref, path, destination string) error {
 	path = strings.TrimPrefix(path, "/")
-	stdout, stderr, err := runCommand(
-		"gh", "api",
+	stdout, stderr, err := runGHCommand(
+		"api",
 		"-H", "Accept: application/vnd.github+json",
 		fmt.Sprintf("/repos/%s/contents/%s?ref=%s", repo, path, ref),
 	)
@@ -657,8 +657,8 @@ func fetchRepoFile(repo, ref, path, destination string) error {
 	return os.WriteFile(destination, content, 0o644)
 }
 
-func runCommand(name string, args ...string) (string, string, error) {
-	cmd := exec.Command(name, args...)
+func runGHCommand(args ...string) (string, string, error) {
+	cmd := exec.Command("gh", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

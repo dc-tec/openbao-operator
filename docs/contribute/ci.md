@@ -69,9 +69,9 @@ make ci-core`}
     },
     {
       cells: [
-        "Image and filesystem security scans",
-        "`make security-ci` and `make security-scan-built-images`",
-        "Run these when images, dependencies, or container-facing surfaces changed.",
+        "Static security and filesystem scans",
+        "`make semgrep-ci`, `make security-ci`, and `make security-scan-built-images`",
+        "Run these when dependencies, network-facing code, container-facing surfaces, or CI/config security surfaces changed. `make semgrep-ci` is the blocking local Semgrep scan across `cmd`, `internal`, `api`, `hack`, `config`, and `.github`; `make security-ci` includes that scan plus vulncheck, license policy, and the Trivy filesystem scan.",
       ],
     },
     {
@@ -87,6 +87,8 @@ make ci-core`}
 <Callout type="note" title="What CI assumes">
 
 CI and release workflows enforce vendored Go dependencies. After dependency changes, rerun `make verify-vendor`. License verification uses that same vendored view of the dependency graph.
+
+Inline `nosemgrep` suppressions are reserved for bounded intentional exceptions. Put the suppression on the exact reported line and add a plain-language explanation immediately above it.
 
 </Callout>
 

@@ -37,6 +37,7 @@ runs:
       shell: bash
       env:
         GOFLAGS: ${{ inputs.operator-schema-drift-goflags }}
+        OPERATOR_SCHEMA_DRIFT_IMAGE_TAG: ${{ inputs.operator-schema-drift-image-tag }}
       run: |
         set -euo pipefail
-        go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag "${{ inputs.operator-schema-drift-image-tag }}"
+        go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag "${OPERATOR_SCHEMA_DRIFT_IMAGE_TAG}"

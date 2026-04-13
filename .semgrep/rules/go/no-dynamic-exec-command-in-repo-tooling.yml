@@ -1,0 +1,23 @@
+rules:
+  - id: no-dynamic-exec-command-in-repo-tooling
+    message: >-
+      Keep exec.Command targets static in repo tooling. Hardcode the executable
+      name and pass only dynamic arguments so command dispatch cannot be redirected
+      by caller-controlled values.
+    severity: WARNING
+    languages:
+      - go
+    paths:
+      include:
+        - /.github/scripts/**/*.go
+        - /hack/**/*.go
+      exclude:
+        - '**/*_test.go'
+        - '**/testing_*.go'
+    patterns:
+      - pattern-either:
+          - pattern: exec.Command($CMD, ...)
+          - pattern: exec.CommandContext($CTX, $CMD, ...)
+      - metavariable-regex:
+          metavariable: $CMD
+          regex: '^(?!["`]).+'

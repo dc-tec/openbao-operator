@@ -39,7 +39,9 @@ runs:
 
     - name: Add repo-local tools to PATH
       shell: bash
-      run: echo "${GITHUB_WORKSPACE}/${{ inputs.tool-cache-path }}" >> "${GITHUB_PATH}"
+      env:
+        TOOL_CACHE_PATH: ${{ inputs.tool-cache-path }}
+      run: echo "${GITHUB_WORKSPACE}/${TOOL_CACHE_PATH}" >> "${GITHUB_PATH}"
 
     - name: Cache repo tools
       if: inputs.cache-tools == 'true'
@@ -51,6 +53,9 @@ runs:
     - name: Bootstrap repo tools
       if: inputs.bootstrap-targets != ''
       shell: bash
+      env:
+        BOOTSTRAP_TARGETS: ${{ inputs.bootstrap-targets }}
       run: |
         set -euo pipefail
-        make ${{ inputs.bootstrap-targets }}
+        read -r -a bootstrap_targets <<< "${BOOTSTRAP_TARGETS}"
+        make "${bootstrap_targets[@]}"

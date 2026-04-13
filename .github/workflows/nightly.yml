@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   security:
-    name: Security (vulncheck + Trivy FS)
+    name: Security (vulncheck + Semgrep + Trivy FS)
     runs-on: &runner ubuntu-24.04
     steps:
       - name: Checkout
@@ -27,6 +27,9 @@ jobs:
         env:
           GOFLAGS: -mod=vendor
         run: make vulncheck
+
+      - name: Run Semgrep
+        run: make semgrep-ci
 
       - name: Install Trivy (safe pinned release)
         uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6

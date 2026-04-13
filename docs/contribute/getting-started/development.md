@@ -144,6 +144,13 @@ make tilt-down`}
     },
     {
       cells: [
+        "Security static analysis",
+        "`make semgrep-scan`, `make semgrep-ci`, `make security-ci`",
+        "Use `make semgrep-scan` for a report-only pass, `make semgrep-ci` for the blocking repo-wide Semgrep gate across runtime, config, and CI surfaces, or `make security-ci` for the full CI-equivalent security lane with vulncheck, license checks, Semgrep, and Trivy.",
+      ],
+    },
+    {
+      cells: [
         "Controller debugging",
         "`make air-controller`, `make debug-controller`, `make debug-test PKG=... TEST=...`",
         "Live reload or Delve-based debugging for controller and test work.",

@@ -134,7 +134,10 @@ func collectCases(opts options) ([]testCase, error) {
 }
 
 func outlineFile(ginkgoPath, filePath string) ([]outlineNode, error) {
-	cmd := exec.Command(ginkgoPath, "outline", "--format=json", filePath) // #nosec G204 -- controlled tool invocation
+	// The catalog calls the validated Ginkgo binary discovered for local repo tooling.
+	// #nosec G204 -- controlled tool invocation.
+	// nosemgrep
+	cmd := exec.Command(ginkgoPath, "outline", "--format=json", filePath)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout

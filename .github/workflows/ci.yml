@@ -72,19 +72,29 @@ jobs:
       - name: Detect chart changes
         id: diff
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_E2E_REQUESTED: ${{ (inputs.force_full_e2e || inputs.force_backup_e2e || inputs.force_upgrade_e2e || inputs.force_hardened_e2e) && 'true' || 'false' }}
+          MANUAL_FULL_E2E: ${{ inputs.force_full_e2e && 'true' || 'false' }}
+          MANUAL_BACKUP_E2E: ${{ inputs.force_backup_e2e && 'true' || 'false' }}
+          MANUAL_UPGRADE_E2E: ${{ inputs.force_upgrade_e2e && 'true' || 'false' }}
+          MANUAL_HARDENED_E2E: ${{ inputs.force_hardened_e2e && 'true' || 'false' }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
         run: |
           set -euo pipefail
 
           head_sha="${GITHUB_SHA}"
           base_sha=""
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             {
-              echo "manual_e2e_requested=${{ (inputs.force_full_e2e || inputs.force_backup_e2e || inputs.force_upgrade_e2e || inputs.force_hardened_e2e) && 'true' || 'false' }}"
-              echo "manual_full_e2e=${{ inputs.force_full_e2e && 'true' || 'false' }}"
-              echo "manual_backup_e2e=${{ inputs.force_backup_e2e && 'true' || 'false' }}"
-              echo "manual_upgrade_e2e=${{ inputs.force_upgrade_e2e && 'true' || 'false' }}"
-              echo "manual_hardened_e2e=${{ inputs.force_hardened_e2e && 'true' || 'false' }}"
+              echo "manual_e2e_requested=${MANUAL_E2E_REQUESTED}"
+              echo "manual_full_e2e=${MANUAL_FULL_E2E}"
+              echo "manual_backup_e2e=${MANUAL_BACKUP_E2E}"
+              echo "manual_upgrade_e2e=${MANUAL_UPGRADE_E2E}"
+              echo "manual_hardened_e2e=${MANUAL_HARDENED_E2E}"
               for key in chart workflow docs go_quality go_tests config_compat security_scan security_image fuzz e2e e2e_backup e2e_upgrade e2e_hardened; do
                 echo "${key}=false"
               done
@@ -101,13 +111,13 @@ jobs:
             echo "manual_hardened_e2e=false"
           } >> "${GITHUB_OUTPUT}"
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.event.pull_request.head.sha }}"
-          elif [[ "${{ github.event_name }}" == "push" ]]; then
-            base_sha="${{ github.event.before }}"
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            base_sha="${PR_BASE_SHA}"
+            head_sha="${PR_HEAD_SHA}"
+          elif [[ "${EVENT_NAME}" == "push" ]]; then
+            base_sha="${PUSH_BEFORE_SHA}"
           else
-            echo "Unsupported event: ${{ github.event_name }}" >&2
+            echo "Unsupported event: ${EVENT_NAME}" >&2
             exit 1
           fi
 
@@ -193,7 +203,7 @@ jobs:
             echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"
           fi
   security:
-    name: Security (vulncheck + Trivy FS)
+    name: Security (vulncheck + Semgrep + Trivy FS)
     needs: changes
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.security_scan == 'true'
     runs-on: *runner
@@ -208,6 +218,9 @@ jobs:
         env:
           GOFLAGS: -mod=vendor
         run: make vulncheck
+
+      - name: Run Semgrep
+        run: make semgrep-ci
 
       - name: Install Trivy (safe pinned release)
         uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6

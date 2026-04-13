@@ -105,7 +105,8 @@ func initializeAdmissionTracker(mgr ctrl.Manager, cfg runConfig) *admission.Trac
 	default:
 		checkCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		status, err := admission.CheckDependencies(
+		status := admission.Status{}
+		checkedStatus, err := admission.CheckDependencies(
 			checkCtx,
 			mgr.GetAPIReader(),
 			admission.DefaultDependencies(),
@@ -113,7 +114,8 @@ func initializeAdmissionTracker(mgr ctrl.Manager, cfg runConfig) *admission.Trac
 		)
 		if err != nil {
 			setupLog.Error(err, "Failed to evaluate admission policy dependencies; treating admission as not ready")
-			status.OverallReady = false
+		} else {
+			status = checkedStatus
 		}
 		admission.SetAdmissionDependenciesReady(status.OverallReady)
 		admissionTracker.Set(status)
