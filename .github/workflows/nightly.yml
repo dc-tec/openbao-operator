@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload fuzz artifacts (failure)
         if: failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fuzz-nightly-artifacts
           path: |
@@ -116,7 +116,7 @@ jobs:
         run: make build-linux
 
       - name: Upload Binaries
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: operator-binaries
           path: bin/linux_amd64/
@@ -178,7 +178,7 @@ jobs:
 
       - name: Build operator image
         id: build-manager
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: hack/ci/Dockerfile.fast.manager
@@ -195,7 +195,7 @@ jobs:
 
       - name: Build init image
         id: build-init
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: hack/ci/Dockerfile.fast.init
@@ -209,7 +209,7 @@ jobs:
 
       - name: Build backup image
         id: build-backup
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: hack/ci/Dockerfile.fast.backup
@@ -223,7 +223,7 @@ jobs:
 
       - name: Build upgrade image
         id: build-upgrade
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: hack/ci/Dockerfile.fast.upgrade
@@ -321,7 +321,7 @@ jobs:
 
       - name: Upload E2E artifacts (failure)
         if: failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-artifacts-kind-${{ matrix.k8s }}
           path: artifacts/
@@ -528,7 +528,7 @@ jobs:
           done
 
       - name: Upload nightly candidate bundle
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-candidate-bundle
           path: dist/candidate/
