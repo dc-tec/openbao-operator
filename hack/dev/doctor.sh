@@ -35,6 +35,7 @@ printf 'OpenBao Operator development environment check\n'
 printf 'Repository: %s\n\n' "${ROOT_DIR}"
 
 expected_go="$(sed -n 's/^go //p' go.mod | head -n 1)"
+expected_semgrep="$(sed -n 's/^SEMGREP_VERSION ?= //p' mk/dependencies.mk | head -n 1)"
 if command -v go >/dev/null 2>&1; then
   current_go="$(go env GOVERSION 2>/dev/null || true)"
   if [[ "${current_go}" == "go${expected_go}"* ]]; then
@@ -70,6 +71,17 @@ if [ -x "${ROOT_DIR}/.github/tools/node_modules/.bin/ast-grep" ]; then
   ok "ast-grep bootstrapped locally"
 else
   warn "ast-grep not bootstrapped locally yet (run 'make bootstrap' or 'make ast-grep')"
+fi
+
+if [ -x "${ROOT_DIR}/bin/semgrep" ]; then
+  current_semgrep="$("${ROOT_DIR}/bin/semgrep" --version 2>/dev/null || true)"
+  if [ "${current_semgrep}" = "${expected_semgrep}" ]; then
+    ok "semgrep bootstrapped locally (${current_semgrep})"
+  else
+    warn "semgrep version mismatch: expected ${expected_semgrep}, found ${current_semgrep:-unknown} (run 'make semgrep')"
+  fi
+else
+  warn "semgrep not bootstrapped locally yet (run 'make bootstrap' or 'make semgrep')"
 fi
 
 if command -v docker >/dev/null 2>&1; then

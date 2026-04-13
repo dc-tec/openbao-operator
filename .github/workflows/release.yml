@@ -132,7 +132,7 @@ jobs:
     secrets: inherit
 
   security-govulncheck:
-    name: Security Gate (vulncheck)
+    name: Security Gate (vulncheck + Semgrep)
     runs-on: *runner
     needs: prepare
     permissions:
@@ -150,6 +150,9 @@ jobs:
         env:
           GOFLAGS: -mod=vendor
         run: make vulncheck
+
+      - name: Run Semgrep
+        run: make semgrep-ci
 
   security-images:
     name: Security Gate (Trivy image ${{ matrix.image_name }})
