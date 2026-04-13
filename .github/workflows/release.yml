@@ -261,7 +261,7 @@ jobs:
 
       - name: Upload E2E artifacts (failure)
         if: failure()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-artifacts-kind-1.35.0
           path: artifacts/
@@ -587,7 +587,7 @@ jobs:
           compare_file "sbom-openbao-upgrade.spdx.json"
 
       - name: Upload byte-verified release assets
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-byte-verified-assets
           path: |
@@ -602,7 +602,7 @@ jobs:
           retention-days: 7
 
       - name: Upload reproducibility report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-reproducibility-report
           path: dist/reproducibility-report.md
