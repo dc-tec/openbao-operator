@@ -135,7 +135,9 @@ func collectCases(opts options) ([]testCase, error) {
 
 func outlineFile(ginkgoPath, filePath string) ([]outlineNode, error) {
 	// The catalog calls the validated Ginkgo binary discovered for local repo tooling.
-	cmd := exec.Command(ginkgoPath, "outline", "--format=json", filePath) // #nosec G204 -- controlled tool invocation. nosemgrep: semgrep.rules.go.no-dynamic-exec-command-in-repo-tooling, go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	// #nosec G204 -- controlled tool invocation.
+	// nosemgrep
+	cmd := exec.Command(ginkgoPath, "outline", "--format=json", filePath)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout

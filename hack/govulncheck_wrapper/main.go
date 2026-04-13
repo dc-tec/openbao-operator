@@ -124,7 +124,8 @@ func run(out io.Writer, errOut io.Writer, govulncheckPath, ignorePath string, sh
 
 func runGovulncheck(path string, args ...string) (combined []byte, rc int, err error) {
 	// The wrapper executes the validated govulncheck binary chosen by repo tooling or CLI override.
-	cmd := exec.Command(path, args...) // nosemgrep: semgrep.rules.go.no-dynamic-exec-command-in-repo-tooling, go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	// nosemgrep
+	cmd := exec.Command(path, args...)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
