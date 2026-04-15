@@ -2,18 +2,22 @@ package openbaocluster
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -79,6 +83,12 @@ type InfraPodRuntime struct {
 	ClientForPodFunc ScaleDownPodClientFactory
 }
 
+// InfraScaleDownRuntime groups authenticated Raft membership operations used
+// to stage safe scale-downs.
+type InfraScaleDownRuntime struct {
+	Runtime initmanagerport.ScaleDownRuntime
+}
+
 // InfraDependencies provides external dependencies for infrastructure reconciliation.
 type InfraDependencies struct {
 	Kubernetes        InfraKubernetesRuntime
@@ -86,6 +96,7 @@ type InfraDependencies struct {
 	ImageVerification InfraImageVerificationRuntime
 	Events            InfraEventRuntime
 	Pods              InfraPodRuntime
+	ScaleDown         InfraScaleDownRuntime
 }
 
 type infraReconciler struct {
@@ -114,13 +125,34 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 
 	spec := r.computeStatefulSetSpec(logger, cluster, resolvedImages.mainImage, resolvedImages.initImage)
+	stagedScaleDown := false
 
 	currentSTS := &appsv1.StatefulSet{}
-	if err := r.deps.Kubernetes.Client.Get(ctx, client.ObjectKey{Name: spec.Name, Namespace: cluster.Namespace}, currentSTS); err == nil {
-		if err := r.handleScaleDownSafety(ctx, cluster, spec.Replicas, currentSTS); err != nil {
+	reader := r.deps.Kubernetes.APIReader
+	if reader == nil {
+		reader = r.deps.Kubernetes.Client
+	}
+
+	err = reader.Get(ctx, client.ObjectKey{Name: spec.Name, Namespace: cluster.Namespace}, currentSTS)
+	switch {
+	case err == nil:
+		appliedReplicas, err := r.handleScaleDownSafety(ctx, cluster, spec.Replicas, currentSTS)
+		if err != nil {
+			if operatorerrors.IsPermanent(err) && errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+				logger.Info("Scale down safety check requires user intervention", "reason", err.Error())
+				return recon.Result{}, nil
+			}
 			logger.Info("Scale down safety check blocked reconciliation", "reason", err.Error())
 			return recon.Result{RequeueAfter: infraRequeueShort}, nil
 		}
+		spec.Replicas = appliedReplicas
+		stagedScaleDown = cluster.Status.Initialized && spec.Replicas > cluster.Spec.Replicas
+	case apierrors.IsNotFound(err):
+		// No StatefulSet exists yet; scale-down safety only applies once the workload is created.
+	default:
+		return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(
+			err,
+		)
 	}
 
 	effectiveOIDC, err := r.resolveOIDC(ctx, cluster)
@@ -131,6 +163,14 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	manager := r.newInfraManager(effectiveOIDC)
 	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
 		return recon.Result{}, r.mapManagerReconcileError(err)
+	}
+	if stagedScaleDown {
+		logger.Info(
+			"Staged scale down step applied; requeueing to continue safe replica reduction",
+			"appliedStatefulSetReplicas", spec.Replicas,
+			"desiredReplicas", cluster.Spec.Replicas,
+		)
+		return recon.Result{RequeueAfter: infraRequeueShort}, nil
 	}
 
 	return recon.Result{}, nil

@@ -7,6 +7,8 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
+const OpenBaoClusterNamespace = "openbaocluster-dev"
+
 func ptrToInt32(v int32) *int32 {
 	return &v
 }
@@ -366,13 +368,26 @@ func TestBuildAutopilotConfig(t *testing.T) {
 	}
 }
 
-func TestAutopilotBaseURL_UsesPublicService(t *testing.T) {
+func TestAutopilotBaseURL_UsesPublicServiceWhenRendered(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
 	cluster.Name = "openbaocluster-dev"
-	cluster.Namespace = "openbaocluster-dev"
+	cluster.Namespace = OpenBaoClusterNamespace
+	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{}
 
 	got := autopilotBaseURL(cluster)
 	want := "https://openbaocluster-dev-public.openbaocluster-dev.svc:8200"
+	if got != want {
+		t.Fatalf("autopilotBaseURL() = %q, want %q", got, want)
+	}
+}
+
+func TestAutopilotBaseURL_FallsBackToHeadlessService(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{}
+	cluster.Name = "openbaocluster-dev"
+	cluster.Namespace = OpenBaoClusterNamespace
+
+	got := autopilotBaseURL(cluster)
+	want := "https://openbaocluster-dev.openbaocluster-dev.svc:8200"
 	if got != want {
 		t.Fatalf("autopilotBaseURL() = %q, want %q", got, want)
 	}

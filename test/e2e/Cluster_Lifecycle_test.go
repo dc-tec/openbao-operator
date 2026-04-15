@@ -334,8 +334,51 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			_ = f.Cleanup(cleanupCtx)
 		})
 
+		verifyClusterServesJWTAuthenticatedKV := func(secretPath, expectedValue string) {
+			verifierLabels := map[string]string{"role": "test-verifier"}
+
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, c, f.Namespace, clusterName)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				g.Expect(e2ehelpers.WriteSecretViaJWT(
+					ctx,
+					cfg,
+					c,
+					f.Namespace,
+					openBaoImage,
+					baoAddr,
+					"default",
+					"e2e-test",
+					secretPath,
+					verifierLabels,
+					map[string]string{"foo": expectedValue},
+				)).To(Succeed())
+
+				value, err := e2ehelpers.ReadSecretViaJWT(
+					ctx,
+					cfg,
+					c,
+					f.Namespace,
+					openBaoImage,
+					baoAddr,
+					"default",
+					"e2e-test",
+					secretPath,
+					verifierLabels,
+					"foo",
+				)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(value).To(Equal(expectedValue))
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
+		}
+
 		It("creates a cluster with 1 replica and verifies autopilot min_quorum=1", func() {
 			By(fmt.Sprintf("creating OpenBaoCluster %q with 1 replica", clusterName))
+			requests := append(
+				append([]openbaov1alpha1.SelfInitRequest{}, e2ehelpers.CreateAutopilotVerificationRequests(f.Namespace)...),
+				e2ehelpers.CreateE2ERequests(f.Namespace)...,
+			)
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
@@ -355,7 +398,7 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
 							Enabled: true,
 						},
-						Requests: e2ehelpers.CreateAutopilotVerificationRequests(f.Namespace),
+						Requests: requests,
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -497,27 +540,30 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot min_quorum=3 verified after scale up\n")
 		})
 
-		It("scales down to 2 replicas and verifies autopilot min_quorum=2", func() {
+		It("scales down to 1 replica, remains responsive, and verifies autopilot min_quorum=1", func() {
 
-			By("updating cluster to 2 replicas")
+			By("updating cluster to 1 replica")
 			Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				cluster := &openbaov1alpha1.OpenBaoCluster{}
 				if err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster); err != nil {
 					return err
 				}
-				cluster.Spec.Replicas = 2
+				cluster.Spec.Replicas = 1
 				return c.Update(ctx, cluster)
 			})).To(Succeed())
 
-			By("waiting for StatefulSet to scale down to 2 replicas")
-			f.WaitForStatefulSetReady(ctx, clusterName, 2, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			By("waiting for StatefulSet to scale down to 1 replica")
+			f.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
 
-			By("waiting for pods to be ready")
+			By("waiting for the remaining pod to be ready")
 			Eventually(func(g Gomega) {
 				sts := &appsv1.StatefulSet{}
 				g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)).To(Succeed())
-				g.Expect(sts.Status.ReadyReplicas).To(Equal(int32(2)))
+				g.Expect(sts.Status.ReadyReplicas).To(Equal(int32(1)))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("waiting for Available condition after scale down")
+			f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
 
 			By("getting public service for autopilot verification")
 			svc := &corev1.Service{}
@@ -529,7 +575,7 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			By("triggering reconcile after scale down so autopilot settings are refreshed promptly")
 			Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
 
-			By("verifying Raft Autopilot min_quorum=2 (Development profile with 2 replicas)")
+			By("verifying Raft Autopilot min_quorum=1 (Development profile with 1 replica)")
 			// Wait a bit for autopilot config to be reconciled after scaling
 			Eventually(func() error {
 				return e2ehelpers.VerifyRaftAutopilotMinQuorumViaJWT(
@@ -541,10 +587,16 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					fmt.Sprintf("https://%s:8200", svc.Spec.ClusterIP),
 					"default",
 					map[string]string{"role": "test-verifier"},
-					2, // Expected min_quorum for Development profile with 2 replicas
+					1, // Expected min_quorum for Development profile with 1 replica
 				)
-			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be updated to 2 after scale down")
-			_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot min_quorum=2 verified after scale down\n")
+			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be updated to 1 after scale down")
+			_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot min_quorum=1 verified after scale down\n")
+
+			By("verifying the remaining cluster still serves JWT-authenticated KV traffic")
+			verifyClusterServesJWTAuthenticatedKV(
+				fmt.Sprintf("secret/%s-scaledown-smoke", clusterName),
+				"still-responsive-after-3-to-1",
+			)
 		})
 	})
 })
