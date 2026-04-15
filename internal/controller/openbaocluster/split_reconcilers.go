@@ -97,6 +97,10 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 	if provider, ok := r.parent.InitManager.(initmanagerport.AutopilotProvider); ok {
 		autopilotRuntime = provider.AutopilotRuntime()
 	}
+	statefulSetReader := r.parent.APIReader
+	if statefulSetReader == nil {
+		statefulSetReader = r.parent.Client
+	}
 
 	original := cluster.DeepCopy()
 	reconcilers := []appopenbaocluster.SubReconciler{
@@ -109,6 +113,7 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		reconcilers,
 		r.parent.InitManager,
 		autopilotRuntime,
+		statefulSetReader,
 		r.parent.Recorder,
 		constants.RequeueShort,
 	)

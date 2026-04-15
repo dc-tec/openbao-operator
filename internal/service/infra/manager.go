@@ -203,17 +203,37 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return nil
 	}
 
-	if err := m.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, spec.Image, spec.InitContainerImage, spec.Revision, spec.DisableSelfInit); err != nil {
+	statefulSetCluster := clusterForStatefulSetSpec(cluster, spec)
+	if cluster != nil && statefulSetCluster != cluster {
+		logger.V(1).Info(
+			"Applying staged StatefulSet replica count",
+			"statefulset", spec.Name,
+			"clusterDesiredReplicas", cluster.Spec.Replicas,
+			"appliedStatefulSetReplicas", spec.Replicas,
+		)
+	}
+
+	if err := m.EnsureStatefulSetWithRevision(ctx, logger, statefulSetCluster, configContent, spec.Image, spec.InitContainerImage, spec.Revision, spec.DisableSelfInit); err != nil {
 		return err
 	}
 
 	// SECURITY: Create PodDisruptionBudget to prevent simultaneous pod evictions
 	// that could cause quorum loss during node drains or cluster upgrades
-	if err := m.ensurePodDisruptionBudget(ctx, logger, cluster); err != nil {
+	if err := m.ensurePodDisruptionBudget(ctx, logger, statefulSetCluster); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func clusterForStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) *openbaov1alpha1.OpenBaoCluster {
+	if cluster == nil || spec.Replicas == cluster.Spec.Replicas {
+		return cluster
+	}
+
+	statefulSetCluster := cluster.DeepCopy()
+	statefulSetCluster.Spec.Replicas = spec.Replicas
+	return statefulSetCluster
 }
 
 func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {

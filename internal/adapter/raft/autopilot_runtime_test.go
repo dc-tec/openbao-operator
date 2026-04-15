@@ -27,9 +27,22 @@ func TestAutopilotBaseURL(t *testing.T) {
 	t.Parallel()
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "tenant-ns"},
+		Spec:       openbaov1alpha1.OpenBaoClusterSpec{Service: &openbaov1alpha1.ServiceConfig{}},
 	}
 	got := autopilotBaseURL(cluster)
 	want := "https://cluster-a-public.tenant-ns.svc:8200"
+	if got != want {
+		t.Fatalf("autopilotBaseURL()=%q, want %q", got, want)
+	}
+}
+
+func TestAutopilotBaseURL_UsesHeadlessServiceWithoutExternalService(t *testing.T) {
+	t.Parallel()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "tenant-ns"},
+	}
+	got := autopilotBaseURL(cluster)
+	want := "https://cluster-a.tenant-ns.svc:8200"
 	if got != want {
 		t.Fatalf("autopilotBaseURL()=%q, want %q", got, want)
 	}
@@ -231,4 +244,210 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 			t.Fatalf("expected authenticated client creation error, got %v", err)
 		}
 	})
+}
+
+type fakeScaleDownClient struct {
+	configureCalls []portopenbao.AutopilotConfig
+	configureErr   error
+	raftConfig     *portopenbao.RaftConfigurationResponse
+	readErr        error
+	removeCalls    []string
+	removeErr      error
+	stepDownCalls  int
+	stepDownErr    error
+}
+
+func (c *fakeScaleDownClient) ConfigureRaftAutopilot(_ context.Context, config portopenbao.AutopilotConfig) error {
+	c.configureCalls = append(c.configureCalls, config)
+	return c.configureErr
+}
+
+func (c *fakeScaleDownClient) ReadRaftConfiguration(context.Context) (*portopenbao.RaftConfigurationResponse, error) {
+	if c.readErr != nil {
+		return nil, c.readErr
+	}
+	return c.raftConfig, nil
+}
+
+func (c *fakeScaleDownClient) RemoveRaftPeer(_ context.Context, serverID string) error {
+	c.removeCalls = append(c.removeCalls, serverID)
+	return c.removeErr
+}
+
+func (c *fakeScaleDownClient) StepDownLeader(context.Context) error {
+	c.stepDownCalls++
+	return c.stepDownErr
+}
+
+type fakeScaleDownFactory struct {
+	client       Client
+	newWithToken int
+}
+
+func (f *fakeScaleDownFactory) NewWithJWT(context.Context, string, string, string) (Client, error) {
+	return f.client, nil
+}
+
+func (f *fakeScaleDownFactory) NewWithToken(string, string) (Client, error) {
+	f.newWithToken++
+	return f.client, nil
+}
+
+type fakeScaleDownFactoryProvider struct {
+	factory    ClientFactory
+	clusterKey string
+	caCert     []byte
+}
+
+func (p *fakeScaleDownFactoryProvider) FactoryFor(clusterKey string, caCert []byte) ClientFactory {
+	p.clusterKey = clusterKey
+	p.caCert = append([]byte(nil), caCert...)
+	return p.factory
+}
+
+func TestPrepareScaleDown_RemovesFollowerAndUpdatesAutopilot(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
+	}
+
+	client := &fakeScaleDownClient{
+		raftConfig: &portopenbao.RaftConfigurationResponse{
+			Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{
+					{NodeID: "cluster-0", Address: "https://cluster-0.cluster.ns.svc:8200", Leader: true, Voter: true},
+					{NodeID: "cluster-1", Address: "https://cluster-1.cluster.ns.svc:8200", Voter: true},
+					{NodeID: "cluster-2", Address: "https://cluster-2.cluster.ns.svc:8200", Voter: true},
+				},
+			},
+		},
+	}
+	factory := &fakeScaleDownFactory{client: client}
+	provider := &fakeScaleDownFactoryProvider{factory: factory}
+
+	clientset := k8sfake.NewClientset(
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"},
+			Data:       map[string][]byte{"token": []byte("root-token")},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster-tls-ca", Namespace: "ns"},
+			Data:       map[string][]byte{"ca.crt": []byte("pem-data")},
+		},
+	)
+
+	mgr := NewManager(clientset, provider)
+	err := mgr.PrepareScaleDown(context.Background(), logr.Discard(), cluster, "cluster", 3, 2)
+	if err != nil {
+		t.Fatalf("PrepareScaleDown() error = %v", err)
+	}
+
+	if len(client.configureCalls) != 1 {
+		t.Fatalf("expected one autopilot update, got %d", len(client.configureCalls))
+	}
+	if got := client.configureCalls[0].MinQuorum; got != 2 {
+		t.Fatalf("autopilot min_quorum = %d, want 2", got)
+	}
+	if client.configureCalls[0].CleanupDeadServers {
+		t.Fatalf("cleanup_dead_servers = true, want false for 2 replicas")
+	}
+	if len(client.removeCalls) != 1 || client.removeCalls[0] != "cluster-2" {
+		t.Fatalf("removeCalls = %v, want [cluster-2]", client.removeCalls)
+	}
+	if client.stepDownCalls != 0 {
+		t.Fatalf("stepDownCalls = %d, want 0", client.stepDownCalls)
+	}
+	if factory.newWithToken != 1 {
+		t.Fatalf("NewWithToken() calls = %d, want 1", factory.newWithToken)
+	}
+	if provider.clusterKey != "ns/cluster" {
+		t.Fatalf("clusterKey = %q, want ns/cluster", provider.clusterKey)
+	}
+	if string(provider.caCert) != "pem-data" {
+		t.Fatalf("caCert = %q, want pem-data", string(provider.caCert))
+	}
+}
+
+func TestPrepareScaleDown_StepsDownLeaderVictim(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
+	}
+
+	client := &fakeScaleDownClient{
+		raftConfig: &portopenbao.RaftConfigurationResponse{
+			Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{
+					{NodeID: "cluster-0", Address: "https://cluster-0.cluster.ns.svc:8200", Voter: true},
+					{NodeID: "cluster-1", Address: "https://cluster-1.cluster.ns.svc:8200", Voter: true},
+					{NodeID: "cluster-2", Address: "https://cluster-2.cluster.ns.svc:8200", Leader: true, Voter: true},
+				},
+			},
+		},
+	}
+
+	clientset := k8sfake.NewClientset(
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"},
+			Data:       map[string][]byte{"token": []byte("root-token")},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster-tls-ca", Namespace: "ns"},
+			Data:       map[string][]byte{"ca.crt": []byte("pem-data")},
+		},
+	)
+
+	mgr := NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}})
+	err := mgr.PrepareScaleDown(context.Background(), logr.Discard(), cluster, "cluster", 3, 2)
+	if err == nil || !strings.Contains(err.Error(), "waiting for leader step-down on cluster-2 to complete") {
+		t.Fatalf("expected step-down wait error, got %v", err)
+	}
+	if client.stepDownCalls != 1 {
+		t.Fatalf("stepDownCalls = %d, want 1", client.stepDownCalls)
+	}
+	if len(client.removeCalls) != 0 {
+		t.Fatalf("removeCalls = %v, want none", client.removeCalls)
+	}
+}
+
+func TestWrapScaleDownPermissionError_SelfInitClusterRequiresUpdatedPolicy(t *testing.T) {
+	t.Parallel()
+
+	mgr := &Manager{}
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				OIDC:    &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true},
+			},
+		},
+	}
+
+	err := mgr.wrapScaleDownPermissionError(cluster, fmt.Errorf("read raft config: %w", &portopenbao.APIError{
+		Operation:    "raft configuration request failed",
+		StatusCode:   http.StatusForbidden,
+		ResponseBody: `{"errors":["permission denied"]}`,
+	}))
+	if err == nil {
+		t.Fatal("expected permission error")
+	}
+	if !operatorerrors.IsPermanent(err) {
+		t.Fatalf("expected permanent classification, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "remove-peer") {
+		t.Fatalf("expected permission guidance, got %v", err)
+	}
 }

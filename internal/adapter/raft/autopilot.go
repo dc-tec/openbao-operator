@@ -15,6 +15,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -29,6 +30,9 @@ const (
 
 type Client interface {
 	portopenbao.AutopilotConfigurer
+	ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftConfigurationResponse, error)
+	RemoveRaftPeer(ctx context.Context, serverID string) error
+	StepDownLeader(ctx context.Context) error
 }
 
 type ClientFactory interface {
@@ -188,6 +192,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	}
 
 	logger.Info("Reconciling Raft Autopilot configuration",
+		"cluster", cluster.Name,
 		"cleanup_dead_servers", desiredConfig.CleanupDeadServers,
 		"dead_server_last_contact_threshold", desiredConfig.DeadServerLastContactThreshold,
 		"min_quorum", desiredConfig.MinQuorum,
@@ -206,6 +211,75 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	}
 
 	logger.V(1).Info("Raft Autopilot configuration reconciled successfully")
+	return nil
+}
+
+// PrepareScaleDown stages a single safe scale-down step by reconciling the
+// target autopilot configuration, stepping the victim leader down when needed,
+// and removing the departing Raft peer before the StatefulSet shrinks.
+func (m *Manager) PrepareScaleDown(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	statefulSetName string,
+	currentReplicas int32,
+	desiredReplicas int32,
+) error {
+	if currentReplicas <= desiredReplicas {
+		return nil
+	}
+	if cluster == nil {
+		return fmt.Errorf("cluster is required")
+	}
+	if strings.TrimSpace(statefulSetName) == "" {
+		return fmt.Errorf("statefulset name is required")
+	}
+
+	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to create authenticated OpenBao client for safe scale down: %w", err)
+	}
+
+	scaleStepCluster := cluster.DeepCopy()
+	scaleStepCluster.Spec.Replicas = desiredReplicas
+	if err := m.configureAutopilotWithClient(ctx, logger, client, scaleStepCluster); err != nil {
+		return err
+	}
+
+	configCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	raftConfig, err := client.ReadRaftConfiguration(configCtx)
+	if err != nil {
+		return m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to read Raft configuration before scale down: %w", err),
+		)
+	}
+
+	victimPodName := fmt.Sprintf("%s-%d", statefulSetName, currentReplicas-1)
+	victimServer, found := findRaftServerForPod(raftConfig, victimPodName)
+	if !found {
+		logger.Info("Victim pod already absent from Raft configuration; continuing with scale down", "victim", victimPodName)
+		return nil
+	}
+
+	if victimServer.Leader {
+		logger.Info("Victim pod is current Raft leader; stepping down before scale down", "victim", victimPodName, "node_id", victimServer.NodeID)
+		if err := client.StepDownLeader(configCtx); err != nil {
+			return fmt.Errorf("failed to step down leader %s before scale down: %w", victimPodName, err)
+		}
+		return fmt.Errorf("waiting for leader step-down on %s to complete", victimPodName)
+	}
+
+	logger.Info("Removing Raft peer before scale down", "victim", victimPodName, "node_id", victimServer.NodeID)
+	if err := client.RemoveRaftPeer(configCtx, victimServer.NodeID); err != nil {
+		return m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to remove Raft peer %q before scale down: %w", victimServer.NodeID, err),
+		)
+	}
+
 	return nil
 }
 
@@ -235,6 +309,38 @@ func (m *Manager) ConfigureAutopilot(ctx context.Context, logger logr.Logger, cl
 	}
 
 	logger.Info("Raft Autopilot configured successfully")
+	return nil
+}
+
+func (m *Manager) configureAutopilotWithClient(ctx context.Context, logger logr.Logger, client Client, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if client == nil {
+		return fmt.Errorf("OpenBao client is required")
+	}
+	if cluster == nil {
+		return fmt.Errorf("cluster is required")
+	}
+
+	desiredConfig := BuildAutopilotConfig(cluster)
+
+	logger.Info("Reconciling Raft Autopilot configuration",
+		"cluster", cluster.Name,
+		"cleanup_dead_servers", desiredConfig.CleanupDeadServers,
+		"dead_server_last_contact_threshold", desiredConfig.DeadServerLastContactThreshold,
+		"min_quorum", desiredConfig.MinQuorum,
+		"server_stabilization_time", desiredConfig.ServerStabilizationTime,
+	)
+
+	autopilotCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if err := client.ConfigureRaftAutopilot(autopilotCtx, desiredConfig); err != nil {
+		logger.Error(err, "Failed to update Raft Autopilot configuration; will retry on next reconcile")
+		return operatorerrors.WrapTransientConnection(
+			fmt.Errorf("failed to configure Raft Autopilot: %w", err),
+		)
+	}
+
+	logger.V(1).Info("Raft Autopilot configuration reconciled successfully")
 	return nil
 }
 
@@ -270,6 +376,34 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 	client, err := factory.NewWithJWT(ctx, baseURL, roleNameOperator, jwtToken)
 	if err != nil {
 		return nil, m.handleJWTAuthError(cluster, err)
+	}
+
+	return client, nil
+}
+
+func (m *Manager) newScaleDownClient(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (Client, error) {
+	if cluster == nil {
+		return nil, fmt.Errorf("cluster is required")
+	}
+
+	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled {
+		return m.newOpenBaoClient(ctx, logger, cluster)
+	}
+
+	secretName := cluster.Name + suffixRootToken
+	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
+	}
+
+	rootToken, ok := secret.Data[rootTokenSecretKey]
+	if !ok || len(rootToken) == 0 {
+		return nil, fmt.Errorf("root token Secret %s/%s is missing token data", cluster.Namespace, secretName)
+	}
+
+	client, err := m.newOpenBaoClientWithToken(ctx, cluster, string(rootToken))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authenticated OpenBao client: %w", err)
 	}
 
 	return client, nil
@@ -337,6 +471,24 @@ func (m *Manager) handleJWTAuthError(cluster *openbaov1alpha1.OpenBaoCluster, er
 	return fmt.Errorf("failed to create authenticated OpenBao client: %w", err)
 }
 
+func (m *Manager) wrapScaleDownPermissionError(cluster *openbaov1alpha1.OpenBaoCluster, err error) error {
+	if cluster == nil || !portauth.OperatorJWTBootstrapEnabled(cluster) {
+		return err
+	}
+	if !portopenbao.IsStatus(err, http.StatusForbidden) {
+		return err
+	}
+
+	return operatorerrors.WrapPermanentPrerequisitesMissing(
+		fmt.Errorf(
+			"safe scale down requires the operator JWT policy in cluster %s/%s to allow Raft configuration reads and remove-peer updates: %w",
+			cluster.Namespace,
+			cluster.Name,
+			err,
+		),
+	)
+}
+
 // newOpenBaoClientWithToken creates an authenticated OpenBao client with the given token.
 func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, token string) (Client, error) {
 	if strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Namespace) == "" {
@@ -383,12 +535,44 @@ func (m *Manager) clientFactory(clusterKey string, caCert []byte) ClientFactory 
 	return m.clientFactoryProvider.FactoryFor(clusterKey, caCert)
 }
 
+func findRaftServerForPod(config *portopenbao.RaftConfigurationResponse, podName string) (portopenbao.RaftServer, bool) {
+	if config == nil || strings.TrimSpace(podName) == "" {
+		return portopenbao.RaftServer{}, false
+	}
+
+	for _, server := range config.Config.Servers {
+		if server.NodeID == podName || strings.Contains(server.Address, podName+".") {
+			return server, true
+		}
+	}
+
+	return portopenbao.RaftServer{}, false
+}
+
 // autopilotBaseURL returns a stable in-cluster address for performing Raft autopilot operations.
 //
 // We intentionally do not use Pod DNS names here because blue/green deployments use revisioned
 // StatefulSet pod names (e.g. "<cluster>-<revision>-0"), so "<cluster>-0" may not exist.
 func autopilotBaseURL(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	// Use the (clusterIP) public Service, which is stable across rolling and blue/green strategies.
-	// Service name: "<cluster>-public", DNS: "<service>.<namespace>.svc".
-	return fmt.Sprintf("https://%s-public.%s.svc:%d", cluster.Name, cluster.Namespace, portAPI)
+	serviceName := cluster.Name
+	if clusterNeedsExternalService(cluster) {
+		// When present, the external Service stays stable across rolling and blue/green strategies.
+		serviceName = cluster.Name + "-public"
+	}
+
+	return fmt.Sprintf("https://%s.%s.svc:%d", serviceName, cluster.Namespace, portAPI)
+}
+
+func clusterNeedsExternalService(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster == nil {
+		return false
+	}
+
+	if cluster.Spec.Service != nil {
+		return true
+	}
+	if cluster.Spec.Ingress != nil && cluster.Spec.Ingress.Enabled {
+		return true
+	}
+	return cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled
 }

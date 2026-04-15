@@ -3,10 +3,13 @@ package openbaocluster
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -14,6 +17,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
+	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 const eventReasonAutopilotConfigJWTPrerequisitesMissing = "AutopilotConfigJWTPrerequisitesMissing"
@@ -33,6 +37,7 @@ func AppendInitAndAutopilotReconcilers(
 	reconcilers []SubReconciler,
 	initMgr initmanagerport.Manager,
 	autopilotRuntime initmanagerport.AutopilotRuntime,
+	statefulSetReader client.Reader,
 	recorder events.EventRecorder,
 	requeueShort time.Duration,
 ) []SubReconciler {
@@ -45,8 +50,9 @@ func AppendInitAndAutopilotReconcilers(
 	// Add autopilot config reconciler for Day 2 operations when an autopilot runtime is available.
 	if autopilotRuntime != nil {
 		reconcilers = append(reconcilers, &autopilotConfigReconciler{
-			autopilotRuntime: autopilotRuntime,
-			recorder:         recorder,
+			autopilotRuntime:  autopilotRuntime,
+			statefulSetReader: statefulSetReader,
+			recorder:          recorder,
 			requeueShort: func() time.Duration {
 				if requeueShort > 0 {
 					return requeueShort
@@ -149,9 +155,10 @@ func workloadResultForError(
 // autopilotConfigReconciler reconciles Raft Autopilot configuration for initialized clusters.
 // This handles Day 2 operations like scaling replicas or changing autopilot settings.
 type autopilotConfigReconciler struct {
-	autopilotRuntime initmanagerport.AutopilotRuntime
-	recorder         events.EventRecorder
-	requeueShort     time.Duration
+	autopilotRuntime  initmanagerport.AutopilotRuntime
+	statefulSetReader client.Reader
+	recorder          events.EventRecorder
+	requeueShort      time.Duration
 }
 
 // Reconcile reconciles the Raft Autopilot configuration for an initialized cluster.
@@ -165,7 +172,18 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 		return recon.Result{}, nil
 	}
 
-	if err := r.autopilotRuntime.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
+	autopilotCluster, err := r.autopilotTargetCluster(ctx, logger, cluster)
+	if err != nil {
+		if operatorerrors.IsTransient(err) {
+			logger.V(1).Info("Transient error determining autopilot config target; will retry", "error", err)
+			return recon.Result{RequeueAfter: r.requeueShort}, nil
+		}
+
+		logger.Error(err, "Failed to determine autopilot config target (non-transient)")
+		return recon.Result{}, nil
+	}
+
+	if err := r.autopilotRuntime.ReconcileAutopilotConfig(ctx, logger, autopilotCluster); err != nil {
 		if operatorerrors.IsTransient(err) {
 			logger.V(1).Info("Transient error reconciling autopilot config; will retry", "error", err)
 			return recon.Result{RequeueAfter: r.requeueShort}, nil
@@ -203,6 +221,62 @@ func (r *autopilotConfigReconciler) Reconcile(ctx context.Context, logger logr.L
 	}
 
 	return recon.Result{}, nil
+}
+
+func (r *autopilotConfigReconciler) autopilotTargetCluster(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (*openbaov1alpha1.OpenBaoCluster, error) {
+	if cluster == nil || r.statefulSetReader == nil {
+		return cluster, nil
+	}
+
+	statefulSetName := cluster.Name
+	if stableRevision := inframanager.BlueGreenStableRevision(cluster); stableRevision != "" {
+		statefulSetName = fmt.Sprintf("%s-%s", cluster.Name, stableRevision)
+	}
+
+	currentStatefulSet := &appsv1.StatefulSet{}
+	err := r.statefulSetReader.Get(
+		ctx,
+		client.ObjectKey{Name: statefulSetName, Namespace: cluster.Namespace},
+		currentStatefulSet,
+	)
+	switch {
+	case err == nil:
+	case apierrors.IsNotFound(err):
+		return cluster, nil
+	default:
+		return nil, operatorerrors.WrapTransientKubernetesAPI(
+			fmt.Errorf(
+				"failed to get StatefulSet %s/%s for autopilot reconciliation: %w",
+				cluster.Namespace,
+				statefulSetName,
+				err,
+			),
+		)
+	}
+
+	if currentStatefulSet.Spec.Replicas == nil {
+		return cluster, nil
+	}
+
+	appliedReplicas := *currentStatefulSet.Spec.Replicas
+	if cluster.Spec.Replicas >= appliedReplicas {
+		return cluster, nil
+	}
+
+	logger.V(1).Info(
+		"Using staged StatefulSet replica count for autopilot reconciliation during scale down",
+		"desiredReplicas", cluster.Spec.Replicas,
+		"appliedReplicas", appliedReplicas,
+		"statefulSet", fmt.Sprintf("%s/%s", currentStatefulSet.Namespace, currentStatefulSet.Name),
+	)
+
+	autopilotCluster := cluster.DeepCopy()
+	autopilotCluster.Spec.Replicas = appliedReplicas
+	return autopilotCluster, nil
 }
 
 func workloadRequeueShort(policy WorkloadResultPolicy) time.Duration {
