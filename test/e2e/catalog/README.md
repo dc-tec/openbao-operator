@@ -12,9 +12,9 @@ Notes:
 ## Summary
 
 - Files: `18`
-- Specs: `86`
-- Explicit case IDs: `16`
-- Coverage tags: `42`
+- Specs: `87`
+- Explicit case IDs: `17`
+- Coverage tags: `44`
 
 ## Suites
 
@@ -30,7 +30,7 @@ Notes:
 | [Manager Resilience](suites/Manager_Resilience_test.md) | 3 | 3 | 0 | `manager`, `cluster` | `test/e2e/Manager_Resilience_test.go` |
 | [Manager](suites/Operator_Manager_test.md) | 2 | 0 | 0 | `manager`, `critical`, `smoke` | `test/e2e/Operator_Manager_test.go` |
 | [OpenShift Platform](suites/Platform_OpenShift_test.md) | 2 | 0 | 0 | `openshift`, `platform` | `test/e2e/Platform_OpenShift_test.go` |
-| [Security Guardrails](suites/Security_Guardrails_test.md) | 20 | 0 | 0 | `security`, `critical`, `admission`, `config`, `pentest`, `tokens`, `rbac`, `tamper` | `test/e2e/Security_Guardrails_test.go` |
+| [Security Guardrails](suites/Security_Guardrails_test.md) | 21 | 1 | 0 | `security`, `critical`, `admission`, `pentest`, `config`, `tokens`, `rbac`, `tamper` | `test/e2e/Security_Guardrails_test.go` |
 | [Tenant Data Isolation](suites/Tenant_Data_Isolation_test.md) | 1 | 1 | 0 | `security`, `tenant`, `tenancy` | `test/e2e/Tenant_Data_Isolation_test.go` |
 | [Tenant Isolation](suites/Tenant_Isolation_test.md) | 6 | 0 | 0 | `security`, `tenant`, `tenancy`, `critical`, `single-tenant` | `test/e2e/Tenant_Isolation_test.go` |
 | [Upgrade Strategies: Operation Lock Contention](suites/Upgrade_Operation_Lock_test.md) | 1 | 1 | 0 | `upgrade`, `backup`, `operation-lock`, `slow` | `test/e2e/Upgrade_Operation_Lock_test.go` |
@@ -47,6 +47,7 @@ Notes:
 | `anti-tamper` | 2 |
 | `pvc-cleanup` | 2 |
 | `recoverability-secret-cleanup` | 2 |
+| `admission-runtime-recheck` | 1 |
 | `backup-queueing` | 1 |
 | `bluegreen-drift` | 1 |
 | `cert-replacement` | 1 |
@@ -60,6 +61,7 @@ Notes:
 | `idempotent-reconcile` | 1 |
 | `ingress` | 1 |
 | `leader-election` | 1 |
+| `managed-resource-pause-on-policy-loss` | 1 |
 | `network-isolation` | 1 |
 | `observability-metrics` | 1 |
 | `operation-lock` | 1 |
