@@ -9,8 +9,8 @@ description: Infrastructure security controls in OpenBao Operator, including RBA
 <PageHero
   variant="landing"
   eyebrow="Security / Platform Controls"
-  title="Protect the control plane before you trust the workload."
-  lede="Platform controls are the Kubernetes-level mechanisms that keep operator identities narrow, reject unsafe objects before they persist, and limit traffic between tenants, control-plane components, and external dependencies."
+  title="Platform security controls"
+  lede="This section covers Kubernetes-level controls such as RBAC, validating admission policies, and network boundaries. Use it to review the protections around operator identities, unsafe object rejection, and traffic restrictions."
   actions={[
     {label: 'Open RBAC architecture', docId: 'security/infrastructure/rbac', variant: 'primary'},
     {label: 'Review admission policies', docId: 'security/infrastructure/admission-policies', variant: 'secondary'},

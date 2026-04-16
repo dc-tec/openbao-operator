@@ -9,8 +9,8 @@ description: Multi-tenancy security model for OpenBao Operator, describing tenan
 <PageHero
   variant="landing"
   eyebrow="Security / Tenant Isolation"
-  title="Treat multi-tenancy as an explicit isolation model, not a convenience feature."
-  lede="OpenBao Operator is designed for a shared platform with strict tenant boundaries. The security model depends on explicit namespace introduction, split controller identities, admission guardrails, and network isolation rather than on broad cluster-scoped trust."
+  title="Tenant isolation model"
+  lede="This section covers the multi-tenant security model for OpenBao Operator, including namespace introduction, split controller identities, admission guardrails, and network isolation."
   actions={[
     {label: 'Open the isolation model', docId: 'security/multi-tenancy/tenant-isolation', variant: 'primary'},
     {label: 'Review tenant onboarding', docId: 'user-guide/openbaotenant/overview', variant: 'secondary'},

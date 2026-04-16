@@ -7,8 +7,8 @@ journey: contribute
 
 <PageHero
   eyebrow="Contribute / Build & Change"
-  title="Learn the project rules before your change becomes someone else’s cleanup."
-  lede="These standards define how OpenBao Operator code, docs, generated artifacts, and commit history should look. Use this section before you start refactoring, adding APIs, changing manifests, or touching generated output."
+  title="Repository standards"
+  lede="This section defines the coding, documentation, generated-artifact, and commit-history standards for OpenBao Operator. Use it before changing APIs, manifests, controllers, or generated output."
   actions={[
     {label: "Open project conventions", to: "/contribute/standards/project-conventions", variant: "primary"},
     {label: "Open documentation style guide", to: "/contribute/docs-style-guide", variant: "secondary"},

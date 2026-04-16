@@ -8,8 +8,8 @@ description: Minimal catalog for validated procedures that still need lane-speci
 <PageHero
   variant="landing"
   eyebrow="Validated Deployments / Procedure Catalog"
-  title="Use this catalog only for procedures that still depend on a validated lane."
-  lede="Generic backup and restore workflows now live in the main `Operate` and `Recovery & Restore` sections. This catalog remains only for the k3d cross-cluster DR restore runbook, because that workflow still depends on the assumptions of one validated lane."
+  title="Validated runbooks"
+  lede="This catalog contains the procedures that still depend on a specific validated baseline. Generic backup and restore guidance lives in the main `Operate` and `Recovery & Restore` sections."
   actions={[
     {label: "Open DR restore runbook", docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs", variant: "primary"},
     {label: "Open generic restore guide", docId: "user-guide/openbaorestore/restore", variant: "secondary"},

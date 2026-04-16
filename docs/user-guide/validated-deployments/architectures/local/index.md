@@ -8,8 +8,8 @@ description: Validated local baselines for k3d, including development, hardened 
 <PageHero
   variant="landing"
   eyebrow="Validated Deployments / Local Baselines"
-  title="Use local lanes for rehearsal, validation, and DR proof, not as accidental production defaults."
-  lede="The local validated scope comes from the project's k3d environment. These lanes are valuable because they prove concrete behaviors such as hardened bootstrap, passthrough access, ACME issuance, and cross-cluster restore. They are not a substitute for making an explicit production platform choice."
+  title="Validated local baselines"
+  lede="This section covers the validated local baselines exercised on k3d, including development, hardened rehearsal, and cross-cluster DR. Use it for local validation and rehearsal, not as a generic production recommendation."
   actions={[
     {label: "Open k3d Development", docId: "user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs", variant: "primary"},
     {label: "Open k3d Cross-Cluster DR", docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs", variant: "secondary"},

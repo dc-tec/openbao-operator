@@ -8,8 +8,8 @@ description: Validated cloud baselines for OpenBao Operator, pairing each tested
 <PageHero
   variant="landing"
   eyebrow="Validated Deployments / Cloud Baselines"
-  title="Pick the cloud lane that matches the posture you want to prove."
-  lede="The current cloud validated scope comes from Amazon EKS. Each lane keeps the tested topology and the matching deployment recipe adjacent, so you can confirm the architecture first and then reproduce it without jumping across unrelated nav branches."
+  title="Validated cloud baselines"
+  lede="This section covers the validated cloud baselines currently exercised on Amazon EKS. Each baseline links to the matching deployment recipe so the tested topology and procedure stay together."
   actions={[
     {label: "Open EKS Development", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
     {label: "Open EKS Hardened", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme", variant: "secondary"},
