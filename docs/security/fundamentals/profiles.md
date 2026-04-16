@@ -7,8 +7,8 @@ description: What Development and Hardened mean as security contracts, and why H
 ---
 
 <PageHeader
-  title="Treat security profiles as operating contracts, not just presets."
-  lede="`Development` and `Hardened` are different security contracts, not cosmetic defaults. This page explains what each one is optimizing for, what Hardened requires in production, and why the configuration task belongs in the user guide rather than here."
+  title="Security profile contracts"
+  lede="This page explains what `Development` and `Hardened` optimize for, what Hardened requires in production, and how the two profiles change the operating contract."
 />
 
 

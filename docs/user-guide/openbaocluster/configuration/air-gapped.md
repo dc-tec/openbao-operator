@@ -7,8 +7,8 @@ description: Mirror operator and workload images, set the right repository defau
 ---
 
 <PageHeader
-  title="Mirror every image surface before you call the environment disconnected-ready."
-  lede="An air-gapped or private-registry deployment is not just one image override. The operator image, the default OpenBao workload image, and the helper executors for init, backup, and upgrade each have their own source of truth. Use this page to make those defaults explicit before you need to promote clusters through a disconnected path."
+  title="Air-gapped and private-registry image planning"
+  lede="An air-gapped or private-registry deployment involves operator, workload, and helper executor images. Use this page to make those image defaults explicit and wire pull access for disconnected or private-registry environments."
 />
 
 

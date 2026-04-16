@@ -7,7 +7,7 @@ journey: reference
 
 <PageHeader
   title="Know which operator boundaries are real today."
-  lede="Not every missing feature is an accidental gap. This page captures the current constraints and explicit non-goals for the pre-GA line so operators and contributors can separate unsupported assumptions from issues the project actually intends to solve."
+  lede="This page captures the current constraints and explicit non-goals for the pre-GA line so operators and contributors can separate unsupported assumptions from issues the project intends to solve."
 />
 
 <DecisionTable

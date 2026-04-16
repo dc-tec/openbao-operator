@@ -11,12 +11,12 @@ journeyStep: 2
 <!-- id: installation-guide -->
 
 <PageHeader
-  title="Install the operator in the mode you actually intend to run."
-  lede="Choose a supported install path, keep the rendered namespace and identity explicit, and verify the controller wiring before you create your first OpenBaoCluster."
+  title="Install the operator for the intended tenancy mode"
+  lede="Choose a supported install path, keep the rendered namespace and identity explicit, and verify the controller wiring for the tenancy mode you intend to run."
 />
 
 <Checklist
-    title="Preflight before you install"
+    title="Installation preflight"
     items={[
       'confirm Kubernetes compatibility and cluster-admin access for CRDs, RBAC, and admission policies',
       'decide whether Helm or raw manifests own the install lifecycle',

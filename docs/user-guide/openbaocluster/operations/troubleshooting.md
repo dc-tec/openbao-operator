@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Start with the symptom, then decide whether you need a fix or a recovery path."
-  lede="Most day 2 incidents start as configuration drift, edge integration failures, or capability mismatches. Use this page to capture the failing surface, route the symptom to the right fix, and escalate into recovery only when normal convergence is no longer realistic."
+  title="Troubleshoot by symptom"
+  lede="Use this page to capture the failing surface, route the symptom to the right fix, and decide when recovery is the better path."
 />
 
 
@@ -22,7 +22,7 @@ journey: operate
 kubectl get pods -n <namespace>
 kubectl describe pod <pod> -n <namespace>`}
 >
-  Start here before you jump into a fix. The cluster status, recent events, and the specific pod failures usually tell you whether the problem is inside the workload, at the edge, or in cluster policy.
+  Start here to identify the failing surface. The cluster status, recent events, and the specific pod failures usually tell you whether the problem is inside the workload, at the edge, or in cluster policy.
 </CommandBlock>
 
 <DecisionTable

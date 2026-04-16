@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Make the cluster boring before you call it production."
-  lede="Use this checklist after the first cluster path succeeds and before teams depend on the service. The goal is to lock down the security posture, protect data, prove observability, and confirm that the operator reports a clean converged state."
+  title="Production readiness checklist"
+  lede="Use this checklist after the first cluster path succeeds and before teams depend on the service. It covers security posture, data protection, observability, and the operator-reported signals that should be clean before production use."
 />
 
 <DecisionTable

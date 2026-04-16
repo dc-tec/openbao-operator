@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Treat seal failures as trust and reachability problems first."
-  lede="A sealed cluster usually means the Pods can start but cannot complete the trust or unseal path they need to serve traffic. Start with the operator-visible conditions, then narrow the problem by seal mode before you reach for emergency manual unseal."
+  title="Diagnose a sealed cluster"
+  lede="A sealed cluster usually means the Pods can start but cannot complete the configured trust or unseal path they need to serve traffic. Use this runbook to start with operator-visible conditions, then narrow the problem by seal mode and move to emergency manual unseal only if needed."
 />
 
 <Checklist
@@ -24,7 +24,7 @@ journey: operate
 
 
 <DecisionTable
-  title="Read the first conditions before you dig into logs"
+  title="Read the first conditions"
   columns={['Condition or signal', 'What it usually means', 'Where to look next']}
   rows={[
     {

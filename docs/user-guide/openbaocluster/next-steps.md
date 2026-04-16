@@ -19,7 +19,7 @@ journeyStep: 5
   ]}
 >
   <Checklist
-    title="Leave Get Started only when"
+    title="Move on from Get Started once"
     items={[
       'the access path and TLS posture are chosen',
       'backup and restore work has an owner',

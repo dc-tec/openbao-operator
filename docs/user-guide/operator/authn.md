@@ -8,8 +8,8 @@ journey: get-started
 ---
 
 <PageHeader
-  title="Keep controller auth short-lived, bound, and boring."
-  lede="The operator authenticates to OpenBao with a projected Kubernetes ServiceAccount token by default. That path is safer than static root credentials, but it only stays safe when the rendered controller identity, JWT audience, and OpenBao-side role binding still match."
+  title="Operator authentication paths"
+  lede="The operator authenticates to OpenBao with a projected Kubernetes ServiceAccount token by default. This page explains the default JWT path, the audience and role-binding requirements behind it, and the checks to run when you customize controller identity wiring."
 />
 
 

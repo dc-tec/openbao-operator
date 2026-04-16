@@ -7,8 +7,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Run a restore only when you are ready to overwrite the target cluster."
-  lede="The operator restores snapshot state through an explicit `OpenBaoRestore` request. That request validates the target, acquires the restore operation lock, launches a dedicated restore Job, and records the outcome for audit. Use this page when restore is the right answer, not as a substitute for ordinary troubleshooting."
+  title="Restore from a snapshot"
+  lede="The operator restores snapshot state through an explicit `OpenBaoRestore` request. That request validates the target, acquires the restore operation lock, launches a dedicated restore Job, and records the outcome for audit. Use this page when snapshot restore is the right recovery workflow for the target cluster."
 />
 
 
@@ -100,7 +100,7 @@ Restore replaces the target cluster state with the contents of the selected snap
     class Status write;`}
 />
 
-## Before you create the restore request
+## Prepare the restore request
 
 - Make sure the snapshot you want already exists in object storage and has been validated as usable.
 - Create or keep the target `OpenBaoCluster` in the same namespace as the restore request. The target cluster must exist and be initialized, even if it is otherwise empty.

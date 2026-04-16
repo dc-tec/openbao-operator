@@ -8,8 +8,8 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
 ---
 
 <PageHeader
-  title="Choose how traffic reaches the service before you optimize the edge."
-  lede="OpenBao can be exposed through Gateway API, Ingress, or a direct L4 Service. The important decision is not just which Kubernetes resource you use, but where TLS terminates, who owns certificate lifecycle, and whether the edge path matches the production posture you actually want to operate."
+  title="Choose an external access path"
+  lede="OpenBao can be exposed through Gateway API, Ingress, or a direct L4 Service. This page focuses on where TLS terminates, who owns certificate lifecycle, and how each edge path fits the intended operating posture."
 />
 
 

@@ -7,8 +7,8 @@ description: Validated local disaster-recovery baseline for OpenBao on k3d with 
 ---
 
 <PageHeader
-  title="Use this lane to rehearse restore across a real cluster boundary before you trust a cloud DR pair."
-  lede="This local DR baseline keeps the source, target, and shared trust services separated so backup, restore, unseal, and cutover all cross the same kinds of boundaries they will cross in a real disaster-recovery event."
+  title="Local cross-cluster DR baseline"
+  lede="This local DR baseline keeps the source, target, and shared trust services separated so backup, restore, unseal, and cutover all cross the same kinds of boundaries used in a real disaster-recovery event."
 />
 
 <Checklist

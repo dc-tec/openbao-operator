@@ -7,12 +7,12 @@ journey: operate
 ---
 
 <PageHeader
-  title="Use override restore only when the cluster is locked after a failed upgrade."
-  lede="This runbook exists for the narrow case where the normal restore path is blocked by an existing cluster operation lock, usually after a failed rollback or another crashed automation loop. It is a break-glass restore path, not the default way to restore a cluster."
+  title="Override-lock restore after a failed upgrade"
+  lede="This runbook covers the case where the normal restore path is blocked by an existing cluster operation lock, usually after a failed rollback or another crashed automation loop. Use it for recovery when the restore request cannot proceed through the normal lock path."
 />
 
 <Checklist
-    title="Use this runbook only when"
+    title="Use this runbook when"
     items={[
       'the cluster is stuck behind an operation lock after a failed upgrade or rollback',
       'a normal OpenBaoRestore request is blocked by that lock',

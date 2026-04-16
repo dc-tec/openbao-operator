@@ -8,8 +8,8 @@ description: Choose the cluster posture first, including bootstrap, unseal, TLS,
 ---
 
 <PageHeader
-  title="Choose the operating posture before you tune anything else."
-  lede="`spec.profile` is the top-level decision that shapes bootstrap, unseal, TLS, image verification, and failure tolerance. Pick the posture you plan to keep operating, then let the rest of the cluster baseline follow from that choice."
+  title="Choose a security profile"
+  lede="`spec.profile` is the top-level decision that shapes bootstrap, unseal, TLS, image verification, and failure tolerance. Use this page to choose the cluster posture and then align the rest of the baseline with it."
 />
 
 

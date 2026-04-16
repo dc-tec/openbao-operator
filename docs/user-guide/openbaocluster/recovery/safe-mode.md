@@ -85,7 +85,7 @@ For blue-green rollback incidents, the most common reasons are:
 - `RollbackConsensusRepairFailed`: the operator could not complete the rollback repair path while the cluster was still in `RollingBack`.
 - `RollbackCleanupPeerRemovalFailed`: the rollback itself converged far enough to enter `RollbackCleanup`, but the peer-removal cleanup job failed and automation stopped before stale green peers were safely removed.
 
-## Repair the underlying issue before you acknowledge
+## Repair the underlying issue
 
 Start with the operator-visible status and the last failed job, then move into the narrower runbook that matches the cluster state.
 

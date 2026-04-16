@@ -9,8 +9,8 @@ journeyStep: 3
 ---
 
 <PageHeader
-  title="Introduce the target namespace before you create the first cluster."
-  lede="In the default multi-tenant model, the operator does not discover namespaces implicitly. You onboard a namespace with `OpenBaoTenant`, which gives the control plane the RBAC and tenant guardrails it needs before the first cluster lands there."
+  title="Onboard the target namespace"
+  lede="In the default multi-tenant model, the operator does not discover namespaces implicitly. You onboard a namespace with `OpenBaoTenant`, which installs the RBAC and tenant guardrails needed before the first cluster lands there."
 />
 
 <Callout type="note" title="Skip this in single-tenant mode">
@@ -160,7 +160,7 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
 
 </Callout>
 
-## Verify onboarding before you create the cluster
+## Verify onboarding
 
 <CommandBlock
   language="bash"

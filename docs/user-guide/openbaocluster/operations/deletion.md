@@ -8,12 +8,12 @@ journey: operate
 ---
 
 <PageHeader
-  title="Decommission the cluster without guessing what will be retained."
-  lede="Deleting an `OpenBaoCluster` is not just removing Pods. The deletion policy determines whether PVC-backed data stays behind, whether critical secrets are preserved, and what still requires manual cleanup after the control plane is gone."
+  title="Decommission a cluster"
+  lede="Deleting an `OpenBaoCluster` removes the control plane, but the deletion policy determines whether PVC-backed data stays behind, whether critical secrets are preserved, and what still requires manual cleanup after the control plane is gone."
 />
 
 <Checklist
-    title="Use this page before you"
+    title="Use this page when"
     items={[
       'tear down a dev, staging, or production cluster intentionally',
       'change the deletion policy from the default retain behavior',

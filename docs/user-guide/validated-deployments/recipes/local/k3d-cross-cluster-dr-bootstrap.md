@@ -7,8 +7,8 @@ description: Stand up the validated local disaster-recovery proving ground with 
 ---
 
 <PageHeader
-  title="Bootstrap the DR proving ground before you test the restore event itself."
-  lede="This recipe prepares the validated local disaster-recovery lane: a shared trust-services cluster, a source cluster, and a target cluster, all wired so the restore event will cross the same kinds of trust, storage, and ingress boundaries you expect in a real DR rehearsal."
+  title="Bootstrap the local cross-cluster DR baseline"
+  lede="This recipe prepares the validated local disaster-recovery lane: a shared trust-services cluster, a source cluster, and a target cluster, all wired so the restore event crosses the same trust, storage, and ingress boundaries used in a real DR rehearsal."
 />
 
 <Checklist

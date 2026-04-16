@@ -7,8 +7,8 @@ description: Default-deny network posture for OpenBao Pods and lifecycle jobs, p
 ---
 
 <PageHeader
-  title="Start from default deny and open only the traffic the lifecycle actually needs."
-  lede="The operator treats network policy as part of the security model, not as an optional hardening layer. OpenBao Pods and lifecycle jobs begin from explicit allowlists, and the allowed traffic should line up with clustering, management, and the integrations the cluster is deliberately configured to use."
+  title="Network policy model"
+  lede="This page describes the default-deny posture for OpenBao Pods and lifecycle jobs, and the ingress and egress paths the operator expects when cluster management and integrations are configured."
 />
 
 

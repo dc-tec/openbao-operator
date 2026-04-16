@@ -6,8 +6,8 @@ journey: reference
 ---
 
 <PageHeader
-  title="Use this page when you need the public cadence, release channels, and gates behind how OpenBao Operator ships."
-  lede="The goal is not high-frequency shipping. The goal is a predictable rhythm, visible release gates, and a clear rule for when a release ships early or is skipped."
+  title="Release channels and cadence"
+  lede="This page defines the public cadence, release channels, and gating rules behind how OpenBao Operator ships."
 />
 
 <Callout type="important" title="Cadence is a target, not a promise">

@@ -6,8 +6,8 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Use the Go style guide to keep implementation choices boring, predictable, and easy to review."
-  lede="This page captures the coding defaults maintainers expect in normal Go work: naming, error handling, logging, reconciler-safe concurrency, imports, and constants. The goal is not novelty. The goal is code that behaves like the rest of the repository."
+  title="Repository Go style defaults"
+  lede="This page captures the coding defaults maintainers expect in normal Go work: naming, error handling, logging, reconciler-safe concurrency, imports, and constants. The goal is consistent code that behaves like the rest of the repository."
 />
 
 <DecisionTable

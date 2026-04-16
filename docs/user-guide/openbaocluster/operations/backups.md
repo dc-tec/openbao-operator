@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Make snapshots routine before you need them for a restore."
-  lede="OpenBao Operator runs backups as transient Jobs that authenticate separately from the main workload, stream Raft snapshots directly to object storage, and record schedule and failure state on the cluster."
+  title="Backup operations and snapshot policy"
+  lede="OpenBao Operator runs backups as transient Jobs that authenticate separately from the main workload, stream Raft snapshots directly to object storage, and record schedule and failure state on the cluster. Use this page to configure auth, storage, schedules, retention, and verification."
 />
 
 
@@ -79,7 +79,7 @@ Check `CloudUnsealIdentityReady` for the main Pods and `BackupConfigurationReady
 ## First successful backup path
 
 <DecisionTable
-  title="Use this order the first time you wire backups"
+  title="Recommended first backup path"
   columns={['Step', 'What to do', 'What proves success']}
   rows={[
     {
@@ -655,7 +655,7 @@ Confirm backup status before you start the upgrade rather than assuming the pre-
 <CommandBlock
   language="bash"
   label="verify"
-  title="Check backup readiness before you wait for the schedule"
+  title="Check backup readiness"
   code={`kubectl get openbaocluster my-cluster -n <namespace> \\
   -o jsonpath='{range .status.conditions[*]}{.type}={.status}{\"\\n\"}{end}'`}
 >

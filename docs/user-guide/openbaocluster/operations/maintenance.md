@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Use cluster controls deliberately when you need to change the platform underneath OpenBao."
-  lede="Planned maintenance is where Kubernetes disruption rules, Raft quorum, and admission-policy guardrails all meet. Use this page to prepare drains and restarts, scale safely, and confirm the cluster is still healthy before you hand it back to normal operations."
+  title="Run planned maintenance safely"
+  lede="Planned maintenance is where Kubernetes disruption rules, Raft quorum, and admission-policy guardrails meet. Use this page to prepare drains and restarts, scale safely, and confirm the cluster returns to normal operation."
 />
 
 

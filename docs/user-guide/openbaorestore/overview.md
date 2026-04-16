@@ -7,8 +7,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Treat restore as an explicit destructive workflow."
-  lede="Restore is modeled as `OpenBaoRestore`, an immutable request object that keeps disaster recovery visible, auditable, and separate from normal cluster reconciliation. Use this page to understand when restore is appropriate and what boundaries it enforces before you run it."
+  title="Restore workflow overview"
+  lede="Restore is modeled as `OpenBaoRestore`, an immutable request object that keeps disaster recovery visible, auditable, and separate from normal cluster reconciliation. Use this page to understand when restore is appropriate and what boundaries it enforces."
 />
 
 

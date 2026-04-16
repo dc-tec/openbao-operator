@@ -7,8 +7,8 @@ description: How peer trust, certificate rotation, and workload-facing TLS ident
 ---
 
 <PageHeader
-  title="Keep peer trust, edge exposure, and workload identity on deliberate paths."
-  lede="TLS in the operator is not just an ingress feature. It defines how pods trust each other, how clients verify the service, where certificate authority material lives, and whether the private key ever touches Kubernetes Secrets at all."
+  title="TLS and workload identity paths"
+  lede="This page explains how pods trust each other, how clients verify the service, where certificate authority material lives, and how each TLS mode changes workload identity and certificate handling."
 />
 
 

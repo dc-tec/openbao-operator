@@ -8,7 +8,7 @@ journey: operate
 ---
 
 <PageHeader
-  title="Treat version changes as planned operations, not a quick spec patch."
+  title="Upgrade planning and rollout"
   lede="The operator supports rolling and blue-green upgrades, but both paths depend on cluster health, backup posture, and explicit authentication for the executor Jobs. Use this page to choose the strategy, stage the right config, and verify the rollout cleanly."
 />
 
@@ -67,7 +67,7 @@ Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a s
     class Verify,Complete,Hold write;`}
 />
 
-## Before you patch `spec.version`
+## Prepare the rollout
 
 - Confirm the cluster is initialized, healthy, and already safe to change. An upgrade is not the time to discover a broken backup path or an unstable seal configuration.
 - Set `spec.version` to the target semantic version. The operator blocks downgrades and validates semver format.

@@ -14,7 +14,7 @@ journeyStep: 4
 />
 
 <Checklist
-    title="Before you apply the cluster manifest"
+    title="Cluster manifest checklist"
     items={[
       'confirm the operator install is healthy in the namespace model you chose',
       'confirm the target namespace is already onboarded through OpenBaoTenant when you are in multi-tenant mode',
@@ -224,7 +224,7 @@ If you are going straight to production, prefer a tested architecture or recipe 
   A healthy first cluster should converge without repeated crash loops or long-lived pending state.
 </CommandBlock>
 
-<Callout type="note" title="What to look for before you move on">
+<Callout type="note" title="What to look for next">
 
 Confirm the cluster is available, TLS and storage match the shape you intended, and hardened clusters can realistically progress toward `ProductionReady=True`.
 

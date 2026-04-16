@@ -7,8 +7,8 @@ description: How root tokens, unseal keys, TLS material, and generated job ident
 ---
 
 <PageHeader
-  title="Treat trust material as lifecycle state, not just as Kubernetes Secrets."
-  lede="The operator manages or coordinates several high-value trust surfaces: bootstrap credentials, unseal roots, TLS material, and the identities used by backup, restore, and upgrade workflows. The most important question is not only where they live, but whether the operating model can avoid creating them in the first place."
+  title="Secrets and trust material lifecycle"
+  lede="The operator manages or coordinates several high-value trust surfaces: bootstrap credentials, unseal roots, TLS material, and the identities used by backup, restore, and upgrade workflows. This page explains where they live, how they are bounded, and where the operating model avoids creating them altogether."
 />
 
 

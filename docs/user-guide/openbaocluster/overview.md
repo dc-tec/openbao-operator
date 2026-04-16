@@ -8,8 +8,8 @@ description: Understand what OpenBaoCluster owns, what the operator protects aut
 ---
 
 <PageHeader
-  title="Read OpenBaoCluster as the contract for the whole service, not just a CRD."
-  lede="`OpenBaoCluster` is the declarative contract for the running OpenBao service on Kubernetes. It sets the cluster shape, service boundary, storage path, and day 2 capabilities the operator will keep reconciling. Use this page to orient the rest of Configure before you start editing individual fields."
+  title="OpenBaoCluster as the service contract"
+  lede="`OpenBaoCluster` is the declarative contract for the running OpenBao service on Kubernetes. It sets the cluster shape, service boundary, storage path, and day 2 capabilities the operator will keep reconciling. Use this page to orient the rest of Configure and understand which areas to tune next."
 />
 
 <Checklist

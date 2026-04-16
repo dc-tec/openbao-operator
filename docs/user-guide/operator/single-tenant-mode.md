@@ -8,8 +8,8 @@ journey: get-started
 ---
 
 <PageHeader
-  title="Use single-tenant mode when one team owns one namespace."
-  lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. It is a good fit for dedicated team environments, but it is a branch from the default platform path rather than the starting point for every install."
+  title="Single-tenant deployment model"
+  lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. It is a good fit for dedicated team environments that do not need the default tenant-onboarding path."
 />
 
 
@@ -137,7 +137,7 @@ Single-tenant mode skips `OpenBaoTenant`, but it does not invent the namespace f
 <CommandBlock
   language="yaml"
   label="configure"
-  title="Set the target namespace before you apply the overlay"
+  title="Set the target namespace"
   code={`apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -153,7 +153,7 @@ data:
 <CommandBlock
   language="bash"
   label="verify"
-  title="Render the overlay once before you apply it"
+  title="Render the overlay"
   code={`kubectl kustomize config/overlays/single-tenant`}
 >
   Confirm that the controller ServiceAccount subject, RoleBinding namespace, and `WATCH_NAMESPACE` value all point at the same intended target.
@@ -170,7 +170,7 @@ That is simpler for a dedicated team, but it also means the operator is no longe
 
 </Callout>
 
-## Verify the install before you create a cluster
+## Verify the install
 
 <CommandBlock
   language="bash"

@@ -6,8 +6,8 @@ journey: reference
 ---
 
 <PageHeader
-  title="Use this page when you need the exact upgrade-path contract for the operator itself."
-  lede="This page defines which operator upgrade paths are supported, how CRD sequencing must work, and why rollback should be treated as a recovery decision rather than a normal lifecycle shortcut. It is the exact contract for changing the operator version, not the managed OpenBao workload version."
+  title="Operator upgrade compatibility"
+  lede="This page defines supported operator upgrade paths, required CRD sequencing, and the project stance on downgrade and rollback for the operator itself."
 />
 
 <DecisionTable

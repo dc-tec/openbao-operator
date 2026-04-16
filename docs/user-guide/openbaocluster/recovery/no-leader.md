@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Repair quorum before you change Raft membership."
-  lede="A no-leader incident is not one thing. Sometimes the cluster cannot elect because pods are crash-looping or the cluster port is blocked. Sometimes a dead peer still counts toward quorum. Only when those narrower fixes are exhausted should you move into manual quorum recovery."
+  title="Diagnose no-leader conditions before manual Raft recovery"
+  lede="A no-leader incident can come from crash-looping pods, blocked cluster traffic, or stale peers that still count toward quorum. Use this runbook to narrow the failure mode and decide whether a manual quorum-recovery path is actually required."
 />
 
 <Checklist
@@ -24,7 +24,7 @@ journey: operate
 
 
 <DecisionTable
-  title="Match the failure before you repair it"
+  title="Match the failure mode"
   columns={['Signal', 'Start with', 'Why']}
   rows={[
     {

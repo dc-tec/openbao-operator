@@ -7,7 +7,7 @@ journey: contribute
 
 <PageHeader
   title="Use this page to understand how OpenBao Operator proves that published artifacts are attributable and reproducible."
-  lede="OpenBao Operator follows a build-once, verify, then promote model. The goal is not only to build release assets, but to prove where they came from, how they were produced, and whether an independent rebuild arrives at the same bytes before anything is published."
+  lede="OpenBao Operator follows a build-once, verify, then promote model. This page covers provenance, reproducibility, and the checks maintainers use before publishing release assets."
 />
 
 <DiagramFrame

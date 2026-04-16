@@ -8,8 +8,8 @@ journey: security
 ---
 
 <PageHeader
-  title="Understand the shared-operator boundary before you rely on multi-tenancy."
-  lede="Multi-tenant mode is the default production model because namespace introduction is explicit, the Provisioner and Controller stay separate, tenant access stays scoped, and guardrails are applied before a cluster ever lands in the namespace."
+  title="Shared-operator boundaries in multi-tenant mode"
+  lede="This page explains why multi-tenant mode is the default production model, how namespace introduction stays explicit, and how the Provisioner and Controller split tenant access from workload reconciliation."
 />
 
 
@@ -17,7 +17,7 @@ journey: security
 <Callout type="success" title="Default production model">
 
 Multi-tenant mode is the recommended production operating model for OpenBao Operator.
-Use [Single-Tenant Mode](../operator/single-tenant-mode.md) only when one team directly owns one namespace and intentionally bypasses the default tenant-onboarding boundary.
+Use [Single-Tenant Mode](../operator/single-tenant-mode.md) for dedicated environments where one team directly owns one namespace and does not need the default tenant-onboarding boundary.
 
 </Callout>
 

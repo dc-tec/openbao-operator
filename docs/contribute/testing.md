@@ -6,13 +6,13 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Choose the smallest test that proves the change you actually made."
-  lede="The testing stack is layered on purpose. Start with the cheapest signal that can fail for the right reason, then move outward only when the change touches controller wiring, real API semantics, full cluster lifecycle, or environment-specific behavior."
+  title="Choose test depth by change scope"
+  lede="The testing stack is layered. Start with the cheapest signal that can prove the change, then add integration, E2E, or exploratory coverage when the lower layer is no longer enough."
 />
 
 <DiagramFrame
   title="Testing layers"
-  caption="Move outward only when the cheaper layer can no longer prove the behavior you changed."
+  caption="Move outward when the cheaper layer can no longer prove the behavior you changed."
   code={`graph BT
     Unit["Unit tests"]
     Contract["Fast contracts"]

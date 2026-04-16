@@ -7,8 +7,8 @@ description: Validated cloud baseline for a development-profile OpenBao deployme
 ---
 
 <PageHeader
-  title="Use this lane to validate the EKS bring-up path with real AWS integrations before you move to a hardened public endpoint."
-  lede="This cloud baseline keeps the posture intentionally Development, but it proves the integrations that matter for cloud bring-up: KMS auto-unseal, workload identity, shared-edge exposure, JWT bootstrap, and snapshot upload to S3."
+  title="EKS development baseline with AWS integrations"
+  lede="This cloud baseline keeps the posture intentionally Development while validating the AWS integrations needed for cloud bring-up: KMS auto-unseal, workload identity, shared-edge exposure, JWT bootstrap, and snapshot upload to S3."
 />
 
 <Checklist

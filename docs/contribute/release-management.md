@@ -6,11 +6,11 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Release once, promote by digest, and prove the published artifacts before you announce them."
-  lede="OpenBao Operator uses a build-once, promote-everywhere release model. `release-please` owns versioning, changelog state, and release orchestration, while publish workflows own build, verification, signing, docs deployment, and release evidence."
+  title="Release management workflow"
+  lede="OpenBao Operator uses a build-once, promote-everywhere release model. This page covers versioning, changelog state, release orchestration, signing, docs deployment, and release evidence."
 />
 
-<Callout type="note" title="This page is the maintainer workflow, not the public cadence contract">
+<Callout type="note" title="Maintainer workflow">
 
 Use [Release Policy](pathname:///docs/next/reference/release-policy) for the public release cadence, channel rules, and stable release gates. Use this page for the operational workflow maintainers follow once a release is actually being executed.
 

@@ -7,8 +7,8 @@ description: How the provisioner and controller identities stay separate, narrow
 ---
 
 <PageHeader
-  title="Keep the identity that grants access separate from the identity that uses it."
-  lede="The operator's RBAC model is built around a split-controller design. The provisioner introduces tenant access and namespace guardrails, while the controller consumes tenant-scoped permissions to manage workloads. Neither long-running identity should be able to do both jobs."
+  title="Split-controller RBAC model"
+  lede="The operator's RBAC model separates namespace introduction from workload reconciliation. The provisioner introduces tenant access and namespace guardrails, while the controller consumes tenant-scoped permissions to manage workloads."
 />
 
 

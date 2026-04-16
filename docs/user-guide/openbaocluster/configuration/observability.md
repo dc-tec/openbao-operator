@@ -7,8 +7,8 @@ description: Wire operator metrics, cluster telemetry, dashboards, alerts, and l
 ---
 
 <PageHeader
-  title="Observe both the operator and the workload before you call the cluster ready."
-  lede="OpenBao Operator has two observability layers: the operator control plane itself, and the OpenBao workload it renders. Use this page to wire both layers into your monitoring stack, choose the scrape model your platform already supports, and promote only the signals that help you operate upgrades, backups, and recovery."
+  title="Observability for operator and workload"
+  lede="OpenBao Operator has two observability layers: the operator control plane itself, and the OpenBao workload it renders. Use this page to wire both layers into your monitoring stack, choose the scrape model your platform already supports, and focus on the signals that matter for upgrades, backups, and recovery."
 />
 
 

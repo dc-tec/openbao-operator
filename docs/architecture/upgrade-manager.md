@@ -7,8 +7,8 @@ description: Orchestrate rolling and blue-green upgrades, status-backed resumabi
 ---
 
 <PageHeader
-  title="Change workload versions without violating Raft safety."
-  lede="The upgrade manager owns disruptive version changes. It keeps upgrade orchestration out of the workload loop, persists state in status so upgrades survive controller restarts, and prioritizes cluster availability over finishing quickly."
+  title="Upgrade orchestration and safety model"
+  lede="The upgrade manager owns disruptive version changes. It keeps upgrade orchestration out of the workload loop, persists state in status so upgrades survive controller restarts, and prioritizes cluster availability throughout the rollout."
 />
 
 

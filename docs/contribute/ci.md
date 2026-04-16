@@ -6,8 +6,8 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Know what CI will enforce before you ask it to validate your branch."
-  lede="CI is optimized for signal, not ceremony. Pull requests route work based on changed files and labels, while `main`, edge, nightly, and release workflows enforce the heavier publication and hardening gates. Run the closest local equivalent first so CI is confirming your work, not discovering it for you."
+  title="CI workflow and local parity"
+  lede="This page explains how pull requests, `main`, nightly, and release workflows route checks and publication gates. Run the closest local equivalent first so CI confirms the change rather than discovering it."
 />
 
 <DiagramFrame

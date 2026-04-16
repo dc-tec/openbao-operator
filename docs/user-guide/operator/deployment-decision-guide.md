@@ -9,8 +9,8 @@ journeyStep: 1
 ---
 
 <PageHeader
-  title="Choose the path you want to keep operating."
-  lede="Make the main operating decisions before you install anything. Most teams should stay on the default production path and only branch when namespace ownership, local evaluation, or platform constraints give you a real reason."
+  title="Choose the deployment path"
+  lede="Use this page to choose the tenancy model, security posture, bootstrap flow, and install path. Most teams should stay on the default production path unless namespace ownership, local evaluation, or platform constraints require a different setup."
 />
 
 <Checklist
@@ -123,7 +123,7 @@ Before you move on, decide which human login path will be created as part of `sp
 </Callout>
 
 <RouteList
-  title="Branch only when you need one of these exceptions"
+  title="Exceptions that change the default path"
   items={[
     {
       eyebrow: 'A',
