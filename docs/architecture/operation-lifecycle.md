@@ -92,7 +92,7 @@ That keeps the shared safety model in one place instead of scattering lock and r
       emphasis: 'recommended',
     },
     {
-      cells: ['Acquire / Release', 'Status-based lock ownership via the adapter.', 'Controllers should not each patch status.operationLock differently or invent different lock messages.'],
+      cells: ['Acquire / Release', 'Status-based lock ownership via the adapter with a fresh read-before-write gateway.', 'Controllers should not each patch status.operationLock differently, rely on stale cached objects, or invent different lock messages.'],
     },
     {
       cells: ['IsLockHeld / HeldError / AddHeldAuditFields', 'A shared way to classify contention and enrich audit events with who currently owns the lock.', 'Contention should produce consistent diagnostics instead of manager-specific strings.'],
@@ -134,6 +134,9 @@ That keeps the shared safety model in one place instead of scattering lock and r
     },
     {
       cells: ['Exact-match release', 'Release succeeds only when holder and operation match the active lock, so one manager cannot accidentally clear another manager’s ownership.'],
+    },
+    {
+      cells: ['Legacy takeover', 'The adapter only forces ownership when a clear or explicit override hits an SSA ownership conflict, so normal lock renewals stay non-destructive.'],
     },
     {
       cells: ['Force override', 'Force semantics exist for explicit override paths only; normal long-running operations should not silently steal the lock.'],
