@@ -10,7 +10,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | --- | --- | --- | --- | --- |
 | `cluster-lifecycle-creates-a-cluster-with-self-init-19ac290f` | creates a cluster with self-init disabled and produces expected Secrets | active | _none_ | `lifecycle`, `cluster`, `profile-development` |
 | `cluster-lifecycle-creates-a-cluster-with-1-replica-9792a98c` | creates a cluster with 1 replica and verifies autopilot min_quorum=1 | active | _none_ | `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke` |
-| `cluster-lifecycle-scales-down-to-2-replicas-and-08833c8b` | scales down to 2 replicas and verifies autopilot min_quorum=2 | active | _none_ | `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke` |
+| `cluster-lifecycle-scales-down-to-1-replica-remains-f03c312f` | scales down to 1 replica, remains responsive, and verifies autopilot min_quorum=1 | active | _none_ | `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke` |
 | `cluster-lifecycle-scales-up-to-3-replicas-and-9bd63a38` | scales up to 3 replicas and verifies autopilot min_quorum=3 | active | _none_ | `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke` |
 | `cluster-lifecycle-creates-an-openbaocluster-and-converges-to-00cd448b` | creates an OpenBaoCluster and converges to Available | active | _none_ | `lifecycle`, `cluster`, `critical`, `tenant` |
 | `cluster-lifecycle-expands-storage-by-increasing-spec-storage-212f934d` | expands storage by increasing spec.storage.size (if supported) | active | _none_ | `lifecycle`, `cluster`, `critical`, `tenant` |
@@ -50,9 +50,9 @@ Recorded checkpoints:
 - verifying Raft Autopilot min_quorum=1 (Development profile with 1 replica)
 
 
-## `cluster-lifecycle-scales-down-to-2-replicas-and-08833c8b`
+## `cluster-lifecycle-scales-down-to-1-replica-remains-f03c312f`
 
-Path: `Cluster Lifecycle > Development Profile: Scaling with Autopilot Reconciliation > scales down to 2 replicas and verifies autopilot min_quorum=2`
+Path: `Cluster Lifecycle > Development Profile: Scaling with Autopilot Reconciliation > scales down to 1 replica, remains responsive, and verifies autopilot min_quorum=1`
 
 State: `active`
 
@@ -61,12 +61,14 @@ Covers: _none_
 Labels: `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke`
 
 Recorded checkpoints:
-- updating cluster to 2 replicas
-- waiting for StatefulSet to scale down to 2 replicas
-- waiting for pods to be ready
+- updating cluster to 1 replica
+- waiting for StatefulSet to scale down to 1 replica
+- waiting for the remaining pod to be ready
+- waiting for Available condition after scale down
 - getting public service for autopilot verification
 - triggering reconcile after scale down so autopilot settings are refreshed promptly
-- verifying Raft Autopilot min_quorum=2 (Development profile with 2 replicas)
+- verifying Raft Autopilot min_quorum=1 (Development profile with 1 replica)
+- verifying the remaining cluster still serves JWT-authenticated KV traffic
 
 
 ## `cluster-lifecycle-scales-up-to-3-replicas-and-9bd63a38`

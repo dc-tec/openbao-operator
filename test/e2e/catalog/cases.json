@@ -180,15 +180,15 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-lifecycle-scales-down-to-2-replicas-and-08833c8b",
-    "generatedId": "cluster-lifecycle-scales-down-to-2-replicas-and-08833c8b",
+    "id": "cluster-lifecycle-scales-down-to-1-replica-remains-f03c312f",
+    "generatedId": "cluster-lifecycle-scales-down-to-1-replica-remains-f03c312f",
     "file": "test/e2e/Cluster_Lifecycle_test.go",
     "type": "It",
-    "name": "scales down to 2 replicas and verifies autopilot min_quorum=2",
+    "name": "scales down to 1 replica, remains responsive, and verifies autopilot min_quorum=1",
     "path": [
       "Cluster Lifecycle",
       "Development Profile: Scaling with Autopilot Reconciliation",
-      "scales down to 2 replicas and verifies autopilot min_quorum=2"
+      "scales down to 1 replica, remains responsive, and verifies autopilot min_quorum=1"
     ],
     "labels": [
       "lifecycle",
@@ -207,12 +207,14 @@
       "smoke"
     ],
     "steps": [
-      "updating cluster to 2 replicas",
-      "waiting for StatefulSet to scale down to 2 replicas",
-      "waiting for pods to be ready",
+      "updating cluster to 1 replica",
+      "waiting for StatefulSet to scale down to 1 replica",
+      "waiting for the remaining pod to be ready",
+      "waiting for Available condition after scale down",
       "getting public service for autopilot verification",
       "triggering reconcile after scale down so autopilot settings are refreshed promptly",
-      "verifying Raft Autopilot min_quorum=2 (Development profile with 2 replicas)"
+      "verifying Raft Autopilot min_quorum=1 (Development profile with 1 replica)",
+      "verifying the remaining cluster still serves JWT-authenticated KV traffic"
     ],
     "focused": false,
     "pending": false,
@@ -1067,6 +1069,49 @@
       "platform"
     ],
     "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "admission-runtime-binding-loss",
+    "generatedId": "security-guardrails-pauses-managed-resource-reconciliation-when-a-ee48afbc",
+    "caseLabel": "admission-runtime-binding-loss",
+    "coverage": [
+      "admission-runtime-recheck",
+      "managed-resource-pause-on-policy-loss"
+    ],
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "pauses managed-resource reconciliation when a required admission binding disappears, then recovers when restored",
+    "path": [
+      "Security Guardrails",
+      "Admission Dependency Runtime Recheck",
+      "pauses managed-resource reconciliation when a required admission binding disappears, then recovers when restored"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission",
+      "pentest",
+      "case:admission-runtime-binding-loss",
+      "covers:admission-runtime-recheck",
+      "covers:managed-resource-pause-on-policy-loss"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission",
+      "pentest"
+    ],
+    "steps": [
+      "removing a required admission binding after the cluster is healthy",
+      "waiting for live dependency checks to report the missing binding",
+      "requesting a scale-up that would normally mutate the managed StatefulSet",
+      "proving the controller fails closed and does not mutate the StatefulSet",
+      "restoring the admission binding and verifying recovery"
+    ],
     "focused": false,
     "pending": false,
     "suiteFile": "",

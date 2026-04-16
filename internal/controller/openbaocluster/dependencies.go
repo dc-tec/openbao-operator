@@ -7,11 +7,17 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 	"k8s.io/client-go/rest"
 )
 
 func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDependencies {
+	var scaleDownRuntime initmanagerport.ScaleDownRuntime
+	if provider, ok := r.InitManager.(initmanagerport.ScaleDownProvider); ok {
+		scaleDownRuntime = provider.ScaleDownRuntime()
+	}
+
 	return appopenbaocluster.InfraDependencies{
 		Kubernetes: appopenbaocluster.InfraKubernetesRuntime{
 			Client:            r.Client,
@@ -45,6 +51,9 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 			ClientForPodFunc: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.ScaleDownPodClient, error) {
 				return r.clientForPod(ctx, cluster, podName)
 			},
+		},
+		ScaleDown: appopenbaocluster.InfraScaleDownRuntime{
+			Runtime: scaleDownRuntime,
 		},
 	}
 }

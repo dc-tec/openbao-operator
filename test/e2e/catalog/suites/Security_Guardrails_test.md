@@ -8,6 +8,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
+| `admission-runtime-binding-loss` | pauses managed-resource reconciliation when a required admission binding disappears, then recovers when restored | active | `admission-runtime-recheck`, `managed-resource-pause-on-policy-loss` | `security`, `critical`, `admission`, `pentest` |
 | `security-guardrails-accepts-structured-configuration-protected-stanzas-cannot-2a18b9bd` | accepts structured configuration (protected stanzas cannot be overridden) | active | _none_ | `security`, `critical`, `admission` |
 | `security-guardrails-blocks-cross-namespace-tenant-targeting-self-6a21b1fd` | blocks cross-namespace tenant targeting (self-service mode) | active | _none_ | `security`, `critical`, `admission` |
 | `security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d` | blocks decimal IP encoding in backup endpoint (SSRF protection) | active | _none_ | `security`, `critical`, `admission` |
@@ -28,6 +29,26 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `security-guardrails-prevents-sidecar-injection-via-statefulset-updates-145c71ee` | prevents sidecar injection via StatefulSet updates | active | _none_ | `security`, `critical`, `tamper` |
 | `security-guardrails-prevents-unauthorized-deletion-of-the-tls-9e011135` | prevents unauthorized deletion of the TLS CA secret | active | _none_ | `security`, `critical`, `tamper` |
 | `security-guardrails-prevents-unauthorized-deletion-of-the-unseal-2ea235de` | prevents unauthorized deletion of the unseal Secret | active | _none_ | `security`, `critical`, `tamper` |
+
+## `admission-runtime-binding-loss`
+
+Path: `Security Guardrails > Admission Dependency Runtime Recheck > pauses managed-resource reconciliation when a required admission binding disappears, then recovers when restored`
+
+State: `active`
+
+Generated fallback ID: `security-guardrails-pauses-managed-resource-reconciliation-when-a-ee48afbc`
+
+Covers: `admission-runtime-recheck`, `managed-resource-pause-on-policy-loss`
+
+Labels: `security`, `critical`, `admission`, `pentest`
+
+Recorded checkpoints:
+- removing a required admission binding after the cluster is healthy
+- waiting for live dependency checks to report the missing binding
+- requesting a scale-up that would normally mutate the managed StatefulSet
+- proving the controller fails closed and does not mutate the StatefulSet
+- restoring the admission binding and verifying recovery
+
 
 ## `security-guardrails-accepts-structured-configuration-protected-stanzas-cannot-2a18b9bd`
 

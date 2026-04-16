@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -21,21 +20,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
-func TestHandleScaleDownSafety(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(scheme)
-	_ = openbaov1alpha1.AddToScheme(scheme)
+type scaleDownRuntimeStub struct {
+	prepareFunc func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error
+}
 
+func (s scaleDownRuntimeStub) PrepareScaleDown(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error {
+	if s.prepareFunc != nil {
+		return s.prepareFunc(ctx, logger, cluster, statefulSetName, currentReplicas, desiredReplicas)
+	}
+	return nil
+}
+
+func TestHandleScaleDownSafety(t *testing.T) {
 	clusterName := "test-cluster"
 	namespace := "default"
 
@@ -43,44 +47,87 @@ func TestHandleScaleDownSafety(t *testing.T) {
 		name            string
 		currentReplicas int32
 		desiredReplicas int32
-		victimLeader    bool
-		victimError     bool // simulate network error
+		statusReplicas  int32
+		readyReplicas   int32
+		currentStatus   int32
+		generation      int64
+		observedGen     int64
+		runtimeError    string
+		expectedApplied int32
 		expectedError   string
 	}{
 		{
-			name:            "No scale down",
+			name:            "no scale down",
 			currentReplicas: 3,
 			desiredReplicas: 3,
-			victimLeader:    false, // Irrelevant
+			statusReplicas:  3,
+			readyReplicas:   3,
+			currentStatus:   3,
+			generation:      1,
+			observedGen:     1,
+			expectedApplied: 3,
 			expectedError:   "",
 		},
 		{
-			name:            "Scale up",
+			name:            "scale up",
 			currentReplicas: 3,
 			desiredReplicas: 4,
-			victimLeader:    false, // Irrelevant
+			statusReplicas:  3,
+			readyReplicas:   3,
+			currentStatus:   3,
+			generation:      1,
+			observedGen:     1,
+			expectedApplied: 4,
 			expectedError:   "",
 		},
 		{
-			name:            "Scale down, victim is follower",
+			name:            "scale down uses one safe step",
 			currentReplicas: 3,
-			desiredReplicas: 2,
-			victimLeader:    false,
+			desiredReplicas: 1,
+			statusReplicas:  3,
+			readyReplicas:   3,
+			currentStatus:   3,
+			generation:      1,
+			observedGen:     1,
+			expectedApplied: 2,
 			expectedError:   "",
 		},
 		{
-			name:            "Scale down, victim is leader",
+			name:            "scale down waits for statefulset to settle between steps",
+			currentReplicas: 2,
+			desiredReplicas: 1,
+			statusReplicas:  2,
+			readyReplicas:   1,
+			currentStatus:   1,
+			generation:      2,
+			observedGen:     2,
+			expectedApplied: 2,
+			expectedError:   "waiting for StatefulSet default/test-cluster to settle at 2 replicas before next scale-down step",
+		},
+		{
+			name:            "scale down requeues when runtime blocks",
 			currentReplicas: 3,
 			desiredReplicas: 2,
-			victimLeader:    true,
+			statusReplicas:  3,
+			readyReplicas:   3,
+			currentStatus:   3,
+			generation:      1,
+			observedGen:     1,
+			runtimeError:    "waiting for leader step-down on test-cluster-2 to complete",
+			expectedApplied: 3,
 			expectedError:   "waiting for leader step-down on test-cluster-2 to complete",
 		},
 		{
-			name:            "Scale down, victim unreachable",
+			name:            "scale down blocks without runtime",
 			currentReplicas: 3,
 			desiredReplicas: 2,
-			victimError:     true,
-			expectedError:   "", // Should proceed (fail open)
+			statusReplicas:  3,
+			readyReplicas:   3,
+			currentStatus:   3,
+			generation:      1,
+			observedGen:     1,
+			expectedApplied: 3,
+			expectedError:   "scale-down runtime is not configured",
 		},
 	}
 
@@ -96,77 +143,49 @@ func TestHandleScaleDownSafety(t *testing.T) {
 				},
 			}
 
-			// Mock StatefulSet
 			sts := &appsv1.StatefulSet{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName,
-					Namespace: namespace,
+					Name:       clusterName,
+					Namespace:  namespace,
+					Generation: tt.generation,
 				},
 				Spec: appsv1.StatefulSetSpec{
 					Replicas: &tt.currentReplicas,
 				},
+				Status: appsv1.StatefulSetStatus{
+					ObservedGeneration: tt.observedGen,
+					Replicas:           tt.statusReplicas,
+					ReadyReplicas:      tt.readyReplicas,
+					CurrentReplicas:    tt.currentStatus,
+				},
 			}
 
-			// Mock Client
-			k8sClient := fake.NewClientBuilder().
-				WithScheme(scheme).
-				WithObjects(cluster, sts).
-				Build()
-
-				// Mock OpenBao Client for victim pod
-			clientFunc := func(_ context.Context, c *openbaov1alpha1.OpenBaoCluster, podName string) (ScaleDownPodClient, error) {
-				if tt.victimError {
-					return nil, fmt.Errorf("network error")
+			r := &infraReconciler{}
+			if tt.name != "scale down blocks without runtime" {
+				r.deps.ScaleDown = InfraScaleDownRuntime{
+					Runtime: scaleDownRuntimeStub{
+						prepareFunc: func(_ context.Context, _ logr.Logger, gotCluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error {
+							assert.Same(t, cluster, gotCluster)
+							assert.Equal(t, clusterName, statefulSetName)
+							assert.Equal(t, tt.currentReplicas, currentReplicas)
+							if tt.currentReplicas > tt.desiredReplicas {
+								expectedDesired := tt.currentReplicas - 1
+								if expectedDesired < tt.desiredReplicas {
+									expectedDesired = tt.desiredReplicas
+								}
+								assert.Equal(t, expectedDesired, desiredReplicas)
+							}
+							if tt.runtimeError != "" {
+								return errors.New(tt.runtimeError)
+							}
+							return nil
+						},
+					},
 				}
-
-				// Mock server to handle health/step-down
-				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					switch r.URL.Path {
-					case "/v1/sys/health":
-						if tt.victimLeader {
-							// Active Leader: 200 OK, initialized=true, sealed=false, standby=false
-							w.WriteHeader(http.StatusOK)
-							_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": false}`))
-						} else {
-							// Follower: 429, initialized=true, sealed=false, standby=true
-							w.WriteHeader(http.StatusTooManyRequests)
-							_, _ = w.Write([]byte(`{"initialized": true, "sealed": false, "standby": true}`))
-						}
-					case "/v1/sys/step-down":
-						if r.Method == http.MethodPut {
-							w.WriteHeader(http.StatusNoContent)
-						} else {
-							w.WriteHeader(http.StatusMethodNotAllowed)
-						}
-					default:
-						w.WriteHeader(http.StatusNotFound)
-					}
-				}))
-				// Note: server is not closed, leaking resources in test but acceptable for short unit test
-
-				// Important: Use server URL
-				clientConfig := portopenbao.ClientConfig{
-					BaseURL: server.URL,
-					Token:   "root", // required for step-down
-				}
-
-				return openbao.NewClient(clientConfig)
 			}
 
-			r := &infraReconciler{deps: InfraDependencies{
-				Kubernetes: InfraKubernetesRuntime{
-					Client: k8sClient,
-					Scheme: scheme,
-				},
-				Events: InfraEventRuntime{
-					Recorder: nil, // not needed for this test part
-				},
-				Pods: InfraPodRuntime{
-					ClientForPodFunc: clientFunc,
-				},
-			}}
-
-			err := r.handleScaleDownSafety(context.Background(), cluster, tt.desiredReplicas, sts)
+			appliedReplicas, err := r.handleScaleDownSafety(context.Background(), cluster, tt.desiredReplicas, sts)
+			assert.Equal(t, tt.expectedApplied, appliedReplicas)
 			if tt.expectedError == "" {
 				assert.NoError(t, err)
 			} else {
@@ -435,6 +454,75 @@ func TestInfraReconciler_Reconcile_MapsAPIServerNetworkConfigurationError(t *tes
 	if !strings.Contains(err.Error(), "spec.network.apiServerEndpointIPs") {
 		t.Fatalf("error %q does not mention apiServerEndpointIPs", err)
 	}
+}
+
+func TestInfraReconciler_Reconcile_DoesNotRequeuePermanentScaleDownPrerequisites(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	currentReplicas := int32(3)
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Version:  "2.5.0",
+			Image:    "openbao/openbao:2.5.0",
+			Replicas: 1,
+			InitContainer: &openbaov1alpha1.InitContainerConfig{
+				Image: "openbao-init:test",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true,
+		},
+	}
+	statefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       cluster.Name,
+			Namespace:  cluster.Namespace,
+			Generation: 1,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &currentReplicas,
+		},
+		Status: appsv1.StatefulSetStatus{
+			ObservedGeneration: 1,
+			Replicas:           3,
+			ReadyReplicas:      3,
+			CurrentReplicas:    3,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, statefulSet).
+		Build()
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			Kubernetes: InfraKubernetesRuntime{
+				Client: k8sClient,
+				Scheme: scheme,
+			},
+			ScaleDown: InfraScaleDownRuntime{
+				Runtime: scaleDownRuntimeStub{
+					prepareFunc: func(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster, string, int32, int32) error {
+						return operatorerrors.WrapPermanentPrerequisitesMissing(errors.New("missing raft permissions"))
+					},
+				},
+			},
+		},
+	}
+
+	result, err := r.Reconcile(context.Background(), logr.Discard(), cluster)
+	assert.NoError(t, err)
+	assert.Zero(t, result.RequeueAfter)
 }
 
 func TestInfraReconciler_MapManagerReconcileError(t *testing.T) {
