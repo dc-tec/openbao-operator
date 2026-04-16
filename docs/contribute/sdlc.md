@@ -6,13 +6,13 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Use the SDLC to understand which controls prove a change is safe to ship."
-  lede="The SDLC is the maintainer model for how work moves from design to production. It ties normal implementation work to the governance controls that harden builds, gate releases, and feed operational learning back into the next change."
+  title="Software development lifecycle"
+  lede="This page describes how the project connects planning, implementation, verification, release, and operational feedback."
 />
 
 <DiagramFrame
   title="Lifecycle model"
-  caption="The lifecycle is a control loop, not a one-way checklist."
+  caption="The lifecycle links planning, implementation, verification, release, and operational feedback."
   code={`graph LR
     Plan["Plan and design"]
     Build["Implement"]
@@ -76,9 +76,9 @@ journey: contribute
   ]}
 />
 
-<Callout type="note" title="Governance model, not a task checklist">
+<Callout type="note" title="How to use this page">
 
-This page explains how the project models change control. Use the workflow pages for concrete commands and release execution. Use this page when you need to understand why those checks exist and where they fit.
+This page describes the project change-control model. Workflow pages cover concrete commands and release execution. This page focuses on how the controls fit together.
 
 </Callout>
 

@@ -12,7 +12,7 @@ description: Reproduce the validated development baseline on Amazon EKS with AWS
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
       "a Development-profile cluster that unseals with AWS KMS through workload identity",
@@ -22,7 +22,7 @@ description: Reproduce the validated development baseline on Amazon EKS with AWS
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This recipe matches the EKS development lane validated in the project cloud environment. The tested path covered KMS unseal, JWT bootstrap, Gateway exposure, and successful S3 backups.
 

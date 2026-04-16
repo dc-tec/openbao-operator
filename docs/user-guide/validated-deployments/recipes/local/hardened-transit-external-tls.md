@@ -12,7 +12,7 @@ description: Reproduce the validated local hardened lane with Transit auto-unsea
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
       "a hardened cluster that self-initializes and never persists a root token Secret",
@@ -22,7 +22,7 @@ description: Reproduce the validated local hardened lane with Transit auto-unsea
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This recipe follows the hardened external-TLS lifecycle covered by the in-repo E2E suite and the local validation environment. The tested path includes tenant onboarding, external TLS Secrets, Transit auto-unseal, self-init, and successful JWT admin login.
 

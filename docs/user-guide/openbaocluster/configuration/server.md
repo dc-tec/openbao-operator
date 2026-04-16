@@ -3,12 +3,12 @@ title: Server Configuration
 hide_title: true
 pageType: task
 journey: configure
-description: Configure server-runtime defaults such as UI, listener behavior, audit devices, plugins, and Raft autopilot without mixing in unrelated exposure or observability concerns.
+description: Configure server-runtime defaults such as UI, listener behavior, audit devices, plugins, and Raft autopilot, and use the dedicated pages for adjacent configuration areas.
 ---
 
 <PageHeader
-  title="Tune the server runtime without turning this page into a dump of every field."
-  lede="Use this page for the settings that shape how the OpenBao server itself runs: listener and lease behavior, Raft autopilot, audit devices, and plugin registration. Exposure, observability, and mirrored-image strategy each have their own configuration paths."
+  title="Configure the server runtime"
+  lede="Use this page for the settings that shape how the OpenBao server runs: listener and lease behavior, Raft autopilot, audit devices, and plugin registration. Exposure, observability, and mirrored-image settings are documented separately."
 />
 
 
@@ -107,7 +107,7 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
       cells: [
         "`raft.performanceMultiplier`",
         "Compensate for high-latency or slower control-plane environments.",
-        "Change this deliberately and observe cluster behavior rather than cargo-culting larger values.",
+        "Change this deliberately and verify that measured latency or failure behavior requires the larger value.",
       ],
     },
   ]}
@@ -131,7 +131,7 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
         file_path: "/var/log/openbao/audit.log"
         format: "json"`}
 >
-  Audit devices belong in the cluster baseline so the service does not come up “temporarily unaudited” and stay that way by accident.
+  Include audit devices in the cluster baseline so the service starts with the expected audit configuration.
 </CommandBlock>
 
   </TabItem>
@@ -234,7 +234,7 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
         maxTrailingLogs: 2000
         serverStabilizationTime: "30s"`}
 >
-  Override only when you have a concrete reason. Most clusters should start with the operator defaults and change them only after observing real failure or latency behavior.
+  Start with the operator defaults and override them only after measuring behavior that requires a change.
 </CommandBlock>
 
   </TabItem>
@@ -250,7 +250,7 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
       autopilot:
         cleanupDeadServers: false`}
 >
-  If you disable cleanup, you are taking manual ownership of peer removal. That is usually a temporary operational exception, not a steady-state recommendation.
+  If you disable cleanup, you are taking manual ownership of peer removal. This is usually a temporary operational exception rather than the steady-state configuration.
 </CommandBlock>
 
   </TabItem>
@@ -262,7 +262,7 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
   title="Inspect the full configuration schema"
   code={`kubectl explain openbaocluster.spec.configuration`}
 >
-  Use this when you need the exact field tree. Keep this page for the defaults and decision boundaries, not as a full API dump.
+  Use this when you need the exact field tree. Keep this page for defaults and decision boundaries rather than exhaustive field-by-field reference.
 </CommandBlock>
 
 <NextActions

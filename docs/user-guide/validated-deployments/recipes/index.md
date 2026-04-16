@@ -28,7 +28,7 @@ description: Catalog of validated deployment recipes, grouped by cloud and local
     {
       eyebrow: "02",
       title: "Local recipes",
-      description: "Deployment procedures for the validated k3d development, hardened, and cross-cluster DR lanes.",
+      description: "Deployment procedures for the validated k3d development, hardened, and cross-cluster DR baselines.",
       docId: "user-guide/validated-deployments/recipes/local/index",
     },
   ]}

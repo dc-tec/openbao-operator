@@ -8,8 +8,8 @@ journey: get-started
 ---
 
 <PageHeader
-  title="Keep the operator identity surfaces separate in your head."
-  lede="The controller, workload pods, and day 2 executor jobs do not share one identity. This page helps you trace which Kubernetes ServiceAccount maps to which OpenBao auth and authorization surface so custom installs do not drift."
+  title="Operator identity surfaces"
+  lede="The controller, workload pods, and day 2 executor jobs use different identities. This page maps each Kubernetes ServiceAccount to the corresponding OpenBao auth and authorization surface."
 />
 
 

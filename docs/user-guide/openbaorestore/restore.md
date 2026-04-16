@@ -15,7 +15,7 @@ journey: operate
 
 <Callout type="danger" title="Restore overwrites the target cluster">
 
-Restore replaces the target cluster state with the contents of the selected snapshot. All current secrets, policies, auth methods, and keys in that cluster are treated as replaceable state. Confirm the target namespace, target cluster, and snapshot key before you apply the request.
+Restore replaces the target cluster state with the contents of the selected snapshot. All current secrets, policies, auth methods, and keys in that cluster are treated as replaceable state. Verify the target namespace, target cluster, and snapshot key as part of the restore request.
 
 </Callout>
 
@@ -73,7 +73,7 @@ Restore replaces the target cluster state with the contents of the selected snap
         'Static token',
         'JWT auth is not available yet and you need a compatibility path for recovery.',
         'The restore Job reads a long-lived OpenBao token from a Secret in the same namespace.',
-        'Treat the token as a high-sensitivity credential and rotate it intentionally.',
+        'Store the token as a high-sensitivity credential and rotate it intentionally.',
       ],
     },
   ]}
@@ -225,7 +225,7 @@ That keeps the restore path aligned with the backup path you have already proven
   tokenSecretRef:
     name: restore-token`}
 >
-  Use this path only when JWT auth is not available. The Secret must be in the same namespace as the restore request.
+  Use this path if JWT auth is not available. The Secret must be in the same namespace as the restore request.
 </CommandBlock>
 
 </TabItem>
@@ -327,7 +327,7 @@ kubectl describe openbaocluster <cluster> -n <namespace>`}
     },
     {
       label: 'Recover after upgrade restore',
-      description: 'Use the override-lock path only when a failed upgrade or rollback blocks the normal restore request.',
+      description: 'Use the override-lock path if a failed upgrade or rollback blocks the normal restore request.',
       docId: 'user-guide/openbaorestore/recovery-restore-after-upgrade',
     },
   ]}

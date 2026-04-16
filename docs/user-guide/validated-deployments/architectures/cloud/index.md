@@ -31,14 +31,14 @@ description: Validated cloud baselines for OpenBao Operator, pairing each tested
     {
       eyebrow: "01",
       title: "EKS Development",
-      description: "Shared terminating edge, AWS KMS auto-unseal, JWT bootstrap, and S3 backups for a realistic but non-production lane.",
+      description: "Shared terminating edge, AWS KMS auto-unseal, JWT bootstrap, and S3 backups in the validated EKS development baseline.",
       docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3",
       actionLabel: "Open lane",
     },
     {
       eyebrow: "02",
       title: "EKS Hardened",
-      description: "Dedicated passthrough edge, AWS KMS auto-unseal, OpenBao-managed ACME, and the tighter production posture used in the hardened cloud lane.",
+      description: "Dedicated passthrough edge, AWS KMS auto-unseal, OpenBao-managed ACME, and the hardened cloud baseline.",
       docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme",
       actionLabel: "Open lane",
     },

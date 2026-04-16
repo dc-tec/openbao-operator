@@ -28,7 +28,7 @@ description: Catalog of validated reference architectures, grouped by cloud and 
     {
       eyebrow: "02",
       title: "Local baselines",
-      description: "Validated k3d lanes for development, hardened rehearsal, and cross-cluster DR proof.",
+      description: "Validated k3d lanes for development, hardened rehearsal, and cross-cluster DR.",
       docId: "user-guide/validated-deployments/architectures/local/index",
     },
   ]}

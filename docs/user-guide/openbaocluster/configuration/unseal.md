@@ -118,15 +118,15 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     {
       cells: [
         "AWS KMS",
-        "Needed only when you are not using IRSA, ambient credentials, or another default AWS credential chain.",
+        "Required if you are not using IRSA, ambient credentials, or another default AWS credential chain.",
         "`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.",
-        "Use Secrets only when workload identity is not the intended path.",
+        "Prefer workload identity when that path is available and intended.",
       ],
     },
     {
       cells: [
         "GCP Cloud KMS",
-        "Needed only when `spec.unseal.gcpCloudKMS.credentials` points at a mounted file instead of using Workload Identity or ADC.",
+        "Required if `spec.unseal.gcpCloudKMS.credentials` points at a mounted file instead of using Workload Identity or ADC.",
         "A Secret key matching the configured file name, usually `credentials.json`, containing valid JSON credentials.",
         "The path must live under `/etc/bao/seal-creds`.",
       ],
@@ -134,7 +134,7 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     {
       cells: [
         "Azure Key Vault",
-        "Needed only when you are not using Managed Identity or Azure Workload Identity.",
+        "Required if you are not using Managed Identity or Azure Workload Identity.",
         "`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`.",
         "Managed identity is the preferred Hardened path when your platform supports it.",
       ],
@@ -142,7 +142,7 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     {
       cells: [
         "OCI KMS",
-        "Needed only when `spec.unseal.ocikms.authTypeAPIKey=true`.",
+        "Required if `spec.unseal.ocikms.authTypeAPIKey=true`.",
         "`config`, plus the Secret key referenced by `key_file` inside the OCI SDK config.",
         "The OCI config must define `user`, `fingerprint`, `tenancy`, `region`, and `key_file` in profile `[DEFAULT]`, and `key_file` must point under `/etc/bao/seal-creds`.",
       ],

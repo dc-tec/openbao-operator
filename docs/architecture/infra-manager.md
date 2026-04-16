@@ -7,7 +7,7 @@ description: Render OpenBaoCluster into converged configuration, StatefulSet res
 ---
 
 <PageHeader
-  title="Render the cluster spec into a converged StatefulSet and configuration."
+  title="Infrastructure manager workflow"
   lede="The infrastructure manager is the workload path that turns `OpenBaoCluster` into running Kubernetes resources. It owns rendered configuration, StatefulSet-facing infrastructure, and the rollout triggers that keep configuration drift and pod lifecycle changes in sync."
 />
 

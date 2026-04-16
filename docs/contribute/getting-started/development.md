@@ -6,7 +6,7 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Get a workstation to the point where you can build, run, test, and debug the operator without fighting the toolchain."
+  title="Contributor workstation setup"
   lede="Start by bootstrapping the repository-managed tools, then choose the smallest development loop that matches your task. Most contributor work does not need a full cluster deployment on the first edit, although webhooks, RBAC, networking, and lifecycle behavior usually do."
 />
 

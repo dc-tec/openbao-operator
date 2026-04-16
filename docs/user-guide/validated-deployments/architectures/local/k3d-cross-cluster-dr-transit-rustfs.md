@@ -12,7 +12,7 @@ description: Validated local disaster-recovery baseline for OpenBao on k3d with 
 />
 
 <Checklist
-    title="This lane proves"
+    title="Validated coverage"
     items={[
       "a snapshot can leave the source cluster, cross an object-storage boundary, and restore into a different target cluster",
       "the restored target can unseal only because it shares the same external Transit root of trust as the source",
@@ -65,14 +65,14 @@ This local disaster-recovery reference architecture uses k3d to validate the DR 
       cells: [
         "Cutover model",
         "Manual restore and manual client or DNS cutover",
-        "The lane proves restore correctness, not automatic failover orchestration.",
+        "The baseline covers restore correctness and does not include automatic failover orchestration.",
       ],
     },
   ]}
 />
 
 <DiagramFrame
-  title="Validated lane topology"
+  title="Baseline topology"
   caption="The source cluster writes snapshots to shared storage, the target cluster restores from that storage, and both sides depend on the same external Transit key to make restored data usable."
   code={`flowchart LR
     Client["Operator or admin"] -->|"HTTPS (SNI)"| SourceEdge["Source passthrough edge"]
@@ -152,15 +152,15 @@ This local disaster-recovery reference architecture uses k3d to validate the DR 
   ]}
 />
 
-<Callout type="success" title="What this lane validated">
+<Callout type="success" title="Validated coverage">
 
 The local DR lane proved source backup to RustFS, restore into a separate target cluster, target unseal with the shared Transit key, and post-restore checks that source credentials and source data replaced the target bootstrap state.
 
 </Callout>
 
-<Callout type="warning" title="What this lane is not">
+<Callout type="warning" title="Out of scope">
 
-This lane does not define automatic failover or a cloud DR reference. It is a validated manual recovery lane with explicit preconditions for backup, restore, and cutover.
+This baseline does not define automatic failover or a cloud DR reference. It covers a validated manual recovery flow with explicit preconditions for backup, restore, and cutover.
 
 </Callout>
 

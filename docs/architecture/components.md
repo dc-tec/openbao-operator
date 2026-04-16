@@ -7,8 +7,8 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
 ---
 
 <PageHeader
-  title="Split the control plane so pod churn, long-running operations, and status writes stay separate."
-  lede="OpenBao Operator avoids a single reconciliation loop. The control plane is divided into focused controllers, then delegated into app-layer orchestration and narrower domain managers so the system can react quickly without mixing unrelated responsibilities."
+  title="Split-controller control plane"
+  lede="OpenBao Operator divides the control plane into focused controllers, then delegates into app-layer orchestration and narrower domain managers so workload churn, long-running operations, and status writes stay separated."
 />
 
 

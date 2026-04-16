@@ -7,12 +7,12 @@ description: Validated hardened cloud baseline for OpenBao on Amazon EKS with AW
 ---
 
 <PageHeader
-  title="Use this lane when you need the production-style EKS baseline that keeps OpenBao as the public TLS endpoint."
-  lede="This cloud baseline is the current hardened EKS reference shape validated by the project. It keeps the unseal root in AWS KMS, keeps the public hostname on a dedicated passthrough Gateway, and lets OpenBao manage ACME issuance directly while backup Jobs write to S3 through a separate identity."
+  title="Hardened EKS baseline with public ACME"
+  lede="This cloud baseline is the hardened EKS topology validated by the project. It uses AWS KMS for auto-unseal, a dedicated public passthrough Gateway, OpenBao-managed ACME, and S3 backups through a separate identity."
 />
 
 <Checklist
-    title="This lane proves"
+    title="Validated coverage"
     items={[
       "a Hardened-profile cluster can bootstrap on EKS with KMS auto-unseal and signed helper images",
       "OpenBao-managed ACME can issue and serve the public certificate while the Gateway remains pure passthrough",
@@ -36,7 +36,7 @@ Cloud reference architecture. This is the production-style Amazon EKS baseline v
       cells: [
         "Profile",
         "`spec.profile: Hardened`",
-        "The lane proves the production-style posture rather than the relaxed bring-up defaults used in the development baseline.",
+        "The baseline uses the hardened production-style posture rather than the development baseline defaults.",
       ],
       emphasis: "recommended",
     },
@@ -44,7 +44,7 @@ Cloud reference architecture. This is the production-style Amazon EKS baseline v
       cells: [
         "Seal path",
         "AWS KMS via workload identity",
-        "The main workload uses a cloud-native unseal path instead of static or external secret material.",
+        "The main workload uses a cloud-native unseal path rather than static or external secret material.",
       ],
     },
     {
@@ -65,14 +65,14 @@ Cloud reference architecture. This is the production-style Amazon EKS baseline v
       cells: [
         "Backup path",
         "S3 with a separate backup identity",
-        "The lane proves that backup execution remains separate from KMS unseal and public-edge concerns.",
+        "Backup execution remains separate from KMS unseal and public-edge concerns.",
       ],
     },
   ]}
 />
 
 <DiagramFrame
-  title="Validated lane topology"
+  title="Baseline topology"
   caption="The hardened hostname lives on its own passthrough edge, OpenBao handles ACME itself, and the cluster still keeps backup and unseal identity surfaces separate."
   code={`flowchart LR
     Client["OpenBao client"] -->|"HTTPS (SNI)"| Edge["Dedicated public passthrough Gateway"]
@@ -148,15 +148,15 @@ Cloud reference architecture. This is the production-style Amazon EKS baseline v
   ]}
 />
 
-<Callout type="success" title="What this lane validated">
+<Callout type="success" title="Validated coverage">
 
 The hardened EKS lane covered bootstrap, KMS auto-unseal, OpenBao-managed public ACME certificate issuance, Gateway passthrough, JWT bootstrap, human admin JWT login, and successful S3 backups.
 
 </Callout>
 
-<Callout type="warning" title="What this lane is not">
+<Callout type="warning" title="Out of scope">
 
-This is not the right lane if you need a source-restricted public hostname, externally managed TLS, or a terminating Gateway in front of OpenBao. Those choices are different contracts, not small tweaks to this one.
+This baseline does not cover source-restricted public hostnames, externally managed TLS, or a terminating Gateway in front of OpenBao. Those choices require a different topology.
 
 </Callout>
 

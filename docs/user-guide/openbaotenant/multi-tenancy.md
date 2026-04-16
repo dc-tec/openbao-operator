@@ -1,6 +1,6 @@
 ---
 title: Multi-Tenant Security
-description: Understand the default shared-operator security model, including namespace introduction, split controllers, RBAC boundaries, and tenant guardrails.
+description: Default shared-operator security model, including namespace introduction, split controllers, RBAC boundaries, and tenant guardrails.
 slug: /tenant-onboarding/multi-tenant-security
 hide_title: true
 pageType: concept
@@ -8,8 +8,8 @@ journey: security
 ---
 
 <PageHeader
-  title="Shared-operator boundaries in multi-tenant mode"
-  lede="This page explains why multi-tenant mode is the default production model, how namespace introduction stays explicit, and how the Provisioner and Controller split tenant access from workload reconciliation."
+  title="Shared-operator boundaries"
+  lede="This page covers namespace introduction, split controllers, RBAC boundaries, and tenant guardrails in the default multi-tenant model."
 />
 
 
@@ -22,7 +22,7 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) for dedicated enviro
 </Callout>
 
 <DiagramFrame
-  title="Why the control plane is split"
+  title="Control-plane split"
   caption="Namespace introduction and tenant guardrails stay with the Provisioner. Workload reconciliation stays with the tenant-scoped Controller. That separation prevents one long-running identity from both granting and consuming tenant access."
   code={`graph LR
     subgraph Cluster["Shared Kubernetes cluster"]
@@ -44,7 +44,7 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) for dedicated enviro
 />
 
 <DecisionTable
-  title="The control-plane split is the security model"
+  title="Control-plane security boundaries"
   columns={['Surface', 'Primary owner', 'Why it stays separate', 'If you shortcut it']}
   rows={[
     {

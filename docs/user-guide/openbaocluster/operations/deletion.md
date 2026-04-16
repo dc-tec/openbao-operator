@@ -13,7 +13,7 @@ journey: operate
 />
 
 <Checklist
-    title="Use this page when"
+    title="Use this page to"
     items={[
       'tear down a dev, staging, or production cluster intentionally',
       'change the deletion policy from the default retain behavior',

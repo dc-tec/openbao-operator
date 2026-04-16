@@ -1,6 +1,6 @@
 ---
 title: Run Planned Maintenance
-description: Drain nodes, scale the cluster, enable maintenance mode, and restart Pods without guessing how quorum and admission policy interact.
+description: Drain nodes, scale the cluster, enable maintenance mode, and restart Pods with the expected quorum and admission-policy behavior.
 slug: /operate/maintenance
 hide_title: true
 pageType: task

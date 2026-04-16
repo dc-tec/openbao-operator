@@ -1,6 +1,6 @@
 ---
 title: Operator Authentication
-description: Understand the projected JWT auth path, audience contract, and custom-install checks for controller identity wiring.
+description: Projected JWT auth path, audience contract, and custom-install checks for controller identity wiring.
 slug: /get-started/operator-authentication
 hide_title: true
 pageType: concept
@@ -32,7 +32,7 @@ journey: get-started
 />
 
 <DecisionTable
-  title="Why the JWT path is the default"
+  title="JWT default path"
   columns={['Property', 'What you get', 'Why it matters']}
   rows={[
     {
@@ -67,7 +67,7 @@ journey: get-started
   ]}
 />
 
-<Callout type="note" title="Operator auth is not human auth">
+<Callout type="note" title="Controller and human authentication are separate">
 
 `spec.selfInit.oidc.enabled: true` bootstraps the controller auth path only.
 It does not create a human login method by itself.
@@ -76,7 +76,7 @@ If you use self-init, create human access in the same bootstrap contract through
 </Callout>
 
 <DecisionTable
-  title="Treat bootstrap auth as two access surfaces"
+  title="Bootstrap authentication surfaces"
   columns={['Surface', 'Where it is defined', 'Why it exists']}
   rows={[
     {
@@ -127,7 +127,7 @@ If you use self-init, create human access in the same bootstrap contract through
 <CommandBlock
   language="hcl"
   label="configure"
-  title="The operator policy is intentionally narrow"
+  title="Controller policy scope"
   code={`path "sys/health" {
   capabilities = ["read"]
 }
@@ -155,7 +155,7 @@ path "sys/storage/raft/autopilot/configuration" {
   token_policies="openbao-operator" \\
   token_ttl="1h"`}
 >
-  Replace the namespace, ServiceAccount name, and audience with the values produced by your rendered install, not the defaults from an example manifest.
+  Replace the namespace, ServiceAccount name, and audience with the values from your rendered install, not the example defaults.
 </CommandBlock>
 
 ## What must stay aligned

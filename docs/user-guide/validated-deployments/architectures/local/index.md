@@ -9,7 +9,7 @@ description: Validated local baselines for k3d, including development, hardened 
   variant="landing"
   eyebrow="Validated Deployments / Local Baselines"
   title="Validated local baselines"
-  lede="This section covers the validated local baselines exercised on k3d, including development, hardened rehearsal, and cross-cluster DR. Use it for local validation and rehearsal, not as a generic production recommendation."
+  lede="This section covers the validated local baselines exercised on k3d, including development, hardened rehearsal, and cross-cluster DR."
   actions={[
     {label: "Open k3d Development", docId: "user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs", variant: "primary"},
     {label: "Open k3d Cross-Cluster DR", docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs", variant: "secondary"},
@@ -19,7 +19,7 @@ description: Validated local baselines for k3d, including development, hardened 
     title="Use local baselines when you need to"
     items={[
       "rehearse a development or hardened lane on workstation-grade infrastructure",
-      "prove a boundary such as external TLS passthrough, internal ACME, or shared Transit unseal",
+      "exercise a boundary such as external TLS passthrough, internal ACME, or shared Transit unseal",
       "practice restore and cutover behavior in the validated cross-cluster DR lane",
     ]}
   />
@@ -52,14 +52,14 @@ description: Validated local baselines for k3d, including development, hardened 
     {
       eyebrow: "04",
       title: "k3d Cross-Cluster DR",
-      description: "A proving lane for shared Transit, shared snapshot storage, and restore rehearsal across separate source and target clusters.",
+      description: "A lane for shared Transit, shared snapshot storage, and restore rehearsal across separate source and target clusters.",
       docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs",
       actionLabel: "Open lane",
     },
   ]}
 />
 
-<Callout type="note" title="Only the DR restore runbook stays lane-specific here">
+<Callout type="note" title="Lane-specific runbook scope">
 
 Generic backup and restore procedures belong in the main `Operate` docs. The cross-cluster DR restore procedure remains in this section because it depends on the exact validated DR lane assumptions.
 

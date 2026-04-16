@@ -2,7 +2,7 @@
 title: Prepare for Day 2
 slug: /get-started/next-steps
 hide_title: true
-description: Choose the next operating concern after the first cluster is healthy so backups, access, and hardening are not left as future cleanup.
+description: Choose the next operating concern after the first cluster is healthy so backups, access, and hardening become part of the operating baseline.
 pageType: landing
 journey: get-started
 journeyStep: 5

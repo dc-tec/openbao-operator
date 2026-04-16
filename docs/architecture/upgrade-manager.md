@@ -3,7 +3,7 @@ title: Upgrade Manager
 hide_title: true
 pageType: concept
 journey: architecture
-description: Orchestrate rolling and blue-green upgrades, status-backed resumability, and rollback safety without violating Raft consensus.
+description: Orchestrate rolling and blue-green upgrades, status-backed resumability, rollback safety, and Raft-aware rollout behavior.
 ---
 
 <PageHeader

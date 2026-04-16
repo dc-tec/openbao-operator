@@ -7,12 +7,12 @@ description: Reproduce the validated local development lane with self-init, oper
 ---
 
 <PageHeader
-  title="Reproduce the validated local development lane without turning a quick-start cluster into a pile of one-off overrides."
+  title="Reproduce the validated local development baseline"
   lede="This recipe stands up the local development baseline with tenant onboarding, operator-managed TLS, a shared terminating edge, JWT bootstrap, an optional demo login, and an S3-compatible backup path backed by RustFS."
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
       "a Development-profile cluster that self-initializes and exposes the UI through the shared edge",
@@ -22,7 +22,7 @@ description: Reproduce the validated local development lane with self-init, oper
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This recipe follows the development lifecycle, backup, and blue/green patterns exercised in the local validation environment and the in-repo E2E suites. The optional `userpass` login remains local-only convenience layered on top of the validated cluster path.
 

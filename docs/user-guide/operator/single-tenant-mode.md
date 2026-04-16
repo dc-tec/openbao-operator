@@ -1,6 +1,6 @@
 ---
 title: Single-Tenant Mode
-description: Use the controller-only install path when one team owns one namespace and does not need the default tenant-onboarding model.
+description: Single-tenant operator deployment for one team that owns one namespace and does not use the default tenant-onboarding model.
 slug: /get-started/single-tenant-mode
 hide_title: true
 pageType: task
@@ -15,7 +15,7 @@ journey: get-started
 
 
 <DecisionTable
-  title="Stay on multi-tenant unless this is true"
+  title="When to choose single-tenant mode"
   columns={['Question', 'Multi-tenant default', 'Choose single-tenant when', 'Go deeper']}
   rows={[
     {

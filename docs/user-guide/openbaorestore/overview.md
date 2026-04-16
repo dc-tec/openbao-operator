@@ -21,7 +21,7 @@ journey: operate
       cells: [
         'Disaster recovery',
         'You need to reintroduce known-good state after severe corruption, cluster loss, or a failed repair path.',
-        'Restore overwrites the target cluster. Validate the snapshot and target before you create the request.',
+        'Restore overwrites the target cluster. Validate the snapshot and target as part of request preparation.',
       ],
       emphasis: 'recommended',
     },
@@ -42,8 +42,8 @@ journey: operate
     {
       cells: [
         'Ordinary troubleshooting',
-        'Start with the incident recovery or troubleshooting guides unless snapshot restore is already the selected recovery action.',
-        'Prefer a narrower repair path while it can still recover the cluster without overwriting state.',
+        'Use the incident recovery or troubleshooting guides unless snapshot restore is already the selected recovery action.',
+        'Restore remains a destructive action while narrower repair paths are still viable.',
       ],
     },
   ]}
@@ -145,7 +145,7 @@ spec:
     },
     {
       label: 'Recover after upgrade restore',
-      description: 'Use the override-lock runbook when a failed upgrade blocks the normal restore workflow.',
+      description: 'Use the override-lock runbook if a failed upgrade blocks the normal restore workflow.',
       docId: 'user-guide/openbaorestore/recovery-restore-after-upgrade',
     },
     {

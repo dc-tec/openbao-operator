@@ -12,12 +12,12 @@ description: Validated local baseline for a development-profile OpenBao deployme
 />
 
 <Checklist
-    title="This lane proves"
+    title="Validated coverage"
     items={[
       "a Development-profile cluster can bootstrap cleanly on k3d without extra cloud dependencies",
       "the shared terminating edge can front OpenBao alongside the rest of the local platform toolchain",
       "operator-managed TLS, self-init, JWT bootstrap, and RustFS backups can coexist in one repeatable lane",
-      "blue/green upgrades can be rehearsed locally before you touch a hardened or cloud baseline",
+      "blue/green upgrades can be rehearsed locally before moving to a hardened or cloud baseline",
     ]}
   />
 
@@ -58,7 +58,7 @@ This local reference architecture uses k3d as a development environment for oper
       cells: [
         "Backup target",
         "RustFS via the S3-compatible API",
-        "The lane proves snapshot behavior against a real object-storage boundary without needing cloud credentials.",
+        "The baseline covers snapshot behavior against a real object-storage boundary without cloud credentials.",
       ],
     },
     {
@@ -72,7 +72,7 @@ This local reference architecture uses k3d as a development environment for oper
 />
 
 <DiagramFrame
-  title="Validated lane topology"
+  title="Baseline topology"
   caption="The shared terminating edge stays simple, the operator owns TLS and bootstrap, and the backup path leaves the cluster through a separate RustFS boundary."
   code={`flowchart LR
     Client["Operator or admin"] -->|"HTTPS"| Edge["Shared Gateway API edge"]
@@ -146,13 +146,13 @@ This local reference architecture uses k3d as a development environment for oper
   ]}
 />
 
-<Callout type="success" title="What this lane validated">
+<Callout type="success" title="Validated coverage">
 
 The local development lane exercised self-init bootstrap, JWT admin login, optional demo UI login, shared-edge exposure, scheduled and manual backup behavior to RustFS, and blue/green upgrade rehearsal.
 
 </Callout>
 
-<Callout type="warning" title="What this lane is not">
+<Callout type="warning" title="Out of scope">
 
 This lane does not define a production reference or a hardened security posture. It is a local validation environment for shared-edge routing, backup behavior, and upgrade rehearsal.
 

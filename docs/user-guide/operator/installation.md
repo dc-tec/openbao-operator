@@ -28,7 +28,7 @@ journeyStep: 2
 
 
 <JourneyRail
-  title="Installation is the handoff between design choices and a working control plane"
+  title="Installation sequence"
   current={2}
   items={[
     {
@@ -427,7 +427,7 @@ Expected output (multi-tenant mode):
 <provisioner-pod>                                 1/1     Running   0          1m`}
 />
 
-<Callout type="success" title="Do not move on until the operator namespace looks exactly how you expect.">
+<Callout type="success" title="Verify the operator namespace before continuing.">
 
 A good install checkpoint is more than pods in `Running`:
 

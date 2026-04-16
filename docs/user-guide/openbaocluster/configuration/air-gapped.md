@@ -3,7 +3,7 @@ title: Air-Gapped and Private Registries
 hide_title: true
 pageType: task
 journey: configure
-description: Mirror operator and workload images, set the right repository defaults, and wire pull secrets before you move clusters into disconnected or private-registry environments.
+description: Mirror operator, workload, and helper images; set repository defaults; and wire pull secrets for disconnected or private-registry environments.
 ---
 
 <PageHeader
@@ -97,9 +97,9 @@ Use the same released operator version for the controller, provisioner, init, ba
 
 </Callout>
 
-<Callout type="note" title="Install defaults are not the only image contract">
+<Callout type="note" title="Use install defaults and cluster overrides together">
 
-Install-wide defaults are the safest starting point, but they do not replace cluster-level overrides when a specific OpenBaoCluster needs a different tag, mirror, or promotion cadence.
+Install-wide defaults provide the baseline image contract. Use cluster-level overrides when a specific `OpenBaoCluster` needs a different tag, mirror, or promotion cadence.
 
 </Callout>
 
@@ -151,7 +151,7 @@ spec:
       cells: [
         "Every runtime image is mirrored",
         "Operator, OpenBao, init, backup, and upgrade images exist in the internal registry before install or rollout.",
-        "A cluster that relies on public registry fallback is not disconnected-ready, even if the main OpenBao image is mirrored.",
+        "Disconnected operation requires every runtime image to be mirrored, not only the main OpenBao image.",
       ],
       emphasis: "recommended",
     },
@@ -159,14 +159,14 @@ spec:
       cells: [
         "Pull secrets exist in every runtime namespace",
         "The operator namespace and every tenant namespace that runs workloads have the correct registry credential Secret.",
-        "Install success does not imply workload success. Clusters can still fail to reconcile when the tenant namespace lacks the pull secret.",
+        "Install success and workload reconcile success are separate checks. Tenant namespaces still need the correct pull secret.",
       ],
     },
     {
       cells: [
         "Version and tag promotion is explicit",
         "Image tags and repository mirrors are tracked as part of the release process.",
-        "Disconnected environments make silent tag drift harder to notice and more painful to debug later.",
+        "Disconnected environments require explicit tag promotion records because drift is harder to detect later.",
       ],
     },
   ]}

@@ -7,7 +7,7 @@ description: Reconcile OpenBaoRestore requests, acquire operation locks, and orc
 ---
 
 <PageHeader
-  title="Treat restore as a destructive, explicit, lock-aware workflow."
+  title="Restore manager workflow"
   lede="The restore manager keeps disaster recovery separate from normal cluster reconciliation. It models restore as an immutable CRD-backed request, coordinates execution through a dedicated controller path, and protects the cluster with explicit validation and lock ownership."
 />
 

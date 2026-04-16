@@ -6,7 +6,7 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Use these patterns to keep controller code Kubernetes-native instead of drifting into ad hoc orchestration."
+  title="Kubernetes-native controller patterns"
   lede="The operator relies on predictable reconcile loops, explicit controller boundaries, and safe interaction with the API server. These patterns are the default shape of controller work in this repository, especially when app-layer orchestration and manager boundaries are involved."
 />
 

@@ -6,7 +6,7 @@ journey: reference
 ---
 
 <PageHeader
-  title="Use this page when you need the exact contract for how APIs and behavior can change across releases."
+  title="Deprecation policy contract"
   lede="OpenBao Operator is still pre-GA, so compatibility rules are explicit rather than implied. This page defines how deprecations are announced, how removals happen, and what migration guidance must ship with a breaking or removing change."
 />
 

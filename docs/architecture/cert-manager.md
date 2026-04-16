@@ -7,8 +7,8 @@ description: Manage TLS certificate sources, rotation windows, and hot-reload si
 ---
 
 <PageHeader
-  title="Own certificate sources, rotation, and hot reload without restarting pods."
-  lede="The cert manager keeps TLS lifecycle close to the workload contract. It decides whether certificates are operator-managed, externally supplied, or handled by ACME, and it turns certificate changes into safe reload signals instead of pod restarts."
+  title="Certificate lifecycle management"
+  lede="The cert manager keeps TLS lifecycle close to the workload contract. It decides whether certificates are operator-managed, externally supplied, or handled by ACME, and it turns certificate changes into reload signals rather than pod restarts."
 />
 
 

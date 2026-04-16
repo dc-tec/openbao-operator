@@ -28,7 +28,7 @@ description: Cloud deployment recipes for the validated Amazon EKS lanes.
     {
       eyebrow: "02",
       title: "EKS Hardened recipe",
-      description: "Deploy the hardened EKS lane with passthrough edge, AWS KMS, ACME, and the tighter production posture.",
+      description: "Deploy the hardened EKS lane with passthrough edge, AWS KMS, ACME, and the hardened production posture.",
       docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme",
     },
   ]}

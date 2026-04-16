@@ -8,7 +8,7 @@ journey: operate
 ---
 
 <PageHeader
-  title="Repair rollback failures without forcing a downgrade."
+  title="Recover from failed rollback"
   lede="A failed rollback means blue-green automation stopped because continuing automatically could worsen Raft safety or cluster availability. Start with the status surface and the last failed rollback Job, then decide whether the right next step is a retry, a controlled pause for manual repair, or a restore from backup."
 />
 

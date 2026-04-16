@@ -6,13 +6,13 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Choose test depth by change scope"
-  lede="The testing stack is layered. Start with the cheapest signal that can prove the change, then add integration, E2E, or exploratory coverage when the lower layer is no longer enough."
+  title="Testing strategy by change scope"
+  lede="This page maps change scope to validation depth across unit, integration, E2E, fuzzing, and exploratory coverage."
 />
 
 <DiagramFrame
   title="Testing layers"
-  caption="Move outward when the cheaper layer can no longer prove the behavior you changed."
+  caption="Move to the next layer when the lower-cost layer no longer proves the behavior you changed."
   code={`graph BT
     Unit["Unit tests"]
     Contract["Fast contracts"]
@@ -84,7 +84,7 @@ Use the controller-runtime fake client as a fast contract tool, not as a substit
 make doctor
 make ci-core`}
 >
-  This is the default maintainer expectation before you open a PR or hand a failing branch to someone else for review.
+  This is the standard local validation baseline before review or handoff.
 </CommandBlock>
 
 <CommandBlock
@@ -100,7 +100,7 @@ export E2E_OPERATOR_IMAGE=quay.io/your-org/openbao-operator:dev
 export E2E_API_SERVER_CIDR=0.0.0.0/0
 make test-e2e-existing E2E_LABEL_FILTER='openshift'`}
 >
-  Use fuzzing when parsers, normalizers, auth helpers, or config rendering changed. Use `test-e2e-existing` when you need focused OpenShift or non-Kind validation against an existing cluster.
+  These commands cover parser, auth, renderer, and platform-specific validation that does not fit the default local gate.
 </CommandBlock>
 
 <DecisionTable
@@ -136,17 +136,17 @@ make test-e2e-existing E2E_LABEL_FILTER='openshift'`}
   items={[
     {
       label: "Continuous integration",
-      description: "See how CI maps these layers to workflow gates, routing, and label-driven E2E expansion.",
+      description: "Continuous integration maps these validation layers to workflow gates and routing.",
       to: "/contribute/ci",
     },
     {
       label: "Coding standards",
-      description: "Go back to project conventions when the implementation itself still needs cleanup before more test depth helps.",
+      description: "Coding standards cover implementation cleanup when more test depth would not help yet.",
       to: "/contribute/standards",
     },
     {
       label: "Release management",
-      description: "Move into release and publish flow once the branch is stable and ready for maintainer handling.",
+      description: "Release management covers release and publish flow once the branch is stable.",
       to: "/contribute/release-management",
     },
   ]}

@@ -44,7 +44,7 @@ This path ignores the current lock owner, overwrites cluster state with the sele
       cells: [
         '`overrideOperationLock: true`',
         'Clears the existing cluster operation lock so restore can proceed.',
-        'This is the field that turns the request into an override path rather than a routine restore.',
+        'This field marks the request as an override path rather than a routine restore.',
       ],
     },
     {
@@ -57,7 +57,7 @@ This path ignores the current lock owner, overwrites cluster state with the sele
   ]}
 />
 
-## Create the break-glass restore request
+## Create the override restore request
 
 <CommandBlock
   language="yaml"
@@ -83,7 +83,7 @@ spec:
   force: true
   overrideOperationLock: true`}
 >
-  `force` is required when restore targets an unhealthy cluster. `overrideOperationLock` bypasses the stuck upgrade or backup lock. Keep them together for this override path.
+  `force` is required when restore targets an unhealthy cluster. `overrideOperationLock` bypasses the stuck upgrade or backup lock. Together they define the override request.
 </CommandBlock>
 
 <CommandBlock
@@ -103,7 +103,7 @@ spec:
 kubectl describe openbaocluster <cluster> -n <namespace>
 kubectl get jobs -n <namespace>`}
 >
-  A completed restore only means the restore workflow finished. The target cluster may still require unseal, Raft repair, or break-glass acknowledgment before it is truly operational again.
+  A completed restore means the restore workflow finished. The target cluster may still require unseal, Raft repair, or break-glass acknowledgment before it is ready for service again.
 </CommandBlock>
 
 <NextActions

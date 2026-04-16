@@ -1,6 +1,6 @@
 ---
 title: Deployment Decision Guide
-description: Choose the tenancy model, security posture, bootstrap flow, and install path you want to keep operating after the first install.
+description: Choose the tenancy model, security posture, bootstrap flow, and install path for a new deployment.
 slug: /get-started/deployment-decision-guide
 hide_title: true
 pageType: task
@@ -10,11 +10,11 @@ journeyStep: 1
 
 <PageHeader
   title="Choose the deployment path"
-  lede="Use this page to choose the tenancy model, security posture, bootstrap flow, and install path. Most teams should stay on the default production path unless namespace ownership, local evaluation, or platform constraints require a different setup."
+  lede="This page covers the tenancy model, security posture, bootstrap flow, and install path for a new deployment. The default path is multi-tenant, Hardened, self-init, and the standard install flow."
 />
 
 <Checklist
-    title="Default production path"
+    title="Default starting point"
     items={[
       'multi-tenant mode',
       'Hardened profile',
@@ -33,7 +33,7 @@ journeyStep: 1
   items={[
     {
       label: 'Choose a deployment model',
-      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      description: 'Set tenancy, security posture, install method, and any planned exceptions.',
       docId: 'user-guide/operator/deployment-decision-guide',
     },
     {
@@ -150,7 +150,7 @@ Decide which human login path will be created as part of `spec.selfInit.requests
 />
 
 <Checklist
-  title="Do not move on until you can answer these plainly"
+  title="Check these decisions before you continue"
   items={[
     'Am I running multi-tenant or single-tenant mode?',
     'Is this environment Hardened or Development?',

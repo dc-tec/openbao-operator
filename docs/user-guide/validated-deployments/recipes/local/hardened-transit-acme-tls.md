@@ -7,22 +7,22 @@ description: Reproduce the validated local hardened ACME lane with Transit auto-
 ---
 
 <PageHeader
-  title="Reproduce the validated hardened ACME lane while keeping OpenBao as the TLS endpoint all the way through the local edge."
+  title="Reproduce the validated hardened ACME baseline"
   lede="This recipe stands up the local hardened ACME baseline with tenant onboarding, a shared trust-services dependency for Transit and ACME, an internal ACME CA, and a user-managed passthrough route that preserves `tls-alpn-01` behavior."
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
       "a trust Secret that carries both the Transit CA bundle and the private ACME issuer trust root",
       "a hardened cluster that self-initializes, unseals with Transit, and serves ACME traffic through passthrough",
-      "conditions and services that prove ACME is working before you move to a public cloud lane",
+      "conditions and services that confirm ACME is working before you move to a public cloud lane",
     ]}
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This recipe follows the local ACME lifecycle covered by the in-repo ACME suite and the project validation environment. The tested path covers private ACME trust material, Transit auto-unseal, ACME readiness, and human admin JWT access.
 

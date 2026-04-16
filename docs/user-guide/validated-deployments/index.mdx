@@ -3,14 +3,14 @@ title: Validated Deployments
 slug: /validated-deployments
 hide_title: true
 pageType: landing
-description: Tested OpenBao Operator baselines grouped by validated lane, with paired reference architecture and deployment recipe pages.
+description: Validated OpenBao Operator baselines grouped by lane, with paired reference architecture and deployment recipe pages.
 ---
 
 <PageHero
   variant="landing"
   eyebrow="Validated Deployments"
   title="Validated deployment baselines"
-  lede="This section groups tested deployment baselines by environment, with a reference architecture and matching recipe for each validated baseline. Use it when you want to start from a project-tested topology rather than assemble one from scratch."
+  lede="This section groups validated deployment baselines by environment, with a reference architecture and matching recipe for each one. Use it when you want to start from a project-tested topology."
   actions={[
     {label: "Open cloud baselines", docId: "user-guide/validated-deployments/architectures/cloud/index", variant: "primary"},
     {label: "Open local baselines", docId: "user-guide/validated-deployments/architectures/local/index", variant: "secondary"},
@@ -22,7 +22,7 @@ description: Tested OpenBao Operator baselines grouped by validated lane, with p
       "start from a topology that the project exercised end to end",
       "compare cloud and local lanes without stitching together architecture and recipe pages yourself",
       "pick a lane with clear invariants, assumptions, and validation scope",
-      "adapt a known baseline rather than improvising the first production shape",
+      "adapt a known baseline as the starting point for environment-specific changes",
     ]}
   />
 </PageHero>
@@ -39,21 +39,21 @@ description: Tested OpenBao Operator baselines grouped by validated lane, with p
     {
       eyebrow: "02",
       title: "Local baselines",
-      description: "Use the k3d lanes for workstation validation, hardened rehearsal, and cross-cluster DR practice without treating them as generic production blueprints.",
+      description: "Use the k3d lanes for workstation validation, hardened rehearsal, and cross-cluster DR practice.",
       docId: "user-guide/validated-deployments/architectures/local/index",
     },
     {
       eyebrow: "03",
       title: "Cross-cluster DR lane",
-      description: "Go directly to the validated DR architecture when the goal is restore rehearsal, shared Transit, and snapshot cutover proof.",
+      description: "Go directly to the validated DR architecture for restore rehearsal, shared Transit, and snapshot cutover validation.",
       docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs",
     },
   ]}
 />
 
-<Callout type="note" title="Validated lane pages are not the canonical operator runbooks">
+<Callout type="note" title="Scope of this section">
 
-The main operator guides remain the source of truth for install, backup, restore, upgrade, and recovery behavior. This section proves specific environment shapes and links to the exact lane that was exercised.
+The main operator guides remain the source of truth for install, backup, restore, upgrade, and recovery behavior. This section covers specific validated environment shapes and links to the exact lane that was exercised.
 
 </Callout>
 
@@ -72,7 +72,7 @@ The main operator guides remain the source of truth for install, backup, restore
     },
     {
       label: "Open Get Started",
-      description: "Return to the general operator path when you need the product-wide install and onboarding journey instead of a validated lane.",
+      description: "Return to the general operator path for the product-wide install and onboarding journey.",
       docId: "user-guide/index",
     },
   ]}

@@ -41,7 +41,7 @@ description: Choose the cluster posture first, including bootstrap, unseal, TLS,
 
 <DiagramFrame
   title="How the profile shapes the baseline"
-  caption="The profile is not cosmetic. It determines whether the cluster can rely on operator-generated trust material and stored bootstrap credentials or whether those paths are explicitly disallowed."
+  caption="The profile determines whether the cluster can rely on operator-generated trust material and stored bootstrap credentials or whether those paths are explicitly disallowed."
   code={`flowchart LR
     Profile["spec.profile"] --> Bootstrap["Bootstrap path"]
     Profile --> Unseal["Unseal root of trust"]
@@ -75,7 +75,7 @@ description: Choose the cluster posture first, including bootstrap, unseal, TLS,
       cells: [
         "Bootstrap credential handling",
         "Manual init is allowed and can leave a root token in a Secret when self-init is disabled.",
-        "Self-initialization is the supported path and root-token persistence is not the normal operating model.",
+        "Self-initialization is the expected path, and root-token persistence is reserved for exceptional workflows.",
       ],
       emphasis: "recommended",
     },
@@ -83,7 +83,7 @@ description: Choose the cluster posture first, including bootstrap, unseal, TLS,
       cells: [
         "Unseal",
         "Static unseal in a Secret is allowed for fast evaluation.",
-        "Use an external trust source such as cloud KMS or transit. Treat static unseal as a non-production exception.",
+        "Use an external trust source such as cloud KMS or transit. Static unseal is limited to development and other deliberate exceptions.",
       ],
     },
     {
@@ -97,7 +97,7 @@ description: Choose the cluster posture first, including bootstrap, unseal, TLS,
       cells: [
         "Image verification",
         "Can be introduced gradually and warning-only rollouts are possible.",
-        "Verification is expected, warning-only behavior is not the production posture, and official-image defaults still verify when trust material is omitted.",
+        "Use image verification as the steady-state posture. Warning-only behavior fits rollout or transition periods, and official-image defaults still verify when trust material is omitted.",
       ],
     },
     {
@@ -173,9 +173,9 @@ spec:
   </TabItem>
 </Tabs>
 
-<Callout type="warning" title="Do not let development defaults drift into production">
+<Callout type="warning" title="Switch the baseline before production use">
 
-The dangerous part of the Development profile is not that it exists; it is that it feels easy to keep. If the cluster matters, switch to Hardened before other systems begin to depend on it.
+If other systems will depend on the cluster, move from Development to Hardened before that production usage begins.
 
 </Callout>
 

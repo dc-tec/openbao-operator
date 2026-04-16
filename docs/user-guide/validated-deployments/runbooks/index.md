@@ -2,7 +2,7 @@
 title: Validated Procedure Catalog
 hide_title: true
 pageType: landing
-description: Minimal catalog for validated procedures that still need lane-specific treatment, with generic backup and restore workflows handed off to the main operator docs.
+description: Catalog of validated procedures that still need lane-specific treatment, with generic backup and restore workflows handed off to the main operator docs.
 ---
 
 <PageHero
@@ -29,7 +29,7 @@ description: Minimal catalog for validated procedures that still need lane-speci
 />
 
 <NextActions
-  title="Use the main operator docs for generic procedures"
+  title="Main operator docs for generic procedures"
   items={[
     {
       label: "Backup operations",

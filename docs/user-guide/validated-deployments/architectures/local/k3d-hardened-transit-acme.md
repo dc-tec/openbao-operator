@@ -12,7 +12,7 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
 />
 
 <Checklist
-    title="This lane proves"
+    title="Validated coverage"
     items={[
       "a Hardened cluster can bootstrap locally while keeping the seal dependency outside the tenant namespace",
       "OpenBao-managed ACME issuance works when the validator reaches the passthrough edge with the expected hostname",
@@ -65,14 +65,14 @@ This local reference architecture uses k3d to rehearse hardened deployments that
       cells: [
         "Validation scope",
         "Local ACME lifecycle coverage plus hardened bootstrap",
-        "The lane is valuable because it proves ACME readiness, trust material, and bootstrap behavior together.",
+        "The baseline covers ACME readiness, trust material, and bootstrap behavior together.",
       ],
     },
   ]}
 />
 
 <DiagramFrame
-  title="Validated lane topology"
+  title="Baseline topology"
   caption="The same external trust-services dependency supplies both Transit auto-unseal and the private ACME directory, while the ingress layer remains pure passthrough."
   code={`flowchart LR
     Client["OpenBao client"] -->|"HTTPS (SNI)"| Edge["Traefik IngressRouteTCP"]
@@ -145,13 +145,13 @@ This local reference architecture uses k3d to rehearse hardened deployments that
   ]}
 />
 
-<Callout type="success" title="What this lane validated">
+<Callout type="success" title="Validated coverage">
 
 The validated local lane exercised hardened bootstrap with self-init, Transit auto-unseal through shared trust services, OpenBao-managed ACME issuance from a private CA, human admin JWT login, and external access over user-managed passthrough.
 
 </Callout>
 
-<Callout type="warning" title="What this lane is not">
+<Callout type="warning" title="Out of scope">
 
 This lane does not prove public ACME behavior or replace a cloud ingress baseline. It is a local rehearsal environment for the hardened ACME control path.
 

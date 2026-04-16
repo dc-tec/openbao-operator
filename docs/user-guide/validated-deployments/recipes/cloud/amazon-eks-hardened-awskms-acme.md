@@ -7,12 +7,12 @@ description: Reproduce the validated hardened baseline on Amazon EKS with AWS KM
 ---
 
 <PageHeader
-  title="Reproduce the validated hardened EKS lane without diluting the public-edge and ACME assumptions it depends on."
-  lede="This recipe applies the hardened cloud baseline with KMS auto-unseal, a dedicated public passthrough Gateway, OpenBao-managed ACME, JWT bootstrap, and S3 backups. Use it when you want the production-style EKS path the project has actually validated."
+  title="Reproduce the validated hardened EKS baseline"
+  lede="This recipe applies the hardened cloud baseline with KMS auto-unseal, a dedicated public passthrough Gateway, OpenBao-managed ACME, JWT bootstrap, and S3 backups."
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
       "a Hardened-profile cluster that unseals with AWS KMS and serves the public hostname through passthrough",
@@ -22,7 +22,7 @@ description: Reproduce the validated hardened baseline on Amazon EKS with AWS KM
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This recipe matches the hardened Amazon EKS lane validated in the project cloud environment. The tested path covered KMS auto-unseal, public ACME issuance, dedicated passthrough ingress, JWT bootstrap, and successful S3 backups.
 

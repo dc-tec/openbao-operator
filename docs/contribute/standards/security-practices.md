@@ -6,8 +6,8 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Use these practices when code touches keys, certificates, external input, filesystem state, or privileged controller behavior."
-  lede="OpenBao Operator handles sensitive material and security-relevant control paths. The safest implementation choice is usually the simplest one: least-privilege permissions, standard cryptographic primitives, no shell escapes from controllers, and explicit care around secrets in memory and logs."
+  title="Secure coding practices"
+  lede="OpenBao Operator handles sensitive material and security-relevant control paths. This page covers least-privilege permissions, standard cryptographic primitives, controller-safe execution, and explicit care around secrets in memory and logs."
 />
 
 <DecisionTable

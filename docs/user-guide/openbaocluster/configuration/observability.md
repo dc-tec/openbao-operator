@@ -31,7 +31,7 @@ description: Configure operator metrics, cluster telemetry, dashboards, alerts, 
         "OpenBao workload telemetry",
         "The `spec.observability.metrics` block on each `OpenBaoCluster`, plus optional `spec.telemetry` overrides.",
         "Application-level metrics from the OpenBao Pods themselves.",
-        "This is separate from operator metrics. Do not assume enabling one layer automatically covers the other.",
+        "Configure this separately from operator metrics. Enabling one layer does not configure the other.",
       ],
     },
     {
@@ -39,7 +39,7 @@ description: Configure operator metrics, cluster telemetry, dashboards, alerts, 
         "Logs and health probes",
         "Operator install values such as log level and health probe settings.",
         "Fast incident triage when the issue is not obvious from metrics alone.",
-        "Use debug logging intentionally and temporarily. Do not leave broad debug enabled as the long-term default.",
+        "Use debug logging intentionally and temporarily, then return to the normal log level.",
       ],
     },
     {
@@ -226,7 +226,7 @@ spec:
           expr: rate(openbao_reconcile_errors_total[5m]) > 0.1
           for: 10m`}
 >
-  Keep the first alert set small. Availability, backup freshness, and sustained reconcile failure are the signals that change operator behavior fastest.
+  Keep the first alert set small. Availability, backup freshness, and sustained reconcile failure are the highest-value starting signals.
 </CommandBlock>
 
 ## Dashboards, logs, and health
@@ -263,7 +263,7 @@ The most useful dashboards show both surfaces together, but they should still ma
   items={[
     {
       label: "Configure backups",
-      description: "Backups are the first place good observability pays off. Wire them before you depend on restore.",
+      description: "Configure backup telemetry before restore depends on it.",
       docId: "user-guide/openbaocluster/operations/backups",
     },
     {

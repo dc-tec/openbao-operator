@@ -12,7 +12,7 @@ description: Stand up the validated local disaster-recovery environment with sep
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an infra cluster that hosts shared trust services and the shared Transit key",
       "a healthy source cluster and target cluster with distinct namespaces and external endpoints",
@@ -22,7 +22,7 @@ description: Stand up the validated local disaster-recovery environment with sep
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This bootstrap path matches the local DR lane that was proven end to end on March 16, 2026, including source backup, restore into the target cluster, target unseal, and credential plus data verification after restore.
 
@@ -67,7 +67,7 @@ This bootstrap path matches the local DR lane that was proven end to end on Marc
 
 <DecisionTable
   kind="reference"
-  title="Validated lane defaults"
+  title="Baseline defaults"
   columns={["Value", "Default", "Purpose"]}
   rows={[
     {cells: ["Infra context", "`k3d-openbao-dr-infra`", "Shared trust-services cluster."]},
@@ -86,7 +86,7 @@ This bootstrap path matches the local DR lane that was proven end to end on Marc
 <CommandBlock
   language="text"
   label="configure"
-  title="Run the bootstrap automation or manifests you keep for the validated lane"
+  title="Run the bootstrap automation or manifests for this baseline"
   code={`The validated bootstrap needs to create and wire:
 - one infra cluster for shared trust services
 - one source cluster

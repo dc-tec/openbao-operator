@@ -12,7 +12,7 @@ description: Restore the validated local disaster-recovery target from a source 
 />
 
 <Checklist
-    title="This runbook should leave you with"
+    title="Runbook outcomes"
     items={[
       "a fresh source snapshot written to shared RustFS storage",
       "an `OpenBaoRestore` object that completes on the target cluster",
@@ -67,7 +67,7 @@ This workflow overwrites the target cluster state. Existing auth methods, polici
 
 <DecisionTable
   kind="reference"
-  title="Validated lane defaults"
+  title="Baseline defaults"
   columns={["Value", "Default", "Purpose"]}
   rows={[
     {cells: ["Source context", "`k3d-openbao-dr-source`", "Primary cluster that creates the backup."]},

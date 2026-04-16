@@ -6,7 +6,7 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Use this page when a change should have emitted files and you need to know which command owns them."
+  title="Generated artifact ownership"
   lede="Generated output is part of the source tree contract in this repository. If an API, policy, renderer, or chart input changes, the matching generated artifacts must change in the same PR. Do not edit generated files directly."
 />
 

@@ -8,16 +8,16 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
 
 <PageHeader
   title="Local hardened lane with external TLS"
-  lede="This validated local baseline rehearses a hardened deployment that keeps TLS outside the operator, keeps the seal dependency external, and exposes OpenBao through user-managed TCP passthrough instead of a shared terminating edge."
+  lede="This validated local baseline covers a hardened deployment with external TLS, an external seal dependency, and user-managed TCP passthrough."
 />
 
 <Checklist
-    title="This lane proves"
+    title="Validated coverage"
     items={[
       "a Hardened cluster can bootstrap locally without falling back to operator-managed TLS or static unseal",
       "Transit auto-unseal can stay outside the cluster while self-init and JWT bootstrap still succeed",
       "externally managed TLS Secrets and passthrough traffic can remain separate from the operator's edge integration model",
-      "the local environment can rehearse a production-style trust split without pretending k3d itself is the production target",
+      "the local environment can rehearse a production-style trust split",
     ]}
   />
 
@@ -44,7 +44,7 @@ This local reference architecture uses k3d to rehearse a hardened deployment wit
       cells: [
         "Seal path",
         "External Transit provider",
-        "The unseal root stays outside the cluster so the lane tests a real external dependency instead of collapsing back into static secrets.",
+        "The unseal root stays outside the cluster so the baseline exercises a real external dependency rather than static secrets.",
       ],
     },
     {
@@ -65,14 +65,14 @@ This local reference architecture uses k3d to rehearse a hardened deployment wit
       cells: [
         "Validation scope",
         "Local validation environment plus hardened E2E lifecycle coverage",
-        "The lane proves bootstrap, unseal, admin JWT login, and passthrough access in a repeatable local rehearsal path.",
+        "The baseline covers bootstrap, unseal, admin JWT login, and passthrough access in a repeatable local rehearsal path.",
       ],
     },
   ]}
 />
 
 <DiagramFrame
-  title="Validated lane topology"
+  title="Baseline topology"
   caption="The lane keeps the unseal root external, keeps TLS external, and keeps the passthrough path user-managed. That separation is the reason this local baseline is useful."
   code={`flowchart LR
     Client["OpenBao client"] -->|"HTTPS (SNI)"| Edge["Traefik IngressRouteTCP"]
@@ -138,13 +138,13 @@ This local reference architecture uses k3d to rehearse a hardened deployment wit
   ]}
 />
 
-<Callout type="success" title="What this lane validated">
+<Callout type="success" title="Validated coverage">
 
 The validated local lane exercised hardened bootstrap with self-init, Transit auto-unseal through a shared external OpenBao service, JWT login for a human admin `ServiceAccount`, and passthrough external access with externally managed TLS Secrets.
 
 </Callout>
 
-<Callout type="warning" title="What this lane is not">
+<Callout type="warning" title="Out of scope">
 
 This lane does not define a cloud reference or a GitOps reference. It is a local rehearsal environment for hardened bootstrap, external TLS, and passthrough access with explicit external dependencies.
 

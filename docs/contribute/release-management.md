@@ -55,7 +55,7 @@ Use [Release Policy](pathname:///docs/next/reference/release-policy) for the pub
         "Edge",
         "CI success on `main`.",
         "Mutable and immutable edge manifests plus signed images and provenance metadata.",
-        "Use for pre-release validation only; do not treat edge as production support policy.",
+        "Pre-release validation channel; production support expectations remain with stable releases.",
       ],
     },
     {
@@ -63,13 +63,13 @@ Use [Release Policy](pathname:///docs/next/reference/release-policy) for the pub
         "Nightly",
         "Nightly validation success.",
         "Nightly manifests, tags, and provenance metadata.",
-        "Use for scheduled validation and drift detection, not as a replacement for a stable release.",
+        "Scheduled validation and drift-detection channel; stable releases remain the publication path.",
       ],
     },
   ]}
 />
 
-<Callout type="important" title="Docs snapshots are for stable releases">
+<Callout type="important" title="Stable release docs snapshots">
 
 Before merging a stable release PR, snapshot the docs for the outgoing version and commit the generated artifacts. Prereleases continue to use `/docs/next` and do not need a permanent versioned docs snapshot.
 
@@ -91,12 +91,12 @@ Before merging a stable release PR, snapshot the docs for the outgoing version a
   code={`git switch -c chore/release-as-0.1.0-rc.6
 git commit --allow-empty -m $'chore: release 0.1.0-rc.6\n\nRelease-As: 0.1.0-rc.6\nSigned-off-by: Your Name <you@example.com>'`}
 >
-  Open a tiny PR with only this empty commit, merge it, and let `Release Please PR` recreate the release PR on `main`. Use this when you need a specific `-alpha`, `-beta`, or `-rc` target instead of the bump inferred from normal Conventional Commits.
+  This flow creates an explicit prerelease target on `main` when the inferred Conventional Commit bump is not the intended version.
 </CommandBlock>
 
-<Callout type="note" title="workflow_dispatch `release_as` is still optional, not the authoritative path">
+<Callout type="note" title="`workflow_dispatch` `release_as` input">
 
-`Release Please PR` still exposes a `workflow_dispatch` `release_as` input, and it is useful when it produces the expected release PR. Keep the `Release-As:` PR path as the reliable fallback until the dispatch path proves consistently correct for your release line.
+`Release Please PR` still exposes a `workflow_dispatch` `release_as` input, and it can be useful when it produces the expected release PR. The `Release-As:` PR path remains the fallback for release lines where the dispatch path is not yet reliable.
 
 </Callout>
 
@@ -181,22 +181,22 @@ Upload the matching public key to the GitHub identity that should show the `Veri
   items={[
     {
       label: "Release policy",
-      description: "Go back to the public cadence and release-gate contract when the release rules themselves need to change.",
+      description: "Release policy covers cadence and release-gate rules.",
       to: "/docs/next/reference/release-policy",
     },
     {
       label: "Distribution",
-      description: "Open the public-distribution model when you need to update Artifact Hub metadata, chart publishing assumptions, or deferred OLM posture.",
+      description: "Distribution covers Artifact Hub metadata, chart publishing assumptions, and deferred OLM posture.",
       to: "/contribute/distribution",
     },
     {
       label: "Continuous integration",
-      description: "Go back to workflow behavior if the release gate failed before publish.",
+      description: "Continuous integration covers workflow behavior before publish.",
       to: "/contribute/ci",
     },
     {
       label: "Project governance",
-      description: "Move into SDLC or supply-chain policy when the release rules themselves need to change.",
+      description: "Project governance covers SDLC and supply-chain policy changes.",
       to: "/contribute/project-governance",
     },
   ]}

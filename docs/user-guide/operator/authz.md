@@ -1,6 +1,6 @@
 ---
 title: Operator Authorization
-description: Understand which policies belong to controller, backup, restore, and upgrade work so destructive capabilities stay scoped to the right identities.
+description: Policy surfaces for controller, backup, restore, and upgrade work, with destructive capabilities scoped to the right identities.
 slug: /get-started/operator-authorization
 hide_title: true
 pageType: concept
@@ -8,15 +8,15 @@ journey: get-started
 ---
 
 <PageHeader
-  title="Keep each operator capability on its own policy surface."
-  lede="Authentication answers who a workload is. Authorization answers what that workload can do. OpenBao Operator stays safer when controller, backup, restore, and upgrade work authenticate separately and only receive the policies each path actually needs."
+  title="Operator authorization surfaces"
+  lede="This page covers the policy surfaces for controller, backup, restore, and upgrade work. Each path should authenticate separately and receive only the capabilities it needs."
 />
 
 
 
 <DiagramFrame
   title="Policies stay attached to job-specific identities"
-  caption="Each operator path maps to its own JWT role and policy set. The controller is not the universal credential for all day 2 work."
+  caption="Each operator path maps to its own JWT role and policy set, with separate controller, backup, restore, and upgrade identities."
   code={`graph LR
     subgraph K8s["Kubernetes identities"]
       Controller["Controller SA"]
@@ -53,7 +53,7 @@ journey: get-started
 />
 
 <DecisionTable
-  title="Keep policies separated by lifecycle capability"
+  title="Policy surfaces by lifecycle capability"
   columns={['Policy surface', 'Used by', 'Typical capabilities', 'Why it stays separate']}
   rows={[
     {
@@ -93,7 +93,7 @@ journey: get-started
   ]}
 />
 
-<Callout type="danger" title="Treat restore as a destructive role">
+<Callout type="danger" title="Restore is a destructive role">
 
 The restore capability can replace data, policies, and keys across the cluster.
 Do not bind the restore policy to the controller or to a broad multi-purpose ServiceAccount just because it is convenient during setup.

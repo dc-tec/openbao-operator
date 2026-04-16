@@ -40,7 +40,7 @@ description: Local deployment recipes for the validated k3d lanes.
     {
       eyebrow: "04",
       title: "k3d Cross-Cluster DR bootstrap",
-      description: "Bootstrap the source and target clusters for the validated DR proving lane.",
+      description: "Bootstrap the source and target clusters for the validated DR lane.",
       docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap",
     },
   ]}

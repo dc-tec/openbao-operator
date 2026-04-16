@@ -7,7 +7,7 @@ journey: contribute
 
 <PageHeader
   title="CI workflow and local parity"
-  lede="This page explains how pull requests, `main`, nightly, and release workflows route checks and publication gates. Run the closest local equivalent first so CI confirms the change rather than discovering it."
+  lede="This page covers pull request, `main`, nightly, and release workflows, and maps each validation lane to the closest local command set."
 />
 
 <DiagramFrame
@@ -38,7 +38,7 @@ journey: contribute
 make doctor
 make ci-core`}
 >
-  Use this as the default local bar so CI confirms the branch state instead of being the first place a basic issue appears.
+  Use this as the default local baseline so routine branch issues are found before CI.
 </CommandBlock>
 
 <DecisionTable
@@ -57,7 +57,7 @@ make ci-core`}
       cells: [
         "Docs-only changes",
         "`make docs-build`",
-        "Use this when the change is isolated to documentation, routing, or site behavior.",
+        "For changes isolated to documentation, routing, or site behavior.",
       ],
     },
     {
@@ -78,7 +78,7 @@ make ci-core`}
       cells: [
         "Focused E2E and platform validation",
         "`make test-e2e-ci ...`, `make helm-e2e-smoke`, or `make test-e2e-existing ...`",
-        "Use label filters or the existing-cluster path when you need a smaller or platform-specific reproduction.",
+        "Label filters and the existing-cluster path provide smaller or platform-specific reproductions.",
       ],
     },
   ]}
@@ -115,7 +115,7 @@ Inline `nosemgrep` suppressions are reserved for bounded intentional exceptions.
       cells: [
         "Maintainer adds `ci:full-e2e`",
         "The broader E2E suite runs.",
-        "Use this when the change is wide enough that targeted routing is no longer sufficient.",
+        "This is appropriate when the change spans enough surface area that targeted routing is no longer sufficient.",
       ],
     },
     {
@@ -143,7 +143,7 @@ make helm-e2e-smoke
 make fuzz
 FUZZ_TARGET_FILTER='FuzzDiscoverConfig|internal/service/upgrade' make fuzz`}
 >
-  Use the smallest reproduction that still matches the CI lane you are trying to explain.
+  Choose the smallest reproduction that still matches the CI lane under investigation.
 </CommandBlock>
 
 <NextActions
@@ -151,17 +151,17 @@ FUZZ_TARGET_FILTER='FuzzDiscoverConfig|internal/service/upgrade' make fuzz`}
   items={[
     {
       label: "Testing strategy",
-      description: "Go back one level when you still need to choose the right validation depth before mapping it to a workflow.",
+      description: "Testing strategy covers validation depth before it is mapped to a workflow.",
       to: "/contribute/testing",
     },
     {
       label: "Release management",
-      description: "Move into release execution, stable-doc snapshot rules, and post-publish verification once the branch is release-ready.",
+      description: "Release management covers release execution, docs snapshots, and post-publish verification.",
       to: "/contribute/release-management",
     },
     {
       label: "Dependency license policy",
-      description: "Open the shipped-license rules when the failing gate is about allowlists rather than code or workflow behavior.",
+      description: "Dependency license policy covers shipped-license allowlists and their enforcement.",
       to: "/contribute/dependency-licenses",
     },
   ]}
