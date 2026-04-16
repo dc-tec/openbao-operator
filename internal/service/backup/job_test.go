@@ -44,7 +44,9 @@ const (
 
 func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 	t.Helper()
-	builder := fake.NewClientBuilder().WithScheme(testScheme)
+	builder := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{})
 	if len(objs) > 0 {
 		builder = builder.WithObjects(objs...)
 	}
@@ -821,7 +823,7 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	k8sClient := newTestClient(t, succeededJob)
+	k8sClient := newTestClient(t, cluster, succeededJob)
 	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -872,7 +874,7 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	k8sClient := newTestClient(t, failedJob)
+	k8sClient := newTestClient(t, cluster, failedJob)
 	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -944,7 +946,7 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 
 	ctx := context.Background()
 	logger := logr.Discard()
-	k8sClient := newTestClient(t, failedJob)
+	k8sClient := newTestClient(t, cluster, failedJob)
 	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
 
 	// First call should update status

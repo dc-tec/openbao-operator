@@ -106,7 +106,7 @@ func TestProcessBackupJobResult_EmitsCompletedEvent(t *testing.T) {
 	}
 
 	recorder := events.NewFakeRecorder(10)
-	k8sClient := newTestClient(t, job)
+	k8sClient := newTestClient(t, cluster, job)
 	manager := NewManager(
 		k8sClient,
 		testScheme,
@@ -144,7 +144,7 @@ func TestProcessBackupJobResult_EmitsFailedEvent(t *testing.T) {
 	}
 
 	recorder := events.NewFakeRecorder(10)
-	k8sClient := newTestClient(t, job)
+	k8sClient := newTestClient(t, cluster, job)
 	manager := NewManager(
 		k8sClient,
 		testScheme,

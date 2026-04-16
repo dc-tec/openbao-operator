@@ -16,15 +16,20 @@ import (
 )
 
 func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
-	cluster := newTestClusterWithBackup("record-attempt", "backup-ns")
-	cluster.Status.Backup = nil
+	stored := newTestClusterWithBackup("record-attempt", "backup-ns")
+	stored.Status.Backup = nil
+	stored.Status.UpgradeRequests = &openbaov1alpha1.UpgradeRequestStatus{
+		LastHandledRetry: "persist-me",
+	}
+	cluster := stored.DeepCopy()
+	cluster.Status.UpgradeRequests = nil
 	var capturedOptions client.SubResourceApplyOptions
 	var sawStatusApply bool
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
-		WithStatusSubresource(cluster).
-		WithObjects(cluster).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(stored.DeepCopy()).
 		WithInterceptorFuncs(interceptor.Funcs{
 			SubResourceApply: func(ctx context.Context, c client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
 				if subResource == "status" {
@@ -64,13 +69,19 @@ func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
 	if updated.Status.Backup == nil || updated.Status.Backup.LastAttemptTime == nil || !updated.Status.Backup.LastAttemptTime.Time.Equal(now) {
 		t.Fatalf("persisted LastAttemptTime = %#v, want %v", updated.Status.Backup, now)
 	}
+	if updated.Status.UpgradeRequests == nil || updated.Status.UpgradeRequests.LastHandledRetry != "persist-me" {
+		t.Fatalf("persisted UpgradeRequests = %#v, want sibling adminops field preserved", updated.Status.UpgradeRequests)
+	}
+	if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledRetry != "persist-me" {
+		t.Fatalf("in-memory UpgradeRequests = %#v, want refreshed sibling adminops field", cluster.Status.UpgradeRequests)
+	}
 	if !sawStatusApply {
 		t.Fatal("expected backup status persistence to use status apply")
 	}
 	if capturedOptions.FieldManager != constants.FieldOwnerAdminOpsStatus {
 		t.Fatalf("FieldManager = %q, want %q", capturedOptions.FieldManager, constants.FieldOwnerAdminOpsStatus)
 	}
-	if capturedOptions.Force == nil || !*capturedOptions.Force {
-		t.Fatalf("Force = %v, want true", capturedOptions.Force)
+	if capturedOptions.Force != nil && *capturedOptions.Force {
+		t.Fatalf("Force = %v, want unset/false", capturedOptions.Force)
 	}
 }

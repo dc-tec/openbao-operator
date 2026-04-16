@@ -6,7 +6,9 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -79,6 +81,21 @@ func PatchAdminOpsOwnedFields(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	reason string,
 ) error {
+	return PatchAdminOpsOwnedFieldsWithReader(ctx, c, c, logger, original, cluster, reason)
+}
+
+// PatchAdminOpsOwnedFieldsWithReader patches only admin-ops controller owned
+// status fields, using reader for live read-before-write freshness when
+// available.
+func PatchAdminOpsOwnedFieldsWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	logger logr.Logger,
+	original *openbaov1alpha1.OpenBaoCluster,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	reason string,
+) error {
 	if original == nil || cluster == nil {
 		return nil
 	}
@@ -99,11 +116,36 @@ func PatchAdminOpsOwnedFields(
 	}
 
 	cluster.Status.AdminOps = adminOps
-	if err := statusapply.ApplyOpenBaoClusterAdminOpsStatus(ctx, c, cluster, statusapply.OpenBaoClusterAdminOpsStatusApplyOptions{
-		ForceOwnership: true,
-	}); err != nil {
+	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+	updated, err := statusapply.MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(ctx, reader, c, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+		obj.Status.BlueGreen = cluster.Status.BlueGreen
+		obj.Status.UpgradeRequests = cluster.Status.UpgradeRequests
+		obj.Status.BreakGlass = cluster.Status.BreakGlass
+		obj.Status.AdminOps = adminOps
+		return nil
+	}, statusapply.OpenBaoClusterAdminOpsStatusApplyOptions{})
+	if err != nil && apierrors.IsConflict(err) {
+		// Ownership-conflict path: retry with force only on SSA conflict.
+		updated, err = statusapply.MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(ctx, reader, c, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			obj.Status.BlueGreen = cluster.Status.BlueGreen
+			obj.Status.UpgradeRequests = cluster.Status.UpgradeRequests
+			obj.Status.BreakGlass = cluster.Status.BreakGlass
+			obj.Status.AdminOps = adminOps
+			return nil
+		}, statusapply.OpenBaoClusterAdminOpsStatusApplyOptions{
+			ForceOwnership: true,
+		})
+	}
+	if err != nil {
 		return fmt.Errorf("failed to patch adminops status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
+	cluster.Status.BlueGreen = updated.Status.BlueGreen
+	cluster.Status.UpgradeRequests = updated.Status.UpgradeRequests
+	cluster.Status.Backup = updated.Status.Backup
+	cluster.ResourceVersion = updated.ResourceVersion
+	cluster.Status.BreakGlass = updated.Status.BreakGlass
+	cluster.Status.AdminOps = updated.Status.AdminOps
+
 	logger.V(1).Info("Patched OpenBaoCluster adminops status (SSA)", "reason", reason, "fieldOwner", constants.FieldOwnerAdminOpsStatus)
 	return nil
 }

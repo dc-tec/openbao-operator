@@ -174,7 +174,11 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	logger.Info("Reconciling OpenBaoCluster admin operations")
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
-	if err := r.parent.Get(ctx, req.NamespacedName, cluster); err != nil {
+	reader := r.parent.APIReader
+	if reader == nil {
+		reader = r.parent.Client
+	}
+	if err := reader.Get(ctx, req.NamespacedName, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}

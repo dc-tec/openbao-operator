@@ -172,7 +172,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.Recorder,
-		),
+		).WithReader(deps.APIReader),
 		backupmanager.NewManager(
 			deps.Client,
 			deps.Scheme,
@@ -180,7 +180,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.Recorder,
-		),
+		).WithReader(deps.APIReader),
 	}
 }
 

@@ -3,6 +3,7 @@ package backup
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -529,7 +530,9 @@ func TestBackfillBackupGaugesFromLatestSuccess(t *testing.T) {
 		defer func() { openBlobStoreFn = originalOpenBlobStoreFn }()
 
 		err := manager.backfillBackupGaugesFromLatestSuccess(context.Background(), logr.Discard(), cluster, metrics, job)
-		if err == nil || err.Error() != "failed to patch backup status after metrics backfill: apply failed" {
+		if err == nil ||
+			!strings.Contains(err.Error(), "failed to patch backup status after metrics backfill: failed to apply adminops status") ||
+			!strings.Contains(err.Error(), "apply failed") {
 			t.Fatalf("backfillBackupGaugesFromLatestSuccess() error = %v, want wrapped apply failure", err)
 		}
 	})
