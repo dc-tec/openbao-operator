@@ -12,10 +12,13 @@ import (
 	"errors"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
 )
 
 var (
@@ -152,15 +155,33 @@ func Release(ctx context.Context, c client.Client, cluster *openbaov1alpha1.Open
 }
 
 func patchStatus(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster, desired *openbaov1alpha1.OperationLockStatus) error {
-	original := cluster.DeepCopy()
-	toPatch := cluster.DeepCopy()
-	toPatch.Status.OperationLock = desired
+	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+	applyLock := func(forceOwnership bool) (*openbaov1alpha1.OpenBaoCluster, error) {
+		return statusapply.MutateAndApplyOpenBaoClusterOperationLockStatus(
+			ctx,
+			c,
+			key,
+			func(obj *openbaov1alpha1.OpenBaoCluster) error {
+				obj.Status.OperationLock = desired
+				return nil
+			},
+			statusapply.OpenBaoClusterOperationLockStatusApplyOptions{
+				ForceOwnership: forceOwnership,
+			},
+		)
+	}
 
-	if err := c.Status().Patch(ctx, toPatch, client.MergeFrom(original)); err != nil {
-		return fmt.Errorf("failed to patch operation lock status: %w", err)
+	updated, err := applyLock(false)
+	if err != nil && apierrors.IsConflict(err) {
+		// Take over lock field ownership only when a conflict is detected.
+		updated, err = applyLock(true)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to apply operation lock status: %w", err)
 	}
 	// Keep the caller object in sync with the apiserver's updated ResourceVersion
 	// to avoid optimistic locking conflicts in later patches during the same reconcile.
-	cluster.ResourceVersion = toPatch.ResourceVersion
+	cluster.ResourceVersion = updated.ResourceVersion
+	cluster.Status.OperationLock = updated.Status.OperationLock
 	return nil
 }

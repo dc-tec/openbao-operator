@@ -1861,14 +1861,23 @@ type UpgradeProgress struct {
 	// LastStepDownTime records when the last leader step-down was performed.
 	// +optional
 	LastStepDownTime *metav1.Time `json:"lastStepDownTime,omitempty"`
+	// Failure is the structured rolling-upgrade failure status.
+	// When Failure.Reason is non-empty, the upgrade is considered failed.
+	// +optional
+	// +nullable
+	// +kubebuilder:validation:Nullable
+	Failure *ControllerErrorStatus `json:"failure,omitempty"`
 	// LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
+	// Deprecated: use Failure.Reason.
 	// When set, the status controller should consider the cluster Degraded.
 	// +optional
 	LastErrorReason string `json:"lastErrorReason,omitempty"`
 	// LastErrorMessage is a human-readable failure message (best-effort).
+	// Deprecated: use Failure.Message.
 	// +optional
 	LastErrorMessage string `json:"lastErrorMessage,omitempty"`
 	// LastErrorAt is when the last upgrade error was recorded (best-effort).
+	// Deprecated: use Failure.At.
 	// +optional
 	LastErrorAt *metav1.Time `json:"lastErrorAt,omitempty"`
 }
@@ -1891,6 +1900,8 @@ type ControllerErrorStatus struct {
 type WorkloadControllerStatus struct {
 	// LastError is the last workload-controller error observed for this cluster.
 	// +optional
+	// +nullable
+	// +kubebuilder:validation:Nullable
 	LastError *ControllerErrorStatus `json:"lastError,omitempty"`
 }
 
@@ -1898,6 +1909,8 @@ type WorkloadControllerStatus struct {
 type AdminOpsControllerStatus struct {
 	// LastError is the last adminops-controller error observed for this cluster.
 	// +optional
+	// +nullable
+	// +kubebuilder:validation:Nullable
 	LastError *ControllerErrorStatus `json:"lastError,omitempty"`
 }
 

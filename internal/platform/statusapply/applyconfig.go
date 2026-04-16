@@ -25,6 +25,7 @@ func ToApplyConfiguration(obj client.Object, resolver GVKResolver) (runtime.Appl
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert object to unstructured: %w", err)
 	}
+	pruneNilValues(unstructuredMap)
 
 	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
 	gvk := obj.GetObjectKind().GroupVersionKind()
@@ -40,4 +41,35 @@ func ToApplyConfiguration(obj client.Object, resolver GVKResolver) (runtime.Appl
 	unstructuredObj.SetGroupVersionKind(gvk)
 
 	return client.ApplyConfigurationFromUnstructured(unstructuredObj), nil
+}
+
+func pruneNilValues(m map[string]interface{}) {
+	for key, value := range m {
+		switch typed := value.(type) {
+		case nil:
+			delete(m, key)
+		case map[string]interface{}:
+			pruneNilValues(typed)
+		case []interface{}:
+			m[key] = pruneNilSlice(typed)
+		}
+	}
+}
+
+func pruneNilSlice(items []interface{}) []interface{} {
+	pruned := make([]interface{}, 0, len(items))
+	for _, item := range items {
+		switch typed := item.(type) {
+		case nil:
+			continue
+		case map[string]interface{}:
+			pruneNilValues(typed)
+			pruned = append(pruned, typed)
+		case []interface{}:
+			pruned = append(pruned, pruneNilSlice(typed))
+		default:
+			pruned = append(pruned, item)
+		}
+	}
+	return pruned
 }
