@@ -64,6 +64,10 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 		Spec: appsv1.StatefulSetSpec{
 			ServiceName: headlessServiceName(cluster),
 			Replicas:    int32Ptr(replicas),
+			// Scale-down removes the departing Raft peer before shrinking the StatefulSet.
+			// Reusing that ordinal's old data directory on a later scale-up resurrects
+			// stale Raft membership, so scaled-down PVCs must be deleted.
+			PersistentVolumeClaimRetentionPolicy: buildStatefulSetPVCRetentionPolicy(),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -103,6 +107,13 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 	security.AddManagedWorkloadSecurityLabels(statefulSet.Labels, cluster)
 
 	return statefulSet, nil
+}
+
+func buildStatefulSetPVCRetentionPolicy() *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy {
+	return &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+		WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+		WhenScaled:  appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+	}
 }
 
 func buildStatefulSetAffinity(cluster *openbaov1alpha1.OpenBaoCluster) *corev1.Affinity {
