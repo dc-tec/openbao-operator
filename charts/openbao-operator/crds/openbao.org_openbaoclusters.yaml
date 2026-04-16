@@ -3238,6 +3238,7 @@ spec:
                   lastError:
                     description: LastError is the last adminops-controller error observed
                       for this cluster.
+                    nullable: true
                     properties:
                       at:
                         description: At is when the error was observed (best-effort).
@@ -3499,6 +3500,7 @@ spec:
                 description: |-
                   OperationLock prevents concurrent long-running operations (upgrade/backup/restore)
                   from acting on the same cluster at the same time.
+                nullable: true
                 properties:
                   acquiredAt:
                     description: AcquiredAt is when the lock was first acquired.
@@ -3526,6 +3528,7 @@ spec:
                     format: date-time
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               phase:
                 description: Phase is a high-level summary of the cluster state.
                 enum:
@@ -3564,21 +3567,42 @@ spec:
                       value.
                     format: int32
                     type: integer
+                  failure:
+                    description: |-
+                      Failure is the structured rolling-upgrade failure status.
+                      When Failure.Reason is non-empty, the upgrade is considered failed.
+                    nullable: true
+                    properties:
+                      at:
+                        description: At is when the error was observed (best-effort).
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message is a human-readable error message (best-effort).
+                        type: string
+                      reason:
+                        description: Reason is a low-cardinality identifier for the
+                          error.
+                        type: string
+                    type: object
                   fromVersion:
                     description: FromVersion is the version being upgraded from.
                     type: string
                   lastErrorAt:
-                    description: LastErrorAt is when the last upgrade error was recorded
-                      (best-effort).
+                    description: |-
+                      LastErrorAt is when the last upgrade error was recorded (best-effort).
+                      Deprecated: use Failure.At.
                     format: date-time
                     type: string
                   lastErrorMessage:
-                    description: LastErrorMessage is a human-readable failure message
-                      (best-effort).
+                    description: |-
+                      LastErrorMessage is a human-readable failure message (best-effort).
+                      Deprecated: use Failure.Message.
                     type: string
                   lastErrorReason:
                     description: |-
                       LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
+                      Deprecated: use Failure.Reason.
                       When set, the status controller should consider the cluster Degraded.
                     type: string
                   lastStepDownTime:
@@ -3627,6 +3651,7 @@ spec:
                   lastError:
                     description: LastError is the last workload-controller error observed
                       for this cluster.
+                    nullable: true
                     properties:
                       at:
                         description: At is when the error was observed (best-effort).
