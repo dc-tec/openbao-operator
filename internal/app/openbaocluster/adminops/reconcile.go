@@ -163,7 +163,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.Recorder,
-		),
+		).WithReader(deps.APIReader),
 		rollingupgrade.NewManager(
 			deps.Client,
 			deps.Scheme,
