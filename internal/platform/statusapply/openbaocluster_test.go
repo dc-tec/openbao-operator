@@ -16,6 +16,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
+const statusSubresourceName = "status"
+
 func TestApplyOpenBaoClusterAdminOpsStatus_PersistsFullAdminOpsPlane(t *testing.T) {
 	t.Parallel()
 
@@ -142,8 +144,8 @@ func TestApplyOpenBaoClusterAdminOpsStatus_ApplyOptions(t *testing.T) {
 				t.Fatalf("ApplyOpenBaoClusterAdminOpsStatus() error = %v", err)
 			}
 
-			if subResourceName != "status" {
-				t.Fatalf("subResourceName = %q, want status", subResourceName)
+			if subResourceName != statusSubresourceName {
+				t.Fatalf("subResourceName = %q, want %s", subResourceName, statusSubresourceName)
 			}
 			if capturedOptions.FieldManager != constants.FieldOwnerAdminOpsStatus {
 				t.Fatalf("FieldManager = %q, want %q", capturedOptions.FieldManager, constants.FieldOwnerAdminOpsStatus)
