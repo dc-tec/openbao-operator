@@ -24,7 +24,7 @@ description: Validated local disaster-recovery baseline for OpenBao on k3d with 
 
 <Callout type="note" title="Classification">
 
-Local disaster-recovery reference architecture. k3d is not the production target, but this lane is the proving ground for the DR invariants that matter before you move to a cloud recovery pair.
+This local disaster-recovery reference architecture uses k3d to validate the DR invariants for backup, restore, unseal, and manual cutover before moving to a cloud recovery pair.
 
 </Callout>
 
@@ -126,7 +126,7 @@ Local disaster-recovery reference architecture. k3d is not the production target
       cells: [
         "Shared RustFS bucket",
         "The restore uses the same object-transfer shape as a real remote-storage path.",
-        "The lane is meant to prove the handoff through storage, not just a local disk copy.",
+        "The lane exercises snapshot handoff through shared object storage instead of a local disk copy.",
       ],
     },
     {
@@ -160,7 +160,7 @@ The local DR lane proved source backup to RustFS, restore into a separate target
 
 <Callout type="warning" title="What this lane is not">
 
-This is not an automatic failover design, not a cloud DR reference, and not proof that any backup can restore into any target shape. It is a validated manual recovery lane with explicit preconditions.
+This lane does not define automatic failover or a cloud DR reference. It is a validated manual recovery lane with explicit preconditions for backup, restore, and cutover.
 
 </Callout>
 
@@ -169,7 +169,7 @@ This is not an automatic failover design, not a cloud DR reference, and not proo
   items={[
     {
       label: "Bootstrap recipe",
-      description: "Stand up the infra, source, and target clusters that make up the DR proving ground.",
+      description: "Stand up the infra, source, and target clusters that make up the DR validation environment.",
       docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap",
     },
     {

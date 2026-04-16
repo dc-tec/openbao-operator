@@ -127,7 +127,7 @@ description: What Development and Hardened mean as security contracts, and why H
 
 <Callout type="success" title="What Hardened is really saying">
 
-Hardened means the operator is allowed to assume an external trust root, explicit runtime identity, and production-ready lifecycle posture. It is a statement about the whole operating model, not only about one field in the CR.
+Hardened means the operator can rely on an external trust root, explicit runtime identity, and a production-ready lifecycle posture. It defines the operating model for the cluster, not just one field in the CR.
 
 </Callout>
 

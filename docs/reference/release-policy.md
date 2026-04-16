@@ -10,7 +10,7 @@ journey: reference
   lede="This page defines the public cadence, release channels, and gating rules behind how OpenBao Operator ships."
 />
 
-<Callout type="important" title="Cadence is a target, not a promise">
+<Callout type="important" title="Cadence is best-effort">
 
 The project aims for one stable release every 4 weeks. If the stable release gates are not green, the release window is skipped rather than forced.
 
@@ -111,7 +111,7 @@ A stable release should meet all of the following:
 
 <Callout type="note" title="Skip rather than force">
 
-If a monthly release window is not ready, skip it and say so. Predictability matters more than forcing a release that has not met the public gates.
+If a monthly release window is not ready, skip it and say so. Predictability matters more than pushing a release that has not met the public gates.
 
 </Callout>
 

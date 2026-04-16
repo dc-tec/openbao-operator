@@ -51,7 +51,7 @@ journey: operate
         'Static token',
         'JWT auth is not available yet and you need a compatibility path.',
         'The backup Job reads a long-lived token from a Secret in the cluster namespace.',
-        'This is a legacy path. Treat the token as a sensitive credential and rotate it deliberately.',
+        'This is a compatibility path. Treat the token as a sensitive credential and rotate it deliberately.',
       ],
       emphasis: 'caution',
     },

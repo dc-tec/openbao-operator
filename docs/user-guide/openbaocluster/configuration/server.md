@@ -100,7 +100,7 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
       cells: [
         "`defaultLeaseTTL` / `maxLeaseTTL`",
         "Set sensible lease bounds for the workloads that depend on the cluster.",
-        "Treat very long leases as an operational contract, not just a convenience setting.",
+        "Very long leases change the operational contract for the workloads that depend on the cluster.",
       ],
     },
     {

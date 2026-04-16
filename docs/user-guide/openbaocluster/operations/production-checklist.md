@@ -64,7 +64,7 @@ journey: operate
 
 <Callout type="warning" title="Do not stop at install success">
 
-A cluster that initializes successfully is not automatically ready for production. The production gate is the combination of security hardening, backup readiness, and clean status conditions, not the fact that pods started once.
+A cluster that initializes successfully still needs security hardening, backup readiness, and clean status conditions before it is ready for production.
 
 </Callout>
 
@@ -105,7 +105,7 @@ kubectl get openbaotenant -A`}
 
 <Callout type="note" title="Backups are part of the production gate">
 
-Treat backup success and restore confidence as part of the launch checklist, not as follow-up work for a later sprint.
+Include backup success and restore confidence in the launch checklist rather than deferring them to later follow-up work.
 
 </Callout>
 

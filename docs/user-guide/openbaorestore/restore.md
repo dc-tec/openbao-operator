@@ -1,6 +1,6 @@
 ---
 title: Restore from Backup
-description: Create an OpenBaoRestore request, wire snapshot access and restore auth, and verify the destructive recovery workflow deliberately.
+description: Create an OpenBaoRestore request, configure snapshot access and restore auth, and verify the restore workflow.
 hide_title: true
 pageType: task
 journey: operate
@@ -26,7 +26,7 @@ Restore replaces the target cluster state with the contents of the selected snap
     {
       cells: [
         '1. Prove the backup path first',
-        'Do not start here if the snapshot was never validated. Use the backup guide to confirm the object exists and the storage/auth path is already known-good.',
+        'Confirm the snapshot exists and that the backup storage and auth path already succeeded in the backup workflow.',
         'You know the exact snapshot key and can point to a successful backup object in storage.',
       ],
       emphasis: 'recommended',
@@ -34,7 +34,7 @@ Restore replaces the target cluster state with the contents of the selected snap
     {
       cells: [
         '2. Prepare the target cluster deliberately',
-        'Keep the target `OpenBaoCluster` in the same namespace, and make sure it already exists and can be reached by the restore Job.',
+        'Keep the target `OpenBaoCluster` in the same namespace, make sure it already exists, and confirm the restore Job can reach it.',
         'The target cluster resource exists, the namespace is correct, and the restore Job can reach object storage.',
       ],
     },
@@ -115,8 +115,8 @@ The `OpenBaoRestore`, the target `OpenBaoCluster`, and any referenced token Secr
 
 <Callout type="tip" title="For most first-time restores">
 
-If the target cluster already uses `spec.selfInit.oidc.enabled=true`, start with `jwtAuthRole: openbao-operator-restore` and the same object-storage provider shape you already proved in the backup flow.
-That is the shortest path from a tested backup to a tested restore.
+If the target cluster already uses `spec.selfInit.oidc.enabled=true`, start with `jwtAuthRole: openbao-operator-restore` and the same object-storage provider shape you already validated in the backup flow.
+That keeps the restore path aligned with the backup path you have already proven.
 
 </Callout>
 

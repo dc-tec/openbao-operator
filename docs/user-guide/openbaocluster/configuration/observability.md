@@ -3,7 +3,7 @@ title: Observability
 hide_title: true
 pageType: task
 journey: configure
-description: Wire operator metrics, cluster telemetry, dashboards, alerts, and logs before you have to troubleshoot the service under pressure.
+description: Configure operator metrics, cluster telemetry, dashboards, alerts, and logs for routine operations and incident response.
 ---
 
 <PageHeader
@@ -47,7 +47,7 @@ description: Wire operator metrics, cluster telemetry, dashboards, alerts, and l
         "Dashboards and alerts",
         "Grafana assets under `config/grafana/` and your own Prometheus or Alertmanager rules.",
         "A small, repeatable operator cockpit for upgrades, backups, and cluster readiness.",
-        "Dashboards should support decisions. They should not become an excuse to avoid explicit alerts on the failure modes that matter.",
+        "Use dashboards for context and alerts for time-sensitive failures.",
       ],
     },
   ]}
@@ -133,7 +133,7 @@ description: Wire operator metrics, cluster telemetry, dashboards, alerts, and l
       - targets:
           - <provisioner-metrics-service>.<operator-namespace>.svc:8443`}
 >
-  Use this only when you do not run a scrape operator. Keep the ServiceAccount permission to GET `/metrics` and the TLS assumptions explicit.
+  Use this path when you do not run a scrape operator. Keep the ServiceAccount permission to GET `/metrics` and the TLS assumptions explicit.
 </CommandBlock>
 
   </TabItem>
@@ -164,7 +164,7 @@ spec:
         interval: "30s"
         scrapeTimeout: "10s"`}
 >
-  This enables the OpenBao telemetry stanza with safe defaults and creates a Prometheus Operator ServiceMonitor when that is the scrape model you use. Use `spec.telemetry` only when you need lower-level OpenBao telemetry tuning.
+  This enables the OpenBao telemetry stanza with safe defaults and creates a Prometheus Operator ServiceMonitor when that is the scrape model you use. Reach for `spec.telemetry` when you need lower-level OpenBao telemetry tuning.
 </CommandBlock>
 
 <DecisionTable
@@ -176,7 +176,7 @@ spec:
       cells: [
         "Availability",
         "`openbao_cluster_ready_replicas` and cluster conditions such as `Available` or `Degraded`",
-        "This tells you whether the cluster is actually serving, not just whether Pods exist.",
+        "This tells you whether the cluster is serving traffic rather than only whether Pods exist.",
       ],
       emphasis: "recommended",
     },
@@ -184,14 +184,14 @@ spec:
       cells: [
         "Backup freshness",
         "`openbao_backup_last_success_timestamp`, `openbao_backup_consecutive_failures`, and the backup status conditions",
-        "Restore is only as real as the last backup you can prove succeeded.",
+        "These signals show whether the snapshots you plan to restore are current and successful.",
       ],
     },
     {
       cells: [
         "Upgrade safety",
         "`openbao_upgrade_in_progress`, `openbao_upgrade_failure_total`, and rollback counters",
-        "Upgrades should be observable as controlled workflows, not silent StatefulSet churn.",
+        "These signals distinguish orchestrated upgrade activity from normal steady state.",
       ],
     },
     {

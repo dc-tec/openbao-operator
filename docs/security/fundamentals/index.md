@@ -20,7 +20,7 @@ description: Core security fundamentals for OpenBao Operator including threat mo
     title="Use this section when you need to"
     items={[
       'understand the security assumptions behind the operator architecture',
-      'decide what Hardened actually means before you deploy it',
+      'understand how Development and Hardened profiles change the supported security posture',
       'review how bootstrap and unseal trust material is handled',
       'anchor security review conversations before diving into RBAC or network policy details',
     ]}
@@ -39,7 +39,7 @@ description: Core security fundamentals for OpenBao Operator including threat mo
     {
       eyebrow: '02',
       title: 'Production posture',
-      description: 'Understand what Development and Hardened actually mean, and why Hardened is the supported production contract.',
+      description: 'Understand how Development and Hardened differ, and why Hardened is the supported production contract.',
       docId: 'security/fundamentals/profiles',
     },
     {

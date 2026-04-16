@@ -4,14 +4,14 @@ slug: /configure
 hide_title: true
 pageType: landing
 journey: configure
-description: Configure OpenBaoCluster profiles, bootstrap behavior, storage, exposure, networking, and observability before you scale the service.
+description: Configure OpenBaoCluster profiles, bootstrap behavior, storage, exposure, networking, and observability for a repeatable service baseline.
 ---
 
 <PageHero
   variant="landing"
   eyebrow="Configure"
   title="Cluster configuration"
-  lede="Use this section to configure the OpenBaoCluster profile, bootstrap model, exposure pattern, storage, networking, and observability defaults. It is intended for choices you want in place before broader rollout."
+  lede="Use this section to configure the OpenBaoCluster profile, bootstrap model, exposure pattern, storage, networking, and observability defaults. It covers the choices that define the cluster baseline."
   actions={[
     {label: 'Open cluster overview', docId: 'user-guide/openbaocluster/overview', variant: 'primary'},
     {label: 'Review security profiles', docId: 'user-guide/openbaocluster/configuration/security-profiles', variant: 'secondary'},
@@ -23,7 +23,7 @@ description: Configure OpenBaoCluster profiles, bootstrap behavior, storage, exp
       'the right security profile for the environment',
       'bootstrap and server settings you can explain and repeat',
       'storage, network, and external access choices that match the service boundary',
-      'observability and recovery dependencies wired before day 2 pressure starts',
+      'observability and recovery dependencies wired for day 2 operations',
     ]}
   />
 </PageHero>
@@ -34,7 +34,7 @@ description: Configure OpenBaoCluster profiles, bootstrap behavior, storage, exp
     {
       eyebrow: '01',
       title: 'Read this first',
-      description: 'Start with the OpenBaoCluster contract so the rest of the section reads like cluster shaping rather than field-by-field trivia.',
+      description: 'Start with the OpenBaoCluster contract so the rest of the section reads as cluster design rather than isolated field settings.',
       docId: 'user-guide/openbaocluster/overview',
     },
     {
@@ -58,7 +58,7 @@ description: Configure OpenBaoCluster profiles, bootstrap behavior, storage, exp
     {
       eyebrow: '05',
       title: 'Platform readiness',
-      description: 'Set storage, observability, and environment-specific constraints such as private registries before the cluster becomes expensive to move.',
+      description: 'Set storage, observability, and environment-specific constraints such as private registries early in the cluster design.',
       docId: 'user-guide/openbaocluster/configuration/resources-storage',
     },
   ]}

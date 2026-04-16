@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Use safe mode to stop risky automation and recover control."
-  lede="Break glass or safe mode is the operator's explicit stop signal when continuing rollback automation could make availability or Raft safety worse. Use this page to inspect the break-glass state, stabilize the cluster, repair the failure, and only then let automation resume."
+  title="Safe mode and break-glass recovery"
+  lede="Break glass or safe mode is the operator's explicit stop signal when continuing rollback automation could make availability or Raft safety worse. Use this page to inspect the break-glass state, stabilize the cluster, repair the failure, and then resume automation."
 />
 
 <Checklist
@@ -39,7 +39,7 @@ journey: operate
       cells: [
         'status.breakGlass populated',
         'The cluster status contains the reason, message, nonce, and suggested next checks.',
-        'You should diagnose from that status first instead of guessing which internal job failed.',
+        'Start with that status so the recovery path follows the recorded failure reason and suggested checks.',
       ],
     },
     {

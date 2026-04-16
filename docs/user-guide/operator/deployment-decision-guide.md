@@ -60,8 +60,8 @@ journeyStep: 1
 />
 
 <DecisionTable
-  title="Stay on the default path unless one of these is true"
-  columns={['Decision area', 'Default', 'Branch only when', 'Go deeper']}
+  title="Default deployment decisions and exceptions"
+  columns={['Decision area', 'Default', 'Use an alternative when', 'Go deeper']}
   rows={[
     {
       cells: [
@@ -118,7 +118,7 @@ journeyStep: 1
 <Callout type="warning" title="Operator auth is not human auth">
 
 `spec.selfInit.oidc.enabled: true` bootstraps operator authentication only.
-Before you move on, decide which human login path will be created as part of `spec.selfInit.requests` during bootstrap.
+Decide which human login path will be created as part of `spec.selfInit.requests` during bootstrap before you finalize the cluster design.
 
 </Callout>
 

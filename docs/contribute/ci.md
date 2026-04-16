@@ -38,7 +38,7 @@ journey: contribute
 make doctor
 make ci-core`}
 >
-  Treat this as the default local bar. If this is red, CI is not the right place to learn that first.
+  Use this as the default local bar so CI confirms the branch state instead of being the first place a basic issue appears.
 </CommandBlock>
 
 <DecisionTable

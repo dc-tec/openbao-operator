@@ -1,6 +1,6 @@
 ---
 title: Recover After Upgrade Restore
-description: Use the override-lock restore path only when a failed upgrade or rollback blocks the normal restore workflow.
+description: Use the override-lock restore path when a failed upgrade or rollback blocks the normal restore workflow.
 hide_title: true
 pageType: runbook
 journey: operate
@@ -44,7 +44,7 @@ This path ignores the current lock owner, overwrites cluster state with the sele
       cells: [
         '`overrideOperationLock: true`',
         'Clears the existing cluster operation lock so restore can proceed.',
-        'This is what makes the workflow break-glass instead of routine restore.',
+        'This is the field that turns the request into an override path rather than a routine restore.',
       ],
     },
     {
@@ -83,7 +83,7 @@ spec:
   force: true
   overrideOperationLock: true`}
 >
-  `force` is required when restore targets an unhealthy cluster. `overrideOperationLock` is what bypasses the stuck upgrade or backup lock. Keep them together only for this break-glass path.
+  `force` is required when restore targets an unhealthy cluster. `overrideOperationLock` bypasses the stuck upgrade or backup lock. Keep them together for this override path.
 </CommandBlock>
 
 <CommandBlock

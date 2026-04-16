@@ -40,7 +40,7 @@ journey: operate
         'Maintenance mode',
         'Admission policy requires the `openbao.org/maintenance=true` signal before restarts or controlled deletes.',
         'The operator annotates managed resources so maintenance-only actions are allowed under the configured break-glass groups.',
-        'This is not a generic bypass for random edits. It is a controlled operational mode.',
+        'This is a controlled operational mode for maintenance-only actions under the configured break-glass groups.',
       ],
     },
     {
@@ -48,7 +48,7 @@ journey: operate
         'Pause reconciliation',
         'You need a short-lived window where the operator stops mutating the cluster while you inspect or repair it.',
         'The operator stops normal reconciliation until you resume it.',
-        'Pausing is not the same thing as recovery and is not enough for safe-mode incidents.',
+        'Pausing stops normal reconciliation, but safe-mode incidents still require the dedicated recovery flow.',
       ],
     },
   ]}

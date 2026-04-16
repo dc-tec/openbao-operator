@@ -7,8 +7,8 @@ description: Validated local baseline for a development-profile OpenBao deployme
 ---
 
 <PageHeader
-  title="Use this lane to validate operator bring-up, shared-edge routing, and backup flows without pretending a dev profile is production."
-  lede="This local baseline is the lowest-friction validated path for development work on k3d. It keeps the edge simple, keeps TLS operator-managed, keeps backups pointed at an S3-compatible store, and still exercises the cluster lifecycle with a realistic control-plane shape."
+  title="Local development lane with shared edge and RustFS"
+  lede="This validated local baseline covers development work on k3d with a shared terminating edge, operator-managed TLS, RustFS backups, and blue/green upgrades. Use it to exercise the cluster lifecycle with a low-friction local topology."
 />
 
 <Checklist
@@ -24,7 +24,7 @@ description: Validated local baseline for a development-profile OpenBao deployme
 
 <Callout type="note" title="Classification">
 
-Local reference architecture. k3d is not a production target, but this lane is the preferred proving ground for local operator bring-up, UI checks, backup rehearsal, and upgrade behavior.
+This local reference architecture uses k3d as a development environment for operator bring-up, UI checks, backup rehearsal, and upgrade behavior. It is a validated local lane rather than a production target.
 
 </Callout>
 
@@ -113,7 +113,7 @@ Local reference architecture. k3d is not a production target, but this lane is t
       cells: [
         "RustFS for backups",
         "A real S3-compatible transfer boundary with no cloud dependency.",
-        "The lane should prove snapshot upload and retention behavior, not just configuration syntax.",
+        "The lane exercises snapshot upload and retention behavior against an S3-compatible API.",
       ],
     },
     {
@@ -154,7 +154,7 @@ The local development lane exercised self-init bootstrap, JWT admin login, optio
 
 <Callout type="warning" title="What this lane is not">
 
-This is not a production reference, not a hardened security posture, and not proof that the shared terminating edge is the right answer for public OpenBao endpoints. It is a fast, realistic local validation lane.
+This lane does not define a production reference or a hardened security posture. It is a local validation environment for shared-edge routing, backup behavior, and upgrade rehearsal.
 
 </Callout>
 

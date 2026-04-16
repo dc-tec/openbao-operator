@@ -84,7 +84,7 @@ Use the controller-runtime fake client as a fast contract tool, not as a substit
 make doctor
 make ci-core`}
 >
-  This is the default maintainer expectation before you open a PR or ask someone else to chase a failing branch.
+  This is the default maintainer expectation before you open a PR or hand a failing branch to someone else for review.
 </CommandBlock>
 
 <CommandBlock

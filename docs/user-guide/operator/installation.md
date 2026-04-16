@@ -1,6 +1,6 @@
 ---
 title: Operator Installation
-description: Install OpenBao Operator with the right tenancy mode, rendered identity, and verification checks before you create a cluster.
+description: Install OpenBao Operator with the intended tenancy mode, rendered identity, and verification checks.
 slug: /get-started/install
 hide_title: true
 pageType: task
@@ -83,7 +83,7 @@ See [Single-Tenant Mode](single-tenant-mode.md) for single-tenant deployments.
 
 ## Install Profiles
 
-Use this table to choose the supported install path before you start changing values or overlays. For most environments, the default answer is Helm plus multi-tenant mode unless your namespace ownership model says otherwise.
+Use this table to choose the supported install path before changing values or overlays. For most environments, the default answer is Helm plus multi-tenant mode unless your namespace ownership model requires a different shape.
 
 <DecisionTable
   title="Supported installation paths"
@@ -124,8 +124,8 @@ Use `config/overlays/single-tenant-custom-identity` when you also need a custom 
 <Callout type="info" title="Default recommendation">
 
 Start with Helm, keep the default multi-tenant mode, pin the chart release for production,
-and leave admission policies enabled. Deviate from that path only when raw-manifest
-control or single-tenant namespace ownership is an explicit requirement.
+and leave admission policies enabled. Move away from that path only for explicit raw-manifest
+control or single-tenant namespace ownership requirements.
 
 </Callout>
 

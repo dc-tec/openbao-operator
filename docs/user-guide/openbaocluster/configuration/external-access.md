@@ -69,7 +69,7 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
       cells: [
         "Temporary operator-managed trust",
         "You are standing up a development or internal evaluation environment quickly.",
-        "This is convenient, but it is not the Hardened production contract and should not become the long-term default by inertia.",
+        "This is appropriate for development and internal evaluation paths, but it does not match the Hardened production contract.",
       ],
       emphasis: "caution",
     },
@@ -176,7 +176,7 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
       cells: [
         "OperatorManaged",
         "Development or internal evaluation paths only",
-        "This is easy to start with, but the operator becomes the certificate authority and that is not the Hardened production posture.",
+        "This keeps startup simple, but it makes the operator the certificate authority and does not match the Hardened production posture.",
       ],
       emphasis: "caution",
     },

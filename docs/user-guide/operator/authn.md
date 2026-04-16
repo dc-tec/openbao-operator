@@ -1,6 +1,6 @@
 ---
 title: Operator Authentication
-description: Understand the projected JWT auth path, audience contract, and custom-install checks before you change controller identity wiring.
+description: Understand the projected JWT auth path, audience contract, and custom-install checks for controller identity wiring.
 slug: /get-started/operator-authentication
 hide_title: true
 pageType: concept
@@ -71,7 +71,7 @@ journey: get-started
 
 `spec.selfInit.oidc.enabled: true` bootstraps the controller auth path only.
 It does not create a human login method by itself.
-If you use self-init, human access should be created in the same bootstrap contract through `selfInit.requests`, not bolted on later as an afterthought.
+If you use self-init, create human access in the same bootstrap contract through `selfInit.requests` so the cluster has an operator path and a human path from the start.
 
 </Callout>
 

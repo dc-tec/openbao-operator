@@ -7,8 +7,8 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
 ---
 
 <PageHeader
-  title="Use this lane to rehearse a hardened deployment with external certificates and a separate unseal root."
-  lede="This local baseline is the closest validated rehearsal path to a hardened deployment that keeps TLS outside the operator, keeps the seal dependency external, and exposes OpenBao through user-managed TCP passthrough instead of a shared terminating edge."
+  title="Local hardened lane with external TLS"
+  lede="This validated local baseline rehearses a hardened deployment that keeps TLS outside the operator, keeps the seal dependency external, and exposes OpenBao through user-managed TCP passthrough instead of a shared terminating edge."
 />
 
 <Checklist
@@ -24,7 +24,7 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
 
 <Callout type="note" title="Classification">
 
-Local reference architecture. k3d is not the production target, but this lane is the closest validated local analogue to a hardened deployment with an external seal provider and externally managed certificates.
+This local reference architecture uses k3d to rehearse a hardened deployment with an external seal provider and externally managed certificates. It is a local validation lane rather than a production target.
 
 </Callout>
 
@@ -146,7 +146,7 @@ The validated local lane exercised hardened bootstrap with self-init, Transit au
 
 <Callout type="warning" title="What this lane is not">
 
-This is not a cloud reference, not a GitOps reference, and not proof that `spec.gateway` itself is the right path for hardened passthrough. It is a local rehearsal lane with explicit external dependencies.
+This lane does not define a cloud reference or a GitOps reference. It is a local rehearsal environment for hardened bootstrap, external TLS, and passthrough access with explicit external dependencies.
 
 </Callout>
 

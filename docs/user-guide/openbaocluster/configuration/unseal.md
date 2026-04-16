@@ -4,12 +4,12 @@ slug: /configure/unseal
 hide_title: true
 pageType: task
 journey: configure
-description: Choose the unseal root of trust deliberately and use the exact Secret and mounted-file contract the operator validates for each unseal mode.
+description: Configure the unseal root of trust and the Secret or mounted-file contract the operator validates for each supported unseal mode.
 ---
 
 <PageHeader
-  title="Treat unseal as a trust contract, not just a field to satisfy."
-  lede="The unseal path decides where the root of trust lives, how credentials reach the Pods, and which Secret keys or mounted files the operator expects. Use this page when you want the concrete contract, not just the high-level posture guidance."
+  title="Unseal trust and credential contracts"
+  lede="The unseal path defines where the root of trust lives, how credentials reach the Pods, and which Secret keys or mounted files each mode requires. Use this page to map a chosen unseal mode to the exact operator contract."
 />
 
 
@@ -136,7 +136,7 @@ For production-oriented clusters, use an external trust source such as cloud KMS
         "Azure Key Vault",
         "Needed only when you are not using Managed Identity or Azure Workload Identity.",
         "`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`.",
-        "Managed identity is the cleaner Hardened path when your platform supports it.",
+        "Managed identity is the preferred Hardened path when your platform supports it.",
       ],
     },
     {
