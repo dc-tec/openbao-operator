@@ -7,7 +7,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 const (
@@ -19,7 +18,7 @@ const (
 // ObservedGeneration and LastTransitionTime must be set by the caller.
 func buildUpgradingCondition(cluster *openbaov1alpha1.OpenBaoCluster) metav1.Condition {
 	rollingUpgradeInProgress := cluster.Status.Upgrade != nil
-	upgradeFailed := rollingUpgradeInProgress && upgrade.UpgradeFailed(cluster.Status.Upgrade)
+	upgradeFailed := rollingUpgradeInProgress && rollingUpgradeFailed(cluster.Status.Upgrade)
 
 	blueGreenInProgress := cluster.Status.BlueGreen != nil &&
 		cluster.Status.BlueGreen.Phase != "" &&
@@ -29,7 +28,7 @@ func buildUpgradingCondition(cluster *openbaov1alpha1.OpenBaoCluster) metav1.Con
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionUpgrading),
 			Status:  metav1.ConditionFalse,
-			Reason:  upgrade.UpgradeFailureReason(cluster.Status.Upgrade),
+			Reason:  rollingUpgradeFailureReason(cluster.Status.Upgrade),
 			Message: buildRollingUpgradeFailedMessage(cluster),
 		}
 	}
@@ -90,7 +89,7 @@ func buildRollingUpgradeFailedMessage(cluster *openbaov1alpha1.OpenBaoCluster) s
 	from, to := rollingVersionRange(cluster)
 	detail := "The operator recorded a failure."
 	if cluster != nil && cluster.Status.Upgrade != nil {
-		if message := upgrade.UpgradeFailureMessage(cluster.Status.Upgrade); message != "" {
+		if message := rollingUpgradeFailureMessage(cluster.Status.Upgrade); message != "" {
 			detail = ensureSentence(message)
 		}
 	}
@@ -217,4 +216,28 @@ func ensureSentence(message string) string {
 	default:
 		return message + "."
 	}
+}
+
+func rollingUpgradeFailureReason(progress *openbaov1alpha1.UpgradeProgress) string {
+	if progress == nil {
+		return ""
+	}
+	if progress.Failure != nil {
+		return strings.TrimSpace(progress.Failure.Reason)
+	}
+	return strings.TrimSpace(progress.LastErrorReason)
+}
+
+func rollingUpgradeFailureMessage(progress *openbaov1alpha1.UpgradeProgress) string {
+	if progress == nil {
+		return ""
+	}
+	if progress.Failure != nil {
+		return strings.TrimSpace(progress.Failure.Message)
+	}
+	return strings.TrimSpace(progress.LastErrorMessage)
+}
+
+func rollingUpgradeFailed(progress *openbaov1alpha1.UpgradeProgress) bool {
+	return rollingUpgradeFailureReason(progress) != ""
 }
