@@ -29,11 +29,11 @@ The project provides best-effort support for the latest stable release line.
       cells: ['Prerelease (`-rc`, `-beta`, `-alpha`)', 'Evaluation before the next stable release.', 'No expanded support window; use for testing and early adoption only.'],
     },
     {
-      cells: ['Edge (`main` snapshots)', 'Continuous validation and integration signal.', 'Not a production support channel.'],
+      cells: ['Edge (`main` snapshots)', 'Continuous validation and integration signal.', 'Evaluation and validation channel only.'],
       emphasis: 'caution',
     },
     {
-      cells: ['Nightly', 'Scheduled validation snapshots.', 'Not a production support channel.'],
+      cells: ['Nightly', 'Scheduled validation snapshots.', 'Evaluation and validation channel only.'],
       emphasis: 'caution',
     },
   ]}
@@ -90,7 +90,7 @@ Security fixes follow [SECURITY.md](https://github.com/dc-tec/openbao-operator/b
   items={[
     {
       label: 'Release policy',
-      description: 'Open the public cadence and release-gate contract when the next question is when the project ships, not just what it supports.',
+      description: 'Open the public cadence and release-gate contract when the next question is when the project ships.',
       docId: 'reference/release-policy',
     },
     {

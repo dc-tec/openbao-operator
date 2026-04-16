@@ -3,7 +3,7 @@ title: k3d Cross-Cluster DR Bootstrap
 hide_title: true
 pageType: task
 journey: validated-deployments
-description: Stand up the validated local disaster-recovery proving ground with separate infra, source, and target clusters, shared Transit, RustFS storage, and passthrough ingress.
+description: Stand up the validated local disaster-recovery environment with separate infra, source, and target clusters, shared Transit, RustFS storage, and passthrough ingress.
 ---
 
 <PageHeader

@@ -42,8 +42,8 @@ journey: operate
     {
       cells: [
         'Ordinary troubleshooting',
-        'Restore is usually not the first move. Start with the incident recovery or troubleshooting guides first.',
-        'Do not overwrite state while a narrower repair path is still viable.',
+        'Start with the incident recovery or troubleshooting guides unless snapshot restore is already the selected recovery action.',
+        'Prefer a narrower repair path while it can still recover the cluster without overwriting state.',
       ],
     },
   ]}

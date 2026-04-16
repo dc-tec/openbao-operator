@@ -1,6 +1,6 @@
 ---
 title: Onboard the Target Namespace
-description: Introduce the target namespace through OpenBaoTenant before you create the first cluster in the default multi-tenant path.
+description: Introduce the target namespace through OpenBaoTenant for the first cluster in the default multi-tenant path.
 slug: /get-started/onboard-target-namespace
 hide_title: true
 pageType: task
@@ -31,7 +31,7 @@ Create the Kubernetes namespace through your normal platform workflow first, the
   items={[
     {
       label: 'Choose a deployment model',
-      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      description: 'Set tenancy, security posture, install method, and the main exceptions.',
       docId: 'user-guide/operator/deployment-decision-guide',
     },
     {

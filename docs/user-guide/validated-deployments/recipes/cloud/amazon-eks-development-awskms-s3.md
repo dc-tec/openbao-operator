@@ -7,8 +7,8 @@ description: Reproduce the validated development baseline on Amazon EKS with AWS
 ---
 
 <PageHeader
-  title="Reproduce the validated EKS development lane without mixing the quick bring-up path with hardened endpoint requirements."
-  lede="This recipe applies the EKS development baseline with KMS auto-unseal, shared-edge exposure, JWT bootstrap, and S3 backups. Use it when you need the exact validated cloud bring-up path, not a generic EKS example."
+  title="Reproduce the validated EKS development lane"
+  lede="This recipe applies the EKS development baseline with KMS auto-unseal, shared-edge exposure, JWT bootstrap, and S3 backups. Use it when you need the exact validated cloud bring-up path for this topology."
 />
 
 <Checklist

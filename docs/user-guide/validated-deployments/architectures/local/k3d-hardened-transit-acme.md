@@ -7,8 +7,8 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
 ---
 
 <PageHeader
-  title="Use this lane to rehearse hardened ACME issuance locally without swapping in public internet dependencies."
-  lede="This local baseline keeps the hardened posture, keeps the unseal root external, and keeps OpenBao as the TLS endpoint while an internal ACME CA proves certificate issuance through a user-managed passthrough edge."
+  title="Local hardened lane with private ACME"
+  lede="This validated local baseline keeps the hardened posture, keeps the unseal root external, and keeps OpenBao as the TLS endpoint while an internal ACME CA validates certificate issuance through a user-managed passthrough edge."
 />
 
 <Checklist
@@ -17,14 +17,14 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
       "a Hardened cluster can bootstrap locally while keeping the seal dependency outside the tenant namespace",
       "OpenBao-managed ACME issuance works when the validator reaches the passthrough edge with the expected hostname",
       "Transit auto-unseal and ACME trust material can coexist in one shared trust-services dependency",
-      "local rehearsal can cover ACME readiness and probe behavior before you move to a public cloud baseline",
+      "local rehearsal covers ACME readiness and probe behavior before a public-cloud baseline",
     ]}
   />
 
 
 <Callout type="note" title="Classification">
 
-Local reference architecture. k3d is not the production target, but this lane is the preferred local analogue for hardened deployments that keep TLS passthrough in OpenBao and use a private ACME trust chain.
+This local reference architecture uses k3d to rehearse hardened deployments that keep TLS passthrough in OpenBao and use a private ACME trust chain. It is a local validation lane rather than a production target.
 
 </Callout>
 
@@ -153,7 +153,7 @@ The validated local lane exercised hardened bootstrap with self-init, Transit au
 
 <Callout type="warning" title="What this lane is not">
 
-This is not proof that public ACME will work, not a substitute for a cloud ingress baseline, and not a generic passthrough recommendation. It is a local rehearsal lane for the hardened ACME control path.
+This lane does not prove public ACME behavior or replace a cloud ingress baseline. It is a local rehearsal environment for the hardened ACME control path.
 
 </Callout>
 

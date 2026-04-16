@@ -7,8 +7,8 @@ description: Reproduce the validated local hardened lane with Transit auto-unsea
 ---
 
 <PageHeader
-  title="Reproduce the validated hardened local lane without collapsing the trust boundaries it depends on."
-  lede="This recipe stands up the local hardened lane with tenant onboarding, external Transit unseal, externally managed TLS Secrets, and user-managed TCP passthrough. Use it when you want the exact validated path, not a generic local example."
+  title="Reproduce the validated hardened local lane"
+  lede="This recipe stands up the local hardened lane with tenant onboarding, external Transit unseal, externally managed TLS Secrets, and user-managed TCP passthrough. Use it when you want the exact validated path for this topology."
 />
 
 <Checklist
