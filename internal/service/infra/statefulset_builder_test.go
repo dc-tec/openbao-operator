@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
@@ -134,6 +135,26 @@ func TestBuildStatefulSet_MaintenanceAnnotations(t *testing.T) {
 
 	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-19T00:00:00Z" {
 		t.Fatalf("expected Pod template annotation %q to be set, got %q", constants.AnnotationRestartAt, got)
+	}
+}
+
+func TestBuildStatefulSet_DeletesPVCsOnlyWhenScaledDown(t *testing.T) {
+	cluster := newMinimalCluster("scaledown-pvc-cluster", "default")
+
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
+	}
+
+	retentionPolicy := statefulSet.Spec.PersistentVolumeClaimRetentionPolicy
+	if retentionPolicy == nil {
+		t.Fatal("expected StatefulSet PVC retention policy")
+	}
+	if got := retentionPolicy.WhenScaled; got != appsv1.DeletePersistentVolumeClaimRetentionPolicyType {
+		t.Fatalf("WhenScaled = %q, want %q", got, appsv1.DeletePersistentVolumeClaimRetentionPolicyType)
+	}
+	if got := retentionPolicy.WhenDeleted; got != appsv1.RetainPersistentVolumeClaimRetentionPolicyType {
+		t.Fatalf("WhenDeleted = %q, want %q", got, appsv1.RetainPersistentVolumeClaimRetentionPolicyType)
 	}
 }
 
