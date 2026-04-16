@@ -15,6 +15,8 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+const persistMe = "persist-me"
+
 type stagedReader struct {
 	first client.Reader
 	then  client.Reader
@@ -46,7 +48,7 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_UsesLatestStateAndPreservesS
 			Namespace: "default",
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			Backup:          &openbaov1alpha1.BackupStatus{LastFailureReason: "persist-me"},
+			Backup:          &openbaov1alpha1.BackupStatus{LastFailureReason: persistMe},
 			UpgradeRequests: &openbaov1alpha1.UpgradeRequestStatus{LastHandledRetry: "before"},
 		},
 	}
@@ -70,7 +72,7 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_UsesLatestStateAndPreservesS
 		t.Fatalf("MutateAndApplyOpenBaoClusterAdminOpsStatus() error = %v", err)
 	}
 
-	if updated.Status.Backup == nil || updated.Status.Backup.LastFailureReason != "persist-me" {
+	if updated.Status.Backup == nil || updated.Status.Backup.LastFailureReason != persistMe {
 		t.Fatalf("updated.Status.Backup = %#v, want preserved backup state", updated.Status.Backup)
 	}
 	if updated.Status.BreakGlass == nil || !updated.Status.BreakGlass.Active || updated.Status.BreakGlass.Nonce != "nonce-1" {
@@ -99,7 +101,7 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatusWithReader_UsesProvidedReader
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			Backup: &openbaov1alpha1.BackupStatus{
-				LastFailureReason: "persist-me",
+				LastFailureReason: persistMe,
 			},
 		},
 	}
@@ -131,7 +133,7 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatusWithReader_UsesProvidedReader
 		t.Fatalf("MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader() error = %v", err)
 	}
 
-	if updated.Status.Backup == nil || updated.Status.Backup.LastFailureReason != "persist-me" {
+	if updated.Status.Backup == nil || updated.Status.Backup.LastFailureReason != persistMe {
 		t.Fatalf("updated.Status.Backup = %#v, want preserved backup state", updated.Status.Backup)
 	}
 	if updated.Status.BreakGlass == nil || !updated.Status.BreakGlass.Active || updated.Status.BreakGlass.Nonce != "nonce-1" {

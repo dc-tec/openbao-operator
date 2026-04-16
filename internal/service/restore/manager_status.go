@@ -174,7 +174,7 @@ func (m *Manager) releaseClusterLock(ctx context.Context, logger logr.Logger, re
 	}
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
-	if err := m.client.Get(ctx, types.NamespacedName{
+	if err := m.reader.Get(ctx, types.NamespacedName{
 		Namespace: restore.Namespace,
 		Name:      restore.Spec.Cluster,
 	}, cluster); err != nil {
@@ -185,7 +185,7 @@ func (m *Manager) releaseClusterLock(ctx context.Context, logger logr.Logger, re
 	}
 
 	lock := restoreOperationLock(restore)
-	if err := opslifecycle.Release(ctx, m.client, cluster, lock); err != nil {
+	if err := opslifecycle.ReleaseWithReader(ctx, m.reader, m.client, cluster, lock); err != nil {
 		if opslifecycle.IsLockHeld(err) {
 			return nil
 		}

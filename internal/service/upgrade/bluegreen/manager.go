@@ -30,6 +30,7 @@ var (
 // Manager manages blue/green upgrade operations for OpenBaoCluster.
 type Manager struct {
 	client                client.Client
+	reader                client.Reader
 	scheme                *runtime.Scheme
 	infraRuntime          portinfra.BlueGreenRuntime
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
@@ -60,6 +61,7 @@ func NewManager(
 	}
 	mgr := &Manager{
 		client:                c,
+		reader:                c,
 		scheme:                scheme,
 		infraRuntime:          infraRuntime,
 		backupRuntime:         backupRuntime,
@@ -72,6 +74,14 @@ func NewManager(
 	}
 	mgr.clusterOps = newOpenBaoClusterOps(c, mgr.clientFactory)
 	return mgr
+}
+
+// WithReader configures a live reader for lock/status read-before-write flows.
+func (m *Manager) WithReader(reader client.Reader) *Manager {
+	if reader != nil {
+		m.reader = reader
+	}
+	return m
 }
 
 func NewManagerWithClientFactory(

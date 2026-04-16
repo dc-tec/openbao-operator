@@ -23,7 +23,7 @@ import (
 // Returns (cluster, result, error) where result is non-nil if validation failed and should return early.
 func (m *Manager) validateCluster(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (*openbaov1alpha1.OpenBaoCluster, *ctrl.Result, error) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
-	if err := m.client.Get(ctx, types.NamespacedName{
+	if err := m.reader.Get(ctx, types.NamespacedName{
 		Namespace: restore.Namespace,
 		Name:      restore.Spec.Cluster,
 	}, cluster); err != nil {
@@ -61,7 +61,7 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 	}
 
 	lockBefore := cluster.Status.OperationLock
-	if err := opslifecycle.Acquire(ctx, m.client, cluster, lock, opslifecycle.AcquireOptions{
+	if err := opslifecycle.AcquireWithReader(ctx, m.reader, m.client, cluster, lock, opslifecycle.AcquireOptions{
 		Message: restoreLockMessage(restore),
 		Force:   forceAcquire,
 	}); err != nil {

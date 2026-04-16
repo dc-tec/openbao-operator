@@ -108,7 +108,7 @@ func (m *Manager) acquireBackupLock(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	jobName string,
 ) (*recon.Result, error) {
-	if err := opslifecycle.Acquire(ctx, m.client, cluster, backupOperationLock, opslifecycle.AcquireOptions{
+	if err := opslifecycle.AcquireWithReader(ctx, m.reader, m.client, cluster, backupOperationLock, opslifecycle.AcquireOptions{
 		Message: fmt.Sprintf("backup job %s", jobName),
 	}); err != nil {
 		if opslifecycle.IsLockHeld(err) {

@@ -2091,6 +2091,7 @@ type OpenBaoClusterStatus struct {
 	// OperationLock prevents concurrent long-running operations (upgrade/backup/restore)
 	// from acting on the same cluster at the same time.
 	// +optional
+	// +nullable
 	// +kubebuilder:validation:Nullable
 	OperationLock *OperationLockStatus `json:"operationLock,omitempty"`
 	// BreakGlass records when the operator has halted quorum-risk automation and requires
@@ -2126,6 +2127,7 @@ const (
 )
 
 // OperationLockStatus represents a status-based lock held by the operator.
+// +structType=atomic
 type OperationLockStatus struct {
 	// Operation is the operation currently holding the lock.
 	// +optional

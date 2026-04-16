@@ -100,3 +100,32 @@ func TestToApplyConfiguration_PreservesEmptyObjectClearSemantics(t *testing.T) {
 		t.Fatalf("apply payload missing empty failure object clear semantics: %s", got)
 	}
 }
+
+func TestToApplyConfigurationWithExplicitNulls_PreservesRequestedNullFields(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+		},
+	}
+
+	applyConfig, err := ToApplyConfigurationWithExplicitNulls(cluster, nil, "status.operationLock")
+	if err != nil {
+		t.Fatalf("ToApplyConfigurationWithExplicitNulls() error = %v", err)
+	}
+
+	payload, err := json.Marshal(applyConfig)
+	if err != nil {
+		t.Fatalf("json.Marshal(applyConfig) error = %v", err)
+	}
+
+	if got := string(payload); !strings.Contains(got, `"operationLock":null`) {
+		t.Fatalf("apply payload missing explicit null operationLock: %s", got)
+	}
+}

@@ -3499,6 +3499,7 @@ spec:
                 description: |-
                   OperationLock prevents concurrent long-running operations (upgrade/backup/restore)
                   from acting on the same cluster at the same time.
+                nullable: true
                 properties:
                   acquiredAt:
                     description: AcquiredAt is when the lock was first acquired.
@@ -3526,6 +3527,7 @@ spec:
                     format: date-time
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               phase:
                 description: Phase is a high-level summary of the cluster state.
                 enum:

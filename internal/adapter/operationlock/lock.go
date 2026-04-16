@@ -57,6 +57,18 @@ func (e *HeldError) Unwrap() error {
 // Acquire ensures the given cluster holds the operation lock for opts.Operation.
 // It patches the cluster status to persist the lock immediately.
 func Acquire(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster, opts AcquireOptions) error {
+	return AcquireWithReader(ctx, nil, c, cluster, opts)
+}
+
+// AcquireWithReader ensures the given cluster holds the operation lock for
+// opts.Operation using reader for fresh read-before-write visibility.
+func AcquireWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	opts AcquireOptions,
+) error {
 	if cluster == nil {
 		return fmt.Errorf("cluster is required")
 	}
@@ -77,7 +89,7 @@ func Acquire(ctx context.Context, c client.Client, cluster *openbaov1alpha1.Open
 			AcquiredAt: &now,
 			RenewedAt:  &now,
 		}
-		if err := patchStatus(ctx, c, cluster, desired); err != nil {
+		if err := patchStatus(ctx, reader, c, cluster, desired); err != nil {
 			return err
 		}
 		cluster.Status.OperationLock = desired
@@ -92,7 +104,7 @@ func Acquire(ctx context.Context, c client.Client, cluster *openbaov1alpha1.Open
 		if desired.AcquiredAt == nil {
 			desired.AcquiredAt = &now
 		}
-		if err := patchStatus(ctx, c, cluster, desired); err != nil {
+		if err := patchStatus(ctx, reader, c, cluster, desired); err != nil {
 			return err
 		}
 		cluster.Status.OperationLock = desired
@@ -107,7 +119,7 @@ func Acquire(ctx context.Context, c client.Client, cluster *openbaov1alpha1.Open
 			AcquiredAt: &now,
 			RenewedAt:  &now,
 		}
-		if err := patchStatus(ctx, c, cluster, desired); err != nil {
+		if err := patchStatus(ctx, reader, c, cluster, desired); err != nil {
 			return err
 		}
 		cluster.Status.OperationLock = desired
@@ -124,6 +136,19 @@ func Acquire(ctx context.Context, c client.Client, cluster *openbaov1alpha1.Open
 // Release clears the lock if it is held by opts.Operation/opts.Holder.
 // If the lock is held by someone else, Release returns ErrLockHeld.
 func Release(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster, holder string, operation openbaov1alpha1.ClusterOperation) error {
+	return ReleaseWithReader(ctx, nil, c, cluster, holder, operation)
+}
+
+// ReleaseWithReader clears the lock if it is held by opts.Operation/opts.Holder
+// using reader for fresh read-before-write visibility.
+func ReleaseWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	holder string,
+	operation openbaov1alpha1.ClusterOperation,
+) error {
 	if cluster == nil {
 		return fmt.Errorf("cluster is required")
 	}
@@ -147,18 +172,25 @@ func Release(ctx context.Context, c client.Client, cluster *openbaov1alpha1.Open
 		}
 	}
 
-	if err := patchStatus(ctx, c, cluster, nil); err != nil {
+	if err := patchStatus(ctx, reader, c, cluster, nil); err != nil {
 		return err
 	}
 	cluster.Status.OperationLock = nil
 	return nil
 }
 
-func patchStatus(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster, desired *openbaov1alpha1.OperationLockStatus) error {
+func patchStatus(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	desired *openbaov1alpha1.OperationLockStatus,
+) error {
 	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
 	applyLock := func(forceOwnership bool) (*openbaov1alpha1.OpenBaoCluster, error) {
-		return statusapply.MutateAndApplyOpenBaoClusterOperationLockStatus(
+		return statusapply.MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(
 			ctx,
+			reader,
 			c,
 			key,
 			func(obj *openbaov1alpha1.OpenBaoCluster) error {

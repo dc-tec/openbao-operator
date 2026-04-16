@@ -24,7 +24,7 @@ import (
 func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore) (ctrl.Result, error) {
 	// Get target cluster for job configuration
 	cluster := &openbaov1alpha1.OpenBaoCluster{}
-	if err := m.client.Get(ctx, types.NamespacedName{
+	if err := m.reader.Get(ctx, types.NamespacedName{
 		Namespace: restore.Namespace,
 		Name:      restore.Spec.Cluster,
 	}, cluster); err != nil {
@@ -33,7 +33,7 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 	lock := restoreOperationLock(restore)
 	lockHeldByUs := lock.IsHeldBy(cluster.Status.OperationLock)
-	if err := opslifecycle.Acquire(ctx, m.client, cluster, lock, opslifecycle.AcquireOptions{
+	if err := opslifecycle.AcquireWithReader(ctx, m.reader, m.client, cluster, lock, opslifecycle.AcquireOptions{
 		Message: restoreLockMessage(restore),
 	}); err != nil {
 		if opslifecycle.IsLockHeld(err) {

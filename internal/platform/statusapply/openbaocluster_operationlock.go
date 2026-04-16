@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,6 +49,9 @@ func ApplyOpenBaoClusterOperationLockStatus(
 	}
 
 	applyConfig, err := ToApplyConfiguration(applyCluster, c)
+	if cluster.Status.OperationLock == nil {
+		applyConfig, err = ToApplyConfigurationWithExplicitNulls(applyCluster, c, "status.operationLock")
+	}
 	if err != nil {
 		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
 	}
@@ -71,6 +75,20 @@ func MutateAndApplyOpenBaoClusterOperationLockStatus(
 	mutate OpenBaoClusterOperationLockStatusMutator,
 	opts OpenBaoClusterOperationLockStatusApplyOptions,
 ) (*openbaov1alpha1.OpenBaoCluster, error) {
+	return MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(ctx, nil, c, key, mutate, opts)
+}
+
+// MutateAndApplyOpenBaoClusterOperationLockStatusWithReader safely persists the
+// lock plane with a read-mutate-apply flow using reader for fresh read-before-
+// write and read-after-write visibility when needed.
+func MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	key types.NamespacedName,
+	mutate OpenBaoClusterOperationLockStatusMutator,
+	opts OpenBaoClusterOperationLockStatusApplyOptions,
+) (*openbaov1alpha1.OpenBaoCluster, error) {
 	if c == nil {
 		return nil, fmt.Errorf("client is required")
 	}
@@ -80,9 +98,12 @@ func MutateAndApplyOpenBaoClusterOperationLockStatus(
 	if mutate == nil {
 		return nil, fmt.Errorf("mutate function is required")
 	}
+	if reader == nil {
+		reader = c
+	}
 
 	current := &openbaov1alpha1.OpenBaoCluster{}
-	if err := c.Get(ctx, key, current); err != nil {
+	if err := reader.Get(ctx, key, current); err != nil {
 		return nil, fmt.Errorf("failed to get cluster %s/%s before operation lock status apply: %w", key.Namespace, key.Name, err)
 	}
 
@@ -91,20 +112,40 @@ func MutateAndApplyOpenBaoClusterOperationLockStatus(
 		return nil, err
 	}
 
+	if current.Status.OperationLock != nil && desired.Status.OperationLock == nil {
+		if err := ensureOperationLockOwnershipForClear(ctx, c, current); err != nil {
+			return nil, fmt.Errorf("failed to take ownership of operation lock status for cluster %s/%s before clear: %w", key.Namespace, key.Name, err)
+		}
+	}
+
 	if err := ApplyOpenBaoClusterOperationLockStatus(ctx, c, desired, opts); err != nil {
 		return nil, fmt.Errorf("failed to apply operation lock status for cluster %s/%s: %w", key.Namespace, key.Name, err)
 	}
 
 	updated := &openbaov1alpha1.OpenBaoCluster{}
-	if err := c.Get(ctx, key, updated); err != nil {
+	if err := reader.Get(ctx, key, updated); err != nil {
 		return nil, fmt.Errorf("failed to get cluster %s/%s after operation lock status apply: %w", key.Namespace, key.Name, err)
-	}
-	if desired.Status.OperationLock == nil && updated.Status.OperationLock != nil {
-		// Fake client SSA does not reliably materialize omitted-field clears
-		// on readback. Return desired clear-state to keep callers deterministic.
-		desired.ResourceVersion = updated.ResourceVersion
-		return desired, nil
 	}
 
 	return updated, nil
+}
+
+func ensureOperationLockOwnershipForClear(
+	ctx context.Context,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) error {
+	if cluster == nil || cluster.Status.OperationLock == nil {
+		return nil
+	}
+
+	err := ApplyOpenBaoClusterOperationLockStatus(ctx, c, cluster, OpenBaoClusterOperationLockStatusApplyOptions{})
+	if err != nil && apierrors.IsConflict(err) {
+		// Clearing a lock seeded outside the dedicated field owner is an explicit
+		// ownership-takeover path, so retry with force only on conflict.
+		err = ApplyOpenBaoClusterOperationLockStatus(ctx, c, cluster, OpenBaoClusterOperationLockStatusApplyOptions{
+			ForceOwnership: true,
+		})
+	}
+	return err
 }

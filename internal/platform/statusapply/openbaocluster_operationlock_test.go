@@ -2,7 +2,9 @@ package statusapply
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -171,5 +173,70 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_PropagatesMutatorError(
 	)
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("MutateAndApplyOpenBaoClusterOperationLockStatus() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestMutateAndApplyOpenBaoClusterOperationLockStatus_ClearTakesOwnershipThenOmitsField(t *testing.T) {
+	t.Parallel()
+
+	acquiredAt := metav1.Now()
+	stored := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "operationlock-clear",
+			Namespace: "default",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation:  openbaov1alpha1.ClusterOperationBackup,
+				Holder:     "openbaocluster/backup",
+				Message:    "backup in progress",
+				AcquiredAt: &acquiredAt,
+				RenewedAt:  &acquiredAt,
+			},
+		},
+	}
+
+	var applyPayloads []string
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(newOpenBaoClusterStatusTestScheme(t)).
+		WithStatusSubresource(stored).
+		WithObjects(stored.DeepCopy()).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceApply: func(ctx context.Context, c client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+				if subResource == "status" {
+					payload, err := json.Marshal(obj)
+					if err != nil {
+						return err
+					}
+					applyPayloads = append(applyPayloads, string(payload))
+				}
+				return c.Status().Apply(ctx, obj, opts...)
+			},
+		}).
+		WithReturnManagedFields().
+		Build()
+
+	_, err := MutateAndApplyOpenBaoClusterOperationLockStatus(
+		context.Background(),
+		k8sClient,
+		types.NamespacedName{Name: stored.Name, Namespace: stored.Namespace},
+		func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			obj.Status.OperationLock = nil
+			return nil
+		},
+		OpenBaoClusterOperationLockStatusApplyOptions{},
+	)
+	if err != nil {
+		t.Fatalf("MutateAndApplyOpenBaoClusterOperationLockStatus() error = %v", err)
+	}
+
+	if len(applyPayloads) != 2 {
+		t.Fatalf("apply payloads = %#v, want 2 status apply calls (take ownership, then clear)", applyPayloads)
+	}
+	if !strings.Contains(applyPayloads[0], `"operationLock":{"`) {
+		t.Fatalf("ownership payload missing operationLock object: %s", applyPayloads[0])
+	}
+	if strings.Contains(applyPayloads[1], `"operationLock":{"`) || !strings.Contains(applyPayloads[1], `"operationLock":null`) {
+		t.Fatalf("clear payload should explicitly null operationLock after ownership takeover: %s", applyPayloads[1])
 	}
 }

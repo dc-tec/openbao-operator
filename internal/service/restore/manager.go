@@ -31,6 +31,7 @@ const (
 // Manager orchestrates restore operations for OpenBao clusters.
 type Manager struct {
 	client                client.Client
+	reader                client.Reader
 	scheme                *runtime.Scheme
 	recorder              events.EventRecorder
 	operatorImageVerifier imageverify.Verifier
@@ -41,9 +42,18 @@ type Manager struct {
 func NewManager(c client.Client, scheme *runtime.Scheme, recorder events.EventRecorder, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
 	return &Manager{
 		client:                c,
+		reader:                c,
 		scheme:                scheme,
 		recorder:              recorder,
 		operatorImageVerifier: operatorImageVerifier,
 		Platform:              platform,
 	}
+}
+
+// WithReader configures a live reader for lock/status read-before-write flows.
+func (m *Manager) WithReader(reader client.Reader) *Manager {
+	if reader != nil {
+		m.reader = reader
+	}
+	return m
 }
