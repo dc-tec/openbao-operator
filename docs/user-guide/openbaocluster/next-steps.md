@@ -12,7 +12,7 @@ journeyStep: 5
   variant="landing"
   eyebrow="Step 5"
   title="Next steps after initial setup"
-  lede="Use this page after the first cluster becomes healthy to choose the next operational concern. It helps route follow-up work such as hardening, exposure, backups, and day 2 procedures."
+  lede="Follow-up work after the first cluster becomes healthy, including hardening, exposure, backups, and day 2 procedures."
   actions={[
     {label: 'Open the production checklist', docId: 'user-guide/openbaocluster/operations/production-checklist', variant: 'primary'},
     {label: 'Open Operate', docId: 'user-guide/openbaocluster/operations/index', variant: 'secondary'},
@@ -35,7 +35,7 @@ journeyStep: 5
   items={[
     {
       label: 'Choose a deployment model',
-      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      description: 'Choose tenancy, security posture, install method, and the main exceptions for the environment.',
       docId: 'user-guide/operator/deployment-decision-guide',
     },
     {
@@ -45,7 +45,7 @@ journeyStep: 5
     },
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant before you create a cluster.',
+      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant, then create a cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
     {
@@ -77,14 +77,14 @@ journeyStep: 5
       cells: [
         'You have not yet proven backup or restore',
         'Backups',
-        'The first risky upgrade should not be the first time object storage, backup auth, and restore assumptions are tested.',
+        'Test object storage, backup auth, and restore assumptions before the first risky upgrade.',
       ],
     },
     {
       cells: [
         'You need user or edge access now',
         'External access',
-        'TLS mode, exposure path, and user auth assumptions should be settled before traffic and clients grow around a temporary shortcut.',
+        'Settle TLS mode, exposure path, and user auth assumptions before traffic and clients grow around a temporary shortcut.',
       ],
     },
     {
@@ -138,7 +138,7 @@ journeyStep: 5
   items={[
     {
       label: 'Browse validated deployments',
-      description: 'Use tested architectures, recipes, and runbooks when you want a known-good implementation path.',
+      description: 'Use tested architectures, recipes, and runbooks when you want a validated implementation path.',
       docId: 'user-guide/validated-deployments/index',
     },
     {

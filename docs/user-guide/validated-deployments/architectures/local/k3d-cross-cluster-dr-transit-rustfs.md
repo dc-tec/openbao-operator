@@ -22,14 +22,14 @@ description: Validated local disaster-recovery baseline for OpenBao on k3d with 
   />
 
 
-<Callout type="note" title="Classification">
+<Callout type="note" title="Baseline scope">
 
 This local disaster-recovery reference architecture uses k3d to validate the DR invariants for backup, restore, unseal, and manual cutover before moving to a cloud recovery pair.
 
 </Callout>
 
 <DecisionTable
-  title="Lane summary"
+  title="Baseline summary"
   columns={["Surface", "Choice", "Why it matters"]}
   rows={[
     {
@@ -142,7 +142,7 @@ This local disaster-recovery reference architecture uses k3d to validate the DR 
 
 <Checklist
   tone="warning"
-  title="Stay on the validated path"
+  title="Baseline requirements"
   items={[
     "keep the source and target on the same OpenBao version for the restore event",
     "keep the source and target pointed at the same Transit address, CA bundle, SNI, and key name",
@@ -165,7 +165,7 @@ This baseline does not define automatic failover or a cloud DR reference. It cov
 </Callout>
 
 <NextActions
-  title="Use the lane"
+  title="Next steps"
   items={[
     {
       label: "Bootstrap recipe",

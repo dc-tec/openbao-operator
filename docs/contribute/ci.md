@@ -7,7 +7,7 @@ journey: contribute
 
 <PageHeader
   title="CI workflow and local parity"
-  lede="This page covers pull request, `main`, nightly, and release workflows, and maps each validation lane to the closest local command set."
+  lede="Pull request, `main`, nightly, and release workflows, plus the closest local command set for each validation lane."
 />
 
 <DiagramFrame
@@ -38,7 +38,7 @@ journey: contribute
 make doctor
 make ci-core`}
 >
-  Use this as the default local baseline so routine branch issues are found before CI.
+  Default local baseline before handing work to CI.
 </CommandBlock>
 
 <DecisionTable

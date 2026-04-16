@@ -53,7 +53,7 @@ journey: operate
       cells: [
         'No node can form quorum and there is no healthy leader to remove peers from.',
         'Use manual quorum recovery with `peers.json` as a last resort.',
-        'This is destructive and should be used only when automatic recovery is no longer possible.',
+        'This is destructive. Use it only when automatic recovery is no longer possible.',
       ],
     },
   ]}
@@ -112,7 +112,7 @@ kubectl exec -n <namespace> -it <pod-a> -- nslookup <pod-b>.<headless-service>`}
 
 Check these first when the transport path is broken:
 
-- `NetworkPolicy` rules that should allow cluster-to-cluster traffic
+- `NetworkPolicy` rules that allow cluster-to-cluster traffic
 - service and headless-service DNS resolution
 - sidecar or mesh policies that may block direct Pod-to-Pod communication
 

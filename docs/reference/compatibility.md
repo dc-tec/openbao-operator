@@ -6,8 +6,8 @@ journey: reference
 ---
 
 <PageHeader
-  title="Use the compatibility matrix when you need the exact validation and support boundary for a platform or version."
-  lede="This page is the contract for what the project actively validates, what remains best-effort supported, and what should be treated as out of scope for the current pre-GA line. It is the fastest way to answer whether a target Kubernetes or OpenBao version sits inside the tested envelope."
+  title="Compatibility matrix"
+  lede="Validated versions, support posture, and production guidance for the current pre-GA line."
 />
 
 <Callout type="note" title="Terminology">
@@ -83,7 +83,7 @@ The current stable release line is intended for real deployments, but it remains
 <DecisionTable
   kind="reference"
   title="CI validation matrix"
-  caption="Treat the CI configuration as the source of truth for what is actually exercised."
+  caption="Versions and paths exercised by CI workflows."
   columns={['Workflow', 'Scope', 'Versions tested']}
   rows={[
     {
@@ -110,17 +110,17 @@ Always validate new Kubernetes or OpenBao versions in a staging environment befo
   items={[
     {
       label: 'Upgrade compatibility',
-      description: 'Use the exact upgrade-path contract when the next question is sequencing rather than version support.',
+      description: 'Upgrade sequencing and rollback stance for operator upgrades.',
       docId: 'reference/operator-upgrade-compatibility',
     },
     {
       label: 'Support policy',
-      description: 'Open the support contract when you need to know what the project maintains beyond raw validation coverage.',
+      description: 'Release-line maintenance beyond raw validation coverage.',
       docId: 'reference/support-policy',
     },
     {
       label: 'Known limitations',
-      description: 'Check current caveats and non-goals before assuming that an unvalidated path is only temporarily undocumented.',
+      description: 'Current caveats and explicit non-goals for unsupported paths.',
       docId: 'reference/known-limitations',
     },
   ]}

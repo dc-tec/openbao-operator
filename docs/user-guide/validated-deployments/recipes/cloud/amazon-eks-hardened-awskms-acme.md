@@ -35,7 +35,7 @@ A public ACME CA such as Let's Encrypt must reach the hardened hostname on port 
 </Callout>
 
 <DecisionTable
-  title="What this lane assumes"
+  title="Baseline assumptions"
   columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
   rows={[
     {

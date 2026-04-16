@@ -8,7 +8,7 @@ description: What Development and Hardened mean as security contracts, and why H
 
 <PageHeader
   title="Security profile contracts"
-  lede="This page explains what `Development` and `Hardened` optimize for, what Hardened requires in production, and how the two profiles change the operating contract."
+  lede="What `Development` and `Hardened` optimize for, what Hardened requires in production, and how the profiles change the operating contract."
 />
 
 
@@ -79,7 +79,7 @@ description: What Development and Hardened mean as security contracts, and why H
   ]}
 />
 
-## Why Hardened is the supported production contract
+## Hardened production contract
 
 <DecisionTable
   kind="reference"
@@ -125,15 +125,15 @@ description: What Development and Hardened mean as security contracts, and why H
   ]}
 />
 
-<Callout type="success" title="What Hardened is really saying">
+<Callout type="success" title="Hardened profile assumptions">
 
 Hardened means the operator can rely on an external trust root, explicit runtime identity, and a production-ready lifecycle posture. It defines the operating model for the cluster, not just one field in the CR.
 
 </Callout>
 
-## What Development deliberately relaxes
+## Development profile relaxations
 
-Development is still useful, but it should be understood as an intentional weakening of the production contract:
+Development intentionally relaxes the production contract:
 
 - bootstrap material can persist in cluster Secrets
 - static unseal remains available
@@ -141,22 +141,23 @@ Development is still useful, but it should be understood as an intentional weake
 - runtime and supply-chain controls can be less strict
 - the cluster reports a security-risk signal rather than pretending this posture is production-ready
 
-<Callout type="warning" title="Do not upgrade trust roots in place by assumption">
+<Callout type="warning" title="Trust-root migrations">
 
 Teams often start in Development for exploration. When moving to staging or production, create a new Hardened cluster rather than assuming a Development trust path can be promoted safely.
+Teams often start in Development for exploration. For staging or production, create a new Hardened cluster instead of promoting a Development trust path in place.
 
 </Callout>
 
-## Where configuration belongs
+## Configuration scope
 
-This page explains the contract. The actual task of setting `spec.profile`, choosing the unseal mode, and satisfying the production requirements belongs in <SiteLink docId="user-guide/openbaocluster/configuration/security-profiles">Configure Security Profiles</SiteLink>.
+Configuration steps for `spec.profile`, unseal mode, and the production requirements are in <SiteLink docId="user-guide/openbaocluster/configuration/security-profiles">Configure Security Profiles</SiteLink>.
 
 <NextActions
   title="Continue the security model"
   items={[
     {
       label: 'Configure security profiles',
-      description: 'Switch to the task page when you are ready to apply the profile to a real cluster.',
+      description: 'Cluster fields and configuration steps behind these profile requirements.',
       docId: 'user-guide/openbaocluster/configuration/security-profiles',
     },
     {
@@ -166,7 +167,7 @@ This page explains the contract. The actual task of setting `spec.profile`, choo
     },
     {
       label: 'Threat model',
-      description: 'Go back to the broader threat model if you need the rationale behind these profile boundaries.',
+      description: 'Rationale behind these profile boundaries.',
       docId: 'security/fundamentals/threat-model',
     },
   ]}

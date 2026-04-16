@@ -9,14 +9,14 @@ description: Validated cloud baselines for OpenBao Operator, pairing each tested
   variant="landing"
   eyebrow="Validated Deployments / Cloud Baselines"
   title="Validated cloud baselines"
-  lede="This section covers the validated cloud baselines currently exercised on Amazon EKS. Each baseline links to the matching deployment recipe so the tested topology and procedure stay together."
+  lede="Amazon EKS validated baselines are listed here, each linked to its matching deployment recipe."
   actions={[
     {label: "Open EKS Development", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
     {label: "Open EKS Hardened", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme", variant: "secondary"},
   ]}
 >
   <Checklist
-    title="Use cloud baselines when you need to"
+    title="Use cloud baselines to"
     items={[
       "compare validated development and hardened EKS topologies",
       "see the exact trust boundary, edge model, and storage assumptions before deployment",
@@ -31,14 +31,14 @@ description: Validated cloud baselines for OpenBao Operator, pairing each tested
     {
       eyebrow: "01",
       title: "EKS Development",
-      description: "Shared terminating edge, AWS KMS auto-unseal, JWT bootstrap, and S3 backups in the validated EKS development baseline.",
+      description: "EKS development baseline with shared terminating edge, AWS KMS auto-unseal, JWT bootstrap, and S3 backups.",
       docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3",
       actionLabel: "Open lane",
     },
     {
       eyebrow: "02",
       title: "EKS Hardened",
-      description: "Dedicated passthrough edge, AWS KMS auto-unseal, OpenBao-managed ACME, and the hardened cloud baseline.",
+      description: "EKS hardened baseline with dedicated passthrough edge, AWS KMS auto-unseal, OpenBao-managed ACME, and S3 backups.",
       docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme",
       actionLabel: "Open lane",
     },

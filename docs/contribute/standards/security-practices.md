@@ -7,7 +7,7 @@ journey: contribute
 
 <PageHeader
   title="Secure coding practices"
-  lede="OpenBao Operator handles sensitive material and security-relevant control paths. This page covers least-privilege permissions, standard cryptographic primitives, controller-safe execution, and explicit care around secrets in memory and logs."
+  lede="Least-privilege permissions, standard cryptographic primitives, controller-safe execution, and careful handling of secrets in memory and logs."
 />
 
 <DecisionTable

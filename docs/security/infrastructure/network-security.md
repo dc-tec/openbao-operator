@@ -8,7 +8,7 @@ description: Default-deny network posture for OpenBao Pods and lifecycle jobs, p
 
 <PageHeader
   title="Network policy model"
-  lede="This page describes the default-deny posture for OpenBao Pods and lifecycle jobs, and the ingress and egress paths the operator expects when cluster management and integrations are configured."
+  lede="Default-deny posture for OpenBao Pods and lifecycle jobs, plus the ingress and egress paths the operator expects when cluster management and integrations are configured."
 />
 
 

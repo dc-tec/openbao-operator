@@ -50,7 +50,7 @@ description: Shared lock, retry, and phase-audit primitives used by backup, rest
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Operation lifecycle coordination sits below the concrete managers and above the lock adapter:
 
@@ -124,7 +124,7 @@ That keeps the shared safety model in one place instead of scattering lock and r
   ]}
 />
 
-## Retry And Lock Model
+## Retry and lock model
 
 <DecisionTable
   kind="reference"

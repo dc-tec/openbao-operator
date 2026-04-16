@@ -22,14 +22,14 @@ description: Validated hardened cloud baseline for OpenBao on Amazon EKS with AW
   />
 
 
-<Callout type="note" title="Classification">
+<Callout type="note" title="Baseline scope">
 
 Cloud reference architecture. This is the production-style Amazon EKS baseline validated by the project.
 
 </Callout>
 
 <DecisionTable
-  title="Lane summary"
+  title="Baseline summary"
   columns={["Surface", "Choice", "Why it matters"]}
   rows={[
     {
@@ -138,7 +138,7 @@ Cloud reference architecture. This is the production-style Amazon EKS baseline v
 
 <Checklist
   tone="warning"
-  title="Stay on the validated path"
+  title="Baseline requirements"
   items={[
     "keep the hardened hostname publicly reachable on port `443` for ACME validation",
     "keep the public OpenBao hostname on a dedicated passthrough Gateway instead of the shared terminating edge",
@@ -161,7 +161,7 @@ This baseline does not cover source-restricted public hostnames, externally mana
 </Callout>
 
 <NextActions
-  title="Use the lane"
+  title="Next steps"
   items={[
     {
       label: "Deployment recipe",

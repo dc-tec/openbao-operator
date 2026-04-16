@@ -50,7 +50,7 @@ description: Manage TLS certificate sources, rotation windows, and hot-reload si
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 TLS lifecycle stays on the workload reconcile path:
 
@@ -79,7 +79,7 @@ That keeps TLS behavior close to workload rendering while avoiding a second, dis
   ]}
 />
 
-## Rotation And Reload Path
+## Rotation and reload path
 
 <DiagramFrame
   title="TLS rotation loop"

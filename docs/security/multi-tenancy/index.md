@@ -10,14 +10,14 @@ description: Multi-tenancy security model for OpenBao Operator, describing tenan
   variant="landing"
   eyebrow="Security / Tenant Isolation"
   title="Tenant isolation model"
-  lede="This section covers the multi-tenant security model for OpenBao Operator, including namespace introduction, split controller identities, admission guardrails, and network isolation."
+  lede="Multi-tenant security model for OpenBao Operator, including namespace introduction, split controller identities, admission guardrails, and network isolation."
   actions={[
     {label: 'Open the isolation model', docId: 'security/multi-tenancy/tenant-isolation', variant: 'primary'},
     {label: 'Review tenant onboarding', docId: 'user-guide/openbaotenant/overview', variant: 'secondary'},
   ]}
 >
   <Checklist
-    title="Use this section when you need to"
+    title="Covers"
     items={[
       'understand what the multi-tenant operating model actually guarantees',
       'review the boundary between the provisioner and namespace-restricted controller',
@@ -67,17 +67,17 @@ description: Multi-tenancy security model for OpenBao Operator, describing tenan
   items={[
     {
       label: 'Read the isolation model',
-      description: 'Go deeper into the exact namespace, RBAC, and secret-boundary behavior.',
+      description: 'Namespace, RBAC, and secret-boundary behavior.',
       docId: 'security/multi-tenancy/tenant-isolation',
     },
     {
       label: 'Open RBAC architecture',
-      description: 'See how the split-controller model enforces the tenant boundary at the identity layer.',
+      description: 'How the split-controller model enforces the tenant boundary at the identity layer.',
       docId: 'security/infrastructure/rbac',
     },
     {
       label: 'Open tenancy and governance',
-      description: 'Switch to the user-guide path when you need the actual onboarding workflow instead of the security model.',
+      description: 'User-guide onboarding workflow and governance path.',
       docId: 'user-guide/openbaotenant/overview',
     },
   ]}

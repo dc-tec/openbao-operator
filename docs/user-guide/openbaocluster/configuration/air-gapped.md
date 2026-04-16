@@ -145,7 +145,7 @@ spec:
 <DecisionTable
   kind="reference"
   title="Disconnected-environment checks"
-  columns={["Check", "What good looks like", "Why it matters"]}
+  columns={["Check", "Expected state", "Why it matters"]}
   rows={[
     {
       cells: [
@@ -174,7 +174,7 @@ spec:
 
 <Callout type="tip" title="Keep image verification and registry strategy separate in your head">
 
-This page explains where images come from and how they are pulled. Signature verification, digest pinning, and trust roots are handled in the supply-chain security model, not by the mirror configuration alone.
+Use this guide to understand where images come from and how they are pulled. Signature verification, digest pinning, and trust roots are handled in the supply-chain security model, not by the mirror configuration alone.
 
 </Callout>
 

@@ -149,7 +149,7 @@ When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins
     {
       cells: [
         "GatewayClass exists and is accepted",
-        "A route is only useful if the controller owning the GatewayClass is real and healthy.",
+        "A route works only when the controller owning the GatewayClass is present and healthy.",
         "The selected `GatewayClass` exists and reports acceptance.",
       ],
     },

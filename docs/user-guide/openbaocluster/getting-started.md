@@ -9,8 +9,8 @@ journeyStep: 4
 ---
 
 <PageHeader
-  title="Create the first cluster you can keep operating."
-  lede="By the time you reach this step, the operator is installed and the target namespace is already onboarded when you are in the default multi-tenant mode. Start with the closest safe baseline, verify the cluster becomes healthy, and then move directly into the next operating concern."
+  title="Create the first cluster"
+  lede="Start with the closest safe baseline, verify that the cluster becomes healthy, and then move directly into the next operating concern. In the default multi-tenant mode, the target namespace is already onboarded before this step."
 />
 
 <Checklist
@@ -26,7 +26,7 @@ journeyStep: 4
 
 <Callout type="note" title="Choose the namespace handoff first">
 
-- In the default multi-tenant mode, create the target namespace and finish [OpenBaoTenant onboarding](../openbaotenant/onboarding.md) before you apply `OpenBaoCluster`.
+- In the default multi-tenant mode, create the target namespace, finish [OpenBaoTenant onboarding](../openbaotenant/onboarding.md), then apply `OpenBaoCluster`.
 - In single-tenant mode, skip `OpenBaoTenant` and create the cluster only in the controller's watched namespace.
 
 </Callout>
@@ -37,7 +37,7 @@ journeyStep: 4
   items={[
     {
       label: 'Choose a deployment model',
-      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      description: 'Choose tenancy, security posture, install method, and the main exceptions for the environment.',
       docId: 'user-guide/operator/deployment-decision-guide',
     },
     {
@@ -47,7 +47,7 @@ journeyStep: 4
     },
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant before you create a cluster.',
+      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant, then create a cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
     {
@@ -71,7 +71,7 @@ journeyStep: 4
       cells: [
         'Local evaluation',
         'Development profile with operator-managed TLS and minimal storage choices.',
-        'Treat it as disposable. Do not carry this profile into production.',
+        'Use this for disposable evaluation clusters rather than a production baseline.',
         'Security profiles',
       ],
       emphasis: 'recommended',
@@ -221,7 +221,7 @@ If you are going straight to production, prefer a tested architecture or recipe 
   title="Watch the cluster pods stabilize"
   code={`kubectl get pods -l openbao.org/cluster=<name> -n <namespace> -w`}
 >
-  A healthy first cluster should converge without repeated crash loops or long-lived pending state.
+  A healthy first cluster converges without repeated crash loops or long-lived pending state.
 </CommandBlock>
 
 <Callout type="note" title="What to look for next">

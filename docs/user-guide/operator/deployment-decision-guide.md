@@ -10,7 +10,7 @@ journeyStep: 1
 
 <PageHeader
   title="Choose the deployment path"
-  lede="This page covers the tenancy model, security posture, bootstrap flow, and install path for a new deployment. The default path is multi-tenant, Hardened, self-init, and the standard install flow."
+  lede="Choose the tenancy model, security posture, bootstrap flow, and install path for a new deployment. The default path is multi-tenant, Hardened, self-init, and the standard install flow."
 />
 
 <Checklist
@@ -43,7 +43,7 @@ journeyStep: 1
     },
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, use OpenBaoTenant before you create the first cluster.',
+      description: 'In the default multi-tenant path, use OpenBaoTenant, then create the first cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
     {
@@ -118,7 +118,7 @@ journeyStep: 1
 <Callout type="warning" title="Operator auth is not human auth">
 
 `spec.selfInit.oidc.enabled: true` bootstraps operator authentication only.
-Decide which human login path will be created as part of `spec.selfInit.requests` during bootstrap before you finalize the cluster design.
+Decide which human login path will be created as part of `spec.selfInit.requests` during bootstrap, then finalize the cluster design.
 
 </Callout>
 
@@ -142,7 +142,7 @@ Decide which human login path will be created as part of `spec.selfInit.requests
     {
       eyebrow: 'C',
       title: 'Validated deployments',
-      description: 'Use a tested architecture or recipe when you want a known-good starting point instead of building a path from scratch.',
+      description: 'Use a tested architecture or recipe when you want a validated starting point instead of building the path from scratch.',
       docId: 'user-guide/validated-deployments/index',
       actionLabel: 'Open',
     },
@@ -150,7 +150,7 @@ Decide which human login path will be created as part of `spec.selfInit.requests
 />
 
 <Checklist
-  title="Check these decisions before you continue"
+  title="Check these decisions"
   items={[
     'Am I running multi-tenant or single-tenant mode?',
     'Is this environment Hardened or Development?',
@@ -166,12 +166,12 @@ Decide which human login path will be created as part of `spec.selfInit.requests
   items={[
     {
       label: 'Install the operator',
-      description: 'Use the supported install flow and verify the rendered controller identity before you continue.',
+      description: 'Use the supported install flow and verify the rendered controller identity.',
       docId: 'user-guide/operator/installation',
     },
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant before you create the first cluster.',
+      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant, then create the first cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
   ]}

@@ -77,7 +77,7 @@ description: Backup and restore lifecycle for live clusters, including snapshot 
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Durability work is shared across two explicit operation surfaces:
 

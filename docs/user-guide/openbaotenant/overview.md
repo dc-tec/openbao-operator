@@ -9,13 +9,13 @@ journey: get-started
 
 <PageHeader
   title="OpenBaoTenant namespace introduction"
-  lede="`OpenBaoTenant` introduces namespaces in the default multi-tenant model. This page covers the RBAC, guardrails, and control-plane behavior that follow from that onboarding step."
+  lede="`OpenBaoTenant` introduces namespaces in the default multi-tenant model. Use this page for the RBAC, guardrails, and control-plane behavior that follow from that onboarding step."
 />
 
 
 
 <DiagramFrame
-  title="OpenBaoTenant is the namespace introduction point"
+  title="OpenBaoTenant as the namespace introduction point"
   caption="The Provisioner reacts to OpenBaoTenant, introduces the namespace boundary, and only then can the rest of the operator safely manage cluster resources there."
   code={`graph LR
     Tenant["Target namespace owner or platform admin"] --> Request["OpenBaoTenant"]

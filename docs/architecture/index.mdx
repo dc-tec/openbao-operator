@@ -11,7 +11,7 @@ description: Internal design, controller boundaries, lifecycle flows, invariants
   variant="landing"
   eyebrow="Architecture"
   title="Operator architecture"
-  lede="This section covers controller boundaries, lifecycle coordination, invariants, and implementation tradeoffs. Use it when you need to understand behavior, review design changes, or connect implementation back to status and security contracts."
+  lede="Controller boundaries, lifecycle coordination, invariants, and implementation tradeoffs behind OpenBao Operator."
   actions={[
     {label: 'Read the invariants', docId: 'architecture/operator-invariants', variant: 'primary'},
     {label: 'Open component design', docId: 'architecture/components', variant: 'secondary'},
@@ -40,13 +40,13 @@ description: Internal design, controller boundaries, lifecycle flows, invariants
     {
       eyebrow: '02',
       title: 'Component design',
-      description: 'See how the split-controller control plane, app layer, and manager boundaries work together.',
+      description: 'Split-controller control plane, app layer, and manager boundaries.',
       docId: 'architecture/components',
     },
     {
       eyebrow: '03',
       title: 'Operation lifecycle coordination',
-      description: 'Understand the shared lock, retry, and phase-transition primitives behind backup, restore, and upgrade flows.',
+      description: 'Shared lock, retry, and phase-transition primitives behind backup, restore, and upgrade flows.',
       docId: 'architecture/operation-lifecycle',
     },
     {
@@ -63,17 +63,17 @@ description: Internal design, controller boundaries, lifecycle flows, invariants
   items={[
     {
       label: 'Open security',
-      description: 'Architecture and security are tightly coupled through RBAC, admission, identity, and workload controls.',
+      description: 'Security contracts for RBAC, admission, identity, and workload controls.',
       docId: 'security/index',
     },
     {
       label: 'Open reference',
-      description: 'Use exact status and event semantics when you need to connect architecture back to observable behavior.',
+      description: 'Status conditions, events, and observable contracts.',
       docId: 'reference/status-and-events',
     },
     {
       label: 'Open Operate',
-      description: 'Compare the internal lifecycle design with the user-facing operating guides for upgrades, backups, and recovery.',
+      description: 'User-facing operating guides for upgrades, backups, and recovery.',
       docId: 'user-guide/openbaocluster/operations/index',
     },
   ]}

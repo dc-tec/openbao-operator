@@ -1,6 +1,6 @@
 ---
 title: Backup Operations
-description: Configure backup jobs, object-storage auth, retention, and verification before you depend on snapshot-based recovery.
+description: Configure backup jobs, object-storage auth, retention, and verification for snapshot-based recovery.
 slug: /operate/backups
 hide_title: true
 pageType: task
@@ -697,7 +697,7 @@ Confirm backup status before you start the upgrade rather than assuming the pre-
     },
     {
       label: 'Plan upgrades',
-      description: 'Backups should be validated before you depend on pre-upgrade snapshots and cutover safety.',
+      description: 'Validate backups as part of pre-upgrade snapshots and cutover safety.',
       docId: 'user-guide/openbaocluster/operations/upgrades',
     },
     {

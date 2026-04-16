@@ -22,14 +22,14 @@ description: Validated local baseline for a hardened OpenBao deployment on k3d w
   />
 
 
-<Callout type="note" title="Classification">
+<Callout type="note" title="Baseline scope">
 
 This local reference architecture uses k3d to rehearse hardened deployments that keep TLS passthrough in OpenBao and use a private ACME trust chain. It is a local validation lane rather than a production target.
 
 </Callout>
 
 <DecisionTable
-  title="Lane summary"
+  title="Baseline summary"
   columns={["Surface", "Choice", "Why it matters"]}
   rows={[
     {
@@ -135,7 +135,7 @@ This local reference architecture uses k3d to rehearse hardened deployments that
 
 <Checklist
   tone="warning"
-  title="Stay on the validated path"
+  title="Baseline requirements"
   items={[
     "keep `spec.profile: Hardened` and keep the trust-services endpoint reachable for both Transit and ACME",
     "keep the ACME hostname resolving back to the passthrough edge from the validating environment",
@@ -158,7 +158,7 @@ This lane does not prove public ACME behavior or replace a cloud ingress baselin
 </Callout>
 
 <NextActions
-  title="Use the lane"
+  title="Next steps"
   items={[
     {
       label: "Deployment recipe",

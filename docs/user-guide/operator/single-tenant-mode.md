@@ -9,7 +9,7 @@ journey: get-started
 
 <PageHeader
   title="Single-tenant deployment model"
-  lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. It is a good fit for dedicated team environments that do not need the default tenant-onboarding path."
+  lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. Use it for dedicated team environments that do not need the default tenant-onboarding path."
 />
 
 
@@ -178,7 +178,7 @@ That is simpler for a dedicated team, but it also means the operator is no longe
   title="Check that only the controller is running"
   code={`kubectl get pods -n <operator-namespace>`}
 >
-  In single-tenant mode you should see the controller deployment running, but not a Provisioner pod.
+  In single-tenant mode, expect the controller deployment to be running and no Provisioner pod to exist.
 </CommandBlock>
 
 <CommandBlock
@@ -188,7 +188,7 @@ That is simpler for a dedicated team, but it also means the operator is no longe
   code={`kubectl get deploy -n <operator-namespace> openbao-operator-controller \\
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="WATCH_NAMESPACE")].value}'`}
 >
-  This value should match the target namespace you plan to use for the first `OpenBaoCluster`.
+  Confirm this value matches the target namespace you plan to use for the first `OpenBaoCluster`.
 </CommandBlock>
 
 ## Migration guidance

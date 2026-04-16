@@ -9,7 +9,7 @@ journey: security
 
 <PageHeader
   title="Shared-operator boundaries"
-  lede="This page covers namespace introduction, split controllers, RBAC boundaries, and tenant guardrails in the default multi-tenant model."
+  lede="Review namespace introduction, split controllers, RBAC boundaries, and tenant guardrails in the default multi-tenant model."
 />
 
 
@@ -93,7 +93,7 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) for dedicated enviro
         '`openbaocluster-admin-role`',
         'Cluster',
         'Platform-level administration and exceptional cluster ownership.',
-        'It should not be the normal tenant user path.',
+        'Reserve this role for platform-level administration and exceptional cluster ownership.',
       ],
       emphasis: 'recommended',
     },
@@ -148,7 +148,7 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) for dedicated enviro
     {
       cells: [
         'Backup storage isolation',
-        'Each tenant should use object-storage credentials or prefixes that do not overlap with other tenants.',
+        'Use object-storage credentials or prefixes that do not overlap with other tenants.',
         'Make sure backup credentials cannot list or read other tenants\' snapshot paths.',
         'Backup operations',
       ],
@@ -175,7 +175,7 @@ kubectl get rolebinding,resourcequota,limitrange,networkpolicy -n <target-namesp
   code={`kubectl auth can-i create openbaoclusters.openbao.org -n <target-namespace> --as <tenant-user>
 kubectl auth can-i get secrets -n <target-namespace> --as <tenant-user>`}
 >
-  The normal tenant editor path should allow cluster lifecycle work without granting broad Secret reads by default.
+  Expect the normal tenant editor path to allow cluster lifecycle work without granting broad Secret reads by default.
 </CommandBlock>
 
 <Callout type="note" title="Supplemental policy engines are optional">

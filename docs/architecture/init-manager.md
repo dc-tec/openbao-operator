@@ -50,7 +50,7 @@ description: Bootstrap a new cluster safely, handle self-init or operator init f
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Initialization stays on the workload-side controller path while the cluster is not yet ready for normal steady-state reconciliation:
 
@@ -60,7 +60,7 @@ Initialization stays on the workload-side controller path while the cluster is n
 
 That separation prevents first-boot logic from leaking into every steady-state reconcile.
 
-## Bootstrap Flow
+## Bootstrap flow
 
 <DiagramFrame
   title="Initialize, then scale"
@@ -85,7 +85,7 @@ That separation prevents first-boot logic from leaking into every steady-state r
   `}
 />
 
-## Initialization Phases
+## Initialization phases
 
 <Tabs groupId="init-manager-phases">
   <TabItem value="bootstrap" label="Bootstrap one node">
@@ -126,7 +126,7 @@ That separation prevents first-boot logic from leaking into every steady-state r
   </TabItem>
 </Tabs>
 
-## Autopilot Defaults
+## Autopilot defaults
 
 <DecisionTable
   kind="reference"

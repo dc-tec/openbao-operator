@@ -35,7 +35,7 @@ Use the main guides for the product-wide source of truth on <SiteLink docId="use
 </Callout>
 
 <DecisionTable
-  title="What this lane assumes"
+  title="Baseline assumptions"
   columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
   rows={[
     {

@@ -8,7 +8,7 @@ description: Render OpenBaoCluster into converged configuration, StatefulSet res
 
 <PageHeader
   title="Infrastructure manager workflow"
-  lede="The infrastructure manager is the workload path that turns `OpenBaoCluster` into running Kubernetes resources. It owns rendered configuration, StatefulSet-facing infrastructure, and the rollout triggers that keep configuration drift and pod lifecycle changes in sync."
+  lede="The infrastructure manager renders `OpenBaoCluster` into running Kubernetes resources. It owns rendered configuration, StatefulSet-facing infrastructure, and the rollout triggers that keep configuration drift and pod lifecycle changes aligned."
 />
 
 
@@ -50,7 +50,7 @@ description: Render OpenBaoCluster into converged configuration, StatefulSet res
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Infrastructure reconciliation belongs to the workload orchestration path:
 
@@ -81,7 +81,7 @@ That split keeps controller code as reconcile plumbing while the infra manager o
   ]}
 />
 
-## Render-Then-Apply Flow
+## Render-then-apply flow
 
 <DiagramFrame
   title="Render then apply"
@@ -108,7 +108,7 @@ That split keeps controller code as reconcile plumbing while the infra manager o
     class Config,Resources,Annotate,Apply,Rollout write;`}
 />
 
-## Configuration And Seal Rendering
+## Configuration and seal rendering
 
 The manager does not apply a static ConfigMap. It renders the config from the cluster spec and the selected integration modes.
 
@@ -144,13 +144,13 @@ When `spec.unseal.type` points at a cloud KMS integration, the manager stops gen
   </TabItem>
 </Tabs>
 
-<Callout type="note" title="TLS mode changes workload rendering">
+<Callout type="note" title="TLS mode affects rendering">
 
-TLS mode affects both rendered config and mounted resource expectations. `OperatorManaged`, `External`, and `ACME` are not only certificate sources, they change what the workload pod expects on disk and what the hot-reload path watches.
+TLS mode affects both rendered config and mounted resource expectations. `OperatorManaged`, `External`, and `ACME` change what the workload pod expects on disk and what the hot-reload path watches.
 
 </Callout>
 
-## Safety Boundaries
+## Safety boundaries
 
 <DecisionTable
   kind="reference"
@@ -183,7 +183,7 @@ TLS mode affects both rendered config and mounted resource expectations. `Operat
     },
     {
       label: 'Init manager',
-      description: 'See how the workload path hands off from first-boot infrastructure into cluster initialization.',
+      description: 'How the workload path hands off from first-boot infrastructure into cluster initialization.',
       docId: 'architecture/init-manager',
     },
     {

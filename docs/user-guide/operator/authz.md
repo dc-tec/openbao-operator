@@ -9,7 +9,7 @@ journey: get-started
 
 <PageHeader
   title="Operator authorization surfaces"
-  lede="This page covers the policy surfaces for controller, backup, restore, and upgrade work. Each path should authenticate separately and receive only the capabilities it needs."
+  lede="Use separate policy surfaces for controller, backup, restore, and upgrade work. Each path authenticates separately and receives only the capabilities it needs."
 />
 
 
@@ -61,7 +61,7 @@ journey: get-started
         'Controller maintenance',
         'The main controller Deployment',
         '`sys/health`, `sys/step-down`, and autopilot configuration reads or updates',
-        'This path should stay available for routine reconciliation and maintenance without inheriting destructive restore powers.',
+        'Keep this path available for routine reconciliation and maintenance without adding destructive restore powers.',
       ],
       emphasis: 'recommended',
     },
@@ -70,7 +70,7 @@ journey: get-started
         'Backup',
         'The generated backup Job',
         '`sys/storage/raft/snapshot` read access',
-        'Snapshot reads are narrower than normal controller maintenance and should be easy to reason about independently.',
+        'Snapshot reads are narrower than controller maintenance and remain easier to reason about independently.',
       ],
     },
     {
@@ -78,7 +78,7 @@ journey: get-started
         'Restore',
         'The generated restore Job',
         '`sys/storage/raft/snapshot-force` update access',
-        'Restore can replace the full cluster state and should only exist on the specific workload that performs restore.',
+        'Restore can replace the full cluster state and belongs only on the workload that performs restore.',
       ],
       emphasis: 'caution',
     },
@@ -87,7 +87,7 @@ journey: get-started
         'Upgrade',
         'The generated upgrade Job',
         'Step-down, autopilot state, snapshot read, and optional peer-management operations for blue-green flows',
-        'Upgrade paths often need time-bounded orchestration permissions that should not widen steady-state controller access.',
+        'Upgrade paths often need time-bounded orchestration permissions without widening steady-state controller access.',
       ],
     },
   ]}
@@ -122,7 +122,7 @@ path "sys/storage/raft/autopilot/configuration" {
   capabilities = ["read", "update"]
 }`}
 >
-  This is the steady-state controller scope. It should not expand to cover backup, restore, or blue-green peer management unless you are intentionally breaking the model.
+  This is the steady-state controller scope. Keep backup, restore, and blue-green peer management in separate roles unless you are intentionally changing the model.
 </CommandBlock>
 
 </TabItem>

@@ -77,7 +77,7 @@ description: Cluster creation flow from OpenBaoCluster creation through TLS boot
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Day 1 creation crosses three workload-side services in sequence:
 

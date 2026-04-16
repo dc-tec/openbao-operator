@@ -7,10 +7,10 @@ journey: reference
 
 <PageHeader
   title="Release channels and cadence"
-  lede="This page defines the public cadence, release channels, and gating rules behind how OpenBao Operator ships."
+  lede="Public cadence, release channels, and gating rules for OpenBao Operator."
 />
 
-<Callout type="important" title="Cadence is best-effort">
+<Callout type="important" title="Best-effort cadence">
 
 The project aims for one stable release every 4 weeks. If the stable release gates are not green, the release window is skipped rather than forced.
 
@@ -109,7 +109,7 @@ A stable release should meet all of the following:
 - no known upgrade, backup, or restore regressions
 - no open release-blocker issues
 
-<Callout type="note" title="Skip rather than force">
+<Callout type="note" title="Release window skips">
 
 If a monthly release window is not ready, skip it and say so. Predictability matters more than pushing a release that has not met the public gates.
 
@@ -130,17 +130,17 @@ Until the project reaches beta, the support window stays on the latest stable li
   items={[
     {
       label: 'Support policy',
-      description: 'Open the maintenance contract when the question is what receives best-effort support after a release ships.',
+      description: 'Maintenance contract for releases after they ship.',
       docId: 'reference/support-policy',
     },
     {
       label: 'Compatibility matrix',
-      description: 'Use the validation matrix when the next question is which Kubernetes or OpenBao versions are actually exercised.',
+      description: 'Kubernetes and OpenBao versions exercised by CI.',
       docId: 'reference/compatibility',
     },
     {
       label: 'Release management',
-      description: 'Move to the maintainer workflow when the next step is executing a release rather than understanding the public policy.',
+      description: 'Maintainer workflow for executing a release.',
       to: '/contribute/release-management',
     },
   ]}

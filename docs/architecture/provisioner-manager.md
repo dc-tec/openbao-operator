@@ -50,7 +50,7 @@ description: Provision tenant namespaces with scoped RBAC, Secret allowlists, Po
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Provisioning follows a dedicated tenant-controller path:
 
@@ -81,7 +81,7 @@ That keeps tenant onboarding separate from `OpenBaoCluster` steady-state reconci
   ]}
 />
 
-## Provisioning Flow
+## Provisioning flow
 
 <DiagramFrame
   title="Tenant onboarding flow"

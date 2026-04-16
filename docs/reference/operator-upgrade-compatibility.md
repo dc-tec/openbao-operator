@@ -7,7 +7,7 @@ journey: reference
 
 <PageHeader
   title="Operator upgrade compatibility"
-  lede="This page defines supported operator upgrade paths, required CRD sequencing, and the project stance on downgrade and rollback for the operator itself."
+  lede="Supported operator upgrade paths, required CRD sequencing, and the project stance on downgrade and rollback."
 />
 
 <DecisionTable
@@ -27,7 +27,7 @@ journey: reference
       emphasis: 'caution',
     },
     {
-      cells: ['Operator downgrades as routine rollback', 'Not supported', 'Treat downgrade pressure as a recovery decision, not as a normal release mechanism.'],
+      cells: ['Operator downgrades as routine rollback', 'Not supported', 'Plan downgrades only as recovery workflows with staging validation.'],
       emphasis: 'caution',
     },
   ]}
@@ -69,7 +69,7 @@ After upgrade:
 If an upgrade introduces issues:
 
 1. prefer a forward fix on a newer stable release
-2. if rollback is required, treat it as a recovery operation with staging validation first
+2. if rollback is required, validate it as a recovery workflow in staging first
 3. use backup and restore runbooks for data-path recovery scenarios
 
 <NextActions
@@ -82,12 +82,12 @@ If an upgrade introduces issues:
     },
     {
       label: 'Restore from backup',
-      description: 'Move into restore procedures when rollback is no longer enough to recover state safely.',
+      description: 'Restore procedures for cases where rollback is no longer sufficient.',
       docId: 'user-guide/openbaorestore/restore',
     },
     {
       label: 'Status conditions and events',
-      description: 'Use the status and events reference to interpret readiness and failure signals before and after the upgrade.',
+      description: 'Readiness and failure signals before and after an upgrade.',
       docId: 'reference/status-and-events',
     },
   ]}

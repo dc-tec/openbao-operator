@@ -7,7 +7,7 @@ journey: contribute
 
 <PageHeader
   title="Testing strategy by change scope"
-  lede="This page maps change scope to validation depth across unit, integration, E2E, fuzzing, and exploratory coverage."
+  lede="Validation depth by change scope across unit, integration, E2E, fuzzing, and exploratory coverage."
 />
 
 <DiagramFrame
@@ -84,7 +84,7 @@ Use the controller-runtime fake client as a fast contract tool, not as a substit
 make doctor
 make ci-core`}
 >
-  This is the standard local validation baseline before review or handoff.
+  Standard local validation baseline before review or handoff.
 </CommandBlock>
 
 <CommandBlock

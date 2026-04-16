@@ -168,7 +168,7 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
   title="Inspect the OpenBaoTenant status"
   code={`kubectl get openbaotenant <name> -n <namespace> -o yaml`}
 >
-  Look for `status.provisioned: true` and a healthy `Provisioned` condition before you apply the first cluster manifest.
+  Confirm `status.provisioned: true` and a healthy `Provisioned` condition, then apply the first cluster manifest.
 </CommandBlock>
 
 <DecisionTable

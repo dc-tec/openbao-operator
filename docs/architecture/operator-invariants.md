@@ -7,8 +7,8 @@ journey: architecture
 ---
 
 <PageHeader
-  title="Start design changes from the contracts the operator is trying to preserve."
-  lede="These invariants are the cross-cutting rules behind the rest of the architecture. They explain why some designs are intentionally split, why certain shortcuts are blocked, and which safety properties should survive refactors, new features, or operational changes."
+  title="Operator invariants"
+  lede="Cross-cutting contracts behind the rest of the architecture. They explain why some designs are split, which shortcuts are blocked, and which safety properties must survive refactors, new features, and operational changes."
 />
 
 
@@ -35,14 +35,14 @@ journey: architecture
       cells: [
         'Production posture',
         'Hardened production means self-init, trusted TLS, and a non-static unseal path.',
-        'Production safety is a contract, not just a suggested configuration style.',
+        'Production safety is part of the supported operating contract.',
       ],
     },
     {
       cells: [
         'Integration assumptions',
         'External dependencies surface as explicit status and readiness conditions.',
-        'This turns environment assumptions into visible contracts instead of late runtime failures.',
+        'This makes environment assumptions visible before they become runtime failures.',
       ],
     },
     {
@@ -212,9 +212,9 @@ Related reading: <SiteLink docId="reference/status-and-events">Status and Events
 
 Related reading: <SiteLink docId="architecture/operation-lifecycle">Operation Lifecycle</SiteLink>, <SiteLink docId="user-guide/openbaorestore/restore">Restore from Backup</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/recovery/index">Recovery and Restore</SiteLink>.
 
-<Callout type="tip" title="Treat invariant changes as contract changes">
+<Callout type="tip" title="Invariant changes affect the contract">
 
-If a change weakens one of these invariants, update the related architecture, security, and user-guide pages in the same change set. This is not only an implementation detail; it changes the operating contract of the product.
+If a change weakens one of these invariants, update the related architecture, security, and user-guide pages in the same change set. It changes the product operating contract.
 
 </Callout>
 
@@ -223,17 +223,17 @@ If a change weakens one of these invariants, update the related architecture, se
   items={[
     {
       label: 'Component design',
-      description: 'See where controllers, app facades, and managers split responsibilities to preserve these invariants.',
+      description: 'Where controllers, app facades, and managers split responsibilities to preserve these invariants.',
       docId: 'architecture/components',
     },
     {
       label: 'Operation lifecycle',
-      description: 'Trace how shared lifecycle coordination keeps upgrades, backups, and restores from colliding.',
+      description: 'Shared lifecycle coordination for upgrades, backups, and restores.',
       docId: 'architecture/operation-lifecycle',
     },
     {
       label: 'Security overview',
-      description: 'Move into the user-facing security model that these invariants are designed to protect.',
+      description: 'User-facing security model behind these invariants.',
       docId: 'security/index',
     },
   ]}

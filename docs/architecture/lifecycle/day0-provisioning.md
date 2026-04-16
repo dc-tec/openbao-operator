@@ -77,7 +77,7 @@ description: Tenant provisioning flow from OpenBaoTenant creation through namesp
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Day 0 provisioning uses the dedicated tenant-controller path:
 

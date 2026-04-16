@@ -77,7 +77,7 @@ description: Operational lifecycle for upgrades, maintenance controls, and long-
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Day 2 work is intentionally separated from the high-churn workload loop:
 

@@ -9,7 +9,7 @@ description: Catalog of validated procedures that still need lane-specific treat
   variant="landing"
   eyebrow="Validated Deployments / Procedure Catalog"
   title="Validated runbooks"
-  lede="This catalog contains the procedures that still depend on a specific validated baseline. Generic backup and restore guidance lives in the main `Operate` and `Recovery & Restore` sections."
+  lede="Runbooks that still depend on a specific validated baseline are listed here. Generic backup and restore guidance lives in the main `Operate` and `Recovery & Restore` sections."
   actions={[
     {label: "Open DR restore runbook", docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs", variant: "primary"},
     {label: "Open generic restore guide", docId: "user-guide/openbaorestore/restore", variant: "secondary"},
@@ -22,7 +22,7 @@ description: Catalog of validated procedures that still need lane-specific treat
     {
       eyebrow: "01",
       title: "Cross-cluster DR restore",
-      description: "Lane-specific restore procedure for the validated k3d DR environment with shared Transit and shared snapshot storage.",
+      description: "Restore procedure for the validated k3d DR environment with shared Transit and shared snapshot storage.",
       docId: "user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs",
     },
   ]}

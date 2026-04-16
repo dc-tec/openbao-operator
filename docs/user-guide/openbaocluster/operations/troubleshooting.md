@@ -263,7 +263,7 @@ Normal troubleshooting stops being the right tool when the incident is no longer
     },
     {
       label: 'Review backup operations',
-      description: 'Confirm the snapshot path is healthy before you rely on restore as part of the incident response.',
+      description: 'Confirm snapshot-path health before restore becomes part of the incident response.',
       docId: 'user-guide/openbaocluster/operations/backups',
     },
     {

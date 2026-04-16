@@ -10,17 +10,17 @@ description: Validated OpenBao Operator baselines grouped by lane, with paired r
   variant="landing"
   eyebrow="Validated Deployments"
   title="Validated deployment baselines"
-  lede="This section groups validated deployment baselines by environment, with a reference architecture and matching recipe for each one. Use it when you want to start from a project-tested topology."
+  lede="Validated deployment baselines are grouped by environment, with a reference architecture and matching recipe for each baseline."
   actions={[
     {label: "Open cloud baselines", docId: "user-guide/validated-deployments/architectures/cloud/index", variant: "primary"},
     {label: "Open local baselines", docId: "user-guide/validated-deployments/architectures/local/index", variant: "secondary"},
   ]}
 >
   <Checklist
-    title="Use validated deployments when you want to"
+    title="Use validated deployments to"
     items={[
       "start from a topology that the project exercised end to end",
-      "compare cloud and local lanes without stitching together architecture and recipe pages yourself",
+      "compare cloud and local baselines with architecture and recipe pages kept together",
       "pick a lane with clear invariants, assumptions, and validation scope",
       "adapt a known baseline as the starting point for environment-specific changes",
     ]}
@@ -33,19 +33,19 @@ description: Validated OpenBao Operator baselines grouped by lane, with paired r
     {
       eyebrow: "01",
       title: "Cloud baselines",
-      description: "Start here when you want the Amazon EKS development or hardened lanes and need the architecture and recipe kept together.",
+      description: "Amazon EKS development and hardened baselines with paired architecture and recipe pages.",
       docId: "user-guide/validated-deployments/architectures/cloud/index",
     },
     {
       eyebrow: "02",
       title: "Local baselines",
-      description: "Use the k3d lanes for workstation validation, hardened rehearsal, and cross-cluster DR practice.",
+      description: "k3d baselines for workstation validation, hardened rehearsal, and cross-cluster DR.",
       docId: "user-guide/validated-deployments/architectures/local/index",
     },
     {
       eyebrow: "03",
       title: "Cross-cluster DR lane",
-      description: "Go directly to the validated DR architecture for restore rehearsal, shared Transit, and snapshot cutover validation.",
+      description: "Validated DR architecture for restore rehearsal, shared Transit, and snapshot cutover verification.",
       docId: "user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs",
     },
   ]}
@@ -53,7 +53,7 @@ description: Validated OpenBao Operator baselines grouped by lane, with paired r
 
 <Callout type="note" title="Scope of this section">
 
-The main operator guides remain the source of truth for install, backup, restore, upgrade, and recovery behavior. This section covers specific validated environment shapes and links to the exact lane that was exercised.
+Main operator guides remain the source of truth for install, backup, restore, upgrade, and recovery behavior. These pages document the validated environment shapes used for specific baselines.
 
 </Callout>
 
@@ -62,17 +62,17 @@ The main operator guides remain the source of truth for install, backup, restore
   items={[
     {
       label: "Open configure",
-      description: "Adapt the validated lane to your actual storage, edge, and observability choices without losing the cluster-shaping model.",
+      description: "Adapt storage, edge, and observability choices for your environment.",
       docId: "user-guide/openbaocluster/configuration/index",
     },
     {
       label: "Open Operate",
-      description: "Use the main operating guides for backups, upgrades, troubleshooting, and recovery once the lane is running.",
+      description: "Use the main operating guides for backups, upgrades, troubleshooting, and recovery after the baseline is running.",
       docId: "user-guide/openbaocluster/operations/index",
     },
     {
       label: "Open Get Started",
-      description: "Return to the general operator path for the product-wide install and onboarding journey.",
+      description: "Return to the general operator path for install and onboarding guidance.",
       docId: "user-guide/index",
     },
   ]}

@@ -9,7 +9,7 @@ description: Cloud deployment recipes for the validated Amazon EKS lanes.
   variant="landing"
   eyebrow="Validated Deployments / Cloud Recipe Catalog"
   title="Validated cloud recipes"
-  lede="This catalog contains the deployment recipes for the validated Amazon EKS baselines. Keep the matching reference architecture nearby so the recipe stays tied to the tested topology and assumptions."
+  lede="Deployment recipes for the validated Amazon EKS baselines are listed here. Keep the matching reference architecture nearby during deployment."
   actions={[
     {label: "Open EKS Development recipe", docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
     {label: "Open EKS Hardened recipe", docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme", variant: "secondary"},

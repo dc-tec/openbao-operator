@@ -9,7 +9,7 @@ description: Catalog of validated deployment recipes, grouped by cloud and local
   variant="landing"
   eyebrow="Validated Deployments / Recipe Catalog"
   title="Validated recipe catalog"
-  lede="This catalog groups the deployment recipes for each validated baseline. Use it when you already know the baseline or want to keep the matching reference architecture nearby while you deploy."
+  lede="Deployment recipes are grouped by validated baseline. Keep the matching reference architecture nearby while you deploy."
   actions={[
     {label: "Open cloud recipe catalog", docId: "user-guide/validated-deployments/recipes/cloud/index", variant: "primary"},
     {label: "Open local recipe catalog", docId: "user-guide/validated-deployments/recipes/local/index", variant: "secondary"},

@@ -29,7 +29,7 @@ This bootstrap path matches the local DR lane that was proven end to end on Marc
 </Callout>
 
 <DecisionTable
-  title="What this lane assumes"
+  title="Baseline assumptions"
   columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
   rows={[
     {

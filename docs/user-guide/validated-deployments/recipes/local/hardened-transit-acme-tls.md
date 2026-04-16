@@ -35,7 +35,7 @@ Use <SiteLink docId="user-guide/openbaocluster/configuration/external-access">ex
 </Callout>
 
 <DecisionTable
-  title="What this lane assumes"
+  title="Baseline assumptions"
   columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
   rows={[
     {

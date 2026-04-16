@@ -11,7 +11,7 @@ description: Threat model, hardened profiles, RBAC, admission policy, network co
   variant="landing"
   eyebrow="Security"
   title="Security documentation"
-  lede="This section covers the operator trust model, production posture, platform controls, workload protections, and tenant isolation. Use it to review the security assumptions and controls behind an OpenBao Operator deployment."
+  lede="Operator trust model, production posture, platform controls, workload protections, and tenant isolation."
   actions={[
     {label: 'Read the security model', docId: 'security/fundamentals/index', variant: 'primary'},
     {label: 'Review platform controls', docId: 'security/infrastructure/index', variant: 'secondary'},
@@ -40,7 +40,7 @@ description: Threat model, hardened profiles, RBAC, admission policy, network co
     {
       eyebrow: '02',
       title: 'Platform controls',
-      description: 'RBAC architecture, admission policies, and network boundaries that protect the control plane first.',
+      description: 'RBAC architecture, admission policies, and network boundaries for the control plane.',
       docId: 'security/infrastructure/index',
     },
     {
@@ -63,12 +63,12 @@ description: Threat model, hardened profiles, RBAC, admission policy, network co
   items={[
     {
       label: 'Security profiles',
-      description: 'Map the security model back to the task page that configures `spec.profile` on a real cluster.',
+      description: 'Task page for configuring `spec.profile` on a cluster.',
       docId: 'user-guide/openbaocluster/configuration/security-profiles',
     },
     {
       label: 'Tenant onboarding',
-      description: 'Connect security guarantees back to the namespace introduction and governance path in the user guide.',
+      description: 'Namespace introduction and governance path in the user guide.',
       docId: 'user-guide/openbaotenant/overview',
     },
   ]}

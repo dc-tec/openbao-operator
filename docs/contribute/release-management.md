@@ -7,12 +7,12 @@ journey: contribute
 
 <PageHeader
   title="Release management workflow"
-  lede="OpenBao Operator uses a build-once, promote-everywhere release model. This page covers versioning, changelog state, release orchestration, signing, docs deployment, and release evidence."
+  lede="Build-once, promote-everywhere release workflow covering versioning, changelog state, release orchestration, signing, docs deployment, and release evidence."
 />
 
 <Callout type="note" title="Maintainer workflow">
 
-Use [Release Policy](pathname:///docs/next/reference/release-policy) for the public release cadence, channel rules, and stable release gates. Use this page for the operational workflow maintainers follow once a release is actually being executed.
+[Release Policy](pathname:///docs/next/reference/release-policy) covers the public release cadence, channel rules, and stable release gates. The steps below cover the maintainer workflow once a release is being executed.
 
 </Callout>
 
@@ -94,9 +94,9 @@ git commit --allow-empty -m $'chore: release 0.1.0-rc.6\n\nRelease-As: 0.1.0-rc.
   This flow creates an explicit prerelease target on `main` when the inferred Conventional Commit bump is not the intended version.
 </CommandBlock>
 
-<Callout type="note" title="`workflow_dispatch` `release_as` input">
+<Callout type="note" title="`workflow_dispatch` `release_as` path">
 
-`Release Please PR` still exposes a `workflow_dispatch` `release_as` input, and it can be useful when it produces the expected release PR. The `Release-As:` PR path remains the fallback for release lines where the dispatch path is not yet reliable.
+`Release Please PR` still exposes a `workflow_dispatch` `release_as` input, and it can produce the expected release PR. The `Release-As:` PR path remains the fallback for release lines where the dispatch path is not yet reliable.
 
 </Callout>
 

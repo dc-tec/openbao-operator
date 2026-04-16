@@ -9,7 +9,7 @@ journey: get-started
 
 <PageHeader
   title="Operator authentication paths"
-  lede="The operator authenticates to OpenBao with a projected Kubernetes ServiceAccount token by default. This page explains the default JWT path, the audience and role-binding requirements behind it, and the checks to run when you customize controller identity wiring."
+  lede="Default JWT authentication, the audience contract behind it, and the checks to run when you customize controller identity wiring."
 />
 
 
@@ -140,7 +140,7 @@ path "sys/storage/raft/autopilot/configuration" {
   capabilities = ["read", "update"]
 }`}
 >
-  Keep the controller policy focused on maintenance work. Backup, restore, and upgrade jobs should authenticate through their own roles instead of inheriting the controller scope.
+  Keep the controller policy focused on maintenance work. Backup, restore, and upgrade jobs authenticate through their own roles instead of inheriting the controller scope.
 </CommandBlock>
 
 <CommandBlock

@@ -16,7 +16,7 @@ description: Configure the unseal root of trust and the Secret or mounted-file c
 
 <Callout type="important" title="Hardened posture prefers external trust">
 
-For production-oriented clusters, use an external trust source such as cloud KMS, transit, KMIP, OCI KMS, or PKCS#11. Static unseal remains useful for development and controlled exceptions, but it keeps decryption material inside Kubernetes.
+For production-oriented clusters, use an external trust source such as cloud KMS, transit, KMIP, OCI KMS, or PKCS#11. Reserve static unseal for development and controlled exceptions because it keeps decryption material inside Kubernetes.
 
 </Callout>
 

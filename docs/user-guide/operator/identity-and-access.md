@@ -9,7 +9,7 @@ journey: get-started
 
 <PageHeader
   title="Operator identity surfaces"
-  lede="The controller, workload pods, and day 2 executor jobs use different identities. This page maps each Kubernetes ServiceAccount to the corresponding OpenBao auth and authorization surface."
+  lede="The controller, workload pods, and day 2 executor jobs use different identities. Use this page to map each Kubernetes ServiceAccount to the corresponding OpenBao auth and authorization surface."
 />
 
 

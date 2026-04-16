@@ -9,7 +9,7 @@ description: Local deployment recipes for the validated k3d lanes.
   variant="landing"
   eyebrow="Validated Deployments / Local Recipe Catalog"
   title="Validated local recipes"
-  lede="This catalog contains the deployment recipes for the validated k3d baselines. These procedures reproduce the project-tested local environments and should be read together with the matching baseline."
+  lede="Deployment recipes for the validated k3d baselines are listed here. Read them with the matching baseline."
   actions={[
     {label: "Open k3d Development recipe", docId: "user-guide/validated-deployments/recipes/local/development-self-init-userpass", variant: "primary"},
     {label: "Open k3d Cross-Cluster DR bootstrap", docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap", variant: "secondary"},

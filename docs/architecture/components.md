@@ -8,12 +8,12 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
 
 <PageHeader
   title="Split-controller control plane"
-  lede="OpenBao Operator divides the control plane into focused controllers, then delegates into app-layer orchestration and narrower domain managers so workload churn, long-running operations, and status writes stay separated."
+  lede="Focused controllers, app-layer orchestration, and narrow domain managers keep workload churn, long-running operations, and status writes separated."
 />
 
 
 
-## Controller Split
+## Controller split
 
 <DiagramFrame
   title="Controller split"
@@ -73,7 +73,7 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
 
 </Callout>
 
-## App Orchestration And Managers
+## App orchestration and managers
 
 <DiagramFrame
   title="App-layer orchestration"
@@ -140,22 +140,22 @@ Controller import surfaces are intentionally narrow and enforced by generated ar
   items={[
     {
       label: 'Infrastructure manager',
-      description: 'See how configuration rendering and StatefulSet ownership are coordinated.',
+      description: 'Configuration rendering and StatefulSet ownership.',
       docId: 'architecture/infra-manager',
     },
     {
       label: 'Upgrade manager',
-      description: 'Review how RollingUpdate and BlueGreen state transitions are modeled.',
+      description: 'RollingUpdate and BlueGreen state transitions.',
       docId: 'architecture/upgrade-manager',
     },
     {
       label: 'Restore manager',
-      description: 'Understand the destructive restore path and lock lifecycle behind OpenBaoRestore.',
+      description: 'Destructive restore path and lock lifecycle behind OpenBaoRestore.',
       docId: 'architecture/restore-manager',
     },
     {
       label: 'Lifecycle architecture',
-      description: 'Move from component boundaries into the day-by-day lifecycle flows that use them.',
+      description: 'Day-by-day lifecycle flows that use these components.',
       docId: 'architecture/lifecycle/index',
     },
   ]}

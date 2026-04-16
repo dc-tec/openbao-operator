@@ -11,18 +11,18 @@ description: Choose the right incident recovery or backup-driven restore path wh
   variant="landing"
   eyebrow="Operate / Recovery & Restore"
   title="Recovery and restore"
-  lede="This section covers incident recovery and backup-driven restore workflows. Use it when troubleshooting is no longer enough and the cluster needs focused recovery steps or an explicit `OpenBaoRestore` request."
+  lede="Use these guides for incident recovery and backup-driven restore workflows when troubleshooting is no longer enough and the cluster needs focused recovery steps or an explicit `OpenBaoRestore` request."
   actions={[
     {label: 'Run a restore', docId: 'user-guide/openbaorestore/restore', variant: 'primary'},
     {label: 'Enter safe mode', docId: 'user-guide/openbaocluster/recovery/safe-mode', variant: 'secondary'},
   ]}
 >
   <Checklist
-    title="Use this section when you need to"
+    title="Use recovery when you need to"
     items={[
       'decide whether the cluster still has a normal repair path',
       'move from incident diagnosis into a narrow recovery runbook',
-      'restore state from backup without guessing at the destructive impact',
+      'restore state from backup with a clear view of the destructive impact',
       'return the cluster to normal operations only after the status surface is clean again',
     ]}
   />
@@ -120,7 +120,7 @@ description: Choose the right incident recovery or backup-driven restore path wh
     },
     {
       label: 'Check backup readiness',
-      description: 'Good recovery depends on the snapshot path already being healthy before the incident starts.',
+      description: 'Recovery depends on the snapshot path already being healthy before the incident starts.',
       docId: 'user-guide/openbaocluster/operations/backups',
     },
     {

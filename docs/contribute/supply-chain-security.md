@@ -6,8 +6,8 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Use this page to understand how OpenBao Operator proves that published artifacts are attributable and reproducible."
-  lede="OpenBao Operator follows a build-once, verify, then promote model. This page covers provenance, reproducibility, and the checks maintainers use before publishing release assets."
+  title="Supply-chain security controls"
+  lede="Provenance, reproducibility, and publish-time checks for OpenBao Operator release assets."
 />
 
 <DiagramFrame
@@ -124,7 +124,7 @@ journey: contribute
 sed -n '1,220p' .github/workflows/release.yml
 sed -n '1,220p' .github/workflows/reusable-channel-hardening.yml`}
 >
-  Use this when you need to trace where a trust gate is implemented before changing the workflow or the scripts that back it.
+  Use these commands to trace the workflow or script that implements a trust gate.
 </CommandBlock>
 
 <Callout type="warning" title="Single-maintainer operating constraint">
@@ -167,22 +167,22 @@ Human two-person approval controls are still limited by the current single-maint
   items={[
     {
       label: "Release management",
-      description: "Use the concrete release procedure when you need the exact sequence of verification, publish, and post-release steps.",
+      description: "Release procedure for verification, publish, and post-release steps.",
       to: "/contribute/release-management",
     },
     {
       label: "Continuous integration",
-      description: "Review how these controls appear earlier in the branch and PR lifecycle before a release exists.",
+      description: "How these controls appear earlier in the branch and PR lifecycle.",
       to: "/contribute/ci",
     },
     {
       label: "Dependency license policy",
-      description: "Open the policy that governs which shipped dependencies are allowed into the release graph at all.",
+      description: "Dependency policy for which shipped dependencies may enter the release graph.",
       to: "/contribute/dependency-licenses",
     },
     {
       label: "Incident response",
-      description: "Use the supply-chain incident runbook when you need to freeze publishing, rotate credentials, or inspect recent releases.",
+      description: "Supply-chain incident runbook for freezing publishing, rotating credentials, or inspecting recent releases.",
       to: "/contribute/supply-chain-incident-response",
     },
   ]}

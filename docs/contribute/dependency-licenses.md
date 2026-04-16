@@ -7,12 +7,12 @@ journey: contribute
 
 <PageHeader
   title="Dependency license policy"
-  lede="The repository enforces license policy on shipped dependencies. This page defines the allowed set, the extra handling required for MPL-2.0, and the checks maintainers expect before a dependency change is merged."
+  lede="Allowed license classes, MPL-2.0 handling, and the checks maintainers expect when dependency changes are proposed."
 />
 
 <Callout type="note" title="Policy, not legal advice">
 
-This page defines project policy for contributors and maintainers. It does not replace legal review.
+This is project policy for contributors and maintainers. It does not replace legal review.
 
 </Callout>
 
@@ -130,7 +130,7 @@ make license-report`}
       cells: [
         "Documentation and maintainer review",
         "Policy intent, special cases such as `MPL-2.0`, and explicit approval of allowlist changes.",
-        "This page, PR review, and matching CI configuration updates.",
+        "This policy, PR review, and matching CI configuration updates.",
       ],
     },
   ]}

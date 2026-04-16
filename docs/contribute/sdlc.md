@@ -7,7 +7,7 @@ journey: contribute
 
 <PageHeader
   title="Software development lifecycle"
-  lede="This page describes how the project connects planning, implementation, verification, release, and operational feedback."
+  lede="How the project connects planning, implementation, verification, release, and operational feedback."
 />
 
 <DiagramFrame
@@ -76,9 +76,9 @@ journey: contribute
   ]}
 />
 
-<Callout type="note" title="How to use this page">
+<Callout type="note" title="How this page fits">
 
-This page describes the project change-control model. Workflow pages cover concrete commands and release execution. This page focuses on how the controls fit together.
+Workflow pages cover concrete commands and release execution. The sections below show how the controls fit together.
 
 </Callout>
 
@@ -133,7 +133,7 @@ This page describes the project change-control model. Workflow pages cover concr
     },
     {
       label: "Coding standards",
-      description: "Go back to implementation rules when the next question is how to make a change fit the repository correctly.",
+      description: "Implementation rules for fitting a change into the repository.",
       to: "/contribute/standards",
     },
   ]}

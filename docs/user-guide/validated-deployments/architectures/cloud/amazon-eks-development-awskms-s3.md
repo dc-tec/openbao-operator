@@ -22,14 +22,14 @@ description: Validated cloud baseline for a development-profile OpenBao deployme
   />
 
 
-<Callout type="note" title="Classification">
+<Callout type="note" title="Baseline scope">
 
 Cloud reference architecture. This is a realistic EKS validation and bring-up topology, but it is intentionally a Development lane rather than a production target.
 
 </Callout>
 
 <DecisionTable
-  title="Lane summary"
+  title="Baseline summary"
   columns={["Surface", "Choice", "Why it matters"]}
   rows={[
     {
@@ -129,7 +129,7 @@ Cloud reference architecture. This is a realistic EKS validation and bring-up to
 
 <Checklist
   tone="warning"
-  title="Stay on the validated path"
+  title="Baseline requirements"
   items={[
     "keep `spec.profile: Development` and treat the lane as bring-up coverage, not a production recommendation",
     "keep the shared terminating edge and do not switch the same lane to passthrough midstream",
@@ -152,7 +152,7 @@ This baseline does not cover the hardened public-endpoint path, ACME passthrough
 </Callout>
 
 <NextActions
-  title="Use the lane"
+  title="Next steps"
   items={[
     {
       label: "Deployment recipe",

@@ -8,7 +8,7 @@ journey: contribute
 <PageHero
   eyebrow="Contribute / Start Here"
   title="Contributor setup"
-  lede="Start here to prepare a workstation, create a first branch, and run the initial local checks. This section covers the shortest path from clone to a passing local validation loop."
+  lede="Prepare a workstation, create a first branch, and run the initial local checks."
   actions={[
     {label: "Set up your environment", to: "/contribute/getting-started/development", variant: "primary"},
     {label: "Open testing strategy", to: "/contribute/testing", variant: "secondary"},

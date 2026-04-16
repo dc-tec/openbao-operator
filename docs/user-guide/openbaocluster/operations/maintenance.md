@@ -212,7 +212,7 @@ kubectl exec -n <namespace> -it <pod-name> -- bao operator raft list-peers`}
     },
     {
       label: 'Decommission a cluster',
-      description: 'Choose the right teardown policy before you remove a cluster and its storage.',
+      description: 'Choose the teardown policy that matches the cluster and storage cleanup you intend to perform.',
       docId: 'user-guide/openbaocluster/operations/deletion',
     },
     {

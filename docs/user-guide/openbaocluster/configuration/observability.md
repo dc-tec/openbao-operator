@@ -254,7 +254,7 @@ spec:
 
 <Callout type="tip" title="Keep operator metrics and workload telemetry separate in your dashboards">
 
-The most useful dashboards show both surfaces together, but they should still make it obvious whether a failure is in the operator control plane or in the OpenBao workload itself.
+Build dashboards that show both surfaces together and still make it obvious whether a failure is in the operator control plane or in the OpenBao workload itself.
 
 </Callout>
 

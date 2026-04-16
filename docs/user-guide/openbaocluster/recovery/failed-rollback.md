@@ -18,7 +18,7 @@ journey: operate
       'a blue-green rollback enters break glass mode',
       'the rollback consensus repair job failed and automation stopped',
       'you need to decide whether the rollback can safely retry or needs manual repair',
-      'you need to restore from a known-good snapshot because rollback repair is no longer enough',
+      'you need to restore from a recovery snapshot because rollback repair is no longer enough',
     ]}
   />
 
@@ -51,7 +51,7 @@ Do not force `spec.version` back to an older release to escape the incident. Dow
     {
       cells: [
         'The cluster state is beyond safe rollback repair.',
-        'Restore from a known-good snapshot.',
+        'Restore from a recovery snapshot.',
         'Restore is the explicit recovery path when continuing the rollback is no longer trustworthy.',
       ],
     },
@@ -92,7 +92,7 @@ kubectl exec -n <namespace> -it <pod-name> -- bao operator raft list-peers`}
   Look for network isolation between blue and green Pods, stuck or sealed Pods, peer membership that no longer matches the intended rollback topology, or executor-job failures that prevented the rollback from completing.
 </CommandBlock>
 
-If the break-glass reason is `RollbackCleanupPeerRemovalFailed`, spend extra time verifying that no stale green peers remain in Raft membership before you acknowledge the nonce. A retry will create a fresh rollback-cleanup attempt, so the live peer list needs to match the rollback intent first.
+If the break-glass reason is `RollbackCleanupPeerRemovalFailed`, verify that no stale green peers remain in Raft membership before you acknowledge the nonce. A retry will create a fresh rollback-cleanup attempt, so the live peer list needs to match the rollback intent first.
 
 <Callout type="note" title="Use maintenance mode before disruptive manual repair">
 
@@ -159,7 +159,7 @@ After you repair the cluster, resume reconciliation and acknowledge the current 
 Use this when the rollback surface is no longer safe to repair in place.
 
 1. stop any further automation
-2. identify the last known-good snapshot
+2. identify the snapshot selected for recovery
 3. follow <SiteLink docId="user-guide/openbaorestore/recovery-restore-after-upgrade">Recover After Upgrade Restore</SiteLink>
 
 </TabItem>

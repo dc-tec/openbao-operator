@@ -22,14 +22,14 @@ description: Validated local baseline for a development-profile OpenBao deployme
   />
 
 
-<Callout type="note" title="Classification">
+<Callout type="note" title="Baseline scope">
 
 This local reference architecture uses k3d as a development environment for operator bring-up, UI checks, backup rehearsal, and upgrade behavior. It is a validated local lane rather than a production target.
 
 </Callout>
 
 <DecisionTable
-  title="Lane summary"
+  title="Baseline summary"
   columns={["Surface", "Choice", "Why it matters"]}
   rows={[
     {
@@ -136,7 +136,7 @@ This local reference architecture uses k3d as a development environment for oper
 
 <Checklist
   tone="warning"
-  title="Stay on the validated path"
+  title="Baseline requirements"
   items={[
     "keep `spec.profile: Development` and do not treat the lane as a production hardening reference",
     "keep the shared terminating Gateway in front of the cluster instead of switching to passthrough mid-lane",
@@ -159,7 +159,7 @@ This lane does not define a production reference or a hardened security posture.
 </Callout>
 
 <NextActions
-  title="Use the lane"
+  title="Next steps"
   items={[
     {
       label: "Deployment recipe",

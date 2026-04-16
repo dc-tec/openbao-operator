@@ -7,8 +7,8 @@ description: Signature verification, transparency-log checks, digest pinning, an
 ---
 
 <PageHeader
-  title="Verify what will run before the controller ever writes a Pod template."
-  lede="The operator's supply-chain model is built around signature verification, digest pinning, and separate trust roots for the main OpenBao image versus helper images such as init, backup, restore, and upgrade executors. The goal is to keep mutable tags and unverified images out of production reconciliation."
+  title="Supply-chain verification"
+  lede="Signature verification, digest pinning, and separate trust roots for the main OpenBao image and helper images such as init, backup, restore, and upgrade executors."
 />
 
 

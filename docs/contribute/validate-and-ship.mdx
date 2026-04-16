@@ -8,19 +8,19 @@ journey: contribute
 <PageHero
   eyebrow="Contribute / Validate & Ship"
   title="Validation and release workflows"
-  lede="Use this section for local validation, CI behavior, release execution, and distribution workflows. It groups the execution side of contributor and maintainer work."
+  lede="Local validation, CI behavior, release execution, and distribution workflows."
   actions={[
     {label: "Open testing strategy", to: "/contribute/testing", variant: "primary"},
     {label: "Open release management", to: "/contribute/release-management", variant: "secondary"},
   ]}
 >
   <Checklist
-    title="Use this section when you need to"
+    title="Covers"
     items={[
-      "pick the right local test depth before you push a branch",
-      "understand how CI maps to local commands and why a workflow failed",
-      "run or review release flow, artifact publication, and distribution mechanics",
-      "distinguish contributor checks from maintainer-only release responsibilities",
+      "local test depth before a branch is pushed",
+      "CI-to-local command mapping and workflow failure triage",
+      "release flow, artifact publication, and distribution mechanics",
+      "the split between contributor checks and maintainer release responsibilities",
     ]}
   />
 </PageHero>
@@ -60,12 +60,12 @@ journey: contribute
   items={[
     {
       label: "Project governance",
-      description: "Move into SDLC, supply-chain, and dependency policy when your change affects project policy rather than just execution.",
+      description: "SDLC, supply-chain, and dependency policy when the change affects project policy.",
       to: "/contribute/project-governance",
     },
     {
       label: "Coding standards",
-      description: "Go back to the change rules if CI is failing because the implementation itself still violates project conventions.",
+      description: "Coding standards when CI is failing because the implementation still violates project conventions.",
       to: "/contribute/standards",
     },
   ]}

@@ -7,7 +7,7 @@ journey: reference
 
 <PageHeader
   title="Support and maintenance policy"
-  lede="This page defines which release lines receive best-effort maintenance attention, how channels differ, and what operators should expect when requesting issue triage."
+  lede="Release lines that receive best-effort maintenance attention, channel differences, and issue-triage expectations."
 />
 
 <Callout type="note" title="Current support window">
@@ -50,7 +50,7 @@ OpenBao Operator is still pre-GA:
 ## Validation versus support
 
 - [Compatibility Matrix](compatibility.md) defines what is explicitly validated in CI.
-- This page defines what receives best-effort maintenance attention.
+- This policy defines what receives best-effort maintenance attention.
 - `Recommended for production` means the documented hardened operating path, not a promise of long-lived pre-GA API stability.
 
 ## Security fixes
@@ -90,22 +90,22 @@ Security fixes follow [SECURITY.md](https://github.com/dc-tec/openbao-operator/b
   items={[
     {
       label: 'Release policy',
-      description: 'Open the public cadence and release-gate contract when the next question is when the project ships.',
+      description: 'Public cadence and release-gate rules.',
       docId: 'reference/release-policy',
     },
     {
       label: 'Compatibility matrix',
-      description: 'Open the validation matrix when the next question is whether a platform or version is exercised by CI.',
+      description: 'Platforms and versions exercised by CI.',
       docId: 'reference/compatibility',
     },
     {
       label: 'Known limitations',
-      description: 'Check current caveats and non-goals when an unsupported behavior might actually be a deliberate constraint.',
+      description: 'Current caveats and explicit non-goals behind unsupported behavior.',
       docId: 'reference/known-limitations',
     },
     {
       label: 'Release management',
-      description: 'Use the maintainer release workflow when you need the operational process behind these support promises.',
+      description: 'Maintainer release workflow behind these support expectations.',
       to: '/contribute/release-management',
     },
   ]}

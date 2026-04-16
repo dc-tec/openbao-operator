@@ -243,7 +243,7 @@ kubectl get jobs -n <namespace>`}
 
 <DecisionTable
   kind="reference"
-  title="What good looks like after the upgrade"
+  title="Expected signals after the upgrade"
   columns={['Surface', 'Healthy signal', 'Why it matters']}
   rows={[
     {
@@ -272,7 +272,7 @@ kubectl get jobs -n <namespace>`}
       cells: [
         'Protection path',
         'Backup status and external dependency conditions remain healthy.',
-        'A successful version change should not quietly break the next restore or backup window.',
+        'A successful version change keeps the next restore or backup window intact.',
       ],
     },
   ]}

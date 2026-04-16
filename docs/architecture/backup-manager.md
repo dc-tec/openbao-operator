@@ -50,7 +50,7 @@ description: Schedule snapshot jobs, enforce retention, and update backup status
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Backup orchestration belongs to the AdminOps path:
 
@@ -81,7 +81,7 @@ That keeps the controller focused on reconcile plumbing while the backup manager
   ]}
 />
 
-## Backup Flow
+## Backup flow
 
 <DiagramFrame
   title="Validate, launch, then record"
@@ -131,7 +131,7 @@ That keeps the controller focused on reconcile plumbing while the backup manager
   ]}
 />
 
-## Provider And Retention Surfaces
+## Provider and retention surfaces
 
 <DecisionTable
   kind="reference"

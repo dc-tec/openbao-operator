@@ -7,8 +7,8 @@ description: How peer trust, certificate rotation, and workload-facing TLS ident
 ---
 
 <PageHeader
-  title="TLS and workload identity paths"
-  lede="This page explains how pods trust each other, how clients verify the service, where certificate authority material lives, and how each TLS mode changes workload identity and certificate handling."
+  title="TLS and workload identity"
+  lede="How pods trust each other, how clients verify the service, where certificate authority material lives, and how each TLS mode changes workload identity and certificate handling."
 />
 
 
@@ -165,7 +165,7 @@ description: How peer trust, certificate rotation, and workload-facing TLS ident
 
 <Callout type="note" title="Configuration ownership">
 
-This page explains the TLS security model. Use the configuration guides when you need the exact cluster fields:
+Use the configuration guides below when you need the exact cluster fields:
 
 - <SiteLink docId="user-guide/openbaocluster/configuration/external-access">External access</SiteLink>
 - <SiteLink docId="user-guide/openbaocluster/configuration/gateway-api">Gateway API support</SiteLink>

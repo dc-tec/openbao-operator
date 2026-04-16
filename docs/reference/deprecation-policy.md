@@ -6,8 +6,8 @@ journey: reference
 ---
 
 <PageHeader
-  title="Deprecation policy contract"
-  lede="OpenBao Operator is still pre-GA, so compatibility rules are explicit rather than implied. This page defines how deprecations are announced, how removals happen, and what migration guidance must ship with a breaking or removing change."
+  title="Deprecation and API lifecycle policy"
+  lede="How deprecations are announced, how removals happen, and what migration guidance must ship with a breaking or removing change."
 />
 
 <DecisionTable
@@ -27,7 +27,7 @@ journey: reference
       cells: [
         'Patch releases (`0.Y.Z`)',
         'Should avoid intentional breaking changes.',
-        'Use only when the change is truly compatible or required for safety and integrity.',
+        'Reserved for compatible changes or changes required for safety and integrity.',
       ],
     },
     {
@@ -96,17 +96,17 @@ The project currently serves a single CRD API version, `v1alpha1`. When addition
   items={[
     {
       label: 'Compatibility matrix',
-      description: 'Open the validation matrix when the question is whether a target platform or version is still in scope.',
+      description: 'Platforms and versions that remain in scope.',
       docId: 'reference/compatibility',
     },
     {
       label: 'Upgrade compatibility',
-      description: 'Use the upgrade-path contract when you need sequencing and rollback guidance instead of API lifecycle rules.',
+      description: 'Sequencing and rollback guidance for operator upgrades.',
       docId: 'reference/operator-upgrade-compatibility',
     },
     {
       label: 'Release management',
-      description: 'Move to the maintainer workflow when the next step is shipping a release that contains the deprecation.',
+      description: 'Maintainer workflow for shipping a release that contains the deprecation.',
       to: '/contribute/release-management',
     },
   ]}

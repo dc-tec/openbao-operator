@@ -7,7 +7,7 @@ journey: contribute
 
 <PageHeader
   title="Repository Go style defaults"
-  lede="This page captures the coding defaults maintainers expect in normal Go work: naming, error handling, logging, reconciler-safe concurrency, imports, and constants. The goal is consistent code that behaves like the rest of the repository."
+  lede="Naming, error handling, logging, reconciler-safe concurrency, imports, and constants used across the repository."
 />
 
 <DecisionTable

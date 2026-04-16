@@ -1,6 +1,6 @@
 ---
 title: Decommission a Cluster
-description: Choose the right deletion policy before you tear down a cluster so you know exactly what happens to PVCs, secrets, and backups.
+description: Choose the deletion policy for a cluster teardown and verify what happens to PVCs, secrets, and backups.
 slug: /operate/decommission
 hide_title: true
 pageType: task
@@ -66,7 +66,7 @@ The default `Retain` behavior preserves the things you need if the deletion turn
 
 <Callout type="note" title="Why the unseal key is retained">
 
-The unseal key material is what makes the retained PVC data usable later. If the operator let Kubernetes garbage-collect that Secret automatically, you could keep the encrypted data and still lose the practical ability to recover it.
+The unseal key material is what makes the retained PVC data usable later. If the operator let Kubernetes garbage-collect that Secret automatically, you could keep the encrypted data and still lose the ability to recover it.
 
 </Callout>
 
@@ -133,7 +133,7 @@ Once the PVCs are deleted, the underlying volume data is gone unless you have an
   code={`kubectl delete openbaocluster <name> -n <namespace>`}
 />
 
-If the cluster still serves production traffic, stop here and confirm your cutover, backup, and recovery assumptions before you continue.
+If the cluster still serves production traffic, confirm your cutover, backup, and recovery assumptions before you continue.
 
 ## Verify the cleanup result
 

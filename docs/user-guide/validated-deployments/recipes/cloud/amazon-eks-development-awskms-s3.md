@@ -30,12 +30,12 @@ This recipe matches the EKS development lane validated in the project cloud envi
 
 <Callout type="note" title="Use the main docs for generic operator behavior">
 
-Use <SiteLink docId="user-guide/openbaotenant/onboarding">tenant onboarding</SiteLink>, <SiteLink docId="user-guide/openbaocluster/configuration/gateway-api">Gateway API support</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/operations/backups">backup operations</SiteLink> for the product-wide guidance. This page captures the exact validated lane.
+Use <SiteLink docId="user-guide/openbaotenant/onboarding">tenant onboarding</SiteLink>, <SiteLink docId="user-guide/openbaocluster/configuration/gateway-api">Gateway API support</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/operations/backups">backup operations</SiteLink> for the product-wide guidance. This recipe documents the validated lane.
 
 </Callout>
 
 <DecisionTable
-  title="What this lane assumes"
+  title="Baseline assumptions"
   columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
   rows={[
     {

@@ -9,7 +9,7 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
 
 <PageHeader
   title="Choose an external access path"
-  lede="OpenBao can be exposed through Gateway API, Ingress, or a direct L4 Service. This page focuses on where TLS terminates, who owns certificate lifecycle, and how each edge path fits the intended operating posture."
+  lede="OpenBao can be exposed through Gateway API, Ingress, or a direct L4 Service. Use this page to choose where TLS terminates, who owns certificate lifecycle, and how each edge path fits the intended operating posture."
 />
 
 
@@ -128,7 +128,7 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
     annotations:
       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"`}
 >
-  This is useful when you already operate an ingress-controller standard and do not need the richer Gateway API route model.
+  Use this when you already operate an ingress-controller standard and do not need the richer Gateway API route model.
 </CommandBlock>
 
   </TabItem>
