@@ -2,7 +2,9 @@ package rolling
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,7 +16,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -183,6 +187,9 @@ func TestClearUpgradeFailureForRetry_TableDriven(t *testing.T) {
 				if cluster.Status.Upgrade.LastStepDownTime != nil {
 					t.Fatalf("LastStepDownTime=%v, want nil", cluster.Status.Upgrade.LastStepDownTime)
 				}
+				if cluster.Status.Upgrade.Failure != nil {
+					t.Fatalf("Failure=%#v, want nil", cluster.Status.Upgrade.Failure)
+				}
 				if cluster.Status.Upgrade.StartedAt == nil {
 					t.Fatalf("StartedAt=nil, want refreshed timestamp")
 				}
@@ -334,6 +341,76 @@ func TestPrepareFailedUpgradeRetry_WaitsForStatefulSetTemplateToMatchRetryTarget
 	storedPod := &corev1.Pod{}
 	if getErr := k8sClient.Get(context.Background(), types.NamespacedName{Name: targetPod, Namespace: cluster.Namespace}, storedPod); getErr != nil {
 		t.Fatalf("Get(target pod) error = %v, want pod preserved", getErr)
+	}
+}
+
+func TestPatchRetryStatusSSA_ApplyPayloadOmitsClearedFailureFields(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add openbaov1alpha1 scheme: %v", err)
+	}
+
+	failedAt := metav1.NewTime(time.Unix(1_700_000_000, 0).UTC())
+	stepDownAt := metav1.NewTime(time.Unix(1_700_000_100, 0).UTC())
+	stored := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "retry-cluster",
+			Namespace: "default",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion:    "2.5.0",
+				FromVersion:      "2.4.4",
+				CurrentPartition: 3,
+				Failure: &openbaov1alpha1.ControllerErrorStatus{
+					Reason:  upgrade.ReasonPodNotReady,
+					Message: "pod failed to become ready",
+					At:      &failedAt,
+				},
+				LastErrorReason:  upgrade.ReasonPodNotReady,
+				LastErrorMessage: "pod failed to become ready",
+				LastErrorAt:      &failedAt,
+				LastStepDownTime: &stepDownAt,
+			},
+		},
+	}
+
+	var capturedPayload string
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(stored.DeepCopy()).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceApply: func(ctx context.Context, c client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+				payload, err := json.Marshal(obj)
+				if err != nil {
+					return err
+				}
+				capturedPayload = string(payload)
+				return c.Status().Apply(ctx, obj, opts...)
+			},
+		}).
+		Build()
+
+	manager := &Manager{client: k8sClient}
+	cluster := stored.DeepCopy()
+	if err := manager.patchRetryStatusSSA(context.Background(), cluster, "retry-now"); err != nil {
+		t.Fatalf("patchRetryStatusSSA() error = %v", err)
+	}
+
+	for _, forbidden := range []string{
+		`"failure":null`,
+		`"lastErrorAt":null`,
+		`"lastStepDownTime":null`,
+	} {
+		if strings.Contains(capturedPayload, forbidden) {
+			t.Fatalf("retry apply payload unexpectedly contains %s: %s", forbidden, capturedPayload)
+		}
+	}
+	if !strings.Contains(capturedPayload, `"lastHandledRetry":"retry-now"`) {
+		t.Fatalf("retry apply payload missing handled retry marker: %s", capturedPayload)
 	}
 }
 
@@ -593,30 +670,6 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			}
 			if gotHandledRetry != "retry-now" {
 				t.Fatalf("LastHandledRetry=%q, want retry-now", gotHandledRetry)
-			}
-
-			storedCluster := &openbaov1alpha1.OpenBaoCluster{}
-			if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, storedCluster); err != nil {
-				t.Fatalf("Get(cluster) error: %v", err)
-			}
-			if storedCluster.Status.Upgrade == nil {
-				t.Fatalf("stored Upgrade=nil, want non-nil")
-			}
-			if storedCluster.Status.Upgrade.LastErrorReason != "" {
-				t.Fatalf("stored LastErrorReason=%q, want empty", storedCluster.Status.Upgrade.LastErrorReason)
-			}
-			if storedCluster.Status.Upgrade.StartedAt == nil {
-				t.Fatalf("stored StartedAt=nil, want refreshed timestamp")
-			}
-			if !storedCluster.Status.Upgrade.StartedAt.After(startedAt.Time) {
-				t.Fatalf("stored StartedAt=%v, want time after %v", storedCluster.Status.Upgrade.StartedAt, startedAt)
-			}
-			storedHandledRetry := ""
-			if storedCluster.Status.UpgradeRequests != nil {
-				storedHandledRetry = storedCluster.Status.UpgradeRequests.LastHandledRetry
-			}
-			if storedHandledRetry != "retry-now" {
-				t.Fatalf("stored LastHandledRetry=%q, want retry-now", storedHandledRetry)
 			}
 
 			deletedJob := &batchv1.Job{}

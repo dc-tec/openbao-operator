@@ -48,18 +48,3 @@ func PatchOpenBaoClusterStatusMerge(
 
 	return desired, nil
 }
-
-// FinalizeRootUpgradeStatusMerge persists the common root-upgrade terminal
-// status shape after a successful upgrade completes.
-func FinalizeRootUpgradeStatusMerge(
-	ctx context.Context,
-	c client.Client,
-	key types.NamespacedName,
-	targetVersion string,
-) (*openbaov1alpha1.OpenBaoCluster, error) {
-	return PatchOpenBaoClusterStatusMerge(ctx, c, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
-		obj.Status.Upgrade = nil
-		obj.Status.CurrentVersion = targetVersion
-		return nil
-	})
-}

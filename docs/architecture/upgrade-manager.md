@@ -89,8 +89,8 @@ shared mechanics live behind narrower seams:
   coordination such as leader discovery, leader transfer, peer
   join/promote/demote/remove, and autopilot capability fallback.
 - `internal/platform/statusapply` owns the shared AdminOps status apply and
-  merge-patch helpers so upgrade, backup, and adminops flows use the same
-  status-subresource ownership rules.
+  mutate+apply gateways so upgrade, backup, and adminops flows use the same
+  status-subresource ownership rules and field-manager boundaries.
 
 <DecisionTable
   kind="decision"

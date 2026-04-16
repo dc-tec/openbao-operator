@@ -43,6 +43,9 @@ func FuzzRollingHelpers(f *testing.F) {
 		_ = upgrade.RetryRequestValue(cluster)
 		clearUpgradeFailureForRetry(cluster)
 		if cluster.Status.Upgrade != nil {
+			if cluster.Status.Upgrade.Failure != nil {
+				t.Fatalf("clearUpgradeFailureForRetry() should clear structured failure")
+			}
 			if cluster.Status.Upgrade.LastErrorReason != "" || cluster.Status.Upgrade.LastErrorMessage != "" {
 				t.Fatalf("clearUpgradeFailureForRetry() should clear error fields")
 			}

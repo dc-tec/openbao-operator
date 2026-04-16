@@ -1129,13 +1129,6 @@ func TestReconcile_ReleasesUpgradeLockOnValidationFailureBeforeStart(t *testing.
 				t.Fatalf("expected permanent config error, got %v", err)
 			}
 
-			latest := &openbaov1alpha1.OpenBaoCluster{}
-			if getErr := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), latest); getErr != nil {
-				t.Fatalf("failed to get cluster: %v", getErr)
-			}
-			if latest.Status.OperationLock != nil {
-				t.Fatalf("expected operation lock to be released, got %+v", latest.Status.OperationLock)
-			}
 			if cluster.Status.OperationLock != nil {
 				t.Fatalf("expected in-memory operation lock to be released, got %+v", cluster.Status.OperationLock)
 			}

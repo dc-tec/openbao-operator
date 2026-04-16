@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // buildAvailableCondition builds the Available condition based on replica counts.
@@ -61,7 +62,7 @@ func buildDegradedCondition(
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionDegraded),
 			Status:  metav1.ConditionTrue,
-			Reason:  cluster.Status.Upgrade.LastErrorReason,
+			Reason:  upgrade.UpgradeFailureReason(cluster.Status.Upgrade),
 			Message: buildRollingUpgradeFailedMessage(cluster),
 		}
 	}

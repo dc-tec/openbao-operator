@@ -7,6 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 const (
@@ -18,7 +19,7 @@ const (
 // ObservedGeneration and LastTransitionTime must be set by the caller.
 func buildUpgradingCondition(cluster *openbaov1alpha1.OpenBaoCluster) metav1.Condition {
 	rollingUpgradeInProgress := cluster.Status.Upgrade != nil
-	upgradeFailed := rollingUpgradeInProgress && cluster.Status.Upgrade.LastErrorReason != ""
+	upgradeFailed := rollingUpgradeInProgress && upgrade.UpgradeFailed(cluster.Status.Upgrade)
 
 	blueGreenInProgress := cluster.Status.BlueGreen != nil &&
 		cluster.Status.BlueGreen.Phase != "" &&
@@ -28,7 +29,7 @@ func buildUpgradingCondition(cluster *openbaov1alpha1.OpenBaoCluster) metav1.Con
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionUpgrading),
 			Status:  metav1.ConditionFalse,
-			Reason:  cluster.Status.Upgrade.LastErrorReason,
+			Reason:  upgrade.UpgradeFailureReason(cluster.Status.Upgrade),
 			Message: buildRollingUpgradeFailedMessage(cluster),
 		}
 	}
@@ -89,7 +90,7 @@ func buildRollingUpgradeFailedMessage(cluster *openbaov1alpha1.OpenBaoCluster) s
 	from, to := rollingVersionRange(cluster)
 	detail := "The operator recorded a failure."
 	if cluster != nil && cluster.Status.Upgrade != nil {
-		if message := strings.TrimSpace(cluster.Status.Upgrade.LastErrorMessage); message != "" {
+		if message := upgrade.UpgradeFailureMessage(cluster.Status.Upgrade); message != "" {
 			detail = ensureSentence(message)
 		}
 	}
