@@ -299,12 +299,7 @@ func createClusterCRForTest(t *testing.T, k8sClient client.Client, cluster *open
 }
 
 func statefulSetName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return statefulSetNameWithRevision(cluster, "")
-}
-
-//nolint:unparam // configContent varies in production with actual config values
-func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, platform string) (*appsv1.StatefulSet, error) {
-	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", false, platform)
+	return cluster.Name
 }
 
 // -----------------------------------------------------------------------------

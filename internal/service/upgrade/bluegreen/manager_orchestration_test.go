@@ -478,7 +478,7 @@ func TestManager_ReleaseUpgradeLockIfHeld(t *testing.T) {
 	})
 }
 
-type infraRuntimeStub struct {
+type workloadRuntimeStub struct {
 	ensureBlueGreenStatusCalled bool
 	lastCluster                 *openbaov1alpha1.OpenBaoCluster
 	ensureStatefulSetCalled     bool
@@ -490,12 +490,12 @@ type infraRuntimeStub struct {
 	ensureStatefulSetErr        error
 }
 
-func (s *infraRuntimeStub) EnsureBlueGreenStatus(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
+func (s *workloadRuntimeStub) EnsureBlueGreenStatus(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
 	s.ensureBlueGreenStatusCalled = true
 	s.lastCluster = cluster
 }
 
-func (s *infraRuntimeStub) EnsureStatefulSetWithRevision(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool) error {
+func (s *workloadRuntimeStub) EnsureStatefulSetWithRevision(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool) error {
 	s.ensureStatefulSetCalled = true
 	s.lastCluster = cluster
 	s.lastConfigContent = configContent
@@ -509,25 +509,25 @@ func (s *infraRuntimeStub) EnsureStatefulSetWithRevision(_ context.Context, _ lo
 func TestManager_EnsureBlueGreenStatus(t *testing.T) {
 	t.Parallel()
 
-	t.Run("nil infra runtime is a no-op", func(t *testing.T) {
+	t.Run("nil workload runtime is a no-op", func(t *testing.T) {
 		cluster := newBlueGreenCluster()
 		mgr := &Manager{}
 
 		mgr.ensureBlueGreenStatus(context.Background(), logr.Discard(), cluster)
 	})
 
-	t.Run("delegates to infra runtime", func(t *testing.T) {
+	t.Run("delegates to workload runtime", func(t *testing.T) {
 		cluster := newBlueGreenCluster()
-		runtime := &infraRuntimeStub{}
-		mgr := &Manager{infraRuntime: runtime}
+		runtime := &workloadRuntimeStub{}
+		mgr := &Manager{workloadRuntime: runtime}
 
 		mgr.ensureBlueGreenStatus(context.Background(), logr.Discard(), cluster)
 
 		if !runtime.ensureBlueGreenStatusCalled {
-			t.Fatal("expected EnsureBlueGreenStatus to be delegated to infra runtime")
+			t.Fatal("expected EnsureBlueGreenStatus to be delegated to workload runtime")
 		}
 		if runtime.lastCluster != cluster {
-			t.Fatal("expected infra runtime to receive the cluster being reconciled")
+			t.Fatal("expected workload runtime to receive the cluster being reconciled")
 		}
 	})
 }

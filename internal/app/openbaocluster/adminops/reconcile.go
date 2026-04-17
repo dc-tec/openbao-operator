@@ -15,13 +15,12 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 	rollingupgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade/rolling"
+	workloadmanager "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 // Dependencies holds dependencies required to build admin operations reconcilers.
@@ -136,21 +135,7 @@ func Reconcile(
 }
 
 func buildReconcilers(deps Dependencies) []subReconciler {
-	infraMgr := inframanager.NewManagerWithReaderAndOIDCConfig(
-		deps.Client,
-		deps.APIReader,
-		deps.Scheme,
-		deps.OperatorNamespace,
-		&portauth.OIDCConfig{
-			IssuerURL:          deps.OIDCIssuer,
-			OIDCDiscoveryURL:   deps.OIDCDiscoveryURL,
-			OIDCDiscoveryCAPEM: deps.OIDCDiscoveryCAPEM,
-			JWKSURL:            deps.OIDCJWKSURL,
-			JWKSCAPEM:          deps.OIDCJWKSCAPEM,
-			JWKSKeys:           deps.OIDCJWTKeys,
-		},
-		deps.Platform,
-	)
+	workloadMgr := workloadmanager.NewManager(deps.Client, deps.Scheme, deps.Platform).WithReader(deps.APIReader)
 	backupRuntime := backupmanager.NewUpgradeStrategyRuntime(deps.Client, deps.Scheme)
 	adminOpsMutator := func(
 		ctx context.Context,
@@ -168,7 +153,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 		bluegreen.NewManager(
 			deps.Client,
 			deps.Scheme,
-			infraMgr,
+			workloadMgr,
 			backupRuntime,
 			deps.SmartClientConfig,
 			deps.ImageVerifier,

@@ -26,10 +26,10 @@ func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov
 }
 
 func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	if m.infraRuntime == nil {
+	if m.workloadRuntime == nil {
 		return
 	}
-	m.infraRuntime.EnsureBlueGreenStatus(ctx, logger, cluster)
+	m.workloadRuntime.EnsureBlueGreenStatus(ctx, logger, cluster)
 }
 
 func (m *Manager) releaseUpgradeLockIfHeld(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {

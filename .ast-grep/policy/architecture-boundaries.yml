@@ -244,6 +244,7 @@ appBoundaries:
       - internal/service/upgrade
       - internal/service/upgrade/bluegreen
       - internal/service/upgrade/rolling
+      - internal/service/workload
   - name: openbaocluster-statusops
     displayName: OpenBaoCluster StatusOps
     files:

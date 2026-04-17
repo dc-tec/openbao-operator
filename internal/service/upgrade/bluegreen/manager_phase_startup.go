@@ -41,8 +41,8 @@ func (m *Manager) handlePhaseDeployingGreen(ctx context.Context, logger logr.Log
 }
 
 func (m *Manager) createGreenStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, blueRevision string, greenRevision string) (phaseOutcome, error) {
-	if m.infraRuntime == nil {
-		return phaseOutcome{}, fmt.Errorf("infra runtime is not configured")
+	if m.workloadRuntime == nil {
+		return phaseOutcome{}, fmt.Errorf("workload runtime is not configured")
 	}
 
 	infraDetails := configbuilder.InfrastructureDetails{
@@ -62,7 +62,7 @@ func (m *Manager) createGreenStatefulSet(ctx context.Context, logger logr.Logger
 		return phaseOutcome{}, err
 	}
 
-	if err := m.infraRuntime.EnsureStatefulSetWithRevision(ctx, logger, cluster, string(renderedConfig), greenImage, greenInitImage, greenRevision, true); err != nil {
+	if err := m.workloadRuntime.EnsureStatefulSetWithRevision(ctx, logger, cluster, string(renderedConfig), greenImage, greenInitImage, greenRevision, true); err != nil {
 		return phaseOutcome{}, fmt.Errorf("failed to create Green StatefulSet: %w", err)
 	}
 

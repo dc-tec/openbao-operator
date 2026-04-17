@@ -1,4 +1,4 @@
-package infra
+package workload
 
 import (
 	"crypto/sha256"
@@ -9,7 +9,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 const (
@@ -33,7 +32,7 @@ type probeExecActions struct {
 }
 
 func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	return workloadsvc.ResolveInitContainerImage(cluster)
+	return ResolveInitContainerImage(cluster)
 }
 
 // getContainerImage returns the container image to use for the OpenBao container.

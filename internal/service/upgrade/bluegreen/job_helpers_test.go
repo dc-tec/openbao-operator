@@ -18,8 +18,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
@@ -76,7 +76,7 @@ func TestRunExecutorJob_FailedJob_RetriesWithRunIDWhenEnabled(t *testing.T) {
 		WithObjects(cluster, job).
 		Build()
 
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	infraMgr := workloadsvc.NewManager(c, scheme, "")
 	mgr := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	step, err := mgr.runExecutorJobStep(context.Background(), logr.Discard(), cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")
@@ -170,7 +170,7 @@ func TestRunExecutorJob_FailedJob_DoesNotRetryWhenAutoRollbackDisabled(t *testin
 		WithObjects(cluster, job).
 		Build()
 
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	infraMgr := workloadsvc.NewManager(c, scheme, "")
 	mgr := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	step, err := mgr.runExecutorJobStep(context.Background(), logr.Discard(), cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")
@@ -257,7 +257,7 @@ func TestRunExecutorJob_FailedJob_TriggersAbortWhenMaxFailuresReached(t *testing
 		WithObjects(cluster, job).
 		Build()
 
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	infraMgr := workloadsvc.NewManager(c, scheme, "")
 	mgr := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	step, err := mgr.runExecutorJobStep(context.Background(), logr.Discard(), cluster, ActionJoinGreenNonVoters, "job failure threshold exceeded")

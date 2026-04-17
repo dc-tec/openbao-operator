@@ -53,20 +53,6 @@ const (
 	openBaoBinaryName        = constants.BinaryBao
 	configHashAnnotation     = "openbao.org/config-hash"
 	unsealTypeTransit        = "transit"
-
-	// OpenBao images are built to run as a non-root user with stable UID/GID.
-	// The StatefulSet security context pins these IDs so that both the main
-	// OpenBao container and the config-init container run as non-root even if
-	// the image metadata defaults to root.
-	openBaoUserID  = constants.UserOpenBao
-	openBaoGroupID = constants.GroupOpenBao
-
-	// File permissions: 0440 for secrets (owner/group read-only), 0644 for configs
-	secretFileMode = int32(0440)
-	// serviceAccountFileMode matches the secret file mode for projected tokens/CA.
-	serviceAccountFileMode = int32(0440)
-	// serviceAccountTokenExpirationSeconds is the projected token TTL.
-	serviceAccountTokenExpirationSeconds = int64(3600)
 )
 
 // Manager reconciles infrastructure resources such as ConfigMaps, StatefulSets, and Services for an OpenBaoCluster.
@@ -74,6 +60,7 @@ type Manager struct {
 	client             client.Client
 	reader             client.Reader
 	scheme             *runtime.Scheme
+	workload           *workloadsvc.Manager
 	operatorNamespace  string
 	oidcIssuer         string
 	oidcDiscoveryURL   string
@@ -93,6 +80,7 @@ func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace strin
 		client:            c,
 		reader:            c,
 		scheme:            scheme,
+		workload:          workloadsvc.NewManager(c, scheme, platform),
 		operatorNamespace: operatorNamespace,
 		oidcIssuer:        oidcIssuer,
 		oidcJWTKeys:       oidcJWTKeys,
@@ -108,6 +96,7 @@ func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Sche
 	m := NewManager(c, scheme, operatorNamespace, oidcIssuer, oidcJWTKeys, platform)
 	if r != nil {
 		m.reader = r
+		m.workload.WithReader(r)
 	}
 	return m
 }
@@ -148,11 +137,6 @@ func (m *Manager) SetOIDCConfig(config *portauth.OIDCConfig) {
 	m.oidcJWKSURL = config.JWKSURL
 	m.oidcJWKSCAPEM = config.JWKSCAPEM
 	m.oidcJWTKeys = append([]string(nil), config.JWKSKeys...)
-}
-
-// EnsureBlueGreenStatus exposes blue/green status bootstrap/repair for strategy consumers.
-func (m *Manager) EnsureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	workloadsvc.EnsureBlueGreenStatus(ctx, logger, m.client, cluster)
 }
 
 // Reconcile ensures infrastructure resources are aligned with the desired state for the given OpenBaoCluster.
@@ -198,43 +182,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return err
 	}
 
-	// Skip StatefulSet reconciliation if requested (e.g., during BlueGreen cleanup phases)
-	if spec.SkipReconciliation {
-		logger.Info("Skipping StatefulSet reconciliation per spec", "reason", "skip flag set")
-		return nil
-	}
-
-	statefulSetCluster := clusterForStatefulSetSpec(cluster, spec)
-	if cluster != nil && statefulSetCluster != cluster {
-		logger.V(1).Info(
-			"Applying staged StatefulSet replica count",
-			"statefulset", spec.Name,
-			"clusterDesiredReplicas", cluster.Spec.Replicas,
-			"appliedStatefulSetReplicas", spec.Replicas,
-		)
-	}
-
-	if err := m.EnsureStatefulSetWithRevision(ctx, logger, statefulSetCluster, configContent, spec.Image, spec.InitContainerImage, spec.Revision, spec.DisableSelfInit); err != nil {
-		return err
-	}
-
-	// SECURITY: Create PodDisruptionBudget to prevent simultaneous pod evictions
-	// that could cause quorum loss during node drains or cluster upgrades
-	if err := m.ensurePodDisruptionBudget(ctx, logger, statefulSetCluster); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func clusterForStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster, spec workloadsvc.StatefulSetSpec) *openbaov1alpha1.OpenBaoCluster {
-	if cluster == nil || spec.Replicas == cluster.Spec.Replicas {
-		return cluster
-	}
-
-	statefulSetCluster := cluster.DeepCopy()
-	statefulSetCluster.Spec.Replicas = spec.Replicas
-	return statefulSetCluster
+	return m.workload.Reconcile(ctx, logger, cluster, configContent, spec)
 }
 
 func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {
@@ -447,13 +395,6 @@ func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 // configMapNameWithRevision returns the ConfigMap name for a given revision.
 // If rev is empty, returns the cluster's base ConfigMap name.
 // Otherwise, returns "<cluster-name>-config-<revision>".
-func configMapNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) string {
-	if rev == "" {
-		return configMapName(cluster)
-	}
-	return fmt.Sprintf("%s%s-%s", cluster.Name, constants.SuffixConfigMap, rev)
-}
-
 func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + configInitMapSuffix
 }
@@ -485,13 +426,3 @@ func externalServiceNameGreen(cluster *openbaov1alpha1.OpenBaoCluster) string {
 // statefulSetNameWithRevision returns the StatefulSet name for a given revision.
 // If rev is empty, returns the cluster name (for backward compatibility).
 // Otherwise, returns "<cluster-name>-<revision>".
-func statefulSetNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) string {
-	if rev == "" {
-		return cluster.Name
-	}
-	return fmt.Sprintf("%s-%s", cluster.Name, rev)
-}
-
-func int32Ptr(v int32) *int32 {
-	return &v
-}
