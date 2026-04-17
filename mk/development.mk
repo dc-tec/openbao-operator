@@ -18,9 +18,9 @@ bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-
 
 .PHONY: git-hooks-install
 git-hooks-install: ## Configure the repo-local Git hooks path.
-	@chmod +x .githooks/pre-commit hack/dev/pre-commit.sh
+	@chmod +x .githooks/pre-commit .githooks/pre-push hack/dev/pre-commit.sh hack/dev/pre-push.sh
 	@git config --local core.hooksPath .githooks
-	@echo "Configured repo-local Git hooks: .githooks"
+	@echo "Configured repo-local Git hooks: .githooks (pre-commit, pre-push)"
 
 .PHONY: git-hooks-uninstall
 git-hooks-uninstall: ## Remove the repo-local Git hooks path.
