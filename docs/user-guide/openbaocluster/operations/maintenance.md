@@ -172,16 +172,20 @@ This mode is also required for some day 2 changes that need a controlled restart
 
 ## Trigger a rolling restart
 
-Use `restartAt` when you need the workload to roll because an external dependency changed, such as a certificate chain, secret material, or another input that should force a controlled refresh.
+Use `spec.runtime.restartAt` when you need the workload to roll because an external dependency changed, such as a certificate chain, secret material, or another input that should force a controlled refresh.
 
 <CommandBlock
   language="yaml"
   label="configure"
   title="Request a rolling restart"
   code={`spec:
-  maintenance:
+  runtime:
     restartAt: "2026-01-19T00:00:00Z"`}
 />
+
+This request is independent from maintenance authorization. Set maintenance only when you need disruptive work on managed resources or an operator flow that explicitly requires the maintenance gate.
+
+Use `spec.runtime.restartAt` for new configurations. The older `spec.maintenance.restartAt` path remains temporarily for compatibility.
 
 When a leader Pod must be restarted or evicted, the operator handles graceful step-down automatically before termination so the cluster can elect a new leader cleanly.
 
