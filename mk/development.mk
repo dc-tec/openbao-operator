@@ -12,8 +12,25 @@ bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-
 	else \
 		echo "Skipping docs bootstrap because npm is not available."; \
 	fi
+	@$(MAKE) git-hooks-install
 	@echo "Bootstrap complete."
 	@echo "Run 'make doctor' to validate external prerequisites."
+
+.PHONY: git-hooks-install
+git-hooks-install: ## Configure the repo-local Git hooks path.
+	@chmod +x .githooks/pre-commit hack/dev/pre-commit.sh
+	@git config --local core.hooksPath .githooks
+	@echo "Configured repo-local Git hooks: .githooks"
+
+.PHONY: git-hooks-uninstall
+git-hooks-uninstall: ## Remove the repo-local Git hooks path.
+	@current="$$(git config --local --get core.hooksPath || true)"; \
+	if [ "$$current" = ".githooks" ]; then \
+		git config --local --unset core.hooksPath; \
+		echo "Removed repo-local Git hooks configuration."; \
+	else \
+		echo "Repo-local Git hooks were not configured."; \
+	fi
 
 .PHONY: doctor
 doctor: ## Validate local prerequisites for the main contributor workflow.

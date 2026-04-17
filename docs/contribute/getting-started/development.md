@@ -36,7 +36,7 @@ Optional but recommended:
   code={`make bootstrap
 make doctor`}
 >
-  Run this first on a new machine, inside a fresh devcontainer, or after toolchain changes. `make doctor` is the quickest way to see what is still missing locally.
+  Run this first on a new machine, inside a fresh devcontainer, or after toolchain changes. `make bootstrap` also installs the repo-local Git hooks from `.githooks/`, including the pre-commit check for staged Go formatting and targeted linting. `make doctor` is the quickest way to see what is still missing locally.
 </CommandBlock>
 
 <DecisionTable
