@@ -3,13 +3,15 @@ package snapshot
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	servicebackup "github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -60,7 +62,7 @@ func ResolvePreUpgradeSnapshotExecutorDigest(
 	failureReason string,
 	failureMessage string,
 ) (string, error) {
-	executorImage, err := servicebackup.GetBackupExecutorImage(cluster)
+	executorImage, err := resolveBackupExecutorImage(cluster)
 	if err != nil {
 		return "", fmt.Errorf("failed to determine pre-upgrade snapshot executor image: %w", err)
 	}
@@ -74,4 +76,21 @@ func ResolvePreUpgradeSnapshotExecutorDigest(
 		failureReason,
 		failureMessage,
 	)
+}
+
+func resolveBackupExecutorImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
+	if cluster.Spec.Backup != nil && strings.TrimSpace(cluster.Spec.Backup.Image) != "" {
+		return cluster.Spec.Backup.Image, nil
+	}
+	image, err := constants.DefaultBackupImage()
+	if err != nil {
+		return "", operatorerrors.WrapPermanentConfig(operatorerrors.WithReason(
+			constants.ReasonHelperImageConfigurationInvalid,
+			fmt.Errorf(
+				"default backup executor image is unavailable; set spec.backup.image explicitly or configure OPERATOR_VERSION in the operator Deployment: %w",
+				err,
+			),
+		))
+	}
+	return image, nil
 }
