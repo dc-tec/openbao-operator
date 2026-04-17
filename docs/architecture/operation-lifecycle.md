@@ -60,6 +60,27 @@ Operation lifecycle coordination sits below the concrete managers and above the 
 
 That keeps the shared safety model in one place instead of scattering lock and retry semantics across several managers.
 
+<DecisionTable
+  kind="reference"
+  title="OpenBaoCluster status ownership planes"
+  columns={['Plane', 'Field manager', 'Owned status fields']}
+  rows={[
+    {
+      cells: ['Observed status', '`openbao-status-controller`', '`status.observedGeneration`, `status.phase`, `status.activeLeader`, `status.readyReplicas`, `status.currentVersion`, `status.lastBackupTime`, `status.conditions`'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Workload status', '`openbao-workload-controller`', '`status.initialized`, `status.selfInitialized`, `status.workload`'],
+    },
+    {
+      cells: ['AdminOps status', '`openbao-adminops-controller`', '`status.upgrade`, `status.upgradeRequests`, `status.backup`, `status.blueGreen`, `status.breakGlass`, `status.adminOps`'],
+    },
+    {
+      cells: ['Operation lock status', '`openbao-operationlock-controller`', '`status.operationLock`'],
+    },
+  ]}
+/>
+
 <DiagramFrame
   title="Coordination model"
   caption="Backup, restore, and upgrade do not each implement their own lock and retry policy. They share one coordination service that wraps the operation-lock adapter and keeps audit fields consistent."

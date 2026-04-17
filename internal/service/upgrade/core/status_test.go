@@ -59,6 +59,9 @@ func TestSetUpgradeStarted(t *testing.T) {
 			if len(status.Upgrade.CompletedPods) != 0 {
 				t.Errorf("CompletedPods should be empty, got %v", status.Upgrade.CompletedPods)
 			}
+			if status.Upgrade.Failure != nil {
+				t.Errorf("Failure = %#v, want nil until the first error is recorded", status.Upgrade.Failure)
+			}
 		})
 	}
 }

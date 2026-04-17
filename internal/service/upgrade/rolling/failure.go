@@ -2,7 +2,6 @@ package rolling
 
 import (
 	"context"
-	"strings"
 
 	"github.com/go-logr/logr"
 
@@ -29,18 +28,18 @@ func resolveUpgradeFailure(cluster *openbaov1alpha1.OpenBaoCluster, defaultReaso
 	}
 
 	if cluster.Status.Upgrade != nil {
-		details.FirstFailure = cluster.Status.Upgrade.LastErrorAt == nil
+		details.FirstFailure = upgrade.UpgradeFailureAt(cluster.Status.Upgrade) == nil
 	}
 
-	if cluster.Status.Upgrade == nil || strings.TrimSpace(cluster.Status.Upgrade.LastErrorReason) == "" {
+	if cluster.Status.Upgrade == nil || !upgrade.UpgradeFailed(cluster.Status.Upgrade) {
 		core.SetUpgradeFailed(&cluster.Status, defaultReason, defaultMessage)
 	}
 
 	if cluster.Status.Upgrade != nil {
-		if reason := strings.TrimSpace(cluster.Status.Upgrade.LastErrorReason); reason != "" {
+		if reason := upgrade.UpgradeFailureReason(cluster.Status.Upgrade); reason != "" {
 			details.Reason = reason
 		}
-		if message := strings.TrimSpace(cluster.Status.Upgrade.LastErrorMessage); message != "" {
+		if message := upgrade.UpgradeFailureMessage(cluster.Status.Upgrade); message != "" {
 			details.Message = message
 		}
 	}

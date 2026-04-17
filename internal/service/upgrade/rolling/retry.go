@@ -25,7 +25,7 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 		return false, nil
 	}
 
-	if strings.TrimSpace(cluster.Status.Upgrade.LastErrorReason) == "" {
+	if !upgrade.UpgradeFailed(cluster.Status.Upgrade) {
 		return false, nil
 	}
 
@@ -51,7 +51,7 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 		return false, err
 	}
 
-	if err := m.patchRetryStatusMerge(ctx, cluster, retryRequest); err != nil {
+	if err := m.patchRetryStatusSSA(ctx, cluster, retryRequest); err != nil {
 		return false, fmt.Errorf("failed to clear failed upgrade state for retry: %w", err)
 	}
 	if cluster.Status.Upgrade == nil {
@@ -64,23 +64,39 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 	return true, nil
 }
 
-func (m *Manager) patchRetryStatusMerge(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, retryRequest string) error {
+func (m *Manager) patchRetryStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, retryRequest string) error {
 	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
-	desired, err := statusapply.PatchOpenBaoClusterStatusMerge(ctx, m.client, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+	desired, err := statusapply.MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(ctx, m.reader, m.client, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		if obj.Status.Upgrade == nil {
+			upgrade.MarkRetryRequestHandled(&obj.Status, retryRequest)
 			return nil
 		}
 		clearUpgradeFailureForRetry(obj)
 		upgrade.MarkRetryRequestHandled(&obj.Status, retryRequest)
 		return nil
+	}, statusapply.OpenBaoClusterAdminOpsStatusApplyOptions{
+		ForceOwnership: true,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to patch cleared retry status: %w", err)
+		return fmt.Errorf("failed to apply cleared retry status: %w", err)
+	}
+	if retryFailureFieldsRemain(desired) {
+		return fmt.Errorf("failed to clear failed rolling-upgrade state via SSA")
 	}
 
 	cluster.Status.Upgrade = desired.Status.Upgrade
 	cluster.Status.UpgradeRequests = desired.Status.UpgradeRequests
 	return nil
+}
+
+func retryFailureFieldsRemain(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster == nil || cluster.Status.Upgrade == nil {
+		return false
+	}
+	return upgrade.UpgradeFailed(cluster.Status.Upgrade) ||
+		upgrade.UpgradeFailureMessage(cluster.Status.Upgrade) != "" ||
+		upgrade.UpgradeFailureAt(cluster.Status.Upgrade) != nil ||
+		cluster.Status.Upgrade.LastStepDownTime != nil
 }
 
 func (m *Manager) cleanupStepDownJobForRetry(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -203,6 +219,7 @@ func clearUpgradeFailureForRetry(cluster *openbaov1alpha1.OpenBaoCluster) {
 	}
 
 	now := metav1.Now()
+	cluster.Status.Upgrade.Failure = nil
 	cluster.Status.Upgrade.LastErrorReason = ""
 	cluster.Status.Upgrade.LastErrorMessage = ""
 	cluster.Status.Upgrade.LastErrorAt = nil

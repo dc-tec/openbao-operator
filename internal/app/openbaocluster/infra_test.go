@@ -270,6 +270,32 @@ func TestInfraReconciler_VerifyInitContainerImageDigest_UsesResolvedDefaultImage
 	}
 }
 
+func TestComputeStatefulSetSpec_BlueGreenCleanupRetainsStatefulSetName(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "bluegreen-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				Phase:        openbaov1alpha1.PhaseCleanup,
+				BlueRevision: "blue123",
+			},
+		},
+	}
+
+	spec := (&infraReconciler{}).computeStatefulSetSpec(logr.Discard(), cluster, "sha256:main", "sha256:init")
+	assert.True(t, spec.SkipReconciliation)
+	assert.Equal(t, "blue123", spec.Revision)
+	assert.Equal(t, "bluegreen-cluster-blue123", spec.Name)
+}
+
 func TestInfraReconciler_ResolveTargetMainImage_BlueGreenPrefersActivePods(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)

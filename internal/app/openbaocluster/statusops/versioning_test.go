@@ -129,6 +129,28 @@ func TestReconcileCurrentVersion_AdvancesWhenObservedVersionIsHigher(t *testing.
 	assert.Equal(t, "2.4.4", cluster.Status.CurrentVersion)
 }
 
+func TestReconcileCurrentVersion_AdvancesAfterRollingUpgradeFinalization(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version: "2.4.4",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.3",
+			Upgrade:        nil, // rolling manager finalized by clearing upgrade status only
+		},
+	}
+
+	state := &StatusState{
+		RollingUpgradeInProgress: false,
+		BlueGreenInProgress:      false,
+		UpgradeInProgress:        false,
+	}
+
+	ReconcileCurrentVersion(logr.Discard(), cluster, state, "2.4.4")
+	assert.Equal(t, "2.4.4", cluster.Status.CurrentVersion)
+}
+
 func TestMaybeAdvanceCurrentVersionForBlueGreen_AdvancesOnCompletion(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{

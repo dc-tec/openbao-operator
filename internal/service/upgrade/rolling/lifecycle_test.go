@@ -19,6 +19,59 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
+func TestPatchStatusSSA_PreservesSiblingAdminOpsFieldsFromLatestObject(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	stored := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "upgrade-cluster",
+			Namespace: "ns1",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				FromVersion:      "2.4.3",
+				TargetVersion:    "2.4.4",
+				CurrentPartition: 1,
+			},
+			UpgradeRequests: &openbaov1alpha1.UpgradeRequestStatus{
+				LastHandledRetry: "retry-1",
+			},
+			Backup: &openbaov1alpha1.BackupStatus{
+				LastFailureReason: "persist-me",
+			},
+		},
+	}
+	cluster := stored.DeepCopy()
+	cluster.Status.Backup = nil
+	cluster.Status.Upgrade.CurrentPartition = 2
+
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(stored.DeepCopy()).
+		Build()
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, portopenbao.ClientConfig{}, nil, "")
+
+	if err := mgr.patchStatusSSA(context.Background(), cluster); err != nil {
+		t.Fatalf("patchStatusSSA() error = %v", err)
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(stored), updated); err != nil {
+		t.Fatalf("Get() cluster error = %v", err)
+	}
+	if updated.Status.Backup == nil || updated.Status.Backup.LastFailureReason != "persist-me" {
+		t.Fatalf("persisted backup = %#v, want sibling adminops field preserved", updated.Status.Backup)
+	}
+	if cluster.Status.Backup == nil || cluster.Status.Backup.LastFailureReason != "persist-me" {
+		t.Fatalf("in-memory backup = %#v, want refreshed sibling adminops field", cluster.Status.Backup)
+	}
+	if updated.Status.Upgrade == nil || updated.Status.Upgrade.CurrentPartition != 2 {
+		t.Fatalf("persisted upgrade = %#v, want updated rolling status", updated.Status.Upgrade)
+	}
+}
+
 func TestWaitForFinalizationConverged_WaitsForStatefulSetConvergence(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = appsv1.AddToScheme(scheme)
@@ -164,7 +217,7 @@ func TestWaitForFinalizationConverged_SucceedsWhenStatefulSetPodsAndHealthConver
 	}
 }
 
-func TestPatchFinalizedUpgradeStatus_PersistsCurrentVersionAndClearsUpgrade(t *testing.T) {
+func TestPatchFinalizedUpgradeStatus_ClearsUpgradeWithoutTouchingCurrentVersion(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
@@ -197,15 +250,10 @@ func TestPatchFinalizedUpgradeStatus_PersistsCurrentVersionAndClearsUpgrade(t *t
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	updated := &openbaov1alpha1.OpenBaoCluster{}
-	if err := c.Get(context.Background(), client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, updated); err != nil {
-		t.Fatalf("failed to get updated cluster: %v", err)
-	}
-
-	if updated.Status.Upgrade != nil {
+	if cluster.Status.Upgrade != nil {
 		t.Fatalf("expected upgrade status to be cleared after finalization")
 	}
-	if updated.Status.CurrentVersion != "2.4.4" {
-		t.Fatalf("expected CurrentVersion to be persisted as target version, got %q", updated.Status.CurrentVersion)
+	if cluster.Status.CurrentVersion != "2.4.3" {
+		t.Fatalf("expected CurrentVersion to remain unchanged, got %q", cluster.Status.CurrentVersion)
 	}
 }

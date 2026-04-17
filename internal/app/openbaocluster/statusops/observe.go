@@ -19,6 +19,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // LabelConfig supplies labels used during status observation.
@@ -46,7 +47,7 @@ func GatherState(
 
 	// Compute upgrade state from cluster.Status.
 	state.RollingUpgradeInProgress = cluster.Status.Upgrade != nil
-	if state.RollingUpgradeInProgress && cluster.Status.Upgrade.LastErrorReason != "" {
+	if state.RollingUpgradeInProgress && upgrade.UpgradeFailed(cluster.Status.Upgrade) {
 		state.UpgradeFailed = true
 	}
 

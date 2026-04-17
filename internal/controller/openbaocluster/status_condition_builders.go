@@ -61,7 +61,7 @@ func buildDegradedCondition(
 		return metav1.Condition{
 			Type:    string(openbaov1alpha1.ConditionDegraded),
 			Status:  metav1.ConditionTrue,
-			Reason:  cluster.Status.Upgrade.LastErrorReason,
+			Reason:  rollingUpgradeFailureReason(cluster.Status.Upgrade),
 			Message: buildRollingUpgradeFailedMessage(cluster),
 		}
 	}
