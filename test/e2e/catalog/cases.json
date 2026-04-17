@@ -1625,6 +1625,60 @@
     "suiteTitle": ""
   },
   {
+    "id": "security-guardrails-allows-managed-pod-deletion-during-maintenance-80b5ee0d",
+    "generatedId": "security-guardrails-allows-managed-pod-deletion-during-maintenance-80b5ee0d",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "allows managed Pod deletion during maintenance with cluster maintenance permission",
+    "path": [
+      "Security Guardrails",
+      "Resource Locking (anti-tamper)",
+      "allows managed Pod deletion during maintenance with cluster maintenance permission"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-prevents-managed-pod-deletion-during-maintenance-238e18f8",
+    "generatedId": "security-guardrails-prevents-managed-pod-deletion-during-maintenance-238e18f8",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "prevents managed Pod deletion during maintenance without cluster maintenance permission",
+    "path": [
+      "Security Guardrails",
+      "Resource Locking (anti-tamper)",
+      "prevents managed Pod deletion during maintenance without cluster maintenance permission"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "security-guardrails-prevents-sidecar-injection-via-statefulset-updates-145c71ee",
     "generatedId": "security-guardrails-prevents-sidecar-injection-via-statefulset-updates-145c71ee",
     "file": "test/e2e/Security_Guardrails_test.go",
