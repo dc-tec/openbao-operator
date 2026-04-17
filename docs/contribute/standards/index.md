@@ -7,19 +7,19 @@ journey: contribute
 
 <PageHero
   eyebrow="Contribute / Build & Change"
-  title="Learn the project rules before your change becomes someone else’s cleanup."
-  lede="These standards define how OpenBao Operator code, docs, generated artifacts, and commit history should look. Use this section before you start refactoring, adding APIs, changing manifests, or touching generated output."
+  title="Repository standards"
+  lede="Coding, documentation, generated-artifact, and commit-history standards for OpenBao Operator."
   actions={[
     {label: "Open project conventions", to: "/contribute/standards/project-conventions", variant: "primary"},
     {label: "Open documentation style guide", to: "/contribute/docs-style-guide", variant: "secondary"},
   ]}
 >
   <Checklist
-    title="Use this section when you need to"
+    title="Use this section to"
     items={[
       "understand what the project considers idiomatic Go and acceptable controller patterns",
       "avoid common review feedback around error handling, logging, generated files, and commit shape",
-      "follow the project’s security, docs, and architecture expectations before you submit code",
+      "follow the project’s security, docs, and architecture expectations when you submit code",
       "know which standards are global and which are specific to OpenBao Operator itself",
     ]}
   />

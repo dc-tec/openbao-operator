@@ -16,6 +16,7 @@ func SetUpgradeStarted(status *openbaov1alpha1.OpenBaoClusterStatus, from, to st
 		StartedAt:        &now,
 		CurrentPartition: replicas, // Start with partition = replicas (no pods updated yet)
 		CompletedPods:    []int32{},
+		Failure:          nil,
 		LastErrorReason:  "",
 		LastErrorMessage: "",
 		LastErrorAt:      nil,
@@ -57,6 +58,11 @@ func SetUpgradeFailed(status *openbaov1alpha1.OpenBaoClusterStatus, reason, mess
 
 	if status.Upgrade == nil {
 		status.Upgrade = &openbaov1alpha1.UpgradeProgress{}
+	}
+	status.Upgrade.Failure = &openbaov1alpha1.ControllerErrorStatus{
+		Reason:  reason,
+		Message: message,
+		At:      &now,
 	}
 	status.Upgrade.LastErrorReason = reason
 	status.Upgrade.LastErrorMessage = message

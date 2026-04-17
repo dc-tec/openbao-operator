@@ -59,7 +59,7 @@ func (m *Manager) ensureUpgradeLock(
 }
 
 func (m *Manager) releaseIdleUpgradeLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	if err := core.ReleaseUpgradeLockIfHeld(ctx, m.client, logger, cluster); err != nil {
+	if err := core.ReleaseUpgradeLockIfHeldWithReader(ctx, m.reader, m.client, logger, cluster); err != nil {
 		logger.Error(err, "Failed to release stale upgrade operation lock")
 	}
 }
@@ -76,7 +76,7 @@ func (m *Manager) acquireUpgradeLock(
 		lockMessage = fmt.Sprintf("upgrade to %s (in progress)", cluster.Status.Upgrade.TargetVersion)
 	}
 
-	lockResult, err := core.AcquireUpgradeLock(ctx, m.client, logger, cluster, lockMessage)
+	lockResult, err := core.AcquireUpgradeLockWithReader(ctx, m.reader, m.client, logger, cluster, lockMessage)
 	if err != nil {
 		return recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}

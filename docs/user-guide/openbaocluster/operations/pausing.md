@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Pause the operator only when you need a short-lived manual window."
-  lede="Pausing tells the operator to stop normal reconciliation for a specific cluster while you inspect or repair it. Use it for deliberate tactical work, not as a substitute for recovery workflows or as a long-term steady state."
+  title="Pause reconciliation for a short manual window"
+  lede="Pausing tells the operator to stop normal reconciliation for a specific cluster while you inspect or repair it. Use it for short, deliberate manual work; recovery workflows and long-running manual management should use their own paths."
 />
 
 <Checklist

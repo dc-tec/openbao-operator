@@ -31,7 +31,7 @@ func ApplyOpenBaoClusterAdminOpsStatus(
 		return fmt.Errorf("cluster is required")
 	}
 
-	applyCluster := &openbaov1alpha1.OpenBaoCluster{
+	applyConfig, err := ToApplyConfiguration(&openbaov1alpha1.OpenBaoCluster{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: openbaov1alpha1.GroupVersion.String(),
 			Kind:       "OpenBaoCluster",
@@ -48,9 +48,7 @@ func ApplyOpenBaoClusterAdminOpsStatus(
 			BreakGlass:      cluster.Status.BreakGlass,
 			AdminOps:        cluster.Status.AdminOps,
 		},
-	}
-
-	applyConfig, err := ToApplyConfiguration(applyCluster, c)
+	}, c)
 	if err != nil {
 		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
 	}

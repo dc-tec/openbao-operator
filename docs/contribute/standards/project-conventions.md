@@ -6,7 +6,7 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Use these conventions to make a change fit the repository before CI has to rescue it."
+  title="Repository project conventions"
   lede="These are the project-specific rules that go beyond generic Go style. They keep controller code predictable, reviews focused, architecture boundaries enforceable, and generated output aligned with the code that owns it."
 />
 
@@ -38,7 +38,7 @@ journey: contribute
     },
     {
       cells: [
-        "Treat architecture boundaries as policy",
+        "Keep architecture boundaries aligned with policy",
         "Update the boundary policy before adding new top-level internal packages or controller packages.",
         "The repository enforces these rules automatically, so design intent and CI stay aligned.",
       ],
@@ -53,9 +53,9 @@ journey: contribute
   ]}
 />
 
-<Callout type="warning" title="No `any` in core logic">
+<Callout type="warning" title="Avoid type erasure in core logic">
 
-Treat `any` and `interface{}` as escape hatches for external API boundaries, not as normal implementation tools. If a helper only works because it erases types, it usually needs a narrower contract.
+Reserve `any` and `interface{}` for external API boundaries. Helpers that only work because they erase types usually need a narrower contract.
 
 </Callout>
 
@@ -129,7 +129,7 @@ make lint-ast`}
     },
     {
       label: "Generated artifacts",
-      description: "Use the generation map when you know a change should have emitted files but are not sure which command owns them.",
+      description: "Generated artifacts maps emitted files back to their owning commands.",
       to: "/contribute/standards/generated-artifacts",
     },
     {

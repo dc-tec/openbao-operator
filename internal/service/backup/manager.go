@@ -24,6 +24,7 @@ var backupOperationLock = opslifecycle.OperationLock{
 // Manager reconciles backup configuration and execution for an OpenBaoCluster.
 type Manager struct {
 	client                client.Client
+	reader                client.Reader
 	scheme                *runtime.Scheme
 	recorder              events.EventRecorder
 	clientConfig          portopenbao.ClientConfig
@@ -40,12 +41,21 @@ func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig portopenba
 	}
 	return &Manager{
 		client:                c,
+		reader:                c,
 		scheme:                scheme,
 		recorder:              eventRecorder,
 		clientConfig:          clientConfig,
 		operatorImageVerifier: operatorImageVerifier,
 		Platform:              platform,
 	}
+}
+
+// WithReader configures a live reader for status read-before-write flows.
+func (m *Manager) WithReader(reader client.Reader) *Manager {
+	if reader != nil {
+		m.reader = reader
+	}
+	return m
 }
 
 // BackupResult contains the result of a successful backup.

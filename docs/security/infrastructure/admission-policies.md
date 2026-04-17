@@ -7,8 +7,8 @@ description: How ValidatingAdmissionPolicy guardrails enforce managed-resource o
 ---
 
 <PageHeader
-  title="Reject unsafe intent before it becomes persisted state."
-  lede="The operator uses Kubernetes `ValidatingAdmissionPolicy` to enforce key safety rules at the API boundary. These policies are not a replacement for reconciliation logic; they are the front line that prevents invalid, privileged, or drifted state from landing in etcd in the first place."
+  title="Admission policies and fail-closed behavior"
+  lede="Kubernetes `ValidatingAdmissionPolicy` guardrails for key safety rules at the API boundary."
 />
 
 
@@ -93,14 +93,14 @@ description: How ValidatingAdmissionPolicy guardrails enforce managed-resource o
       cells: [
         'Required policy disappears or becomes misbound later',
         'Sensitive reconciliation paths pause and surface degraded status.',
-        'The admission dependency is part of the runtime safety model, not only a bootstrap check.',
+        'The admission dependency is part of the runtime safety model as well as startup validation.',
       ],
     },
     {
       cells: [
         'Unsafe mode explicitly enabled',
         'The operator can start without admission dependency enforcement.',
-        'This is intended only for development or break-glass scenarios and materially weakens defense in depth.',
+        'Reserved for development or explicit break-glass scenarios; materially weakens defense in depth.',
       ],
     },
   ]}
@@ -198,9 +198,9 @@ Disabling admission policies is treated as unsafe mode. Even if the cluster othe
   ]}
 />
 
-<Callout type="note" title="Optional canary">
+<Callout type="note" title="Admission canary">
 
-The provisioner supports an optional admission canary that submits a dry-run RBAC request which must be denied. This gives stronger assurance that policy enforcement is active, not only that the policy objects exist.
+The provisioner supports an optional admission canary that submits a dry-run RBAC request which must be denied. This adds evidence that policy enforcement is active, beyond the presence of the policy objects themselves.
 
 </Callout>
 
@@ -217,17 +217,17 @@ Admission policy is one of the reasons the operator can separate user intent fro
   items={[
     {
       label: 'RBAC architecture',
-      description: 'See how these policies reinforce the split-controller identity model.',
+      description: 'How these policies reinforce the split-controller identity model.',
       docId: 'security/infrastructure/rbac',
     },
     {
       label: 'Network security',
-      description: 'Review the default-deny network posture that complements admission enforcement.',
+      description: 'Default-deny network posture that complements admission enforcement.',
       docId: 'security/infrastructure/network-security',
     },
     {
       label: 'Threat model',
-      description: 'Connect admission guardrails back to the STRIDE threats they mitigate.',
+      description: 'STRIDE threats mitigated by the admission guardrails.',
       docId: 'security/fundamentals/threat-model',
     },
   ]}

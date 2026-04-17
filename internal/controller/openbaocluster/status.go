@@ -93,9 +93,9 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 	appopenbaocluster.ReconcileCurrentVersion(logger, cluster, state, observedVersion)
 	appopenbaocluster.MaybeAdvanceCurrentVersionForBlueGreen(logger, cluster, observedVersion)
-	// Rolling upgrade completion is finalized by the AdminOps rolling manager.
-	// The status controller must not independently advance CurrentVersion for rolling,
-	// otherwise it can race with in-progress partitioned rollouts.
+	// Rolling manager finalization only clears status.upgrade. The status
+	// controller is the sole writer of CurrentVersion and advances it after
+	// rollout convergence is observed from workload state.
 
 	// Update per-cluster metrics.
 	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)

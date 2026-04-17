@@ -1,6 +1,6 @@
 ---
 title: Backup Operations
-description: Configure backup jobs, object-storage auth, retention, and verification before you depend on snapshot-based recovery.
+description: Configure backup jobs, object-storage auth, retention, and verification for snapshot-based recovery.
 slug: /operate/backups
 hide_title: true
 pageType: task
@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Make snapshots routine before you need them for a restore."
-  lede="OpenBao Operator runs backups as transient Jobs that authenticate separately from the main workload, stream Raft snapshots directly to object storage, and record schedule and failure state on the cluster."
+  title="Backup operations and snapshot policy"
+  lede="OpenBao Operator runs backups as transient Jobs that authenticate separately from the main workload, stream Raft snapshots directly to object storage, and record schedule and failure state on the cluster. Use this page to configure auth, storage, schedules, retention, and verification."
 />
 
 
@@ -51,7 +51,7 @@ journey: operate
         'Static token',
         'JWT auth is not available yet and you need a compatibility path.',
         'The backup Job reads a long-lived token from a Secret in the cluster namespace.',
-        'This is a legacy path. Treat the token as a sensitive credential and rotate it deliberately.',
+        'This is a compatibility path. Treat the token as a sensitive credential and rotate it deliberately.',
       ],
       emphasis: 'caution',
     },
@@ -79,7 +79,7 @@ Check `CloudUnsealIdentityReady` for the main Pods and `BackupConfigurationReady
 ## First successful backup path
 
 <DecisionTable
-  title="Use this order the first time you wire backups"
+  title="Recommended first backup path"
   columns={['Step', 'What to do', 'What proves success']}
   rows={[
     {
@@ -655,7 +655,7 @@ Confirm backup status before you start the upgrade rather than assuming the pre-
 <CommandBlock
   language="bash"
   label="verify"
-  title="Check backup readiness before you wait for the schedule"
+  title="Check backup readiness"
   code={`kubectl get openbaocluster my-cluster -n <namespace> \\
   -o jsonpath='{range .status.conditions[*]}{.type}={.status}{\"\\n\"}{end}'`}
 >
@@ -697,7 +697,7 @@ Confirm backup status before you start the upgrade rather than assuming the pre-
     },
     {
       label: 'Plan upgrades',
-      description: 'Backups should be validated before you depend on pre-upgrade snapshots and cutover safety.',
+      description: 'Validate backups as part of pre-upgrade snapshots and cutover safety.',
       docId: 'user-guide/openbaocluster/operations/upgrades',
     },
     {

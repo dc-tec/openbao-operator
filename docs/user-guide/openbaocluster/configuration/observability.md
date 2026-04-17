@@ -3,12 +3,12 @@ title: Observability
 hide_title: true
 pageType: task
 journey: configure
-description: Wire operator metrics, cluster telemetry, dashboards, alerts, and logs before you have to troubleshoot the service under pressure.
+description: Configure operator metrics, cluster telemetry, dashboards, alerts, and logs for routine operations and incident response.
 ---
 
 <PageHeader
-  title="Observe both the operator and the workload before you call the cluster ready."
-  lede="OpenBao Operator has two observability layers: the operator control plane itself, and the OpenBao workload it renders. Use this page to wire both layers into your monitoring stack, choose the scrape model your platform already supports, and promote only the signals that help you operate upgrades, backups, and recovery."
+  title="Observability for operator and workload"
+  lede="OpenBao Operator has two observability layers: the operator control plane itself, and the OpenBao workload it renders. Use this page to wire both layers into your monitoring stack, choose the scrape model your platform already supports, and focus on the signals that matter for upgrades, backups, and recovery."
 />
 
 
@@ -31,7 +31,7 @@ description: Wire operator metrics, cluster telemetry, dashboards, alerts, and l
         "OpenBao workload telemetry",
         "The `spec.observability.metrics` block on each `OpenBaoCluster`, plus optional `spec.telemetry` overrides.",
         "Application-level metrics from the OpenBao Pods themselves.",
-        "This is separate from operator metrics. Do not assume enabling one layer automatically covers the other.",
+        "Configure this separately from operator metrics. Enabling one layer does not configure the other.",
       ],
     },
     {
@@ -39,7 +39,7 @@ description: Wire operator metrics, cluster telemetry, dashboards, alerts, and l
         "Logs and health probes",
         "Operator install values such as log level and health probe settings.",
         "Fast incident triage when the issue is not obvious from metrics alone.",
-        "Use debug logging intentionally and temporarily. Do not leave broad debug enabled as the long-term default.",
+        "Use debug logging intentionally and temporarily, then return to the normal log level.",
       ],
     },
     {
@@ -47,7 +47,7 @@ description: Wire operator metrics, cluster telemetry, dashboards, alerts, and l
         "Dashboards and alerts",
         "Grafana assets under `config/grafana/` and your own Prometheus or Alertmanager rules.",
         "A small, repeatable operator cockpit for upgrades, backups, and cluster readiness.",
-        "Dashboards should support decisions. They should not become an excuse to avoid explicit alerts on the failure modes that matter.",
+        "Use dashboards for context and alerts for time-sensitive failures.",
       ],
     },
   ]}
@@ -133,7 +133,7 @@ description: Wire operator metrics, cluster telemetry, dashboards, alerts, and l
       - targets:
           - <provisioner-metrics-service>.<operator-namespace>.svc:8443`}
 >
-  Use this only when you do not run a scrape operator. Keep the ServiceAccount permission to GET `/metrics` and the TLS assumptions explicit.
+  Use this path when you do not run a scrape operator. Keep the ServiceAccount permission to GET `/metrics` and the TLS assumptions explicit.
 </CommandBlock>
 
   </TabItem>
@@ -164,7 +164,7 @@ spec:
         interval: "30s"
         scrapeTimeout: "10s"`}
 >
-  This enables the OpenBao telemetry stanza with safe defaults and creates a Prometheus Operator ServiceMonitor when that is the scrape model you use. Use `spec.telemetry` only when you need lower-level OpenBao telemetry tuning.
+  This enables the OpenBao telemetry stanza with safe defaults and creates a Prometheus Operator ServiceMonitor when that is the scrape model you use. Reach for `spec.telemetry` when you need lower-level OpenBao telemetry tuning.
 </CommandBlock>
 
 <DecisionTable
@@ -176,7 +176,7 @@ spec:
       cells: [
         "Availability",
         "`openbao_cluster_ready_replicas` and cluster conditions such as `Available` or `Degraded`",
-        "This tells you whether the cluster is actually serving, not just whether Pods exist.",
+        "This tells you whether the cluster is serving traffic rather than only whether Pods exist.",
       ],
       emphasis: "recommended",
     },
@@ -184,14 +184,14 @@ spec:
       cells: [
         "Backup freshness",
         "`openbao_backup_last_success_timestamp`, `openbao_backup_consecutive_failures`, and the backup status conditions",
-        "Restore is only as real as the last backup you can prove succeeded.",
+        "These signals show whether the snapshots you plan to restore are current and successful.",
       ],
     },
     {
       cells: [
         "Upgrade safety",
         "`openbao_upgrade_in_progress`, `openbao_upgrade_failure_total`, and rollback counters",
-        "Upgrades should be observable as controlled workflows, not silent StatefulSet churn.",
+        "These signals distinguish orchestrated upgrade activity from normal steady state.",
       ],
     },
     {
@@ -226,7 +226,7 @@ spec:
           expr: rate(openbao_reconcile_errors_total[5m]) > 0.1
           for: 10m`}
 >
-  Keep the first alert set small. Availability, backup freshness, and sustained reconcile failure are the signals that change operator behavior fastest.
+  Keep the first alert set small. Availability, backup freshness, and sustained reconcile failure are the highest-value starting signals.
 </CommandBlock>
 
 ## Dashboards, logs, and health
@@ -254,7 +254,7 @@ spec:
 
 <Callout type="tip" title="Keep operator metrics and workload telemetry separate in your dashboards">
 
-The most useful dashboards show both surfaces together, but they should still make it obvious whether a failure is in the operator control plane or in the OpenBao workload itself.
+Build dashboards that show both surfaces together and still make it obvious whether a failure is in the operator control plane or in the OpenBao workload itself.
 
 </Callout>
 
@@ -263,7 +263,7 @@ The most useful dashboards show both surfaces together, but they should still ma
   items={[
     {
       label: "Configure backups",
-      description: "Backups are the first place good observability pays off. Wire them before you depend on restore.",
+      description: "Configure backup telemetry before restore depends on it.",
       docId: "user-guide/openbaocluster/operations/backups",
     },
     {

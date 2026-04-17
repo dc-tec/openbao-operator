@@ -7,8 +7,8 @@ description: How root tokens, unseal keys, TLS material, and generated job ident
 ---
 
 <PageHeader
-  title="Treat trust material as lifecycle state, not just as Kubernetes Secrets."
-  lede="The operator manages or coordinates several high-value trust surfaces: bootstrap credentials, unseal roots, TLS material, and the identities used by backup, restore, and upgrade workflows. The most important question is not only where they live, but whether the operating model can avoid creating them in the first place."
+  title="Secrets and trust material lifecycle"
+  lede="Bootstrap credentials, unseal roots, TLS material, and the identities used by backup, restore, and upgrade workflows."
 />
 
 
@@ -44,7 +44,7 @@ description: How root tokens, unseal keys, TLS material, and generated job ident
       cells: [
         'Backup, restore, and upgrade job auth',
         'Projected tokens, generated ServiceAccounts, or explicit credentials Secrets',
-        'Should remain separate from the main OpenBao workload identity.',
+        'Separate from the main OpenBao workload identity.',
       ],
     },
   ]}
@@ -154,7 +154,7 @@ Using transit, cloud KMS, or HSM-backed modes shifts the root of trust away from
       cells: [
         'Development bootstrap without self-init',
         'The root token can be stored in `<cluster>-root-token`.',
-        'This is useful for testing but creates a critical secret in the namespace.',
+        'Testing-oriented path that creates a critical secret in the namespace.',
       ],
     },
   ]}
@@ -170,7 +170,7 @@ If a root token or equivalent bootstrap credential exists in a Secret, anyone wh
 
 <DiagramFrame
   title="Job identity separation"
-  caption="The main OpenBao Pods, backup jobs, restore jobs, and upgrade jobs should not silently share one identity path. Each surface should stay explicit and observable."
+  caption="The main OpenBao Pods, backup jobs, restore jobs, and upgrade jobs use separate identity paths so each surface stays explicit and observable."
   code={`sequenceDiagram
     autonumber
     participant Operator as Operator
@@ -192,17 +192,17 @@ If a root token or equivalent bootstrap credential exists in a Secret, anyone wh
     Job->>Bao: Perform backup, restore, or upgrade work`}
 />
 
-The important boundary is this:
+Lifecycle job identities stay separate from the main workload identity:
 
 - main OpenBao Pods use the trust path selected for the cluster itself
 - backup, restore, and upgrade Jobs use separate generated identities
 - those Jobs do not automatically inherit the cloud or JWT path of the main workload unless the operator deliberately configured it
 
-This is why backup and restore readiness are surfaced independently in status rather than assumed from the main Pods.
+Backup and restore readiness are surfaced independently in status rather than inferred from the main Pods.
 
-## Where the task guidance lives
+## Related task pages
 
-This page owns the trust model. The operational task pages stay elsewhere:
+Operational task pages:
 
 - <SiteLink docId="user-guide/openbaocluster/configuration/security-profiles">Configure Security Profiles</SiteLink>
 - <SiteLink docId="user-guide/openbaocluster/operations/backups">Configure Backups</SiteLink>
@@ -213,17 +213,17 @@ This page owns the trust model. The operational task pages stay elsewhere:
   items={[
     {
       label: 'Production posture',
-      description: 'See how these trust-material choices map back to Development versus Hardened.',
+      description: 'How these trust-material choices map back to Development versus Hardened.',
       docId: 'security/fundamentals/profiles',
     },
     {
       label: 'Configure security profiles',
-      description: 'Switch to the task page when you are ready to set the actual cluster fields.',
+      description: 'Cluster fields behind these trust-model choices.',
       docId: 'user-guide/openbaocluster/configuration/security-profiles',
     },
     {
       label: 'Threat model',
-      description: 'Return to the broader threat model if you need the surrounding attacker and boundary assumptions.',
+      description: 'Attacker model and surrounding boundary assumptions.',
       docId: 'security/fundamentals/threat-model',
     },
   ]}

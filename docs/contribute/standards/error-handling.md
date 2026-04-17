@@ -6,8 +6,8 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Handle errors so callers keep context, reviewers can follow the failure path, and controllers stay alive."
-  lede="Most error-handling issues in this repository are not about catching more failures. They are about returning failures with enough structure and context that the next layer can make the right decision without guessing. These rules keep that path predictable."
+  title="Error-handling defaults"
+  lede="Return failures with enough structure and context for the next layer to act correctly."
 />
 
 <DecisionTable

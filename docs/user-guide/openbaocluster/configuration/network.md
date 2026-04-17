@@ -7,8 +7,8 @@ description: Configure the operator-managed NetworkPolicy contract, including DN
 ---
 
 <PageHeader
-  title="Treat NetworkPolicy as part of the cluster contract, not as an afterthought."
-  lede="The operator uses a deny-by-default posture and then adds the ingress and egress paths the cluster needs to function. That means DNS, Kubernetes API access, edge peers, and backup or restore dependencies should be configured intentionally rather than discovered during an outage."
+  title="Network policy and traffic contracts"
+  lede="The operator starts from a deny-by-default posture and then adds the ingress and egress paths the cluster needs to function. Use this page to configure DNS, Kubernetes API access, edge peers, and external dependency traffic for backup and restore workflows."
 />
 
 
@@ -137,7 +137,7 @@ description: Configure the operator-managed NetworkPolicy contract, including DN
     dnsEndpointIPs:
       - "169.254.20.10"`}
 >
-  Use `dnsEndpointIPs` only when the resolver is enforced by IP rather than by Service-backed pod traffic. This also affects backup and restore Jobs.
+  Set `dnsEndpointIPs` when the resolver is enforced by IP rather than by Service-backed pod traffic. This setting also applies to backup and restore Jobs.
 </CommandBlock>
 
   </TabItem>

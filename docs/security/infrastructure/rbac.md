@@ -7,8 +7,8 @@ description: How the provisioner and controller identities stay separate, narrow
 ---
 
 <PageHeader
-  title="Keep the identity that grants access separate from the identity that uses it."
-  lede="The operator's RBAC model is built around a split-controller design. The provisioner introduces tenant access and namespace guardrails, while the controller consumes tenant-scoped permissions to manage workloads. Neither long-running identity should be able to do both jobs."
+  title="Split-controller RBAC model"
+  lede="Provisioner and controller identities stay separate. The provisioner introduces tenant access and namespace guardrails, and the controller uses tenant-scoped permissions to manage workloads."
 />
 
 
@@ -61,7 +61,7 @@ description: How the provisioner and controller identities stay separate, narrow
 
 <Callout type="note" title="Projected Kubernetes API tokens">
 
-The operator disables default token auto-mounting and uses explicit projected ServiceAccount tokens for Kubernetes API access. Audience pinning can be configured, but the important contract here is that API identity stays explicit and short-lived rather than inherited implicitly.
+The operator disables default token auto-mounting and uses explicit projected ServiceAccount tokens for Kubernetes API access. Audience pinning can be configured. API identity remains explicit and short-lived through projected tokens.
 
 </Callout>
 
@@ -120,15 +120,15 @@ The operator disables default token auto-mounting and uses explicit projected Se
       cells: [
         'Create tenant guardrails such as `ResourceQuota` and `LimitRange`',
         'Day-0 governance belongs to provisioning, not to workload reconciliation.',
-        'The provisioner manages only the operator-owned fixed objects and does not treat these resources as general namespace inventory.',
+        'The provisioner manages only the operator-owned fixed objects; it does not manage general namespace inventory.',
       ],
     },
   ]}
 />
 
-<Callout type="note" title="Blind-write pattern">
+<Callout type="note" title="Access grant flow">
 
-The provisioner writes the RBAC that grants the controller access, but it does not grant itself those permissions. That is the core security property of the onboarding path.
+The provisioner writes the RBAC that grants the controller access, but it does not receive those tenant permissions itself. That separation is the core security property of the onboarding path.
 
 </Callout>
 
@@ -227,12 +227,12 @@ Installing with admission policies disabled materially weakens the RBAC defense-
   items={[
     {
       label: 'Admission policies',
-      description: 'See how RBAC writes and managed-resource mutations are constrained at the API boundary.',
+      description: 'RBAC writes and managed-resource mutations constrained at the API boundary.',
       docId: 'security/infrastructure/admission-policies',
     },
     {
       label: 'Network security',
-      description: 'Review the default-deny network posture that complements these identity boundaries.',
+      description: 'Default-deny network posture that complements these identity boundaries.',
       docId: 'security/infrastructure/network-security',
     },
     {

@@ -10,8 +10,8 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
 <PageHero
   variant="landing"
   eyebrow="Operate"
-  title="Run the cluster as a service, not as a one-time install."
-  lede="This section covers the full day 2 lifecycle of an OpenBao cluster: make it reliable, protect data before risky change, use cluster controls deliberately, and move from troubleshooting into recovery when normal operations are no longer enough."
+  title="Cluster operations"
+  lede="Use these guides for the day 2 lifecycle of an OpenBao cluster, including production readiness, backups, upgrades, maintenance, troubleshooting, and decommissioning."
   actions={[
     {label: 'Open the production checklist', docId: 'user-guide/openbaocluster/operations/production-checklist', variant: 'primary'},
     {label: 'Open recovery and restore', docId: 'user-guide/openbaocluster/recovery/index', variant: 'secondary'},
@@ -22,7 +22,7 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
     items={[
       'close the gap between a working cluster and a supportable service',
       'put backups and upgrade planning in place before risky change',
-      'use maintenance and pause controls deliberately instead of improvising',
+      'use maintenance and pause controls with the intended operating model',
       'move into recovery and restore when troubleshooting is no longer enough',
     ]}
   />
@@ -32,17 +32,17 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
   title="How this section is organized"
   items={[
     {
-      label: 'Reliability & Change',
+      label: 'Reliability and change',
       description: 'Use the production checklist, backups, and upgrade planning to keep planned change safe.',
       docId: 'user-guide/openbaocluster/operations/production-checklist',
     },
     {
-      label: 'Cluster Controls',
-      description: 'Use maintenance, pause, and decommission workflows when you need to change controller behavior deliberately.',
+      label: 'Cluster controls',
+      description: 'Use maintenance, pause, and decommission workflows to change controller behavior safely.',
       docId: 'user-guide/openbaocluster/operations/maintenance',
     },
     {
-      label: 'Troubleshooting & Recovery',
+      label: 'Troubleshooting and recovery',
       description: 'Start with symptoms and status, then move into recovery and restore when the incident crosses that line.',
       docId: 'user-guide/openbaocluster/operations/troubleshooting',
     },
@@ -50,18 +50,18 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
 />
 
 <RouteList
-  title="Reliability & Change"
+  title="Reliability and change"
   items={[
     {
       eyebrow: '01',
       title: 'Production checklist',
-      description: 'Use the checklist before you call an environment production-ready or supportable.',
+      description: 'Use the checklist to confirm an environment is production-ready and supportable.',
       docId: 'user-guide/openbaocluster/operations/production-checklist',
     },
     {
       eyebrow: '02',
       title: 'Configure backups',
-      description: 'Set up snapshot streaming, backup identity, and restore readiness before you need them.',
+      description: 'Set up snapshot streaming, backup identity, and restore readiness as part of the operating baseline.',
       docId: 'user-guide/openbaocluster/operations/backups',
     },
     {
@@ -74,7 +74,7 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
 />
 
 <RouteList
-  title="Cluster Controls"
+  title="Cluster controls"
   items={[
     {
       eyebrow: '01',
@@ -91,14 +91,14 @@ description: Upgrade, back up, maintain, troubleshoot, recover, and restore Open
     {
       eyebrow: '03',
       title: 'Decommission a cluster',
-      description: 'Remove a cluster deliberately with the right deletion policy for data, PVCs, and external backups.',
+      description: 'Remove a cluster with the deletion policy that matches data, PVCs, and external backups.',
       docId: 'user-guide/openbaocluster/operations/deletion',
     },
   ]}
 />
 
 <RouteList
-  title="Troubleshooting & Recovery"
+  title="Troubleshooting and recovery"
   items={[
     {
       eyebrow: '01',

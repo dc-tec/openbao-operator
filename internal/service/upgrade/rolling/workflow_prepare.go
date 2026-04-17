@@ -61,8 +61,9 @@ func (m *Manager) handlePreStartUpgradeFailure(
 		return persistErr
 	}
 
-	return core.ReleaseUpgradeLockOnErrorIfHeld(
+	return core.ReleaseUpgradeLockOnErrorIfHeldWithReader(
 		ctx,
+		m.reader,
 		m.client,
 		logger,
 		cluster,

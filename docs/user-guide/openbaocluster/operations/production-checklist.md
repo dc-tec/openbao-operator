@@ -1,6 +1,6 @@
 ---
 title: Production Checklist
-description: Verify security, durability, observability, and readiness before you route real traffic through an OpenBao cluster.
+description: Verify security, durability, observability, and readiness for an OpenBao cluster that will serve real traffic.
 slug: /operate/production-checklist
 hide_title: true
 pageType: task
@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Make the cluster boring before you call it production."
-  lede="Use this checklist after the first cluster path succeeds and before teams depend on the service. The goal is to lock down the security posture, protect data, prove observability, and confirm that the operator reports a clean converged state."
+  title="Production readiness checklist"
+  lede="Use this checklist after the first cluster path succeeds and before teams depend on the service. It covers security posture, data protection, observability, and the operator-reported signals that should be clean before production use."
 />
 
 <DecisionTable
@@ -46,7 +46,7 @@ journey: operate
       cells: [
         'Cluster readiness',
         'The status conditions show healthy convergence and no unresolved integration blockers.',
-        'A production launch should start from a stable status surface, not an optimistic assumption.',
+        'Start a production launch from a stable status surface rather than an optimistic assumption.',
         'Use the final verification commands on this page.',
       ],
     },
@@ -62,9 +62,9 @@ journey: operate
 - Enable `spec.selfInit` and configure real user authentication in `spec.selfInit.requests` so the first operator-driven bootstrap does not end in a lockout.
 - If you rely on operator lifecycle auth for backups and upgrades, enable `spec.selfInit.oidc.enabled: true` or deliberately provision the equivalent JWT roles yourself.
 
-<Callout type="warning" title="Do not stop at install success">
+<Callout type="warning" title="Install success is not the production gate">
 
-A cluster that initializes successfully is not automatically ready for production. The production gate is the combination of security hardening, backup readiness, and clean status conditions, not the fact that pods started once.
+A cluster that initializes successfully still needs security hardening, backup readiness, and clean status conditions before it is ready for production.
 
 </Callout>
 
@@ -92,7 +92,7 @@ A cluster that initializes successfully is not automatically ready for productio
 kubectl get deploy -n <operator-namespace>
 kubectl get openbaotenant -A`}
 >
-  The exact number of policies and controller Deployments depends on the features you enabled, but the OpenBao guardrail set should be visible before you bring real tenants onto the platform.
+  The exact number of policies and controller Deployments depends on the features you enabled, but the OpenBao guardrail set must be visible before you bring real tenants onto the platform.
 </CommandBlock>
 
 ## Make the cluster durable
@@ -105,7 +105,7 @@ kubectl get openbaotenant -A`}
 
 <Callout type="note" title="Backups are part of the production gate">
 
-Treat backup success and restore confidence as part of the launch checklist, not as follow-up work for a later sprint.
+Include backup success and restore confidence in the launch checklist rather than deferring them to later follow-up work.
 
 </Callout>
 
@@ -114,7 +114,7 @@ Treat backup success and restore confidence as part of the launch checklist, not
 - Configure metrics scraping through Prometheus Operator (`ServiceMonitor`) or VictoriaMetrics Operator (`VMServiceScrape`).
 - Grant the scraping identity permission to read `/metrics` and keep TLS verification strict in production.
 - Make sure structured logs including `cluster_name` and `cluster_namespace` reach the log system your operators actually use.
-- Alert on backup staleness, degradation, reconciliation failures, and other conditions that should wake a human before tenants feel the failure.
+- Alert on backup staleness, degradation, reconciliation failures, and other conditions that warrant human intervention before tenants feel the failure.
 
 ## Verify the cluster before routing traffic
 
@@ -170,12 +170,12 @@ kubectl get openbaocluster <name> -n <namespace> -o jsonpath='{.status.phase}{"\
   items={[
     {
       label: 'Configure backups',
-      description: 'Lock in the snapshot path before you plan the first upgrade or maintenance window.',
+      description: 'Lock in the snapshot path as part of upgrade and maintenance planning.',
       docId: 'user-guide/openbaocluster/operations/backups',
     },
     {
       label: 'Plan upgrades',
-      description: 'Choose the right rollout strategy before you patch the version field on a production cluster.',
+      description: 'Choose the right rollout strategy for the next production version change.',
       docId: 'user-guide/openbaocluster/operations/upgrades',
     },
     {

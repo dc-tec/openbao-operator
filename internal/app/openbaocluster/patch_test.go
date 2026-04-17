@@ -67,8 +67,8 @@ func TestPatchAdminOpsOwnedFields_PatchesAdminOpsFieldsWithoutBackup(t *testing.
 		t.Fatalf("PatchAdminOpsOwnedFields() error = %v", err)
 	}
 
-	if applyCalls != 1 {
-		t.Fatalf("status apply calls = %d, want 1", applyCalls)
+	if applyCalls < 1 {
+		t.Fatalf("status apply calls = %d, want >=1", applyCalls)
 	}
 	if subResourceName != "status" {
 		t.Fatalf("subResourceName = %q, want status", subResourceName)
@@ -76,8 +76,12 @@ func TestPatchAdminOpsOwnedFields_PatchesAdminOpsFieldsWithoutBackup(t *testing.
 	if capturedOptions.FieldManager != constants.FieldOwnerAdminOpsStatus {
 		t.Fatalf("FieldManager = %q, want %q", capturedOptions.FieldManager, constants.FieldOwnerAdminOpsStatus)
 	}
-	if capturedOptions.Force == nil || !*capturedOptions.Force {
-		t.Fatalf("Force = %v, want true", capturedOptions.Force)
+	if applyCalls > 1 {
+		if capturedOptions.Force == nil || !*capturedOptions.Force {
+			t.Fatalf("Force = %v, want true on conflict-retry apply", capturedOptions.Force)
+		}
+	} else if capturedOptions.Force != nil && *capturedOptions.Force {
+		t.Fatalf("Force = %v, want unset/false when no retry is needed", capturedOptions.Force)
 	}
 
 	stored := &openbaov1alpha1.OpenBaoCluster{}
@@ -97,8 +101,8 @@ func TestPatchAdminOpsOwnedFields_PatchesAdminOpsFieldsWithoutBackup(t *testing.
 	if !reflect.DeepEqual(stored.Status.AdminOps, desired.Status.AdminOps) {
 		t.Fatalf("stored adminOps = %#v, want %#v", stored.Status.AdminOps, desired.Status.AdminOps)
 	}
-	if !reflect.DeepEqual(stored.Status.Backup, desired.Status.Backup) {
-		t.Fatalf("stored backup = %#v, want %#v", stored.Status.Backup, desired.Status.Backup)
+	if !reflect.DeepEqual(stored.Status.Backup, original.Status.Backup) {
+		t.Fatalf("stored backup = %#v, want preserved original %#v", stored.Status.Backup, original.Status.Backup)
 	}
 }
 

@@ -7,20 +7,20 @@ journey: contribute
 
 <PageHero
   eyebrow="Contribute / Project Governance"
-  title="Use these pages when you are changing how the project is governed, secured, or published."
-  lede="This section is for policy and maintainer work: SDLC expectations, supply-chain controls, and dependency license rules. It is not the place to start for normal feature work, but it is the right place when you are changing how OpenBao Operator proves trust or manages release risk."
+  title="Project governance and policy"
+  lede="SDLC, supply-chain controls, and dependency license policy for OpenBao Operator."
   actions={[
     {label: "Open SDLC", to: "/contribute/sdlc", variant: "primary"},
     {label: "Open supply chain security", to: "/contribute/supply-chain-security", variant: "secondary"},
   ]}
 >
   <Checklist
-    title="Use this section when you need to"
+    title="Covers"
     items={[
-      "understand how the project models secure development and release flow end to end",
-      "review or change supply-chain controls, provenance expectations, or reproducibility requirements",
-      "understand which dependency licenses are allowed for shipped binaries",
-      "separate project policy work from normal day-to-day implementation work",
+      "secure development and release flow across the project lifecycle",
+      "supply-chain controls, provenance expectations, and reproducibility requirements",
+      "dependency license policy for shipped binaries",
+      "maintainer and policy work outside day-to-day feature development",
     ]}
   />
 </PageHero>
@@ -31,7 +31,7 @@ journey: contribute
     {
       eyebrow: "01",
       title: "Software development lifecycle",
-      description: "See how planning, implementation, verification, release, and operations map into the project’s secure lifecycle.",
+      description: "Planning, implementation, verification, release, and operations in the project lifecycle.",
       to: "/contribute/sdlc",
     },
     {
@@ -43,7 +43,7 @@ journey: contribute
     {
       eyebrow: "03",
       title: "Supply-chain incident response",
-      description: "Use the maintainer runbook when you need to freeze Actions, suspend release automation, rotate trust roots, or inspect recent publication state.",
+      description: "Maintainer runbook for freezing Actions, suspending release automation, rotating trust roots, or inspecting publication state.",
       to: "/contribute/supply-chain-incident-response",
     },
     {
@@ -60,12 +60,12 @@ journey: contribute
   items={[
     {
       label: "Release management",
-      description: "Use the concrete release workflow when policy turns into an actual release event.",
+      description: "Release workflow for turning policy into an actual release event.",
       to: "/contribute/release-management",
     },
     {
       label: "Continuous integration",
-      description: "Review the CI implementation that enforces many of these policy expectations in practice.",
+      description: "CI implementation that enforces many of these policy expectations in practice.",
       to: "/contribute/ci",
     },
   ]}

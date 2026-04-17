@@ -7,7 +7,7 @@ description: Shared lock, retry, and phase-audit primitives used by backup, rest
 ---
 
 <PageHeader
-  title="Coordinate locks, retries, and phase transitions across disruptive operations."
+  title="Operation lifecycle coordination"
   lede="`internal/service/opslifecycle` is the shared service-layer contract behind backup, restore, and upgrade orchestration. It does not own a controller or CRD of its own. Instead, it keeps operation lock identity, retry timing, and phase audit logging consistent whenever a manager needs to take disruptive action against a cluster."
 />
 
@@ -50,7 +50,7 @@ description: Shared lock, retry, and phase-audit primitives used by backup, rest
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Operation lifecycle coordination sits below the concrete managers and above the lock adapter:
 
@@ -59,6 +59,27 @@ Operation lifecycle coordination sits below the concrete managers and above the 
 3. `opslifecycle` delegates the actual status patching to `internal/adapter/operationlock`.
 
 That keeps the shared safety model in one place instead of scattering lock and retry semantics across several managers.
+
+<DecisionTable
+  kind="reference"
+  title="OpenBaoCluster status ownership planes"
+  columns={['Plane', 'Field manager', 'Owned status fields']}
+  rows={[
+    {
+      cells: ['Observed status', '`openbao-status-controller`', '`status.observedGeneration`, `status.phase`, `status.activeLeader`, `status.readyReplicas`, `status.currentVersion`, `status.lastBackupTime`, `status.conditions`'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Workload status', '`openbao-workload-controller`', '`status.initialized`, `status.selfInitialized`, `status.workload`'],
+    },
+    {
+      cells: ['AdminOps status', '`openbao-adminops-controller`', '`status.upgrade`, `status.upgradeRequests`, `status.backup`, `status.blueGreen`, `status.breakGlass`, `status.adminOps`'],
+    },
+    {
+      cells: ['Operation lock status', '`openbao-operationlock-controller`', '`status.operationLock`'],
+    },
+  ]}
+/>
 
 <DiagramFrame
   title="Coordination model"
@@ -92,7 +113,7 @@ That keeps the shared safety model in one place instead of scattering lock and r
       emphasis: 'recommended',
     },
     {
-      cells: ['Acquire / Release', 'Status-based lock ownership via the adapter.', 'Controllers should not each patch status.operationLock differently or invent different lock messages.'],
+      cells: ['Acquire / Release', 'Status-based lock ownership via the adapter with a fresh read-before-write gateway.', 'Controllers should not each patch status.operationLock differently, rely on stale cached objects, or invent different lock messages.'],
     },
     {
       cells: ['IsLockHeld / HeldError / AddHeldAuditFields', 'A shared way to classify contention and enrich audit events with who currently owns the lock.', 'Contention should produce consistent diagnostics instead of manager-specific strings.'],
@@ -103,7 +124,7 @@ That keeps the shared safety model in one place instead of scattering lock and r
   ]}
 />
 
-## Retry And Lock Model
+## Retry and lock model
 
 <DecisionTable
   kind="reference"
@@ -134,6 +155,9 @@ That keeps the shared safety model in one place instead of scattering lock and r
     },
     {
       cells: ['Exact-match release', 'Release succeeds only when holder and operation match the active lock, so one manager cannot accidentally clear another manager’s ownership.'],
+    },
+    {
+      cells: ['Legacy takeover', 'The adapter only forces ownership when a clear or explicit override hits an SSA ownership conflict, so normal lock renewals stay non-destructive.'],
     },
     {
       cells: ['Force override', 'Force semantics exist for explicit override paths only; normal long-running operations should not silently steal the lock.'],

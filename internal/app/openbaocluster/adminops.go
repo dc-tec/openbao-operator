@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	adminopsapp "github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminops"
@@ -29,7 +30,16 @@ func ReconcileAdminOps(
 		original,
 		cluster,
 		adminopsapp.ErrorRecorder(recordError),
-		PatchAdminOpsOwnedFields,
+		func(
+			ctx context.Context,
+			c client.Client,
+			logger logr.Logger,
+			original *openbaov1alpha1.OpenBaoCluster,
+			cluster *openbaov1alpha1.OpenBaoCluster,
+			reason string,
+		) error {
+			return PatchAdminOpsOwnedFieldsWithReader(ctx, deps.APIReader, c, logger, original, cluster, reason)
+		},
 		controllerErrorStatus,
 	)
 }

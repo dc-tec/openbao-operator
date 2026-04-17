@@ -8,8 +8,8 @@ description: Cloud deployment recipes for the validated Amazon EKS lanes.
 <PageHero
   variant="landing"
   eyebrow="Validated Deployments / Cloud Recipe Catalog"
-  title="Run the cloud procedure that matches the lane you already chose."
-  lede="These recipes reproduce the validated Amazon EKS lanes. Keep the matching reference architecture nearby so the recipe stays connected to the topology and assumptions it was actually proven against."
+  title="Validated cloud recipes"
+  lede="Deployment recipes for the validated Amazon EKS baselines are listed here. Keep the matching reference architecture nearby during deployment."
   actions={[
     {label: "Open EKS Development recipe", docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
     {label: "Open EKS Hardened recipe", docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme", variant: "secondary"},
@@ -28,7 +28,7 @@ description: Cloud deployment recipes for the validated Amazon EKS lanes.
     {
       eyebrow: "02",
       title: "EKS Hardened recipe",
-      description: "Deploy the hardened EKS lane with passthrough edge, AWS KMS, ACME, and the tighter production posture.",
+      description: "Deploy the hardened EKS lane with passthrough edge, AWS KMS, ACME, and the hardened production posture.",
       docId: "user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme",
     },
   ]}

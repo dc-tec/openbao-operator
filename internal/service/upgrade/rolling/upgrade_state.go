@@ -1,8 +1,6 @@
 package rolling
 
 import (
-	"strings"
-
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -13,7 +11,7 @@ import (
 func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (upgradeNeeded bool, resumeUpgrade bool) {
 	if upgrade.RetryRequestPending(cluster) &&
 		(cluster.Status.Upgrade == nil ||
-			strings.TrimSpace(cluster.Status.Upgrade.LastErrorReason) == "" ||
+			!upgrade.UpgradeFailed(cluster.Status.Upgrade) ||
 			cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion) {
 		retryRequest := upgrade.RetryRequestValue(cluster)
 		upgrade.MarkRetryRequestHandled(&cluster.Status, retryRequest)
@@ -23,19 +21,21 @@ func (m *Manager) detectUpgradeState(logger logr.Logger, cluster *openbaov1alpha
 	}
 
 	if cluster.Status.Upgrade != nil {
-		if strings.TrimSpace(cluster.Status.Upgrade.LastErrorReason) != "" {
+		if upgrade.UpgradeFailed(cluster.Status.Upgrade) {
+			failureReason := upgrade.UpgradeFailureReason(cluster.Status.Upgrade)
+			failureMessage := upgrade.UpgradeFailureMessage(cluster.Status.Upgrade)
 			if cluster.Spec.Version != cluster.Status.Upgrade.TargetVersion {
 				logger.Info("Failed upgrade target differs from spec; resuming to re-evaluate upgrade target",
 					"failedTargetVersion", cluster.Status.Upgrade.TargetVersion,
 					"specVersion", cluster.Spec.Version,
-					"failureReason", cluster.Status.Upgrade.LastErrorReason)
+					"failureReason", failureReason)
 				return false, true
 			}
 
 			if !upgrade.RetryRequestPending(cluster) {
 				logger.Info("Upgrade is in failed state; waiting for manual retry request",
-					"failureReason", cluster.Status.Upgrade.LastErrorReason,
-					"failureMessage", cluster.Status.Upgrade.LastErrorMessage,
+					"failureReason", failureReason,
+					"failureMessage", failureMessage,
 					"retryRequestField", upgrade.RequestRetryFieldPath)
 				return false, false
 			}

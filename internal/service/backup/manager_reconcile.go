@@ -133,7 +133,7 @@ func (m *Manager) handleRestoreInProgress(ctx context.Context, logger logr.Logge
 }
 
 func (m *Manager) releaseBackupLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, contextNote string) {
-	if err := opslifecycle.Release(ctx, m.client, cluster, backupOperationLock); err != nil && !opslifecycle.IsLockHeld(err) {
+	if err := opslifecycle.ReleaseWithReader(ctx, m.reader, m.client, cluster, backupOperationLock); err != nil && !opslifecycle.IsLockHeld(err) {
 		logger.Error(err, "Failed to release backup operation lock", "context", contextNote)
 		return
 	} else if err == nil {

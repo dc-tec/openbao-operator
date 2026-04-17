@@ -1,6 +1,6 @@
 ---
 title: Single-Tenant Mode
-description: Use the controller-only install path when one team owns one namespace and does not need the default tenant-onboarding model.
+description: Single-tenant operator deployment for one team that owns one namespace and does not use the default tenant-onboarding model.
 slug: /get-started/single-tenant-mode
 hide_title: true
 pageType: task
@@ -8,14 +8,14 @@ journey: get-started
 ---
 
 <PageHeader
-  title="Use single-tenant mode when one team owns one namespace."
-  lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. It is a good fit for dedicated team environments, but it is a branch from the default platform path rather than the starting point for every install."
+  title="Single-tenant deployment model"
+  lede="Single-tenant mode removes the Provisioner and lets the controller watch one target namespace directly. Use it for dedicated team environments that do not need the default tenant-onboarding path."
 />
 
 
 
 <DecisionTable
-  title="Stay on multi-tenant unless this is true"
+  title="When to choose single-tenant mode"
   columns={['Question', 'Multi-tenant default', 'Choose single-tenant when', 'Go deeper']}
   rows={[
     {
@@ -137,7 +137,7 @@ Single-tenant mode skips `OpenBaoTenant`, but it does not invent the namespace f
 <CommandBlock
   language="yaml"
   label="configure"
-  title="Set the target namespace before you apply the overlay"
+  title="Set the target namespace"
   code={`apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -153,7 +153,7 @@ data:
 <CommandBlock
   language="bash"
   label="verify"
-  title="Render the overlay once before you apply it"
+  title="Render the overlay"
   code={`kubectl kustomize config/overlays/single-tenant`}
 >
   Confirm that the controller ServiceAccount subject, RoleBinding namespace, and `WATCH_NAMESPACE` value all point at the same intended target.
@@ -170,7 +170,7 @@ That is simpler for a dedicated team, but it also means the operator is no longe
 
 </Callout>
 
-## Verify the install before you create a cluster
+## Verify the install
 
 <CommandBlock
   language="bash"
@@ -178,7 +178,7 @@ That is simpler for a dedicated team, but it also means the operator is no longe
   title="Check that only the controller is running"
   code={`kubectl get pods -n <operator-namespace>`}
 >
-  In single-tenant mode you should see the controller deployment running, but not a Provisioner pod.
+  In single-tenant mode, expect the controller deployment to be running and no Provisioner pod to exist.
 </CommandBlock>
 
 <CommandBlock
@@ -188,7 +188,7 @@ That is simpler for a dedicated team, but it also means the operator is no longe
   code={`kubectl get deploy -n <operator-namespace> openbao-operator-controller \\
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="WATCH_NAMESPACE")].value}'`}
 >
-  This value should match the target namespace you plan to use for the first `OpenBaoCluster`.
+  Confirm this value matches the target namespace you plan to use for the first `OpenBaoCluster`.
 </CommandBlock>
 
 ## Migration guidance

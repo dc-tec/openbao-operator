@@ -3,12 +3,12 @@ title: Backup Manager
 hide_title: true
 pageType: concept
 journey: architecture
-description: Schedule snapshot jobs, enforce retention, and update backup status without moving backup data through the controller.
+description: Schedule snapshot jobs, enforce retention, and update backup status while keeping snapshot data transport out of the controller.
 ---
 
 <PageHeader
-  title="Run Raft snapshots as stateless jobs and keep retention out of the data plane."
-  lede="The backup manager owns scheduled and manual snapshot orchestration for `OpenBaoCluster`. It validates cluster readiness, acquires the operation lock, creates executor Jobs, and records backup state so backups stay auditable and resumable without embedding snapshot transport inside the controller."
+  title="Backup manager workflow"
+  lede="The backup manager owns scheduled and manual snapshot orchestration for `OpenBaoCluster`. It validates cluster readiness, acquires the operation lock, creates executor Jobs, and records backup state so backups stay auditable and resumable while snapshot transport stays outside the controller."
 />
 
 
@@ -50,7 +50,7 @@ description: Schedule snapshot jobs, enforce retention, and update backup status
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Backup orchestration belongs to the AdminOps path:
 
@@ -81,7 +81,7 @@ That keeps the controller focused on reconcile plumbing while the backup manager
   ]}
 />
 
-## Backup Flow
+## Backup flow
 
 <DiagramFrame
   title="Validate, launch, then record"
@@ -131,7 +131,7 @@ That keeps the controller focused on reconcile plumbing while the backup manager
   ]}
 />
 
-## Provider And Retention Surfaces
+## Provider and retention surfaces
 
 <DecisionTable
   kind="reference"

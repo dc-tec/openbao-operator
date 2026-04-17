@@ -6,8 +6,8 @@ journey: reference
 ---
 
 <PageHeader
-  title="Use this page to decode what the operator is telling you through conditions, events, and lifecycle signals."
-  lede="This is the exact lookup surface for status conditions and emitted events across `OpenBaoCluster`, `OpenBaoRestore`, and `OpenBaoTenant`. Use it when a cluster is stalled, degraded, upgrading, backing up, restoring, or otherwise behaving in a way that needs precise interpretation rather than a generic troubleshooting step."
+  title="Status conditions and event reference"
+  lede="Status conditions and emitted events across `OpenBaoCluster`, `OpenBaoRestore`, and `OpenBaoTenant`."
 />
 
 <CommandBlock
@@ -26,7 +26,7 @@ kubectl -n <ns> get events --sort-by=.lastTimestamp`}
 <DecisionTable
   kind="reference"
   title="Workflow checkpoints"
-  caption="Use these condition sets as the fastest contract checks for common workflows."
+  caption="Condition sets for quick checks of common workflows."
   columns={['Workflow', 'Conditions to watch']}
   rows={[
     {
@@ -210,12 +210,12 @@ Condition **types** are part of the API surface. Reason and event values may exp
   items={[
     {
       label: 'Unseal configuration',
-      description: 'Open the provider and Secret contract page when `CloudUnsealIdentityReady` or seal-mode setup is the real problem.',
+      description: 'Provider and Secret requirements behind `CloudUnsealIdentityReady` and seal-mode setup.',
       docId: 'user-guide/openbaocluster/configuration/unseal',
     },
     {
       label: 'Troubleshoot the cluster',
-      description: 'Use the operational troubleshooting page when you know something is wrong but do not yet know which signal matters.',
+      description: 'Operational troubleshooting when the relevant signal is not yet clear.',
       to: '/docs/operate/troubleshooting',
     },
     {

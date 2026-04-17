@@ -9,18 +9,18 @@ description: Core security fundamentals for OpenBao Operator including threat mo
 <PageHero
   variant="landing"
   eyebrow="Security / Security Model"
-  title="Start from the trust model before you choose controls."
-  lede="This section explains what the operator is trying to defend, which production posture it considers safe, and how trust material such as root tokens, unseal keys, and bootstrap identities should behave across the lifecycle."
+  title="Security model and trust assumptions"
+  lede="Threat model, security profiles, and trust material such as root tokens, unseal keys, and bootstrap identities."
   actions={[
     {label: 'Read the threat model', docId: 'security/fundamentals/threat-model', variant: 'primary'},
     {label: 'Review production posture', docId: 'security/fundamentals/profiles', variant: 'secondary'},
   ]}
 >
   <Checklist
-    title="Use this section when you need to"
+    title="Covers"
     items={[
       'understand the security assumptions behind the operator architecture',
-      'decide what Hardened actually means before you deploy it',
+      'understand how Development and Hardened profiles change the supported security posture',
       'review how bootstrap and unseal trust material is handled',
       'anchor security review conversations before diving into RBAC or network policy details',
     ]}
@@ -33,13 +33,13 @@ description: Core security fundamentals for OpenBao Operator including threat mo
     {
       eyebrow: '01',
       title: 'Threat model',
-      description: 'Read the trust boundaries, attacker assumptions, and design mitigations behind the operator.',
+      description: 'Trust boundaries, attacker assumptions, and design mitigations.',
       docId: 'security/fundamentals/threat-model',
     },
     {
       eyebrow: '02',
       title: 'Production posture',
-      description: 'Understand what Development and Hardened actually mean, and why Hardened is the supported production contract.',
+      description: 'How Development and Hardened differ, and the supported production contract.',
       docId: 'security/fundamentals/profiles',
     },
     {
@@ -55,12 +55,12 @@ description: Core security fundamentals for OpenBao Operator including threat mo
   items={[
     {
       label: 'Open platform controls',
-      description: 'Move from the trust model into the Kubernetes controls that enforce it.',
+      description: 'Kubernetes controls that enforce the trust model.',
       docId: 'security/infrastructure/index',
     },
     {
       label: 'Configure security profiles',
-      description: 'Switch to the user-guide task page when you are ready to set `spec.profile` on a real cluster.',
+      description: 'Task page for setting `spec.profile` on a cluster.',
       docId: 'user-guide/openbaocluster/configuration/security-profiles',
     },
   ]}

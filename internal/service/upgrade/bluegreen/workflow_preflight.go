@@ -33,7 +33,7 @@ func (m *Manager) ensureBlueGreenStatus(ctx context.Context, logger logr.Logger,
 }
 
 func (m *Manager) releaseUpgradeLockIfHeld(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	return core.ReleaseUpgradeLockIfHeld(ctx, m.client, logger, cluster)
+	return core.ReleaseUpgradeLockIfHeldWithReader(ctx, m.reader, m.client, logger, cluster)
 }
 
 func (m *Manager) finalizeUpgradeTerminalState(
@@ -111,10 +111,10 @@ func (m *Manager) validateIdleUpgradeInputs(ctx context.Context, logger logr.Log
 	}
 
 	if err := upgrade.ValidateUpgradeTargetVersion(logger, cluster.Status.CurrentVersion, cluster.Spec.Version); err != nil {
-		return core.ReleaseUpgradeLockOnErrorIfHeld(ctx, m.client, logger, cluster, true, err, "")
+		return core.ReleaseUpgradeLockOnErrorIfHeldWithReader(ctx, m.reader, m.client, logger, cluster, true, err, "")
 	}
 	if err := upgrade.ValidateImageRefMatchesVersion(cluster.Spec.Version, cluster.Spec.Image); err != nil {
-		return core.ReleaseUpgradeLockOnErrorIfHeld(ctx, m.client, logger, cluster, true, err, "")
+		return core.ReleaseUpgradeLockOnErrorIfHeldWithReader(ctx, m.reader, m.client, logger, cluster, true, err, "")
 	}
 
 	return nil
@@ -124,7 +124,7 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 	if !upgradeActive && !upgradeNeeded {
 		return false, recon.Result{}, nil
 	}
-	lockResult, err := core.AcquireUpgradeLock(ctx, m.client, logger, cluster, fmt.Sprintf("blue/green upgrade phase %s", core.CurrentBlueGreenPhase(cluster)))
+	lockResult, err := core.AcquireUpgradeLockWithReader(ctx, m.reader, m.client, logger, cluster, fmt.Sprintf("blue/green upgrade phase %s", core.CurrentBlueGreenPhase(cluster)))
 	if err != nil {
 		return true, recon.Result{}, fmt.Errorf("failed to acquire upgrade operation lock: %w", err)
 	}

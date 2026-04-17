@@ -6,8 +6,8 @@ journey: reference
 ---
 
 <PageHeader
-  title="Use this page when you need the exact maintenance contract behind a release line or channel."
-  lede="Validation and support are related, but they are not the same thing. This page defines which release lines receive best-effort maintenance attention, how channels differ, and what the project expects from operators before they ask for issue triage."
+  title="Support and maintenance policy"
+  lede="Release lines that receive best-effort maintenance attention, channel differences, and issue-triage expectations."
 />
 
 <Callout type="note" title="Current support window">
@@ -29,11 +29,11 @@ The project provides best-effort support for the latest stable release line.
       cells: ['Prerelease (`-rc`, `-beta`, `-alpha`)', 'Evaluation before the next stable release.', 'No expanded support window; use for testing and early adoption only.'],
     },
     {
-      cells: ['Edge (`main` snapshots)', 'Continuous validation and integration signal.', 'Not a production support channel.'],
+      cells: ['Edge (`main` snapshots)', 'Continuous validation and integration signal.', 'Evaluation and validation channel only.'],
       emphasis: 'caution',
     },
     {
-      cells: ['Nightly', 'Scheduled validation snapshots.', 'Not a production support channel.'],
+      cells: ['Nightly', 'Scheduled validation snapshots.', 'Evaluation and validation channel only.'],
       emphasis: 'caution',
     },
   ]}
@@ -50,7 +50,7 @@ OpenBao Operator is still pre-GA:
 ## Validation versus support
 
 - [Compatibility Matrix](compatibility.md) defines what is explicitly validated in CI.
-- This page defines what receives best-effort maintenance attention.
+- This policy defines what receives best-effort maintenance attention.
 - `Recommended for production` means the documented hardened operating path, not a promise of long-lived pre-GA API stability.
 
 ## Security fixes
@@ -90,22 +90,22 @@ Security fixes follow [SECURITY.md](https://github.com/dc-tec/openbao-operator/b
   items={[
     {
       label: 'Release policy',
-      description: 'Open the public cadence and release-gate contract when the next question is when the project ships, not just what it supports.',
+      description: 'Public cadence and release-gate rules.',
       docId: 'reference/release-policy',
     },
     {
       label: 'Compatibility matrix',
-      description: 'Open the validation matrix when the next question is whether a platform or version is exercised by CI.',
+      description: 'Platforms and versions exercised by CI.',
       docId: 'reference/compatibility',
     },
     {
       label: 'Known limitations',
-      description: 'Check current caveats and non-goals when an unsupported behavior might actually be a deliberate constraint.',
+      description: 'Current caveats and explicit non-goals behind unsupported behavior.',
       docId: 'reference/known-limitations',
     },
     {
       label: 'Release management',
-      description: 'Use the maintainer release workflow when you need the operational process behind these support promises.',
+      description: 'Maintainer release workflow behind these support expectations.',
       to: '/contribute/release-management',
     },
   ]}

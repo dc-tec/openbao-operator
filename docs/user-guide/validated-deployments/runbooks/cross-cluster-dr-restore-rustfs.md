@@ -7,12 +7,12 @@ description: Restore the validated local disaster-recovery target from a source 
 ---
 
 <PageHeader
-  title="Run the destructive restore step only after the source snapshot, target health, and shared seal root are all known-good."
+  title="Restore the target in the local DR lane"
   lede="This runbook restores the target cluster in the validated local DR lane from a source snapshot stored in RustFS. It assumes the source and target already share the same external Transit key and that you are ready to overwrite the target bootstrap state."
 />
 
 <Checklist
-    title="This runbook should leave you with"
+    title="Runbook outcomes"
     items={[
       "a fresh source snapshot written to shared RustFS storage",
       "an `OpenBaoRestore` object that completes on the target cluster",
@@ -29,7 +29,7 @@ This workflow overwrites the target cluster state. Existing auth methods, polici
 </Callout>
 
 <DecisionTable
-  title="Before you restore"
+  title="Restore prerequisites"
   columns={["Requirement", "Why it exists", "What happens if it is wrong"]}
   rows={[
     {
@@ -67,7 +67,7 @@ This workflow overwrites the target cluster state. Existing auth methods, polici
 
 <DecisionTable
   kind="reference"
-  title="Validated lane defaults"
+  title="Baseline defaults"
   columns={["Value", "Default", "Purpose"]}
   rows={[
     {cells: ["Source context", "`k3d-openbao-dr-source`", "Primary cluster that creates the backup."]},

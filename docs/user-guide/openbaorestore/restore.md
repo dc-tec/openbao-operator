@@ -1,21 +1,21 @@
 ---
 title: Restore from Backup
-description: Create an OpenBaoRestore request, wire snapshot access and restore auth, and verify the destructive recovery workflow deliberately.
+description: Create an OpenBaoRestore request, configure snapshot access and restore auth, and verify the restore workflow.
 hide_title: true
 pageType: task
 journey: operate
 ---
 
 <PageHeader
-  title="Run a restore only when you are ready to overwrite the target cluster."
-  lede="The operator restores snapshot state through an explicit `OpenBaoRestore` request. That request validates the target, acquires the restore operation lock, launches a dedicated restore Job, and records the outcome for audit. Use this page when restore is the right answer, not as a substitute for ordinary troubleshooting."
+  title="Restore from a snapshot"
+  lede="The operator restores snapshot state through an explicit `OpenBaoRestore` request. That request validates the target, acquires the restore operation lock, launches a dedicated restore Job, and records the outcome for audit. Use this page when snapshot restore is the right recovery workflow for the target cluster."
 />
 
 
 
 <Callout type="danger" title="Restore overwrites the target cluster">
 
-Restore replaces the target cluster state with the contents of the selected snapshot. All current secrets, policies, auth methods, and keys in that cluster are treated as replaceable state. Confirm the target namespace, target cluster, and snapshot key before you apply the request.
+Restore replaces the target cluster state with the contents of the selected snapshot. All current secrets, policies, auth methods, and keys in that cluster are treated as replaceable state. Verify the target namespace, target cluster, and snapshot key as part of the restore request.
 
 </Callout>
 
@@ -26,7 +26,7 @@ Restore replaces the target cluster state with the contents of the selected snap
     {
       cells: [
         '1. Prove the backup path first',
-        'Do not start here if the snapshot was never validated. Use the backup guide to confirm the object exists and the storage/auth path is already known-good.',
+        'Confirm the snapshot exists and that the backup storage and auth path already succeeded in the backup workflow.',
         'You know the exact snapshot key and can point to a successful backup object in storage.',
       ],
       emphasis: 'recommended',
@@ -34,7 +34,7 @@ Restore replaces the target cluster state with the contents of the selected snap
     {
       cells: [
         '2. Prepare the target cluster deliberately',
-        'Keep the target `OpenBaoCluster` in the same namespace, and make sure it already exists and can be reached by the restore Job.',
+        'Keep the target `OpenBaoCluster` in the same namespace, make sure it already exists, and confirm the restore Job can reach it.',
         'The target cluster resource exists, the namespace is correct, and the restore Job can reach object storage.',
       ],
     },
@@ -73,7 +73,7 @@ Restore replaces the target cluster state with the contents of the selected snap
         'Static token',
         'JWT auth is not available yet and you need a compatibility path for recovery.',
         'The restore Job reads a long-lived OpenBao token from a Secret in the same namespace.',
-        'Treat the token as a high-sensitivity credential and rotate it intentionally.',
+        'Store the token as a high-sensitivity credential and rotate it intentionally.',
       ],
     },
   ]}
@@ -100,7 +100,7 @@ Restore replaces the target cluster state with the contents of the selected snap
     class Status write;`}
 />
 
-## Before you create the restore request
+## Prepare the restore request
 
 - Make sure the snapshot you want already exists in object storage and has been validated as usable.
 - Create or keep the target `OpenBaoCluster` in the same namespace as the restore request. The target cluster must exist and be initialized, even if it is otherwise empty.
@@ -115,8 +115,8 @@ The `OpenBaoRestore`, the target `OpenBaoCluster`, and any referenced token Secr
 
 <Callout type="tip" title="For most first-time restores">
 
-If the target cluster already uses `spec.selfInit.oidc.enabled=true`, start with `jwtAuthRole: openbao-operator-restore` and the same object-storage provider shape you already proved in the backup flow.
-That is the shortest path from a tested backup to a tested restore.
+If the target cluster already uses `spec.selfInit.oidc.enabled=true`, start with `jwtAuthRole: openbao-operator-restore` and the same object-storage provider shape you already validated in the backup flow.
+That keeps the restore path aligned with the backup path you have already proven.
 
 </Callout>
 
@@ -225,7 +225,7 @@ That is the shortest path from a tested backup to a tested restore.
   tokenSecretRef:
     name: restore-token`}
 >
-  Use this path only when JWT auth is not available. The Secret must be in the same namespace as the restore request.
+  Use this path if JWT auth is not available. The Secret must be in the same namespace as the restore request.
 </CommandBlock>
 
 </TabItem>
@@ -327,7 +327,7 @@ kubectl describe openbaocluster <cluster> -n <namespace>`}
     },
     {
       label: 'Recover after upgrade restore',
-      description: 'Use the override-lock path only when a failed upgrade or rollback blocks the normal restore request.',
+      description: 'Use the override-lock path if a failed upgrade or rollback blocks the normal restore request.',
       docId: 'user-guide/openbaorestore/recovery-restore-after-upgrade',
     },
   ]}

@@ -2052,6 +2052,11 @@ func (in *UpgradeProgress) DeepCopyInto(out *UpgradeProgress) {
 		in, out := &in.LastStepDownTime, &out.LastStepDownTime
 		*out = (*in).DeepCopy()
 	}
+	if in.Failure != nil {
+		in, out := &in.Failure, &out.Failure
+		*out = new(ControllerErrorStatus)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.LastErrorAt != nil {
 		in, out := &in.LastErrorAt, &out.LastErrorAt
 		*out = (*in).DeepCopy()

@@ -7,7 +7,7 @@ description: How namespace introduction, split controller identities, admission 
 ---
 
 <PageHeader
-  title="Make tenant access explicit instead of discoverable."
+  title="Tenant isolation model"
   lede="The operator's multi-tenant model depends on deliberate namespace introduction. A tenant namespace becomes manageable only after onboarding introduces the controller through fixed RBAC, applies namespace guardrails, and keeps the identity that grants access separate from the identity that consumes it."
 />
 
@@ -98,7 +98,7 @@ description: How namespace introduction, split controller identities, admission 
 
 <Callout type="note" title="Task versus model">
 
-This page explains the isolation contract. Use <SiteLink docId="user-guide/openbaotenant/onboarding">Onboard the target namespace</SiteLink> when you need the concrete onboarding workflow and field-level configuration.
+Use <SiteLink docId="user-guide/openbaotenant/onboarding">Onboard the target namespace</SiteLink> when you need the concrete onboarding workflow and field-level configuration.
 
 </Callout>
 

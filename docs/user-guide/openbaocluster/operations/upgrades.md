@@ -8,7 +8,7 @@ journey: operate
 ---
 
 <PageHeader
-  title="Treat version changes as planned operations, not a quick spec patch."
+  title="Upgrade planning and rollout"
   lede="The operator supports rolling and blue-green upgrades, but both paths depend on cluster health, backup posture, and explicit authentication for the executor Jobs. Use this page to choose the strategy, stage the right config, and verify the rollout cleanly."
 />
 
@@ -67,7 +67,7 @@ Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a s
     class Verify,Complete,Hold write;`}
 />
 
-## Before you patch `spec.version`
+## Prepare the rollout
 
 - Confirm the cluster is initialized, healthy, and already safe to change. An upgrade is not the time to discover a broken backup path or an unstable seal configuration.
 - Set `spec.version` to the target semantic version. The operator blocks downgrades and validates semver format.
@@ -207,7 +207,7 @@ Choose `BlueGreen` when you need parallel validation, a manual promotion point, 
       cells: [
         'spec.upgrade.requests.retry',
         'Restarts a failed rolling upgrade after you fix the underlying cause.',
-        'The operator preserved `status.upgrade.lastErrorReason` and is waiting for an explicit retry.',
+        'The operator preserved `status.upgrade.failure.reason` (and the deprecated `lastError*` compatibility fields) and is waiting for an explicit retry.',
       ],
       emphasis: 'recommended',
     },
@@ -238,12 +238,12 @@ Choose `BlueGreen` when you need parallel validation, a manual promotion point, 
 kubectl get pods -n <namespace>
 kubectl get jobs -n <namespace>`}
 >
-  Look for an idle cluster rather than just a patched spec. The right end state is healthy pods, no unresolved upgrade error reason, and a condition surface that matches the cluster features you enabled.
+  Look for an idle cluster rather than just a patched spec. The right end state is healthy pods, no unresolved upgrade failure state, and a condition surface that matches the cluster features you enabled.
 </CommandBlock>
 
 <DecisionTable
   kind="reference"
-  title="What good looks like after the upgrade"
+  title="Expected signals after the upgrade"
   columns={['Surface', 'Healthy signal', 'Why it matters']}
   rows={[
     {
@@ -264,7 +264,7 @@ kubectl get jobs -n <namespace>`}
     {
       cells: [
         'Upgrade status',
-        'No unresolved `status.upgrade.lastErrorReason` and no stalled blue-green phase.',
+        'No unresolved `status.upgrade.failure.reason` (or deprecated `lastErrorReason`) and no stalled blue-green phase.',
         'The controller does not think operator action is still required.',
       ],
     },
@@ -272,7 +272,7 @@ kubectl get jobs -n <namespace>`}
       cells: [
         'Protection path',
         'Backup status and external dependency conditions remain healthy.',
-        'A successful version change should not quietly break the next restore or backup window.',
+        'A successful version change keeps the next restore or backup window intact.',
       ],
     },
   ]}

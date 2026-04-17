@@ -7,12 +7,12 @@ description: Reproduce the validated development baseline on Amazon EKS with AWS
 ---
 
 <PageHeader
-  title="Reproduce the validated EKS development lane without mixing the quick bring-up path with hardened endpoint requirements."
-  lede="This recipe applies the EKS development baseline with KMS auto-unseal, shared-edge exposure, JWT bootstrap, and S3 backups. Use it when you need the exact validated cloud bring-up path, not a generic EKS example."
+  title="Reproduce the validated EKS development lane"
+  lede="This recipe applies the EKS development baseline with KMS auto-unseal, shared-edge exposure, JWT bootstrap, and S3 backups. Use it when you need the exact validated cloud bring-up path for this topology."
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
       "a Development-profile cluster that unseals with AWS KMS through workload identity",
@@ -22,7 +22,7 @@ description: Reproduce the validated development baseline on Amazon EKS with AWS
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This recipe matches the EKS development lane validated in the project cloud environment. The tested path covered KMS unseal, JWT bootstrap, Gateway exposure, and successful S3 backups.
 
@@ -30,12 +30,12 @@ This recipe matches the EKS development lane validated in the project cloud envi
 
 <Callout type="note" title="Use the main docs for generic operator behavior">
 
-Use <SiteLink docId="user-guide/openbaotenant/onboarding">tenant onboarding</SiteLink>, <SiteLink docId="user-guide/openbaocluster/configuration/gateway-api">Gateway API support</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/operations/backups">backup operations</SiteLink> for the product-wide guidance. This page captures the exact validated lane.
+Use <SiteLink docId="user-guide/openbaotenant/onboarding">tenant onboarding</SiteLink>, <SiteLink docId="user-guide/openbaocluster/configuration/gateway-api">Gateway API support</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/operations/backups">backup operations</SiteLink> for the product-wide guidance. This recipe documents the validated lane.
 
 </Callout>
 
 <DecisionTable
-  title="What this lane assumes"
+  title="Baseline assumptions"
   columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
   rows={[
     {

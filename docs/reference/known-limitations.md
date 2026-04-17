@@ -6,8 +6,8 @@ journey: reference
 ---
 
 <PageHeader
-  title="Know which operator boundaries are real today."
-  lede="Not every missing feature is an accidental gap. This page captures the current constraints and explicit non-goals for the pre-GA line so operators and contributors can separate unsupported assumptions from issues the project actually intends to solve."
+  title="Known limitations and non-goals"
+  lede="Current constraints and explicit non-goals for the pre-GA line."
 />
 
 <DecisionTable
@@ -22,7 +22,7 @@ journey: reference
       cells: ['Cluster adoption', 'The operator assumes it manages clusters it created and reconciles; generic import of arbitrary unmanaged OpenBao clusters is out of scope.', 'Create operator-managed clusters directly, or use backup and restore workflows when you need to move data into a new operator-managed cluster.'],
     },
     {
-      cells: ['Operator downgrade', 'Downgrades are not treated as a normal rollback path.', 'Use the recovery and restore guidance when a release cannot move forward safely.'],
+      cells: ['Operator downgrade', 'Routine downgrades are unsupported.', 'Use the recovery and restore guidance when a release cannot move forward safely.'],
       emphasis: 'caution',
     },
     {
@@ -49,22 +49,22 @@ journey: reference
   items={[
     {
       label: 'Support policy',
-      description: 'Open the maintenance contract behind these constraints and the release lines that remain in scope.',
+      description: 'Maintenance contract and release lines that remain in scope.',
       docId: 'reference/support-policy',
     },
     {
       label: 'Upgrade compatibility',
-      description: 'Use the exact operator upgrade-path contract when the next question is rollback stance or CRD sequencing.',
+      description: 'Rollback stance and CRD sequencing for operator upgrades.',
       docId: 'reference/operator-upgrade-compatibility',
     },
     {
       label: 'Decommission a cluster',
-      description: 'Return to the operational decommission workflow for the data-path caveats around external backups.',
+      description: 'Operational decommissioning workflow for external-backup caveats.',
       docId: 'user-guide/openbaocluster/operations/deletion',
     },
     {
       label: 'Restore from backup',
-      description: 'Use the restore workflow when a limitation turns the next safe move into recovery or migration rather than in-place change.',
+      description: 'Recovery or migration workflow when an in-place change is not available.',
       docId: 'user-guide/openbaorestore/restore',
     },
   ]}

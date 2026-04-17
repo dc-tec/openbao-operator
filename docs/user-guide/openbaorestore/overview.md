@@ -1,14 +1,14 @@
 ---
 title: Restore Overview
-description: Understand when restore is the right tool, why it is modeled as OpenBaoRestore, and what safety boundaries it keeps in place.
+description: Understand when restore is appropriate, why it is modeled as OpenBaoRestore, and which safety boundaries it enforces.
 hide_title: true
 pageType: concept
 journey: operate
 ---
 
 <PageHeader
-  title="Treat restore as an explicit destructive workflow."
-  lede="Restore is modeled as `OpenBaoRestore`, an immutable request object that keeps disaster recovery visible, auditable, and separate from normal cluster reconciliation. Use this page to understand when restore is appropriate and what boundaries it enforces before you run it."
+  title="Restore workflow overview"
+  lede="Restore is modeled as `OpenBaoRestore`, an immutable request object that keeps disaster recovery visible, auditable, and separate from normal cluster reconciliation. Use this page to understand when restore is appropriate and what boundaries it enforces."
 />
 
 
@@ -21,7 +21,7 @@ journey: operate
       cells: [
         'Disaster recovery',
         'You need to reintroduce known-good state after severe corruption, cluster loss, or a failed repair path.',
-        'Restore overwrites the target cluster. Validate the snapshot and target before you start.',
+        'Restore overwrites the target cluster. Validate the snapshot and target as part of request preparation.',
       ],
       emphasis: 'recommended',
     },
@@ -42,8 +42,8 @@ journey: operate
     {
       cells: [
         'Ordinary troubleshooting',
-        'Restore is usually not the first move. Start with the incident recovery or troubleshooting guides first.',
-        'Do not overwrite state while a narrower repair path is still viable.',
+        'Use the incident recovery or troubleshooting guides unless snapshot restore is already the selected recovery action.',
+        'Restore remains a destructive action while narrower repair paths are still viable.',
       ],
     },
   ]}
@@ -51,7 +51,7 @@ journey: operate
 
 <DiagramFrame
   title="Restore control flow"
-  caption="A restore request is validated, acquires the cluster operation lock, then launches a restore Job that pulls the snapshot and injects it into the target cluster. The workflow is explicit so destructive recovery does not hide inside normal reconciliation."
+  caption="A restore request is validated, acquires the cluster operation lock, then launches a restore Job that pulls the snapshot and injects it into the target cluster. The explicit request keeps destructive recovery separate from normal reconciliation."
   code={`flowchart LR
     Request["OpenBaoRestore request"] --> Validate["Validate target, source, and auth"]
     Validate --> Lock["Acquire restore lock"]
@@ -145,7 +145,7 @@ spec:
     },
     {
       label: 'Recover after upgrade restore',
-      description: 'Use the override-lock runbook only when a failed upgrade blocks the normal restore workflow.',
+      description: 'Use the override-lock runbook if a failed upgrade blocks the normal restore workflow.',
       docId: 'user-guide/openbaorestore/recovery-restore-after-upgrade',
     },
     {

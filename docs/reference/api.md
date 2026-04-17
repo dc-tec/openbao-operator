@@ -496,6 +496,7 @@ can translate into high-level conditions.
 
 _Appears in:_
 - [AdminOpsControllerStatus](#adminopscontrollerstatus)
+- [UpgradeProgress](#upgradeprogress)
 - [WorkloadControllerStatus](#workloadcontrollerstatus)
 
 | Field | Description | Default | Validation |
@@ -1674,9 +1675,10 @@ _Appears in:_
 | `currentPartition` _integer_ | CurrentPartition is the current StatefulSet partition value. |  |  |
 | `completedPods` _integer array_ | CompletedPods lists ordinals of pods that have been successfully upgraded. |  | Optional: \{\} <br /> |
 | `lastStepDownTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastStepDownTime records when the last leader step-down was performed. |  | Optional: \{\} <br /> |
-| `lastErrorReason` _string_ | LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).<br />When set, the status controller should consider the cluster Degraded. |  | Optional: \{\} <br /> |
-| `lastErrorMessage` _string_ | LastErrorMessage is a human-readable failure message (best-effort). |  | Optional: \{\} <br /> |
-| `lastErrorAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastErrorAt is when the last upgrade error was recorded (best-effort). |  | Optional: \{\} <br /> |
+| `failure` _[ControllerErrorStatus](#controllererrorstatus)_ | Failure is the structured rolling-upgrade failure status.<br />When Failure.Reason is non-empty, the upgrade is considered failed. |  | Optional: \{\} <br /> |
+| `lastErrorReason` _string_ | LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).<br />Deprecated: use Failure.Reason.<br />When set, the status controller should consider the cluster Degraded. |  | Optional: \{\} <br /> |
+| `lastErrorMessage` _string_ | LastErrorMessage is a human-readable failure message (best-effort).<br />Deprecated: use Failure.Message. |  | Optional: \{\} <br /> |
+| `lastErrorAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastErrorAt is when the last upgrade error was recorded (best-effort).<br />Deprecated: use Failure.At. |  | Optional: \{\} <br /> |
 
 
 #### UpgradeRequestConfig

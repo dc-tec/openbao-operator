@@ -26,6 +26,11 @@ func (r *infraReconciler) computeStatefulSetSpec(
 
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		spec.Revision = inframanager.BlueGreenStableRevision(cluster)
+		if spec.Revision == "" {
+			spec.Name = cluster.Name
+		} else {
+			spec.Name = fmt.Sprintf("%s-%s", cluster.Name, spec.Revision)
+		}
 		if cluster.Status.BlueGreen != nil &&
 			(cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseDemotingBlue ||
 				cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup) {
@@ -37,12 +42,7 @@ func (r *infraReconciler) computeStatefulSetSpec(
 		}
 	} else {
 		spec.Revision = ""
-	}
-
-	if spec.Revision == "" {
 		spec.Name = cluster.Name
-	} else {
-		spec.Name = fmt.Sprintf("%s-%s", cluster.Name, spec.Revision)
 	}
 
 	return spec

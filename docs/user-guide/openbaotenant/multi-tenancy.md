@@ -1,6 +1,6 @@
 ---
 title: Multi-Tenant Security
-description: Understand the default shared-operator security model, including namespace introduction, split controllers, RBAC boundaries, and tenant guardrails.
+description: Default shared-operator security model, including namespace introduction, split controllers, RBAC boundaries, and tenant guardrails.
 slug: /tenant-onboarding/multi-tenant-security
 hide_title: true
 pageType: concept
@@ -8,8 +8,8 @@ journey: security
 ---
 
 <PageHeader
-  title="Understand the shared-operator boundary before you rely on multi-tenancy."
-  lede="Multi-tenant mode is the default production model because namespace introduction is explicit, the Provisioner and Controller stay separate, tenant access stays scoped, and guardrails are applied before a cluster ever lands in the namespace."
+  title="Shared-operator boundaries"
+  lede="Review namespace introduction, split controllers, RBAC boundaries, and tenant guardrails in the default multi-tenant model."
 />
 
 
@@ -17,12 +17,12 @@ journey: security
 <Callout type="success" title="Default production model">
 
 Multi-tenant mode is the recommended production operating model for OpenBao Operator.
-Use [Single-Tenant Mode](../operator/single-tenant-mode.md) only when one team directly owns one namespace and intentionally bypasses the default tenant-onboarding boundary.
+Use [Single-Tenant Mode](../operator/single-tenant-mode.md) for dedicated environments where one team directly owns one namespace and does not need the default tenant-onboarding boundary.
 
 </Callout>
 
 <DiagramFrame
-  title="Why the control plane is split"
+  title="Control-plane split"
   caption="Namespace introduction and tenant guardrails stay with the Provisioner. Workload reconciliation stays with the tenant-scoped Controller. That separation prevents one long-running identity from both granting and consuming tenant access."
   code={`graph LR
     subgraph Cluster["Shared Kubernetes cluster"]
@@ -44,7 +44,7 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) only when one team d
 />
 
 <DecisionTable
-  title="The control-plane split is the security model"
+  title="Control-plane security boundaries"
   columns={['Surface', 'Primary owner', 'Why it stays separate', 'If you shortcut it']}
   rows={[
     {
@@ -93,7 +93,7 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) only when one team d
         '`openbaocluster-admin-role`',
         'Cluster',
         'Platform-level administration and exceptional cluster ownership.',
-        'It should not be the normal tenant user path.',
+        'Reserve this role for platform-level administration and exceptional cluster ownership.',
       ],
       emphasis: 'recommended',
     },
@@ -148,7 +148,7 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) only when one team d
     {
       cells: [
         'Backup storage isolation',
-        'Each tenant should use object-storage credentials or prefixes that do not overlap with other tenants.',
+        'Use object-storage credentials or prefixes that do not overlap with other tenants.',
         'Make sure backup credentials cannot list or read other tenants\' snapshot paths.',
         'Backup operations',
       ],
@@ -175,7 +175,7 @@ kubectl get rolebinding,resourcequota,limitrange,networkpolicy -n <target-namesp
   code={`kubectl auth can-i create openbaoclusters.openbao.org -n <target-namespace> --as <tenant-user>
 kubectl auth can-i get secrets -n <target-namespace> --as <tenant-user>`}
 >
-  The normal tenant editor path should allow cluster lifecycle work without granting broad Secret reads by default.
+  Expect the normal tenant editor path to allow cluster lifecycle work without granting broad Secret reads by default.
 </CommandBlock>
 
 <Callout type="note" title="Supplemental policy engines are optional">

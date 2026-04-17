@@ -1,6 +1,6 @@
 ---
 title: Onboard the Target Namespace
-description: Introduce the target namespace through OpenBaoTenant before you create the first cluster in the default multi-tenant path.
+description: Introduce the target namespace through OpenBaoTenant for the first cluster in the default multi-tenant path.
 slug: /get-started/onboard-target-namespace
 hide_title: true
 pageType: task
@@ -9,8 +9,8 @@ journeyStep: 3
 ---
 
 <PageHeader
-  title="Introduce the target namespace before you create the first cluster."
-  lede="In the default multi-tenant model, the operator does not discover namespaces implicitly. You onboard a namespace with `OpenBaoTenant`, which gives the control plane the RBAC and tenant guardrails it needs before the first cluster lands there."
+  title="Onboard the target namespace"
+  lede="In the default multi-tenant model, you onboard a namespace with `OpenBaoTenant` before creating the first cluster there. This task installs the RBAC and tenant guardrails the operator depends on."
 />
 
 <Callout type="note" title="Skip this in single-tenant mode">
@@ -31,7 +31,7 @@ Create the Kubernetes namespace through your normal platform workflow first, the
   items={[
     {
       label: 'Choose a deployment model',
-      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      description: 'Set tenancy, security posture, install method, and the main exceptions.',
       docId: 'user-guide/operator/deployment-decision-guide',
     },
     {
@@ -160,7 +160,7 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
 
 </Callout>
 
-## Verify onboarding before you create the cluster
+## Verify onboarding
 
 <CommandBlock
   language="bash"
@@ -168,7 +168,7 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
   title="Inspect the OpenBaoTenant status"
   code={`kubectl get openbaotenant <name> -n <namespace> -o yaml`}
 >
-  Look for `status.provisioned: true` and a healthy `Provisioned` condition before you move on to the first cluster manifest.
+  Confirm `status.provisioned: true` and a healthy `Provisioned` condition, then apply the first cluster manifest.
 </CommandBlock>
 
 <DecisionTable

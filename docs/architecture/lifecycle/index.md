@@ -9,15 +9,15 @@ description: Lifecycle overview for OpenBao Operator from Day 0 provisioning thr
 <PageHero
   variant="landing"
   eyebrow="Architecture / Lifecycle"
-  title="Follow the operator from tenant provisioning to day 2 operations and backup-driven restore."
-  lede="These pages explain the lifecycle from the controller and manager perspective. Use them to understand which internal responsibilities own Day 0 provisioning, Day 1 creation, Day 2 operations, and backup-and-restore flows rather than how an operator user performs those tasks."
+  title="Lifecycle architecture"
+  lede="Operator lifecycle flows from the controller and manager perspective, covering Day 0 provisioning, Day 1 creation, Day 2 operations, and backup-and-restore behavior."
   actions={[
     {label: 'Start with Day 0 provisioning', docId: 'architecture/lifecycle/day0-provisioning', variant: 'primary'},
     {label: 'Open Day 2 operations', docId: 'architecture/lifecycle/day2-operations', variant: 'secondary'},
   ]}
 >
   <Checklist
-    title="Lifecycle pages explain"
+    title="Lifecycle pages show"
     items={[
       'which controller and manager own each phase',
       'where security and tenant boundaries enter the lifecycle',

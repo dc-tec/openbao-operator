@@ -7,8 +7,8 @@ description: Configure Gateway API as the primary edge path for OpenBao, includi
 ---
 
 <PageHeader
-  title="Use Gateway API when the edge should be explicit, portable, and multi-tenant aware."
-  lede="Gateway API is the preferred long-term edge model for OpenBao because it makes route ownership, listener mode, and cross-namespace attachment clearer than a generic Ingress path. For most production deployments, start with TLS passthrough so OpenBao remains the TLS endpoint."
+  title="Gateway API integration"
+  lede="Gateway API is the recommended edge model for explicit route ownership, listener mode, and cross-namespace attachment. For most production deployments, start with TLS passthrough so OpenBao remains the TLS endpoint."
 />
 
 
@@ -122,7 +122,7 @@ If `tls.mode` is `ACME`, do not terminate TLS at the Gateway. OpenBao must remai
       name: main-gateway
       namespace: gateway-system`}
 >
-  Use termination only when you actually need Gateway-side HTTP features. In that model the operator can create a `BackendTLSPolicy` so the backend hop stays encrypted and validated.
+  Use Gateway-side termination when you need HTTP-aware policy, WAF behavior, or centralized certificate handling. In that model the operator can create a `BackendTLSPolicy` so the backend hop stays encrypted and validated.
 </CommandBlock>
 
 <ExpandableCallout type="note" title="What the operator adds for backend TLS">
@@ -149,7 +149,7 @@ When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins
     {
       cells: [
         "GatewayClass exists and is accepted",
-        "A route is only useful if the controller owning the GatewayClass is real and healthy.",
+        "A route works only when the controller owning the GatewayClass is present and healthy.",
         "The selected `GatewayClass` exists and reports acceptance.",
       ],
     },

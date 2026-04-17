@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Repair quorum before you change Raft membership."
-  lede="A no-leader incident is not one thing. Sometimes the cluster cannot elect because pods are crash-looping or the cluster port is blocked. Sometimes a dead peer still counts toward quorum. Only when those narrower fixes are exhausted should you move into manual quorum recovery."
+  title="Diagnose no-leader conditions before manual Raft recovery"
+  lede="A no-leader incident can come from crash-looping pods, blocked cluster traffic, or stale peers that still count toward quorum. Use this runbook to narrow the failure mode and decide whether a manual quorum-recovery path is actually required."
 />
 
 <Checklist
@@ -24,7 +24,7 @@ journey: operate
 
 
 <DecisionTable
-  title="Match the failure before you repair it"
+  title="Match the failure mode"
   columns={['Signal', 'Start with', 'Why']}
   rows={[
     {
@@ -53,7 +53,7 @@ journey: operate
       cells: [
         'No node can form quorum and there is no healthy leader to remove peers from.',
         'Use manual quorum recovery with `peers.json` as a last resort.',
-        'This is destructive and should be used only when automatic recovery is no longer possible.',
+        'This is destructive. Use it only when automatic recovery is no longer possible.',
       ],
     },
   ]}
@@ -112,7 +112,7 @@ kubectl exec -n <namespace> -it <pod-a> -- nslookup <pod-b>.<headless-service>`}
 
 Check these first when the transport path is broken:
 
-- `NetworkPolicy` rules that should allow cluster-to-cluster traffic
+- `NetworkPolicy` rules that allow cluster-to-cluster traffic
 - service and headless-service DNS resolution
 - sidecar or mesh policies that may block direct Pod-to-Pod communication
 

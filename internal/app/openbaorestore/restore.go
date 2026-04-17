@@ -22,6 +22,7 @@ type RestoreReconciler interface {
 // RestoreDependencies contains the runtime inputs needed to build the restore reconciler.
 type RestoreDependencies struct {
 	Client                client.Client
+	APIReader             client.Reader
 	Scheme                *runtime.Scheme
 	Recorder              events.EventRecorder
 	OperatorImageVerifier imageverify.Verifier
@@ -46,6 +47,6 @@ func NewRestoreReconciler(deps RestoreDependencies) RestoreReconciler {
 			deps.Recorder,
 			deps.OperatorImageVerifier,
 			deps.Platform,
-		),
+		).WithReader(deps.APIReader),
 	}
 }

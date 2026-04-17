@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -331,11 +333,11 @@ func TestAcquireReturnsPatchStatusError(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		WithInterceptorFuncs(interceptor.Funcs{
-			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+			SubResourceApply: func(ctx context.Context, c client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
 				if subResourceName == "status" {
-					return errors.New("patch failed")
+					return errors.New("apply failed")
 				}
-				return c.SubResource(subResourceName).Patch(ctx, obj, patch, opts...)
+				return c.Status().Apply(ctx, obj, opts...)
 			},
 		}).
 		Build()
@@ -345,8 +347,56 @@ func TestAcquireReturnsPatchStatusError(t *testing.T) {
 		Operation: openbaov1alpha1.ClusterOperationUpgrade,
 		Message:   "starting",
 	})
-	require.EqualError(t, err, "failed to patch operation lock status: patch failed")
+	require.EqualError(t, err, "failed to apply operation lock status: failed to apply operation lock status for cluster ns1/c1: apply failed")
 	require.Nil(t, cluster.Status.OperationLock)
+}
+
+func TestAcquireRetriesWithForceOnApplyConflict(t *testing.T) {
+	ctx := context.Background()
+	cluster := newTestCluster()
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	var statusApplyCalls int
+	var forceFlags []bool
+
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceApply: func(ctx context.Context, c client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+				if subResourceName == "status" {
+					statusApplyCalls++
+					applied := *(&client.SubResourceApplyOptions{}).ApplyOpts(opts)
+					force := applied.Force != nil && *applied.Force
+					forceFlags = append(forceFlags, force)
+					if statusApplyCalls == 1 {
+						return apierrors.NewConflict(
+							schema.GroupResource{Group: openbaov1alpha1.GroupVersion.Group, Resource: "openbaoclusters"},
+							cluster.Name,
+							errors.New("simulated conflict"),
+						)
+					}
+				}
+				return c.Status().Apply(ctx, obj, opts...)
+			},
+		}).
+		Build()
+
+	err := Acquire(ctx, c, cluster, AcquireOptions{
+		Holder:    "controller/upgrade",
+		Operation: openbaov1alpha1.ClusterOperationUpgrade,
+		Message:   "starting",
+	})
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, statusApplyCalls, 2)
+	require.Len(t, forceFlags, statusApplyCalls)
+	require.False(t, forceFlags[0], "first attempt should not force ownership")
+	require.True(t, forceFlags[1], "second attempt should force ownership after conflict")
+	require.NotNil(t, cluster.Status.OperationLock)
+	require.Equal(t, openbaov1alpha1.ClusterOperationUpgrade, cluster.Status.OperationLock.Operation)
 }
 
 func TestReleaseOnlySucceedsForExactMatch(t *testing.T) {

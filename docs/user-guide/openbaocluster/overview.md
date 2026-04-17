@@ -8,17 +8,17 @@ description: Understand what OpenBaoCluster owns, what the operator protects aut
 ---
 
 <PageHeader
-  title="Read OpenBaoCluster as the contract for the whole service, not just a CRD."
-  lede="`OpenBaoCluster` is the declarative contract for the running OpenBao service on Kubernetes. It sets the cluster shape, service boundary, storage path, and day 2 capabilities the operator will keep reconciling. Use this page to orient the rest of Configure before you start editing individual fields."
+  title="OpenBaoCluster as the service contract"
+  lede="`OpenBaoCluster` is the declarative contract for the running OpenBao service on Kubernetes. It sets the cluster shape, service boundary, storage path, and day 2 capabilities the operator will keep reconciling. Use this page to orient the rest of Configure and understand which areas to tune next."
 />
 
 <Checklist
-    title="A good read of this page should leave you with"
+    title="Use this page to understand"
     items={[
       "a clear view of what the operator owns versus what the platform still expects from you",
       "the right mental model for spec as desired state and status as the observed operating surface",
       "a shorter list of pages to read next instead of a flat wall of configuration topics",
-      "the confidence to shape the first cluster without treating the CR as an arbitrary field dump",
+      "how to shape the first cluster around the main operating decisions",
     ]}
   />
 
@@ -116,7 +116,7 @@ spec:
   backup:
     schedule: "0 3 * * *"`}
 >
-  The point is not to memorize every field. It is to see the major configuration surfaces that map to the rest of the section: baseline, service boundary, platform readiness, and day 2 operations.
+  This example shows the major configuration surfaces that map to the rest of the section: baseline, service boundary, platform readiness, and day 2 operations.
 </CommandBlock>
 
 <RouteList
@@ -148,7 +148,7 @@ spec:
   items={[
     {
       label: "Security profiles",
-      description: "Start with the production posture and bootstrap model before you spend time on edge or observability details.",
+      description: "Start with the production posture and bootstrap model, then refine edge and observability details.",
       docId: "user-guide/openbaocluster/configuration/security-profiles",
     },
     {

@@ -26,6 +26,7 @@ var (
 // Manager reconciles version and Raft-aware upgrade behavior for an OpenBaoCluster.
 type Manager struct {
 	client                client.Client
+	reader                client.Reader
 	scheme                *runtime.Scheme
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
 	recorder              events.EventRecorder
@@ -51,6 +52,7 @@ func NewManager(
 	}
 	return &Manager{
 		client:                c,
+		reader:                c,
 		scheme:                scheme,
 		backupRuntime:         backupRuntime,
 		recorder:              eventRecorder,
@@ -82,6 +84,7 @@ func NewManagerWithClientFactory(
 	}
 	return &Manager{
 		client:                c,
+		reader:                c,
 		scheme:                scheme,
 		backupRuntime:         backupRuntime,
 		recorder:              eventRecorder,
@@ -90,6 +93,14 @@ func NewManagerWithClientFactory(
 		operatorImageVerifier: operatorImageVerifier,
 		Platform:              platform,
 	}
+}
+
+// WithReader configures a live reader for status read-before-write flows.
+func (m *Manager) WithReader(reader client.Reader) *Manager {
+	if reader != nil {
+		m.reader = reader
+	}
+	return m
 }
 
 // Reconcile ensures upgrades progress safely for the given OpenBaoCluster.

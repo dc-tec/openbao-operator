@@ -3,12 +3,12 @@ title: Resources and Storage
 hide_title: true
 pageType: task
 journey: configure
-description: Choose storage class, PVC size, and workload resource requests before the cluster becomes difficult to resize or move.
+description: Choose storage class, PVC size, and workload resource requests for the cluster data path and capacity baseline.
 ---
 
 <PageHeader
-  title="Choose storage and workload limits before the data path makes them expensive to change."
-  lede="The operator renders the core workload for you, but it does not choose the platform capacity or storage class you intend to live with. Use this page to understand which resources the cluster owns, how PVC growth works, and where explicit sizing is safer than inheriting whatever the platform happens to default."
+  title="Storage and workload sizing"
+  lede="The operator renders the workload, but storage class and capacity choices still belong to the platform baseline. Use this page to set resource requests, understand PVC growth behavior, and make storage decisions explicit."
 />
 
 
@@ -93,7 +93,7 @@ spec:
     size: "50Gi"
     storageClassName: "fast-ssd"`}
 >
-  Start with explicit requests and an explicit `storageClassName` in production. Defaults are fine for evaluation, but they are a weak contract once the cluster carries real data.
+  Set explicit requests and an explicit `storageClassName` in production. Defaults are acceptable for evaluation, but they provide less predictable long-term storage behavior.
 </CommandBlock>
 
 <DecisionTable
@@ -127,7 +127,7 @@ spec:
       cells: [
         "Filesystem expansion",
         "Some CSI drivers finish expansion only after a restart. The operator surfaces that and can use a controlled restart path when maintenance is enabled.",
-        "Do not assume a size increase is complete just because the PVC request changed. Check the PVC and cluster conditions before you move on.",
+        "A size increase is not complete until the PVC and cluster conditions confirm it.",
       ],
       emphasis: "caution",
     },
@@ -152,7 +152,7 @@ spec:
   code={`kubectl get openbaocluster <name> -n <namespace> \\
   -o jsonpath='{range .status.conditions[*]}{.type}={.status}{"\\t"}{.reason}{"\\n"}{end}'`}
 >
-  A healthy cluster should eventually report `StorageConfigured=True`. If it does not, fix the storage-path mismatch before you continue with upgrades or backups.
+  A healthy cluster should eventually report `StorageConfigured=True`. If it does not, fix the storage-path mismatch before continuing with upgrades or backups.
 </CommandBlock>
 
 <Callout type="note" title="Controlled restarts still matter after a PVC expansion">
@@ -176,7 +176,7 @@ If your CSI driver requires a restart to finish filesystem resize, use the maint
     },
     {
       label: "Configure backups",
-      description: "Snapshots depend on the storage path you chose and should be routine long before you need restore.",
+      description: "Configure backups against the storage path the cluster will use in steady state.",
       docId: "user-guide/openbaocluster/operations/backups",
     },
   ]}
