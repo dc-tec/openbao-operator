@@ -465,7 +465,7 @@
         },
         "maintenanceBreakGlassGroups": {
           "type": "array",
-          "description": "Groups allowed to bypass managed-resource mutation locks when the target resource is explicitly marked for maintenance",
+          "description": "Deprecated and no longer used. Maintenance authorization now comes from Kubernetes RBAC via the custom `maintenance` verb on `openbaoclusters.openbao.org`.",
           "items": {
             "type": "string",
             "minLength": 1

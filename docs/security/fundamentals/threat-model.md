@@ -295,7 +295,7 @@ Operator-managed PVCs are intentionally CR-driven and status-observed rather tha
 
 - Emit structured operator audit logs for startup gating, upgrades, backups, restore, and operation-lock transitions.
 - Use Kubernetes API audit logs and admission denials as the primary mutation trail.
-- Keep maintenance mode explicit and break-glass groups narrow by default.
+- Keep maintenance mode explicit and grant the custom maintenance permission only to trusted operators.
 
 </Callout>
 

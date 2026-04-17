@@ -39,8 +39,8 @@ journey: operate
       cells: [
         'Maintenance mode',
         'Admission policy requires the `openbao.org/maintenance=true` signal before restarts or controlled deletes.',
-        'The operator annotates managed resources so maintenance-only actions are allowed under the configured break-glass groups.',
-        'This is a controlled operational mode for maintenance-only actions under the configured break-glass groups.',
+        'The operator annotates managed resources so callers with maintenance permission on the owning OpenBaoCluster can perform planned restarts or deletes.',
+        'Grant the custom `maintenance` verb on the owning OpenBaoCluster before using this path.',
       ],
     },
     {
@@ -165,7 +165,7 @@ Enable maintenance mode when your admission policies require a deliberate mainte
   maintenance:
     enabled: true`}
 >
-  In this mode, the operator annotates managed Pods and the StatefulSet with `openbao.org/maintenance=true`. By default, maintenance-only bypass is limited to callers in the Kubernetes group `system:masters` unless you changed the configured break-glass groups at install time.
+  In this mode, the operator annotates managed Pods and the StatefulSet with `openbao.org/maintenance=true`. Callers still need normal Kubernetes RBAC on the target resource plus the custom `maintenance` verb on the owning `OpenBaoCluster`.
 </CommandBlock>
 
 This mode is also required for some day 2 changes that need a controlled restart path, such as finishing filesystem expansion after increasing `spec.storage.size`.

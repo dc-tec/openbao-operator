@@ -47,33 +47,12 @@ const (
 // === Shared Helpers ===
 
 func createRoleBindingForGroup(ctx context.Context, c client.Client, namespace string, role *rbacv1.Role) {
-	err := c.Create(ctx, role)
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).NotTo(HaveOccurred(), "Failed to create Role %q in namespace %q", role.Name, namespace)
-	}
-
-	rb := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      role.Name + "-binding",
-			Namespace: namespace,
+	Expect(e2ehelpers.EnsureRoleBinding(ctx, c, role, []rbacv1.Subject{
+		{
+			Kind: "Group",
+			Name: impersonatedGroup,
 		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: rbacv1.GroupName,
-			Kind:     "Role",
-			Name:     role.Name,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind: "Group",
-				Name: impersonatedGroup,
-			},
-		},
-	}
-
-	err = c.Create(ctx, rb)
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		Expect(err).NotTo(HaveOccurred(), "Failed to create RoleBinding %q in namespace %q", rb.Name, namespace)
-	}
+	})).To(Succeed(), "Failed to ensure RoleBinding for %q in namespace %q", role.Name, namespace)
 }
 
 func containsString(values []string, needle string) bool {
@@ -901,6 +880,11 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 						Verbs:     []string{"get", "list", "delete"},
 					},
 					{
+						APIGroups: []string{""},
+						Resources: []string{"pods"},
+						Verbs:     []string{"get", "list", "delete"},
+					},
+					{
 						APIGroups: []string{"apps"},
 						Resources: []string{"statefulsets"},
 						Verbs:     []string{"get", "list", "update"},
@@ -1004,6 +988,87 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
+		})
+
+		It("prevents managed Pod deletion during maintenance without cluster maintenance permission", func() {
+			Expect(tenantFW.SetMaintenanceEnabled(ctx, victim.Name, true)).To(Succeed())
+
+			var targetPod corev1.Pod
+			Eventually(func(g Gomega) {
+				pods := &corev1.PodList{}
+				g.Expect(admin.List(ctx, pods,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						"openbao.org/cluster": victim.Name,
+					},
+				)).To(Succeed())
+				g.Expect(pods.Items).NotTo(BeEmpty())
+				targetPod = pods.Items[0]
+				g.Expect(targetPod.Annotations).To(HaveKeyWithValue(constants.AnnotationMaintenance, "true"))
+			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+
+			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+				return c.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: targetPod.Name, Namespace: targetPod.Namespace}})
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
+		})
+
+		It("allows managed Pod deletion during maintenance with cluster maintenance permission", func() {
+			maintenanceRole := &rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "e2e-victim-maintenance",
+					Namespace: tenantNamespace,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{"openbao.org"},
+						Resources:     []string{"openbaoclusters"},
+						ResourceNames: []string{victim.Name},
+						Verbs:         []string{"get", "maintenance"},
+					},
+					{
+						APIGroups:     []string{"openbao.org"},
+						Resources:     []string{"openbaoclusters/status"},
+						ResourceNames: []string{victim.Name},
+						Verbs:         []string{"get"},
+					},
+				},
+			}
+			createRoleBindingForGroup(ctx, admin, tenantNamespace, maintenanceRole)
+			Expect(tenantFW.SetMaintenanceEnabled(ctx, victim.Name, true)).To(Succeed())
+
+			var targetPod corev1.Pod
+			Eventually(func(g Gomega) {
+				pods := &corev1.PodList{}
+				g.Expect(admin.List(ctx, pods,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						"openbao.org/cluster": victim.Name,
+					},
+				)).To(Succeed())
+				g.Expect(pods.Items).NotTo(BeEmpty())
+				targetPod = pods.Items[0]
+				g.Expect(targetPod.Annotations).To(HaveKeyWithValue(constants.AnnotationMaintenance, "true"))
+			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+			originalUID := targetPod.UID
+
+			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+				return c.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: targetPod.Name, Namespace: targetPod.Namespace}})
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func(g Gomega) {
+				pods := &corev1.PodList{}
+				g.Expect(admin.List(ctx, pods,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						"openbao.org/cluster": victim.Name,
+					},
+				)).To(Succeed())
+				g.Expect(pods.Items).NotTo(BeEmpty())
+				g.Expect(pods.Items[0].UID).NotTo(Equal(originalUID))
+			}, 4*time.Minute, 2*time.Second).Should(Succeed())
 		})
 	})
 

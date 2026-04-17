@@ -259,13 +259,38 @@ spec:
               has(oldObject.metadata.annotations) &&
               ("openbao.org/maintenance" in oldObject.metadata.annotations) &&
               oldObject.metadata.annotations["openbao.org/maintenance"] == "true"))
-    - name: break_glass_admin_groups
+    - name: maintenance_current_labels
       expression: >-
-        ["system:masters"]
-    - name: is_break_glass_admin
+        (object != null && has(object.metadata) && has(object.metadata.labels)) ? object.metadata.labels : {}
+    - name: maintenance_old_labels
       expression: >-
-        variables.break_glass_admin_groups.exists(group,
-          request.userInfo.groups.exists(g, g == group))
+        (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels)) ? oldObject.metadata.labels : {}
+    - name: maintenance_cluster_name
+      expression: >-
+        request.operation == "DELETE" ?
+          ("openbao.org/cluster" in variables.maintenance_old_labels ?
+            variables.maintenance_old_labels["openbao.org/cluster"] :
+            ("app.kubernetes.io/instance" in variables.maintenance_old_labels ?
+              variables.maintenance_old_labels["app.kubernetes.io/instance"] : "")) :
+          ("openbao.org/cluster" in variables.maintenance_current_labels ?
+            variables.maintenance_current_labels["openbao.org/cluster"] :
+            ("openbao.org/cluster" in variables.maintenance_old_labels ?
+              variables.maintenance_old_labels["openbao.org/cluster"] :
+              ("app.kubernetes.io/instance" in variables.maintenance_current_labels ?
+                variables.maintenance_current_labels["app.kubernetes.io/instance"] :
+                ("app.kubernetes.io/instance" in variables.maintenance_old_labels ?
+                  variables.maintenance_old_labels["app.kubernetes.io/instance"] : ""))))
+    - name: maintenance_authorized
+      expression: >-
+        variables.maintenance_enabled &&
+        request.namespace != "" &&
+        variables.maintenance_cluster_name != "" &&
+        authorizer.group("openbao.org").
+          resource("openbaoclusters").
+          namespace(request.namespace).
+          name(variables.maintenance_cluster_name).
+          check("maintenance").
+          allowed()
   validations:
     - expression: >-
         !variables.is_managed ||
@@ -284,5 +309,5 @@ spec:
         variables.is_service_registration_label_update ||
         variables.is_kube_system_pod_finalizer_update ||
         variables.is_kube_system_job_finalizer_update ||
-        (variables.maintenance_enabled && variables.is_break_glass_admin)
+        variables.maintenance_authorized
       message: Direct modification of OpenBao-managed resources is prohibited; modify the parent OpenBaoCluster/OpenBaoTenant instead.

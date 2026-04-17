@@ -26,6 +26,8 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `security-guardrails-has-required-validatingadmissionpolicy-dependencies-installed-and-87ec7cda` | has required ValidatingAdmissionPolicy dependencies installed and correctly bound | active | _none_ | `security`, `critical`, `rbac` |
 | `security-guardrails-restricts-openbao-pod-serviceaccount-pod-patching-abbf5716` | restricts OpenBao pod ServiceAccount pod patching to cluster pods | active | _none_ | `security`, `critical`, `rbac`, `pentest` |
 | `security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9` | scopes Secret access via allowlist Roles | active | _none_ | `security`, `critical`, `rbac` |
+| `security-guardrails-allows-managed-pod-deletion-during-maintenance-80b5ee0d` | allows managed Pod deletion during maintenance with cluster maintenance permission | active | _none_ | `security`, `critical`, `tamper` |
+| `security-guardrails-prevents-managed-pod-deletion-during-maintenance-238e18f8` | prevents managed Pod deletion during maintenance without cluster maintenance permission | active | _none_ | `security`, `critical`, `tamper` |
 | `security-guardrails-prevents-sidecar-injection-via-statefulset-updates-145c71ee` | prevents sidecar injection via StatefulSet updates | active | _none_ | `security`, `critical`, `tamper` |
 | `security-guardrails-prevents-unauthorized-deletion-of-the-tls-9e011135` | prevents unauthorized deletion of the TLS CA secret | active | _none_ | `security`, `critical`, `tamper` |
 | `security-guardrails-prevents-unauthorized-deletion-of-the-unseal-2ea235de` | prevents unauthorized deletion of the unseal Secret | active | _none_ | `security`, `critical`, `tamper` |
@@ -268,6 +270,28 @@ Recorded checkpoints:
 - verifying the tenant role does not grant broad Secret access
 - verifying the dedicated Secrets writer role only grants the expected allowlisted access
 - verifying the Secrets writer RoleBinding points at the allowlist role
+
+
+## `security-guardrails-allows-managed-pod-deletion-during-maintenance-80b5ee0d`
+
+Path: `Security Guardrails > Resource Locking (anti-tamper) > allows managed Pod deletion during maintenance with cluster maintenance permission`
+
+State: `active`
+
+Covers: _none_
+
+Labels: `security`, `critical`, `tamper`
+
+
+## `security-guardrails-prevents-managed-pod-deletion-during-maintenance-238e18f8`
+
+Path: `Security Guardrails > Resource Locking (anti-tamper) > prevents managed Pod deletion during maintenance without cluster maintenance permission`
+
+State: `active`
+
+Covers: _none_
+
+Labels: `security`, `critical`, `tamper`
 
 
 ## `security-guardrails-prevents-sidecar-injection-via-statefulset-updates-145c71ee`
