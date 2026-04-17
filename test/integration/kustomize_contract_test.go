@@ -158,8 +158,8 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	}
 
 	var hasOpenBaoLabelExpression string
-	var breakGlassAdminGroupsExpression string
-	var isBreakGlassAdminExpression string
+	var maintenanceAuthorizedExpression string
+	var maintenanceClusterNameExpression string
 	var isManagedExpression string
 	for _, variable := range variables {
 		variableMap, ok := variable.(map[string]any)
@@ -171,10 +171,10 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		switch name {
 		case "has_openbao_specific_label":
 			hasOpenBaoLabelExpression = expression
-		case "break_glass_admin_groups":
-			breakGlassAdminGroupsExpression = expression
-		case "is_break_glass_admin":
-			isBreakGlassAdminExpression = expression
+		case "maintenance_authorized":
+			maintenanceAuthorizedExpression = expression
+		case "maintenance_cluster_name":
+			maintenanceClusterNameExpression = expression
 		case "is_managed":
 			isManagedExpression = expression
 		}
@@ -186,11 +186,17 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	if !strings.Contains(isManagedExpression, "variables.has_openbao_specific_label") {
 		t.Fatalf("is_managed expression does not require has_openbao_specific_label: %q", isManagedExpression)
 	}
-	if !strings.Contains(breakGlassAdminGroupsExpression, `"system:masters"`) {
-		t.Fatalf("break_glass_admin_groups expression does not include the default admin group: %q", breakGlassAdminGroupsExpression)
+	if !strings.Contains(maintenanceClusterNameExpression, `"openbao.org/cluster"`) {
+		t.Fatalf("maintenance_cluster_name expression does not prefer openbao.org/cluster: %q", maintenanceClusterNameExpression)
 	}
-	if !strings.Contains(isBreakGlassAdminExpression, "variables.break_glass_admin_groups.exists") {
-		t.Fatalf("is_break_glass_admin expression does not reference break_glass_admin_groups: %q", isBreakGlassAdminExpression)
+	if !strings.Contains(maintenanceClusterNameExpression, `"app.kubernetes.io/instance"`) {
+		t.Fatalf("maintenance_cluster_name expression does not fall back to app.kubernetes.io/instance: %q", maintenanceClusterNameExpression)
+	}
+	if !strings.Contains(maintenanceAuthorizedExpression, `authorizer.group("openbao.org")`) {
+		t.Fatalf("maintenance_authorized expression does not use the CEL authorizer: %q", maintenanceAuthorizedExpression)
+	}
+	if !strings.Contains(maintenanceAuthorizedExpression, `check("maintenance")`) {
+		t.Fatalf("maintenance_authorized expression does not check the custom maintenance verb: %q", maintenanceAuthorizedExpression)
 	}
 }
 
