@@ -7,8 +7,8 @@ description: Reconcile OpenBaoRestore requests, acquire operation locks, and orc
 ---
 
 <PageHeader
-  title="Treat restore as a destructive, explicit, lock-aware workflow."
-  lede="The restore manager keeps disaster recovery separate from normal cluster reconciliation. It models restore as an immutable CRD-backed request, coordinates execution through a dedicated controller path, and protects the cluster with explicit validation and lock ownership."
+  title="Restore manager workflow"
+  lede="Restore requests run outside normal cluster reconciliation. The manager models restore as an immutable CRD-backed request, coordinates execution through a dedicated controller path, and protects the cluster with explicit validation and lock ownership."
 />
 
 
@@ -50,7 +50,7 @@ description: Reconcile OpenBaoRestore requests, acquire operation locks, and orc
   ]}
 />
 
-## Request Model
+## Request model
 
 <DecisionTable
   kind="reference"
@@ -73,7 +73,7 @@ description: Reconcile OpenBaoRestore requests, acquire operation locks, and orc
   ]}
 />
 
-## Restore Lifecycle
+## Restore lifecycle
 
 <DiagramFrame
   title="Restore lifecycle"
@@ -125,7 +125,7 @@ description: Reconcile OpenBaoRestore requests, acquire operation locks, and orc
   ]}
 />
 
-## Safety Boundaries
+## Safety boundaries
 
 <DecisionTable
   kind="reference"
@@ -148,7 +148,7 @@ description: Reconcile OpenBaoRestore requests, acquire operation locks, and orc
   ]}
 />
 
-<Callout type="warning" title="Restore is not routine reconciliation">
+<Callout type="warning" title="Restore workflow scope">
 
 Restore is intentionally modeled outside the normal `OpenBaoCluster` lifecycle. The operator treats it as a destructive recovery operation with its own request object, its own controller path, and its own lock semantics.
 
@@ -164,12 +164,12 @@ Restore is intentionally modeled outside the normal `OpenBaoCluster` lifecycle. 
     },
     {
       label: 'Operation lifecycle coordination',
-      description: 'See how restore shares lock and retry primitives with other disruptive operations.',
+      description: 'Lock and retry primitives shared with other disruptive operations.',
       docId: 'architecture/operation-lifecycle',
     },
     {
       label: 'Restore guide',
-      description: 'Compare the internal restore controller model with the user-facing restore and recovery procedures.',
+      description: 'User-facing restore and recovery procedures.',
       docId: 'user-guide/openbaorestore/restore',
     },
   ]}

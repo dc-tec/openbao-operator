@@ -7,15 +7,15 @@ description: Threat actors, trust boundaries, protected assets, and accepted res
 ---
 
 <PageHeader
-  title="Start from the trust boundaries the operator is designed to defend."
-  lede="This threat model focuses on the operator control plane, tenant isolation boundaries, and lifecycle workflows such as onboarding, upgrade, backup, and restore. It does not replace OpenBao's own internal threat model; it explains the extra surface introduced by running OpenBao through the operator."
+  title="Threat model and scope"
+  lede="Threat model for the operator control plane, tenant isolation boundaries, and lifecycle workflows such as onboarding, upgrade, backup, and restore. It complements OpenBao's own internal threat model by covering the extra surface introduced by the operator."
 />
 
 
 
 <Callout type="note" title="Scope">
 
-This page models threats to the OpenBao Operator control plane, tenant isolation boundaries, and lifecycle workflows. It assumes the operator manages clusters it created and reconciles; generic import of arbitrary unmanaged OpenBao clusters is out of scope.
+This model assumes the operator manages clusters it created and reconciles; generic import of arbitrary unmanaged OpenBao clusters is out of scope.
 
 </Callout>
 

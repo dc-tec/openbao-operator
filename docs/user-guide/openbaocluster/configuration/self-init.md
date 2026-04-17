@@ -3,12 +3,12 @@ title: Self-Initialization
 hide_title: true
 pageType: task
 journey: configure
-description: Configure bootstrap requests, operator OIDC setup, and verification for self-initializing OpenBao clusters without leaving a persistent root token behind.
+description: Configure bootstrap requests, operator OIDC setup, and verification for self-initializing OpenBao clusters with an auto-revoked bootstrap credential.
 ---
 
 <PageHeader
-  title="Bootstrap the cluster declaratively and avoid carrying a root token forward."
-  lede="Self-initialization lets the cluster bring up auth methods, policies, audit devices, and other bootstrap state as part of the `OpenBaoCluster` manifest. It is the supported production bootstrap path because it avoids leaving a long-lived root token in a Kubernetes Secret."
+  title="Declarative cluster bootstrap"
+  lede="Self-initialization applies auth methods, policies, audit devices, and other bootstrap state from the `OpenBaoCluster` manifest and then revokes the bootstrap root token. Use this page to configure the bootstrap contract and the access paths that must exist after initialization."
 />
 
 
@@ -58,9 +58,9 @@ description: Configure bootstrap requests, operator OIDC setup, and verification
     class Auth,Audit,Ready write;`}
 />
 
-<Callout type="warning" title="Lockout is the real failure mode">
+<Callout type="warning" title="Plan the access path before enabling self-init">
 
-Self-init is safer only if you plan the access path up front. If you enable it without creating a usable auth method for operators or humans, the root token is revoked and the cluster can become effectively unreachable without recreation.
+If self-init is enabled and no usable auth method exists for operators or humans, the root token is revoked and the cluster can become effectively unreachable unless it is recreated.
 
 </Callout>
 
@@ -86,10 +86,9 @@ Self-init is safer only if you plan the access path up front. If you enable it w
   ]}
 />
 
-<Callout type="tip" title="Self-init is the whole bootstrap contract">
+<Callout type="tip" title="Define operator and human access in the same bootstrap contract">
 
-Do not think of operator auth as step one and human auth as something to add later.
-If the cluster will self-initialize, define the human login path in `selfInit.requests` as part of the same manifest that enables self-init.
+If the cluster will self-initialize, define the human login path in `selfInit.requests` as part of the same manifest that enables operator auth.
 
 </Callout>
 
@@ -111,7 +110,7 @@ If the cluster will self-initialize, define the human login path in `selfInit.re
           fileOptions:
             filePath: /tmp/audit.log`}
 >
-  Treat `requests` as part of the bootstrap contract. They should create the minimum auth, policy, and audit state required for the cluster to be useful after bootstrap.
+  `requests` defines the bootstrap state. Include the minimum auth, policy, and audit configuration the cluster needs immediately after initialization.
 </CommandBlock>
 
 <CommandBlock

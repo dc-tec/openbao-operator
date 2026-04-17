@@ -7,7 +7,7 @@ description: Shared lock, retry, and phase-audit primitives used by backup, rest
 ---
 
 <PageHeader
-  title="Coordinate locks, retries, and phase transitions across disruptive operations."
+  title="Operation lifecycle coordination"
   lede="`internal/service/opslifecycle` is the shared service-layer contract behind backup, restore, and upgrade orchestration. It does not own a controller or CRD of its own. Instead, it keeps operation lock identity, retry timing, and phase audit logging consistent whenever a manager needs to take disruptive action against a cluster."
 />
 
@@ -50,7 +50,7 @@ description: Shared lock, retry, and phase-audit primitives used by backup, rest
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Operation lifecycle coordination sits below the concrete managers and above the lock adapter:
 
@@ -124,7 +124,7 @@ That keeps the shared safety model in one place instead of scattering lock and r
   ]}
 />
 
-## Retry And Lock Model
+## Retry and lock model
 
 <DecisionTable
   kind="reference"

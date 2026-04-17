@@ -7,19 +7,19 @@ journey: contribute
 
 <PageHero
   eyebrow="Contribute / Start Here"
-  title="Get a clean local environment before you touch the codebase."
-  lede="Use this section when you are setting up your workstation, creating your first branch, or trying to understand the shortest contributor path from clone to a passing local gate."
+  title="Contributor setup"
+  lede="Prepare a workstation, create a first branch, and run the initial local checks."
   actions={[
     {label: "Set up your environment", to: "/contribute/getting-started/development", variant: "primary"},
     {label: "Open testing strategy", to: "/contribute/testing", variant: "secondary"},
   ]}
 >
   <Checklist
-    title="Use this page when you need to"
+    title="Use this page to"
     items={[
-      "prepare the required local tools before you run any repo-managed commands",
+      "prepare the required local tools for repo-managed commands",
       "understand the first commands maintainers expect you to run on a clean clone",
-      "see the basic contribution path before you dive into standards or CI details",
+      "see the basic contribution path before diving into standards or CI details",
       "find the right next page once the environment itself is working",
     ]}
   />
@@ -33,7 +33,7 @@ journey: contribute
 make doctor
 make ci-core`}
 >
-  Treat this as the baseline local proof before you open a pull request or ask someone else to debug your workstation.
+  Use this as the baseline local proof for a new branch or workstation setup.
 </CommandBlock>
 
 <RouteList
@@ -48,13 +48,13 @@ make ci-core`}
     {
       eyebrow: "02",
       title: "Learn the coding rules",
-      description: "Read the project conventions, code standards, and generated-artifact rules before you start reshaping code or manifests.",
+      description: "Read the project conventions, code standards, and generated-artifact rules before reshaping code or manifests.",
       to: "/contribute/standards",
     },
     {
       eyebrow: "03",
       title: "Understand the testing stack",
-      description: "Know which layers to run locally and what CI is going to enforce before you push a branch.",
+      description: "Know which layers to run locally and what CI is going to enforce for the branch.",
       to: "/contribute/testing",
     },
     {
@@ -105,7 +105,7 @@ make ci-core`}
     },
     {
       label: "Coding standards",
-      description: "Read the project rules before you make a code or docs change.",
+      description: "Read the project rules for code and docs changes.",
       to: "/contribute/standards",
     },
     {

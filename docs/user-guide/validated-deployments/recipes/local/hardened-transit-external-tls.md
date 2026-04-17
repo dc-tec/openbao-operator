@@ -7,12 +7,12 @@ description: Reproduce the validated local hardened lane with Transit auto-unsea
 ---
 
 <PageHeader
-  title="Reproduce the validated hardened local lane without collapsing the trust boundaries it depends on."
-  lede="This recipe stands up the local hardened lane with tenant onboarding, external Transit unseal, externally managed TLS Secrets, and user-managed TCP passthrough. Use it when you want the exact validated path, not a generic local example."
+  title="Reproduce the validated hardened local lane"
+  lede="This recipe stands up the local hardened lane with tenant onboarding, external Transit unseal, externally managed TLS Secrets, and user-managed TCP passthrough. Use it when you want the exact validated path for this topology."
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an onboarded tenant namespace and admin ServiceAccount",
       "a hardened cluster that self-initializes and never persists a root token Secret",
@@ -22,7 +22,7 @@ description: Reproduce the validated local hardened lane with Transit auto-unsea
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This recipe follows the hardened external-TLS lifecycle covered by the in-repo E2E suite and the local validation environment. The tested path includes tenant onboarding, external TLS Secrets, Transit auto-unseal, self-init, and successful JWT admin login.
 
@@ -35,7 +35,7 @@ Use the main guides for the product-wide source of truth on <SiteLink docId="use
 </Callout>
 
 <DecisionTable
-  title="What this lane assumes"
+  title="Baseline assumptions"
   columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
   rows={[
     {

@@ -3,12 +3,12 @@ title: Upgrade Manager
 hide_title: true
 pageType: concept
 journey: architecture
-description: Orchestrate rolling and blue-green upgrades, status-backed resumability, and rollback safety without violating Raft consensus.
+description: Orchestrate rolling and blue-green upgrades, status-backed resumability, rollback safety, and Raft-aware rollout behavior.
 ---
 
 <PageHeader
-  title="Change workload versions without violating Raft safety."
-  lede="The upgrade manager owns disruptive version changes. It keeps upgrade orchestration out of the workload loop, persists state in status so upgrades survive controller restarts, and prioritizes cluster availability over finishing quickly."
+  title="Upgrade orchestration and safety model"
+  lede="The upgrade manager handles disruptive version changes. It keeps upgrade orchestration out of the workload loop, persists state in status so upgrades survive controller restarts, and prioritizes cluster availability during rollout."
 />
 
 
@@ -51,7 +51,7 @@ description: Orchestrate rolling and blue-green upgrades, status-backed resumabi
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Upgrade execution belongs to the AdminOps orchestration path:
 
@@ -64,7 +64,7 @@ Upgrade execution belongs to the AdminOps orchestration path:
 
 That keeps upgrade state machines out of the workload loop and lets long-running transitions own their own retry model.
 
-## Package Shape
+## Package shape
 
 The upgrade subsystem is split so strategy packages keep workflow ownership while
 shared mechanics live behind narrower seams:
@@ -191,7 +191,7 @@ Blue-green creates a second revision and needs roughly double storage capacity f
   </TabItem>
 </Tabs>
 
-## State And Recovery Model
+## State and recovery model
 
 <DecisionTable
   kind="reference"
@@ -240,17 +240,17 @@ Blue-green creates a second revision and needs roughly double storage capacity f
   items={[
     {
       label: 'Operation lifecycle coordination',
-      description: 'See how lock, retry, and phase-transition helpers are shared with backup and restore.',
+      description: 'Lock, retry, and phase-transition helpers shared with backup and restore.',
       docId: 'architecture/operation-lifecycle',
     },
     {
       label: 'Backup manager',
-      description: 'Pre-upgrade snapshots and object-storage readiness are part of the upgrade safety model.',
+      description: 'Pre-upgrade snapshots and object-storage readiness.',
       docId: 'architecture/backup-manager',
     },
     {
       label: 'Upgrades guide',
-      description: 'Compare the internal state machine with the user-facing rolling and blue-green operating procedures.',
+      description: 'User-facing rolling and blue-green operating procedures.',
       docId: 'user-guide/openbaocluster/operations/upgrades',
     },
   ]}

@@ -8,8 +8,8 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
 ---
 
 <PageHeader
-  title="Choose how traffic reaches the service before you optimize the edge."
-  lede="OpenBao can be exposed through Gateway API, Ingress, or a direct L4 Service. The important decision is not just which Kubernetes resource you use, but where TLS terminates, who owns certificate lifecycle, and whether the edge path matches the production posture you actually want to operate."
+  title="Choose an external access path"
+  lede="OpenBao can be exposed through Gateway API, Ingress, or a direct L4 Service. Use this page to choose where TLS terminates, who owns certificate lifecycle, and how each edge path fits the intended operating posture."
 />
 
 
@@ -69,7 +69,7 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
       cells: [
         "Temporary operator-managed trust",
         "You are standing up a development or internal evaluation environment quickly.",
-        "This is convenient, but it is not the Hardened production contract and should not become the long-term default by inertia.",
+        "This fits development and internal evaluation paths. Use `External` or `ACME` for the Hardened production baseline.",
       ],
       emphasis: "caution",
     },
@@ -128,7 +128,7 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
     annotations:
       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"`}
 >
-  This is useful when you already operate an ingress-controller standard and do not need the richer Gateway API route model.
+  Use this when you already operate an ingress-controller standard and do not need the richer Gateway API route model.
 </CommandBlock>
 
   </TabItem>
@@ -176,7 +176,7 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
       cells: [
         "OperatorManaged",
         "Development or internal evaluation paths only",
-        "This is easy to start with, but the operator becomes the certificate authority and that is not the Hardened production posture.",
+        "This keeps startup simple, but it also makes the operator the certificate authority. Use `External` or `ACME` for the Hardened production baseline.",
       ],
       emphasis: "caution",
     },

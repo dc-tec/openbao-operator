@@ -1,6 +1,6 @@
 ---
 title: Run Planned Maintenance
-description: Drain nodes, scale the cluster, enable maintenance mode, and restart Pods without guessing how quorum and admission policy interact.
+description: Drain nodes, scale the cluster, enable maintenance mode, and restart Pods with the expected quorum and admission-policy behavior.
 slug: /operate/maintenance
 hide_title: true
 pageType: task
@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Use cluster controls deliberately when you need to change the platform underneath OpenBao."
-  lede="Planned maintenance is where Kubernetes disruption rules, Raft quorum, and admission-policy guardrails all meet. Use this page to prepare drains and restarts, scale safely, and confirm the cluster is still healthy before you hand it back to normal operations."
+  title="Run planned maintenance safely"
+  lede="Planned maintenance is where Kubernetes disruption rules, Raft quorum, and admission-policy guardrails meet. Use this page to prepare drains and restarts, scale safely, and confirm the cluster returns to normal operation."
 />
 
 
@@ -40,7 +40,7 @@ journey: operate
         'Maintenance mode',
         'Admission policy requires the `openbao.org/maintenance=true` signal before restarts or controlled deletes.',
         'The operator annotates managed resources so maintenance-only actions are allowed under the configured break-glass groups.',
-        'This is not a generic bypass for random edits. It is a controlled operational mode.',
+        'This is a controlled operational mode for maintenance-only actions under the configured break-glass groups.',
       ],
     },
     {
@@ -48,7 +48,7 @@ journey: operate
         'Pause reconciliation',
         'You need a short-lived window where the operator stops mutating the cluster while you inspect or repair it.',
         'The operator stops normal reconciliation until you resume it.',
-        'Pausing is not the same thing as recovery and is not enough for safe-mode incidents.',
+        'Pausing stops normal reconciliation, but safe-mode incidents still require the dedicated recovery flow.',
       ],
     },
   ]}
@@ -212,7 +212,7 @@ kubectl exec -n <namespace> -it <pod-name> -- bao operator raft list-peers`}
     },
     {
       label: 'Decommission a cluster',
-      description: 'Choose the right teardown policy before you remove a cluster and its storage.',
+      description: 'Choose the teardown policy that matches the cluster and storage cleanup you intend to perform.',
       docId: 'user-guide/openbaocluster/operations/deletion',
     },
     {

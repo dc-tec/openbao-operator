@@ -7,7 +7,7 @@ description: Operational lifecycle for upgrades, maintenance controls, and long-
 ---
 
 <PageHeader
-  title="Hand off from cluster creation into upgrades, maintenance, and long-running operational work."
+  title="Day 2 operations lifecycle"
   lede="Day 2 starts once the cluster is initialized and the workload path is steady. From that point on, long-running operations such as upgrades and backups move through the admin operations path, while maintenance controls gate how much automation is allowed to continue during manual intervention."
 />
 
@@ -77,7 +77,7 @@ description: Operational lifecycle for upgrades, maintenance controls, and long-
   ]}
 />
 
-## Architectural Placement
+## Architectural placement
 
 Day 2 work is intentionally separated from the high-churn workload loop:
 

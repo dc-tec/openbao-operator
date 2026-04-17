@@ -1,6 +1,6 @@
 ---
 title: Deployment Decision Guide
-description: Choose the tenancy model, security posture, bootstrap flow, and install path you want to keep operating after the first install.
+description: Choose the tenancy model, security posture, bootstrap flow, and install path for a new deployment.
 slug: /get-started/deployment-decision-guide
 hide_title: true
 pageType: task
@@ -9,12 +9,12 @@ journeyStep: 1
 ---
 
 <PageHeader
-  title="Choose the path you want to keep operating."
-  lede="Make the main operating decisions before you install anything. Most teams should stay on the default production path and only branch when namespace ownership, local evaluation, or platform constraints give you a real reason."
+  title="Choose the deployment path"
+  lede="Choose the tenancy model, security posture, bootstrap flow, and install path for a new deployment. The default path is multi-tenant, Hardened, self-init, and the standard install flow."
 />
 
 <Checklist
-    title="Default production path"
+    title="Default starting point"
     items={[
       'multi-tenant mode',
       'Hardened profile',
@@ -33,7 +33,7 @@ journeyStep: 1
   items={[
     {
       label: 'Choose a deployment model',
-      description: 'Lock down tenancy, security posture, install method, and the main exceptions before you install.',
+      description: 'Set tenancy, security posture, install method, and any planned exceptions.',
       docId: 'user-guide/operator/deployment-decision-guide',
     },
     {
@@ -43,7 +43,7 @@ journeyStep: 1
     },
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, use OpenBaoTenant before you create the first cluster.',
+      description: 'In the default multi-tenant path, use OpenBaoTenant, then create the first cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
     {
@@ -60,8 +60,8 @@ journeyStep: 1
 />
 
 <DecisionTable
-  title="Stay on the default path unless one of these is true"
-  columns={['Decision area', 'Default', 'Branch only when', 'Go deeper']}
+  title="Default deployment decisions and exceptions"
+  columns={['Decision area', 'Default', 'Use an alternative when', 'Go deeper']}
   rows={[
     {
       cells: [
@@ -118,12 +118,12 @@ journeyStep: 1
 <Callout type="warning" title="Operator auth is not human auth">
 
 `spec.selfInit.oidc.enabled: true` bootstraps operator authentication only.
-Before you move on, decide which human login path will be created as part of `spec.selfInit.requests` during bootstrap.
+Decide which human login path will be created as part of `spec.selfInit.requests` during bootstrap, then finalize the cluster design.
 
 </Callout>
 
 <RouteList
-  title="Branch only when you need one of these exceptions"
+  title="Exceptions that change the default path"
   items={[
     {
       eyebrow: 'A',
@@ -142,7 +142,7 @@ Before you move on, decide which human login path will be created as part of `sp
     {
       eyebrow: 'C',
       title: 'Validated deployments',
-      description: 'Use a tested architecture or recipe when you want a known-good starting point instead of building a path from scratch.',
+      description: 'Use a tested architecture or recipe when you want a validated starting point instead of building the path from scratch.',
       docId: 'user-guide/validated-deployments/index',
       actionLabel: 'Open',
     },
@@ -150,7 +150,7 @@ Before you move on, decide which human login path will be created as part of `sp
 />
 
 <Checklist
-  title="Do not move on until you can answer these plainly"
+  title="Check these decisions"
   items={[
     'Am I running multi-tenant or single-tenant mode?',
     'Is this environment Hardened or Development?',
@@ -166,12 +166,12 @@ Before you move on, decide which human login path will be created as part of `sp
   items={[
     {
       label: 'Install the operator',
-      description: 'Use the supported install flow and verify the rendered controller identity before you continue.',
+      description: 'Use the supported install flow and verify the rendered controller identity.',
       docId: 'user-guide/operator/installation',
     },
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant before you create the first cluster.',
+      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant, then create the first cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
   ]}

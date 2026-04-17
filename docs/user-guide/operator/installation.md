@@ -1,6 +1,6 @@
 ---
 title: Operator Installation
-description: Install OpenBao Operator with the right tenancy mode, rendered identity, and verification checks before you create a cluster.
+description: Install OpenBao Operator with the intended tenancy mode, rendered identity, and verification checks.
 slug: /get-started/install
 hide_title: true
 pageType: task
@@ -11,12 +11,12 @@ journeyStep: 2
 <!-- id: installation-guide -->
 
 <PageHeader
-  title="Install the operator in the mode you actually intend to run."
-  lede="Choose a supported install path, keep the rendered namespace and identity explicit, and verify the controller wiring before you create your first OpenBaoCluster."
+  title="Install the operator for the intended tenancy mode"
+  lede="Choose a supported install path, keep the rendered namespace and identity explicit, and verify the controller wiring for the tenancy mode you intend to run."
 />
 
 <Checklist
-    title="Preflight before you install"
+    title="Installation preflight"
     items={[
       'confirm Kubernetes compatibility and cluster-admin access for CRDs, RBAC, and admission policies',
       'decide whether Helm or raw manifests own the install lifecycle',
@@ -28,7 +28,7 @@ journeyStep: 2
 
 
 <JourneyRail
-  title="Installation is the handoff between design choices and a working control plane"
+  title="Installation sequence"
   current={2}
   items={[
     {
@@ -43,7 +43,7 @@ journeyStep: 2
     },
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, let OpenBaoTenant introduce the namespace before you create a cluster.',
+      description: 'In the default multi-tenant path, let OpenBaoTenant introduce the namespace, then create the cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
     {
@@ -81,9 +81,9 @@ See [Single-Tenant Mode](single-tenant-mode.md) for single-tenant deployments.
 
 </Callout>
 
-## Install Profiles
+## Install profiles
 
-Use this table to choose the supported install path before you start changing values or overlays. For most environments, the default answer is Helm plus multi-tenant mode unless your namespace ownership model says otherwise.
+Use this table to choose the supported install path before changing values or overlays. For most environments, the default answer is Helm plus multi-tenant mode unless your namespace ownership model requires a different shape.
 
 <DecisionTable
   title="Supported installation paths"
@@ -114,7 +114,7 @@ Use this table to choose the supported install path before you start changing va
   ]}
 />
 
-<Callout type="note" title="Single-Tenant Customization Boundary">
+<Callout type="note" title="Single-tenant customization boundary">
 
 Use `config/overlays/single-tenant` when you only need a custom operator namespace or target namespace.
 Use `config/overlays/single-tenant-custom-identity` when you also need a custom operator identity, such as an extra `namePrefix`.
@@ -124,8 +124,8 @@ Use `config/overlays/single-tenant-custom-identity` when you also need a custom 
 <Callout type="info" title="Default recommendation">
 
 Start with Helm, keep the default multi-tenant mode, pin the chart release for production,
-and leave admission policies enabled. Deviate from that path only when raw-manifest
-control or single-tenant namespace ownership is an explicit requirement.
+and leave admission policies enabled. Move away from that path only for explicit raw-manifest
+control or single-tenant namespace ownership requirements.
 
 </Callout>
 
@@ -133,7 +133,7 @@ control or single-tenant namespace ownership is an explicit requirement.
 
 <Tabs groupId="helm-recommended-openshift-yaml-manifests-developer-source">
 
-<TabItem value="helm-recommended" label="Helm (Recommended)">
+<TabItem value="helm-recommended" label="Helm (recommended)">
 
 Install the operator using the official Helm chart. For production, pin the chart release explicitly with `--version`.
 
@@ -153,7 +153,7 @@ The examples below use the default release namespace `openbao-operator-system`. 
   --create-namespace`}
 />
 
-### Common Configuration
+### Common configuration
 
 <CommandBlock
   language="bash"
@@ -178,7 +178,7 @@ Use `image.tag` only when you intentionally need a non-default operator image fo
 
 </Callout>
 
-### Single-Tenant With Custom Helm Identity
+### Single-tenant with custom Helm identity
 
 Helm already supports the equivalent of the raw-manifest custom-identity overlays through the release name and `fullnameOverride`.
 
@@ -220,7 +220,7 @@ Artifact Hub indexing can lag shortly after a release is published.
 
 </Callout>
 
-### Full Values Reference
+### Full values reference
 
 | Parameter | Description | Default |
 | :--- | :--- | :--- |
@@ -240,7 +240,7 @@ Artifact Hub indexing can lag shortly after a release is published.
 
 [Full values.yaml](https://github.com/dc-tec/openbao-operator/blob/main/charts/openbao-operator/values.yaml)
 
-<Callout type="info" title="Air-Gapped Environments">
+<Callout type="info" title="Air-gapped environments">
 
 To use private registries for the operator and its sidecars (init, backup, upgrade), see the [Air-Gapped / Private Registries](../openbaocluster/configuration/air-gapped.md) guide.
 
@@ -264,7 +264,7 @@ You can optionally force the platform mode to ensure compatibility with Security
   --set platform=openshift`}
 />
 
-<Callout type="tip" title="What this does">
+<Callout type="tip" title="What this setting does">
 
 This setting instructs the chart/operator to omit pinned `runAsUser` / `fsGroup` IDs in generated Pods, allowing OpenShift's SCC admission controller to inject namespace-scoped IDs automatically.
 
@@ -296,25 +296,25 @@ Raw-manifest installs have three supported starting points:
 - `config/overlays/single-tenant`: direct single-tenant install without the provisioner
 - `config/overlays/single-tenant-custom-identity`: direct single-tenant install without the provisioner plus custom operator identity support
 
-<Callout type="tip" title="Custom Namespace Or Prefix">
+<Callout type="tip" title="Custom namespace or prefix">
 
 For raw-manifest installs with a custom operator namespace or extra name prefix, start from `config/overlays/custom-identity`. Set `namespace` there and optionally add `namePrefix`. The controller and provisioner ServiceAccount identities, RoleBinding subjects, and admission-policy identity checks follow the installed ServiceAccounts automatically.
 
 </Callout>
 
-<Callout type="tip" title="Single-Tenant Raw Manifests">
+<Callout type="tip" title="Single-tenant raw manifests">
 
 For direct single-tenant installs, start from `config/overlays/single-tenant`. That overlay owns the operator namespace and target namespace wiring instead of relying on manual `WATCH_NAMESPACE` patches.
 
 </Callout>
 
-<Callout type="tip" title="Single-Tenant With Custom Identity">
+<Callout type="tip" title="Single-tenant with custom identity">
 
 If you need single-tenant mode and a custom operator identity, such as an extra `namePrefix`, start from `config/overlays/single-tenant-custom-identity`. That overlay keeps the single-tenant namespace wiring and the controller admission-policy identity rewrites aligned in one supported path.
 
 </Callout>
 
-<Callout type="note" title="Operator JWT Auth">
+<Callout type="note" title="Operator JWT auth">
 
 If you use custom raw-manifest identities together with manual OpenBao JWT configuration or self-init OIDC bootstrap, verify the rendered controller ServiceAccount name and namespace first. See [Operator Authentication](./operator-authentication#what-must-stay-aligned).
 
@@ -341,11 +341,11 @@ make deploy IMG=ghcr.io/dc-tec/openbao-operator:dev`}
 
 </Tabs>
 
-## Render Verification
+## Render verification
 
-Use this checklist for raw-manifest installs before you apply the manifests.
+Use this checklist for raw-manifest installs.
 
-### Multi-Tenant With Custom Identity
+### Multi-tenant with custom identity
 
 Render the overlay:
 
@@ -366,7 +366,7 @@ Confirm:
 
 See [Operator Authentication](./operator-authentication#what-must-stay-aligned) for the OpenBao-side JWT binding checks.
 
-### Single-Tenant Raw Manifests
+### Single-tenant raw manifests
 
 Render the overlay:
 
@@ -386,7 +386,7 @@ Confirm:
 
 If you customize the single-tenant overlay beyond those supported fields, treat the render output as the source of truth.
 
-### Single-Tenant With Custom Identity
+### Single-tenant with custom identity
 
 Render the overlay:
 
@@ -405,7 +405,7 @@ Confirm:
 4. the single-tenant `RoleBinding` subject points at the rendered controller `ServiceAccount`
 5. controller admission-policy variables reference the same rendered namespace and `ServiceAccount` name
 
-## Verify Installation
+## Verify installation
 
 Check that the operator pods are running:
 
@@ -427,9 +427,9 @@ Expected output (multi-tenant mode):
 <provisioner-pod>                                 1/1     Running   0          1m`}
 />
 
-<Callout type="success" title="Do not move on until the operator namespace looks exactly how you expect.">
+<Callout type="success" title="Verify the operator namespace before continuing">
 
-A good install checkpoint is more than pods in `Running`:
+Use this install checkpoint to verify more than pods in `Running`:
 
 - the controller and provisioner pods match the tenancy mode you chose
 - the rendered namespace and ServiceAccount names match your install plan
@@ -441,9 +441,9 @@ A good install checkpoint is more than pods in `Running`:
 
 ## Upgrading
 
-### Helm Upgrades
+### Helm upgrades
 
-<Callout type="warning" title="CRD Updates">
+<Callout type="warning" title="CRD updates">
 
 Helm does not automatically upgrade CRDs. For releases with CRD changes:
 
@@ -460,7 +460,7 @@ Helm does not automatically upgrade CRDs. For releases with CRD changes:
 
 </Callout>
 
-### YAML Manifest Upgrades
+### YAML manifest upgrades
 
 ```bash
 kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/X.Y.Z/install.yaml
@@ -499,13 +499,13 @@ kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/download/X
 
 </Tabs>
 
-## Next Steps
+## Next steps
 
 <NextActions
   items={[
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, create OpenBaoTenant before you create the first cluster.',
+      description: 'In the default multi-tenant path, create OpenBaoTenant, then create the first cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
     {

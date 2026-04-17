@@ -7,12 +7,12 @@ description: Validated cloud baseline for a development-profile OpenBao deployme
 ---
 
 <PageHeader
-  title="Use this lane to validate the EKS bring-up path with real AWS integrations before you move to a hardened public endpoint."
-  lede="This cloud baseline keeps the posture intentionally Development, but it proves the integrations that matter for cloud bring-up: KMS auto-unseal, workload identity, shared-edge exposure, JWT bootstrap, and snapshot upload to S3."
+  title="EKS development baseline with AWS integrations"
+  lede="This cloud baseline keeps the posture intentionally Development while validating the AWS integrations needed for cloud bring-up: KMS auto-unseal, workload identity, shared-edge exposure, JWT bootstrap, and snapshot upload to S3."
 />
 
 <Checklist
-    title="This lane proves"
+    title="Validated coverage"
     items={[
       "a Development-profile cluster can bootstrap on EKS with AWS KMS auto-unseal and no static root-token workflow",
       "JWT bootstrap and human admin JWT access both work under the cloud control-plane conditions EKS introduces",
@@ -22,14 +22,14 @@ description: Validated cloud baseline for a development-profile OpenBao deployme
   />
 
 
-<Callout type="note" title="Classification">
+<Callout type="note" title="Baseline scope">
 
 Cloud reference architecture. This is a realistic EKS validation and bring-up topology, but it is intentionally a Development lane rather than a production target.
 
 </Callout>
 
 <DecisionTable
-  title="Lane summary"
+  title="Baseline summary"
   columns={["Surface", "Choice", "Why it matters"]}
   rows={[
     {
@@ -44,7 +44,7 @@ Cloud reference architecture. This is a realistic EKS validation and bring-up to
       cells: [
         "Seal path",
         "AWS KMS via workload identity",
-        "The main workload proves real cloud auto-unseal behavior instead of a local or static secret fallback.",
+        "The main workload uses cloud auto-unseal through AWS KMS rather than local or static secret material.",
       ],
     },
     {
@@ -58,21 +58,21 @@ Cloud reference architecture. This is a realistic EKS validation and bring-up to
       cells: [
         "Backup path",
         "S3 with a separate backup identity",
-        "The lane proves that backup execution stays separate from the main KMS identity surface.",
+        "Backup execution stays separate from the main KMS identity surface.",
       ],
     },
     {
       cells: [
         "Validation scope",
         "Manual EKS validation plus operator lifecycle behavior",
-        "The lane proves the cloud integration path you need before deciding whether to harden the endpoint.",
+        "The baseline covers the cloud integration path used in the validated EKS development environment.",
       ],
     },
   ]}
 />
 
 <DiagramFrame
-  title="Validated lane topology"
+  title="Baseline topology"
   caption="The main workload uses one cloud identity for KMS, backup Jobs use another for S3, and the public edge remains a shared terminating layer rather than a dedicated passthrough stack."
   code={`flowchart LR
     Client["Operator or admin"] -->|"HTTPS"| Edge["Shared Gateway API edge"]
@@ -129,7 +129,7 @@ Cloud reference architecture. This is a realistic EKS validation and bring-up to
 
 <Checklist
   tone="warning"
-  title="Stay on the validated path"
+  title="Baseline requirements"
   items={[
     "keep `spec.profile: Development` and treat the lane as bring-up coverage, not a production recommendation",
     "keep the shared terminating edge and do not switch the same lane to passthrough midstream",
@@ -139,20 +139,20 @@ Cloud reference architecture. This is a realistic EKS validation and bring-up to
   ]}
 />
 
-<Callout type="success" title="What this lane validated">
+<Callout type="success" title="Validated coverage">
 
 The EKS development lane covered bootstrap, AWS KMS auto-unseal, JWT bootstrap on EKS, human admin JWT login, Gateway exposure through the shared edge, and successful S3 backups.
 
 </Callout>
 
-<Callout type="warning" title="What this lane is not">
+<Callout type="warning" title="Out of scope">
 
-This is not a hardened public-endpoint reference, not proof of ACME passthrough, and not a final production posture. It is the shortest cloud lane that still proves the important AWS control-plane integrations.
+This baseline does not cover the hardened public-endpoint path, ACME passthrough, or a final production posture. It covers the AWS control-plane integrations used in the validated development environment.
 
 </Callout>
 
 <NextActions
-  title="Use the lane"
+  title="Next steps"
   items={[
     {
       label: "Deployment recipe",

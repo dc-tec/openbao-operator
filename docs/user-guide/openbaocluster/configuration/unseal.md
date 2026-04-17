@@ -4,19 +4,19 @@ slug: /configure/unseal
 hide_title: true
 pageType: task
 journey: configure
-description: Choose the unseal root of trust deliberately and use the exact Secret and mounted-file contract the operator validates for each unseal mode.
+description: Configure the unseal root of trust and the Secret or mounted-file contract the operator validates for each supported unseal mode.
 ---
 
 <PageHeader
-  title="Treat unseal as a trust contract, not just a field to satisfy."
-  lede="The unseal path decides where the root of trust lives, how credentials reach the Pods, and which Secret keys or mounted files the operator expects. Use this page when you want the concrete contract, not just the high-level posture guidance."
+  title="Unseal trust and credential contracts"
+  lede="The unseal path defines where the root of trust lives, how credentials reach the Pods, and which Secret keys or mounted files each mode requires. Use this page to map a chosen unseal mode to the exact operator contract."
 />
 
 
 
 <Callout type="important" title="Hardened posture prefers external trust">
 
-For production-oriented clusters, use an external trust source such as cloud KMS, transit, KMIP, OCI KMS, or PKCS#11. Static unseal remains useful for development and controlled exceptions, but it keeps decryption material inside Kubernetes.
+For production-oriented clusters, use an external trust source such as cloud KMS, transit, KMIP, OCI KMS, or PKCS#11. Reserve static unseal for development and controlled exceptions because it keeps decryption material inside Kubernetes.
 
 </Callout>
 
@@ -118,15 +118,15 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     {
       cells: [
         "AWS KMS",
-        "Needed only when you are not using IRSA, ambient credentials, or another default AWS credential chain.",
+        "Required if you are not using IRSA, ambient credentials, or another default AWS credential chain.",
         "`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.",
-        "Use Secrets only when workload identity is not the intended path.",
+        "Prefer workload identity when that path is available and intended.",
       ],
     },
     {
       cells: [
         "GCP Cloud KMS",
-        "Needed only when `spec.unseal.gcpCloudKMS.credentials` points at a mounted file instead of using Workload Identity or ADC.",
+        "Required if `spec.unseal.gcpCloudKMS.credentials` points at a mounted file instead of using Workload Identity or ADC.",
         "A Secret key matching the configured file name, usually `credentials.json`, containing valid JSON credentials.",
         "The path must live under `/etc/bao/seal-creds`.",
       ],
@@ -134,15 +134,15 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     {
       cells: [
         "Azure Key Vault",
-        "Needed only when you are not using Managed Identity or Azure Workload Identity.",
+        "Required if you are not using Managed Identity or Azure Workload Identity.",
         "`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`.",
-        "Managed identity is the cleaner Hardened path when your platform supports it.",
+        "Managed identity is the preferred Hardened path when your platform supports it.",
       ],
     },
     {
       cells: [
         "OCI KMS",
-        "Needed only when `spec.unseal.ocikms.authTypeAPIKey=true`.",
+        "Required if `spec.unseal.ocikms.authTypeAPIKey=true`.",
         "`config`, plus the Secret key referenced by `key_file` inside the OCI SDK config.",
         "The OCI config must define `user`, `fingerprint`, `tenancy`, `region`, and `key_file` in profile `[DEFAULT]`, and `key_file` must point under `/etc/bao/seal-creds`.",
       ],

@@ -8,15 +8,15 @@ description: Validated cloud baselines for OpenBao Operator, pairing each tested
 <PageHero
   variant="landing"
   eyebrow="Validated Deployments / Cloud Baselines"
-  title="Pick the cloud lane that matches the posture you want to prove."
-  lede="The current cloud validated scope comes from Amazon EKS. Each lane keeps the tested topology and the matching deployment recipe adjacent, so you can confirm the architecture first and then reproduce it without jumping across unrelated nav branches."
+  title="Validated cloud baselines"
+  lede="Amazon EKS validated baselines are listed here, each linked to its matching deployment recipe."
   actions={[
     {label: "Open EKS Development", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3", variant: "primary"},
     {label: "Open EKS Hardened", docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme", variant: "secondary"},
   ]}
 >
   <Checklist
-    title="Use cloud baselines when you need to"
+    title="Use cloud baselines to"
     items={[
       "compare validated development and hardened EKS topologies",
       "see the exact trust boundary, edge model, and storage assumptions before deployment",
@@ -31,14 +31,14 @@ description: Validated cloud baselines for OpenBao Operator, pairing each tested
     {
       eyebrow: "01",
       title: "EKS Development",
-      description: "Shared terminating edge, AWS KMS auto-unseal, JWT bootstrap, and S3 backups for a realistic but non-production lane.",
+      description: "EKS development baseline with shared terminating edge, AWS KMS auto-unseal, JWT bootstrap, and S3 backups.",
       docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3",
       actionLabel: "Open lane",
     },
     {
       eyebrow: "02",
       title: "EKS Hardened",
-      description: "Dedicated passthrough edge, AWS KMS auto-unseal, OpenBao-managed ACME, and the tighter production posture used in the hardened cloud lane.",
+      description: "EKS hardened baseline with dedicated passthrough edge, AWS KMS auto-unseal, OpenBao-managed ACME, and S3 backups.",
       docId: "user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme",
       actionLabel: "Open lane",
     },

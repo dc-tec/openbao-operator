@@ -1,18 +1,18 @@
 ---
 title: Recover After Upgrade Restore
-description: Use the override-lock restore path only when a failed upgrade or rollback blocks the normal restore workflow.
+description: Use the override-lock restore path when a failed upgrade or rollback blocks the normal restore workflow.
 hide_title: true
 pageType: runbook
 journey: operate
 ---
 
 <PageHeader
-  title="Use override restore only when the cluster is locked after a failed upgrade."
-  lede="This runbook exists for the narrow case where the normal restore path is blocked by an existing cluster operation lock, usually after a failed rollback or another crashed automation loop. It is a break-glass restore path, not the default way to restore a cluster."
+  title="Override-lock restore after a failed upgrade"
+  lede="This runbook covers the case where the normal restore path is blocked by an existing cluster operation lock, usually after a failed rollback or another crashed automation loop. Use it for recovery when the restore request cannot proceed through the normal lock path."
 />
 
 <Checklist
-    title="Use this runbook only when"
+    title="Use this runbook when"
     items={[
       'the cluster is stuck behind an operation lock after a failed upgrade or rollback',
       'a normal OpenBaoRestore request is blocked by that lock',
@@ -44,7 +44,7 @@ This path ignores the current lock owner, overwrites cluster state with the sele
       cells: [
         '`overrideOperationLock: true`',
         'Clears the existing cluster operation lock so restore can proceed.',
-        'This is what makes the workflow break-glass instead of routine restore.',
+        'This field marks the request as an override path rather than a routine restore.',
       ],
     },
     {
@@ -57,7 +57,7 @@ This path ignores the current lock owner, overwrites cluster state with the sele
   ]}
 />
 
-## Create the break-glass restore request
+## Create the override restore request
 
 <CommandBlock
   language="yaml"
@@ -83,7 +83,7 @@ spec:
   force: true
   overrideOperationLock: true`}
 >
-  `force` is required when restore targets an unhealthy cluster. `overrideOperationLock` is what bypasses the stuck upgrade or backup lock. Keep them together only for this break-glass path.
+  `force` is required when restore targets an unhealthy cluster. `overrideOperationLock` bypasses the stuck upgrade or backup lock. Together they define the override request.
 </CommandBlock>
 
 <CommandBlock
@@ -103,7 +103,7 @@ spec:
 kubectl describe openbaocluster <cluster> -n <namespace>
 kubectl get jobs -n <namespace>`}
 >
-  A completed restore only means the restore workflow finished. The target cluster may still require unseal, Raft repair, or break-glass acknowledgment before it is truly operational again.
+  A completed restore means the restore workflow finished. The target cluster may still require unseal, Raft repair, or break-glass acknowledgment before it is ready for service again.
 </CommandBlock>
 
 <NextActions

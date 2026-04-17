@@ -31,11 +31,7 @@ test('legacy latest user-guide route redirects into the new IA', async ({page}) 
 test('next docs expose the version banner and feedback controls', async ({page}) => {
   await page.goto('docs/next/get-started/deployment-decision-guide');
 
-  await expect(
-    page.getByRole('heading', {
-      name: 'Choose the path you want to keep operating.',
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Choose the deployment path'})).toBeVisible();
   await expect(page.getByText('Next release documentation')).toBeVisible();
   await expect(page.getByText('Was this page helpful?')).toBeVisible();
   await expect(page.getByRole('button', {name: 'Yes'})).toBeVisible();
@@ -56,9 +52,7 @@ test('stable docs expose the current release banner', async ({page}) => {
 test('architecture section exposes grouped local navigation', async ({page}) => {
   await page.goto('docs/next/architecture');
 
-  await expect(
-    page.getByRole('heading', {name: 'Understand why the operator behaves the way it does.'}),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Operator architecture'})).toBeVisible();
   await expect(page.getByText('Read This First', {exact: true})).toBeVisible();
   await expect(page.getByText('Workload Managers', {exact: true})).toBeVisible();
   await expect(page.getByText('Operations Managers', {exact: true})).toBeVisible();
@@ -70,9 +64,7 @@ test('architecture section exposes grouped local navigation', async ({page}) => 
 test('security section exposes grouped local navigation', async ({page}) => {
   await page.goto('docs/next/security');
 
-  await expect(
-    page.getByRole('heading', {name: 'Security is part of the operating path, not an appendix.'}),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Security documentation'})).toBeVisible();
   await expect(page.getByText('Security Model', {exact: true})).toBeVisible();
   await expect(page.getByText('Platform Controls', {exact: true})).toBeVisible();
   await expect(page.getByText('Workload Protections', {exact: true})).toBeVisible();
@@ -82,9 +74,7 @@ test('security section exposes grouped local navigation', async ({page}) => {
 test('configure section exposes grouped local navigation', async ({page}) => {
   await page.goto('docs/next/configure');
 
-  await expect(
-    page.getByRole('heading', {name: 'Shape the cluster before it becomes expensive to change.'}),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Cluster configuration'})).toBeVisible();
   await expect(page.getByText('Read This First', {exact: true})).toBeVisible();
   await expect(page.getByText('Cluster Baseline', {exact: true})).toBeVisible();
   await expect(page.getByText('Service Boundary', {exact: true})).toBeVisible();
@@ -96,7 +86,7 @@ test('validated deployments expose lane-first local navigation', async ({page}) 
 
   await expect(
     page.getByRole('heading', {
-      name: 'Choose a tested baseline by lane, then adapt it without forgetting what was actually proven.',
+      name: 'Validated deployment baselines',
     }),
   ).toBeVisible();
   await expect(page.getByText('Cloud Baselines', {exact: true})).toBeVisible();
@@ -108,7 +98,7 @@ test('validated deployments expose lane-first local navigation', async ({page}) 
 test('reference section exposes grouped lookup navigation', async ({page}) => {
   await page.goto('docs/next/reference');
 
-  await expect(page.getByRole('heading', {name: 'Use the exact contract when the details matter.'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Reference documentation'})).toBeVisible();
   await expect(page.getByText('Quick Checks', {exact: true})).toBeVisible();
   await expect(page.getByText('API Surface', {exact: true})).toBeVisible();
   await expect(page.getByText('Lifecycle & Support Contract', {exact: true})).toBeVisible();
@@ -119,11 +109,7 @@ test('contribute section exposes grouped contributor navigation', async ({page})
   await page.goto('contribute');
   const sidebar = page.locator('.theme-doc-sidebar-container');
 
-  await expect(
-    page.getByRole('heading', {
-      name: 'Choose the contributor path that matches the work you need to do.',
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'Contributor documentation'})).toBeVisible();
   await expect(sidebar.getByRole('link', {name: 'Start Here', exact: true})).toBeVisible();
   await expect(sidebar.getByRole('link', {name: 'Build & Change', exact: true})).toBeVisible();
   await expect(sidebar.getByRole('link', {name: 'Validate & Ship', exact: true})).toBeVisible();

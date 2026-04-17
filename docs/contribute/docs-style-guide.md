@@ -6,7 +6,7 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Use this guide to keep contributor and operator docs calm, exact, and structurally consistent."
+  title="Documentation style guide"
   lede="The docs are written for platform engineers, SREs, operators, maintainers, and contributors doing real work. This guide defines the voice, page contracts, navigation language, and shared components that keep the documentation product coherent as it grows."
 />
 
@@ -62,6 +62,17 @@ journey: contribute
 - Keep explanations short enough to scan under time pressure.
 - Be lightly opinionated when the project has a recommended path.
 
+## Wording and headings
+
+- Keep the page title as needed for navigation, but use sentence case for headings below the page title.
+- Start sections with the decision, scope, or instruction itself. Do not spend the first sentence explaining that the section exists.
+- Prefer direct wording over evaluative filler. Replace words such as `strong`, `practical`, `useful`, `good`, and `mature` with the actual recommendation.
+- Reduce repeated `This page...`, `This section...`, and `The goal is...` framing when the heading or surrounding structure already provides that context.
+- Prefer direct verbs such as `Use`, `Keep`, `Limit`, `Reserve`, `Place`, and `Do not give` over repetitive `should` phrasing.
+- Prefer operational wording over abstract noun clusters. Name the action, object, or control directly.
+- Vary sentence length and cadence. Do not let every section open with the same balanced or three-part construction.
+- Keep one main idea per paragraph when possible.
+
 ## Terms
 
 Use product and platform terms consistently:
@@ -80,6 +91,11 @@ Use product and platform terms consistently:
 - Abstract language when concrete verbs such as `install`, `upgrade`, `restore`, or `troubleshoot` are clearer.
 - Slogan-heavy copy on normal pages.
 - `not X, but Y` framing when it does not clarify a real technical distinction.
+- Repeated evaluative framing such as "a strong baseline", "a practical model", "a useful default", or "a good starting point".
+- Opening sections by restating the heading before making a point.
+- Generic transition sentences that only restate the obvious benefit of the previous line.
+- Stacked hedging such as `usually`, `often`, `generally`, `typically`, and `in most cases` when the docs are describing the baseline recommendation.
+- Taxonomy or categorization that does not drive an actual operator or maintainer decision.
 
 ## Metadata and shared components
 

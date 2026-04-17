@@ -3,12 +3,12 @@ title: Air-Gapped and Private Registries
 hide_title: true
 pageType: task
 journey: configure
-description: Mirror operator and workload images, set the right repository defaults, and wire pull secrets before you move clusters into disconnected or private-registry environments.
+description: Mirror operator, workload, and helper images; set repository defaults; and wire pull secrets for disconnected or private-registry environments.
 ---
 
 <PageHeader
-  title="Mirror every image surface before you call the environment disconnected-ready."
-  lede="An air-gapped or private-registry deployment is not just one image override. The operator image, the default OpenBao workload image, and the helper executors for init, backup, and upgrade each have their own source of truth. Use this page to make those defaults explicit before you need to promote clusters through a disconnected path."
+  title="Air-gapped and private-registry image planning"
+  lede="An air-gapped or private-registry deployment involves operator, workload, and helper executor images. Use this page to make those image defaults explicit and wire pull access for disconnected or private-registry environments."
 />
 
 
@@ -97,9 +97,9 @@ Use the same released operator version for the controller, provisioner, init, ba
 
 </Callout>
 
-<Callout type="note" title="Install defaults are not the only image contract">
+<Callout type="note" title="Use install defaults and cluster overrides together">
 
-Install-wide defaults are the safest starting point, but they do not replace cluster-level overrides when a specific OpenBaoCluster needs a different tag, mirror, or promotion cadence.
+Install-wide defaults provide the baseline image contract. Use cluster-level overrides when a specific `OpenBaoCluster` needs a different tag, mirror, or promotion cadence.
 
 </Callout>
 
@@ -145,13 +145,13 @@ spec:
 <DecisionTable
   kind="reference"
   title="Disconnected-environment checks"
-  columns={["Check", "What good looks like", "Why it matters"]}
+  columns={["Check", "Expected state", "Why it matters"]}
   rows={[
     {
       cells: [
         "Every runtime image is mirrored",
         "Operator, OpenBao, init, backup, and upgrade images exist in the internal registry before install or rollout.",
-        "A cluster that relies on public registry fallback is not disconnected-ready, even if the main OpenBao image is mirrored.",
+        "Disconnected operation requires every runtime image to be mirrored, not only the main OpenBao image.",
       ],
       emphasis: "recommended",
     },
@@ -159,14 +159,14 @@ spec:
       cells: [
         "Pull secrets exist in every runtime namespace",
         "The operator namespace and every tenant namespace that runs workloads have the correct registry credential Secret.",
-        "Install success does not imply workload success. Clusters can still fail to reconcile when the tenant namespace lacks the pull secret.",
+        "Install success and workload reconcile success are separate checks. Tenant namespaces still need the correct pull secret.",
       ],
     },
     {
       cells: [
         "Version and tag promotion is explicit",
         "Image tags and repository mirrors are tracked as part of the release process.",
-        "Disconnected environments make silent tag drift harder to notice and more painful to debug later.",
+        "Disconnected environments require explicit tag promotion records because drift is harder to detect later.",
       ],
     },
   ]}
@@ -174,7 +174,7 @@ spec:
 
 <Callout type="tip" title="Keep image verification and registry strategy separate in your head">
 
-This page explains where images come from and how they are pulled. Signature verification, digest pinning, and trust roots are handled in the supply-chain security model, not by the mirror configuration alone.
+Use this guide to understand where images come from and how they are pulled. Signature verification, digest pinning, and trust roots are handled in the supply-chain security model, not by the mirror configuration alone.
 
 </Callout>
 

@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Use safe mode to stop risky automation and recover control."
-  lede="Break glass or safe mode is the operator's explicit stop signal when continuing rollback automation could make availability or Raft safety worse. Use this page to inspect the break-glass state, stabilize the cluster, repair the failure, and only then let automation resume."
+  title="Safe mode and break-glass recovery"
+  lede="Break glass or safe mode is the operator's explicit stop signal when continuing rollback automation could make availability or Raft safety worse. Use this page to inspect the break-glass state, stabilize the cluster, repair the failure, and then resume automation."
 />
 
 <Checklist
@@ -39,7 +39,7 @@ journey: operate
       cells: [
         'status.breakGlass populated',
         'The cluster status contains the reason, message, nonce, and suggested next checks.',
-        'You should diagnose from that status first instead of guessing which internal job failed.',
+        'Start with that status so the recovery path follows the recorded failure reason and suggested checks.',
       ],
     },
     {
@@ -85,7 +85,7 @@ For blue-green rollback incidents, the most common reasons are:
 - `RollbackConsensusRepairFailed`: the operator could not complete the rollback repair path while the cluster was still in `RollingBack`.
 - `RollbackCleanupPeerRemovalFailed`: the rollback itself converged far enough to enter `RollbackCleanup`, but the peer-removal cleanup job failed and automation stopped before stale green peers were safely removed.
 
-## Repair the underlying issue before you acknowledge
+## Repair the underlying issue
 
 Start with the operator-visible status and the last failed job, then move into the narrower runbook that matches the cluster state.
 

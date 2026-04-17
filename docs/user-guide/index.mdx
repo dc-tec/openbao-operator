@@ -10,8 +10,8 @@ description: Choose a deployment model, install OpenBao Operator, onboard the ta
 <PageHero
   variant="landing"
   eyebrow="Get Started"
-  title="Deploy OpenBao Operator with a clear first path."
-  lede="This journey is for platform teams standing up OpenBao Operator for the first time. Leave with the right tenancy model, security posture, first cluster shape, and day 2 plan."
+  title="Get started with OpenBao Operator"
+  lede="Choose a deployment model, install the operator, onboard the target namespace, and create a first cluster."
   actions={[
     {label: 'Choose a deployment model', docId: 'user-guide/operator/deployment-decision-guide', variant: 'primary'},
     {label: 'Jump to installation', docId: 'user-guide/operator/installation', variant: 'secondary'},
@@ -44,7 +44,7 @@ description: Choose a deployment model, install OpenBao Operator, onboard the ta
     },
     {
       label: 'Onboard the target namespace',
-      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant before you create a cluster.',
+      description: 'In the default multi-tenant path, introduce the namespace through OpenBaoTenant as part of cluster onboarding.',
       docId: 'user-guide/openbaotenant/onboarding',
     },
     {
@@ -65,12 +65,12 @@ description: Choose a deployment model, install OpenBao Operator, onboard the ta
   items={[
     {
       label: 'Single-tenant mode',
-      description: 'Use this branch only when one team directly owns one namespace and intentionally bypasses the default tenant onboarding step.',
+      description: 'Use this path when one team directly owns one namespace and intentionally bypasses the default tenant onboarding step.',
       docId: 'user-guide/operator/single-tenant-mode',
     },
     {
       label: 'Tenancy & governance',
-      description: 'Understand what OpenBaoTenant introduces and why the default shared-operator path makes namespace onboarding explicit.',
+      description: 'Review OpenBaoTenant namespace introduction, default guardrails, and shared-operator boundaries.',
       docId: 'user-guide/openbaotenant/overview',
     },
     {

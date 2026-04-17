@@ -3,16 +3,16 @@ title: k3d Cross-Cluster DR Bootstrap
 hide_title: true
 pageType: task
 journey: validated-deployments
-description: Stand up the validated local disaster-recovery proving ground with separate infra, source, and target clusters, shared Transit, RustFS storage, and passthrough ingress.
+description: Stand up the validated local disaster-recovery environment with separate infra, source, and target clusters, shared Transit, RustFS storage, and passthrough ingress.
 ---
 
 <PageHeader
-  title="Bootstrap the DR proving ground before you test the restore event itself."
-  lede="This recipe prepares the validated local disaster-recovery lane: a shared trust-services cluster, a source cluster, and a target cluster, all wired so the restore event will cross the same kinds of trust, storage, and ingress boundaries you expect in a real DR rehearsal."
+  title="Bootstrap the local cross-cluster DR baseline"
+  lede="This recipe prepares the validated local disaster-recovery lane: a shared trust-services cluster, a source cluster, and a target cluster, all wired so the restore event crosses the same trust, storage, and ingress boundaries used in a real DR rehearsal."
 />
 
 <Checklist
-    title="This recipe should leave you with"
+    title="Recipe outcomes"
     items={[
       "an infra cluster that hosts shared trust services and the shared Transit key",
       "a healthy source cluster and target cluster with distinct namespaces and external endpoints",
@@ -22,14 +22,14 @@ description: Stand up the validated local disaster-recovery proving ground with 
   />
 
 
-<Callout type="success" title="Validated lane">
+<Callout type="success" title="Validated coverage">
 
 This bootstrap path matches the local DR lane that was proven end to end on March 16, 2026, including source backup, restore into the target cluster, target unseal, and credential plus data verification after restore.
 
 </Callout>
 
 <DecisionTable
-  title="What this lane assumes"
+  title="Baseline assumptions"
   columns={["Assumption", "Why it exists", "What breaks if it is wrong"]}
   rows={[
     {
@@ -67,7 +67,7 @@ This bootstrap path matches the local DR lane that was proven end to end on Marc
 
 <DecisionTable
   kind="reference"
-  title="Validated lane defaults"
+  title="Baseline defaults"
   columns={["Value", "Default", "Purpose"]}
   rows={[
     {cells: ["Infra context", "`k3d-openbao-dr-infra`", "Shared trust-services cluster."]},
@@ -86,7 +86,7 @@ This bootstrap path matches the local DR lane that was proven end to end on Marc
 <CommandBlock
   language="text"
   label="configure"
-  title="Run the bootstrap automation or manifests you keep for the validated lane"
+  title="Run the bootstrap automation or manifests for this baseline"
   code={`The validated bootstrap needs to create and wire:
 - one infra cluster for shared trust services
 - one source cluster

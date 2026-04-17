@@ -8,8 +8,8 @@ description: Catalog of validated deployment recipes, grouped by cloud and local
 <PageHero
   variant="landing"
   eyebrow="Validated Deployments / Recipe Catalog"
-  title="Use the recipe catalog when you already know the lane and just need the procedure."
-  lede="Recipes are the task-oriented half of a validated lane. They assume you either already know the topology or will keep the matching reference architecture close while you apply the manifests."
+  title="Validated recipe catalog"
+  lede="Deployment recipes are grouped by validated baseline. Keep the matching reference architecture nearby while you deploy."
   actions={[
     {label: "Open cloud recipe catalog", docId: "user-guide/validated-deployments/recipes/cloud/index", variant: "primary"},
     {label: "Open local recipe catalog", docId: "user-guide/validated-deployments/recipes/local/index", variant: "secondary"},
@@ -28,7 +28,7 @@ description: Catalog of validated deployment recipes, grouped by cloud and local
     {
       eyebrow: "02",
       title: "Local recipes",
-      description: "Deployment procedures for the validated k3d development, hardened, and cross-cluster DR lanes.",
+      description: "Deployment procedures for the validated k3d development, hardened, and cross-cluster DR baselines.",
       docId: "user-guide/validated-deployments/recipes/local/index",
     },
   ]}

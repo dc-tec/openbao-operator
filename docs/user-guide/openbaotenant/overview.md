@@ -1,6 +1,6 @@
 ---
 title: Tenancy & Governance
-description: Understand how OpenBaoTenant introduces namespaces, default guardrails, and the shared-operator boundary in the multi-tenant model.
+description: OpenBaoTenant namespace introduction, default guardrails, and the shared-operator boundary in the multi-tenant model.
 slug: /tenant-onboarding
 hide_title: true
 pageType: concept
@@ -8,14 +8,14 @@ journey: get-started
 ---
 
 <PageHeader
-  title="Introduce namespaces deliberately instead of letting the operator discover them."
-  lede="`OpenBaoTenant` is the namespace-introduction contract in the default multi-tenant model. It tells the operator which namespace should become an authorized tenant and lets the control plane create the RBAC and guardrails that make shared operation safe."
+  title="OpenBaoTenant namespace introduction"
+  lede="`OpenBaoTenant` introduces namespaces in the default multi-tenant model. Use this page for the RBAC, guardrails, and control-plane behavior that follow from that onboarding step."
 />
 
 
 
 <DiagramFrame
-  title="OpenBaoTenant is the namespace introduction point"
+  title="OpenBaoTenant as the namespace introduction point"
   caption="The Provisioner reacts to OpenBaoTenant, introduces the namespace boundary, and only then can the rest of the operator safely manage cluster resources there."
   code={`graph LR
     Tenant["Target namespace owner or platform admin"] --> Request["OpenBaoTenant"]

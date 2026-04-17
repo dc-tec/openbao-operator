@@ -6,8 +6,8 @@ journey: contribute
 ---
 
 <PageHeader
-  title="Understand what we publish today, and what we deliberately do not publish yet."
-  lede="OpenBao Operator uses an Artifact Hub-first distribution model. We publish OCI Helm chart releases to GHCR, index them in Artifact Hub for discovery, and keep OLM bundle assets in-repo and CI-validated without treating public OperatorHub publication as part of the current supported surface."
+  title="Current distribution model"
+  lede="OpenBao Operator uses an Artifact Hub-first distribution model. OCI Helm chart releases are published to GHCR, indexed in Artifact Hub for discovery, and OLM bundle assets remain in-repo and CI-validated rather than being part of the current supported publication surface."
 />
 
 <DecisionTable

@@ -7,12 +7,12 @@ description: Validated local disaster-recovery baseline for OpenBao on k3d with 
 ---
 
 <PageHeader
-  title="Use this lane to rehearse restore across a real cluster boundary before you trust a cloud DR pair."
-  lede="This local DR baseline keeps the source, target, and shared trust services separated so backup, restore, unseal, and cutover all cross the same kinds of boundaries they will cross in a real disaster-recovery event."
+  title="Local cross-cluster DR baseline"
+  lede="This local DR baseline keeps the source, target, and shared trust services separated so backup, restore, unseal, and cutover all cross the same kinds of boundaries used in a real disaster-recovery event."
 />
 
 <Checklist
-    title="This lane proves"
+    title="Validated coverage"
     items={[
       "a snapshot can leave the source cluster, cross an object-storage boundary, and restore into a different target cluster",
       "the restored target can unseal only because it shares the same external Transit root of trust as the source",
@@ -22,14 +22,14 @@ description: Validated local disaster-recovery baseline for OpenBao on k3d with 
   />
 
 
-<Callout type="note" title="Classification">
+<Callout type="note" title="Baseline scope">
 
-Local disaster-recovery reference architecture. k3d is not the production target, but this lane is the proving ground for the DR invariants that matter before you move to a cloud recovery pair.
+This local disaster-recovery reference architecture uses k3d to validate the DR invariants for backup, restore, unseal, and manual cutover before moving to a cloud recovery pair.
 
 </Callout>
 
 <DecisionTable
-  title="Lane summary"
+  title="Baseline summary"
   columns={["Surface", "Choice", "Why it matters"]}
   rows={[
     {
@@ -65,14 +65,14 @@ Local disaster-recovery reference architecture. k3d is not the production target
       cells: [
         "Cutover model",
         "Manual restore and manual client or DNS cutover",
-        "The lane proves restore correctness, not automatic failover orchestration.",
+        "The baseline covers restore correctness and does not include automatic failover orchestration.",
       ],
     },
   ]}
 />
 
 <DiagramFrame
-  title="Validated lane topology"
+  title="Baseline topology"
   caption="The source cluster writes snapshots to shared storage, the target cluster restores from that storage, and both sides depend on the same external Transit key to make restored data usable."
   code={`flowchart LR
     Client["Operator or admin"] -->|"HTTPS (SNI)"| SourceEdge["Source passthrough edge"]
@@ -126,7 +126,7 @@ Local disaster-recovery reference architecture. k3d is not the production target
       cells: [
         "Shared RustFS bucket",
         "The restore uses the same object-transfer shape as a real remote-storage path.",
-        "The lane is meant to prove the handoff through storage, not just a local disk copy.",
+        "The lane exercises snapshot handoff through shared object storage instead of a local disk copy.",
       ],
     },
     {
@@ -142,7 +142,7 @@ Local disaster-recovery reference architecture. k3d is not the production target
 
 <Checklist
   tone="warning"
-  title="Stay on the validated path"
+  title="Baseline requirements"
   items={[
     "keep the source and target on the same OpenBao version for the restore event",
     "keep the source and target pointed at the same Transit address, CA bundle, SNI, and key name",
@@ -152,24 +152,24 @@ Local disaster-recovery reference architecture. k3d is not the production target
   ]}
 />
 
-<Callout type="success" title="What this lane validated">
+<Callout type="success" title="Validated coverage">
 
 The local DR lane proved source backup to RustFS, restore into a separate target cluster, target unseal with the shared Transit key, and post-restore checks that source credentials and source data replaced the target bootstrap state.
 
 </Callout>
 
-<Callout type="warning" title="What this lane is not">
+<Callout type="warning" title="Out of scope">
 
-This is not an automatic failover design, not a cloud DR reference, and not proof that any backup can restore into any target shape. It is a validated manual recovery lane with explicit preconditions.
+This baseline does not define automatic failover or a cloud DR reference. It covers a validated manual recovery flow with explicit preconditions for backup, restore, and cutover.
 
 </Callout>
 
 <NextActions
-  title="Use the lane"
+  title="Next steps"
   items={[
     {
       label: "Bootstrap recipe",
-      description: "Stand up the infra, source, and target clusters that make up the DR proving ground.",
+      description: "Stand up the infra, source, and target clusters that make up the DR validation environment.",
       docId: "user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap",
     },
     {
