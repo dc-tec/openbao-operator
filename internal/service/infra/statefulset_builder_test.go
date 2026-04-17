@@ -120,7 +120,9 @@ func ptrInt64Value(p *int64) int64 {
 func TestBuildStatefulSet_MaintenanceAnnotations(t *testing.T) {
 	cluster := newMinimalCluster("maintenance-cluster", "default")
 	cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{
-		Enabled:   true,
+		Enabled: true,
+	}
+	cluster.Spec.Runtime = &openbaov1alpha1.RuntimeConfig{
 		RestartAt: "2026-01-19T00:00:00Z",
 	}
 
@@ -135,6 +137,41 @@ func TestBuildStatefulSet_MaintenanceAnnotations(t *testing.T) {
 
 	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-19T00:00:00Z" {
 		t.Fatalf("expected Pod template annotation %q to be set, got %q", constants.AnnotationRestartAt, got)
+	}
+}
+
+func TestBuildStatefulSet_RuntimeRestartAtOverridesDeprecatedMaintenanceRestartAt(t *testing.T) {
+	cluster := newMinimalCluster("runtime-precedence-cluster", "default")
+	cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{
+		RestartAt: "2026-01-18T00:00:00Z",
+	}
+	cluster.Spec.Runtime = &openbaov1alpha1.RuntimeConfig{
+		RestartAt: "2026-01-19T00:00:00Z",
+	}
+
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
+	}
+
+	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-19T00:00:00Z" {
+		t.Fatalf("expected runtime restart annotation to win, got %q", got)
+	}
+}
+
+func TestBuildStatefulSet_DeprecatedMaintenanceRestartAtFallback(t *testing.T) {
+	cluster := newMinimalCluster("maintenance-fallback-cluster", "default")
+	cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{
+		RestartAt: "2026-01-18T00:00:00Z",
+	}
+
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
+	}
+
+	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != "2026-01-18T00:00:00Z" {
+		t.Fatalf("expected deprecated maintenance restart annotation fallback, got %q", got)
 	}
 }
 
@@ -235,7 +272,7 @@ func TestBuildStatefulSet_PodMetadata(t *testing.T) {
 			constants.AnnotationRestartAt: "should-not-override",
 		},
 	}
-	cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{
+	cluster.Spec.Runtime = &openbaov1alpha1.RuntimeConfig{
 		RestartAt: "2026-01-19T00:00:00Z",
 	}
 

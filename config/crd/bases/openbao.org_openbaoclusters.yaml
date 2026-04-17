@@ -883,8 +883,7 @@ spec:
                     type: string
                 type: object
               maintenance:
-                description: Maintenance configures supported maintenance and restart
-                  workflows.
+                description: Maintenance configures supported maintenance workflows.
                 properties:
                   enabled:
                     description: |-
@@ -899,6 +898,8 @@ spec:
                       The operator propagates this value as a Pod template annotation; any change
                       results in a new StatefulSet revision and a controlled restart.
                       Recommended value is an RFC3339 timestamp string.
+                      Deprecated: use spec.runtime.restartAt instead. spec.runtime.restartAt
+                      takes precedence when both fields are set.
                     minLength: 1
                     type: string
                 type: object
@@ -1767,6 +1768,19 @@ spec:
                       named "openbao-operator-restore" will be assumed/created.
 
                       The role must grant "update" capability on sys/storage/raft/snapshot-force.
+                    type: string
+                type: object
+              runtime:
+                description: Runtime configures explicit runtime control requests
+                  for the OpenBao workload.
+                properties:
+                  restartAt:
+                    description: |-
+                      RestartAt triggers a rolling restart when changed.
+                      The operator propagates this value as a Pod template annotation; any change
+                      results in a new StatefulSet revision and a controlled restart.
+                      Recommended value is an RFC3339 timestamp string.
+                    minLength: 1
                     type: string
                 type: object
               securityContext:
