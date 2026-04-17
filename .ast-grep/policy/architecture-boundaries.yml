@@ -279,15 +279,13 @@ globalImportBoundaries:
       - internal/controller
   - id: no-statusapply-imports-outside-approved-status-writers
     message: statusapply should only be imported by the approved status-owning packages.
-    note: Keep status apply helpers constrained to the transitional ownership paths until the remaining status-writer debt is burned down.
+    note: Keep status apply helpers constrained to the dedicated workload, adminops, and operation-lock status writers.
     files:
       - internal/**/*.go
     ignores:
       - "**/*_test.go"
       - internal/service/opslifecycle/lock.go
       - internal/app/openbaocluster/patch.go
-      - internal/service/backup/manager_status.go
-      - internal/service/upgrade/rolling/lifecycle.go
-      - internal/service/upgrade/rolling/retry.go
+      - internal/app/openbaocluster/adminopsstatus/mutate.go
     disallowImports:
       - internal/platform/statusapply

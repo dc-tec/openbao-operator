@@ -51,7 +51,9 @@ func TestPatchStatusSSA_PreservesSiblingAdminOpsFieldsFromLatestObject(t *testin
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(stored.DeepCopy()).
 		Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, portopenbao.ClientConfig{}, nil, "")
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, portopenbao.ClientConfig{}, nil, "").
+		WithReader(c).
+		WithAdminOpsStatusMutator(testAdminOpsMutator(c))
 
 	if err := mgr.patchStatusSSA(context.Background(), cluster); err != nil {
 		t.Fatalf("patchStatusSSA() error = %v", err)
@@ -244,7 +246,9 @@ func TestPatchFinalizedUpgradeStatus_ClearsUpgradeWithoutTouchingCurrentVersion(
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, portopenbao.ClientConfig{}, nil, "")
+	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, portopenbao.ClientConfig{}, nil, "").
+		WithReader(c).
+		WithAdminOpsStatusMutator(testAdminOpsMutator(c))
 
 	if err := mgr.patchFinalizedUpgradeStatus(context.Background(), cluster); err != nil {
 		t.Fatalf("expected no error, got %v", err)

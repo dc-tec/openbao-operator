@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
@@ -75,10 +76,25 @@ const (
 )
 
 func newBackupManager(k8sClient client.Client) *Manager {
-	return &Manager{
+	return withTestAdminOpsStatusPersistence(&Manager{
 		client: k8sClient,
+		reader: k8sClient,
 		scheme: testScheme,
-	}
+	}, k8sClient)
+}
+
+func withTestAdminOpsStatusPersistence(manager *Manager, k8sClient client.Client) *Manager {
+	return manager.WithReader(k8sClient).WithAdminOpsStatusMutator(func(
+		ctx context.Context,
+		cluster *openbaov1alpha1.OpenBaoCluster,
+		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
+		forceOwnership bool,
+	) error {
+		return adminopsstatus.MutateWithReader(ctx, k8sClient, k8sClient, cluster, mutate, adminopsstatus.MutateOptions{
+			ForceOwnership:  forceOwnership,
+			RetryOnConflict: !forceOwnership,
+		})
+	})
 }
 
 func newBackupJobForCluster(cluster *openbaov1alpha1.OpenBaoCluster, name string, createdAt time.Time) *batchv1.Job {

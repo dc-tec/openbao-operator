@@ -16,7 +16,6 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -65,8 +64,11 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 }
 
 func (m *Manager) patchRetryStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, retryRequest string) error {
-	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
-	desired, err := statusapply.MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(ctx, m.reader, m.client, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+	if m.adminOpsMutator == nil {
+		return fmt.Errorf("adminops status mutator is required")
+	}
+
+	if err := m.adminOpsMutator(ctx, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		if obj.Status.Upgrade == nil {
 			upgrade.MarkRetryRequestHandled(&obj.Status, retryRequest)
 			return nil
@@ -74,18 +76,13 @@ func (m *Manager) patchRetryStatusSSA(ctx context.Context, cluster *openbaov1alp
 		clearUpgradeFailureForRetry(obj)
 		upgrade.MarkRetryRequestHandled(&obj.Status, retryRequest)
 		return nil
-	}, statusapply.OpenBaoClusterAdminOpsStatusApplyOptions{
-		ForceOwnership: true,
-	})
-	if err != nil {
+	}, true); err != nil {
 		return fmt.Errorf("failed to apply cleared retry status: %w", err)
 	}
-	if retryFailureFieldsRemain(desired) {
+	if retryFailureFieldsRemain(cluster) {
 		return fmt.Errorf("failed to clear failed rolling-upgrade state via SSA")
 	}
 
-	cluster.Status.Upgrade = desired.Status.Upgrade
-	cluster.Status.UpgradeRequests = desired.Status.UpgradeRequests
 	return nil
 }
 

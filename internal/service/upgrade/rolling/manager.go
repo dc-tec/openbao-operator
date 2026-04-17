@@ -33,8 +33,16 @@ type Manager struct {
 	clientFactory         raftops.OpenBaoClientFactory
 	clientConfig          portopenbao.ClientConfig
 	operatorImageVerifier imageverify.Verifier
+	adminOpsMutator       adminOpsStatusMutator
 	Platform              string
 }
+
+type adminOpsStatusMutator func(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
+	forceOwnership bool,
+) error
 
 // NewManager constructs a Manager that uses the provided Kubernetes client and scheme.
 func NewManager(
@@ -99,6 +107,14 @@ func NewManagerWithClientFactory(
 func (m *Manager) WithReader(reader client.Reader) *Manager {
 	if reader != nil {
 		m.reader = reader
+	}
+	return m
+}
+
+// WithAdminOpsStatusMutator configures the adminops-plane status persistence hook.
+func (m *Manager) WithAdminOpsStatusMutator(mutator adminOpsStatusMutator) *Manager {
+	if mutator != nil {
+		m.adminOpsMutator = mutator
 	}
 	return m
 }
