@@ -22,6 +22,13 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+const (
+	testOpenBaoLivenessProbeTimeout  = "4s"
+	testOpenBaoReadinessProbeTimeout = "10s"
+	testOpenBaoStartupProbeTimeout   = "5s"
+	testOpenBaoProbeAddr             = "https://127.0.0.1:8200"
+)
+
 func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
 	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
@@ -38,7 +45,7 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -77,7 +84,7 @@ func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -150,7 +157,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 			ctx := context.Background()
 
 			spec := newTestStatefulSetSpec(cluster)
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+			if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -188,7 +195,7 @@ func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -207,7 +214,7 @@ func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.
 
 	// Update desired storage size in the CR.
 	cluster.Spec.Storage.Size = "20Gi"
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after resize error = %v", err)
 	}
 
@@ -244,7 +251,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -326,28 +333,28 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 				t.Fatalf("expected startup probe timeout to be 10s, got %d", c.StartupProbe.TimeoutSeconds)
 			}
 
-			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
-				t.Fatalf("expected startup probe to target %s, got %v", openBaoProbeAddr, c.StartupProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-addr="+testOpenBaoProbeAddr) {
+				t.Fatalf("expected startup probe to target %s, got %v", testOpenBaoProbeAddr, c.StartupProbe.Exec.Command)
 			}
 			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-mode=startup") {
 				t.Fatalf("expected startup probe to use startup mode, got %v", c.StartupProbe.Exec.Command)
 			}
-			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-timeout="+openBaoStartupProbeTimeout) {
-				t.Fatalf("expected startup probe to use timeout %s, got %v", openBaoStartupProbeTimeout, c.StartupProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-timeout="+testOpenBaoStartupProbeTimeout) {
+				t.Fatalf("expected startup probe to use timeout %s, got %v", testOpenBaoStartupProbeTimeout, c.StartupProbe.Exec.Command)
 			}
 
-			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
-				t.Fatalf("expected liveness probe to target %s, got %v", openBaoProbeAddr, c.LivenessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-addr="+testOpenBaoProbeAddr) {
+				t.Fatalf("expected liveness probe to target %s, got %v", testOpenBaoProbeAddr, c.LivenessProbe.Exec.Command)
 			}
-			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-timeout="+openBaoLivenessProbeTimeout) {
-				t.Fatalf("expected liveness probe to use timeout %s, got %v", openBaoLivenessProbeTimeout, c.LivenessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-timeout="+testOpenBaoLivenessProbeTimeout) {
+				t.Fatalf("expected liveness probe to use timeout %s, got %v", testOpenBaoLivenessProbeTimeout, c.LivenessProbe.Exec.Command)
 			}
 
-			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
-				t.Fatalf("expected readiness probe to target %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-addr="+testOpenBaoProbeAddr) {
+				t.Fatalf("expected readiness probe to target %s, got %v", testOpenBaoProbeAddr, c.ReadinessProbe.Exec.Command)
 			}
-			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-timeout="+openBaoReadinessProbeTimeout) {
-				t.Fatalf("expected readiness probe to use timeout %s, got %v", openBaoReadinessProbeTimeout, c.ReadinessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-timeout="+testOpenBaoReadinessProbeTimeout) {
+				t.Fatalf("expected readiness probe to use timeout %s, got %v", testOpenBaoReadinessProbeTimeout, c.ReadinessProbe.Exec.Command)
 			}
 
 			// Verify environment variables are set correctly
@@ -436,7 +443,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -456,8 +463,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 		probesFound = true
 		cmd := strings.Join(c.ReadinessProbe.Exec.Command, " ")
 		// In ACME mode, probes should still use loopback address but set SNI to the ACME domain
-		if !strings.Contains(cmd, "-addr="+openBaoProbeAddr) {
-			t.Fatalf("expected readiness probe to use loopback address %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+		if !strings.Contains(cmd, "-addr="+testOpenBaoProbeAddr) {
+			t.Fatalf("expected readiness probe to use loopback address %s, got %v", testOpenBaoProbeAddr, c.ReadinessProbe.Exec.Command)
 		}
 		if !strings.Contains(cmd, "-servername="+acmeDomain) {
 			t.Fatalf("expected readiness probe to set SNI to ACME domain, got %v", c.ReadinessProbe.Exec.Command)
@@ -490,7 +497,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -510,8 +517,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 		probesFound = true
 		cmd := strings.Join(c.ReadinessProbe.Exec.Command, " ")
 		// In ACME mode, probes should still use loopback address but set SNI to the ACME domain
-		if !strings.Contains(cmd, "-addr="+openBaoProbeAddr) {
-			t.Fatalf("expected readiness probe to use loopback address %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+		if !strings.Contains(cmd, "-addr="+testOpenBaoProbeAddr) {
+			t.Fatalf("expected readiness probe to use loopback address %s, got %v", testOpenBaoProbeAddr, c.ReadinessProbe.Exec.Command)
 		}
 		if !strings.Contains(cmd, "-servername=example.com") {
 			t.Fatalf("expected readiness probe to set SNI to ACME domain, got %v", c.ReadinessProbe.Exec.Command)
@@ -542,7 +549,7 @@ func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -590,7 +597,7 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -641,7 +648,7 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -673,7 +680,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

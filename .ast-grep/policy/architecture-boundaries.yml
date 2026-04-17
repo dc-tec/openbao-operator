@@ -131,8 +131,7 @@ serviceBoundaries:
       - internal/service/infra/**/*.go
     ignores:
       - "**/*_test.go"
-    allowServiceImports:
-      - internal/service/workload
+    allowServiceImports: []
   - name: workload
     displayName: Workload
     packageRoot: internal/service/workload

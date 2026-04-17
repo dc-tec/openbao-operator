@@ -36,6 +36,14 @@ func (r *infraReconciler) newInfraManager(effectiveOIDC *OIDCConfig) *inframanag
 	)
 }
 
+func (r *infraReconciler) newWorkloadManager() *workloadsvc.Manager {
+	return workloadsvc.NewManager(
+		r.deps.Kubernetes.Client,
+		r.deps.Kubernetes.Scheme,
+		r.deps.Kubernetes.Platform,
+	).WithReader(r.deps.Kubernetes.APIReader)
+}
+
 func (r *infraReconciler) mapManagerReconcileError(err error) error {
 	switch {
 	case err == nil:

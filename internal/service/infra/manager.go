@@ -18,7 +18,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 const (
@@ -60,7 +59,6 @@ type Manager struct {
 	client             client.Client
 	reader             client.Reader
 	scheme             *runtime.Scheme
-	workload           *workloadsvc.Manager
 	operatorNamespace  string
 	oidcIssuer         string
 	oidcDiscoveryURL   string
@@ -80,7 +78,6 @@ func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace strin
 		client:            c,
 		reader:            c,
 		scheme:            scheme,
-		workload:          workloadsvc.NewManager(c, scheme, platform),
 		operatorNamespace: operatorNamespace,
 		oidcIssuer:        oidcIssuer,
 		oidcJWTKeys:       oidcJWTKeys,
@@ -96,7 +93,6 @@ func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Sche
 	m := NewManager(c, scheme, operatorNamespace, oidcIssuer, oidcJWTKeys, platform)
 	if r != nil {
 		m.reader = r
-		m.workload.WithReader(r)
 	}
 	return m
 }
@@ -139,29 +135,30 @@ func (m *Manager) SetOIDCConfig(config *portauth.OIDCConfig) {
 	m.oidcJWTKeys = append([]string(nil), config.JWKSKeys...)
 }
 
-// Reconcile ensures infrastructure resources are aligned with the desired state for the given OpenBaoCluster.
+// PrepareWorkload ensures supporting infrastructure resources are aligned with the desired
+// state for the given OpenBaoCluster and returns the rendered workload configuration.
 //
 // The current implementation focuses on:
 //   - Managing a per-cluster static auto-unseal Secret (only when using static seal).
 //   - Rendering a config.hcl ConfigMap that injects TLS paths, storage configuration, retry_join, and seal configuration.
-//   - Reconciling a headless StatefulSet-backed Service, an optional external Service/Ingress, and the StatefulSet itself.
+//   - Reconciling workload-supporting resources such as Services, Ingress/Gateway, RBAC, and NetworkPolicies.
 //
-// spec contains all parameters needed for StatefulSet reconciliation, including revision, images, and skip logic.
-// This decouples the infrastructure layer from upgrade strategy knowledge.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec workloadsvc.StatefulSetSpec) error {
+// The workload controller is responsible for StatefulSet/PDB reconciliation and consumes the
+// returned config content as part of that separate reconciliation step.
+func (m *Manager) PrepareWorkload(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	// Only create unseal secret if using static seal (default or explicit)
 	if usesStaticSeal(cluster) {
 		if err := m.ensureUnsealSecret(ctx, logger, cluster); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	if err := m.validateUnsealPrerequisites(ctx, cluster); err != nil {
-		return err
+		return "", err
 	}
 
 	if err := m.runACMEPreflight(ctx, logger, cluster); err != nil {
-		return err
+		return "", err
 	}
 
 	infraDetails := configbuilder.InfrastructureDetails{
@@ -173,16 +170,16 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
 	if err != nil {
-		return fmt.Errorf("failed to render config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return "", fmt.Errorf("failed to render config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	configContent := string(renderedConfig)
 
 	if err := m.reconcilePreStatefulSet(ctx, logger, cluster, configContent); err != nil {
-		return err
+		return "", err
 	}
 
-	return m.workload.Reconcile(ctx, logger, cluster, configContent, spec)
+	return configContent, nil
 }
 
 func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {

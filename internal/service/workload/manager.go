@@ -79,6 +79,10 @@ func clusterForStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster, spec Sta
 }
 
 func (m *Manager) ensureConfigMapWithRevision(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, revision string, configContent string) error {
+	if revision == "" {
+		return nil
+	}
+
 	return m.ensureConfigMapWithName(ctx, cluster, configMapNameWithRevision(cluster, revision), configContent)
 }
 

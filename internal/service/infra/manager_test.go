@@ -38,7 +38,7 @@ func TestReconcileCreatesAllResources(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -115,7 +115,7 @@ func TestReconcile_ACMEMode_CreatesChallengeService(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -160,7 +160,7 @@ func TestReconcile_ACMEMode_ManagedSharedCacheCreatesPVC(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -209,7 +209,7 @@ func TestReconcile_ACMEMode_PreflightRejectsGatewayTermination(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	err := manager.Reconcile(ctx, logr.Discard(), cluster, spec)
+	err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec)
 	if err == nil {
 		t.Fatalf("expected Reconcile() to fail preflight for ACME + Gateway termination")
 	}
@@ -266,7 +266,7 @@ func TestReconcile_ACMEMode_PreflightRejectsUnresolvableDomainForPrivateCA(t *te
 	}
 
 	spec := newTestStatefulSetSpec(cluster)
-	err := manager.Reconcile(ctx, logr.Discard(), cluster, spec)
+	err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec)
 	if err == nil {
 		t.Fatalf("expected Reconcile() to fail preflight for unresolvable ACME domain")
 	}
@@ -311,7 +311,7 @@ func TestCleanupRespectsDeletionPolicyForPVCs(t *testing.T) {
 			ctx := context.Background()
 
 			spec := newTestStatefulSetSpec(cluster)
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+			if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -383,7 +383,7 @@ func TestCleanupReliesOnGarbageCollection(t *testing.T) {
 
 	// Create all resources
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -493,11 +493,11 @@ func TestMultiTenancyResourceNamingUniqueness(t *testing.T) {
 
 	// Reconcile both clusters
 	spec1 := newTestStatefulSetSpec(cluster1)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, spec1); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster1, spec1); err != nil {
 		t.Fatalf("Reconcile() cluster1 error = %v", err)
 	}
 	spec2 := newTestStatefulSetSpec(cluster2)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster2, spec2); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster2, spec2); err != nil {
 		t.Fatalf("Reconcile() cluster2 error = %v", err)
 	}
 
@@ -575,11 +575,11 @@ func TestMultiTenancyNamespaceIsolation(t *testing.T) {
 
 	// Reconcile both clusters
 	spec1 := newTestStatefulSetSpec(cluster1)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster1, spec1); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster1, spec1); err != nil {
 		t.Fatalf("Reconcile() cluster1 error = %v", err)
 	}
 	spec2 := newTestStatefulSetSpec(cluster2)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster2, spec2); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster2, spec2); err != nil {
 		t.Fatalf("Reconcile() cluster2 error = %v", err)
 	}
 
@@ -636,7 +636,7 @@ func TestMultiTenancyResourceLabeling(t *testing.T) {
 	createTLSSecretForTest(t, k8sClient, cluster)
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -696,7 +696,7 @@ func TestOwnerReferencesSetOnCreatedResources(t *testing.T) {
 	createTLSSecretForTest(t, k8sClient, cluster)
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

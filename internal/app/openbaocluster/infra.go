@@ -161,7 +161,11 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 
 	manager := r.newInfraManager(effectiveOIDC)
-	if err := manager.Reconcile(ctx, logger, cluster, spec); err != nil {
+	configContent, err := manager.PrepareWorkload(ctx, logger, cluster)
+	if err != nil {
+		return recon.Result{}, r.mapManagerReconcileError(err)
+	}
+	if err := r.newWorkloadManager().Reconcile(ctx, logger, cluster, configContent, spec); err != nil {
 		return recon.Result{}, r.mapManagerReconcileError(err)
 	}
 	if stagedScaleDown {

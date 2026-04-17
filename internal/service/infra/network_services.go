@@ -14,7 +14,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func (m *Manager) ensureHeadlessService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -91,7 +90,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 	}
 
 	selectorLabels := podSelectorLabels(cluster)
-	if activeRevision := workloadsvc.BlueGreenActiveRevision(cluster); activeRevision != "" {
+	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
 		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
 	}
 
@@ -156,7 +155,7 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 	}
 
 	selectorLabels := podSelectorLabels(cluster)
-	if activeRevision := workloadsvc.BlueGreenActiveRevision(cluster); activeRevision != "" {
+	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
 		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
 	}
 
