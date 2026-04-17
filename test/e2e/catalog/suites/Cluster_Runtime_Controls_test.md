@@ -11,7 +11,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `cluster-ingress-host-san` | creates ingress resources and includes the ingress host in the server certificate | active | `ingress`, `external-service`, `tls-san` | `lifecycle`, `cluster`, `runtime` |
 | `cluster-paused-resume` | pauses reconciliation until spec.paused is cleared | active | `paused-reconcile`, `paused-status` | `lifecycle`, `cluster`, `runtime` |
 | `cluster-telemetry-rendering` | renders telemetry configuration when observability metrics are enabled | active | `telemetry`, `observability-metrics` | `lifecycle`, `cluster`, `runtime` |
-| `cluster-restart-at-rolls-pod` | rolls the OpenBao pod when maintenance.restartAt changes | active | `restart-at`, `pod-rollout` | `lifecycle`, `cluster`, `runtime` |
+| `cluster-restart-at-rolls-pod` | rolls the OpenBao pod when runtime.restartAt changes | active | `restart-at`, `pod-rollout` | `lifecycle`, `cluster`, `runtime` |
 
 ## `cluster-ingress-host-san`
 
@@ -66,18 +66,18 @@ Recorded checkpoints:
 
 ## `cluster-restart-at-rolls-pod`
 
-Path: `Cluster Runtime Controls > rolls the OpenBao pod when maintenance.restartAt changes`
+Path: `Cluster Runtime Controls > rolls the OpenBao pod when runtime.restartAt changes`
 
 State: `active`
 
-Generated fallback ID: `cluster-runtime-controls-rolls-the-openbao-pod-when-maintenance-b1bebf8a`
+Generated fallback ID: `cluster-runtime-controls-rolls-the-openbao-pod-when-runtime-c0619ab5`
 
 Covers: `restart-at`, `pod-rollout`
 
 Labels: `lifecycle`, `cluster`, `runtime`
 
 Recorded checkpoints:
-- setting spec.maintenance.restartAt to trigger a rolling restart
+- setting spec.runtime.restartAt to trigger a rolling restart
 - waiting for the StatefulSet pod template to carry the restart annotation
 - waiting for the original pod to be replaced
 

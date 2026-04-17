@@ -281,7 +281,7 @@ type IngressConfig struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
-// MaintenanceConfig defines supported maintenance and restart operations.
+// MaintenanceConfig defines supported maintenance operations.
 // This is intended to provide a first-class workflow for day-2 operations in
 // clusters that enforce managed-resource mutation locks via admission policy.
 type MaintenanceConfig struct {
@@ -291,6 +291,20 @@ type MaintenanceConfig struct {
 	// admission policies require an explicit maintenance signal.
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
+	// RestartAt triggers a rolling restart when changed.
+	// The operator propagates this value as a Pod template annotation; any change
+	// results in a new StatefulSet revision and a controlled restart.
+	// Recommended value is an RFC3339 timestamp string.
+	// Deprecated: use spec.runtime.restartAt instead. spec.runtime.restartAt
+	// takes precedence when both fields are set.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	RestartAt string `json:"restartAt,omitempty"`
+}
+
+// RuntimeConfig defines explicit runtime control requests for the OpenBao
+// workload.
+type RuntimeConfig struct {
 	// RestartAt triggers a rolling restart when changed.
 	// The operator propagates this value as a Pod template annotation; any change
 	// results in a new StatefulSet revision and a controlled restart.
@@ -1732,9 +1746,12 @@ type OpenBaoClusterSpec struct {
 	// Paused, when true, pauses reconciliation for this OpenBaoCluster (except delete and finalizers).
 	// +optional
 	Paused bool `json:"paused,omitempty"`
-	// Maintenance configures supported maintenance and restart workflows.
+	// Maintenance configures supported maintenance workflows.
 	// +optional
 	Maintenance *MaintenanceConfig `json:"maintenance,omitempty"`
+	// Runtime configures explicit runtime control requests for the OpenBao workload.
+	// +optional
+	Runtime *RuntimeConfig `json:"runtime,omitempty"`
 	// BreakGlassAck is an explicit acknowledgment token used to exit Break Glass / Safe Mode.
 	//
 	// When the operator enters break glass mode, it writes a nonce to status.breakGlass.nonce.

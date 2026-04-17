@@ -187,7 +187,7 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		waitForClusterAvailable(clusterName)
 	})
 
-	It("rolls the OpenBao pod when maintenance.restartAt changes", Label(
+	It("rolls the OpenBao pod when runtime.restartAt changes", Label(
 		"case:cluster-restart-at-rolls-pod",
 		"covers:restart-at",
 		"covers:pod-rollout",
@@ -205,12 +205,12 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 
 		restartAt := time.Now().UTC().Format(time.RFC3339Nano)
 
-		By("setting spec.maintenance.restartAt to trigger a rolling restart")
+		By("setting spec.runtime.restartAt to trigger a rolling restart")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoCluster{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
 			original := updated.DeepCopy()
-			updated.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{RestartAt: restartAt}
+			updated.Spec.Runtime = &openbaov1alpha1.RuntimeConfig{RestartAt: restartAt}
 			g.Expect(c.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 

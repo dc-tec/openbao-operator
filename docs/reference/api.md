@@ -778,7 +778,7 @@ _Appears in:_
 
 
 
-MaintenanceConfig defines supported maintenance and restart operations.
+MaintenanceConfig defines supported maintenance operations.
 This is intended to provide a first-class workflow for day-2 operations in
 clusters that enforce managed-resource mutation locks via admission policy.
 
@@ -790,7 +790,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled enables maintenance mode for this cluster.<br />When true, the operator annotates managed resources (Pods/StatefulSet) with<br />`openbao.org/maintenance=true` to allow controlled restarts/deletes where<br />admission policies require an explicit maintenance signal. |  | Optional: \{\} <br /> |
-| `restartAt` _string_ | RestartAt triggers a rolling restart when changed.<br />The operator propagates this value as a Pod template annotation; any change<br />results in a new StatefulSet revision and a controlled restart.<br />Recommended value is an RFC3339 timestamp string. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `restartAt` _string_ | RestartAt triggers a rolling restart when changed.<br />The operator propagates this value as a Pod template annotation; any change<br />results in a new StatefulSet revision and a controlled restart.<br />Recommended value is an RFC3339 timestamp string.<br />Deprecated: use spec.runtime.restartAt instead. spec.runtime.restartAt<br />takes precedence when both fields are set. |  | MinLength: 1 <br />Optional: \{\} <br /> |
 
 
 #### MetricsConfig
@@ -911,7 +911,8 @@ _Appears in:_
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configures telemetry and metrics integration. |  | Optional: \{\} <br /> |
 | `replicas` _integer_ | Replicas is the desired number of OpenBao pods. | 3 | Minimum: 1 <br /> |
 | `paused` _boolean_ | Paused, when true, pauses reconciliation for this OpenBaoCluster (except delete and finalizers). |  | Optional: \{\} <br /> |
-| `maintenance` _[MaintenanceConfig](#maintenanceconfig)_ | Maintenance configures supported maintenance and restart workflows. |  | Optional: \{\} <br /> |
+| `maintenance` _[MaintenanceConfig](#maintenanceconfig)_ | Maintenance configures supported maintenance workflows. |  | Optional: \{\} <br /> |
+| `runtime` _[RuntimeConfig](#runtimeconfig)_ | Runtime configures explicit runtime control requests for the OpenBao workload. |  | Optional: \{\} <br /> |
 | `breakGlassAck` _string_ | BreakGlassAck is an explicit acknowledgment token used to exit Break Glass / Safe Mode.<br />When the operator enters break glass mode, it writes a nonce to status.breakGlass.nonce.<br />To acknowledge and allow the operator to resume quorum-risk automation, set this field<br />to match that nonce.<br />Example:<br />  kubectl -n &lt;ns&gt; patch openbaocluster &lt;name&gt; --type merge -p '\{"spec":\{"breakGlassAck":"&lt;nonce&gt;"\}\}' |  | Optional: \{\} <br /> |
 | `tls` _[TLSConfig](#tlsconfig)_ | TLS configures TLS for the cluster. |  |  |
 | `storage` _[StorageConfig](#storageconfig)_ | Storage configures persistent storage for the cluster. |  |  |
@@ -1186,6 +1187,23 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `jwtAuthRole` _string_ | JWTAuthRole is the name of the JWT Auth role configured in OpenBao<br />for restore operations. When set, and when spec.selfInit.oidc.enabled is true,<br />the operator bootstraps a restore policy and JWT role bound to the restore ServiceAccount<br />(&lt;cluster-name&gt;-restore-serviceaccount).<br />If OIDC is enabled in SelfInit and this field is empty, a default role<br />named "openbao-operator-restore" will be assumed/created.<br />The role must grant "update" capability on sys/storage/raft/snapshot-force. |  | Optional: \{\} <br /> |
+
+
+#### RuntimeConfig
+
+
+
+RuntimeConfig defines explicit runtime control requests for the OpenBao
+workload.
+
+
+
+_Appears in:_
+- [OpenBaoClusterSpec](#openbaoclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `restartAt` _string_ | RestartAt triggers a rolling restart when changed.<br />The operator propagates this value as a Pod template annotation; any change<br />results in a new StatefulSet revision and a controlled restart.<br />Recommended value is an RFC3339 timestamp string. |  | MinLength: 1 <br />Optional: \{\} <br /> |
 
 
 #### SelfInitAuditDevice
