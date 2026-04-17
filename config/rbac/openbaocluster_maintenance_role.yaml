@@ -1,0 +1,30 @@
+# This rule is not used by the project openbao-operator itself.
+# It is provided to allow cluster administrators to delegate direct,
+# maintenance-window-only intervention on OpenBao-managed workload resources
+# without granting full edit or admin permissions on OpenBaoCluster objects.
+#
+# Multi-tenancy: This ClusterRole can be bound via RoleBinding for
+# namespace-scoped maintenance permissions, or copied into a namespaced Role
+# with resourceNames for a single-cluster maintenance window.
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: openbaocluster-maintenance-role
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - get
+      - maintenance
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters/status
+    verbs:
+      - get

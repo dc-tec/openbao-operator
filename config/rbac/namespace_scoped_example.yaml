@@ -60,6 +60,56 @@ subjects:
     name: monitoring # Change to actual group name
     apiGroup: rbac.authorization.k8s.io
 ---
+# Example: Grant maintenance-window intervention on one cluster
+#
+# This namespaced Role grants the custom `maintenance` verb only for a single
+# OpenBaoCluster object. It can be bound to a break-glass group or service account
+# that is allowed to delete or restart managed Pods/StatefulSet only while
+# `spec.maintenance.enabled` is enabled for that cluster.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-maintenance-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - maintenance
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters/status
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-maintenance-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-maintenance-team-a-example
+subjects:
+  - kind: Group
+    name: team-a-break-glass # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
 # Example: Grant admin permissions to platform team (cluster-wide)
 #
 # This ClusterRoleBinding grants platform administrators full access

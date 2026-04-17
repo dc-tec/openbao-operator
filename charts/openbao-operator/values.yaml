@@ -287,8 +287,9 @@ admissionPolicies:
       - aws-
       - aks-
       - azure-
-  # -- Kubernetes groups allowed to bypass managed-resource mutation locks when
-  # -- a cluster explicitly enables maintenance mode.
+  # -- Deprecated: no longer used.
+  # -- Maintenance authorization is now delegated through Kubernetes RBAC using
+  # -- the custom `maintenance` verb on `openbaoclusters.openbao.org`.
   maintenanceBreakGlassGroups:
     - system:masters
 
