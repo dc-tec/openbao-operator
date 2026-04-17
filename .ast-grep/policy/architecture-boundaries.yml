@@ -158,6 +158,7 @@ serviceBoundaries:
     ignores:
       - "**/*_test.go"
     allowServiceImports:
+      - internal/service/upgrade
       - internal/service/opslifecycle
   - name: upgrade-raftops
     displayName: Upgrade RaftOps
@@ -204,20 +205,57 @@ serviceBoundaries:
       - internal/service/upgrade/snapshot
 
 appBoundaries:
-  - name: openbaocluster
-    displayName: OpenBaoCluster
+  - name: openbaocluster-root
+    displayName: OpenBaoCluster Root
     files:
-      - internal/app/openbaocluster/**/*.go
+      - internal/app/openbaocluster/*.go
+    ignores:
+      - "**/*_test.go"
+      - internal/app/openbaocluster/adminops/**/*.go
+      - internal/app/openbaocluster/adminopsstatus/**/*.go
+      - internal/app/openbaocluster/deletionops/**/*.go
+      - internal/app/openbaocluster/statusops/**/*.go
+    allowServiceImports:
+      - internal/service/certs
+      - internal/service/infra
+      - internal/service/upgrade
+      - internal/service/workloadidentity
+  - name: openbaocluster-adminops
+    displayName: OpenBaoCluster AdminOps
+    files:
+      - internal/app/openbaocluster/adminops/**/*.go
     ignores:
       - "**/*_test.go"
     allowServiceImports:
       - internal/service/backup
-      - internal/service/certs
       - internal/service/infra
       - internal/service/upgrade
       - internal/service/upgrade/bluegreen
       - internal/service/upgrade/rolling
-      - internal/service/workloadidentity
+  - name: openbaocluster-statusops
+    displayName: OpenBaoCluster StatusOps
+    files:
+      - internal/app/openbaocluster/statusops/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/infra
+      - internal/service/upgrade
+  - name: openbaocluster-deletionops
+    displayName: OpenBaoCluster DeletionOps
+    files:
+      - internal/app/openbaocluster/deletionops/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/infra
+  - name: openbaocluster-adminopsstatus
+    displayName: OpenBaoCluster AdminOpsStatus
+    files:
+      - internal/app/openbaocluster/adminopsstatus/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
 
 globalImportBoundaries:
   - id: no-adapter-import-controller-or-service

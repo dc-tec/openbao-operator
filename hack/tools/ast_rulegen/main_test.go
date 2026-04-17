@@ -365,7 +365,14 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 
 	policy := architecturePolicy{
 		ModulePath:         "github.com/dc-tec/openbao-operator",
-		ServiceImportRoots: []string{"internal/service/backup", "internal/service/infra", "internal/service/opslifecycle"},
+		ServiceImportRoots: []string{
+			"internal/service/backup",
+			"internal/service/infra",
+			"internal/service/opslifecycle",
+			"internal/service/upgrade",
+			"internal/service/upgrade/bluegreen",
+			"internal/service/upgrade/rolling",
+		},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		ServiceBoundaries: []serviceBoundary{
 			{
@@ -383,7 +390,12 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 				DisplayName:  "OpenBaoCluster",
 				Files:        []string{"internal/app/openbaocluster/**/*.go"},
 				Ignores:      []string{"**/*_test.go"},
-				AllowService: []string{"internal/service/backup", "internal/service/infra"},
+				AllowService: []string{
+					"internal/service/backup",
+					"internal/service/infra",
+					"internal/service/upgrade/bluegreen",
+					"internal/service/upgrade/rolling",
+				},
 			},
 		},
 	}
@@ -394,8 +406,8 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"no-backup-service-unapproved-service-imports":       `"github\.com/dc-tec/openbao-operator/(internal/service/infra(/[^"]*)?)"`,
-		"no-openbaocluster-app-unapproved-service-imports": `"github\.com/dc-tec/openbao-operator/(internal/service/opslifecycle(/[^"]*)?)"`,
+		"no-backup-service-unapproved-service-imports": `"github\.com/dc-tec/openbao-operator/(internal/service/infra(/[^"]*)?|internal/service/upgrade(/[^"]*)?|internal/service/upgrade/bluegreen(/[^"]*)?|internal/service/upgrade/rolling(/[^"]*)?)"`,
+		"no-openbaocluster-app-unapproved-service-imports": `"github\.com/dc-tec/openbao-operator/(internal/service/opslifecycle(/[^"]*)?|internal/service/upgrade(/[^"]*)?)"`,
 	}
 
 	if len(specs) != len(want) {
