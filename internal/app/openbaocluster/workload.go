@@ -17,7 +17,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 const eventReasonAutopilotConfigJWTPrerequisitesMissing = "AutopilotConfigJWTPrerequisitesMissing"
@@ -233,7 +233,7 @@ func (r *autopilotConfigReconciler) autopilotTargetCluster(
 	}
 
 	statefulSetName := cluster.Name
-	if stableRevision := inframanager.BlueGreenStableRevision(cluster); stableRevision != "" {
+	if stableRevision := workloadsvc.BlueGreenStableRevision(cluster); stableRevision != "" {
 		statefulSetName = fmt.Sprintf("%s-%s", cluster.Name, stableRevision)
 	}
 

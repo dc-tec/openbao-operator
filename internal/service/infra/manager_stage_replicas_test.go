@@ -1,12 +1,16 @@
 package infra
 
-import "testing"
+import (
+	"testing"
+
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
+)
 
 func TestClusterForStatefulSetSpec_UsesStagedReplicas(t *testing.T) {
 	cluster := newMinimalCluster("staged-scale-down", "default")
 	cluster.Spec.Replicas = 1
 
-	spec := StatefulSetSpec{
+	spec := workloadsvc.StatefulSetSpec{
 		Name:     cluster.Name,
 		Replicas: 2,
 	}
@@ -27,7 +31,7 @@ func TestClusterForStatefulSetSpec_ReusesClusterWhenReplicasMatch(t *testing.T) 
 	cluster := newMinimalCluster("steady-state", "default")
 	cluster.Spec.Replicas = 2
 
-	spec := StatefulSetSpec{
+	spec := workloadsvc.StatefulSetSpec{
 		Name:     cluster.Name,
 		Replicas: 2,
 	}

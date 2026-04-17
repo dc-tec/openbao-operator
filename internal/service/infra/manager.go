@@ -18,6 +18,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 const (
@@ -151,7 +152,7 @@ func (m *Manager) SetOIDCConfig(config *portauth.OIDCConfig) {
 
 // EnsureBlueGreenStatus exposes blue/green status bootstrap/repair for strategy consumers.
 func (m *Manager) EnsureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	EnsureBlueGreenStatus(ctx, logger, m.client, cluster)
+	workloadsvc.EnsureBlueGreenStatus(ctx, logger, m.client, cluster)
 }
 
 // Reconcile ensures infrastructure resources are aligned with the desired state for the given OpenBaoCluster.
@@ -163,7 +164,7 @@ func (m *Manager) EnsureBlueGreenStatus(ctx context.Context, logger logr.Logger,
 //
 // spec contains all parameters needed for StatefulSet reconciliation, including revision, images, and skip logic.
 // This decouples the infrastructure layer from upgrade strategy knowledge.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec workloadsvc.StatefulSetSpec) error {
 	// Only create unseal secret if using static seal (default or explicit)
 	if usesStaticSeal(cluster) {
 		if err := m.ensureUnsealSecret(ctx, logger, cluster); err != nil {
@@ -226,7 +227,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	return nil
 }
 
-func clusterForStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) *openbaov1alpha1.OpenBaoCluster {
+func clusterForStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster, spec workloadsvc.StatefulSetSpec) *openbaov1alpha1.OpenBaoCluster {
 	if cluster == nil || spec.Replicas == cluster.Spec.Replicas {
 		return cluster
 	}

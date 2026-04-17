@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 	appsv1 "k8s.io/api/apps/v1"
 )
 
@@ -232,8 +233,8 @@ func newTestCACertPEM(t *testing.T) []byte {
 }
 
 // newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
-func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) StatefulSetSpec {
-	return StatefulSetSpec{
+func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) workloadsvc.StatefulSetSpec {
+	return workloadsvc.StatefulSetSpec{
 		Name:               cluster.Name,
 		Revision:           "",
 		Image:              cluster.Spec.Image,
