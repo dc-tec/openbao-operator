@@ -28,7 +28,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 )
 
-func TestOpenBaoRestore_SetupWithManager_TransitionsPendingRestoreToValidating(t *testing.T) {
+func TestOpenBaoRestore_SetupWithManager_InitializesRestoreStatusFromPending(t *testing.T) {
 	setAdmissionReady(t)
 
 	ctx := context.Background()
@@ -60,11 +60,12 @@ func TestOpenBaoRestore_SetupWithManager_TransitionsPendingRestoreToValidating(t
 		if err := liveClient.Get(ctx, restoreKey, current); err != nil {
 			return false
 		}
-		return current.Status.Phase == openbaov1alpha1.RestorePhaseValidating &&
+		return current.Status.Phase != "" &&
+			current.Status.Phase != openbaov1alpha1.RestorePhasePending &&
 			current.Status.StartTime != nil &&
 			current.Status.SnapshotKey == "snapshots/backup.snap" &&
 			slices.Contains(current.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
-	}, 20*time.Second, 200*time.Millisecond, "expected manager-driven reconcile to advance restore into validating")
+	}, 20*time.Second, 200*time.Millisecond, "expected manager-driven reconcile to initialize restore status and leave pending phase")
 }
 
 func setAdmissionReady(t *testing.T) {

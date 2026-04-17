@@ -134,6 +134,7 @@ func (r *OpenBaoRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.RestoreReconciler == nil {
 		r.RestoreReconciler = appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{
 			Client:                r.Client,
+			APIReader:             mgr.GetAPIReader(),
 			Scheme:                r.Scheme,
 			Recorder:              r.Recorder,
 			OperatorImageVerifier: r.OperatorImageVerifier,

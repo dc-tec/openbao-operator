@@ -207,7 +207,7 @@ Choose `BlueGreen` when you need parallel validation, a manual promotion point, 
       cells: [
         'spec.upgrade.requests.retry',
         'Restarts a failed rolling upgrade after you fix the underlying cause.',
-        'The operator preserved `status.upgrade.lastErrorReason` and is waiting for an explicit retry.',
+        'The operator preserved `status.upgrade.failure.reason` (and the deprecated `lastError*` compatibility fields) and is waiting for an explicit retry.',
       ],
       emphasis: 'recommended',
     },
@@ -238,7 +238,7 @@ Choose `BlueGreen` when you need parallel validation, a manual promotion point, 
 kubectl get pods -n <namespace>
 kubectl get jobs -n <namespace>`}
 >
-  Look for an idle cluster rather than just a patched spec. The right end state is healthy pods, no unresolved upgrade error reason, and a condition surface that matches the cluster features you enabled.
+  Look for an idle cluster rather than just a patched spec. The right end state is healthy pods, no unresolved upgrade failure state, and a condition surface that matches the cluster features you enabled.
 </CommandBlock>
 
 <DecisionTable
@@ -264,7 +264,7 @@ kubectl get jobs -n <namespace>`}
     {
       cells: [
         'Upgrade status',
-        'No unresolved `status.upgrade.lastErrorReason` and no stalled blue-green phase.',
+        'No unresolved `status.upgrade.failure.reason` (or deprecated `lastErrorReason`) and no stalled blue-green phase.',
         'The controller does not think operator action is still required.',
       ],
     },

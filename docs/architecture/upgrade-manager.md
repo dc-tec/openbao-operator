@@ -199,14 +199,14 @@ Blue-green creates a second revision and needs roughly double storage capacity f
   columns={['State surface', 'What it preserves']}
   rows={[
     {
-      cells: ['status.upgrade', 'Rolling partition progress, completed pods, and finalization gating.'],
+      cells: ['status.upgrade', 'Rolling partition progress, completed pods, finalization gating, and the structured failure surface under `status.upgrade.failure` (with deprecated `lastError*` compatibility fields still mirrored for now).'],
       emphasis: 'recommended',
     },
     {
       cells: ['status.blueGreen.phase', 'The active blue-green phase and whether promotion, cleanup, or rollback is in progress.'],
     },
     {
-      cells: ['lastErrorReason / lastErrorMessage', 'Why the current attempt failed and what must change before retry.'],
+      cells: ['status.upgradeRequests', 'Edge-trigger bookkeeping for retry, promote, and rollback requests so one-shot adminops intent is handled exactly once.'],
     },
     {
       cells: ['status.breakGlass', 'The nonce and diagnostic state when late rollback automation can no longer continue safely.'],

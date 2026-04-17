@@ -45,32 +45,68 @@ func IsUpgradeOperationLockHeldByUs(lock *openbaov1alpha1.OperationLockStatus) b
 
 // AcquireUpgradeOperationLock acquires the low-level upgrade operation lock.
 func AcquireUpgradeOperationLock(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster, message string) error {
+	return AcquireUpgradeOperationLockWithReader(ctx, nil, c, cluster, message)
+}
+
+// AcquireUpgradeOperationLockWithReader acquires the low-level upgrade
+// operation lock using reader for fresh read-before-write visibility.
+func AcquireUpgradeOperationLockWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	message string,
+) error {
 	if cluster == nil {
 		return fmt.Errorf("cluster is required")
 	}
-	return opslifecycle.Acquire(ctx, c, cluster, upgradeOperationLock, opslifecycle.AcquireOptions{
+	return opslifecycle.AcquireWithReader(ctx, reader, c, cluster, upgradeOperationLock, opslifecycle.AcquireOptions{
 		Message: message,
 	})
 }
 
 // ReleaseUpgradeOperationLock releases the low-level upgrade operation lock.
 func ReleaseUpgradeOperationLock(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	return ReleaseUpgradeOperationLockWithReader(ctx, nil, c, cluster)
+}
+
+// ReleaseUpgradeOperationLockWithReader releases the low-level upgrade
+// operation lock using reader for fresh read-before-write visibility.
+func ReleaseUpgradeOperationLockWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) error {
 	if cluster == nil {
 		return fmt.Errorf("cluster is required")
 	}
-	return opslifecycle.Release(ctx, c, cluster, upgradeOperationLock)
+	return opslifecycle.ReleaseWithReader(ctx, reader, c, cluster, upgradeOperationLock)
 }
 
 // AcquireUpgradeLock acquires the upgrade lock and emits the common audit event
 // shape for success and lock contention.
 func AcquireUpgradeLock(ctx context.Context, c client.Client, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, message string) (LockAcquireResult, error) {
+	return AcquireUpgradeLockWithReader(ctx, nil, c, logger, cluster, message)
+}
+
+// AcquireUpgradeLockWithReader acquires the upgrade lock and emits the common
+// audit event shape for success and lock contention using a dedicated reader.
+func AcquireUpgradeLockWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	message string,
+) (LockAcquireResult, error) {
 	result := LockAcquireResult{}
 	lockHeldByUs := false
 	if cluster != nil {
 		lockHeldByUs = IsUpgradeOperationLockHeldByUs(cluster.Status.OperationLock)
 	}
 
-	if err := AcquireUpgradeOperationLock(ctx, c, cluster, message); err != nil {
+	if err := AcquireUpgradeOperationLockWithReader(ctx, reader, c, cluster, message); err != nil {
 		if !IsOperationLockHeld(err) {
 			return result, err
 		}
@@ -95,6 +131,18 @@ func AcquireUpgradeLock(ctx context.Context, c client.Client, logger logr.Logger
 // ReleaseUpgradeLockIfHeld releases the upgrade lock when it is currently owned
 // by the upgrade flow. Ownership races are treated as benign.
 func ReleaseUpgradeLockIfHeld(ctx context.Context, c client.Client, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	return ReleaseUpgradeLockIfHeldWithReader(ctx, nil, c, logger, cluster)
+}
+
+// ReleaseUpgradeLockIfHeld releases the upgrade lock when it is currently owned
+// by the upgrade flow using a dedicated reader for fresh read-before-write visibility.
+func ReleaseUpgradeLockIfHeldWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) error {
 	if cluster == nil {
 		return fmt.Errorf("cluster is required")
 	}
@@ -102,7 +150,7 @@ func ReleaseUpgradeLockIfHeld(ctx context.Context, c client.Client, logger logr.
 		return nil
 	}
 
-	if err := ReleaseUpgradeOperationLock(ctx, c, cluster); err != nil {
+	if err := ReleaseUpgradeOperationLockWithReader(ctx, reader, c, cluster); err != nil {
 		if IsOperationLockHeld(err) {
 			logger.V(1).Info("Upgrade operation lock changed ownership before release")
 			return nil
@@ -126,11 +174,27 @@ func ReleaseUpgradeLockOnErrorIfHeld(
 	cause error,
 	releaseErrorMessage string,
 ) error {
+	return ReleaseUpgradeLockOnErrorIfHeldWithReader(ctx, nil, c, logger, cluster, shouldRelease, cause, releaseErrorMessage)
+}
+
+// ReleaseUpgradeLockOnErrorIfHeldWithReader joins the original cause with any
+// upgrade lock release error when the caller indicates the upgrade never
+// reached its active state, using a dedicated reader for fresh visibility.
+func ReleaseUpgradeLockOnErrorIfHeldWithReader(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	shouldRelease bool,
+	cause error,
+	releaseErrorMessage string,
+) error {
 	if cause == nil || cluster == nil || !shouldRelease {
 		return cause
 	}
 
-	if err := ReleaseUpgradeLockIfHeld(ctx, c, logger, cluster); err != nil {
+	if err := ReleaseUpgradeLockIfHeldWithReader(ctx, reader, c, logger, cluster); err != nil {
 		if releaseErrorMessage == "" {
 			return errors.Join(cause, err)
 		}
