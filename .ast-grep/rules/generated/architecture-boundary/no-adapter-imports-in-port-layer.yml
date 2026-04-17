@@ -12,5 +12,5 @@ ignores:
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/adapter/auth(/[^"]*)?|internal/adapter/cluster(/[^"]*)?|internal/adapter/config(/[^"]*)?|internal/adapter/kube(/[^"]*)?|internal/adapter/openbao(/[^"]*)?|internal/adapter/operationlock(/[^"]*)?|internal/adapter/probe(/[^"]*)?|internal/adapter/raft(/[^"]*)?|internal/adapter/revision(/[^"]*)?|internal/adapter/security(/[^"]*)?|internal/adapter/storage(/[^"]*)?|internal/adapter/storageenv(/[^"]*)?)"'
+        - regex: '"github\.com/dc-tec/openbao-operator/(internal/adapter/auth(/[^"]*)?|internal/adapter/cluster(/[^"]*)?|internal/adapter/config(/[^"]*)?|internal/adapter/kube(/[^"]*)?|internal/adapter/openbao(/[^"]*)?|internal/adapter/probe(/[^"]*)?|internal/adapter/raft(/[^"]*)?|internal/adapter/revision(/[^"]*)?|internal/adapter/security(/[^"]*)?|internal/adapter/storage(/[^"]*)?|internal/adapter/storageenv(/[^"]*)?)"'
 note: Keep ports limited to contracts, neutral types, and domain helpers.

@@ -23,7 +23,6 @@ layerCoverage:
       - adapter/config
       - adapter/kube
       - adapter/openbao
-      - adapter/operationlock
       - adapter/probe
       - adapter/raft
       - adapter/revision
@@ -43,6 +42,7 @@ layerCoverage:
       - platform/predicates
       - platform/reconcile
       - platform/statusapply
+      - platform/statuspatch
       - platform/testutil
 
 controllerCoverage:
@@ -65,7 +65,6 @@ adapterImportRoots:
   - internal/adapter/config
   - internal/adapter/kube
   - internal/adapter/openbao
-  - internal/adapter/operationlock
   - internal/adapter/probe
   - internal/adapter/raft
   - internal/adapter/revision
@@ -117,6 +116,50 @@ controllerBoundaries:
     allowServiceImports: []
     allowAdapterImports: []
 
+serviceBoundaries:
+  - name: infra
+    displayName: Infra
+    packageRoot: internal/service/infra
+    files:
+      - internal/service/infra/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+  - name: backup
+    displayName: Backup
+    packageRoot: internal/service/backup
+    files:
+      - internal/service/backup/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/opslifecycle
+      - internal/service/workloadidentity
+  - name: restore
+    displayName: Restore
+    packageRoot: internal/service/restore
+    files:
+      - internal/service/restore/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/opslifecycle
+      - internal/service/workloadidentity
+
+appBoundaries:
+  - name: openbaocluster
+    displayName: OpenBaoCluster
+    files:
+      - internal/app/openbaocluster/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/backup
+      - internal/service/certs
+      - internal/service/infra
+      - internal/service/upgrade
+      - internal/service/workloadidentity
+
 globalImportBoundaries:
   - id: no-adapter-import-controller-or-service
     message: Adapter packages must not import controller or service-layer packages directly.
@@ -127,7 +170,6 @@ globalImportBoundaries:
       - internal/adapter/config/**/*.go
       - internal/adapter/kube/**/*.go
       - internal/adapter/openbao/**/*.go
-      - internal/adapter/operationlock/**/*.go
       - internal/adapter/probe/**/*.go
       - internal/adapter/raft/**/*.go
       - internal/adapter/revision/**/*.go
@@ -160,7 +202,6 @@ globalImportBoundaries:
       - internal/adapter/config
       - internal/adapter/kube
       - internal/adapter/openbao
-      - internal/adapter/operationlock
       - internal/adapter/probe
       - internal/adapter/raft
       - internal/adapter/revision
@@ -180,7 +221,6 @@ globalImportBoundaries:
       - internal/adapter/config
       - internal/adapter/kube
       - internal/adapter/openbao
-      - internal/adapter/operationlock
       - internal/adapter/probe
       - internal/adapter/raft
       - internal/adapter/revision
@@ -195,7 +235,6 @@ globalImportBoundaries:
       - internal/adapter/config/**/*.go
       - internal/adapter/kube/**/*.go
       - internal/adapter/openbao/**/*.go
-      - internal/adapter/operationlock/**/*.go
       - internal/adapter/probe/**/*.go
       - internal/adapter/raft/**/*.go
       - internal/adapter/revision/**/*.go
@@ -210,7 +249,6 @@ globalImportBoundaries:
       - internal/adapter/config
       - internal/adapter/kube
       - internal/adapter/openbao
-      - internal/adapter/operationlock
       - internal/adapter/probe
       - internal/adapter/raft
       - internal/adapter/revision
@@ -239,3 +277,17 @@ globalImportBoundaries:
       - internal/controller/**/*.go
     disallowImports:
       - internal/controller
+  - id: no-statusapply-imports-outside-approved-status-writers
+    message: statusapply should only be imported by the approved status-owning packages.
+    note: Keep status apply helpers constrained to the transitional ownership paths until the remaining status-writer debt is burned down.
+    files:
+      - internal/**/*.go
+    ignores:
+      - "**/*_test.go"
+      - internal/service/opslifecycle/lock.go
+      - internal/app/openbaocluster/patch.go
+      - internal/service/backup/manager_status.go
+      - internal/service/upgrade/rolling/lifecycle.go
+      - internal/service/upgrade/rolling/retry.go
+    disallowImports:
+      - internal/platform/statusapply

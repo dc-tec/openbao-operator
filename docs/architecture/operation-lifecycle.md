@@ -34,7 +34,7 @@ description: Shared lock, retry, and phase-audit primitives used by backup, rest
     {
       label: 'Writes through',
       items: [
-        'internal/adapter/operationlock for status.operationLock updates',
+        'internal/service/opslifecycle for status.operationLock updates',
         'audit event fields for phase transitions',
         'shared retry delays consumed by controller requeues',
       ],
@@ -52,11 +52,11 @@ description: Shared lock, retry, and phase-audit primitives used by backup, rest
 
 ## Architectural placement
 
-Operation lifecycle coordination sits below the concrete managers and above the lock adapter:
+Operation lifecycle coordination sits below the concrete managers and owns the shared lock write path:
 
 1. A manager such as backup, restore, or upgrade decides it needs to start or resume work.
 2. It uses `internal/service/opslifecycle` to acquire or release the expected lock identity, classify retry intent, and log phase changes.
-3. `opslifecycle` delegates the actual status patching to `internal/adapter/operationlock`.
+3. `opslifecycle` applies `status.operationLock` directly through the shared SSA lock plane.
 
 That keeps the shared safety model in one place instead of scattering lock and retry semantics across several managers.
 
@@ -83,12 +83,12 @@ That keeps the shared safety model in one place instead of scattering lock and r
 
 <DiagramFrame
   title="Coordination model"
-  caption="Backup, restore, and upgrade do not each implement their own lock and retry policy. They share one coordination service that wraps the operation-lock adapter and keeps audit fields consistent."
+  caption="Backup, restore, and upgrade do not each implement their own lock and retry policy. They share one coordination service that owns the lock write path and keeps audit fields consistent."
   code={`graph TD
     Backup["Backup manager"] --> Ops["Operation lifecycle"]
     Restore["Restore manager"] --> Ops
     Upgrade["Upgrade manager"] --> Ops
-    Ops --> Lock["Operation lock adapter"]
+    Ops --> Lock["Operation lock status writer"]
     Ops --> Retry["Retry classes"]
     Ops --> Audit["Phase audit logging"]
     Lock --> Status["OpenBaoCluster.status.operationLock"]
