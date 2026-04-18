@@ -882,8 +882,7 @@ spec:
                     type: string
                 type: object
               maintenance:
-                description: Maintenance configures supported maintenance and restart
-                  workflows.
+                description: Maintenance configures supported maintenance workflows.
                 properties:
                   enabled:
                     description: |-
@@ -898,6 +897,8 @@ spec:
                       The operator propagates this value as a Pod template annotation; any change
                       results in a new StatefulSet revision and a controlled restart.
                       Recommended value is an RFC3339 timestamp string.
+                      Deprecated: use spec.runtime.restartAt instead. spec.runtime.restartAt
+                      takes precedence when both fields are set.
                     minLength: 1
                     type: string
                 type: object
@@ -1766,6 +1767,19 @@ spec:
                       named "openbao-operator-restore" will be assumed/created.
 
                       The role must grant "update" capability on sys/storage/raft/snapshot-force.
+                    type: string
+                type: object
+              runtime:
+                description: Runtime configures explicit runtime control requests
+                  for the OpenBao workload.
+                properties:
+                  restartAt:
+                    description: |-
+                      RestartAt triggers a rolling restart when changed.
+                      The operator propagates this value as a Pod template annotation; any change
+                      results in a new StatefulSet revision and a controlled restart.
+                      Recommended value is an RFC3339 timestamp string.
+                    minLength: 1
                     type: string
                 type: object
               securityContext:
@@ -3236,6 +3250,7 @@ spec:
                   lastError:
                     description: LastError is the last adminops-controller error observed
                       for this cluster.
+                    nullable: true
                     properties:
                       at:
                         description: At is when the error was observed (best-effort).
@@ -3497,6 +3512,7 @@ spec:
                 description: |-
                   OperationLock prevents concurrent long-running operations (upgrade/backup/restore)
                   from acting on the same cluster at the same time.
+                nullable: true
                 properties:
                   acquiredAt:
                     description: AcquiredAt is when the lock was first acquired.
@@ -3524,6 +3540,7 @@ spec:
                     format: date-time
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               phase:
                 description: Phase is a high-level summary of the cluster state.
                 enum:
@@ -3562,21 +3579,42 @@ spec:
                       value.
                     format: int32
                     type: integer
+                  failure:
+                    description: |-
+                      Failure is the structured rolling-upgrade failure status.
+                      When Failure.Reason is non-empty, the upgrade is considered failed.
+                    nullable: true
+                    properties:
+                      at:
+                        description: At is when the error was observed (best-effort).
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message is a human-readable error message (best-effort).
+                        type: string
+                      reason:
+                        description: Reason is a low-cardinality identifier for the
+                          error.
+                        type: string
+                    type: object
                   fromVersion:
                     description: FromVersion is the version being upgraded from.
                     type: string
                   lastErrorAt:
-                    description: LastErrorAt is when the last upgrade error was recorded
-                      (best-effort).
+                    description: |-
+                      LastErrorAt is when the last upgrade error was recorded (best-effort).
+                      Deprecated: use Failure.At.
                     format: date-time
                     type: string
                   lastErrorMessage:
-                    description: LastErrorMessage is a human-readable failure message
-                      (best-effort).
+                    description: |-
+                      LastErrorMessage is a human-readable failure message (best-effort).
+                      Deprecated: use Failure.Message.
                     type: string
                   lastErrorReason:
                     description: |-
                       LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
+                      Deprecated: use Failure.Reason.
                       When set, the status controller should consider the cluster Degraded.
                     type: string
                   lastStepDownTime:
@@ -3625,6 +3663,7 @@ spec:
                   lastError:
                     description: LastError is the last workload-controller error observed
                       for this cluster.
+                    nullable: true
                     properties:
                       at:
                         description: At is when the error was observed (best-effort).
