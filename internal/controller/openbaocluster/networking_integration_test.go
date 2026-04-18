@@ -102,17 +102,7 @@ var _ = Describe("OpenBaoCluster Networking", func() {
 			infraMgr := infra.NewManager(k8sClient, k8sClient.Scheme(), "openbao-operator-system", "", nil, "")
 
 			By("reconciling networking resources")
-			spec := infra.StatefulSetSpec{
-				Name:               cluster.Name,
-				Revision:           "",
-				Image:              cluster.Spec.Image,
-				InitContainerImage: "",
-				Replicas:           cluster.Spec.Replicas,
-				ConfigHash:         "",
-				DisableSelfInit:    false,
-				SkipReconciliation: false,
-			}
-			err := infraMgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+			_, err := infraMgr.PrepareWorkload(ctx, logr.Discard(), cluster)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("ensuring the HTTPRoute references only the main external service")
@@ -141,17 +131,7 @@ var _ = Describe("OpenBaoCluster Networking", func() {
 
 			By("switching to Cleanup and ensuring the external Service selects the Green revision")
 			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
-			spec = infra.StatefulSetSpec{
-				Name:               cluster.Name,
-				Revision:           "blue123",
-				Image:              cluster.Spec.Image,
-				InitContainerImage: "",
-				Replicas:           cluster.Spec.Replicas,
-				ConfigHash:         "",
-				DisableSelfInit:    false,
-				SkipReconciliation: false,
-			}
-			err = infraMgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+			_, err = infraMgr.PrepareWorkload(ctx, logr.Discard(), cluster)
 			Expect(err).NotTo(HaveOccurred())
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Namespace: cluster.Namespace,
