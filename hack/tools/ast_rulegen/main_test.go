@@ -364,7 +364,7 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 	t.Parallel()
 
 	policy := architecturePolicy{
-		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ModulePath: "github.com/dc-tec/openbao-operator",
 		ServiceImportRoots: []string{
 			"internal/service/backup",
 			"internal/service/infra",
@@ -386,10 +386,10 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 		},
 		AppBoundaries: []appBoundary{
 			{
-				Name:         "openbaocluster",
-				DisplayName:  "OpenBaoCluster",
-				Files:        []string{"internal/app/openbaocluster/**/*.go"},
-				Ignores:      []string{"**/*_test.go"},
+				Name:        "openbaocluster",
+				DisplayName: "OpenBaoCluster",
+				Files:       []string{"internal/app/openbaocluster/**/*.go"},
+				Ignores:     []string{"**/*_test.go"},
 				AllowService: []string{
 					"internal/service/backup",
 					"internal/service/infra",
@@ -405,9 +405,18 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 		t.Fatalf("buildRuleSpecs returned error: %v", err)
 	}
 
+	backupDisallowedRegex := `"github\.com/dc-tec/openbao-operator/(` +
+		`internal/service/infra(/[^"]*)?|` +
+		`internal/service/upgrade(/[^"]*)?|` +
+		`internal/service/upgrade/bluegreen(/[^"]*)?|` +
+		`internal/service/upgrade/rolling(/[^"]*)?)"`
+	openBaoClusterDisallowedRegex := `"github\.com/dc-tec/openbao-operator/(` +
+		`internal/service/opslifecycle(/[^"]*)?|` +
+		`internal/service/upgrade(/[^"]*)?)"`
+
 	want := map[string]string{
-		"no-backup-service-unapproved-service-imports": `"github\.com/dc-tec/openbao-operator/(internal/service/infra(/[^"]*)?|internal/service/upgrade(/[^"]*)?|internal/service/upgrade/bluegreen(/[^"]*)?|internal/service/upgrade/rolling(/[^"]*)?)"`,
-		"no-openbaocluster-app-unapproved-service-imports": `"github\.com/dc-tec/openbao-operator/(internal/service/opslifecycle(/[^"]*)?|internal/service/upgrade(/[^"]*)?)"`,
+		"no-backup-service-unapproved-service-imports":     backupDisallowedRegex,
+		"no-openbaocluster-app-unapproved-service-imports": openBaoClusterDisallowedRegex,
 	}
 
 	if len(specs) != len(want) {
