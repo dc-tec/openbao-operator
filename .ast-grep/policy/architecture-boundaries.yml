@@ -8,6 +8,7 @@ layerCoverage:
     app:
       - app
     service:
+      - service/configuration
       - service/bootstrap
       - service/backup
       - service/certs
@@ -52,6 +53,7 @@ controllerCoverage:
   root: internal/controller
 
 serviceImportRoots:
+  - internal/service/configuration
   - internal/service/bootstrap
   - internal/service/backup
   - internal/service/certs
@@ -125,6 +127,14 @@ controllerBoundaries:
     allowAdapterImports: []
 
 serviceBoundaries:
+  - name: configuration
+    displayName: Configuration
+    packageRoot: internal/service/configuration
+    files:
+      - internal/service/configuration/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
   - name: bootstrap
     displayName: Bootstrap
     packageRoot: internal/service/bootstrap
@@ -132,7 +142,8 @@ serviceBoundaries:
       - internal/service/bootstrap/**/*.go
     ignores:
       - "**/*_test.go"
-    allowServiceImports: []
+    allowServiceImports:
+      - internal/service/configuration
   - name: identity
     displayName: Identity
     packageRoot: internal/service/identity
@@ -225,6 +236,7 @@ serviceBoundaries:
     ignores:
       - "**/*_test.go"
     allowServiceImports:
+      - internal/service/configuration
       - internal/service/opslifecycle
       - internal/service/upgrade
       - internal/service/upgrade/core
@@ -357,6 +369,16 @@ globalImportBoundaries:
       - internal/adapter/security
       - internal/adapter/storage
       - internal/adapter/storageenv
+  - id: no-direct-config-rendering-outside-configuration-service
+    message: Config rendering should go through internal/service/configuration.
+    note: Keep config.hcl semantics owned by the shared configuration service.
+    files:
+      - internal/service/bootstrap/manager.go
+      - internal/service/upgrade/bluegreen/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/adapter/config
   - id: no-adapter-to-adapter-imports
     message: Adapter packages should not depend on other adapters; use ports/contracts.
     files:

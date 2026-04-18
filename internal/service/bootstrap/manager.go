@@ -11,11 +11,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	configurationservice "github.com/dc-tec/openbao-operator/internal/service/configuration"
 )
 
 const (
@@ -93,19 +93,11 @@ func (m *Manager) PrepareWorkload(ctx context.Context, logger logr.Logger, clust
 		return "", err
 	}
 
-	infraDetails := configbuilder.InfrastructureDetails{
-		HeadlessServiceName: headlessServiceName(cluster),
-		Namespace:           cluster.Namespace,
-		APIPort:             constants.PortAPI,
-		ClusterPort:         constants.PortCluster,
-	}
-
-	renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
+	configContent, err := configurationservice.Render(cluster, configurationservice.RenderOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to render config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
-	configContent := string(renderedConfig)
 	if err := m.reconcilePreStatefulSet(ctx, logger, cluster, configContent); err != nil {
 		return "", err
 	}
@@ -169,8 +161,4 @@ func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 
 func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + configInitMapSuffix
-}
-
-func headlessServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name
 }

@@ -7,8 +7,8 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	configurationservice "github.com/dc-tec/openbao-operator/internal/service/configuration"
 )
 
 // handlePhaseIdle transitions from Idle to DeployingGreen when an upgrade is detected.
@@ -45,14 +45,9 @@ func (m *Manager) createGreenStatefulSet(ctx context.Context, logger logr.Logger
 		return phaseOutcome{}, fmt.Errorf("workload runtime is not configured")
 	}
 
-	infraDetails := configbuilder.InfrastructureDetails{
-		HeadlessServiceName:   cluster.Name,
-		Namespace:             cluster.Namespace,
-		APIPort:               constants.PortAPI,
-		ClusterPort:           constants.PortCluster,
+	configContent, err := configurationservice.Render(cluster, configurationservice.RenderOptions{
 		TargetRevisionForJoin: blueRevision,
-	}
-	renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
+	})
 	if err != nil {
 		return phaseOutcome{}, fmt.Errorf("failed to render config for Green cluster: %w", err)
 	}
@@ -62,7 +57,7 @@ func (m *Manager) createGreenStatefulSet(ctx context.Context, logger logr.Logger
 		return phaseOutcome{}, err
 	}
 
-	if err := m.workloadRuntime.EnsureStatefulSetWithRevision(ctx, logger, cluster, string(renderedConfig), greenImage, greenInitImage, greenRevision, true); err != nil {
+	if err := m.workloadRuntime.EnsureStatefulSetWithRevision(ctx, logger, cluster, configContent, greenImage, greenInitImage, greenRevision, true); err != nil {
 		return phaseOutcome{}, fmt.Errorf("failed to create Green StatefulSet: %w", err)
 	}
 
