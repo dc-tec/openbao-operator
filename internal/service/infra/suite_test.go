@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
@@ -149,7 +150,19 @@ func (m *Manager) reconcileWithWorkload(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	spec workloadsvc.StatefulSetSpec,
 ) error {
-	configContent, err := m.PrepareWorkload(ctx, logger, cluster)
+	if err := m.ensureServiceAccount(ctx, logger, cluster); err != nil {
+		return err
+	}
+	if err := m.ensureRBAC(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	configContent, err := bootstrapmanager.NewManagerWithReader(
+		m.client,
+		m.reader,
+		m.scheme,
+		m.operatorNamespace,
+	).PrepareWorkload(ctx, logger, cluster)
 	if err != nil {
 		return err
 	}

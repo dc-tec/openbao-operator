@@ -6,6 +6,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
@@ -26,14 +27,13 @@ func oidcConfigForInfraManager(oidc *OIDCConfig) *portauth.OIDCConfig {
 	}
 }
 
-func (r *infraReconciler) newInfraManager(effectiveOIDC *OIDCConfig) *inframanager.Manager {
-	return inframanager.NewManagerWithReaderAndOIDCConfig(
+func (r *infraReconciler) newBootstrapManager(effectiveOIDC *OIDCConfig) *bootstrapmanager.Manager {
+	return bootstrapmanager.NewManagerWithReaderAndOIDCConfig(
 		r.deps.Kubernetes.Client,
 		r.deps.Kubernetes.APIReader,
 		r.deps.Kubernetes.Scheme,
 		r.deps.Kubernetes.OperatorNamespace,
 		oidcConfigForInfraManager(effectiveOIDC),
-		r.deps.Kubernetes.Platform,
 	)
 }
 
@@ -55,11 +55,21 @@ func (r *infraReconciler) newNetworkingManager() *networkingmanager.Manager {
 	)
 }
 
+func (r *infraReconciler) newInfraManager() *inframanager.Manager {
+	return inframanager.NewManagerWithReader(
+		r.deps.Kubernetes.Client,
+		r.deps.Kubernetes.APIReader,
+		r.deps.Kubernetes.Scheme,
+		r.deps.Kubernetes.OperatorNamespace,
+		r.deps.Kubernetes.Platform,
+	)
+}
+
 func (r *infraReconciler) mapManagerReconcileError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, inframanager.ErrOIDCBootstrapAudienceMismatch):
+	case errors.Is(err, bootstrapmanager.ErrOIDCBootstrapAudienceMismatch):
 		return operatorerrors.WithReason(constants.ReasonOIDCBootstrapConfigurationInvalid, err)
 	case errors.Is(err, networkingmanager.ErrGatewayAPIMissing):
 		return operatorerrors.WithReason(constants.ReasonGatewayAPIMissing, err)

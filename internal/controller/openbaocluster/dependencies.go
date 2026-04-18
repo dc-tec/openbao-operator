@@ -153,17 +153,11 @@ func (r *OpenBaoClusterReconciler) adminOpsDependencies() appopenbaocluster.Admi
 
 func (r *OpenBaoClusterReconciler) deletionDependencies() appopenbaocluster.DeletionDependencies {
 	return appopenbaocluster.DeletionDependencies{
-		Client:             r.Client,
-		APIReader:          r.APIReader,
-		Scheme:             r.ControllerRuntime.Scheme,
-		OperatorNamespace:  r.OperatorNamespace,
-		OIDCIssuer:         r.OIDCIssuer,
-		OIDCDiscoveryURL:   r.OIDCDiscoveryURL,
-		OIDCDiscoveryCAPEM: r.OIDCDiscoveryCAPEM,
-		OIDCJWKSURL:        r.OIDCJWKSURL,
-		OIDCJWKSCAPEM:      r.OIDCJWKSCAPEM,
-		OIDCJWTKeys:        r.OIDCJWTKeys,
-		Platform:           r.Platform,
+		Client:            r.Client,
+		APIReader:         r.APIReader,
+		Scheme:            r.ControllerRuntime.Scheme,
+		OperatorNamespace: r.OperatorNamespace,
+		Platform:          r.Platform,
 	}
 }
 

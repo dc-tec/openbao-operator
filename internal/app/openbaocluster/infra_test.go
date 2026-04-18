@@ -24,7 +24,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
@@ -561,7 +561,7 @@ func TestInfraReconciler_MapManagerReconcileError(t *testing.T) {
 		err        error
 		wantReason string
 	}{
-		{name: "oidc bootstrap audience mismatch", err: inframanager.ErrOIDCBootstrapAudienceMismatch, wantReason: constants.ReasonOIDCBootstrapConfigurationInvalid},
+		{name: "oidc bootstrap audience mismatch", err: bootstrapmanager.ErrOIDCBootstrapAudienceMismatch, wantReason: constants.ReasonOIDCBootstrapConfigurationInvalid},
 		{name: "gateway api missing", err: networkingmanager.ErrGatewayAPIMissing, wantReason: constants.ReasonGatewayAPIMissing},
 		{name: "api server network invalid", err: networkingmanager.ErrAPIServerNetworkConfigurationInvalid, wantReason: constants.ReasonAPIServerNetworkConfigurationInvalid},
 		{name: "prerequisites missing", err: workloadsvc.ErrStatefulSetPrerequisitesMissing, wantReason: constants.ReasonPrerequisitesMissing},

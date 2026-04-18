@@ -1,7 +1,4 @@
-//go:build integration
-// +build integration
-
-package infra
+package bootstrap
 
 import (
 	"testing"
@@ -15,7 +12,6 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 // testScheme is a shared scheme used across tests.
@@ -54,20 +50,6 @@ func newTestClient(t *testing.T) client.Client {
 		Build()
 }
 
-const (
-	configInitMapSuffix      = "-config-init"
-	unsealSecretKey          = "key"
-	unsealKeyBytes           = 32
-	dataVolumeName           = constants.VolumeData
-	tlsVolumeName            = constants.VolumeTLS
-	configVolumeName         = constants.VolumeConfig
-	configRenderedVolumeName = "config-rendered"
-	unsealVolumeName         = "unseal"
-	configFileName           = "config.hcl"
-	serviceAccountMountPath  = "/var/run/secrets/kubernetes.io/serviceaccount"
-	openBaoBinaryName        = constants.BinaryBao
-)
-
 //nolint:unparam // namespace is used in other tests/integration tests
 func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
@@ -91,20 +73,4 @@ func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 			},
 		},
 	}
-}
-
-func unsealSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixUnsealKey
-}
-
-func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixConfigMap
-}
-
-func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + configInitMapSuffix
-}
-
-func headlessServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name
 }

@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package infra
+package bootstrap
 
 import (
 	"context"
@@ -109,7 +109,7 @@ func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 
 	cluster := newMinimalCluster("test-cluster", "default")
 
@@ -161,7 +161,7 @@ func TestEnsureUnsealSecret_HandlesAlreadyExists(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClientWithObjects(t, existingSecret)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 
 	// Should not error when secret already exists (blind create pattern)
 	err := manager.ensureUnsealSecret(ctx, logger, cluster)
@@ -174,7 +174,7 @@ func TestEnsureConfigMap_CreatesConfigMap(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 
 	cluster := newMinimalCluster("test-cluster", "default")
 	configContent := "test config content"
@@ -218,7 +218,7 @@ func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 
 	newConfigContent := "new config content"
 	err := manager.ensureConfigMap(ctx, logger, cluster, newConfigContent)
@@ -260,7 +260,7 @@ func TestEnsureConfigMap_IsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 
 	// With SSA, applying the same state multiple times is idempotent
 	// First apply should succeed
@@ -309,7 +309,7 @@ func TestEnsureSelfInitConfigMap_Disabled(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClientWithObjects(t, existingConfigMap)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err != nil {
@@ -335,7 +335,7 @@ func TestEnsureSelfInitConfigMap_NotConfigured(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 
 	// Should not error when self-init is not configured
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
@@ -370,7 +370,7 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 	manager.SetOIDCConfig(&portauth.OIDCConfig{
 		IssuerURL: "https://issuer.example",
 		JWKSURL:   "https://issuer.example/keys",
@@ -455,7 +455,7 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 	manager.SetOIDCConfig(&portauth.OIDCConfig{
 		IssuerURL: "https://issuer.example",
 		JWKSURL:   "https://issuer.example/keys",
@@ -509,7 +509,13 @@ func TestEnsureSelfInitConfigMap_RejectsBootstrapAudienceMismatch(t *testing.T) 
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, "openbao-operator-system", "https://kubernetes.default.svc", []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"}, "")
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
+	manager.SetOIDCConfig(&portauth.OIDCConfig{
+		IssuerURL: "https://kubernetes.default.svc",
+		JWKSKeys: []string{
+			"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n",
+		},
+	})
 
 	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
 	if err == nil {
