@@ -283,6 +283,67 @@ func (m *Manager) PrepareScaleDown(
 	return nil
 }
 
+// PrepareReadReplicaScaleDown stages a single safe steady-state read-replica
+// scale-down step by removing the departing non-voter before the StatefulSet
+// shrinks. Unlike voter scale-down, there is no leader step-down or autopilot
+// min_quorum adjustment.
+func (m *Manager) PrepareReadReplicaScaleDown(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	statefulSetName string,
+	currentReplicas int32,
+	desiredReplicas int32,
+) error {
+	if currentReplicas <= desiredReplicas {
+		return nil
+	}
+	if cluster == nil {
+		return fmt.Errorf("cluster is required")
+	}
+	if strings.TrimSpace(statefulSetName) == "" {
+		return fmt.Errorf("statefulset name is required")
+	}
+
+	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to create authenticated OpenBao client for read-replica scale down: %w", err)
+	}
+
+	configCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	raftConfig, err := client.ReadRaftConfiguration(configCtx)
+	if err != nil {
+		return m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to read Raft configuration before read-replica scale down: %w", err),
+		)
+	}
+
+	victimPodName := fmt.Sprintf("%s-%d", statefulSetName, currentReplicas-1)
+	victimServer, found := findRaftServerForPod(raftConfig, victimPodName)
+	if !found {
+		logger.Info("Read-replica victim pod already absent from Raft configuration; continuing with scale down", "victim", victimPodName)
+		return nil
+	}
+	if victimServer.Voter {
+		return operatorerrors.WrapPermanentPrerequisitesMissing(
+			fmt.Errorf("read-replica pod %s is registered as a voter; refusing read-replica scale down", victimPodName),
+		)
+	}
+
+	logger.Info("Removing read-replica Raft peer before scale down", "victim", victimPodName, "node_id", victimServer.NodeID)
+	if err := client.RemoveRaftPeer(configCtx, victimServer.NodeID); err != nil {
+		return m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to remove read-replica Raft peer %q before scale down: %w", victimServer.NodeID, err),
+		)
+	}
+
+	return nil
+}
+
 // ReadRaftConfiguration reads the current authenticated Raft configuration for
 // status observation and topology checks.
 func (m *Manager) ReadRaftConfiguration(

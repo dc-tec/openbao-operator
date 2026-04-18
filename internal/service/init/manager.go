@@ -150,6 +150,11 @@ func (m *Manager) MembershipRuntime() initmanagerport.MembershipRuntime {
 	return m.raftManager
 }
 
+// ReadReplicaScaleDownRuntime returns the optional read-replica scale-down runtime.
+func (m *Manager) ReadReplicaScaleDownRuntime() initmanagerport.ReadReplicaScaleDownRuntime {
+	return m.raftManager
+}
+
 // Clientset returns the Kubernetes clientset.
 func (m *Manager) Clientset() kubernetes.Interface {
 	return m.clientset

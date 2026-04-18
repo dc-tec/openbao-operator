@@ -422,6 +422,57 @@ func TestPrepareScaleDown_StepsDownLeaderVictim(t *testing.T) {
 	}
 }
 
+func TestPrepareReadReplicaScaleDown_RemovesNonVoter(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
+	}
+
+	client := &fakeScaleDownClient{
+		raftConfig: &portopenbao.RaftConfigurationResponse{
+			Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{
+					{NodeID: "cluster-0", Address: "https://cluster-0.cluster.ns.svc:8200", Leader: true, Voter: true},
+					{NodeID: "cluster-read-0", Address: "https://cluster-read-0.cluster.ns.svc:8200", Voter: false},
+					{NodeID: "cluster-read-1", Address: "https://cluster-read-1.cluster.ns.svc:8200", Voter: false},
+				},
+			},
+		},
+	}
+
+	clientset := k8sfake.NewClientset(
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster-root-token", Namespace: "ns"},
+			Data:       map[string][]byte{"token": []byte("root-token")},
+		},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster-tls-ca", Namespace: "ns"},
+			Data:       map[string][]byte{"ca.crt": []byte("pem-data")},
+		},
+	)
+
+	mgr := NewManager(clientset, &fakeScaleDownFactoryProvider{factory: &fakeScaleDownFactory{client: client}})
+	err := mgr.PrepareReadReplicaScaleDown(context.Background(), logr.Discard(), cluster, "cluster-read", 2, 1)
+	if err != nil {
+		t.Fatalf("PrepareReadReplicaScaleDown() error = %v", err)
+	}
+	if len(client.removeCalls) != 1 || client.removeCalls[0] != "cluster-read-1" {
+		t.Fatalf("removeCalls = %v, want [cluster-read-1]", client.removeCalls)
+	}
+	if len(client.configureCalls) != 0 {
+		t.Fatalf("configureCalls = %v, want none", client.configureCalls)
+	}
+	if client.stepDownCalls != 0 {
+		t.Fatalf("stepDownCalls = %d, want 0", client.stepDownCalls)
+	}
+}
+
 func TestWrapScaleDownPermissionError_SelfInitClusterRequiresUpdatedPolicy(t *testing.T) {
 	t.Parallel()
 

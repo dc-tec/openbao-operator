@@ -31,12 +31,20 @@ import (
 )
 
 type scaleDownRuntimeStub struct {
-	prepareFunc func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error
+	prepareFunc     func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error
+	readPrepareFunc func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error
 }
 
 func (s scaleDownRuntimeStub) PrepareScaleDown(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error {
 	if s.prepareFunc != nil {
 		return s.prepareFunc(ctx, logger, cluster, statefulSetName, currentReplicas, desiredReplicas)
+	}
+	return nil
+}
+
+func (s scaleDownRuntimeStub) PrepareReadReplicaScaleDown(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error {
+	if s.readPrepareFunc != nil {
+		return s.readPrepareFunc(ctx, logger, cluster, statefulSetName, currentReplicas, desiredReplicas)
 	}
 	return nil
 }
@@ -187,6 +195,157 @@ func TestHandleScaleDownSafety(t *testing.T) {
 			}
 
 			appliedReplicas, err := r.handleScaleDownSafety(context.Background(), cluster, tt.desiredReplicas, sts)
+			assert.Equal(t, tt.expectedApplied, appliedReplicas)
+			if tt.expectedError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+			}
+		})
+	}
+}
+
+func TestHandleReadReplicaScaleDownSafety(t *testing.T) {
+	clusterName := "test-cluster-read"
+	namespace := "default"
+
+	tests := []struct {
+		name            string
+		initialized     bool
+		currentReplicas int32
+		desiredReplicas int32
+		statusReplicas  int32
+		readyReplicas   int32
+		currentStatus   int32
+		generation      int64
+		observedGen     int64
+		runtimeError    string
+		expectedApplied int32
+		expectedError   string
+	}{
+		{
+			name:            "no scale down before initialization",
+			initialized:     false,
+			currentReplicas: 2,
+			desiredReplicas: 1,
+			statusReplicas:  2,
+			readyReplicas:   2,
+			currentStatus:   2,
+			generation:      1,
+			observedGen:     1,
+			expectedApplied: 1,
+			expectedError:   "",
+		},
+		{
+			name:            "scale down uses one safe step",
+			initialized:     true,
+			currentReplicas: 3,
+			desiredReplicas: 1,
+			statusReplicas:  3,
+			readyReplicas:   3,
+			currentStatus:   3,
+			generation:      1,
+			observedGen:     1,
+			expectedApplied: 2,
+			expectedError:   "",
+		},
+		{
+			name:            "scale down waits for statefulset to settle between steps",
+			initialized:     true,
+			currentReplicas: 2,
+			desiredReplicas: 1,
+			statusReplicas:  2,
+			readyReplicas:   1,
+			currentStatus:   1,
+			generation:      2,
+			observedGen:     2,
+			expectedApplied: 2,
+			expectedError:   "waiting for StatefulSet default/test-cluster-read to settle at 2 replicas before next read-replica scale-down step",
+		},
+		{
+			name:            "scale down requeues when runtime blocks",
+			initialized:     true,
+			currentReplicas: 2,
+			desiredReplicas: 1,
+			statusReplicas:  2,
+			readyReplicas:   2,
+			currentStatus:   2,
+			generation:      1,
+			observedGen:     1,
+			runtimeError:    "waiting for non-voter removal",
+			expectedApplied: 2,
+			expectedError:   "waiting for non-voter removal",
+		},
+		{
+			name:            "scale down blocks without runtime",
+			initialized:     true,
+			currentReplicas: 2,
+			desiredReplicas: 1,
+			statusReplicas:  2,
+			readyReplicas:   2,
+			currentStatus:   2,
+			generation:      1,
+			observedGen:     1,
+			expectedApplied: 2,
+			expectedError:   "read-replica scale-down runtime is not configured",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: namespace,
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					Initialized: tt.initialized,
+				},
+			}
+
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       clusterName,
+					Namespace:  namespace,
+					Generation: tt.generation,
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: &tt.currentReplicas,
+				},
+				Status: appsv1.StatefulSetStatus{
+					ObservedGeneration: tt.observedGen,
+					Replicas:           tt.statusReplicas,
+					ReadyReplicas:      tt.readyReplicas,
+					CurrentReplicas:    tt.currentStatus,
+				},
+			}
+
+			r := &infraReconciler{}
+			if tt.name != "scale down blocks without runtime" {
+				r.deps.ScaleDown = InfraScaleDownRuntime{
+					ReadReplicaRuntime: scaleDownRuntimeStub{
+						readPrepareFunc: func(_ context.Context, _ logr.Logger, gotCluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error {
+							assert.Same(t, cluster, gotCluster)
+							assert.Equal(t, clusterName, statefulSetName)
+							assert.Equal(t, tt.currentReplicas, currentReplicas)
+							if tt.currentReplicas > tt.desiredReplicas {
+								expectedDesired := tt.currentReplicas - 1
+								if expectedDesired < tt.desiredReplicas {
+									expectedDesired = tt.desiredReplicas
+								}
+								assert.Equal(t, expectedDesired, desiredReplicas)
+							}
+							if tt.runtimeError != "" {
+								return errors.New(tt.runtimeError)
+							}
+							return nil
+						},
+					},
+				}
+			}
+
+			appliedReplicas, err := r.handleReadReplicaScaleDownSafety(context.Background(), cluster, tt.desiredReplicas, sts)
 			assert.Equal(t, tt.expectedApplied, appliedReplicas)
 			if tt.expectedError == "" {
 				assert.NoError(t, err)

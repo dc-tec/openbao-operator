@@ -26,6 +26,12 @@ type ScaleDownRuntime interface {
 	PrepareScaleDown(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error
 }
 
+// ReadReplicaScaleDownRuntime exposes authenticated non-voter membership
+// operations used to stage safe steady-state read-replica scale-downs.
+type ReadReplicaScaleDownRuntime interface {
+	PrepareReadReplicaScaleDown(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, statefulSetName string, currentReplicas, desiredReplicas int32) error
+}
+
 // MembershipRuntime exposes authenticated Raft membership reads used by status
 // observation for steady-state read replicas.
 type MembershipRuntime interface {
@@ -40,6 +46,12 @@ type AutopilotProvider interface {
 // ScaleDownProvider allows init managers to optionally expose a safe scale-down runtime.
 type ScaleDownProvider interface {
 	ScaleDownRuntime() ScaleDownRuntime
+}
+
+// ReadReplicaScaleDownProvider allows init managers to optionally expose a
+// safe steady-state read-replica scale-down runtime.
+type ReadReplicaScaleDownProvider interface {
+	ReadReplicaScaleDownRuntime() ReadReplicaScaleDownRuntime
 }
 
 // MembershipProvider allows init managers to optionally expose an authenticated

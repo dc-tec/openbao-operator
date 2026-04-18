@@ -93,7 +93,8 @@ type InfraPodRuntime struct {
 // InfraScaleDownRuntime groups authenticated Raft membership operations used
 // to stage safe scale-downs.
 type InfraScaleDownRuntime struct {
-	Runtime initmanagerport.ScaleDownRuntime
+	Runtime            initmanagerport.ScaleDownRuntime
+	ReadReplicaRuntime initmanagerport.ReadReplicaScaleDownRuntime
 }
 
 // InfraDependencies provides external dependencies for infrastructure reconciliation.
@@ -134,8 +135,10 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	spec := r.computeStatefulSetSpec(logger, cluster, resolvedImages.mainImage, resolvedImages.initImage)
 	readSpec := r.computeReadReplicaStatefulSetSpec(cluster, resolvedImages.mainImage, resolvedImages.initImage)
 	stagedScaleDown := false
+	stagedReadReplicaScaleDown := false
 
 	currentSTS := &appsv1.StatefulSet{}
+	readCurrentSTS := &appsv1.StatefulSet{}
 	reader := r.deps.Kubernetes.APIReader
 	if reader == nil {
 		reader = r.deps.Kubernetes.Client
@@ -163,6 +166,27 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		)
 	}
 
+	err = reader.Get(ctx, client.ObjectKey{Name: readSpec.Name, Namespace: cluster.Namespace}, readCurrentSTS)
+	switch {
+	case err == nil:
+		declaredReadReplicas := readSpec.Replicas
+		appliedReplicas, err := r.handleReadReplicaScaleDownSafety(ctx, cluster, declaredReadReplicas, readCurrentSTS)
+		if err != nil {
+			if operatorerrors.IsPermanent(err) && errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+				logger.Info("Read-replica scale down requires user intervention", "reason", err.Error())
+				return recon.Result{}, nil
+			}
+			logger.Info("Read-replica scale down blocked reconciliation", "reason", err.Error())
+			return recon.Result{RequeueAfter: infraRequeueShort}, nil
+		}
+		readSpec.Replicas = appliedReplicas
+		stagedReadReplicaScaleDown = cluster.Status.Initialized && readSpec.Replicas > declaredReadReplicas
+	case apierrors.IsNotFound(err):
+		// No read-replica StatefulSet exists yet.
+	default:
+		return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(err)
+	}
+
 	effectiveOIDC, err := r.resolveOIDC(ctx, cluster)
 	if err != nil {
 		return recon.Result{}, err
@@ -183,10 +207,10 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		return recon.Result{}, r.mapManagerReconcileError(err)
 	}
 	if readSpec.SkipReconciliation {
-		if err := r.newWorkloadManager().ScaleDownStatefulSetIfExists(ctx, logger, cluster, workloadsvc.StatefulSetSpec{
+		if err := r.newWorkloadManager().ScaleStatefulSetIfExists(ctx, logger, cluster, workloadsvc.StatefulSetSpec{
 			Name: resourceidentity.ReadReplicaStatefulSetName(cluster),
 			Pool: constants.LabelValueOpenBaoWorkloadPoolReadReplica,
-		}); err != nil {
+		}, readSpec.Replicas); err != nil {
 			return recon.Result{}, r.mapManagerReconcileError(err)
 		}
 	} else {
@@ -206,8 +230,23 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		)
 		return recon.Result{RequeueAfter: infraRequeueShort}, nil
 	}
+	if stagedReadReplicaScaleDown {
+		logger.Info(
+			"Staged read-replica scale down step applied; requeueing to continue safe replica reduction",
+			"appliedStatefulSetReplicas", readSpec.Replicas,
+			"desiredReplicas", readCurrentDesiredReplicas(cluster),
+		)
+		return recon.Result{RequeueAfter: infraRequeueShort}, nil
+	}
 
 	return recon.Result{}, nil
+}
+
+func readCurrentDesiredReplicas(cluster *openbaov1alpha1.OpenBaoCluster) int32 {
+	if cluster == nil || cluster.Spec.ReadReplicas == nil {
+		return 0
+	}
+	return cluster.Spec.ReadReplicas.Replicas
 }
 
 func bootstrapReadReplicaRenderOptions(cluster *openbaov1alpha1.OpenBaoCluster, voterSpec workloadsvc.StatefulSetSpec) bootstrapmanager.RenderOptions {

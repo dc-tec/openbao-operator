@@ -74,6 +74,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 }
 
 func (m *Manager) ScaleDownStatefulSetIfExists(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
+	return m.ScaleStatefulSetIfExists(ctx, logger, cluster, spec, 0)
+}
+
+func (m *Manager) ScaleStatefulSetIfExists(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec, replicas int32) error {
 	name := statefulSetNameForSpec(cluster, spec)
 	if name == "" {
 		return nil
@@ -87,17 +91,17 @@ func (m *Manager) ScaleDownStatefulSetIfExists(ctx context.Context, logger logr.
 		return fmt.Errorf("failed to get StatefulSet %s/%s for staged scale down: %w", cluster.Namespace, name, err)
 	}
 
-	if statefulSet.Spec.Replicas != nil && *statefulSet.Spec.Replicas == 0 {
+	if statefulSet.Spec.Replicas != nil && *statefulSet.Spec.Replicas == replicas {
 		return nil
 	}
 
 	updated := statefulSet.DeepCopy()
-	updated.Spec.Replicas = int32Ptr(0)
+	updated.Spec.Replicas = int32Ptr(replicas)
 	if err := m.client.Patch(ctx, updated, client.MergeFrom(statefulSet)); err != nil {
-		return fmt.Errorf("failed to scale StatefulSet %s/%s to zero: %w", cluster.Namespace, name, err)
+		return fmt.Errorf("failed to scale StatefulSet %s/%s to %d replicas: %w", cluster.Namespace, name, replicas, err)
 	}
 
-	logger.Info("Scaled StatefulSet to zero", "statefulset", name, "pool", spec.Pool)
+	logger.Info("Scaled StatefulSet", "statefulset", name, "pool", spec.Pool, "replicas", replicas)
 	return nil
 }
 

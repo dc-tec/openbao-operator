@@ -18,6 +18,10 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 	if provider, ok := r.InitManager.(initmanagerport.ScaleDownProvider); ok {
 		scaleDownRuntime = provider.ScaleDownRuntime()
 	}
+	var readReplicaScaleDownRuntime initmanagerport.ReadReplicaScaleDownRuntime
+	if provider, ok := r.InitManager.(initmanagerport.ReadReplicaScaleDownProvider); ok {
+		readReplicaScaleDownRuntime = provider.ReadReplicaScaleDownRuntime()
+	}
 
 	return appopenbaocluster.InfraDependencies{
 		Kubernetes: appopenbaocluster.InfraKubernetesRuntime{
@@ -54,7 +58,8 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 			},
 		},
 		ScaleDown: appopenbaocluster.InfraScaleDownRuntime{
-			Runtime: scaleDownRuntime,
+			Runtime:            scaleDownRuntime,
+			ReadReplicaRuntime: readReplicaScaleDownRuntime,
 		},
 	}
 }
