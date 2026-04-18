@@ -11,6 +11,7 @@ layerCoverage:
       - service/bootstrap
       - service/backup
       - service/certs
+      - service/identity
       - service/infra
       - service/init
       - service/networking
@@ -55,6 +56,7 @@ serviceImportRoots:
   - internal/service/bootstrap
   - internal/service/backup
   - internal/service/certs
+  - internal/service/identity
   - internal/service/infra
   - internal/service/init
   - internal/service/networking
@@ -133,6 +135,14 @@ serviceBoundaries:
     packageRoot: internal/service/bootstrap
     files:
       - internal/service/bootstrap/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+  - name: identity
+    displayName: Identity
+    packageRoot: internal/service/identity
+    files:
+      - internal/service/identity/**/*.go
     ignores:
       - "**/*_test.go"
     allowServiceImports: []
@@ -248,7 +258,7 @@ appBoundaries:
     allowServiceImports:
       - internal/service/bootstrap
       - internal/service/certs
-      - internal/service/infra
+      - internal/service/identity
       - internal/service/networking
       - internal/service/upgrade
       - internal/service/workload
@@ -317,6 +327,7 @@ globalImportBoundaries:
       - internal/service/backup
       - internal/service/bootstrap
       - internal/service/certs
+      - internal/service/identity
       - internal/service/infra
       - internal/service/init
       - internal/service/networking
