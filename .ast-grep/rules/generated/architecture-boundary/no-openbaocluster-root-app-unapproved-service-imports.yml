@@ -17,4 +17,4 @@ rule:
     all:
         - kind: import_spec
         - regex: '"github\.com/dc-tec/openbao-operator/(internal/service/backup(/[^"]*)?|internal/service/init(/[^"]*)?|internal/service/opslifecycle(/[^"]*)?|internal/service/provisioner(/[^"]*)?|internal/service/restore(/[^"]*)?|internal/service/upgrade/bluegreen(/[^"]*)?|internal/service/upgrade/core(/[^"]*)?|internal/service/upgrade/raftops(/[^"]*)?|internal/service/upgrade/rolling(/[^"]*)?|internal/service/upgrade/snapshot(/[^"]*)?)"'
-note: 'Approved service imports for this app package: internal/service/certs, internal/service/infra, internal/service/upgrade, internal/service/workload, internal/service/workloadidentity.'
+note: 'Approved service imports for this app package: internal/service/certs, internal/service/infra, internal/service/networking, internal/service/upgrade, internal/service/workload, internal/service/workloadidentity.'

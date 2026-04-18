@@ -1,4 +1,4 @@
-package infra
+package networking
 
 import (
 	"context"
@@ -200,7 +200,7 @@ func TestValidateGatewayPassthroughListener(t *testing.T) {
 				WithObjects(initObjs...).
 				WithReturnManagedFields().
 				Build()
-			mgr := NewManager(c, scheme, "op-ns", "", nil, "")
+			mgr := NewManager(c, scheme, "op-ns", "")
 
 			err := mgr.validateGatewayPassthroughListener(context.Background(), tt.cluster)
 			if (err != nil) != tt.wantErr {
@@ -247,6 +247,9 @@ func TestRunACMEPreflight(t *testing.T) {
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled: true,
 						Mode:    openbaov1alpha1.TLSModeACME,
+						ACME: &openbaov1alpha1.ACMEConfig{
+							Domains: []string{"example.com"},
+						},
 					},
 					Gateway: &openbaov1alpha1.GatewayConfig{
 						Enabled:        true,
@@ -305,7 +308,7 @@ func TestRunACMEPreflight(t *testing.T) {
 				WithObjects(initObjs...).
 				WithReturnManagedFields().
 				Build()
-			mgr := NewManager(c, scheme, "op-ns", "", nil, "")
+			mgr := NewManager(c, scheme, "op-ns", "")
 
 			err := mgr.runACMEPreflight(context.Background(), logr.Discard(), tt.cluster)
 			if (err != nil) != tt.wantErr {

@@ -1,4 +1,4 @@
-package infra
+package networking
 
 import (
 	"context"
@@ -70,7 +70,7 @@ func TestEvaluateAPIServerNetworkReadiness(t *testing.T) {
 				WithScheme(testScheme).
 				WithReturnManagedFields().
 				Build()
-			manager := NewManagerWithReader(k8sClient, k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+			manager := NewManagerWithReader(k8sClient, k8sClient, testScheme, "openbao-operator-system", "")
 
 			readiness := manager.EvaluateAPIServerNetworkReadiness(context.Background(), logr.Discard(), tt.cluster)
 			if readiness.Status != tt.wantStatus || readiness.Reason != tt.wantReason {

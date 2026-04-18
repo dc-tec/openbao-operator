@@ -24,17 +24,26 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/service/infra"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 type integrationInfraManager struct {
 	infra    *infra.Manager
+	network  *networkingmanager.Manager
 	workload *workloadsvc.Manager
 }
 
 func newIntegrationInfraManager(kubeClient client.Client, scheme *runtime.Scheme) *integrationInfraManager {
 	return &integrationInfraManager{
 		infra: infra.NewManager(kubeClient, scheme, "openbao-operator-system", "", nil, ""),
+		network: networkingmanager.NewManagerWithReader(
+			kubeClient,
+			kubeClient,
+			scheme,
+			"openbao-operator-system",
+			"",
+		),
 		workload: workloadsvc.NewManager(kubeClient, scheme, "").
 			WithReader(kubeClient),
 	}
@@ -48,6 +57,9 @@ func (m *integrationInfraManager) Reconcile(
 ) error {
 	configContent, err := m.infra.PrepareWorkload(ctx, logger, cluster)
 	if err != nil {
+		return err
+	}
+	if err := m.network.Reconcile(ctx, logger, cluster); err != nil {
 		return err
 	}
 	return m.workload.Reconcile(ctx, logger, cluster, configContent, spec)

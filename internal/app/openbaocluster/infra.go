@@ -165,6 +165,9 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	if err != nil {
 		return recon.Result{}, r.mapManagerReconcileError(err)
 	}
+	if err := r.newNetworkingManager().Reconcile(ctx, logger, cluster); err != nil {
+		return recon.Result{}, r.mapManagerReconcileError(err)
+	}
 	if err := r.newWorkloadManager().Reconcile(ctx, logger, cluster, configContent, spec); err != nil {
 		return recon.Result{}, r.mapManagerReconcileError(err)
 	}

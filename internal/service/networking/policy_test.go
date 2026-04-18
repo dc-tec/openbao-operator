@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package infra
+package networking
 
 import (
 	"testing"

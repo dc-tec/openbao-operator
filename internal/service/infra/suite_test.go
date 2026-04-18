@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
@@ -150,6 +151,11 @@ func (m *Manager) reconcileWithWorkload(
 ) error {
 	configContent, err := m.PrepareWorkload(ctx, logger, cluster)
 	if err != nil {
+		return err
+	}
+
+	if err := networkingmanager.NewManagerWithReader(m.client, m.reader, m.scheme, m.operatorNamespace, m.Platform).
+		Reconcile(ctx, logger, cluster); err != nil {
 		return err
 	}
 

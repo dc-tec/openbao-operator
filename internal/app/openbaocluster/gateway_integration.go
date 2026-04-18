@@ -11,7 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
 
 // GatewayIntegrationDependencies groups infrastructure readers required to
@@ -39,12 +39,11 @@ func EvaluateGatewayIntegration(
 	deps GatewayIntegrationDependencies,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) GatewayIntegrationResult {
-	manager := inframanager.NewManagerWithReaderAndOIDCConfig(
+	manager := networkingmanager.NewManagerWithReader(
 		deps.Client,
 		deps.APIReader,
 		deps.Scheme,
 		deps.OperatorNamespace,
-		nil,
 		deps.Platform,
 	)
 	err := manager.ValidateGatewayIntegration(ctx, cluster)
@@ -56,67 +55,67 @@ func EvaluateGatewayIntegration(
 			Reason:  constants.ReasonGatewayIntegrationReady,
 			Message: "Gateway integration prerequisites are satisfied",
 		}
-	case errors.Is(err, inframanager.ErrGatewayAPIMissing):
+	case errors.Is(err, networkingmanager.ErrGatewayAPIMissing):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayAPIMissing,
 			Message: "Gateway API CRDs required for spec.gateway are not installed",
 		}
-	case errors.Is(err, inframanager.ErrGatewayReferenceMissing):
+	case errors.Is(err, networkingmanager.ErrGatewayReferenceMissing):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayReferenceMissing,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayClassMissing):
+	case errors.Is(err, networkingmanager.ErrGatewayClassMissing):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayClassMissing,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayListenerIncompatible):
+	case errors.Is(err, networkingmanager.ErrGatewayListenerIncompatible):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayListenerIncompatible,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayClassNotAccepted):
+	case errors.Is(err, networkingmanager.ErrGatewayClassNotAccepted):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayClassNotAccepted,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayVersionUnsupported):
+	case errors.Is(err, networkingmanager.ErrGatewayVersionUnsupported):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayVersionUnsupported,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayFeatureUnsupported):
+	case errors.Is(err, networkingmanager.ErrGatewayFeatureUnsupported):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayFeatureUnsupported,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayNotProgrammed):
+	case errors.Is(err, networkingmanager.ErrGatewayNotProgrammed):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayNotProgrammed,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayClassPending):
+	case errors.Is(err, networkingmanager.ErrGatewayClassPending):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionUnknown,
 			Reason:  constants.ReasonGatewayClassPending,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayCapabilitiesUnknown):
+	case errors.Is(err, networkingmanager.ErrGatewayCapabilitiesUnknown):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionUnknown,
 			Reason:  constants.ReasonGatewayCapabilitiesUnknown,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrGatewayProgrammingPending):
+	case errors.Is(err, networkingmanager.ErrGatewayProgrammingPending):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionUnknown,
 			Reason:  constants.ReasonGatewayProgrammingPending,

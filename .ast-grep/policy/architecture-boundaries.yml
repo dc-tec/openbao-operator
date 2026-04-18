@@ -12,6 +12,7 @@ layerCoverage:
       - service/certs
       - service/infra
       - service/init
+      - service/networking
       - service/opslifecycle
       - service/provisioner
       - service/restore
@@ -54,6 +55,7 @@ serviceImportRoots:
   - internal/service/certs
   - internal/service/infra
   - internal/service/init
+  - internal/service/networking
   - internal/service/opslifecycle
   - internal/service/provisioner
   - internal/service/restore
@@ -129,6 +131,14 @@ serviceBoundaries:
     packageRoot: internal/service/infra
     files:
       - internal/service/infra/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+  - name: networking
+    displayName: Networking
+    packageRoot: internal/service/networking
+    files:
+      - internal/service/networking/**/*.go
     ignores:
       - "**/*_test.go"
     allowServiceImports: []
@@ -228,6 +238,7 @@ appBoundaries:
     allowServiceImports:
       - internal/service/certs
       - internal/service/infra
+      - internal/service/networking
       - internal/service/upgrade
       - internal/service/workload
       - internal/service/workloadidentity
@@ -240,6 +251,7 @@ appBoundaries:
     allowServiceImports:
       - internal/service/backup
       - internal/service/infra
+      - internal/service/networking
       - internal/service/upgrade
       - internal/service/upgrade/bluegreen
       - internal/service/upgrade/rolling
@@ -252,6 +264,7 @@ appBoundaries:
       - "**/*_test.go"
     allowServiceImports:
       - internal/service/infra
+      - internal/service/networking
       - internal/service/upgrade
       - internal/service/workload
   - name: openbaocluster-deletionops
@@ -294,6 +307,7 @@ globalImportBoundaries:
       - internal/service/certs
       - internal/service/infra
       - internal/service/init
+      - internal/service/networking
       - internal/service/opslifecycle
       - internal/service/provisioner
       - internal/service/restore
