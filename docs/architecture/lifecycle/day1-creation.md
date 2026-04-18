@@ -8,10 +8,8 @@ description: Cluster creation flow from OpenBaoCluster creation through TLS boot
 
 <PageHeader
   title="Bootstrap one node, initialize safely, then scale to the requested cluster shape."
-  lede="Day 1 begins when `OpenBaoCluster` is created. The control plane bootstraps TLS and unseal prerequisites, renders the workload, keeps the StatefulSet at one replica for safe initialization, then hands off into steady-state operations only after the cluster is known-good."
+  lede="Day 1 begins when `OpenBaoCluster` is created. The control plane bootstraps TLS and unseal prerequisites, prepares workload-side resources, keeps the StatefulSet at one replica for safe initialization, then hands off into steady-state operations only after the cluster is known-good."
 />
-
-
 
 <JourneyRail
   current={2}
@@ -54,7 +52,10 @@ description: Cluster creation flow from OpenBaoCluster creation through TLS boot
       label: 'Primary owners',
       items: [
         'internal/service/certs',
-        'internal/service/infra',
+        'internal/service/bootstrap',
+        'internal/service/networking',
+        'internal/service/identity',
+        'internal/service/workload',
         'internal/service/init',
       ],
     },
@@ -62,6 +63,7 @@ description: Cluster creation flow from OpenBaoCluster creation through TLS boot
       label: 'Writes',
       items: [
         'TLS Secrets, trust-bundle surfaces, and rendered `config.hcl`',
+        'network and identity prerequisites for the main workload',
         'single-replica StatefulSet followed by scale-out after initialization',
         '`status.initialized`, `status.selfInitialized`, and initial autopilot configuration',
       ],
@@ -79,38 +81,49 @@ description: Cluster creation flow from OpenBaoCluster creation through TLS boot
 
 ## Architectural placement
 
-Day 1 creation crosses three workload-side services in sequence:
+Day 1 creation crosses the workload-side services in sequence:
 
 1. The cert manager ensures TLS material exists or is ready to be observed.
-2. The infrastructure manager renders the workload contract and keeps the StatefulSet at one replica.
-3. The init manager initializes the cluster, configures autopilot defaults, and only then permits scale-out.
+2. The bootstrap manager renders config and startup prerequisites.
+3. The networking and identity managers create the service and RBAC surfaces the workload needs.
+4. The workload manager holds the StatefulSet at one replica and applies rollout-safe workload resources.
+5. The init manager initializes the cluster, configures autopilot defaults, and only then allows scale-out.
 
 That split keeps first-boot safety logic separate from routine steady-state reconciliation.
 
 <DiagramFrame
   title="Day 1 creation flow"
-  caption="First boot is a controlled handoff: TLS and rendered config first, one-node bootstrap second, initialization and autopilot third, then scale-out into the requested cluster size."
+  caption="First boot is a controlled handoff: TLS and rendered prerequisites first, one-node bootstrap second, initialization and autopilot third, then scale-out into the requested cluster size."
   code={`sequenceDiagram
     autonumber
     participant User as User
     participant K8s as Kubernetes API
     participant Certs as Cert manager
-    participant Infra as Infrastructure manager
+    participant Bootstrap as Bootstrap manager
+    participant Networking as Networking manager
+    participant Identity as Identity manager
+    participant Workload as Workload manager
     participant Init as Init manager
     participant Pod0 as Pod-0
 
     User->>K8s: Create OpenBaoCluster
     K8s-->>Certs: Reconcile TLS state
     Certs->>K8s: Create or validate TLS material
-    K8s-->>Infra: Reconcile workload state
-    Infra->>K8s: Render StatefulSet at replicas=1
-    Infra->>Pod0: Start first pod
+    K8s-->>Bootstrap: Render config and bootstrap prerequisites
+    Bootstrap->>K8s: Apply ConfigMaps, seal prerequisites, and startup config
+    K8s-->>Networking: Reconcile service and network surfaces
+    Networking->>K8s: Apply Services, Ingress or Gateway, and NetworkPolicy
+    K8s-->>Identity: Reconcile workload identity
+    Identity->>K8s: Apply ServiceAccount and RBAC
+    K8s-->>Workload: Reconcile workload state
+    Workload->>K8s: Render StatefulSet at replicas=1
+    Workload->>Pod0: Start first pod
     Pod0-->>Init: Pod ready and API reachable
     Init->>Pod0: Detect initialized or perform init
     Init->>K8s: Set initialized status
     Init->>Pod0: Configure autopilot defaults
-    K8s-->>Infra: Initialization confirmed
-    Infra->>K8s: Scale StatefulSet to spec.replicas
+    K8s-->>Workload: Initialization confirmed
+    Workload->>K8s: Scale StatefulSet to spec.replicas
   `}
 />
 
@@ -135,10 +148,11 @@ That split keeps first-boot safety logic separate from routine steady-state reco
 <Checklist
   title="Self-init flow"
   items={[
-    'Cert and infra managers prepare TLS, seal, and rendered config as usual, but pod-0 receives self-init requests in the rendered startup configuration.',
+    'Cert and bootstrap managers prepare TLS, seal, rendered config, and self-init requests before the first pod starts.',
+    'Networking and identity managers ensure the workload reaches the expected service and RBAC baseline before scale-out begins.',
     'OpenBao initializes itself on first start and auto-revokes the transient root token instead of returning it to the operator.',
     'The init manager detects successful initialization through service-registration labels or equivalent readiness signals and sets status.selfInitialized.',
-    'Once initialized, the infrastructure manager scales to the requested replica count and later pods auto-unseal and join the Raft cluster.',
+    'Once initialized, the workload manager scales to the requested replica count and later pods auto-unseal and join the Raft cluster.',
   ]}
 />
 
@@ -154,10 +168,10 @@ Self-init requires an auto-unseal mechanism. In exchange, it avoids creating a r
 <Checklist
   title="Standard init flow"
   items={[
-    'The infrastructure manager still forces single-pod bootstrap and renders TLS, storage, retry_join, and seal configuration first.',
+    'The bootstrap, networking, identity, and workload managers still force single-pod bootstrap and render TLS, storage, retry_join, and seal prerequisites first.',
     'The init manager waits for pod-0 readiness, detects whether the cluster is already initialized, and calls `/v1/sys/init` only when needed.',
     'The init response is handled in-memory, the root token is stored in `<cluster>-root-token`, and initialization status is patched back to the cluster.',
-    'After initialization and autopilot configuration complete, the infrastructure manager scales the StatefulSet to the requested replica count.',
+    'After initialization and autopilot configuration complete, the workload manager scales the StatefulSet to the requested replica count.',
   ]}
 />
 

@@ -5,22 +5,16 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 // Dependencies contains external collaborators required for deletion orchestration.
 type Dependencies struct {
-	Client            client.Client
-	APIReader         client.Reader
-	Scheme            *runtime.Scheme
-	OperatorNamespace string
-	Platform          string
-	RetentionSecrets  []string
+	Client           client.Client
+	RetentionSecrets []string
 }
 
 // Handle applies the deletion policy for an OpenBaoCluster.
@@ -43,14 +37,7 @@ func Handle(ctx context.Context, logger logr.Logger, deps Dependencies, cluster 
 	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
-	infraMgr := inframanager.NewManagerWithReader(
-		deps.Client,
-		deps.APIReader,
-		deps.Scheme,
-		deps.OperatorNamespace,
-		deps.Platform,
-	)
-	if err := infraMgr.Cleanup(ctx, logger, cluster, policy); err != nil {
+	if err := Cleanup(ctx, logger, deps.Client, cluster, policy); err != nil {
 		return err
 	}
 

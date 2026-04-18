@@ -24,87 +24,10 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
+	identitymanager "github.com/dc-tec/openbao-operator/internal/service/identity"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
-
-type integrationInfraManager struct {
-	bootstrap *bootstrapmanager.Manager
-	infra     *infra.Manager
-	network   *networkingmanager.Manager
-	workload  *workloadsvc.Manager
-}
-
-func newIntegrationInfraManager(kubeClient client.Client, scheme *runtime.Scheme) *integrationInfraManager {
-	return &integrationInfraManager{
-		bootstrap: bootstrapmanager.NewManagerWithReader(
-			kubeClient,
-			kubeClient,
-			scheme,
-			"openbao-operator-system",
-		),
-		infra: infra.NewManager(kubeClient, scheme, "openbao-operator-system", ""),
-		network: networkingmanager.NewManagerWithReader(
-			kubeClient,
-			kubeClient,
-			scheme,
-			"openbao-operator-system",
-			"",
-		),
-		workload: workloadsvc.NewManager(kubeClient, scheme, "").
-			WithReader(kubeClient),
-	}
-}
-
-func (m *integrationInfraManager) Reconcile(
-	ctx context.Context,
-	logger logr.Logger,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	spec workloadsvc.StatefulSetSpec,
-) error {
-	configContent, err := m.bootstrap.PrepareWorkload(ctx, logger, cluster)
-	if err != nil {
-		return err
-	}
-	if err := m.network.Reconcile(ctx, logger, cluster); err != nil {
-		return err
-	}
-	if err := m.infra.Reconcile(ctx, logger, cluster); err != nil {
-		return err
-	}
-	return m.workload.Reconcile(ctx, logger, cluster, configContent, spec)
-}
-
-func (m *integrationInfraManager) EnsureBlueGreenStatus(
-	ctx context.Context,
-	logger logr.Logger,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-) {
-	m.workload.EnsureBlueGreenStatus(ctx, logger, cluster)
-}
-
-func (m *integrationInfraManager) EnsureStatefulSetWithRevision(
-	ctx context.Context,
-	logger logr.Logger,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	configContent string,
-	verifiedImageDigest string,
-	verifiedInitContainerDigest string,
-	revision string,
-	disableSelfInit bool,
-) error {
-	return m.workload.EnsureStatefulSetWithRevision(
-		ctx,
-		logger,
-		cluster,
-		configContent,
-		verifiedImageDigest,
-		verifiedInitContainerDigest,
-		revision,
-		disableSelfInit,
-	)
-}
 
 func requireAdmissionDenied(t *testing.T, err error) {
 	t.Helper()
@@ -328,4 +251,41 @@ func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) workloadsvc
 		DisableSelfInit:    false,
 		SkipReconciliation: false,
 	}
+}
+
+func reconcileClusterResources(
+	ctx context.Context,
+	logger logr.Logger,
+	kubeClient client.Client,
+	scheme *runtime.Scheme,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	spec workloadsvc.StatefulSetSpec,
+) error {
+	configContent, err := bootstrapmanager.NewManagerWithReader(
+		kubeClient,
+		kubeClient,
+		scheme,
+		"openbao-operator-system",
+	).PrepareWorkload(ctx, logger, cluster)
+	if err != nil {
+		return err
+	}
+
+	if err := networkingmanager.NewManagerWithReader(
+		kubeClient,
+		kubeClient,
+		scheme,
+		"openbao-operator-system",
+		"",
+	).Reconcile(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	if err := identitymanager.NewManager(kubeClient, scheme).Reconcile(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	return workloadsvc.NewManager(kubeClient, scheme, "").
+		WithReader(kubeClient).
+		Reconcile(ctx, logger, cluster, configContent, spec)
 }

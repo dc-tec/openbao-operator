@@ -22,5 +22,5 @@ ignores:
 rule:
     all:
         - kind: import_spec
-        - regex: '"github\.com/dc-tec/openbao-operator/(internal/controller(/[^"]*)?|internal/service/backup(/[^"]*)?|internal/service/bootstrap(/[^"]*)?|internal/service/certs(/[^"]*)?|internal/service/infra(/[^"]*)?|internal/service/init(/[^"]*)?|internal/service/networking(/[^"]*)?|internal/service/opslifecycle(/[^"]*)?|internal/service/provisioner(/[^"]*)?|internal/service/restore(/[^"]*)?|internal/service/upgrade(/[^"]*)?|internal/service/workloadidentity(/[^"]*)?)"'
+        - regex: '"github\.com/dc-tec/openbao-operator/(internal/controller(/[^"]*)?|internal/service/backup(/[^"]*)?|internal/service/bootstrap(/[^"]*)?|internal/service/certs(/[^"]*)?|internal/service/identity(/[^"]*)?|internal/service/init(/[^"]*)?|internal/service/networking(/[^"]*)?|internal/service/opslifecycle(/[^"]*)?|internal/service/provisioner(/[^"]*)?|internal/service/restore(/[^"]*)?|internal/service/upgrade(/[^"]*)?|internal/service/workloadidentity(/[^"]*)?)"'
 note: Keep adapter packages behind contracts and prevent upward-layer coupling.

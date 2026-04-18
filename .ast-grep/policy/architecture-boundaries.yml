@@ -11,7 +11,7 @@ layerCoverage:
       - service/bootstrap
       - service/backup
       - service/certs
-      - service/infra
+      - service/identity
       - service/init
       - service/networking
       - service/opslifecycle
@@ -55,7 +55,7 @@ serviceImportRoots:
   - internal/service/bootstrap
   - internal/service/backup
   - internal/service/certs
-  - internal/service/infra
+  - internal/service/identity
   - internal/service/init
   - internal/service/networking
   - internal/service/opslifecycle
@@ -91,7 +91,6 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/service/infra
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
@@ -105,7 +104,6 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/service/infra
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
@@ -119,7 +117,6 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/service/infra
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
@@ -136,11 +133,11 @@ serviceBoundaries:
     ignores:
       - "**/*_test.go"
     allowServiceImports: []
-  - name: infra
-    displayName: Infra
-    packageRoot: internal/service/infra
+  - name: identity
+    displayName: Identity
+    packageRoot: internal/service/identity
     files:
-      - internal/service/infra/**/*.go
+      - internal/service/identity/**/*.go
     ignores:
       - "**/*_test.go"
     allowServiceImports: []
@@ -248,7 +245,7 @@ appBoundaries:
     allowServiceImports:
       - internal/service/bootstrap
       - internal/service/certs
-      - internal/service/infra
+      - internal/service/identity
       - internal/service/networking
       - internal/service/upgrade
       - internal/service/workload
@@ -261,7 +258,6 @@ appBoundaries:
       - "**/*_test.go"
     allowServiceImports:
       - internal/service/backup
-      - internal/service/infra
       - internal/service/networking
       - internal/service/upgrade
       - internal/service/upgrade/bluegreen
@@ -274,7 +270,6 @@ appBoundaries:
     ignores:
       - "**/*_test.go"
     allowServiceImports:
-      - internal/service/infra
       - internal/service/networking
       - internal/service/upgrade
       - internal/service/workload
@@ -284,8 +279,7 @@ appBoundaries:
       - internal/app/openbaocluster/deletionops/**/*.go
     ignores:
       - "**/*_test.go"
-    allowServiceImports:
-      - internal/service/infra
+    allowServiceImports: []
   - name: openbaocluster-adminopsstatus
     displayName: OpenBaoCluster AdminOpsStatus
     files:
@@ -317,7 +311,7 @@ globalImportBoundaries:
       - internal/service/backup
       - internal/service/bootstrap
       - internal/service/certs
-      - internal/service/infra
+      - internal/service/identity
       - internal/service/init
       - internal/service/networking
       - internal/service/opslifecycle

@@ -101,11 +101,11 @@ func TestDifferenceRoots(t *testing.T) {
 	t.Parallel()
 
 	got := differenceRoots(
-		[]string{"internal/service/certs", "internal/service/upgrade", "internal/service/infra"},
+		[]string{"internal/service/certs", "internal/service/upgrade", "internal/service/networking"},
 		[]string{"internal/service/certs"},
 	)
 
-	want := []string{"internal/service/infra", "internal/service/upgrade"}
+	want := []string{"internal/service/networking", "internal/service/upgrade"}
 	if len(got) != len(want) {
 		t.Fatalf("unexpected length: want %d got %d", len(want), len(got))
 	}
@@ -264,7 +264,7 @@ func TestValidatePolicyGlobalBoundaryExternalOnly(t *testing.T) {
 
 	policy := architecturePolicy{
 		ModulePath:         "github.com/dc-tec/openbao-operator",
-		ServiceImportRoots: []string{"internal/service/infra"},
+		ServiceImportRoots: []string{"internal/service/networking"},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		GlobalImportBoundaries: []globalImportBoundary{
 			{
@@ -286,7 +286,7 @@ func TestValidatePolicyGlobalBoundaryMissingDisallowLists(t *testing.T) {
 
 	policy := architecturePolicy{
 		ModulePath:         "github.com/dc-tec/openbao-operator",
-		ServiceImportRoots: []string{"internal/service/infra"},
+		ServiceImportRoots: []string{"internal/service/networking"},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		GlobalImportBoundaries: []globalImportBoundary{
 			{
@@ -310,8 +310,12 @@ func TestValidatePolicyServiceAndAppBoundaries(t *testing.T) {
 	t.Parallel()
 
 	policy := architecturePolicy{
-		ModulePath:         "github.com/dc-tec/openbao-operator",
-		ServiceImportRoots: []string{"internal/service/backup", "internal/service/infra", "internal/service/opslifecycle"},
+		ModulePath: "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{
+			"internal/service/backup",
+			"internal/service/networking",
+			"internal/service/opslifecycle",
+		},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		ServiceBoundaries: []serviceBoundary{
 			{
@@ -325,7 +329,7 @@ func TestValidatePolicyServiceAndAppBoundaries(t *testing.T) {
 			{
 				Name:         "openbaocluster",
 				Files:        []string{"internal/app/openbaocluster/**/*.go"},
-				AllowService: []string{"internal/service/infra"},
+				AllowService: []string{"internal/service/networking"},
 			},
 		},
 	}
@@ -367,7 +371,7 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 		ModulePath: "github.com/dc-tec/openbao-operator",
 		ServiceImportRoots: []string{
 			"internal/service/backup",
-			"internal/service/infra",
+			"internal/service/networking",
 			"internal/service/opslifecycle",
 			"internal/service/upgrade",
 			"internal/service/upgrade/bluegreen",
@@ -392,7 +396,7 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 				Ignores:     []string{"**/*_test.go"},
 				AllowService: []string{
 					"internal/service/backup",
-					"internal/service/infra",
+					"internal/service/networking",
 					"internal/service/upgrade/bluegreen",
 					"internal/service/upgrade/rolling",
 				},
@@ -405,18 +409,17 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 		t.Fatalf("buildRuleSpecs returned error: %v", err)
 	}
 
-	backupDisallowedRegex := `"github\.com/dc-tec/openbao-operator/(` +
-		`internal/service/infra(/[^"]*)?|` +
-		`internal/service/upgrade(/[^"]*)?|` +
-		`internal/service/upgrade/bluegreen(/[^"]*)?|` +
-		`internal/service/upgrade/rolling(/[^"]*)?)"`
-	openBaoClusterDisallowedRegex := `"github\.com/dc-tec/openbao-operator/(` +
-		`internal/service/opslifecycle(/[^"]*)?|` +
-		`internal/service/upgrade(/[^"]*)?)"`
-
 	want := map[string]string{
-		"no-backup-service-unapproved-service-imports":     backupDisallowedRegex,
-		"no-openbaocluster-app-unapproved-service-imports": openBaoClusterDisallowedRegex,
+		"no-backup-service-unapproved-service-imports": strings.Join([]string{
+			`"github\.com/dc-tec/openbao-operator/(internal/service/networking(/[^"]*)?|`,
+			`internal/service/upgrade(/[^"]*)?|`,
+			`internal/service/upgrade/bluegreen(/[^"]*)?|`,
+			`internal/service/upgrade/rolling(/[^"]*)?)"`,
+		}, ""),
+		"no-openbaocluster-app-unapproved-service-imports": strings.Join([]string{
+			`"github\.com/dc-tec/openbao-operator/(internal/service/opslifecycle(/[^"]*)?|`,
+			`internal/service/upgrade(/[^"]*)?)"`,
+		}, ""),
 	}
 
 	if len(specs) != len(want) {

@@ -23,6 +23,7 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
@@ -79,11 +80,11 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 
 	controllerClient := newControllerClient(t)
-	infraMgr := newIntegrationInfraManager(controllerClient, k8sScheme)
+	workloadMgr := workloadsvc.NewManager(controllerClient, k8sScheme, "").WithReader(controllerClient)
 	manager := bluegreen.NewManager(
 		k8sClient,
 		k8sScheme,
-		infraMgr,
+		workloadMgr,
 		backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme),
 		portopenbao.ClientConfig{},
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
@@ -259,8 +260,8 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	}
 
 	controllerClient := newControllerClient(t)
-	infraMgr := newIntegrationInfraManager(controllerClient, k8sScheme)
-	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, infraMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	workloadMgr := workloadsvc.NewManager(controllerClient, k8sScheme, "").WithReader(controllerClient)
+	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, workloadMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaotest.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
 				return true, nil

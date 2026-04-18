@@ -11,8 +11,6 @@ description: Bootstrap a new cluster safely, handle self-init or operator init f
   lede="The init manager owns the first-boot contract for a new `OpenBaoCluster`. It keeps bootstrap on a single node, handles operator-driven or self-init flows, stores or suppresses root material appropriately, and configures Raft autopilot before the workload expands to full replica count."
 />
 
-
-
 <ManagerAtAGlance
   sections={[
     {
@@ -42,7 +40,7 @@ description: Bootstrap a new cluster safely, handle self-init or operator init f
     {
       label: 'Depends on',
       items: [
-        'single-replica bootstrap from the infrastructure path',
+        'single-replica bootstrap from the workload manager',
         'pod readiness and TLS Secret availability before init proceeds',
         'self-init requests and auth bootstrap configuration when self-init is enabled',
       ],
@@ -56,7 +54,7 @@ Initialization stays on the workload-side controller path while the cluster is n
 
 1. `internal/controller/openbaocluster` keeps the cluster on the uninitialized path.
 2. The controller calls `internal/service/init` once the first pod and TLS prerequisites are ready.
-3. The init manager marks initialization state, configures autopilot, and only then allows the infrastructure path to scale to the requested replica count.
+3. The init manager marks initialization state, configures autopilot, and only then allows the workload manager to scale to the requested replica count.
 
 That separation prevents first-boot logic from leaking into every steady-state reconcile.
 
@@ -64,24 +62,24 @@ That separation prevents first-boot logic from leaking into every steady-state r
 
 <DiagramFrame
   title="Initialize, then scale"
-  caption="The infrastructure path holds the workload at one replica until the init manager confirms the cluster is initialized. Only then does the cluster expand to the requested replica count."
+  caption="The workload manager holds the StatefulSet at one replica until the init manager confirms the cluster is initialized. Only then does the cluster expand to the requested replica count."
   code={`sequenceDiagram
     participant Ctrl as OpenBaoCluster controller
-    participant Infra as Infrastructure manager
+    participant Workload as Workload manager
     participant Pod0 as Pod-0
     participant Init as Init manager
     participant Bao as OpenBao API
     participant Status as Cluster status
 
-    Ctrl->>Infra: Render StatefulSet at replicas=1
-    Infra->>Pod0: Start first pod
+    Ctrl->>Workload: Render StatefulSet at replicas=1
+    Workload->>Pod0: Start first pod
     Pod0-->>Init: Pod ready + TLS available
     Init->>Bao: Detect initialized or call /sys/init
     Bao-->>Init: Init response or initialized health
     Init->>Status: Set initialized / selfInitialized
     Init->>Bao: Configure autopilot defaults
-    Status-->>Infra: Initialization confirmed
-    Infra->>Infra: Scale StatefulSet to spec.replicas
+    Status-->>Workload: Initialization confirmed
+    Workload->>Workload: Scale StatefulSet to spec.replicas
   `}
 />
 
@@ -94,7 +92,7 @@ That separation prevents first-boot logic from leaking into every steady-state r
   title="Bootstrap contract"
   items={[
     'A new cluster starts at one replica even when spec.replicas is greater than one.',
-    'The infrastructure manager keeps the StatefulSet capped until status.initialized becomes true.',
+    'The workload manager keeps the StatefulSet capped until status.initialized becomes true.',
     'This avoids race conditions where multiple uninitialized pods could compete to become the first Raft leader.',
   ]}
 />
@@ -186,9 +184,9 @@ If the manager detects that a cluster is already initialized, it takes the initi
   title="Related deep dives"
   items={[
     {
-      label: 'Infrastructure manager',
-      description: 'See how the workload path holds the StatefulSet at one replica and then scales out after init succeeds.',
-      docId: 'architecture/infra-manager',
+      label: 'Workload managers',
+      description: 'See how bootstrap, networking, identity, and workload services prepare Day 1 resources and keep the StatefulSet at one replica.',
+      docId: 'architecture/workload-managers',
     },
     {
       label: 'Self-init guide',
