@@ -39,7 +39,7 @@ journey: contribute
     {
       cells: [
         "Keep architecture boundaries aligned with policy",
-        "Update the boundary policy before adding new top-level internal packages or controller packages.",
+        "Update the boundary policy before adding new top-level internal packages, controller packages, or service-level service or adapter dependencies.",
         "The repository enforces these rules automatically, so design intent and CI stay aligned.",
       ],
     },
@@ -64,12 +64,15 @@ Reserve `any` and `interface{}` for external API boundaries. Helpers that only w
 - Use defined types for enum-like status and phase values instead of raw strings.
 - Avoid junk-drawer package names such as `util`, `common`, or `shared`.
 - Prefer package names that describe the actual boundary or job, such as `k8sutil`, `config`, or `schema`.
+- Reuse shared platform contracts such as `internal/platform/resourceidentity` and `internal/platform/resourceapply` instead of copying names, labels, selectors, or generic apply flow into another service.
+- Keep `config.hcl` semantics behind `internal/service/configuration` instead of letting workload bootstrap and upgrade flows render around each other.
 
 ## Review hygiene
 
 - Keep a PR to one main theme.
 - Avoid drive-by reformatting of unrelated files.
 - If a change touches `api/`, update the generated artifacts in the same branch.
+- If a service needs a new adapter import, update `serviceBoundaries` and regenerate the ast-grep rules in the same branch.
 
 <CommandBlock
   language="bash"

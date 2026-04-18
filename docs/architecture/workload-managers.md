@@ -3,12 +3,12 @@ title: Workload Managers
 hide_title: true
 pageType: concept
 journey: architecture
-description: Bootstrap, networking, identity, and workload managers on the OpenBaoCluster workload reconcile path.
+description: Bootstrap, networking, identity, and workload managers plus shared contracts on the OpenBaoCluster workload reconcile path.
 ---
 
 <PageHeader
   title="Workload managers"
-  lede="The OpenBaoCluster workload path is coordinated through bootstrap, networking, identity, workload, cert, and init managers. Each manager owns a narrower write surface on the same reconcile path."
+  lede="The OpenBaoCluster workload path is coordinated through bootstrap, networking, identity, workload, cert, and init managers. Shared configuration, resource identity, and owned-apply contracts keep the cross-service behavior aligned."
 />
 
 <ManagerAtAGlance
@@ -38,6 +38,14 @@ description: Bootstrap, networking, identity, and workload managers on the OpenB
       ],
     },
     {
+      label: 'Shared contracts',
+      items: [
+        'internal/service/configuration',
+        'internal/platform/resourceidentity',
+        'internal/platform/resourceapply',
+      ],
+    },
+    {
       label: 'Writes',
       items: [
         'rendered config and bootstrap prerequisites',
@@ -56,7 +64,8 @@ The workload reconcile path is now sequenced explicitly:
 1. `internal/controller/openbaocluster` receives a workload-side reconcile event.
 2. The controller delegates into `internal/app/openbaocluster`.
 3. The app layer coordinates cert, bootstrap, networking, identity, workload, and init behavior in the correct order.
-4. Each manager owns a narrower write surface on the same reconcile path.
+4. Shared contracts keep `config.hcl`, managed-resource identity, and generic owned-apply behavior consistent across those managers.
+5. Each manager owns a narrower write surface on the same reconcile path.
 
 This keeps change-coupling lower: config rendering, service exposure, ServiceAccount or RBAC wiring, and StatefulSet lifecycle do not need to move together by default.
 
@@ -72,6 +81,15 @@ This keeps change-coupling lower: config rendering, service exposure, ServiceAcc
     App --> Identity["Identity manager"]
     App --> Workload["Workload manager"]
     App --> Init["Init manager when uninitialized"]
+    Bootstrap --> ConfigSvc["Configuration service"]
+    Bootstrap --> IdentityContract["Resource identity"]
+    Networking --> IdentityContract
+    Identity --> IdentityContract
+    Workload --> IdentityContract
+    Bootstrap --> ApplyContract["Owned apply"]
+    Networking --> ApplyContract
+    Identity --> ApplyContract
+    Workload --> ApplyContract
 
     Cert --> TLS["TLS Secrets and reload signals"]
     Bootstrap --> Config["config.hcl, self-init config, seal prerequisites"]
@@ -116,7 +134,7 @@ This keeps change-coupling lower: config rendering, service exposure, ServiceAcc
 
 The bootstrap manager prepares everything the workload needs before the StatefulSet can be reconciled safely:
 
-- render `config.hcl`
+- reconcile the main ConfigMap using `config.hcl` rendered by the shared configuration service
 - reconcile the self-init ConfigMap when self-init is enabled
 - generate the static unseal Secret when that seal mode is selected
 - validate unseal prerequisites and related secret references
@@ -149,6 +167,28 @@ The workload manager owns the StatefulSet-facing contract:
 - rollout triggers from rendered config or certificate hash changes
 - single-replica bootstrap and later scale-out after initialization
 - revision-scoped workload resources used by blue/green and rollout-safe updates
+
+## Shared contracts on the workload path
+
+The workload-side managers share three narrower contracts instead of reimplementing the same semantics in each package:
+
+<DecisionTable
+  kind="reference"
+  title="Shared contracts below the managers"
+  columns={['Contract', 'Used by', 'Owns']}
+  rows={[
+    {
+      cells: ['Configuration service', 'Bootstrap manager and blue-green upgrade flow.', 'Shared `config.hcl` rendering semantics, including revision-aware green startup config.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Resource identity', 'Bootstrap, networking, identity, and workload managers.', 'Managed-resource names, labels, and selectors that must stay aligned across services.'],
+    },
+    {
+      cells: ['Owned apply', 'Bootstrap, networking, identity, and workload managers.', 'Generic owner-ref-aware apply flow and shared SSA error handling for resources that do not need object-specific special cases.'],
+    },
+  ]}
+/>
 
 <Callout type="note" title="Cert and init stay adjacent to the workload path">
 
