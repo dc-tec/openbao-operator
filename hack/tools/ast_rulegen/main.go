@@ -1188,6 +1188,9 @@ func writeRuleSpecs(policyPath, outDir string, specs []ruleSpec) error {
 	}
 	for _, existingPath := range existingFiles {
 		if err := os.Remove(existingPath); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
 			return fmt.Errorf("remove stale generated rule %s: %w", existingPath, err)
 		}
 	}
