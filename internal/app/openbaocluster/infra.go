@@ -135,9 +135,11 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	readSpec := r.computeReadReplicaStatefulSetSpec(cluster, resolvedImages.mainImage, resolvedImages.initImage)
 	stagedScaleDown := false
 	stagedReadReplicaScaleDown := false
+	stagedRestartOrdering := false
 
 	currentSTS := &appsv1.StatefulSet{}
 	readCurrentSTS := &appsv1.StatefulSet{}
+	currentSTSFound := false
 	readCurrentSTSFound := false
 	reader := r.deps.Kubernetes.APIReader
 	if reader == nil {
@@ -147,6 +149,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	err = reader.Get(ctx, client.ObjectKey{Name: spec.Name, Namespace: cluster.Namespace}, currentSTS)
 	switch {
 	case err == nil:
+		currentSTSFound = true
 		appliedReplicas, err := r.handleScaleDownSafety(ctx, cluster, spec.Replicas, currentSTS)
 		if err != nil {
 			if operatorerrors.IsPermanent(err) && errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
@@ -187,6 +190,8 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	default:
 		return recon.Result{}, operatorerrors.WrapTransientKubernetesAPI(err)
 	}
+
+	stagedRestartOrdering = r.applyReadFirstRestartOrdering(cluster, &spec, &readSpec, currentSTS, currentSTSFound, readCurrentSTS, readCurrentSTSFound)
 
 	effectiveOIDC, err := r.resolveOIDC(ctx, cluster)
 	if err != nil {
@@ -238,6 +243,10 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 			"appliedStatefulSetReplicas", readSpec.Replicas,
 			"desiredReplicas", readCurrentDesiredReplicas(cluster),
 		)
+		return recon.Result{RequeueAfter: infraRequeueShort}, nil
+	}
+	if stagedRestartOrdering {
+		logger.Info("Read-pool restart ordering is still in progress; requeueing before voter restart rollout continues")
 		return recon.Result{RequeueAfter: infraRequeueShort}, nil
 	}
 
