@@ -39,10 +39,11 @@ func TestReconcileMaintenanceAnnotationsForPods(t *testing.T) {
 	}
 
 	podLabels := map[string]string{
-		constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
-		constants.LabelAppInstance:    clusterName,
-		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster: clusterName,
+		constants.LabelAppName:             constants.LabelValueAppNameOpenBao,
+		constants.LabelAppInstance:         clusterName,
+		constants.LabelAppManagedBy:        constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelOpenBaoCluster:      clusterName,
+		constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolVoter,
 	}
 
 	tests := []struct {
@@ -152,7 +153,10 @@ func TestReconcileMaintenanceAnnotationsForPods(t *testing.T) {
 				Build()
 			mgr := &Manager{client: c}
 
-			err := mgr.reconcileMaintenanceAnnotationsForPods(context.Background(), logr.Discard(), tt.cluster, tt.revision)
+			err := mgr.reconcileMaintenanceAnnotationsForPods(context.Background(), logr.Discard(), tt.cluster, StatefulSetSpec{
+				Pool:     constants.LabelValueOpenBaoWorkloadPoolVoter,
+				Revision: tt.revision,
+			})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("reconcileMaintenanceAnnotationsForPods() error = %v, wantErr %v", err, tt.wantErr)
 			}

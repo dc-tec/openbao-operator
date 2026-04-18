@@ -93,14 +93,14 @@ func buildStatefulSetProbeExecActions(cluster *openbaov1alpha1.OpenBaoCluster) p
 	}
 }
 
-func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision string, disableSelfInit bool) []corev1.Volume {
+func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) []corev1.Volume {
 	volumes := []corev1.Volume{
 		{
 			Name: configVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: resourceidentity.ConfigMapNameWithRevision(cluster, revision),
+						Name: configMapNameForSpec(cluster, spec),
 					},
 				},
 			},
@@ -194,7 +194,7 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision s
 	volumes = append(volumes, newSealWiringProvider(cluster).Volumes()...)
 
 	// If self-init is enabled, add the self-init ConfigMap volume, unless disabled (Green pods)
-	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled && !disableSelfInit {
+	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled && !spec.DisableSelfInit {
 		volumes = append(volumes, corev1.Volume{
 			Name: configInitVolumeName,
 			VolumeSource: corev1.VolumeSource{

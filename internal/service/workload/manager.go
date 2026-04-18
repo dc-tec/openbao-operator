@@ -9,10 +9,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	corev1apply "k8s.io/client-go/applyconfigurations/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
@@ -47,43 +49,56 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return nil
 	}
 
-	statefulSetCluster := clusterForStatefulSetSpec(cluster, spec)
-	if cluster != nil && statefulSetCluster != cluster {
+	if spec.Pool == "" {
+		spec.Pool = constants.LabelValueOpenBaoWorkloadPoolVoter
+	}
+
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolVoter && cluster != nil && spec.Replicas != cluster.Spec.Replicas {
 		logger.V(1).Info(
 			"Applying staged StatefulSet replica count",
-			"statefulset", spec.Name,
+			"statefulset", statefulSetNameForSpec(cluster, spec),
 			"clusterDesiredReplicas", cluster.Spec.Replicas,
 			"appliedStatefulSetReplicas", spec.Replicas,
 		)
 	}
 
-	if err := m.EnsureStatefulSetWithRevision(ctx, logger, statefulSetCluster, configContent, spec.Image, spec.InitContainerImage, spec.Revision, spec.DisableSelfInit); err != nil {
+	if err := m.EnsureStatefulSet(ctx, logger, cluster, configContent, spec); err != nil {
 		return err
 	}
 
-	if err := m.ensurePodDisruptionBudget(ctx, logger, statefulSetCluster); err != nil {
+	if err := m.ensurePodDisruptionBudget(ctx, logger, cluster, spec); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func clusterForStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) *openbaov1alpha1.OpenBaoCluster {
-	if cluster == nil || spec.Replicas == cluster.Spec.Replicas {
-		return cluster
-	}
-
-	statefulSetCluster := cluster.DeepCopy()
-	statefulSetCluster.Spec.Replicas = spec.Replicas
-	return statefulSetCluster
-}
-
-func (m *Manager) ensureConfigMapWithRevision(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, revision string, configContent string) error {
-	if revision == "" {
+func (m *Manager) ScaleDownStatefulSetIfExists(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
+	name := statefulSetNameForSpec(cluster, spec)
+	if name == "" {
 		return nil
 	}
 
-	return m.ensureConfigMapWithName(ctx, cluster, resourceidentity.ConfigMapNameWithRevision(cluster, revision), configContent)
+	statefulSet := &appsv1.StatefulSet{}
+	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, statefulSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get StatefulSet %s/%s for staged scale down: %w", cluster.Namespace, name, err)
+	}
+
+	if statefulSet.Spec.Replicas != nil && *statefulSet.Spec.Replicas == 0 {
+		return nil
+	}
+
+	updated := statefulSet.DeepCopy()
+	updated.Spec.Replicas = int32Ptr(0)
+	if err := m.client.Patch(ctx, updated, client.MergeFrom(statefulSet)); err != nil {
+		return fmt.Errorf("failed to scale StatefulSet %s/%s to zero: %w", cluster.Namespace, name, err)
+	}
+
+	logger.Info("Scaled StatefulSet to zero", "statefulset", name, "pool", spec.Pool)
+	return nil
 }
 
 func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, cmName string, configContent string) error {

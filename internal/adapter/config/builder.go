@@ -102,6 +102,12 @@ type InfrastructureDetails struct {
 	// When set, the retry_join label selector will include this revision to ensure
 	// Green pods only discover Blue pods (not each other).
 	TargetRevisionForJoin string
+	// RetryJoinLabelSelector overrides the generated Kubernetes retry_join label selector.
+	// This is used for workload topologies such as steady-state read replicas that must
+	// only discover a subset of pods.
+	RetryJoinLabelSelector string
+	// RetryJoinAsNonVoter marks the joining node as a non-voter when using retry_join.
+	RetryJoinAsNonVoter bool
 }
 
 // RenderHCL renders a complete OpenBao configuration using the provided cluster

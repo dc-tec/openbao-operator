@@ -17,6 +17,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
@@ -251,7 +252,7 @@ func gatherStatefulSetState(
 
 	readStatefulSetName := types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name + "-read",
+		Name:      resourceidentity.ReadReplicaStatefulSetName(cluster),
 	}
 	readStatefulSet := &appsv1.StatefulSet{}
 	if err := reader.Get(ctx, readStatefulSetName, readStatefulSet); err != nil {
@@ -275,11 +276,9 @@ func gatherPodState(
 	state *StatusState,
 	labelsCfg LabelConfig,
 ) error {
-	podSelector := map[string]string{
-		labelsCfg.AppInstanceKey:  cluster.Name,
-		labelsCfg.AppNameKey:      labelsCfg.AppNameValue,
-		labelsCfg.AppManagedByKey: labelsCfg.AppManagedByValue,
-	}
+	podSelector := resourceidentity.VoterPodSelectorLabels(cluster)
+	podSelector[labelsCfg.AppNameKey] = labelsCfg.AppNameValue
+	podSelector[labelsCfg.AppManagedByKey] = labelsCfg.AppManagedByValue
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen && state.ActiveRevision != "" {
 		podSelector[labelsCfg.OpenBaoRevisionKey] = state.ActiveRevision
 	}

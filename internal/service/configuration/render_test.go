@@ -40,6 +40,25 @@ func TestRender_TargetRevisionForJoin(t *testing.T) {
 	}
 }
 
+func TestRender_ReadReplicaRetryJoinSelector(t *testing.T) {
+	cluster := newRenderTestCluster()
+
+	rendered, err := Render(cluster, RenderOptions{
+		RetryJoinLabelSelector: `openbao.org/cluster=test,openbao.org/workload-pool=voter`,
+		RetryJoinAsNonVoter:    true,
+	})
+	if err != nil {
+		t.Fatalf("Render() error = %v", err)
+	}
+
+	if !strings.Contains(rendered, `label_selector=\"openbao.org/cluster=test,openbao.org/workload-pool=voter\"`) {
+		t.Fatalf("expected explicit retry_join selector, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, `retry_join_as_non_voter = true`) {
+		t.Fatalf("expected non-voter join config, got:\n%s", rendered)
+	}
+}
+
 func newRenderTestCluster() *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{

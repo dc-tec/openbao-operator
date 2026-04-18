@@ -3,6 +3,9 @@ package openbaocluster
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -14,11 +17,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
+	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 const (
@@ -125,6 +132,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 
 	spec := r.computeStatefulSetSpec(logger, cluster, resolvedImages.mainImage, resolvedImages.initImage)
+	readSpec := r.computeReadReplicaStatefulSetSpec(cluster, resolvedImages.mainImage, resolvedImages.initImage)
 	stagedScaleDown := false
 
 	currentSTS := &appsv1.StatefulSet{}
@@ -174,6 +182,22 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	if err := r.newWorkloadManager().Reconcile(ctx, logger, cluster, configContent, spec); err != nil {
 		return recon.Result{}, r.mapManagerReconcileError(err)
 	}
+	if readSpec.SkipReconciliation {
+		if err := r.newWorkloadManager().ScaleDownStatefulSetIfExists(ctx, logger, cluster, workloadsvc.StatefulSetSpec{
+			Name: resourceidentity.ReadReplicaStatefulSetName(cluster),
+			Pool: constants.LabelValueOpenBaoWorkloadPoolReadReplica,
+		}); err != nil {
+			return recon.Result{}, r.mapManagerReconcileError(err)
+		}
+	} else {
+		readConfigContent, err := manager.RenderConfig(cluster, bootstrapReadReplicaRenderOptions(cluster, spec))
+		if err != nil {
+			return recon.Result{}, err
+		}
+		if err := r.newWorkloadManager().Reconcile(ctx, logger, cluster, readConfigContent, readSpec); err != nil {
+			return recon.Result{}, r.mapManagerReconcileError(err)
+		}
+	}
 	if stagedScaleDown {
 		logger.Info(
 			"Staged scale down step applied; requeueing to continue safe replica reduction",
@@ -184,4 +208,29 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	}
 
 	return recon.Result{}, nil
+}
+
+func bootstrapReadReplicaRenderOptions(cluster *openbaov1alpha1.OpenBaoCluster, voterSpec workloadsvc.StatefulSetSpec) bootstrapmanager.RenderOptions {
+	return bootstrapmanager.RenderOptions{
+		RetryJoinLabelSelector: selectorString(resourceidentity.VoterPodSelectorLabelsWithRevision(cluster, voterSpec.Revision)),
+		RetryJoinAsNonVoter:    true,
+	}
+}
+
+func selectorString(labels map[string]string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+
+	keys := make([]string, 0, len(labels))
+	for key := range labels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%s", key, labels[key]))
+	}
+	return strings.Join(parts, ",")
 }

@@ -35,6 +35,8 @@ type Manager struct {
 	oidcJWTKeys        []string
 }
 
+type RenderOptions = configurationservice.RenderOptions
+
 func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string) *Manager {
 	return &Manager{
 		client:            c,
@@ -97,6 +99,14 @@ func (m *Manager) PrepareWorkload(ctx context.Context, logger logr.Logger, clust
 		return "", err
 	}
 
+	return configContent, nil
+}
+
+func (m *Manager) RenderConfig(cluster *openbaov1alpha1.OpenBaoCluster, opts configurationservice.RenderOptions) (string, error) {
+	configContent, err := configurationservice.Render(cluster, opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to render config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
 	return configContent, nil
 }
 

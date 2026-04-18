@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -27,9 +28,9 @@ var ErrStatefulSetPrerequisitesMissing = errors.New("StatefulSet prerequisites m
 // This prevents pods from failing to start due to missing ConfigMaps or Secrets.
 // Returns ErrStatefulSetPrerequisitesMissing if prerequisites are not found (callers should handle this
 // by setting a condition and requeuing). Returns other errors for unexpected failures.
-func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, revision string) error {
+func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
 	// Always check for the config ConfigMap
-	configMapName := resourceidentity.ConfigMapNameWithRevision(cluster, revision)
+	configMapName := configMapNameForSpec(cluster, spec)
 	configMap := &corev1.ConfigMap{}
 	if err := m.client.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -85,32 +86,44 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 // Note: UpdateStrategy is intentionally not set here to allow UpgradeManager to manage it.
 // SSA will preserve fields not specified in the desired object.
 func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool) error {
-	name := statefulSetNameWithRevision(cluster, revision)
+	spec := StatefulSetSpec{
+		Name:               statefulSetNameWithRevision(cluster, revision),
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolVoter,
+		Revision:           revision,
+		Image:              verifiedImageDigest,
+		InitContainerImage: verifiedInitContainerDigest,
+		Replicas:           cluster.Spec.Replicas,
+		DisableSelfInit:    disableSelfInit,
+	}
+	return m.EnsureStatefulSet(ctx, logger, cluster, configContent, spec)
+}
 
-	if err := m.ensureConfigMapWithRevision(ctx, cluster, revision, configContent); err != nil {
+func (m *Manager) EnsureStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string, spec StatefulSetSpec) error {
+	if spec.Pool == "" {
+		spec.Pool = constants.LabelValueOpenBaoWorkloadPoolVoter
+	}
+	name := statefulSetNameForSpec(cluster, spec)
+
+	if err := m.ensureConfigMapWithName(ctx, cluster, configMapNameForSpec(cluster, spec), configContent); err != nil {
 		return fmt.Errorf("failed to ensure config ConfigMap for StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
 
 	// Before creating/updating the StatefulSet, verify all prerequisites exist
 	// This is important for External TLS mode where secrets might be deleted/recreated
-	if err := m.checkStatefulSetPrerequisites(ctx, cluster, revision); err != nil {
+	if err := m.checkStatefulSetPrerequisites(ctx, cluster, spec); err != nil {
 		return err
 	}
 
 	initialized := cluster.Status.Initialized
-	desiredReplicas := cluster.Spec.Replicas
+	desiredReplicas := desiredStatefulSetReplicas(cluster, initialized, spec)
 
-	// If not initialized, keep at 1 replica until initialization completes
 	if !initialized {
-		desiredReplicas = 1
-		logger.Info("Cluster not yet initialized; keeping StatefulSet at 1 replica", "statefulset", name)
+		logger.Info("Cluster not yet initialized; applying staged replica count", "statefulset", name, "desiredReplicas", desiredReplicas, "pool", spec.Pool)
 	} else {
-		logger.Info("Cluster initialized; ensuring StatefulSet has desired replicas",
-			"statefulset", name,
-			"desiredReplicas", desiredReplicas)
+		logger.Info("Cluster initialized; ensuring StatefulSet has desired replicas", "statefulset", name, "desiredReplicas", desiredReplicas, "pool", spec.Pool)
 	}
 
-	desired, buildErr := buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, revision, disableSelfInit, m.platform)
+	desired, buildErr := buildStatefulSetForSpec(cluster, configContent, initialized, spec, m.platform)
 	if buildErr != nil {
 		return fmt.Errorf("failed to build StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
 	}
@@ -143,8 +156,9 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 			cluster.Spec.Upgrade.Strategy == "" ||
 			cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyRollingUpdate
 		pendingVersionUpgrade := rollingStrategy &&
+			spec.Pool == constants.LabelValueOpenBaoWorkloadPoolVoter &&
 			initialized &&
-			revision == "" &&
+			spec.Revision == "" &&
 			cluster.Status.Upgrade == nil &&
 			cluster.Status.CurrentVersion != "" &&
 			cluster.Status.CurrentVersion != cluster.Spec.Version
@@ -195,7 +209,7 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 		return fmt.Errorf("failed to ensure StatefulSet %s/%s: %w", cluster.Namespace, name, err)
 	}
 
-	if err := m.reconcileMaintenanceAnnotationsForPods(ctx, logger, cluster, revision); err != nil {
+	if err := m.reconcileMaintenanceAnnotationsForPods(ctx, logger, cluster, spec); err != nil {
 		return fmt.Errorf("failed to reconcile maintenance annotations for OpenBaoCluster %s/%s pods: %w", cluster.Namespace, cluster.Name, err)
 	}
 

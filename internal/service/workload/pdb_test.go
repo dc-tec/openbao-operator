@@ -21,8 +21,9 @@ func TestEnsurePodDisruptionBudget(t *testing.T) {
 	cluster.Spec.Replicas = 3
 
 	ctx := context.Background()
+	spec := StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter}
 
-	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("ensurePodDisruptionBudget() error = %v", err)
 	}
 
@@ -74,8 +75,9 @@ func TestEnsurePodDisruptionBudgetExcludesJobPods(t *testing.T) {
 	cluster.Spec.Replicas = 3
 
 	ctx := context.Background()
+	spec := StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter}
 
-	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("ensurePodDisruptionBudget() error = %v", err)
 	}
 
@@ -138,8 +140,9 @@ func TestEnsurePodDisruptionBudgetSkipsSingleReplica(t *testing.T) {
 	cluster.Spec.Replicas = 1
 
 	ctx := context.Background()
+	spec := StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter}
 
-	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("ensurePodDisruptionBudget() error = %v", err)
 	}
 
@@ -162,8 +165,9 @@ func TestEnsurePodDisruptionBudgetLabels(t *testing.T) {
 	cluster.Spec.Replicas = 5
 
 	ctx := context.Background()
+	spec := StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter}
 
-	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("ensurePodDisruptionBudget() error = %v", err)
 	}
 
@@ -198,9 +202,10 @@ func TestEnsurePodDisruptionBudgetIsIdempotent(t *testing.T) {
 	cluster.Spec.Replicas = 3
 
 	ctx := context.Background()
+	spec := StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter}
 
 	// Create PDB first time
-	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("ensurePodDisruptionBudget() first call error = %v", err)
 	}
 
@@ -214,7 +219,7 @@ func TestEnsurePodDisruptionBudgetIsIdempotent(t *testing.T) {
 	}
 
 	// Call again (should be idempotent)
-	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster); err != nil {
+	if err := manager.ensurePodDisruptionBudget(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("ensurePodDisruptionBudget() second call error = %v", err)
 	}
 
