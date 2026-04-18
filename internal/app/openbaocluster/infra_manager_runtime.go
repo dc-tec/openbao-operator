@@ -7,7 +7,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	identitymanager "github.com/dc-tec/openbao-operator/internal/service/identity"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
@@ -55,13 +55,10 @@ func (r *infraReconciler) newNetworkingManager() *networkingmanager.Manager {
 	)
 }
 
-func (r *infraReconciler) newInfraManager() *inframanager.Manager {
-	return inframanager.NewManagerWithReader(
+func (r *infraReconciler) newIdentityManager() *identitymanager.Manager {
+	return identitymanager.NewManager(
 		r.deps.Kubernetes.Client,
-		r.deps.Kubernetes.APIReader,
 		r.deps.Kubernetes.Scheme,
-		r.deps.Kubernetes.OperatorNamespace,
-		r.deps.Kubernetes.Platform,
 	)
 }
 

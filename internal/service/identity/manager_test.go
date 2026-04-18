@@ -1,7 +1,7 @@
 //go:build integration
 // +build integration
 
-package infra
+package identity
 
 import (
 	"context"
@@ -22,19 +22,15 @@ const (
 
 func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	manager := NewManager(k8sClient, scheme)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-sa", ns)
 	createClusterCRForTest(t, k8sClient, cluster)
 
-	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
-	createTLSSecretForTest(t, k8sClient, cluster)
-
 	ctx := context.Background()
 
-	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -58,20 +54,16 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 
 func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	manager := NewManager(k8sClient, scheme)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-sa-idempotent", ns)
 	createClusterCRForTest(t, k8sClient, cluster)
 
-	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
-	createTLSSecretForTest(t, k8sClient, cluster)
-
 	ctx := context.Background()
 
 	// First reconcile creates the ServiceAccount
-	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -86,8 +78,7 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	}
 
 	// Second reconcile with same cluster should be idempotent (SSA)
-	spec = newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() second call error = %v", err)
 	}
 
@@ -112,19 +103,15 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 
 func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	manager := NewManager(k8sClient, scheme)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-rbac", ns)
 	createClusterCRForTest(t, k8sClient, cluster)
 
-	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
-	createTLSSecretForTest(t, k8sClient, cluster)
-
 	ctx := context.Background()
 
-	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -255,7 +242,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	manager := NewManager(k8sClient, scheme)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-rbac-bluegreen", ns)
@@ -267,11 +254,9 @@ func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
 		GreenRevision: "rev-green",
 	}
 	createClusterCRForTest(t, k8sClient, cluster)
-	createTLSSecretForTest(t, k8sClient, cluster)
 
 	ctx := context.Background()
-	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -320,26 +305,21 @@ func contains(values []string, needle string) bool {
 
 func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	manager := NewManager(k8sClient, scheme)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-rbac-idempotent", ns)
 	createClusterCRForTest(t, k8sClient, cluster)
 
-	// Create TLS secret before Reconcile, as ensureStatefulSet now checks for prerequisites
-	createTLSSecretForTest(t, k8sClient, cluster)
-
 	ctx := context.Background()
 
 	// First reconcile creates RBAC
-	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
 	// Second reconcile should be idempotent (SSA)
-	spec = newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() second call error = %v", err)
 	}
 
@@ -376,10 +356,9 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 
 // TestServiceAccountHasOwnerReferenceForGC verifies that ServiceAccount has an OwnerReference
 // to the OpenBaoCluster, ensuring Kubernetes GC will delete it when the cluster is deleted.
-// Cleanup() no longer manually deletes ServiceAccounts - GC handles this.
 func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	manager := NewManager(k8sClient, scheme)
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	ns := testNamespace(t)
@@ -390,11 +369,8 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 	ctx := context.Background()
 	createClusterCRForTest(t, k8sClient, cluster)
 
-	createTLSSecretForTest(t, k8sClient, cluster)
-
 	// Create ServiceAccount via Reconcile
-	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -419,27 +395,13 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 		t.Error("expected ServiceAccount to have OwnerReference to OpenBaoCluster for GC")
 	}
 
-	// Verify Cleanup() does NOT delete ServiceAccount (GC handles it)
-	if err := manager.Cleanup(ctx, logr.Discard(), cluster, openbaov1alpha1.DeletionPolicyRetain); err != nil {
-		t.Fatalf("Cleanup() error = %v", err)
-	}
-
-	// ServiceAccount should still exist after Cleanup (GC deletes it when cluster is deleted)
-	err = k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      serviceAccountName(cluster),
-	}, &corev1.ServiceAccount{})
-	if err != nil {
-		t.Errorf("expected ServiceAccount to still exist after Cleanup() (GC handles deletion): %v", err)
-	}
 }
 
 // TestRBACHasOwnerReferenceForGC verifies that Role and RoleBinding have OwnerReferences
 // to the OpenBaoCluster, ensuring Kubernetes GC will delete them when the cluster is deleted.
-// Cleanup() no longer manually deletes RBAC resources - GC handles this.
 func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	manager := NewManager(k8sClient, scheme)
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	ns := testNamespace(t)
@@ -450,11 +412,8 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 	ctx := context.Background()
 	createClusterCRForTest(t, k8sClient, cluster)
 
-	createTLSSecretForTest(t, k8sClient, cluster)
-
 	// Create RBAC via Reconcile
-	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.Reconcile(ctx, logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -502,26 +461,4 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 		t.Error("expected Role to have OwnerReference to OpenBaoCluster for GC")
 	}
 
-	// Verify Cleanup() does NOT delete RBAC (GC handles it)
-	if err := manager.Cleanup(ctx, logr.Discard(), cluster, openbaov1alpha1.DeletionPolicyRetain); err != nil {
-		t.Fatalf("Cleanup() error = %v", err)
-	}
-
-	// RoleBinding should still exist after Cleanup (GC deletes it when cluster is deleted)
-	err = k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      roleBindingName,
-	}, &rbacv1.RoleBinding{})
-	if err != nil {
-		t.Errorf("expected RoleBinding to still exist after Cleanup() (GC handles deletion): %v", err)
-	}
-
-	// Role should still exist after Cleanup (GC deletes it when cluster is deleted)
-	err = k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: cluster.Namespace,
-		Name:      roleName,
-	}, &rbacv1.Role{})
-	if err != nil {
-		t.Errorf("expected Role to still exist after Cleanup() (GC handles deletion): %v", err)
-	}
 }

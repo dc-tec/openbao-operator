@@ -30,8 +30,8 @@ const (
 )
 
 func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-init", ns)
@@ -69,8 +69,8 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 }
 
 func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-scaled", ns)
@@ -142,8 +142,8 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			k8sClient, scheme := envtestClientForPackage(t)
-			manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+			k8sClient, _ := envtestClientForPackage(t)
+			manager := NewManager(k8sClient)
 
 			ns := testNamespace(t)
 			cluster := newMinimalCluster("test-replica", ns)
@@ -182,8 +182,8 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 }
 
 func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-storage-resize", ns)
@@ -234,8 +234,8 @@ func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.
 
 //nolint:gocyclo // This is a comprehensive, table-free assertion test for container configuration.
 func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-container", ns)
@@ -395,8 +395,8 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 }
 
 func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("acme-probe", ns)
@@ -480,8 +480,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 }
 
 func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("acme-public", ns)
@@ -534,8 +534,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 }
 
 func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("probe-sni", ns)
@@ -580,8 +580,8 @@ func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
 }
 
 func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-init-container", ns)
@@ -632,8 +632,8 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 	// Set OPERATOR_VERSION to avoid panic from fail-fast logic in DefaultInitImage
 	t.Setenv(constants.EnvOperatorVersion, "1.0.0")
 
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-no-init-container", ns)
@@ -667,8 +667,8 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 }
 
 func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-volumes", ns)
@@ -723,8 +723,8 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 }
 
 func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-delete-pvcs", ns)
@@ -799,8 +799,8 @@ func TestDeletePVCsDeletesAllPVCs(t *testing.T) {
 }
 
 func TestDeletePVCsPreservesExistingACMESharedCachePVC(t *testing.T) {
-	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
+	k8sClient, _ := envtestClientForPackage(t)
+	manager := NewManager(k8sClient)
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-delete-acme-cache", ns)

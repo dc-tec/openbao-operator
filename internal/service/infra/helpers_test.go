@@ -55,15 +55,13 @@ func newTestClient(t *testing.T) client.Client {
 }
 
 const (
-	configInitMapSuffix      = "-config-init"
-	unsealSecretKey          = "key"
-	unsealKeyBytes           = 32
+	apiVersion               = "openbao.org/v1alpha1"
+	kind                     = "OpenBaoCluster"
 	dataVolumeName           = constants.VolumeData
 	tlsVolumeName            = constants.VolumeTLS
 	configVolumeName         = constants.VolumeConfig
 	configRenderedVolumeName = "config-rendered"
 	unsealVolumeName         = "unseal"
-	configFileName           = "config.hcl"
 	serviceAccountMountPath  = "/var/run/secrets/kubernetes.io/serviceaccount"
 	openBaoBinaryName        = constants.BinaryBao
 )
@@ -101,10 +99,13 @@ func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + constants.SuffixConfigMap
 }
 
-func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + configInitMapSuffix
-}
-
 func headlessServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name
+}
+
+func serviceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster.Spec.ServiceAccount != nil && cluster.Spec.ServiceAccount.Name != "" {
+		return cluster.Spec.ServiceAccount.Name
+	}
+	return cluster.Name + constants.SuffixServiceAccount
 }

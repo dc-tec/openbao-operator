@@ -36,6 +36,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
+	identitymanager "github.com/dc-tec/openbao-operator/internal/service/identity"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
@@ -150,30 +151,28 @@ func (m *Manager) reconcileWithWorkload(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	spec workloadsvc.StatefulSetSpec,
 ) error {
-	if err := m.ensureServiceAccount(ctx, logger, cluster); err != nil {
-		return err
-	}
-	if err := m.ensureRBAC(ctx, logger, cluster); err != nil {
-		return err
-	}
-
 	configContent, err := bootstrapmanager.NewManagerWithReader(
 		m.client,
-		m.reader,
-		m.scheme,
-		m.operatorNamespace,
+		m.client,
+		envTestScheme,
+		"openbao-operator-system",
 	).PrepareWorkload(ctx, logger, cluster)
 	if err != nil {
 		return err
 	}
 
-	if err := networkingmanager.NewManagerWithReader(m.client, m.reader, m.scheme, m.operatorNamespace, m.Platform).
+	if err := networkingmanager.NewManagerWithReader(m.client, m.client, envTestScheme, "openbao-operator-system", "").
 		Reconcile(ctx, logger, cluster); err != nil {
 		return err
 	}
 
-	return workloadsvc.NewManager(m.client, m.scheme, m.Platform).
-		WithReader(m.reader).
+	if err := identitymanager.NewManager(m.client, envTestScheme).
+		Reconcile(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	return workloadsvc.NewManager(m.client, envTestScheme, "").
+		WithReader(m.client).
 		Reconcile(ctx, logger, cluster, configContent, spec)
 }
 
