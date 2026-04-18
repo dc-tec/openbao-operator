@@ -25,7 +25,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
 
 func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.T) {
@@ -59,7 +59,7 @@ func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}
-	if !errors.Is(err, infra.ErrGatewayAPIMissing) {
+	if !errors.Is(err, networkingmanager.ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
 	}
 }
@@ -96,7 +96,7 @@ func TestInfraNetwork_GatewayAPICRDsMissing_TLSPassthroughMode_IsDegraded(t *tes
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}
-	if !errors.Is(err, infra.ErrGatewayAPIMissing) {
+	if !errors.Is(err, networkingmanager.ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
 	}
 }
@@ -139,7 +139,7 @@ func TestInfraNetwork_GatewayAPIBackendTLSPolicyCRDMissing_IsDegraded(t *testing
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}
-	if !errors.Is(err, infra.ErrGatewayAPIMissing) {
+	if !errors.Is(err, networkingmanager.ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
 	}
 }
