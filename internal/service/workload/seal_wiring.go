@@ -1,7 +1,6 @@
-package infra
+package workload
 
 import (
-	"path"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -309,23 +308,4 @@ func (p *gcpCKMSSealWiringProvider) VolumeMounts() []corev1.VolumeMount {
 
 func (p *gcpCKMSSealWiringProvider) Volumes() []corev1.Volume {
 	return (&credentialsSecretSealWiringProvider{cluster: p.cluster}).Volumes()
-}
-
-func mountedSealCredentialsKey(filePath string) (string, bool) {
-	cleanPath := path.Clean(strings.TrimSpace(filePath))
-	if cleanPath == "." || cleanPath == "" {
-		return "", false
-	}
-
-	cleanMount := path.Clean(sealCredsVolumeMountPath)
-	if cleanPath == cleanMount || !strings.HasPrefix(cleanPath, cleanMount+"/") {
-		return "", false
-	}
-
-	rel := strings.TrimPrefix(cleanPath, cleanMount+"/")
-	if rel == "" || strings.Contains(rel, "/") {
-		return "", false
-	}
-
-	return rel, true
 }

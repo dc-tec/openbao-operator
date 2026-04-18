@@ -15,8 +15,8 @@ import (
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portbackup "github.com/dc-tec/openbao-operator/internal/port/backup"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
-	portinfra "github.com/dc-tec/openbao-operator/internal/port/infra"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
@@ -32,7 +32,7 @@ type Manager struct {
 	client                client.Client
 	reader                client.Reader
 	scheme                *runtime.Scheme
-	infraRuntime          portinfra.BlueGreenRuntime
+	workloadRuntime       portworkload.BlueGreenRuntime
 	backupRuntime         portbackup.PreUpgradeSnapshotRuntime
 	recorder              events.EventRecorder
 	clientFactory         raftops.OpenBaoClientFactory
@@ -47,7 +47,7 @@ type Manager struct {
 func NewManager(
 	c client.Client,
 	scheme *runtime.Scheme,
-	infraRuntime portinfra.BlueGreenRuntime,
+	workloadRuntime portworkload.BlueGreenRuntime,
 	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
 	clientConfig portopenbao.ClientConfig,
 	imageVerifier imageverify.Verifier,
@@ -63,7 +63,7 @@ func NewManager(
 		client:                c,
 		reader:                c,
 		scheme:                scheme,
-		infraRuntime:          infraRuntime,
+		workloadRuntime:       workloadRuntime,
 		backupRuntime:         backupRuntime,
 		recorder:              eventRecorder,
 		clientFactory:         raftops.DefaultOpenBaoClientFactory,
@@ -87,7 +87,7 @@ func (m *Manager) WithReader(reader client.Reader) *Manager {
 func NewManagerWithClientFactory(
 	c client.Client,
 	scheme *runtime.Scheme,
-	infraRuntime portinfra.BlueGreenRuntime,
+	workloadRuntime portworkload.BlueGreenRuntime,
 	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
 	clientFactory raftops.OpenBaoClientFactory,
 	clientConfig portopenbao.ClientConfig,
@@ -96,7 +96,7 @@ func NewManagerWithClientFactory(
 	platform string,
 	recorder ...events.EventRecorder,
 ) *Manager {
-	mgr := NewManager(c, scheme, infraRuntime, backupRuntime, clientConfig, imageVerifier, operatorImageVerifier, platform, recorder...)
+	mgr := NewManager(c, scheme, workloadRuntime, backupRuntime, clientConfig, imageVerifier, operatorImageVerifier, platform, recorder...)
 	if clientFactory != nil {
 		mgr.clientFactory = clientFactory
 	}

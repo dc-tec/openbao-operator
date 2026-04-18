@@ -22,6 +22,13 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+const (
+	testOpenBaoLivenessProbeTimeout  = "4s"
+	testOpenBaoReadinessProbeTimeout = "10s"
+	testOpenBaoStartupProbeTimeout   = "5s"
+	testOpenBaoProbeAddr             = "https://127.0.0.1:8200"
+)
+
 func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
 	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
@@ -38,7 +45,7 @@ func TestStatefulSetStartsWithOneReplicaWhenNotInitialized(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -77,7 +84,7 @@ func TestStatefulSetScalesToDesiredReplicasWhenInitialized(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -150,7 +157,7 @@ func TestStatefulSetReplicaScalingTableDriven(t *testing.T) {
 			ctx := context.Background()
 
 			spec := newTestStatefulSetSpec(cluster)
-			if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+			if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 
@@ -188,7 +195,7 @@ func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -207,7 +214,7 @@ func TestStatefulSetDoesNotUpdateVolumeClaimTemplatesOnStorageResize(t *testing.
 
 	// Update desired storage size in the CR.
 	cluster.Spec.Storage.Size = "20Gi"
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after resize error = %v", err)
 	}
 
@@ -244,7 +251,7 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -326,28 +333,28 @@ func TestStatefulSetHasCorrectContainerConfiguration(t *testing.T) {
 				t.Fatalf("expected startup probe timeout to be 10s, got %d", c.StartupProbe.TimeoutSeconds)
 			}
 
-			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
-				t.Fatalf("expected startup probe to target %s, got %v", openBaoProbeAddr, c.StartupProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-addr="+testOpenBaoProbeAddr) {
+				t.Fatalf("expected startup probe to target %s, got %v", testOpenBaoProbeAddr, c.StartupProbe.Exec.Command)
 			}
 			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-mode=startup") {
 				t.Fatalf("expected startup probe to use startup mode, got %v", c.StartupProbe.Exec.Command)
 			}
-			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-timeout="+openBaoStartupProbeTimeout) {
-				t.Fatalf("expected startup probe to use timeout %s, got %v", openBaoStartupProbeTimeout, c.StartupProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.StartupProbe.Exec.Command, " "), "-timeout="+testOpenBaoStartupProbeTimeout) {
+				t.Fatalf("expected startup probe to use timeout %s, got %v", testOpenBaoStartupProbeTimeout, c.StartupProbe.Exec.Command)
 			}
 
-			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
-				t.Fatalf("expected liveness probe to target %s, got %v", openBaoProbeAddr, c.LivenessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-addr="+testOpenBaoProbeAddr) {
+				t.Fatalf("expected liveness probe to target %s, got %v", testOpenBaoProbeAddr, c.LivenessProbe.Exec.Command)
 			}
-			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-timeout="+openBaoLivenessProbeTimeout) {
-				t.Fatalf("expected liveness probe to use timeout %s, got %v", openBaoLivenessProbeTimeout, c.LivenessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.LivenessProbe.Exec.Command, " "), "-timeout="+testOpenBaoLivenessProbeTimeout) {
+				t.Fatalf("expected liveness probe to use timeout %s, got %v", testOpenBaoLivenessProbeTimeout, c.LivenessProbe.Exec.Command)
 			}
 
-			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-addr="+openBaoProbeAddr) {
-				t.Fatalf("expected readiness probe to target %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-addr="+testOpenBaoProbeAddr) {
+				t.Fatalf("expected readiness probe to target %s, got %v", testOpenBaoProbeAddr, c.ReadinessProbe.Exec.Command)
 			}
-			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-timeout="+openBaoReadinessProbeTimeout) {
-				t.Fatalf("expected readiness probe to use timeout %s, got %v", openBaoReadinessProbeTimeout, c.ReadinessProbe.Exec.Command)
+			if !strings.Contains(strings.Join(c.ReadinessProbe.Exec.Command, " "), "-timeout="+testOpenBaoReadinessProbeTimeout) {
+				t.Fatalf("expected readiness probe to use timeout %s, got %v", testOpenBaoReadinessProbeTimeout, c.ReadinessProbe.Exec.Command)
 			}
 
 			// Verify environment variables are set correctly
@@ -436,7 +443,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -456,8 +463,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled(t *testing.T) {
 		probesFound = true
 		cmd := strings.Join(c.ReadinessProbe.Exec.Command, " ")
 		// In ACME mode, probes should still use loopback address but set SNI to the ACME domain
-		if !strings.Contains(cmd, "-addr="+openBaoProbeAddr) {
-			t.Fatalf("expected readiness probe to use loopback address %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+		if !strings.Contains(cmd, "-addr="+testOpenBaoProbeAddr) {
+			t.Fatalf("expected readiness probe to use loopback address %s, got %v", testOpenBaoProbeAddr, c.ReadinessProbe.Exec.Command)
 		}
 		if !strings.Contains(cmd, "-servername="+acmeDomain) {
 			t.Fatalf("expected readiness probe to set SNI to ACME domain, got %v", c.ReadinessProbe.Exec.Command)
@@ -490,7 +497,7 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -510,8 +517,8 @@ func TestProbesUseACMEDomainWhenACMEEnabled_PublicACME(t *testing.T) {
 		probesFound = true
 		cmd := strings.Join(c.ReadinessProbe.Exec.Command, " ")
 		// In ACME mode, probes should still use loopback address but set SNI to the ACME domain
-		if !strings.Contains(cmd, "-addr="+openBaoProbeAddr) {
-			t.Fatalf("expected readiness probe to use loopback address %s, got %v", openBaoProbeAddr, c.ReadinessProbe.Exec.Command)
+		if !strings.Contains(cmd, "-addr="+testOpenBaoProbeAddr) {
+			t.Fatalf("expected readiness probe to use loopback address %s, got %v", testOpenBaoProbeAddr, c.ReadinessProbe.Exec.Command)
 		}
 		if !strings.Contains(cmd, "-servername=example.com") {
 			t.Fatalf("expected readiness probe to set SNI to ACME domain, got %v", c.ReadinessProbe.Exec.Command)
@@ -542,7 +549,7 @@ func TestProbesSetSNIToExternalServiceWhenServiceEnabled_NonACME(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -590,7 +597,7 @@ func TestStatefulSetHasInitContainerWhenEnabled(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -641,7 +648,7 @@ func TestStatefulSetIncludesInitContainerEvenWhenDisabledFlagSet(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -673,7 +680,7 @@ func TestStatefulSetHasCorrectVolumeMounts(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -861,174 +868,5 @@ func TestDeletePVCsPreservesExistingACMESharedCachePVC(t *testing.T) {
 	}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cachePVC.Name}, &corev1.PersistentVolumeClaim{}); err != nil {
 		t.Fatalf("expected existing ACME shared cache PVC to be preserved, got error: %v", err)
-	}
-}
-
-func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
-	cluster := newMinimalCluster("acme-cluster", "default")
-	cluster.Spec.Replicas = 1
-	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
-	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
-		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
-	}
-
-	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
-	if err != nil {
-		t.Fatalf("buildStatefulSet() error = %v", err)
-	}
-
-	// Verify no TLS reloader sidecar
-	containers := statefulSet.Spec.Template.Spec.Containers
-	hasReloader := false
-	for _, container := range containers {
-		if container.Name == "tls-reloader" {
-			hasReloader = true
-			break
-		}
-	}
-	if hasReloader {
-		t.Fatal("expected StatefulSet to NOT have tls-reloader sidecar in ACME mode")
-	}
-
-	// Verify only one container (OpenBao container)
-	if len(containers) != 1 {
-		t.Fatalf("expected StatefulSet to have 1 container in ACME mode, got %d", len(containers))
-	}
-	if containers[0].Name != constants.ContainerBao {
-		t.Fatalf("expected container name to be %q, got %q", constants.ContainerBao, containers[0].Name)
-	}
-}
-
-func TestStatefulSet_ACMEMode_NoTLSVolume(t *testing.T) {
-	cluster := newMinimalCluster("acme-cluster", "default")
-	cluster.Spec.Replicas = 1
-	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
-	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
-		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
-	}
-
-	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
-	if err != nil {
-		t.Fatalf("buildStatefulSet() error = %v", err)
-	}
-
-	// Verify no TLS volume
-	volumes := statefulSet.Spec.Template.Spec.Volumes
-	hasTLSVolume := false
-	for _, volume := range volumes {
-		if volume.Name == "tls" {
-			hasTLSVolume = true
-			break
-		}
-	}
-	if hasTLSVolume {
-		t.Fatal("expected StatefulSet to NOT have TLS volume in ACME mode")
-	}
-
-	// Verify OpenBao container doesn't mount TLS volume
-	openBaoContainer := statefulSet.Spec.Template.Spec.Containers[0]
-	hasTLSMount := false
-	for _, mount := range openBaoContainer.VolumeMounts {
-		if mount.Name == "tls" {
-			hasTLSMount = true
-			break
-		}
-	}
-	if hasTLSMount {
-		t.Fatal("expected OpenBao container to NOT mount TLS volume in ACME mode")
-	}
-}
-
-func TestStatefulSet_ACMEMode_WithSharedCacheMount(t *testing.T) {
-	cluster := newMinimalCluster("acme-cluster", "default")
-	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
-	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
-		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
-		SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
-			Mode: openbaov1alpha1.ACMESharedCacheModeManagedPVC,
-			Size: "1Gi",
-		},
-	}
-
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
-	if err != nil {
-		t.Fatalf("buildStatefulSet() error = %v", err)
-	}
-
-	if !hasVolume(statefulSet.Spec.Template.Spec.Volumes, acmeCacheVolumeName) {
-		t.Fatal("expected StatefulSet to include ACME shared cache volume")
-	}
-
-	openBaoContainer := statefulSet.Spec.Template.Spec.Containers[0]
-	if !hasVolumeMountWithPath(openBaoContainer.VolumeMounts, acmeCacheVolumeName, "/bao/acme-cache") {
-		t.Fatal("expected OpenBao container to mount ACME shared cache volume at /bao/acme-cache")
-	}
-}
-
-func TestStatefulSet_ACMEMode_NoShareProcessNamespace(t *testing.T) {
-	cluster := newMinimalCluster("acme-cluster", "default")
-	cluster.Spec.Replicas = 1
-	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
-	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
-		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
-	}
-
-	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
-	if err != nil {
-		t.Fatalf("buildStatefulSet() error = %v", err)
-	}
-
-	// Verify ShareProcessNamespace is false (restored isolation for all modes)
-	shareProcessNamespace := statefulSet.Spec.Template.Spec.ShareProcessNamespace
-	if shareProcessNamespace == nil || *shareProcessNamespace {
-		t.Fatal("expected ShareProcessNamespace to be false (restored container isolation)")
-	}
-}
-
-func TestStatefulSet_NonACMEMode_UsesWrapper(t *testing.T) {
-	cluster := newMinimalCluster("external-cluster", "default")
-	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
-
-	// Build StatefulSet directly to avoid NetworkPolicy creation issues in tests
-	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
-	if err != nil {
-		t.Fatalf("buildStatefulSet() error = %v", err)
-	}
-
-	// Verify no TLS reloader sidecar (wrapper approach eliminates need for sidecar)
-	containers := statefulSet.Spec.Template.Spec.Containers
-	hasReloader := false
-	for _, container := range containers {
-		if container.Name == "tls-reloader" {
-			hasReloader = true
-			break
-		}
-	}
-	if hasReloader {
-		t.Fatal("expected StatefulSet to NOT have tls-reloader sidecar (wrapper approach)")
-	}
-
-	// Verify only one container (OpenBao container with wrapper)
-	if len(containers) != 1 {
-		t.Fatalf("expected StatefulSet to have 1 container, got %d", len(containers))
-	}
-
-	// Verify OpenBao container uses wrapper as entrypoint
-	openBaoContainer := containers[0]
-	if len(openBaoContainer.Command) == 0 || openBaoContainer.Command[0] != "/utils/bao-wrapper" {
-		t.Fatalf("expected OpenBao container to use wrapper as entrypoint, got command: %v", openBaoContainer.Command)
-	}
-
-	// Verify ShareProcessNamespace is false (restored isolation)
-	shareProcessNamespace := statefulSet.Spec.Template.Spec.ShareProcessNamespace
-	if shareProcessNamespace == nil || *shareProcessNamespace {
-		t.Fatal("expected ShareProcessNamespace to be false (restored container isolation)")
 	}
 }

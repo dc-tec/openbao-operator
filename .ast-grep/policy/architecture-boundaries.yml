@@ -16,6 +16,7 @@ layerCoverage:
       - service/provisioner
       - service/restore
       - service/upgrade
+      - service/workload
       - service/workloadidentity
     adapter:
       - adapter/auth
@@ -62,6 +63,7 @@ serviceImportRoots:
   - internal/service/upgrade/raftops
   - internal/service/upgrade/rolling
   - internal/service/upgrade/snapshot
+  - internal/service/workload
   - internal/service/workloadidentity
 
 adapterImportRoots:
@@ -127,6 +129,14 @@ serviceBoundaries:
     packageRoot: internal/service/infra
     files:
       - internal/service/infra/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+  - name: workload
+    displayName: Workload
+    packageRoot: internal/service/workload
+    files:
+      - internal/service/workload/**/*.go
     ignores:
       - "**/*_test.go"
     allowServiceImports: []
@@ -219,6 +229,7 @@ appBoundaries:
       - internal/service/certs
       - internal/service/infra
       - internal/service/upgrade
+      - internal/service/workload
       - internal/service/workloadidentity
   - name: openbaocluster-adminops
     displayName: OpenBaoCluster AdminOps
@@ -232,6 +243,7 @@ appBoundaries:
       - internal/service/upgrade
       - internal/service/upgrade/bluegreen
       - internal/service/upgrade/rolling
+      - internal/service/workload
   - name: openbaocluster-statusops
     displayName: OpenBaoCluster StatusOps
     files:
@@ -241,6 +253,7 @@ appBoundaries:
     allowServiceImports:
       - internal/service/infra
       - internal/service/upgrade
+      - internal/service/workload
   - name: openbaocluster-deletionops
     displayName: OpenBaoCluster DeletionOps
     files:

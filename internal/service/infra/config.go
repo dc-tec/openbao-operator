@@ -97,13 +97,6 @@ func (m *Manager) ensureConfigMap(ctx context.Context, _ logr.Logger, cluster *o
 	return m.ensureConfigMapWithName(ctx, cluster, configMapName(cluster), configContent)
 }
 
-// ensureConfigMapWithRevision manages a revision-scoped config.hcl ConfigMap for a specific
-// StatefulSet revision. This is used for blue/green upgrades where Green must use a
-// different retry_join selector than Blue.
-func (m *Manager) ensureConfigMapWithRevision(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, revision string, configContent string) error {
-	return m.ensureConfigMapWithName(ctx, cluster, configMapNameWithRevision(cluster, revision), configContent)
-}
-
 func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, cmName string, configContent string) error {
 	if strings.TrimSpace(cmName) == "" {
 		return fmt.Errorf("config ConfigMap name is required")

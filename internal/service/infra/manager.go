@@ -52,20 +52,6 @@ const (
 	openBaoBinaryName        = constants.BinaryBao
 	configHashAnnotation     = "openbao.org/config-hash"
 	unsealTypeTransit        = "transit"
-
-	// OpenBao images are built to run as a non-root user with stable UID/GID.
-	// The StatefulSet security context pins these IDs so that both the main
-	// OpenBao container and the config-init container run as non-root even if
-	// the image metadata defaults to root.
-	openBaoUserID  = constants.UserOpenBao
-	openBaoGroupID = constants.GroupOpenBao
-
-	// File permissions: 0440 for secrets (owner/group read-only), 0644 for configs
-	secretFileMode = int32(0440)
-	// serviceAccountFileMode matches the secret file mode for projected tokens/CA.
-	serviceAccountFileMode = int32(0440)
-	// serviceAccountTokenExpirationSeconds is the projected token TTL.
-	serviceAccountTokenExpirationSeconds = int64(3600)
 )
 
 // Manager reconciles infrastructure resources such as ConfigMaps, StatefulSets, and Services for an OpenBaoCluster.
@@ -149,34 +135,30 @@ func (m *Manager) SetOIDCConfig(config *portauth.OIDCConfig) {
 	m.oidcJWTKeys = append([]string(nil), config.JWKSKeys...)
 }
 
-// EnsureBlueGreenStatus exposes blue/green status bootstrap/repair for strategy consumers.
-func (m *Manager) EnsureBlueGreenStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	EnsureBlueGreenStatus(ctx, logger, m.client, cluster)
-}
-
-// Reconcile ensures infrastructure resources are aligned with the desired state for the given OpenBaoCluster.
+// PrepareWorkload ensures supporting infrastructure resources are aligned with the desired
+// state for the given OpenBaoCluster and returns the rendered workload configuration.
 //
 // The current implementation focuses on:
 //   - Managing a per-cluster static auto-unseal Secret (only when using static seal).
 //   - Rendering a config.hcl ConfigMap that injects TLS paths, storage configuration, retry_join, and seal configuration.
-//   - Reconciling a headless StatefulSet-backed Service, an optional external Service/Ingress, and the StatefulSet itself.
+//   - Reconciling workload-supporting resources such as Services, Ingress/Gateway, RBAC, and NetworkPolicies.
 //
-// spec contains all parameters needed for StatefulSet reconciliation, including revision, images, and skip logic.
-// This decouples the infrastructure layer from upgrade strategy knowledge.
-func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
+// The workload controller is responsible for StatefulSet/PDB reconciliation and consumes the
+// returned config content as part of that separate reconciliation step.
+func (m *Manager) PrepareWorkload(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	// Only create unseal secret if using static seal (default or explicit)
 	if usesStaticSeal(cluster) {
 		if err := m.ensureUnsealSecret(ctx, logger, cluster); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	if err := m.validateUnsealPrerequisites(ctx, cluster); err != nil {
-		return err
+		return "", err
 	}
 
 	if err := m.runACMEPreflight(ctx, logger, cluster); err != nil {
-		return err
+		return "", err
 	}
 
 	infraDetails := configbuilder.InfrastructureDetails{
@@ -188,52 +170,16 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 
 	renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
 	if err != nil {
-		return fmt.Errorf("failed to render config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return "", fmt.Errorf("failed to render config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
 	configContent := string(renderedConfig)
 
 	if err := m.reconcilePreStatefulSet(ctx, logger, cluster, configContent); err != nil {
-		return err
+		return "", err
 	}
 
-	// Skip StatefulSet reconciliation if requested (e.g., during BlueGreen cleanup phases)
-	if spec.SkipReconciliation {
-		logger.Info("Skipping StatefulSet reconciliation per spec", "reason", "skip flag set")
-		return nil
-	}
-
-	statefulSetCluster := clusterForStatefulSetSpec(cluster, spec)
-	if cluster != nil && statefulSetCluster != cluster {
-		logger.V(1).Info(
-			"Applying staged StatefulSet replica count",
-			"statefulset", spec.Name,
-			"clusterDesiredReplicas", cluster.Spec.Replicas,
-			"appliedStatefulSetReplicas", spec.Replicas,
-		)
-	}
-
-	if err := m.EnsureStatefulSetWithRevision(ctx, logger, statefulSetCluster, configContent, spec.Image, spec.InitContainerImage, spec.Revision, spec.DisableSelfInit); err != nil {
-		return err
-	}
-
-	// SECURITY: Create PodDisruptionBudget to prevent simultaneous pod evictions
-	// that could cause quorum loss during node drains or cluster upgrades
-	if err := m.ensurePodDisruptionBudget(ctx, logger, statefulSetCluster); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func clusterForStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) *openbaov1alpha1.OpenBaoCluster {
-	if cluster == nil || spec.Replicas == cluster.Spec.Replicas {
-		return cluster
-	}
-
-	statefulSetCluster := cluster.DeepCopy()
-	statefulSetCluster.Spec.Replicas = spec.Replicas
-	return statefulSetCluster
+	return configContent, nil
 }
 
 func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {
@@ -446,13 +392,6 @@ func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 // configMapNameWithRevision returns the ConfigMap name for a given revision.
 // If rev is empty, returns the cluster's base ConfigMap name.
 // Otherwise, returns "<cluster-name>-config-<revision>".
-func configMapNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) string {
-	if rev == "" {
-		return configMapName(cluster)
-	}
-	return fmt.Sprintf("%s%s-%s", cluster.Name, constants.SuffixConfigMap, rev)
-}
-
 func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + configInitMapSuffix
 }
@@ -484,13 +423,3 @@ func externalServiceNameGreen(cluster *openbaov1alpha1.OpenBaoCluster) string {
 // statefulSetNameWithRevision returns the StatefulSet name for a given revision.
 // If rev is empty, returns the cluster name (for backward compatibility).
 // Otherwise, returns "<cluster-name>-<revision>".
-func statefulSetNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) string {
-	if rev == "" {
-		return cluster.Name
-	}
-	return fmt.Sprintf("%s-%s", cluster.Name, rev)
-}
-
-func int32Ptr(v int32) *int32 {
-	return &v
-}

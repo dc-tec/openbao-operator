@@ -14,7 +14,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func anyPVCFileSystemResizePending(pvcs []corev1.PersistentVolumeClaim) bool {
@@ -51,7 +51,7 @@ func nextPodNeedingFSResizeRestart(
 
 	var wantRev string
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		wantRev = inframanager.BlueGreenActiveRevision(cluster)
+		wantRev = workloadsvc.BlueGreenActiveRevision(cluster)
 	}
 
 	unique := make(map[string]struct{}, len(candidatePodNames))

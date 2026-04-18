@@ -34,7 +34,7 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 
 	// First reconcile creates the ServiceAccount
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 
 	// Second reconcile with same cluster should be idempotent (SSA)
 	spec = newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() second call error = %v", err)
 	}
 
@@ -124,7 +124,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	ctx := context.Background()
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -271,7 +271,7 @@ func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
 
 	ctx := context.Background()
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -333,13 +333,13 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 
 	// First reconcile creates RBAC
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
 	// Second reconcile should be idempotent (SSA)
 	spec = newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() second call error = %v", err)
 	}
 
@@ -394,7 +394,7 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 
 	// Create ServiceAccount via Reconcile
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -454,7 +454,7 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 
 	// Create RBAC via Reconcile
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := manager.reconcileWithWorkload(ctx, logr.Discard(), cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 

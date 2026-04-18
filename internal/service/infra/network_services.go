@@ -90,7 +90,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 	}
 
 	selectorLabels := podSelectorLabels(cluster)
-	if activeRevision := BlueGreenActiveRevision(cluster); activeRevision != "" {
+	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
 		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
 	}
 
@@ -155,7 +155,7 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 	}
 
 	selectorLabels := podSelectorLabels(cluster)
-	if activeRevision := BlueGreenActiveRevision(cluster); activeRevision != "" {
+	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
 		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
 	}
 

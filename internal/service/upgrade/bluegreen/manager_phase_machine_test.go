@@ -190,11 +190,11 @@ func TestHandlePhaseDeployingGreen_CreatesGreenStatefulSet(t *testing.T) {
 	cluster := newPhaseMachineCluster()
 	bluePod := newRevisionPod(cluster, cluster.Status.BlueGreen.BlueRevision, "blue-0")
 	markPodReadyUnsealed(bluePod)
-	runtime := &infraRuntimeStub{}
+	runtime := &workloadRuntimeStub{}
 	manager := &Manager{
-		client:       fake.NewClientBuilder().WithScheme(scheme).WithObjects(bluePod).Build(),
-		scheme:       scheme,
-		infraRuntime: runtime,
+		client:          fake.NewClientBuilder().WithScheme(scheme).WithObjects(bluePod).Build(),
+		scheme:          scheme,
+		workloadRuntime: runtime,
 	}
 
 	outcome, err := manager.handlePhaseDeployingGreen(context.Background(), logr.Discard(), cluster, "")
@@ -205,7 +205,7 @@ func TestHandlePhaseDeployingGreen_CreatesGreenStatefulSet(t *testing.T) {
 		t.Fatalf("handlePhaseDeployingGreen() outcome = %+v, want short requeue", outcome)
 	}
 	if !runtime.ensureStatefulSetCalled {
-		t.Fatal("expected infra runtime to create the Green StatefulSet")
+		t.Fatal("expected workload runtime to create the Green StatefulSet")
 	}
 	if runtime.lastRevision != cluster.Status.BlueGreen.GreenRevision {
 		t.Fatalf("revision = %q, want %q", runtime.lastRevision, cluster.Status.BlueGreen.GreenRevision)

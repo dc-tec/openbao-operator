@@ -17,12 +17,71 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/service/infra"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
+
+type integrationInfraManager struct {
+	infra    *infra.Manager
+	workload *workloadsvc.Manager
+}
+
+func newIntegrationInfraManager(kubeClient client.Client, scheme *runtime.Scheme) *integrationInfraManager {
+	return &integrationInfraManager{
+		infra: infra.NewManager(kubeClient, scheme, "openbao-operator-system", "", nil, ""),
+		workload: workloadsvc.NewManager(kubeClient, scheme, "").
+			WithReader(kubeClient),
+	}
+}
+
+func (m *integrationInfraManager) Reconcile(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	spec workloadsvc.StatefulSetSpec,
+) error {
+	configContent, err := m.infra.PrepareWorkload(ctx, logger, cluster)
+	if err != nil {
+		return err
+	}
+	return m.workload.Reconcile(ctx, logger, cluster, configContent, spec)
+}
+
+func (m *integrationInfraManager) EnsureBlueGreenStatus(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) {
+	m.workload.EnsureBlueGreenStatus(ctx, logger, cluster)
+}
+
+func (m *integrationInfraManager) EnsureStatefulSetWithRevision(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	configContent string,
+	verifiedImageDigest string,
+	verifiedInitContainerDigest string,
+	revision string,
+	disableSelfInit bool,
+) error {
+	return m.workload.EnsureStatefulSetWithRevision(
+		ctx,
+		logger,
+		cluster,
+		configContent,
+		verifiedImageDigest,
+		verifiedInitContainerDigest,
+		revision,
+		disableSelfInit,
+	)
+}
 
 func requireAdmissionDenied(t *testing.T, err error) {
 	t.Helper()
@@ -235,8 +294,8 @@ func discardLogger() logr.Logger {
 }
 
 // newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
-func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) infra.StatefulSetSpec {
-	return infra.StatefulSetSpec{
+func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) workloadsvc.StatefulSetSpec {
+	return workloadsvc.StatefulSetSpec{
 		Name:               cluster.Name,
 		Revision:           "",
 		Image:              cluster.Spec.Image,

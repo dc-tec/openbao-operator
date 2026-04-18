@@ -1,4 +1,4 @@
-package infra
+package workload
 
 // StatefulSetSpec encapsulates all parameters needed for StatefulSet reconciliation.
 // This struct decouples the infrastructure layer from upgrade strategy knowledge.

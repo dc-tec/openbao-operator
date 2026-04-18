@@ -1,4 +1,4 @@
-package infra
+package workload
 
 import (
 	"crypto/sha256"
@@ -9,7 +9,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
 const (
@@ -30,26 +29,6 @@ type probeExecActions struct {
 	startup   *corev1.ExecAction
 	liveness  *corev1.ExecAction
 	readiness *corev1.ExecAction
-}
-
-// ResolveInitContainerImage returns the init container image to use.
-// If not specified in the cluster spec, returns the default image derived from
-// OPERATOR_INIT_IMAGE_REPOSITORY and OPERATOR_VERSION environment variables.
-func ResolveInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	if cluster.Spec.InitContainer != nil && cluster.Spec.InitContainer.Image != "" {
-		return cluster.Spec.InitContainer.Image, nil
-	}
-	image, err := constants.DefaultInitImage()
-	if err != nil {
-		return "", operatorerrors.WrapPermanentConfig(operatorerrors.WithReason(
-			constants.ReasonHelperImageConfigurationInvalid,
-			fmt.Errorf(
-				"default init container image is unavailable; set spec.initContainer.image explicitly or configure OPERATOR_VERSION in the operator Deployment: %w",
-				err,
-			),
-		))
-	}
-	return image, nil
 }
 
 func getInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {

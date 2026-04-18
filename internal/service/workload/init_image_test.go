@@ -1,4 +1,4 @@
-package infra
+package workload
 
 import (
 	"testing"
@@ -14,7 +14,7 @@ func TestGetInitContainerImage_DefaultImageConfigurationError(t *testing.T) {
 	cluster := newMinimalCluster("init-image-default", "default")
 	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{}
 
-	_, err := getInitContainerImage(cluster)
+	_, err := ResolveInitContainerImage(cluster)
 	if err == nil {
 		t.Fatal("getInitContainerImage() error = nil, want error")
 	}

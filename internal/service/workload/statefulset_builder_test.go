@@ -1,4 +1,4 @@
-package infra
+package workload
 
 import (
 	"reflect"

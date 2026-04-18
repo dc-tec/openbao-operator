@@ -22,7 +22,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 )
 
@@ -80,7 +79,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 
 	controllerClient := newControllerClient(t)
-	infraMgr := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	infraMgr := newIntegrationInfraManager(controllerClient, k8sScheme)
 	manager := bluegreen.NewManager(
 		k8sClient,
 		k8sScheme,
@@ -260,7 +259,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	}
 
 	controllerClient := newControllerClient(t)
-	infraMgr := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	infraMgr := newIntegrationInfraManager(controllerClient, k8sScheme)
 	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, infraMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaotest.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {

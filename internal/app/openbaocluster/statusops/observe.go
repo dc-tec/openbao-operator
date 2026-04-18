@@ -18,8 +18,8 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 // LabelConfig supplies labels used during status observation.
@@ -175,7 +175,7 @@ func gatherStatefulSetState(
 
 	// Compute active revision for blue/green deployments.
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		state.ActiveRevision = inframanager.BlueGreenActiveRevision(cluster)
+		state.ActiveRevision = workloadsvc.BlueGreenActiveRevision(cluster)
 		statefulSetName.Name = fmt.Sprintf("%s-%s", cluster.Name, state.ActiveRevision)
 	}
 

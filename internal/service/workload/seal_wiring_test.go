@@ -1,10 +1,11 @@
-package infra
+package workload
 
 import (
 	"path"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
@@ -152,7 +153,7 @@ func TestSealWiring_OCIKMSAPIKey_WithCredentials_IncludesOCIConfigEnv(t *testing
 			Name: "provider-creds",
 		},
 		OCIKMS: &openbaov1alpha1.OCIKMSSealConfig{
-			AuthTypeAPIKey: boolPtr(true),
+			AuthTypeAPIKey: ptr.To(true),
 		},
 	}
 

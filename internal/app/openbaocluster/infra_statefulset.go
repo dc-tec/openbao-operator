@@ -6,7 +6,7 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 // computeStatefulSetSpec computes the StatefulSetSpec from the cluster and verified image digests.
@@ -15,8 +15,8 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	verifiedImageDigest string,
 	verifiedInitContainerDigest string,
-) inframanager.StatefulSetSpec {
-	spec := inframanager.StatefulSetSpec{
+) workloadsvc.StatefulSetSpec {
+	spec := workloadsvc.StatefulSetSpec{
 		Image:              verifiedImageDigest,
 		InitContainerImage: verifiedInitContainerDigest,
 		Replicas:           cluster.Spec.Replicas,
@@ -25,7 +25,7 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	}
 
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		spec.Revision = inframanager.BlueGreenStableRevision(cluster)
+		spec.Revision = workloadsvc.BlueGreenStableRevision(cluster)
 		if spec.Revision == "" {
 			spec.Name = cluster.Name
 		} else {

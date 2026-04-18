@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appsv1 "k8s.io/api/apps/v1"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 var (
@@ -141,6 +142,22 @@ func envtestClientForPackage(t *testing.T) (client.Client, *runtime.Scheme) {
 	return envTestClient, envTestScheme
 }
 
+func (m *Manager) reconcileWithWorkload(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	spec workloadsvc.StatefulSetSpec,
+) error {
+	configContent, err := m.PrepareWorkload(ctx, logger, cluster)
+	if err != nil {
+		return err
+	}
+
+	return workloadsvc.NewManager(m.client, m.scheme, m.Platform).
+		WithReader(m.reader).
+		Reconcile(ctx, logger, cluster, configContent, spec)
+}
+
 func testNamespace(t *testing.T) string {
 	t.Helper()
 	h := fnv.New32a()
@@ -232,8 +249,8 @@ func newTestCACertPEM(t *testing.T) []byte {
 }
 
 // newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
-func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) StatefulSetSpec {
-	return StatefulSetSpec{
+func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) workloadsvc.StatefulSetSpec {
+	return workloadsvc.StatefulSetSpec{
 		Name:               cluster.Name,
 		Revision:           "",
 		Image:              cluster.Spec.Image,
@@ -298,12 +315,7 @@ func createClusterCRForTest(t *testing.T, k8sClient client.Client, cluster *open
 }
 
 func statefulSetName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return statefulSetNameWithRevision(cluster, "")
-}
-
-//nolint:unparam // configContent varies in production with actual config values
-func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, platform string) (*appsv1.StatefulSet, error) {
-	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", false, platform)
+	return cluster.Name
 }
 
 // -----------------------------------------------------------------------------

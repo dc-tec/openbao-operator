@@ -1,4 +1,4 @@
-package infra
+package workload
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -110,7 +109,7 @@ func (m *Manager) EnsureStatefulSetWithRevision(ctx context.Context, logger logr
 			"desiredReplicas", desiredReplicas)
 	}
 
-	desired, buildErr := buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, revision, disableSelfInit, m.Platform)
+	desired, buildErr := buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, revision, disableSelfInit, m.platform)
 	if buildErr != nil {
 		return fmt.Errorf("failed to build StatefulSet for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, buildErr)
 	}
@@ -257,40 +256,4 @@ func preserveLockedStatefulSetTemplateFields(desired *appsv1.StatefulSet, existi
 		}
 		desired.Spec.Template.Spec.InitContainers = newInit
 	}
-}
-
-// deletePVCs removes all PersistentVolumeClaims associated with the OpenBaoCluster.
-func (m *Manager) deletePVCs(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	var pvcList corev1.PersistentVolumeClaimList
-	if err := m.client.List(ctx, &pvcList,
-		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(map[string]string{
-			constants.LabelOpenBaoCluster: cluster.Name,
-		}),
-	); err != nil {
-		return err
-	}
-
-	for i := range pvcList.Items {
-		pvc := &pvcList.Items[i]
-		if portopenbao.UsesExistingACMESharedCache(cluster) && pvc.Name == portopenbao.ACMESharedCacheClaimName(cluster) {
-			continue
-		}
-		// Envtest runs without controllers (like kube-controller-manager), which means
-		// protection finalizers (e.g. pvc-protection) may never be removed and deletions
-		// can get stuck. When the user explicitly opted into PVC deletion, ensure the
-		// PVC is actually deletable by clearing finalizers first.
-		if len(pvc.Finalizers) > 0 {
-			original := pvc.DeepCopy()
-			pvc.Finalizers = nil
-			if err := m.client.Patch(ctx, pvc, client.MergeFrom(original)); err != nil && !apierrors.IsNotFound(err) {
-				return err
-			}
-		}
-		if err := m.client.Delete(ctx, pvc); err != nil && !apierrors.IsNotFound(err) {
-			return err
-		}
-	}
-
-	return nil
 }
