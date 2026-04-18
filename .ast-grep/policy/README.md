@@ -14,7 +14,7 @@ The policy currently encodes:
 - `controllerCoverage`: required explicit policy entries for controller packages
 - `serviceImportRoots` and `adapterImportRoots`: global import domains for controller approval rules
 - `controllerBoundaries`: per-controller app facade and approved import allowlists
-- `serviceBoundaries`: per-service approved service import allowlists
+- `serviceBoundaries`: per-service approved service and adapter import allowlists
 - `appBoundaries`: app-package approved service import allowlists
 - `globalImportBoundaries`: repository-wide import guardrails that are generated into ast-grep rules
   - `disallowImports`: module-local import roots (resolved under `modulePath/`)
