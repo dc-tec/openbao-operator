@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
@@ -119,7 +120,7 @@ func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 	}
 
 	// Verify Secret was created
-	secretName := unsealSecretName(cluster)
+	secretName := resourceidentity.UnsealSecretName(cluster)
 	secret := &corev1.Secret{}
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -145,7 +146,7 @@ func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 
 func TestEnsureUnsealSecret_HandlesAlreadyExists(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
-	secretName := unsealSecretName(cluster)
+	secretName := resourceidentity.UnsealSecretName(cluster)
 
 	existingSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -185,7 +186,7 @@ func TestEnsureConfigMap_CreatesConfigMap(t *testing.T) {
 	}
 
 	// Verify ConfigMap was created
-	cmName := configMapName(cluster)
+	cmName := resourceidentity.ConfigMapName(cluster)
 	configMap := &corev1.ConfigMap{}
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -203,7 +204,7 @@ func TestEnsureConfigMap_CreatesConfigMap(t *testing.T) {
 
 func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
-	cmName := configMapName(cluster)
+	cmName := resourceidentity.ConfigMapName(cluster)
 
 	existingConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -244,7 +245,7 @@ func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 
 func TestEnsureConfigMap_IsIdempotent(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
-	cmName := configMapName(cluster)
+	cmName := resourceidentity.ConfigMapName(cluster)
 	configContent := "test config content"
 
 	existingConfigMap := &corev1.ConfigMap{
@@ -294,7 +295,7 @@ func TestEnsureSelfInitConfigMap_Disabled(t *testing.T) {
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
 		Enabled: false,
 	}
-	cmName := configInitMapName(cluster)
+	cmName := resourceidentity.ConfigInitMapName(cluster)
 
 	existingConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -382,7 +383,7 @@ func TestEnsureSelfInitConfigMap_HardenedProfileWithBootstrap(t *testing.T) {
 	}
 
 	// Verify ConfigMap was created
-	cmName := configInitMapName(cluster)
+	cmName := resourceidentity.ConfigInitMapName(cluster)
 	configMap := &corev1.ConfigMap{}
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -466,7 +467,7 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
 	}
 
-	cmName := configInitMapName(cluster)
+	cmName := resourceidentity.ConfigInitMapName(cluster)
 	configMap := &corev1.ConfigMap{}
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -528,7 +529,7 @@ func TestEnsureSelfInitConfigMap_RejectsBootstrapAudienceMismatch(t *testing.T) 
 
 func TestDeleteConfigMap(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
-	cmName := configMapName(cluster)
+	cmName := resourceidentity.ConfigMapName(cluster)
 
 	existingConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -578,7 +579,7 @@ func TestDeleteSecrets(t *testing.T) {
 
 	unsealSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      unsealSecretName(cluster),
+			Name:      resourceidentity.UnsealSecretName(cluster),
 			Namespace: cluster.Namespace,
 		},
 	}
@@ -592,7 +593,7 @@ func TestDeleteSecrets(t *testing.T) {
 
 	tlsServerSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      tlsServerSecretName(cluster),
+			Name:      resourceidentity.TLSServerSecretName(cluster),
 			Namespace: cluster.Namespace,
 		},
 	}
@@ -607,9 +608,9 @@ func TestDeleteSecrets(t *testing.T) {
 
 	// Verify all secrets were deleted
 	secrets := []string{
-		unsealSecretName(cluster),
+		resourceidentity.UnsealSecretName(cluster),
 		tlsCASecretName(cluster),
-		tlsServerSecretName(cluster),
+		resourceidentity.TLSServerSecretName(cluster),
 	}
 
 	for _, secretName := range secrets {
@@ -631,7 +632,7 @@ func TestDeleteSecrets_PartialMissing(t *testing.T) {
 	// Only create one secret
 	unsealSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      unsealSecretName(cluster),
+			Name:      resourceidentity.UnsealSecretName(cluster),
 			Namespace: cluster.Namespace,
 		},
 	}

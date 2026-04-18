@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 // ensureHTTPRoute manages the Gateway API HTTPRoute for the OpenBaoCluster.
@@ -81,7 +82,7 @@ func buildHTTPRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.HTTPRout
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        httpRouteName(cluster),
 			Namespace:   cluster.Namespace,
-			Labels:      infraLabels(cluster),
+			Labels:      resourceidentity.Labels(cluster),
 			Annotations: gw.Annotations,
 		},
 		Spec: gatewayv1.HTTPRouteSpec{

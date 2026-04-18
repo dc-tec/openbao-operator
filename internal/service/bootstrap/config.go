@@ -18,6 +18,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
@@ -39,7 +40,7 @@ func usesStaticSeal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 // the operator never needs GET permission on the unseal key Secret after creation,
 // improving security by preventing the operator from reading root keys.
 func (m *Manager) ensureUnsealSecret(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	secretName := unsealSecretName(cluster)
+	secretName := resourceidentity.UnsealSecretName(cluster)
 
 	// Generate key in memory
 	key, genErr := generateUnsealKey()
@@ -51,7 +52,7 @@ func (m *Manager) ensureUnsealSecret(ctx context.Context, logger logr.Logger, cl
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Type:      corev1.SecretTypeOpaque,
 		Immutable: ptr.To(true), // Secure by default: prevent accidental overwrites
@@ -94,7 +95,7 @@ func generateUnsealKey() ([]byte, error) {
 
 // ensureConfigMap manages the config.hcl ConfigMap for the OpenBaoCluster using Server-Side Apply.
 func (m *Manager) ensureConfigMap(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {
-	return m.ensureConfigMapWithName(ctx, cluster, configMapName(cluster), configContent)
+	return m.ensureConfigMapWithName(ctx, cluster, resourceidentity.ConfigMapName(cluster), configContent)
 }
 
 func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, cmName string, configContent string) error {
@@ -110,7 +111,7 @@ func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cmName,
 			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Data: map[string]string{
 			configFileName: configContent,
@@ -128,7 +129,7 @@ func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov
 // self-initialization stanzas. This ConfigMap is only mounted for pod-0, since
 // only the first pod needs to execute initialization requests.
 func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	cmName := configInitMapName(cluster)
+	cmName := resourceidentity.ConfigInitMapName(cluster)
 
 	// If self-init is not enabled, delete the ConfigMap if it exists
 	if cluster.Spec.SelfInit == nil || !cluster.Spec.SelfInit.Enabled {
@@ -231,7 +232,7 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cmName,
 			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Data: map[string]string{
 			configFileName: initConfigContent,

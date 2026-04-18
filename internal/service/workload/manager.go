@@ -16,6 +16,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 // Manager reconciles workload-owned resources for an OpenBaoCluster.
@@ -83,7 +84,7 @@ func (m *Manager) ensureConfigMapWithRevision(ctx context.Context, cluster *open
 		return nil
 	}
 
-	return m.ensureConfigMapWithName(ctx, cluster, configMapNameWithRevision(cluster, revision), configContent)
+	return m.ensureConfigMapWithName(ctx, cluster, resourceidentity.ConfigMapNameWithRevision(cluster, revision), configContent)
 }
 
 func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, cmName string, configContent string) error {
@@ -92,7 +93,7 @@ func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov
 	}
 
 	configMap := corev1apply.ConfigMap(cmName, cluster.Namespace).
-		WithLabels(infraLabels(cluster)).
+		WithLabels(resourceidentity.Labels(cluster)).
 		WithData(map[string]string{configFileName: configContent})
 	configMap.Kind = ptrTo("ConfigMap")
 	configMap.APIVersion = ptrTo("v1")

@@ -14,10 +14,11 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 func (m *Manager) ensureHeadlessService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	svcName := headlessServiceName(cluster)
+	svcName := resourceidentity.HeadlessServiceName(cluster)
 
 	service := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -27,12 +28,12 @@ func (m *Manager) ensureHeadlessService(ctx context.Context, _ logr.Logger, clus
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcName,
 			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP:                corev1.ClusterIPNone,
 			PublishNotReadyAddresses: true,
-			Selector:                 podSelectorLabels(cluster),
+			Selector:                 resourceidentity.PodSelectorLabels(cluster),
 			Ports: []corev1.ServicePort{
 				{
 					Name:     "api",
@@ -89,7 +90,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 		}
 	}
 
-	selectorLabels := podSelectorLabels(cluster)
+	selectorLabels := resourceidentity.PodSelectorLabels(cluster)
 	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
 		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
 	}
@@ -102,7 +103,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        svcName,
 			Namespace:   cluster.Namespace,
-			Labels:      infraLabels(cluster),
+			Labels:      resourceidentity.Labels(cluster),
 			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
@@ -154,7 +155,7 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 		return nil
 	}
 
-	selectorLabels := podSelectorLabels(cluster)
+	selectorLabels := resourceidentity.PodSelectorLabels(cluster)
 	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
 		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
 	}
@@ -167,7 +168,7 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcName,
 			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Spec: corev1.ServiceSpec{
 			Type:                     corev1.ServiceTypeClusterIP,

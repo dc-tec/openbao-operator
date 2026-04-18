@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 const (
@@ -37,7 +38,7 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	sa := &corev1.ServiceAccount{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      serviceAccountName(cluster),
+		Name:      resourceidentity.ServiceAccountName(cluster),
 	}, sa)
 	if err != nil {
 		t.Fatalf("expected ServiceAccount to exist: %v", err)
@@ -71,7 +72,7 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	sa1 := &corev1.ServiceAccount{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      serviceAccountName(cluster),
+		Name:      resourceidentity.ServiceAccountName(cluster),
 	}, sa1)
 	if err != nil {
 		t.Fatalf("expected ServiceAccount to exist after first reconcile: %v", err)
@@ -86,7 +87,7 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	sa2 := &corev1.ServiceAccount{}
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      serviceAccountName(cluster),
+		Name:      resourceidentity.ServiceAccountName(cluster),
 	}, sa2)
 	if err != nil {
 		t.Fatalf("expected ServiceAccount to exist after second reconcile: %v", err)
@@ -117,7 +118,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 	// Verify Role exists
 	role := &rbacv1.Role{}
-	roleName := serviceAccountName(cluster) + "-role"
+	roleName := resourceidentity.ServiceAccountName(cluster) + "-role"
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      roleName,
@@ -208,7 +209,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 	// Verify RoleBinding exists
 	roleBinding := &rbacv1.RoleBinding{}
-	roleBindingName := serviceAccountName(cluster) + "-rolebinding"
+	roleBindingName := resourceidentity.ServiceAccountName(cluster) + "-rolebinding"
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      roleBindingName,
@@ -227,7 +228,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 		t.Fatalf("expected RoleBinding to have subjects")
 	}
 
-	saName := serviceAccountName(cluster)
+	saName := resourceidentity.ServiceAccountName(cluster)
 	foundSubject := false
 	for _, subject := range roleBinding.Subjects {
 		if subject.Kind == "ServiceAccount" && subject.Name == saName && subject.Namespace == cluster.Namespace {
@@ -261,7 +262,7 @@ func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
 	}
 
 	role := &rbacv1.Role{}
-	roleName := serviceAccountName(cluster) + "-role"
+	roleName := resourceidentity.ServiceAccountName(cluster) + "-role"
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      roleName,
@@ -325,7 +326,7 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 
 	// Verify RoleBinding still references correct ServiceAccount
 	roleBinding := &rbacv1.RoleBinding{}
-	roleBindingName := serviceAccountName(cluster) + "-rolebinding"
+	roleBindingName := resourceidentity.ServiceAccountName(cluster) + "-rolebinding"
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      roleBindingName,
@@ -334,14 +335,14 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 		t.Fatalf("expected RoleBinding to exist after idempotent applies: %v", err)
 	}
 
-	saName := serviceAccountName(cluster)
+	saName := resourceidentity.ServiceAccountName(cluster)
 	if len(roleBinding.Subjects) == 0 || roleBinding.Subjects[0].Name != saName {
 		t.Fatalf("expected RoleBinding to reference ServiceAccount %q after idempotent applies", saName)
 	}
 
 	// Verify Role still exists and has correct rules
 	role := &rbacv1.Role{}
-	roleName := serviceAccountName(cluster) + "-role"
+	roleName := resourceidentity.ServiceAccountName(cluster) + "-role"
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      roleName,
@@ -378,7 +379,7 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 	sa := &corev1.ServiceAccount{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      serviceAccountName(cluster),
+		Name:      resourceidentity.ServiceAccountName(cluster),
 	}, sa)
 	if err != nil {
 		t.Fatalf("expected ServiceAccount to exist: %v", err)
@@ -418,7 +419,7 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 	}
 
 	// Verify RoleBinding has OwnerReference (for GC)
-	roleBindingName := serviceAccountName(cluster) + "-rolebinding"
+	roleBindingName := resourceidentity.ServiceAccountName(cluster) + "-rolebinding"
 	roleBinding := &rbacv1.RoleBinding{}
 	err := k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -440,7 +441,7 @@ func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 	}
 
 	// Verify Role has OwnerReference (for GC)
-	roleName := serviceAccountName(cluster) + "-role"
+	roleName := resourceidentity.ServiceAccountName(cluster) + "-role"
 	role := &rbacv1.Role{}
 	err = k8sClient.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,

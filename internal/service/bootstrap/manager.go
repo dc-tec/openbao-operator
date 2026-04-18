@@ -12,18 +12,16 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	configurationservice "github.com/dc-tec/openbao-operator/internal/service/configuration"
 )
 
 const (
-	configInitMapSuffix = "-config-init"
-	unsealSecretKey     = "key"
-	unsealKeyBytes      = 32
-	configFileName      = "config.hcl"
-	unsealTypeTransit   = "transit"
+	unsealSecretKey   = "key"
+	unsealKeyBytes    = 32
+	configFileName    = "config.hcl"
+	unsealTypeTransit = "transit"
 )
 
 // Manager reconciles bootstrap/configuration resources for an OpenBaoCluster.
@@ -140,25 +138,4 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 	}
 
 	return nil
-}
-
-func infraLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	return map[string]string{
-		constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
-		constants.LabelAppInstance:    cluster.Name,
-		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster: cluster.Name,
-	}
-}
-
-func unsealSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixUnsealKey
-}
-
-func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixConfigMap
-}
-
-func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + configInitMapSuffix
 }

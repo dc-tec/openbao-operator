@@ -11,6 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 // ensurePodDisruptionBudget creates or updates a PodDisruptionBudget for the OpenBaoCluster.
@@ -48,12 +49,12 @@ func (m *Manager) ensurePodDisruptionBudget(ctx context.Context, logger logr.Log
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pdbName,
 			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			MaxUnavailable: &maxUnavailable,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: podSelectorLabels(cluster),
+				MatchLabels: resourceidentity.PodSelectorLabels(cluster),
 				// Exclude Job pods (backup, restore, upgrade-snapshot) which don't
 				// support the scale subresource required by PDBs.
 				MatchExpressions: []metav1.LabelSelectorRequirement{

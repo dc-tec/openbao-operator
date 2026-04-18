@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 func desiredStatefulSetReplicas(cluster *openbaov1alpha1.OpenBaoCluster, initialized bool) int32 {
@@ -110,7 +111,7 @@ func buildStatefulSetPVC(cluster *openbaov1alpha1.OpenBaoCluster) (corev1.Persis
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   dataVolumeName,
-			Labels: infraLabels(cluster),
+			Labels: resourceidentity.Labels(cluster),
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -133,7 +134,7 @@ func buildStatefulSetPVC(cluster *openbaov1alpha1.OpenBaoCluster) (corev1.Persis
 }
 
 func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoCluster, revision string, configContent string) (map[string]string, map[string]string) {
-	podLabels := podSelectorLabelsWithRevision(cluster, revision)
+	podLabels := resourceidentity.PodSelectorLabelsWithRevision(cluster, revision)
 
 	if podLabels == nil {
 		podLabels = make(map[string]string)

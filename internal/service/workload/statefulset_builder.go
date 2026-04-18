@@ -11,6 +11,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 const (
@@ -26,7 +27,7 @@ const (
 // revision is an optional revision identifier for blue/green deployments.
 // disableSelfInit prevents adding self-init logic (used for Green pods).
 func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool, platform string) (*appsv1.StatefulSet, error) {
-	labels := podSelectorLabelsWithRevision(cluster, revision)
+	labels := resourceidentity.PodSelectorLabelsWithRevision(cluster, revision)
 
 	replicas := desiredStatefulSetReplicas(cluster, initialized)
 
@@ -58,11 +59,11 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        statefulSetName,
 			Namespace:   cluster.Namespace,
-			Labels:      infraLabels(cluster),
+			Labels:      resourceidentity.Labels(cluster),
 			Annotations: statefulSetAnnotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			ServiceName: headlessServiceName(cluster),
+			ServiceName: resourceidentity.HeadlessServiceName(cluster),
 			Replicas:    int32Ptr(replicas),
 			// Scale-down removes the departing Raft peer before shrinking the StatefulSet.
 			// Reusing that ordinal's old data directory on a later scale-up resurrects
@@ -89,7 +90,7 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 					// SECURITY: Explicitly disable automount for all containers, then mount
 					// ServiceAccount token only where needed (OpenBao container for Kubernetes Auth)
 					AutomountServiceAccountToken: ptr.To(false),
-					ServiceAccountName:           serviceAccountName(cluster),
+					ServiceAccountName:           resourceidentity.ServiceAccountName(cluster),
 					SecurityContext:              buildStatefulSetPodSecurityContext(cluster, platform),
 					InitContainers:               initContainers,
 					Containers:                   buildContainers(cluster, verifiedImageDigest, renderedConfigDir, probes),
@@ -158,7 +159,7 @@ func buildStatefulSetTopologySpreadConstraints(cluster *openbaov1alpha1.OpenBaoC
 }
 
 func statefulSetPlacementLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	labels := podSelectorLabels(cluster)
+	labels := resourceidentity.PodSelectorLabels(cluster)
 	if labels == nil {
 		labels = make(map[string]string)
 	}

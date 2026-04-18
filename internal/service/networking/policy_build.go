@@ -10,12 +10,13 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 // buildNetworkPolicy constructs a NetworkPolicy for the given OpenBaoCluster.
 func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *apiServerInfo, operatorNamespace string) (*networkingv1.NetworkPolicy, error) {
-	labels := infraLabels(cluster)
-	podSelector := podSelectorLabels(cluster)
+	labels := resourceidentity.Labels(cluster)
+	podSelector := resourceidentity.PodSelectorLabels(cluster)
 
 	clusterPeer := networkingv1.NetworkPolicyPeer{
 		PodSelector: &metav1.LabelSelector{
@@ -152,7 +153,7 @@ func buildNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *
 }
 
 func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInfo *apiServerInfo) (*networkingv1.NetworkPolicy, error) {
-	labels := infraLabels(cluster)
+	labels := resourceidentity.Labels(cluster)
 
 	kubernetesAPIPort443 := intstr.FromInt(443)
 	kubernetesAPIPort6443 := intstr.FromInt(6443)
@@ -160,7 +161,7 @@ func buildJobNetworkPolicy(cluster *openbaov1alpha1.OpenBaoCluster, apiServerInf
 
 	openBaoPeer := networkingv1.NetworkPolicyPeer{
 		PodSelector: &metav1.LabelSelector{
-			MatchLabels: infraLabels(cluster),
+			MatchLabels: resourceidentity.Labels(cluster),
 		},
 	}
 

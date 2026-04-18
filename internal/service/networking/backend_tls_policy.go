@@ -16,6 +16,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 // ensureBackendTLSPolicy manages the Gateway API BackendTLSPolicy for the OpenBaoCluster.
@@ -122,7 +123,7 @@ func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.B
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      backendTLSPolicyName(cluster),
 			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Spec: gatewayv1.BackendTLSPolicySpec{
 			TargetRefs: targetRefs,
@@ -199,7 +200,7 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      configMapName,
 			Namespace: cluster.Namespace,
-			Labels:    infraLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Data: map[string]string{
 			"ca.crt": string(caCertPEM),
