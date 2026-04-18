@@ -8,17 +8,14 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
@@ -147,31 +144,7 @@ func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openba
 }
 
 func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
-	}
-
-	applyConfig, err := kube.ToApplyConfiguration(obj, m.client)
-	if err != nil {
-		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
-	}
-
-	applyOpts := []client.ApplyOption{
-		client.ForceOwnership,
-		client.FieldOwner("openbao-operator"),
-	}
-
-	if err := m.client.Apply(ctx, applyConfig, applyOpts...); err != nil {
-		if operatorerrors.IsTransientKubernetesAPI(err) {
-			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
-		}
-		if apierrors.IsConflict(err) {
-			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
-		}
-		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
-	}
-
-	return nil
+	return resourceapply.ApplyOwned(ctx, m.client, m.scheme, cluster, obj)
 }
 
 func openBaoPodResourceNames(cluster *openbaov1alpha1.OpenBaoCluster) []string {

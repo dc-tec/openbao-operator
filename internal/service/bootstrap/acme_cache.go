@@ -6,14 +6,12 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -72,21 +70,5 @@ func buildManagedACMESharedCachePVC(cluster *openbaov1alpha1.OpenBaoCluster) (*c
 }
 
 func (m *Manager) applyResourceWithoutOwnerRef(ctx context.Context, obj client.Object) error {
-	applyConfig, err := kube.ToApplyConfiguration(obj, m.client)
-	if err != nil {
-		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
-	}
-
-	applyOpts := []client.ApplyOption{
-		client.ForceOwnership,
-		client.FieldOwner("openbao-operator"),
-	}
-
-	if err := m.client.Apply(ctx, applyConfig, applyOpts...); err != nil {
-		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
-		}
-		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
-	}
-	return nil
+	return resourceapply.ApplyUnowned(ctx, m.client, obj)
 }

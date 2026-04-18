@@ -90,8 +90,8 @@ func buildStatefulSetUpdateStrategy(cluster *openbaov1alpha1.OpenBaoCluster) app
 	// For standard rolling upgrades, use RollingUpdate (the Kubernetes default behavior).
 	//
 	// Important: The rolling upgrade manager controls the RollingUpdate.Partition field to
-	// orchestrate upgrades. The infra Manager strips updateStrategy from SSA patches for
-	// non-BlueGreen clusters to avoid clearing/overriding that partition value.
+	// orchestrate upgrades. The workload manager strips updateStrategy from StatefulSet
+	// SSA patches for non-BlueGreen clusters to avoid clearing/overriding that partition value.
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
 		return appsv1.StatefulSetUpdateStrategy{
 			Type: appsv1.OnDeleteStatefulSetStrategyType,
