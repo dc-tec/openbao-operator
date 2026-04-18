@@ -305,3 +305,131 @@ func TestValidatePolicyGlobalBoundaryMissingDisallowLists(t *testing.T) {
 		t.Fatalf("expected error to mention missing disallow lists, got: %v", err)
 	}
 }
+
+func TestValidatePolicyServiceAndAppBoundaries(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{"internal/service/backup", "internal/service/infra", "internal/service/opslifecycle"},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
+		ServiceBoundaries: []serviceBoundary{
+			{
+				Name:         "backup",
+				PackageRoot:  "internal/service/backup",
+				Files:        []string{"internal/service/backup/**/*.go"},
+				AllowService: []string{"internal/service/opslifecycle"},
+			},
+		},
+		AppBoundaries: []appBoundary{
+			{
+				Name:         "openbaocluster",
+				Files:        []string{"internal/app/openbaocluster/**/*.go"},
+				AllowService: []string{"internal/service/infra"},
+			},
+		},
+	}
+
+	if err := validatePolicy(policy); err != nil {
+		t.Fatalf("validatePolicy returned error: %v", err)
+	}
+}
+
+func TestValidatePolicyRejectsUnknownServiceBoundaryRoot(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{"internal/service/backup"},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
+		ServiceBoundaries: []serviceBoundary{
+			{
+				Name:        "backup",
+				PackageRoot: "internal/service/ghost",
+				Files:       []string{"internal/service/backup/**/*.go"},
+			},
+		},
+	}
+
+	err := validatePolicy(policy)
+	if err == nil {
+		t.Fatalf("expected validatePolicy to fail for unknown packageRoot")
+	}
+	if !strings.Contains(err.Error(), "serviceBoundaries[backup].packageRoot") {
+		t.Fatalf("expected error to mention service boundary packageRoot, got: %v", err)
+	}
+}
+
+func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath: "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{
+			"internal/service/backup",
+			"internal/service/infra",
+			"internal/service/opslifecycle",
+			"internal/service/upgrade",
+			"internal/service/upgrade/bluegreen",
+			"internal/service/upgrade/rolling",
+		},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
+		ServiceBoundaries: []serviceBoundary{
+			{
+				Name:         "backup",
+				DisplayName:  "Backup",
+				PackageRoot:  "internal/service/backup",
+				Files:        []string{"internal/service/backup/**/*.go"},
+				Ignores:      []string{"**/*_test.go"},
+				AllowService: []string{"internal/service/opslifecycle"},
+			},
+		},
+		AppBoundaries: []appBoundary{
+			{
+				Name:        "openbaocluster",
+				DisplayName: "OpenBaoCluster",
+				Files:       []string{"internal/app/openbaocluster/**/*.go"},
+				Ignores:     []string{"**/*_test.go"},
+				AllowService: []string{
+					"internal/service/backup",
+					"internal/service/infra",
+					"internal/service/upgrade/bluegreen",
+					"internal/service/upgrade/rolling",
+				},
+			},
+		},
+	}
+
+	specs, err := buildRuleSpecs(policy)
+	if err != nil {
+		t.Fatalf("buildRuleSpecs returned error: %v", err)
+	}
+
+	backupDisallowedRegex := `"github\.com/dc-tec/openbao-operator/(` +
+		`internal/service/infra(/[^"]*)?|` +
+		`internal/service/upgrade(/[^"]*)?|` +
+		`internal/service/upgrade/bluegreen(/[^"]*)?|` +
+		`internal/service/upgrade/rolling(/[^"]*)?)"`
+	openBaoClusterDisallowedRegex := `"github\.com/dc-tec/openbao-operator/(` +
+		`internal/service/opslifecycle(/[^"]*)?|` +
+		`internal/service/upgrade(/[^"]*)?)"`
+
+	want := map[string]string{
+		"no-backup-service-unapproved-service-imports":     backupDisallowedRegex,
+		"no-openbaocluster-app-unapproved-service-imports": openBaoClusterDisallowedRegex,
+	}
+
+	if len(specs) != len(want) {
+		t.Fatalf("unexpected number of rule specs: want %d got %d", len(want), len(specs))
+	}
+
+	for _, spec := range specs {
+		expectedRegex, ok := want[spec.ID]
+		if !ok {
+			t.Fatalf("unexpected rule spec ID: %s", spec.ID)
+		}
+		if spec.Regex != expectedRegex {
+			t.Fatalf("unexpected regex for %s:\nwant: %s\ngot:  %s", spec.ID, expectedRegex, spec.Regex)
+		}
+	}
+}

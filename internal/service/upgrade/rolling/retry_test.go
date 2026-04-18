@@ -394,7 +394,11 @@ func TestPatchRetryStatusSSA_ApplyPayloadOmitsClearedFailureFields(t *testing.T)
 		}).
 		Build()
 
-	manager := &Manager{client: k8sClient}
+	manager := &Manager{
+		client:          k8sClient,
+		reader:          k8sClient,
+		adminOpsMutator: testAdminOpsMutator(k8sClient),
+	}
 	cluster := stored.DeepCopy()
 	if err := manager.patchRetryStatusSSA(context.Background(), cluster, "retry-now"); err != nil {
 		t.Fatalf("patchRetryStatusSSA() error = %v", err)
@@ -627,7 +631,12 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			}
 			k8sClient := builder.Build()
 
-			mgr := &Manager{client: k8sClient, scheme: scheme}
+			mgr := &Manager{
+				client:          k8sClient,
+				reader:          k8sClient,
+				scheme:          scheme,
+				adminOpsMutator: testAdminOpsMutator(k8sClient),
+			}
 
 			resumed, err := mgr.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster)
 			if err != nil {

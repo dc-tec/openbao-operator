@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
@@ -151,6 +152,17 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 		deps.Platform,
 	)
 	backupRuntime := backupmanager.NewUpgradeStrategyRuntime(deps.Client, deps.Scheme)
+	adminOpsMutator := func(
+		ctx context.Context,
+		cluster *openbaov1alpha1.OpenBaoCluster,
+		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
+		forceOwnership bool,
+	) error {
+		return adminopsstatus.MutateWithReader(ctx, deps.APIReader, deps.Client, cluster, mutate, adminopsstatus.MutateOptions{
+			ForceOwnership:  forceOwnership,
+			RetryOnConflict: !forceOwnership,
+		})
+	}
 
 	return []subReconciler{
 		bluegreen.NewManager(
@@ -172,7 +184,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.Recorder,
-		).WithReader(deps.APIReader),
+		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
 		backupmanager.NewManager(
 			deps.Client,
 			deps.Scheme,
@@ -180,7 +192,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.Recorder,
-		).WithReader(deps.APIReader),
+		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
 	}
 }
 

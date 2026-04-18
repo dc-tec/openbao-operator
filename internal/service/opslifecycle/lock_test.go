@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/operationlock"
 )
 
 func TestOperationLockIsHeldBy(t *testing.T) {
@@ -34,7 +33,7 @@ func TestOperationLockIsHeldBy(t *testing.T) {
 func TestIsLockHeld(t *testing.T) {
 	t.Parallel()
 
-	heldErr := &operationlock.HeldError{
+	heldErr := &HeldError{
 		Operation: openbaov1alpha1.ClusterOperationBackup,
 		Holder:    "controller/backup",
 	}
@@ -58,7 +57,7 @@ func TestAddHeldAuditFields(t *testing.T) {
 	fields := map[string]string{
 		"cluster_name": "openbao",
 	}
-	err := &operationlock.HeldError{
+	err := &HeldError{
 		Operation: openbaov1alpha1.ClusterOperationUpgrade,
 		Holder:    "controller/upgrade",
 	}

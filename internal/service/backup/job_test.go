@@ -648,7 +648,10 @@ func TestEnsureBackupJob_CreatesJob(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	scheduled := time.Date(2025, 1, 15, 3, 0, 0, 0, time.UTC)
@@ -695,7 +698,10 @@ func TestEnsureBackupJob_CreateAlreadyExists(t *testing.T) {
 		}).
 		Build()
 
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -724,7 +730,10 @@ func TestEnsureBackupJob_JobAlreadyRunning(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, runningJob)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -754,7 +763,10 @@ func TestEnsureBackupJob_JobCompleted(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, completedJob)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -791,7 +803,10 @@ func TestEnsureBackupJob_JobFailed(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, failedJob)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	created, err := manager.ensureBackupJob(ctx, logger, cluster, jobName, scheduled)
 	if err != nil {
@@ -824,7 +839,10 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, cluster, succeededJob)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -875,7 +893,10 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, cluster, failedJob)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
@@ -947,7 +968,10 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, cluster, failedJob)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	// First call should update status
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -1005,7 +1029,10 @@ func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 
 	// Should not error when job doesn't exist
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
@@ -1036,7 +1063,10 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	ctx := context.Background()
 	logger := logr.Discard()
 	k8sClient := newTestClient(t, runningJob)
-	manager := NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(k8sClient, testScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), ""),
+		k8sClient,
+	)
 	manager.operatorImageVerifier = security.NewImageVerifier(log.Log.WithName("backup-image-verifier"), k8sClient, nil)
 
 	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)

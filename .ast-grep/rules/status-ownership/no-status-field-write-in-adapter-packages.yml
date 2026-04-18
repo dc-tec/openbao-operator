@@ -10,7 +10,6 @@ files:
   - internal/adapter/config/**/*.go
   - internal/adapter/kube/**/*.go
   - internal/adapter/openbao/**/*.go
-  - internal/adapter/operationlock/**/*.go
   - internal/adapter/probe/**/*.go
   - internal/adapter/raft/**/*.go
   - internal/adapter/revision/**/*.go
@@ -19,8 +18,6 @@ files:
   - internal/adapter/storageenv/**/*.go
 ignores:
   - '**/*_test.go'
-  # Transitional ownership exception tracked separately.
-  - internal/adapter/operationlock/**/*.go
 rule:
   any:
     - pattern: $OBJ.Status = $VALUE

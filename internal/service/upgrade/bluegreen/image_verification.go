@@ -10,7 +10,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
@@ -26,7 +25,20 @@ func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) str
 }
 
 func resolveInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	return inframanager.ResolveInitContainerImage(cluster)
+	if cluster.Spec.InitContainer != nil && cluster.Spec.InitContainer.Image != "" {
+		return cluster.Spec.InitContainer.Image, nil
+	}
+	image, err := constants.DefaultInitImage()
+	if err != nil {
+		return "", operatorerrors.WrapPermanentConfig(operatorerrors.WithReason(
+			constants.ReasonHelperImageConfigurationInvalid,
+			fmt.Errorf(
+				"default init container image is unavailable; set spec.initContainer.image explicitly or configure OPERATOR_VERSION in the operator Deployment: %w",
+				err,
+			),
+		))
+	}
+	return image, nil
 }
 
 func (m *Manager) verifyImageDigest(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, imageRef string, failureReason string, failureMessagePrefix string) (string, error) {

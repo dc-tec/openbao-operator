@@ -63,13 +63,16 @@ func TestHandleManualTrigger_EmitsAcceptedEvent(t *testing.T) {
 
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := newTestClient(t, cluster)
-	manager := NewManager(
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(
+			k8sClient,
+			testScheme,
+			portopenbao.ClientConfig{},
+			security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+			"",
+			recorder,
+		),
 		k8sClient,
-		testScheme,
-		portopenbao.ClientConfig{},
-		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-		"",
-		recorder,
 	)
 
 	manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
@@ -107,13 +110,16 @@ func TestProcessBackupJobResult_EmitsCompletedEvent(t *testing.T) {
 
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := newTestClient(t, cluster, job)
-	manager := NewManager(
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(
+			k8sClient,
+			testScheme,
+			portopenbao.ClientConfig{},
+			security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+			"",
+			recorder,
+		),
 		k8sClient,
-		testScheme,
-		portopenbao.ClientConfig{},
-		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-		"",
-		recorder,
 	)
 
 	statusUpdated, err := manager.processBackupJobResult(context.Background(), logr.Discard(), cluster, jobName)
@@ -145,13 +151,16 @@ func TestProcessBackupJobResult_EmitsFailedEvent(t *testing.T) {
 
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := newTestClient(t, cluster, job)
-	manager := NewManager(
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(
+			k8sClient,
+			testScheme,
+			portopenbao.ClientConfig{},
+			security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+			"",
+			recorder,
+		),
 		k8sClient,
-		testScheme,
-		portopenbao.ClientConfig{},
-		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-		"",
-		recorder,
 	)
 
 	statusUpdated, err := manager.processBackupJobResult(context.Background(), logr.Discard(), cluster, jobName)
@@ -173,13 +182,16 @@ func TestEnsureBackupJob_EmitsIdentityConfigurationEvent(t *testing.T) {
 
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := newTestClient(t, cluster)
-	manager := NewManager(
+	manager := withTestAdminOpsStatusPersistence(
+		NewManager(
+			k8sClient,
+			testScheme,
+			portopenbao.ClientConfig{},
+			security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+			"",
+			recorder,
+		),
 		k8sClient,
-		testScheme,
-		portopenbao.ClientConfig{},
-		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-		"",
-		recorder,
 	)
 
 	inProgress, err := manager.ensureBackupJob(context.Background(), logr.Discard(), cluster, backupJobName(cluster, scheduled), scheduled)

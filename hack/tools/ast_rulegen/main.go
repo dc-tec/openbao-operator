@@ -22,6 +22,8 @@ type architecturePolicy struct {
 	ServiceImportRoots     []string               `yaml:"serviceImportRoots"`
 	AdapterImportRoots     []string               `yaml:"adapterImportRoots"`
 	ControllerBoundaries   []controllerBoundary   `yaml:"controllerBoundaries"`
+	ServiceBoundaries      []serviceBoundary      `yaml:"serviceBoundaries"`
+	AppBoundaries          []appBoundary          `yaml:"appBoundaries"`
 	GlobalImportBoundaries []globalImportBoundary `yaml:"globalImportBoundaries"`
 }
 
@@ -45,6 +47,23 @@ type controllerBoundary struct {
 	AppFacadeRoot   string   `yaml:"appFacadeRoot"`
 	AllowService    []string `yaml:"allowServiceImports"`
 	AllowAdapter    []string `yaml:"allowAdapterImports"`
+}
+
+type serviceBoundary struct {
+	Name         string   `yaml:"name"`
+	DisplayName  string   `yaml:"displayName"`
+	PackageRoot  string   `yaml:"packageRoot"`
+	Files        []string `yaml:"files"`
+	Ignores      []string `yaml:"ignores"`
+	AllowService []string `yaml:"allowServiceImports"`
+}
+
+type appBoundary struct {
+	Name         string   `yaml:"name"`
+	DisplayName  string   `yaml:"displayName"`
+	Files        []string `yaml:"files"`
+	Ignores      []string `yaml:"ignores"`
+	AllowService []string `yaml:"allowServiceImports"`
 }
 
 type globalImportBoundary struct {
@@ -175,8 +194,29 @@ func validatePolicy(policy architecturePolicy) error {
 		return errors.New("policy adapterImportRoots must not be empty")
 	}
 
-	seenController := make(map[string]struct{}, len(policy.ControllerBoundaries))
-	for _, boundary := range policy.ControllerBoundaries {
+	if err := validateControllerBoundaries(policy.ControllerBoundaries, serviceRoots, adapterRoots); err != nil {
+		return err
+	}
+	if err := validateServiceBoundaries(policy.ServiceBoundaries, serviceRoots); err != nil {
+		return err
+	}
+	if err := validateAppBoundaries(policy.AppBoundaries, serviceRoots); err != nil {
+		return err
+	}
+	if err := validateGlobalImportBoundaries(policy.GlobalImportBoundaries); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateControllerBoundaries(
+	boundaries []controllerBoundary,
+	serviceRoots []string,
+	adapterRoots []string,
+) error {
+	seenController := make(map[string]struct{}, len(boundaries))
+	for _, boundary := range boundaries {
 		if strings.TrimSpace(boundary.Name) == "" {
 			return errors.New("controllerBoundaries.name is required")
 		}
@@ -194,17 +234,15 @@ func validatePolicy(policy architecturePolicy) error {
 		if strings.TrimSpace(boundary.AppFacadeRoot) == "" {
 			return fmt.Errorf("controllerBoundaries[%s].appFacadeRoot must not be empty", boundary.Name)
 		}
-		if err := ensureSubset(
-			boundary.Name,
-			"allowServiceImports",
+		if err := ensureKnownRoots(
+			fmt.Sprintf("controllerBoundaries[%s].allowServiceImports", boundary.Name),
 			boundary.AllowService,
 			serviceRoots,
 		); err != nil {
 			return err
 		}
-		if err := ensureSubset(
-			boundary.Name,
-			"allowAdapterImports",
+		if err := ensureKnownRoots(
+			fmt.Sprintf("controllerBoundaries[%s].allowAdapterImports", boundary.Name),
 			boundary.AllowAdapter,
 			adapterRoots,
 		); err != nil {
@@ -212,8 +250,74 @@ func validatePolicy(policy architecturePolicy) error {
 		}
 	}
 
-	seenRule := make(map[string]struct{}, len(policy.GlobalImportBoundaries))
-	for _, boundary := range policy.GlobalImportBoundaries {
+	return nil
+}
+
+func validateServiceBoundaries(boundaries []serviceBoundary, serviceRoots []string) error {
+	seenService := make(map[string]struct{}, len(boundaries))
+	for _, boundary := range boundaries {
+		if strings.TrimSpace(boundary.Name) == "" {
+			return errors.New("serviceBoundaries.name is required")
+		}
+		if _, exists := seenService[boundary.Name]; exists {
+			return fmt.Errorf("duplicate serviceBoundaries entry for %q", boundary.Name)
+		}
+		seenService[boundary.Name] = struct{}{}
+
+		if strings.TrimSpace(boundary.PackageRoot) == "" {
+			return fmt.Errorf("serviceBoundaries[%s].packageRoot is required", boundary.Name)
+		}
+		if len(boundary.Files) == 0 {
+			return fmt.Errorf("serviceBoundaries[%s].files must not be empty", boundary.Name)
+		}
+		if err := ensureKnownRoot(
+			fmt.Sprintf("serviceBoundaries[%s].packageRoot", boundary.Name),
+			boundary.PackageRoot,
+			serviceRoots,
+		); err != nil {
+			return err
+		}
+		if err := ensureKnownRoots(
+			fmt.Sprintf("serviceBoundaries[%s].allowServiceImports", boundary.Name),
+			boundary.AllowService,
+			serviceRoots,
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateAppBoundaries(boundaries []appBoundary, serviceRoots []string) error {
+	seenApp := make(map[string]struct{}, len(boundaries))
+	for _, boundary := range boundaries {
+		if strings.TrimSpace(boundary.Name) == "" {
+			return errors.New("appBoundaries.name is required")
+		}
+		if _, exists := seenApp[boundary.Name]; exists {
+			return fmt.Errorf("duplicate appBoundaries entry for %q", boundary.Name)
+		}
+		seenApp[boundary.Name] = struct{}{}
+
+		if len(boundary.Files) == 0 {
+			return fmt.Errorf("appBoundaries[%s].files must not be empty", boundary.Name)
+		}
+		if err := ensureKnownRoots(
+			fmt.Sprintf("appBoundaries[%s].allowServiceImports", boundary.Name),
+			boundary.AllowService,
+			serviceRoots,
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateGlobalImportBoundaries(boundaries []globalImportBoundary) error {
+	seenRule := make(map[string]struct{}, len(boundaries))
+	for _, boundary := range boundaries {
 		if strings.TrimSpace(boundary.ID) == "" {
 			return errors.New("globalImportBoundaries.id is required")
 		}
@@ -242,10 +346,7 @@ func validatePolicy(policy architecturePolicy) error {
 	return nil
 }
 
-func ensureSubset(
-	boundaryName, fieldName string,
-	values, allowed []string,
-) error {
+func ensureKnownRoots(location string, values, allowed []string) error {
 	allowedSet := make(map[string]struct{}, len(allowed))
 	for _, root := range allowed {
 		allowedSet[root] = struct{}{}
@@ -255,14 +356,26 @@ func ensureSubset(
 		if _, ok := allowedSet[value]; ok {
 			continue
 		}
-		return fmt.Errorf(
-			"controllerBoundaries[%s].%s contains unknown root %q",
-			boundaryName,
-			fieldName,
-			value,
-		)
+		return fmt.Errorf("%s contains unknown root %q", location, value)
 	}
 	return nil
+}
+
+func ensureKnownRoot(location, value string, allowed []string) error {
+	value = strings.Trim(strings.TrimSpace(value), "/")
+	if value == "" {
+		return fmt.Errorf("%s is required", location)
+	}
+
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, root := range allowed {
+		allowedSet[root] = struct{}{}
+	}
+	if _, ok := allowedSet[value]; ok {
+		return nil
+	}
+
+	return fmt.Errorf("%s contains unknown root %q", location, value)
 }
 
 func verifyControllerCoverage(policy architecturePolicy) error {
@@ -622,7 +735,10 @@ func buildRuleSpecs(policy architecturePolicy) ([]ruleSpec, error) {
 	specs := make(
 		[]ruleSpec,
 		0,
-		len(policy.ControllerBoundaries)*4+len(policy.GlobalImportBoundaries),
+		len(policy.ControllerBoundaries)*4+
+			len(policy.ServiceBoundaries)+
+			len(policy.AppBoundaries)+
+			len(policy.GlobalImportBoundaries),
 	)
 
 	modulePath := strings.TrimSuffix(strings.TrimSpace(policy.ModulePath), "/")
@@ -722,6 +838,67 @@ func buildRuleSpecs(policy architecturePolicy) ([]ruleSpec, error) {
 				Regex:   adapterRegex,
 			})
 		}
+	}
+
+	for _, boundary := range policy.ServiceBoundaries {
+		serviceLabel := strings.TrimSpace(boundary.DisplayName)
+		if serviceLabel == "" {
+			serviceLabel = strings.TrimSpace(boundary.Name)
+		}
+
+		allowedRoots := append([]string{boundary.PackageRoot}, boundary.AllowService...)
+		unapprovedServiceImports := differenceRoots(serviceRoots, allowedRoots)
+		if len(unapprovedServiceImports) == 0 {
+			continue
+		}
+
+		serviceRegex, err := importRegex(modulePath, unapprovedServiceImports, nil, nil)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"build unapproved-service regex for service %s: %w",
+				boundary.Name,
+				err,
+			)
+		}
+
+		specs = append(specs, ruleSpec{
+			ID:      "no-" + sanitizeName(boundary.Name) + "-service-unapproved-service-imports",
+			Message: serviceImportsMessage(serviceLabel),
+			Note:    serviceImportsNote(boundary.PackageRoot, boundary.AllowService),
+			Files:   boundary.Files,
+			Ignores: boundary.Ignores,
+			Regex:   serviceRegex,
+		})
+	}
+
+	for _, boundary := range policy.AppBoundaries {
+		appLabel := strings.TrimSpace(boundary.DisplayName)
+		if appLabel == "" {
+			appLabel = strings.TrimSpace(boundary.Name)
+		}
+
+		unapprovedServiceImports := differenceRoots(serviceRoots, boundary.AllowService)
+		if len(unapprovedServiceImports) == 0 {
+			continue
+		}
+
+		serviceRegex, err := importRegex(modulePath, unapprovedServiceImports, nil, nil)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"build unapproved-service regex for app %s: %w",
+				boundary.Name,
+				err,
+			)
+		}
+
+		specs = append(specs, ruleSpec{
+			ID:      "no-" + sanitizeName(boundary.Name) + "-app-unapproved-service-imports",
+			Message: appServiceImportsMessage(appLabel),
+			Note:    appServiceImportsNote(boundary.AllowService),
+			Files:   boundary.Files,
+			Ignores: boundary.Ignores,
+			Regex:   serviceRegex,
+		})
 	}
 
 	for _, boundary := range policy.GlobalImportBoundaries {
@@ -916,6 +1093,35 @@ func controllerAdapterImportsMessage(controllerLabel string) string {
 func controllerAdapterImportsNote(allowed []string) string {
 	return fmt.Sprintf(
 		"Approved adapter imports for this controller: %s.",
+		formatAllowList(allowed),
+	)
+}
+
+func serviceImportsMessage(serviceLabel string) string {
+	return fmt.Sprintf(
+		"%s service must only import explicitly approved service packages.",
+		serviceLabel,
+	)
+}
+
+func serviceImportsNote(packageRoot string, allowed []string) string {
+	approved := append([]string{packageRoot}, allowed...)
+	return fmt.Sprintf(
+		"Approved service imports for this service: %s.",
+		formatAllowList(approved),
+	)
+}
+
+func appServiceImportsMessage(appLabel string) string {
+	return fmt.Sprintf(
+		"%s app package must only import explicitly approved service packages.",
+		appLabel,
+	)
+}
+
+func appServiceImportsNote(allowed []string) string {
+	return fmt.Sprintf(
+		"Approved service imports for this app package: %s.",
 		formatAllowList(allowed),
 	)
 }
