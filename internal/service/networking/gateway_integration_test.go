@@ -1,4 +1,4 @@
-package infra
+package networking
 
 import (
 	"context"
@@ -219,7 +219,7 @@ func TestValidateGatewayIntegration(t *testing.T) {
 			}
 
 			k8sClient := builder.Build()
-			manager := NewManagerWithReader(k8sClient, k8sClient, testScheme, "openbao-operator-system", "", nil, "")
+			manager := NewManagerWithReader(k8sClient, k8sClient, testScheme, "openbao-operator-system", "")
 			err := manager.ValidateGatewayIntegration(context.Background(), tt.cluster)
 			if tt.wantError == nil {
 				if err != nil {
@@ -270,8 +270,6 @@ func TestValidateGatewayIntegration_ForbiddenGatewayReadIsCapabilitiesUnknown(t 
 		forbiddenGatewayReader{Reader: k8sClient},
 		testScheme,
 		"openbao-operator-system",
-		"",
-		nil,
 		"",
 	)
 

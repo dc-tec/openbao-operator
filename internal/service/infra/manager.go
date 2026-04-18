@@ -37,11 +37,6 @@ const (
 	configFileName           = "config.hcl"
 	configTemplatePath       = "/etc/bao/config/config.hcl"
 	configInitTemplatePath   = "/etc/bao/config-init/config.hcl"
-	publicServiceSuffix      = "-public"
-	acmeServiceSuffix        = "-acme"
-	httpRouteSuffix          = "-httproute"
-	tlsRouteSuffix           = "-tlsroute"
-	backendTLSPolicySuffix   = "-backend-tls-policy"
 	openBaoConfigMountPath   = constants.PathConfig
 	openBaoRenderedConfig    = "/etc/bao/rendered-config/config.hcl"
 	openBaoTLSMountPath      = constants.PathTLS
@@ -71,7 +66,7 @@ type Manager struct {
 
 // NewManager constructs a Manager that uses the provided Kubernetes client.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
-// operatorNamespace is the namespace where the operator is deployed, used for NetworkPolicy rules.
+// operatorNamespace is the namespace where the operator is deployed, used for bootstrap rendering.
 // oidcIssuer and oidcJWTKeys are the OIDC configuration discovered at operator startup.
 func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string, platform string) *Manager {
 	return &Manager{
@@ -141,10 +136,10 @@ func (m *Manager) SetOIDCConfig(config *portauth.OIDCConfig) {
 // The current implementation focuses on:
 //   - Managing a per-cluster static auto-unseal Secret (only when using static seal).
 //   - Rendering a config.hcl ConfigMap that injects TLS paths, storage configuration, retry_join, and seal configuration.
-//   - Reconciling workload-supporting resources such as Services, Ingress/Gateway, RBAC, and NetworkPolicies.
+//   - Reconciling bootstrap-supporting resources such as self-init configuration, ACME cache, and workload identity.
 //
-// The workload controller is responsible for StatefulSet/PDB reconciliation and consumes the
-// returned config content as part of that separate reconciliation step.
+// The networking and workload controllers are responsible for network-facing resources and
+// StatefulSet/PDB reconciliation and consume the returned config content as separate steps.
 func (m *Manager) PrepareWorkload(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
 	// Only create unseal secret if using static seal (default or explicit)
 	if usesStaticSeal(cluster) {
@@ -154,10 +149,6 @@ func (m *Manager) PrepareWorkload(ctx context.Context, logger logr.Logger, clust
 	}
 
 	if err := m.validateUnsealPrerequisites(ctx, cluster); err != nil {
-		return "", err
-	}
-
-	if err := m.runACMEPreflight(ctx, logger, cluster); err != nil {
 		return "", err
 	}
 
@@ -192,39 +183,7 @@ func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logge
 		return err
 	}
 
-	if err := m.ensureHeadlessService(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureExternalService(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureACMEChallengeService(ctx, logger, cluster); err != nil {
-		return err
-	}
-
 	if err := m.ensureACMESharedCachePVC(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureIngress(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureHTTPRoute(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureTLSRoute(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureGatewayCAConfigMap(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureBackendTLSPolicy(ctx, logger, cluster); err != nil {
 		return err
 	}
 
@@ -233,20 +192,6 @@ func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logge
 	}
 
 	if err := m.ensureRBAC(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	// CRITICAL: Create NetworkPolicy BEFORE StatefulSet to ensure pods boot up
-	// in a protected state. This prevents a race condition where pods could
-	// be running without network restrictions.
-	if err := m.ensureNetworkPolicy(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	// Backup/restore/upgrade-snapshot Jobs are excluded from the primary pod
-	// NetworkPolicy (they often need different egress). Ensure they still run
-	// under an explicit policy.
-	if err := m.ensureJobNetworkPolicy(ctx, logger, cluster); err != nil {
 		return err
 	}
 
@@ -363,24 +308,6 @@ func infraLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
 	}
 }
 
-func podSelectorLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	return podSelectorLabelsWithRevision(cluster, "")
-}
-
-// podSelectorLabelsWithRevision returns pod selector labels including the revision label.
-// If rev is empty, returns base labels (for backward compatibility).
-// Otherwise, includes the revision label for blue/green deployments.
-func podSelectorLabelsWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) map[string]string {
-	labels := infraLabels(cluster)
-	if rev != "" {
-		if labels == nil {
-			labels = make(map[string]string)
-		}
-		labels[constants.LabelOpenBaoRevision] = rev
-	}
-	return labels
-}
-
 func unsealSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + constants.SuffixUnsealKey
 }
@@ -396,28 +323,8 @@ func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + configInitMapSuffix
 }
 
-func tlsServerSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixTLSServer
-}
-
 func headlessServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name
-}
-
-func externalServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + publicServiceSuffix
-}
-
-func acmeServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + acmeServiceSuffix
-}
-
-func externalServiceNameBlue(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return externalServiceName(cluster) + "-blue"
-}
-
-func externalServiceNameGreen(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return externalServiceName(cluster) + "-green"
 }
 
 // statefulSetNameWithRevision returns the StatefulSet name for a given revision.

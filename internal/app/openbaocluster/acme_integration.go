@@ -13,7 +13,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
 
 // ACMEIntegrationDependencies groups infrastructure readers required to evaluate
@@ -41,12 +41,11 @@ func EvaluateACMEIntegration(
 	deps ACMEIntegrationDependencies,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) ACMEIntegrationResult {
-	manager := inframanager.NewManagerWithReaderAndOIDCConfig(
+	manager := networkingmanager.NewManagerWithReader(
 		deps.Client,
 		deps.APIReader,
 		deps.Scheme,
 		deps.OperatorNamespace,
-		nil,
 		deps.Platform,
 	)
 	err := manager.ValidateACMEPreflight(ctx, logr.Discard(), cluster)
@@ -58,19 +57,19 @@ func EvaluateACMEIntegration(
 			Reason:  constants.ReasonACMEIntegrationReady,
 			Message: "ACME integration prerequisites are satisfied",
 		}
-	case errors.Is(err, inframanager.ErrGatewayAPIMissing):
+	case errors.Is(err, networkingmanager.ErrGatewayAPIMissing):
 		return ACMEIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonGatewayAPIMissing,
 			Message: "Gateway API CRDs required for ACME passthrough are not installed",
 		}
-	case errors.Is(err, inframanager.ErrACMEGatewayNotConfiguredForPassthrough):
+	case errors.Is(err, networkingmanager.ErrACMEGatewayNotConfiguredForPassthrough):
 		return ACMEIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonACMEGatewayNotConfiguredForPassthrough,
 			Message: err.Error(),
 		}
-	case errors.Is(err, inframanager.ErrACMEDomainNotResolvable):
+	case errors.Is(err, networkingmanager.ErrACMEDomainNotResolvable):
 		return ACMEIntegrationResult{
 			Status:  metav1.ConditionFalse,
 			Reason:  constants.ReasonACMEDomainNotResolvable,

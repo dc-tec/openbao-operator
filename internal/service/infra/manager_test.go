@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -213,7 +214,7 @@ func TestReconcile_ACMEMode_PreflightRejectsGatewayTermination(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected Reconcile() to fail preflight for ACME + Gateway termination")
 	}
-	if !errors.Is(err, ErrACMEGatewayNotConfiguredForPassthrough) {
+	if !errors.Is(err, networkingmanager.ErrACMEGatewayNotConfiguredForPassthrough) {
 		t.Fatalf("expected ErrACMEGatewayNotConfiguredForPassthrough, got %T: %v", err, err)
 	}
 }
@@ -270,7 +271,7 @@ func TestReconcile_ACMEMode_PreflightRejectsUnresolvableDomainForPrivateCA(t *te
 	if err == nil {
 		t.Fatalf("expected Reconcile() to fail preflight for unresolvable ACME domain")
 	}
-	if !errors.Is(err, ErrACMEDomainNotResolvable) {
+	if !errors.Is(err, networkingmanager.ErrACMEDomainNotResolvable) {
 		t.Fatalf("expected ErrACMEDomainNotResolvable, got %T: %v", err, err)
 	}
 }

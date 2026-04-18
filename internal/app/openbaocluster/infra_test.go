@@ -25,6 +25,7 @@ import (
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
@@ -561,11 +562,11 @@ func TestInfraReconciler_MapManagerReconcileError(t *testing.T) {
 		wantReason string
 	}{
 		{name: "oidc bootstrap audience mismatch", err: inframanager.ErrOIDCBootstrapAudienceMismatch, wantReason: constants.ReasonOIDCBootstrapConfigurationInvalid},
-		{name: "gateway api missing", err: inframanager.ErrGatewayAPIMissing, wantReason: constants.ReasonGatewayAPIMissing},
-		{name: "api server network invalid", err: inframanager.ErrAPIServerNetworkConfigurationInvalid, wantReason: constants.ReasonAPIServerNetworkConfigurationInvalid},
+		{name: "gateway api missing", err: networkingmanager.ErrGatewayAPIMissing, wantReason: constants.ReasonGatewayAPIMissing},
+		{name: "api server network invalid", err: networkingmanager.ErrAPIServerNetworkConfigurationInvalid, wantReason: constants.ReasonAPIServerNetworkConfigurationInvalid},
 		{name: "prerequisites missing", err: workloadsvc.ErrStatefulSetPrerequisitesMissing, wantReason: constants.ReasonPrerequisitesMissing},
-		{name: "acme domain not resolvable", err: inframanager.ErrACMEDomainNotResolvable, wantReason: constants.ReasonACMEDomainNotResolvable},
-		{name: "acme gateway not configured", err: inframanager.ErrACMEGatewayNotConfiguredForPassthrough, wantReason: constants.ReasonACMEGatewayNotConfiguredForPassthrough},
+		{name: "acme domain not resolvable", err: networkingmanager.ErrACMEDomainNotResolvable, wantReason: constants.ReasonACMEDomainNotResolvable},
+		{name: "acme gateway not configured", err: networkingmanager.ErrACMEGatewayNotConfiguredForPassthrough, wantReason: constants.ReasonACMEGatewayNotConfiguredForPassthrough},
 	}
 
 	r := &infraReconciler{}
