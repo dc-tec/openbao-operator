@@ -8,6 +8,7 @@ layerCoverage:
     app:
       - app
     service:
+      - service/bootstrap
       - service/backup
       - service/certs
       - service/infra
@@ -51,6 +52,7 @@ controllerCoverage:
   root: internal/controller
 
 serviceImportRoots:
+  - internal/service/bootstrap
   - internal/service/backup
   - internal/service/certs
   - internal/service/infra
@@ -126,6 +128,14 @@ controllerBoundaries:
     allowAdapterImports: []
 
 serviceBoundaries:
+  - name: bootstrap
+    displayName: Bootstrap
+    packageRoot: internal/service/bootstrap
+    files:
+      - internal/service/bootstrap/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
   - name: infra
     displayName: Infra
     packageRoot: internal/service/infra
@@ -236,6 +246,7 @@ appBoundaries:
       - internal/app/openbaocluster/deletionops/**/*.go
       - internal/app/openbaocluster/statusops/**/*.go
     allowServiceImports:
+      - internal/service/bootstrap
       - internal/service/certs
       - internal/service/infra
       - internal/service/networking
@@ -304,6 +315,7 @@ globalImportBoundaries:
     disallowImports:
       - internal/controller
       - internal/service/backup
+      - internal/service/bootstrap
       - internal/service/certs
       - internal/service/infra
       - internal/service/init
