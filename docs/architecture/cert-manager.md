@@ -11,8 +11,6 @@ description: Manage TLS certificate sources, rotation windows, and hot-reload si
   lede="The cert manager keeps TLS lifecycle close to the workload contract. It decides whether certificates are operator-managed, externally supplied, or handled by ACME, and it turns certificate changes into reload signals rather than pod restarts."
 />
 
-
-
 <ManagerAtAGlance
   sections={[
     {
@@ -154,9 +152,9 @@ When `spec.tls.mode=ACME`, the cert manager still participates in rendering the 
   title="Related deep dives"
   items={[
     {
-      label: 'Infrastructure manager',
-      description: 'See how TLS mode changes rendered config, volume mounts, and pod expectations in the workload path.',
-      docId: 'architecture/infra-manager',
+      label: 'Workload managers',
+      description: 'See how bootstrap, networking, identity, and workload services consume TLS outputs on the workload path.',
+      docId: 'architecture/workload-managers',
     },
     {
       label: 'TLS security guide',
