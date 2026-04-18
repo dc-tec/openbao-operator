@@ -85,6 +85,10 @@ func (m *Manager) prepareBlueGreenReconcile(
 		return res, true, err
 	}
 
+	if result, waiting, err := m.ensureSteadyReadReplicasScaledDown(ctx, logger, cluster); waiting || err != nil {
+		return result, true, err
+	}
+
 	return recon.Result{}, false, nil
 }
 

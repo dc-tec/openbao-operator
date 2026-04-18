@@ -136,6 +136,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	stagedScaleDown := false
 	stagedReadReplicaScaleDown := false
 	stagedRestartOrdering := false
+	applyOperationalReadReplicaStageDown(cluster, &readSpec)
 
 	currentSTS := &appsv1.StatefulSet{}
 	readCurrentSTS := &appsv1.StatefulSet{}

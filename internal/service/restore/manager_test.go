@@ -12,6 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -281,6 +282,76 @@ func TestReconcilePhaseRouting(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateClusterState_WaitsForSteadyReadReplicaDrain(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, appsv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-cluster",
+			Namespace:       "default",
+			ResourceVersion: "1",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true,
+		},
+	}
+
+	replicas := int32(1)
+	readSTS := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "test-cluster-read",
+			Namespace:  "default",
+			Generation: 1,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+		},
+		Status: appsv1.StatefulSetStatus{
+			ObservedGeneration: 1,
+			Replicas:           1,
+			ReadyReplicas:      1,
+			CurrentReplicas:    1,
+		},
+	}
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-restore",
+			Namespace:       "default",
+			ResourceVersion: "1",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, readSTS, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	result, err := mgr.validateClusterState(context.Background(), testLogger(), restore, cluster)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, restoreRequeueImmediately, result.RequeueAfter)
+
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: restore.Name, Namespace: restore.Namespace}, updated))
+	assert.Contains(t, updated.Status.Message, "Waiting for steady read replicas to scale down before restore starts")
 }
 
 func TestReconcileTerminalPhase_ReleasesOperationLock(t *testing.T) {
