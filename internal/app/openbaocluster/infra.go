@@ -160,12 +160,15 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		return recon.Result{}, err
 	}
 
-	manager := r.newInfraManager(effectiveOIDC)
+	manager := r.newBootstrapManager(effectiveOIDC)
 	configContent, err := manager.PrepareWorkload(ctx, logger, cluster)
 	if err != nil {
 		return recon.Result{}, r.mapManagerReconcileError(err)
 	}
 	if err := r.newNetworkingManager().Reconcile(ctx, logger, cluster); err != nil {
+		return recon.Result{}, r.mapManagerReconcileError(err)
+	}
+	if err := r.newInfraManager().Reconcile(ctx, logger, cluster); err != nil {
 		return recon.Result{}, r.mapManagerReconcileError(err)
 	}
 	if err := r.newWorkloadManager().Reconcile(ctx, logger, cluster, configContent, spec); err != nil {

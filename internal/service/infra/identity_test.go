@@ -22,7 +22,7 @@ const (
 
 func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-sa", ns)
@@ -58,7 +58,7 @@ func TestEnsureServiceAccountCreatesAndUpdates(t *testing.T) {
 
 func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-sa-idempotent", ns)
@@ -112,7 +112,7 @@ func TestEnsureServiceAccount_IsIdempotent(t *testing.T) {
 
 func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-rbac", ns)
@@ -255,7 +255,7 @@ func TestEnsureRBACCreatesRoleAndRoleBinding(t *testing.T) {
 
 func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-rbac-bluegreen", ns)
@@ -320,7 +320,7 @@ func contains(values []string, needle string) bool {
 
 func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
 
 	ns := testNamespace(t)
 	cluster := newMinimalCluster("infra-rbac-idempotent", ns)
@@ -379,7 +379,7 @@ func TestEnsureRBAC_IsIdempotent(t *testing.T) {
 // Cleanup() no longer manually deletes ServiceAccounts - GC handles this.
 func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	ns := testNamespace(t)
@@ -439,7 +439,7 @@ func TestServiceAccountHasOwnerReferenceForGC(t *testing.T) {
 // Cleanup() no longer manually deletes RBAC resources - GC handles this.
 func TestRBACHasOwnerReferenceForGC(t *testing.T) {
 	k8sClient, scheme := envtestClientForPackage(t)
-	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "", nil, "")
+	manager := NewManager(k8sClient, scheme, "openbao-operator-system", "")
 
 	// Create the cluster in the fake client so it has a UID for OwnerReference
 	ns := testNamespace(t)

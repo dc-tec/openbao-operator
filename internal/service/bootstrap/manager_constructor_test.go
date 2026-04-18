@@ -1,4 +1,4 @@
-package infra
+package bootstrap
 
 import (
 	"testing"
@@ -29,7 +29,6 @@ func TestNewManagerWithReaderAndOIDCConfig(t *testing.T) {
 		scheme,
 		"openbao-operator-system",
 		config,
-		"test-platform",
 	)
 
 	if manager.reader != k8sClient {

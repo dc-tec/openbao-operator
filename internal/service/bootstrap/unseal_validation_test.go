@@ -1,4 +1,4 @@
-package infra
+package bootstrap
 
 import (
 	"context"
@@ -33,7 +33,7 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -53,7 +53,7 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil {
 			t.Fatal("validateUnsealPrerequisites() error = nil, want error")
@@ -90,7 +90,7 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil {
 			t.Fatal("validateUnsealPrerequisites() error = nil, want error")
@@ -139,7 +139,7 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -157,7 +157,7 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil {
 			t.Fatal("validateUnsealPrerequisites() error = nil, want error")
@@ -179,7 +179,7 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil {
 			t.Fatal("validateUnsealPrerequisites() error = nil, want error")
@@ -215,7 +215,7 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil {
 			t.Fatal("validateUnsealPrerequisites() error = nil, want error")
@@ -262,7 +262,7 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		err = mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil {
 			t.Fatal("validateUnsealPrerequisites() error = nil, want error")
@@ -286,7 +286,7 @@ func TestValidateGCPCKMSUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -305,7 +305,7 @@ func TestValidateGCPCKMSUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -318,7 +318,7 @@ func TestValidateGCPCKMSUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr = NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr = NewManager(client, testScheme, "operator-system")
 		err = mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -326,7 +326,7 @@ func TestValidateGCPCKMSUnsealPrerequisites(t *testing.T) {
 
 		secret.Data["credentials.json"] = []byte(`{"type":"service_account"}`)
 		client = fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr = NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr = NewManager(client, testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -344,7 +344,7 @@ func TestValidateAWSKMSUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -368,7 +368,7 @@ func TestValidateAWSKMSUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -376,7 +376,7 @@ func TestValidateAWSKMSUnsealPrerequisites(t *testing.T) {
 
 		secret.Data["AWS_SECRET_ACCESS_KEY"] = []byte("secret")
 		client = fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr = NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr = NewManager(client, testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -394,7 +394,7 @@ func TestValidateAzureKeyVaultUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -418,7 +418,7 @@ func TestValidateAzureKeyVaultUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -427,7 +427,7 @@ func TestValidateAzureKeyVaultUnsealPrerequisites(t *testing.T) {
 		secret.Data["AZURE_TENANT_ID"] = []byte("tenant")
 		secret.Data["AZURE_CLIENT_SECRET"] = []byte("secret")
 		client = fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr = NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr = NewManager(client, testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -446,7 +446,7 @@ func TestValidateOCIKMSUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -464,7 +464,7 @@ func TestValidateOCIKMSUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -491,7 +491,7 @@ func TestValidateOCIKMSUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -518,7 +518,7 @@ func TestValidateOCIKMSUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -532,7 +532,7 @@ func TestValidateOCIKMSUnsealPrerequisites(t *testing.T) {
 				"region=us-ashburn-1\n",
 		)
 		client = fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr = NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr = NewManager(client, testScheme, "operator-system")
 		err = mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -566,7 +566,7 @@ func TestValidateOCIKMSUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -601,7 +601,7 @@ func TestValidateOCIKMSUnsealPrerequisites(t *testing.T) {
 		}
 
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr := NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(client, testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -619,7 +619,7 @@ func TestValidateKMIPUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -648,7 +648,7 @@ func TestValidateKMIPUnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err = mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -664,7 +664,7 @@ func TestValidateKMIPUnsealPrerequisites(t *testing.T) {
 			},
 		}
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr = NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr = NewManager(client, testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -684,7 +684,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -701,7 +701,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
@@ -713,7 +713,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 			Data:       map[string][]byte{"BAO_HSM_PIN": []byte("1234")},
 		}
 		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
-		mgr = NewManager(client, testScheme, "operator-system", "", nil, "")
+		mgr = NewManager(client, testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
 		}
@@ -732,7 +732,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 			},
 		}
 
-		mgr := NewManager(newTestClient(t), testScheme, "operator-system", "", nil, "")
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)

@@ -13,189 +13,52 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
-const (
-	configInitMapSuffix      = "-config-init"
-	unsealSecretKey          = "key"
-	unsealKeyBytes           = 32
-	dataVolumeName           = constants.VolumeData
-	tlsVolumeName            = constants.VolumeTLS
-	configVolumeName         = constants.VolumeConfig
-	configInitVolumeName     = "config-init"
-	configRenderedVolumeName = "config-rendered"
-	unsealVolumeName         = "unseal"
-	tmpVolumeName            = "tmp"
-	utilsVolumeName          = "utils"
-	acmeCacheVolumeName      = "acme-cache"
-	kubeAPIAccessVolumeName  = "kube-api-access"
-	configFileName           = "config.hcl"
-	configTemplatePath       = "/etc/bao/config/config.hcl"
-	configInitTemplatePath   = "/etc/bao/config-init/config.hcl"
-	openBaoConfigMountPath   = constants.PathConfig
-	openBaoRenderedConfig    = "/etc/bao/rendered-config/config.hcl"
-	openBaoTLSMountPath      = constants.PathTLS
-	openBaoUnsealMountPath   = "/etc/bao/unseal"
-	openBaoDataPath          = constants.PathData
-	serviceAccountMountPath  = "/var/run/secrets/kubernetes.io/serviceaccount"
-	kubeRootCAConfigMapName  = "kube-root-ca.crt"
-	openBaoBinaryName        = constants.BinaryBao
-	configHashAnnotation     = "openbao.org/config-hash"
-	unsealTypeTransit        = "transit"
-)
-
-// Manager reconciles infrastructure resources such as ConfigMaps, StatefulSets, and Services for an OpenBaoCluster.
+// Manager reconciles infra-owned identity resources and cleanup behavior for an OpenBaoCluster.
 type Manager struct {
-	client             client.Client
-	reader             client.Reader
-	scheme             *runtime.Scheme
-	operatorNamespace  string
-	oidcIssuer         string
-	oidcDiscoveryURL   string
-	oidcDiscoveryCAPEM string
-	oidcJWKSURL        string
-	oidcJWKSCAPEM      string
-	oidcJWTKeys        []string
-	Platform           string
+	client            client.Client
+	reader            client.Reader
+	scheme            *runtime.Scheme
+	operatorNamespace string
+	Platform          string
+}
+
+// Reconcile ensures infra-owned identity resources for an OpenBaoCluster.
+func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if err := m.ensureServiceAccount(ctx, logger, cluster); err != nil {
+		return err
+	}
+	if err := m.ensureRBAC(ctx, logger, cluster); err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewManager constructs a Manager that uses the provided Kubernetes client.
-// The scheme is used to set OwnerReferences on created resources for garbage collection.
-// operatorNamespace is the namespace where the operator is deployed, used for bootstrap rendering.
-// oidcIssuer and oidcJWTKeys are the OIDC configuration discovered at operator startup.
-func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string, platform string) *Manager {
+// The scheme is used to set OwnerReferences on managed resources for garbage collection.
+func NewManager(c client.Client, scheme *runtime.Scheme, operatorNamespace string, platform string) *Manager {
 	return &Manager{
 		client:            c,
 		reader:            c,
 		scheme:            scheme,
 		operatorNamespace: operatorNamespace,
-		oidcIssuer:        oidcIssuer,
-		oidcJWTKeys:       oidcJWTKeys,
 		Platform:          platform,
 	}
 }
 
 // NewManagerWithReader constructs a Manager with a dedicated reader.
 // Use this when the controller-runtime client is backed by a namespace-scoped cache
-// (e.g. single-tenant mode) but the operator must still read cluster/system resources
-// outside the watched namespace (e.g. default/kubernetes Service).
-func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Scheme, operatorNamespace string, oidcIssuer string, oidcJWTKeys []string, platform string) *Manager {
-	m := NewManager(c, scheme, operatorNamespace, oidcIssuer, oidcJWTKeys, platform)
+// (e.g. single-tenant mode) but the operator must still read cluster/system resources.
+func NewManagerWithReader(c client.Client, r client.Reader, scheme *runtime.Scheme, operatorNamespace string, platform string) *Manager {
+	m := NewManager(c, scheme, operatorNamespace, platform)
 	if r != nil {
 		m.reader = r
 	}
 	return m
-}
-
-// NewManagerWithReaderAndOIDCConfig constructs a Manager with a dedicated reader
-// and overlays the runtime OIDC configuration when one is available.
-func NewManagerWithReaderAndOIDCConfig(
-	c client.Client,
-	r client.Reader,
-	scheme *runtime.Scheme,
-	operatorNamespace string,
-	oidcConfig *portauth.OIDCConfig,
-	platform string,
-) *Manager {
-	issuer := ""
-	var jwtKeys []string
-	if oidcConfig != nil {
-		issuer = oidcConfig.IssuerURL
-		jwtKeys = oidcConfig.JWKSKeys
-	}
-
-	m := NewManagerWithReader(c, r, scheme, operatorNamespace, issuer, jwtKeys, platform)
-	m.SetOIDCConfig(oidcConfig)
-	return m
-}
-
-// SetOIDCConfig overlays dynamic JWT validation settings discovered at runtime.
-// This preserves compatibility with older tests and call sites that still pass
-// static JWT keys through the constructor while letting production code prefer
-// dynamic jwks_url configuration when available.
-func (m *Manager) SetOIDCConfig(config *portauth.OIDCConfig) {
-	if m == nil || config == nil {
-		return
-	}
-	m.oidcIssuer = config.IssuerURL
-	m.oidcDiscoveryURL = config.OIDCDiscoveryURL
-	m.oidcDiscoveryCAPEM = config.OIDCDiscoveryCAPEM
-	m.oidcJWKSURL = config.JWKSURL
-	m.oidcJWKSCAPEM = config.JWKSCAPEM
-	m.oidcJWTKeys = append([]string(nil), config.JWKSKeys...)
-}
-
-// PrepareWorkload ensures supporting infrastructure resources are aligned with the desired
-// state for the given OpenBaoCluster and returns the rendered workload configuration.
-//
-// The current implementation focuses on:
-//   - Managing a per-cluster static auto-unseal Secret (only when using static seal).
-//   - Rendering a config.hcl ConfigMap that injects TLS paths, storage configuration, retry_join, and seal configuration.
-//   - Reconciling bootstrap-supporting resources such as self-init configuration, ACME cache, and workload identity.
-//
-// The networking and workload controllers are responsible for network-facing resources and
-// StatefulSet/PDB reconciliation and consume the returned config content as separate steps.
-func (m *Manager) PrepareWorkload(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	// Only create unseal secret if using static seal (default or explicit)
-	if usesStaticSeal(cluster) {
-		if err := m.ensureUnsealSecret(ctx, logger, cluster); err != nil {
-			return "", err
-		}
-	}
-
-	if err := m.validateUnsealPrerequisites(ctx, cluster); err != nil {
-		return "", err
-	}
-
-	infraDetails := configbuilder.InfrastructureDetails{
-		HeadlessServiceName: headlessServiceName(cluster),
-		Namespace:           cluster.Namespace,
-		APIPort:             constants.PortAPI,
-		ClusterPort:         constants.PortCluster,
-	}
-
-	renderedConfig, err := configbuilder.RenderHCL(cluster, infraDetails)
-	if err != nil {
-		return "", fmt.Errorf("failed to render config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-	}
-
-	configContent := string(renderedConfig)
-
-	if err := m.reconcilePreStatefulSet(ctx, logger, cluster, configContent); err != nil {
-		return "", err
-	}
-
-	return configContent, nil
-}
-
-func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, configContent string) error {
-	if err := m.ensureConfigMap(ctx, logger, cluster, configContent); err != nil {
-		return err
-	}
-
-	// Create a separate ConfigMap for self-init blocks (only mounted for pod-0).
-	if err := m.ensureSelfInitConfigMap(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureACMESharedCachePVC(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureServiceAccount(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	if err := m.ensureRBAC(ctx, logger, cluster); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // applyResource uses Server-Side Apply to create or update a Kubernetes resource.
@@ -306,25 +169,6 @@ func infraLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
 		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
 		constants.LabelOpenBaoCluster: cluster.Name,
 	}
-}
-
-func unsealSecretName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixUnsealKey
-}
-
-func configMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + constants.SuffixConfigMap
-}
-
-// configMapNameWithRevision returns the ConfigMap name for a given revision.
-// If rev is empty, returns the cluster's base ConfigMap name.
-// Otherwise, returns "<cluster-name>-config-<revision>".
-func configInitMapName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name + configInitMapSuffix
-}
-
-func headlessServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	return cluster.Name
 }
 
 // statefulSetNameWithRevision returns the StatefulSet name for a given revision.
