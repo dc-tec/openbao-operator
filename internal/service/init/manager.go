@@ -145,6 +145,11 @@ func (m *Manager) ScaleDownRuntime() initmanagerport.ScaleDownRuntime {
 	return m.raftManager
 }
 
+// MembershipRuntime returns the optional authenticated raft membership reader.
+func (m *Manager) MembershipRuntime() initmanagerport.MembershipRuntime {
+	return m.raftManager
+}
+
 // Clientset returns the Kubernetes clientset.
 func (m *Manager) Clientset() kubernetes.Interface {
 	return m.clientset

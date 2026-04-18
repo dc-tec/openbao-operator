@@ -283,6 +283,36 @@ func (m *Manager) PrepareScaleDown(
 	return nil
 }
 
+// ReadRaftConfiguration reads the current authenticated Raft configuration for
+// status observation and topology checks.
+func (m *Manager) ReadRaftConfiguration(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (*portopenbao.RaftConfigurationResponse, error) {
+	if cluster == nil {
+		return nil, fmt.Errorf("cluster is required")
+	}
+
+	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authenticated OpenBao client for raft membership read: %w", err)
+	}
+
+	configCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	raftConfig, err := client.ReadRaftConfiguration(configCtx)
+	if err != nil {
+		return nil, m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to read Raft configuration for status observation: %w", err),
+		)
+	}
+
+	return raftConfig, nil
+}
+
 // ConfigureAutopilot configures Raft Autopilot for automatic dead server cleanup.
 // This is called after cluster initialization with the root token.
 func (m *Manager) ConfigureAutopilot(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, rootToken string) error {
