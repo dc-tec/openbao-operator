@@ -14,7 +14,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 // TestOpenBaoClusterReconciler_InitialReconcile tests that a new cluster
@@ -28,7 +27,7 @@ func TestOpenBaoClusterReconciler_InitialReconcile(t *testing.T) {
 
 	// Run infrastructure reconciliation to create resources
 	controllerClient := newControllerClient(t)
-	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("InfraManager.Reconcile error: %v", err)
@@ -110,7 +109,7 @@ func TestOpenBaoClusterReconciler_StatusConditions(t *testing.T) {
 
 	// Run infrastructure reconciliation
 	controllerClient := newControllerClient(t)
-	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("InfraManager.Reconcile error: %v", err)
@@ -157,7 +156,7 @@ func TestOpenBaoClusterReconciler_VersionUpgradeTrigger(t *testing.T) {
 
 	// Run initial reconciliation
 	controllerClient := newControllerClient(t)
-	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
 		t.Fatalf("initial InfraManager.Reconcile error: %v", err)
@@ -282,7 +281,7 @@ func TestOpenBaoClusterReconciler_IdempotentReconcile(t *testing.T) {
 	createTLSSecret(t, namespace, clusterName)
 
 	controllerClient := newControllerClient(t)
-	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 
 	// Run reconciliation multiple times
 	spec := newTestStatefulSetSpec(cluster)
@@ -314,7 +313,7 @@ func TestOpenBaoClusterReconciler_ResourceCleanup(t *testing.T) {
 	createTLSSecret(t, namespace, clusterName)
 
 	controllerClient := newControllerClient(t)
-	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 
 	// Run initial reconciliation to create resources
 	spec := newTestStatefulSetSpec(cluster)

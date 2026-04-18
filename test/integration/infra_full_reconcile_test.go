@@ -15,7 +15,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
@@ -28,7 +27,7 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 	})
 
 	controllerClient := newControllerClient(t)
-	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
+	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 
 	spec := newTestStatefulSetSpec(cluster)
 	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
