@@ -132,9 +132,21 @@ func gatherPVCState(
 	}
 
 	dataPVCPrefix := constants.VolumeData + "-" + cluster.Name + "-"
+	readDataPVCPrefix := constants.VolumeData + "-" + cluster.Name + "-read-"
 	storageClasses := map[string]struct{}{}
+	readStorageClasses := map[string]struct{}{}
 	for i := range pvcList.Items {
 		pvc := &pvcList.Items[i]
+		if strings.HasPrefix(pvc.Name, readDataPVCPrefix) {
+			state.ReadReplicaDataPVCCount++
+			if pvc.Spec.StorageClassName == nil || strings.TrimSpace(*pvc.Spec.StorageClassName) == "" {
+				state.ReadReplicaDataPVCStorageClassUnset = true
+				continue
+			}
+
+			readStorageClasses[strings.TrimSpace(*pvc.Spec.StorageClassName)] = struct{}{}
+			continue
+		}
 		if !strings.HasPrefix(pvc.Name, dataPVCPrefix) {
 			continue
 		}
@@ -149,14 +161,26 @@ func gatherPVCState(
 	}
 
 	if len(storageClasses) == 0 {
+		if len(readStorageClasses) == 0 {
+			return nil
+		}
+	} else {
+		state.DataPVCStorageClassNames = make([]string, 0, len(storageClasses))
+		for className := range storageClasses {
+			state.DataPVCStorageClassNames = append(state.DataPVCStorageClassNames, className)
+		}
+		sort.Strings(state.DataPVCStorageClassNames)
+	}
+
+	if len(readStorageClasses) == 0 {
 		return nil
 	}
 
-	state.DataPVCStorageClassNames = make([]string, 0, len(storageClasses))
-	for className := range storageClasses {
-		state.DataPVCStorageClassNames = append(state.DataPVCStorageClassNames, className)
+	state.ReadReplicaDataPVCStorageClassNames = make([]string, 0, len(readStorageClasses))
+	for className := range readStorageClasses {
+		state.ReadReplicaDataPVCStorageClassNames = append(state.ReadReplicaDataPVCStorageClassNames, className)
 	}
-	sort.Strings(state.DataPVCStorageClassNames)
+	sort.Strings(state.ReadReplicaDataPVCStorageClassNames)
 
 	return nil
 }
@@ -216,6 +240,30 @@ func gatherStatefulSetState(
 		"calculatedReadyReplicas", state.ReadyReplicas,
 		"available", state.Available,
 		"statusStale", state.StatusStale)
+
+	readReplicaDesired := int32(0)
+	if cluster.Spec.ReadReplicas != nil {
+		readReplicaDesired = cluster.Spec.ReadReplicas.Replicas
+	}
+	if readReplicaDesired == 0 {
+		return nil
+	}
+
+	readStatefulSetName := types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cluster.Name + "-read",
+	}
+	readStatefulSet := &appsv1.StatefulSet{}
+	if err := reader.Get(ctx, readStatefulSetName, readStatefulSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			state.ReadReplicaReadyReplicas = 0
+			return nil
+		}
+		return fmt.Errorf("failed to get read StatefulSet %s/%s for status update: %w", cluster.Namespace, readStatefulSetName.Name, err)
+	}
+
+	state.ReadReplicaStatefulSet = readStatefulSet
+	state.ReadReplicaReadyReplicas = readStatefulSet.Status.ReadyReplicas
 
 	return nil
 }

@@ -18,8 +18,8 @@ import (
 // SSA eliminates race conditions by having the API server merge changes,
 // rather than requiring the client to refresh and merge manually.
 // This function patches only the fields owned by the Status controller:
-// observedGeneration, phase, activeLeader, readyReplicas, currentVersion,
-// conditions, lastBackupTime.
+// observedGeneration, phase, activeLeader, readyReplicas, readReplicas,
+// currentVersion, conditions, lastBackupTime.
 func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	cluster.Status.ObservedGeneration = cluster.Generation
 
@@ -38,6 +38,7 @@ func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *
 			Phase:              cluster.Status.Phase,
 			ActiveLeader:       cluster.Status.ActiveLeader,
 			ReadyReplicas:      cluster.Status.ReadyReplicas,
+			ReadReplicas:       cluster.Status.ReadReplicas,
 			CurrentVersion:     cluster.Status.CurrentVersion,
 			LastBackupTime:     cluster.Status.LastBackupTime,
 			Conditions:         cluster.Status.Conditions,
@@ -88,6 +89,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 	// 3. Update status fields (computed locally).
 	cluster.Status.ReadyReplicas = state.ReadyReplicas
+	cluster.Status.ReadReplicas = buildReadReplicaStatus(cluster, state)
 	cluster.Status.ActiveLeader = state.LeaderName
 	cluster.Status.Phase = computePhase(state)
 
@@ -116,9 +118,40 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 
 	logger.Info("Updated status for OpenBaoCluster",
 		"readyReplicas", state.ReadyReplicas,
+		"readReplicaReadyReplicas", state.ReadReplicaReadyReplicas,
 		"phase", cluster.Status.Phase,
 		"currentVersion", cluster.Status.CurrentVersion)
 
 	// 5. Determine requeue.
 	return r.determineStatusRequeue(logger, state, original, cluster), nil
+}
+
+func buildReadReplicaStatus(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) *openbaov1alpha1.ReadReplicaStatus {
+	if cluster.Spec.ReadReplicas == nil {
+		return nil
+	}
+
+	status := &openbaov1alpha1.ReadReplicaStatus{
+		DesiredReplicas: cluster.Spec.ReadReplicas.Replicas,
+	}
+
+	if state != nil {
+		status.ReadyReplicas = state.ReadReplicaReadyReplicas
+		status.RegisteredReplicas = state.ReadReplicaRegisteredReplicas
+		status.Storage.DesiredPVCs = cluster.Spec.ReadReplicas.Replicas
+		status.Storage.BoundPVCs = int32(state.ReadReplicaDataPVCCount)
+		switch {
+		case len(state.ReadReplicaDataPVCStorageClassNames) == 1:
+			status.Storage.StorageClassName = state.ReadReplicaDataPVCStorageClassNames[0]
+		case cluster.Spec.ReadReplicas.Storage != nil && cluster.Spec.ReadReplicas.Storage.StorageClassName != nil:
+			status.Storage.StorageClassName = *cluster.Spec.ReadReplicas.Storage.StorageClassName
+		}
+		return status
+	}
+
+	status.Storage.DesiredPVCs = cluster.Spec.ReadReplicas.Replicas
+	if cluster.Spec.ReadReplicas.Storage != nil && cluster.Spec.ReadReplicas.Storage.StorageClassName != nil {
+		status.Storage.StorageClassName = *cluster.Spec.ReadReplicas.Storage.StorageClassName
+	}
+	return status
 }

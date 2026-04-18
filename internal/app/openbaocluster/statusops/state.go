@@ -13,10 +13,23 @@ type StatusState struct {
 	Available     bool
 	StatusStale   bool // StatefulSet status may lag behind reality.
 
+	// Read-replica StatefulSet observed state.
+	ReadReplicaStatefulSet        *appsv1.StatefulSet
+	ReadReplicaReadyReplicas      int32
+	ReadReplicaRegisteredReplicas int32
+	ReadReplicaMembershipKnown    bool
+	ReadServingAvailable          bool
+	ReadServingKnown              bool
+
 	// Data PVC storage state.
 	DataPVCCount             int
 	DataPVCStorageClassNames []string
 	DataPVCStorageClassUnset bool
+
+	// Read-replica PVC storage state.
+	ReadReplicaDataPVCCount             int
+	ReadReplicaDataPVCStorageClassNames []string
+	ReadReplicaDataPVCStorageClassUnset bool
 
 	// Pod state.
 	Pods             []corev1.Pod

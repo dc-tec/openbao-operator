@@ -15,6 +15,15 @@ func TestPatchStatusSSAPersistsObservedGeneration(t *testing.T) {
 	cluster := newOpenBaoClusterStatusTestObject()
 	cluster.Status.Phase = openbaov1alpha1.ClusterPhaseRunning
 	cluster.Status.ReadyReplicas = cluster.Spec.Replicas
+	cluster.Status.ReadReplicas = &openbaov1alpha1.ReadReplicaStatus{
+		DesiredReplicas: 2,
+		ReadyReplicas:   1,
+		Storage: openbaov1alpha1.ReadReplicaStorageStatus{
+			DesiredPVCs:      2,
+			BoundPVCs:        1,
+			StorageClassName: "fast-ssd",
+		},
+	}
 	cluster.Status.CurrentVersion = cluster.Spec.Version
 
 	k8sClient := fake.NewClientBuilder().
@@ -41,5 +50,11 @@ func TestPatchStatusSSAPersistsObservedGeneration(t *testing.T) {
 	}
 	if updated.Status.Phase != openbaov1alpha1.ClusterPhaseRunning {
 		t.Fatalf("persisted phase = %s, want %s", updated.Status.Phase, openbaov1alpha1.ClusterPhaseRunning)
+	}
+	if updated.Status.ReadReplicas == nil {
+		t.Fatalf("persisted readReplicas = nil, want non-nil")
+	}
+	if updated.Status.ReadReplicas.Storage.StorageClassName != "fast-ssd" {
+		t.Fatalf("persisted readReplicas.storage.storageClassName = %q, want %q", updated.Status.ReadReplicas.Storage.StorageClassName, "fast-ssd")
 	}
 }
