@@ -5,14 +5,11 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	configurationservice "github.com/dc-tec/openbao-operator/internal/service/configuration"
 )
@@ -117,25 +114,5 @@ func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logge
 }
 
 func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	if err := controllerutil.SetControllerReference(cluster, obj, m.scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
-	}
-
-	applyConfig, err := kube.ToApplyConfiguration(obj, m.client)
-	if err != nil {
-		return fmt.Errorf("failed to convert object to ApplyConfiguration: %w", err)
-	}
-
-	applyOpts := []client.ApplyOption{client.ForceOwnership, client.FieldOwner("openbao-operator")}
-	if err := m.client.Apply(ctx, applyConfig, applyOpts...); err != nil {
-		if operatorerrors.IsTransientKubernetesAPI(err) {
-			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
-		}
-		if apierrors.IsConflict(err) {
-			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
-		}
-		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
-	}
-
-	return nil
+	return resourceapply.ApplyOwned(ctx, m.client, m.scheme, cluster, obj)
 }
