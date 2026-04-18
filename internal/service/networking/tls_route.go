@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 // ensureTLSRoute manages the Gateway API TLSRoute for the OpenBaoCluster using Server-Side Apply.
@@ -80,7 +81,7 @@ func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha2.TLS
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        tlsRouteName(cluster),
 			Namespace:   cluster.Namespace,
-			Labels:      infraLabels(cluster),
+			Labels:      resourceidentity.Labels(cluster),
 			Annotations: gw.Annotations,
 		},
 		Spec: gatewayv1alpha2.TLSRouteSpec{

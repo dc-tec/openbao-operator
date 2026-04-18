@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -28,7 +29,7 @@ var ErrStatefulSetPrerequisitesMissing = errors.New("StatefulSet prerequisites m
 // by setting a condition and requeuing). Returns other errors for unexpected failures.
 func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, revision string) error {
 	// Always check for the config ConfigMap
-	configMapName := configMapNameWithRevision(cluster, revision)
+	configMapName := resourceidentity.ConfigMapNameWithRevision(cluster, revision)
 	configMap := &corev1.ConfigMap{}
 	if err := m.client.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
@@ -43,7 +44,7 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 	// Check for TLS secret if TLS is enabled and not in ACME mode
 	// In ACME mode, OpenBao manages certificates internally, so no secret is needed
 	if cluster.Spec.TLS.Enabled && !usesACMEMode(cluster) {
-		tlsSecretName := tlsServerSecretName(cluster)
+		tlsSecretName := resourceidentity.TLSServerSecretName(cluster)
 		tlsSecret := &corev1.Secret{}
 		if err := m.client.Get(ctx, types.NamespacedName{
 			Namespace: cluster.Namespace,

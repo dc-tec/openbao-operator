@@ -7,6 +7,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 const (
@@ -84,7 +85,7 @@ func (p *staticSealWiringProvider) Volumes() []corev1.Volume {
 			Name: unsealVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName:  unsealSecretName(p.cluster),
+					SecretName:  resourceidentity.UnsealSecretName(p.cluster),
 					DefaultMode: ptr.To(secretFileMode),
 				},
 			},

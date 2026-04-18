@@ -14,6 +14,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -45,7 +46,7 @@ func buildManagedACMESharedCachePVC(cluster *openbaov1alpha1.OpenBaoCluster) (*c
 		return nil, fmt.Errorf("invalid ACME shared cache size %q: %w", cluster.Spec.TLS.ACME.SharedCache.Size, err)
 	}
 
-	labels := infraLabels(cluster)
+	labels := resourceidentity.Labels(cluster)
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      portopenbao.ManagedACMESharedCachePVCName(cluster),

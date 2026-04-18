@@ -3,7 +3,6 @@ package workload
 import "github.com/dc-tec/openbao-operator/internal/platform/constants"
 
 const (
-	configInitMapSuffix      = "-config-init"
 	dataVolumeName           = constants.VolumeData
 	tlsVolumeName            = constants.VolumeTLS
 	configVolumeName         = constants.VolumeConfig

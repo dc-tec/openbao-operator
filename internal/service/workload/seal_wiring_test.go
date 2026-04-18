@@ -8,6 +8,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 func TestSealWiring_StaticDefault_MountsUnseal(t *testing.T) {
@@ -31,8 +32,8 @@ func TestSealWiring_StaticDefault_MountsUnseal(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected %q volume to be present for static seal", unsealVolumeName)
 	}
-	if unsealVol.Secret == nil || unsealVol.Secret.SecretName != unsealSecretName(cluster) {
-		t.Fatalf("expected %q volume to use secret %q", unsealVolumeName, unsealSecretName(cluster))
+	if unsealVol.Secret == nil || unsealVol.Secret.SecretName != resourceidentity.UnsealSecretName(cluster) {
+		t.Fatalf("expected %q volume to use secret %q", unsealVolumeName, resourceidentity.UnsealSecretName(cluster))
 	}
 	if !hasVolumeMountWithPath(mounts, unsealVolumeName, openBaoUnsealMountPath) {
 		t.Fatalf("expected %q volume mount at %q for static seal", unsealVolumeName, openBaoUnsealMountPath)

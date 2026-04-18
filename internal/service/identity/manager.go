@@ -19,6 +19,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 // Manager reconciles ServiceAccount and RBAC resources for an OpenBaoCluster.
@@ -46,7 +47,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 }
 
 func (m *Manager) ensureServiceAccount(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := serviceAccountName(cluster)
+	saName := resourceidentity.ServiceAccountName(cluster)
 
 	sa := &corev1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{
@@ -73,13 +74,13 @@ func (m *Manager) ensureServiceAccount(ctx context.Context, _ logr.Logger, clust
 }
 
 func serviceAccountLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	labels := resourceLabels(cluster)
+	labels := resourceidentity.Labels(cluster)
 	labels[constants.LabelOpenBaoServiceAccountRole] = constants.ServiceAccountRoleMain
 	return labels
 }
 
 func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	saName := serviceAccountName(cluster)
+	saName := resourceidentity.ServiceAccountName(cluster)
 	roleName := saName + "-role"
 	roleBindingName := saName + "-rolebinding"
 
@@ -93,7 +94,7 @@ func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openba
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      roleName,
 			Namespace: cluster.Namespace,
-			Labels:    resourceLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -122,7 +123,7 @@ func (m *Manager) ensureRBAC(ctx context.Context, _ logr.Logger, cluster *openba
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      roleBindingName,
 			Namespace: cluster.Namespace,
-			Labels:    resourceLabels(cluster),
+			Labels:    resourceidentity.Labels(cluster),
 		},
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",
@@ -171,22 +172,6 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 	}
 
 	return nil
-}
-
-func resourceLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	return map[string]string{
-		constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
-		constants.LabelAppInstance:    cluster.Name,
-		constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
-		constants.LabelOpenBaoCluster: cluster.Name,
-	}
-}
-
-func serviceAccountName(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	if cluster.Spec.ServiceAccount != nil && cluster.Spec.ServiceAccount.Name != "" {
-		return cluster.Spec.ServiceAccount.Name
-	}
-	return cluster.Name + constants.SuffixServiceAccount
 }
 
 func openBaoPodResourceNames(cluster *openbaov1alpha1.OpenBaoCluster) []string {

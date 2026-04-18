@@ -11,6 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 const maintenanceAnnotationEnabledValue = "true"
@@ -25,7 +26,7 @@ func (m *Manager) reconcileMaintenanceAnnotationsForPods(ctx context.Context, lo
 	var pods corev1.PodList
 	if err := m.client.List(ctx, &pods,
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(podSelectorLabelsWithRevision(cluster, revision)),
+		client.MatchingLabels(resourceidentity.PodSelectorLabelsWithRevision(cluster, revision)),
 	); err != nil {
 		return fmt.Errorf("failed to list pods: %w", err)
 	}

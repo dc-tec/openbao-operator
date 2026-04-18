@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 func (m *Manager) ensureIngress(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -87,14 +88,14 @@ func buildIngress(cluster *openbaov1alpha1.OpenBaoCluster) *networkingv1.Ingress
 
 	secretName := ing.TLSSecretName
 	if strings.TrimSpace(secretName) == "" {
-		secretName = tlsServerSecretName(cluster)
+		secretName = resourceidentity.TLSServerSecretName(cluster)
 	}
 
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        cluster.Name,
 			Namespace:   cluster.Namespace,
-			Labels:      infraLabels(cluster),
+			Labels:      resourceidentity.Labels(cluster),
 			Annotations: ing.Annotations,
 		},
 		Spec: networkingv1.IngressSpec{

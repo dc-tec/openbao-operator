@@ -45,6 +45,7 @@ layerCoverage:
       - platform/openbaotls
       - platform/predicates
       - platform/reconcile
+      - platform/resourceidentity
       - platform/statusapply
       - platform/statuspatch
       - platform/testutil

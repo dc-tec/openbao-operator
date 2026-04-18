@@ -8,6 +8,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -99,7 +100,7 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision s
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: configMapNameWithRevision(cluster, revision),
+						Name: resourceidentity.ConfigMapNameWithRevision(cluster, revision),
 					},
 				},
 			},
@@ -172,7 +173,7 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision s
 			Name: tlsVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName:  tlsServerSecretName(cluster),
+					SecretName:  resourceidentity.TLSServerSecretName(cluster),
 					DefaultMode: ptr.To(secretFileMode),
 				},
 			},
@@ -199,7 +200,7 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, revision s
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: configInitMapName(cluster),
+						Name: resourceidentity.ConfigInitMapName(cluster),
 					},
 				},
 			},
