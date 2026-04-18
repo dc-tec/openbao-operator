@@ -23,20 +23,28 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
 	"github.com/dc-tec/openbao-operator/internal/service/infra"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 type integrationInfraManager struct {
-	infra    *infra.Manager
-	network  *networkingmanager.Manager
-	workload *workloadsvc.Manager
+	bootstrap *bootstrapmanager.Manager
+	infra     *infra.Manager
+	network   *networkingmanager.Manager
+	workload  *workloadsvc.Manager
 }
 
 func newIntegrationInfraManager(kubeClient client.Client, scheme *runtime.Scheme) *integrationInfraManager {
 	return &integrationInfraManager{
-		infra: infra.NewManager(kubeClient, scheme, "openbao-operator-system", "", nil, ""),
+		bootstrap: bootstrapmanager.NewManagerWithReader(
+			kubeClient,
+			kubeClient,
+			scheme,
+			"openbao-operator-system",
+		),
+		infra: infra.NewManager(kubeClient, scheme, "openbao-operator-system", ""),
 		network: networkingmanager.NewManagerWithReader(
 			kubeClient,
 			kubeClient,
@@ -55,11 +63,14 @@ func (m *integrationInfraManager) Reconcile(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	spec workloadsvc.StatefulSetSpec,
 ) error {
-	configContent, err := m.infra.PrepareWorkload(ctx, logger, cluster)
+	configContent, err := m.bootstrap.PrepareWorkload(ctx, logger, cluster)
 	if err != nil {
 		return err
 	}
 	if err := m.network.Reconcile(ctx, logger, cluster); err != nil {
+		return err
+	}
+	if err := m.infra.Reconcile(ctx, logger, cluster); err != nil {
 		return err
 	}
 	return m.workload.Reconcile(ctx, logger, cluster, configContent, spec)
