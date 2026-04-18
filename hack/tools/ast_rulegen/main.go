@@ -194,8 +194,29 @@ func validatePolicy(policy architecturePolicy) error {
 		return errors.New("policy adapterImportRoots must not be empty")
 	}
 
-	seenController := make(map[string]struct{}, len(policy.ControllerBoundaries))
-	for _, boundary := range policy.ControllerBoundaries {
+	if err := validateControllerBoundaries(policy.ControllerBoundaries, serviceRoots, adapterRoots); err != nil {
+		return err
+	}
+	if err := validateServiceBoundaries(policy.ServiceBoundaries, serviceRoots); err != nil {
+		return err
+	}
+	if err := validateAppBoundaries(policy.AppBoundaries, serviceRoots); err != nil {
+		return err
+	}
+	if err := validateGlobalImportBoundaries(policy.GlobalImportBoundaries); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateControllerBoundaries(
+	boundaries []controllerBoundary,
+	serviceRoots []string,
+	adapterRoots []string,
+) error {
+	seenController := make(map[string]struct{}, len(boundaries))
+	for _, boundary := range boundaries {
 		if strings.TrimSpace(boundary.Name) == "" {
 			return errors.New("controllerBoundaries.name is required")
 		}
@@ -229,8 +250,12 @@ func validatePolicy(policy architecturePolicy) error {
 		}
 	}
 
-	seenService := make(map[string]struct{}, len(policy.ServiceBoundaries))
-	for _, boundary := range policy.ServiceBoundaries {
+	return nil
+}
+
+func validateServiceBoundaries(boundaries []serviceBoundary, serviceRoots []string) error {
+	seenService := make(map[string]struct{}, len(boundaries))
+	for _, boundary := range boundaries {
 		if strings.TrimSpace(boundary.Name) == "" {
 			return errors.New("serviceBoundaries.name is required")
 		}
@@ -261,8 +286,12 @@ func validatePolicy(policy architecturePolicy) error {
 		}
 	}
 
-	seenApp := make(map[string]struct{}, len(policy.AppBoundaries))
-	for _, boundary := range policy.AppBoundaries {
+	return nil
+}
+
+func validateAppBoundaries(boundaries []appBoundary, serviceRoots []string) error {
+	seenApp := make(map[string]struct{}, len(boundaries))
+	for _, boundary := range boundaries {
 		if strings.TrimSpace(boundary.Name) == "" {
 			return errors.New("appBoundaries.name is required")
 		}
@@ -283,8 +312,12 @@ func validatePolicy(policy architecturePolicy) error {
 		}
 	}
 
-	seenRule := make(map[string]struct{}, len(policy.GlobalImportBoundaries))
-	for _, boundary := range policy.GlobalImportBoundaries {
+	return nil
+}
+
+func validateGlobalImportBoundaries(boundaries []globalImportBoundary) error {
+	seenRule := make(map[string]struct{}, len(boundaries))
+	for _, boundary := range boundaries {
 		if strings.TrimSpace(boundary.ID) == "" {
 			return errors.New("globalImportBoundaries.id is required")
 		}
