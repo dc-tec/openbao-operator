@@ -143,3 +143,43 @@ func TestComputeRequiredDNSSANs_NilCluster(t *testing.T) {
 		t.Errorf("Expected nil for nil cluster, got %v", dnsNames)
 	}
 }
+
+func TestComputeRequiredDNSSANs_IncludesReadReplicaPodsAndService(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+			ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+				Replicas: 2,
+				Service: &openbaov1alpha1.ReadReplicaServiceConfig{
+					Enabled: true,
+				},
+			},
+		},
+	}
+
+	dnsNames := ComputeRequiredDNSSANs(cluster)
+	expectedDNS := map[string]bool{
+		"test-cluster-read-0.test-cluster.default.svc":               false,
+		"test-cluster-read-0.test-cluster.default.svc.cluster.local": false,
+		"test-cluster-read-1.test-cluster.default.svc":               false,
+		"test-cluster-read-1.test-cluster.default.svc.cluster.local": false,
+		"test-cluster-read.default.svc":                              false,
+		"test-cluster-read.default.svc.cluster.local":                false,
+	}
+
+	for _, dnsName := range dnsNames {
+		if _, ok := expectedDNS[dnsName]; ok {
+			expectedDNS[dnsName] = true
+		}
+	}
+
+	for dnsName, found := range expectedDNS {
+		if !found {
+			t.Errorf("Expected DNS name %q not found in results", dnsName)
+		}
+	}
+}

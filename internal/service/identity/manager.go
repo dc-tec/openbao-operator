@@ -148,13 +148,13 @@ func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster 
 }
 
 func openBaoPodResourceNames(cluster *openbaov1alpha1.OpenBaoCluster) []string {
-	replicas := cluster.Spec.Replicas
-	if replicas < 3 {
-		replicas = 3
+	voterReplicas := cluster.Spec.Replicas
+	if voterReplicas < 3 {
+		voterReplicas = 3
 	}
 
-	prefixes := map[string]struct{}{
-		cluster.Name: {},
+	prefixReplicaCounts := map[string]int32{
+		cluster.Name: voterReplicas,
 	}
 
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
@@ -167,18 +167,45 @@ func openBaoPodResourceNames(cluster *openbaov1alpha1.OpenBaoCluster) []string {
 		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
 			blueRevision = cluster.Status.BlueGreen.BlueRevision
 		}
-		prefixes[fmt.Sprintf("%s-%s", cluster.Name, blueRevision)] = struct{}{}
+		prefixReplicaCounts[fmt.Sprintf("%s-%s", cluster.Name, blueRevision)] = voterReplicas
 
 		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.GreenRevision != "" {
-			prefixes[fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.GreenRevision)] = struct{}{}
+			prefixReplicaCounts[fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.GreenRevision)] = voterReplicas
 		}
 	}
 
-	names := make([]string, 0, len(prefixes)*int(replicas))
-	for prefix := range prefixes {
+	if readReplicas := readReplicaPodResourceCount(cluster); readReplicas > 0 {
+		prefixReplicaCounts[resourceidentity.ReadReplicaStatefulSetName(cluster)] = readReplicas
+	}
+
+	total := 0
+	for _, replicas := range prefixReplicaCounts {
+		total += int(replicas)
+	}
+	names := make([]string, 0, total)
+	for prefix, replicas := range prefixReplicaCounts {
 		for i := int32(0); i < replicas; i++ {
 			names = append(names, prefix+"-"+strconv.FormatInt(int64(i), 10))
 		}
 	}
 	return names
+}
+
+func readReplicaPodResourceCount(cluster *openbaov1alpha1.OpenBaoCluster) int32 {
+	var replicas int32
+	if cluster.Spec.ReadReplicas != nil {
+		replicas = cluster.Spec.ReadReplicas.Replicas
+	}
+	if cluster.Status.ReadReplicas != nil {
+		if cluster.Status.ReadReplicas.DesiredReplicas > replicas {
+			replicas = cluster.Status.ReadReplicas.DesiredReplicas
+		}
+		if cluster.Status.ReadReplicas.ReadyReplicas > replicas {
+			replicas = cluster.Status.ReadReplicas.ReadyReplicas
+		}
+		if cluster.Status.ReadReplicas.RegisteredReplicas > replicas {
+			replicas = cluster.Status.ReadReplicas.RegisteredReplicas
+		}
+	}
+	return replicas
 }
