@@ -53,9 +53,8 @@ func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.
 	createTLSSecretForClient(t, ctx, k8sClient, namespace, cluster.Name)
 
 	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
-	mgr := newIntegrationInfraManager(controllerClient, scheme)
 	spec := newTestStatefulSetSpec(cluster)
-	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+	err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, scheme, cluster, spec)
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}
@@ -90,9 +89,8 @@ func TestInfraNetwork_GatewayAPICRDsMissing_TLSPassthroughMode_IsDegraded(t *tes
 	createTLSSecretForClient(t, ctx, k8sClient, namespace, cluster.Name)
 
 	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
-	mgr := newIntegrationInfraManager(controllerClient, scheme)
 	spec := newTestStatefulSetSpec(cluster)
-	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+	err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, scheme, cluster, spec)
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}
@@ -133,9 +131,8 @@ func TestInfraNetwork_GatewayAPIBackendTLSPolicyCRDMissing_IsDegraded(t *testing
 	createCASecretForClient(t, ctx, k8sClient, namespace, cluster.Name, []byte("ca-1"))
 
 	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
-	mgr := newIntegrationInfraManager(controllerClient, scheme)
 	spec := newTestStatefulSetSpec(cluster)
-	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+	err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, scheme, cluster, spec)
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}

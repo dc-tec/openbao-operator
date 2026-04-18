@@ -27,9 +27,8 @@ func TestOpenBaoClusterReconciler_InitialReconcile(t *testing.T) {
 
 	// Run infrastructure reconciliation to create resources
 	controllerClient := newControllerClient(t)
-	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
+	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("InfraManager.Reconcile error: %v", err)
 	}
 
@@ -109,9 +108,8 @@ func TestOpenBaoClusterReconciler_StatusConditions(t *testing.T) {
 
 	// Run infrastructure reconciliation
 	controllerClient := newControllerClient(t)
-	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
+	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("InfraManager.Reconcile error: %v", err)
 	}
 
@@ -156,9 +154,8 @@ func TestOpenBaoClusterReconciler_VersionUpgradeTrigger(t *testing.T) {
 
 	// Run initial reconciliation
 	controllerClient := newControllerClient(t)
-	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
+	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("initial InfraManager.Reconcile error: %v", err)
 	}
 
@@ -281,12 +278,11 @@ func TestOpenBaoClusterReconciler_IdempotentReconcile(t *testing.T) {
 	createTLSSecret(t, namespace, clusterName)
 
 	controllerClient := newControllerClient(t)
-	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 
 	// Run reconciliation multiple times
 	spec := newTestStatefulSetSpec(cluster)
 	for i := 0; i < 3; i++ {
-		if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
+		if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 			t.Fatalf("Reconcile iteration %d error: %v", i+1, err)
 		}
 	}
@@ -313,11 +309,10 @@ func TestOpenBaoClusterReconciler_ResourceCleanup(t *testing.T) {
 	createTLSSecret(t, namespace, clusterName)
 
 	controllerClient := newControllerClient(t)
-	manager := newIntegrationInfraManager(controllerClient, k8sScheme)
 
 	// Run initial reconciliation to create resources
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, discardLogger(), cluster, spec); err != nil {
+	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("InfraManager.Reconcile error: %v", err)
 	}
 

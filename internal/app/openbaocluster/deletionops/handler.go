@@ -9,7 +9,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 // Dependencies contains external collaborators required for deletion orchestration.
@@ -38,8 +37,7 @@ func Handle(ctx context.Context, logger logr.Logger, deps Dependencies, cluster 
 	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.Clear()
 
-	infraMgr := inframanager.NewManager(deps.Client)
-	if err := infraMgr.Cleanup(ctx, logger, cluster, policy); err != nil {
+	if err := Cleanup(ctx, logger, deps.Client, cluster, policy); err != nil {
 		return err
 	}
 
