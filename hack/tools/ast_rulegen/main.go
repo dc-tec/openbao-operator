@@ -56,6 +56,7 @@ type serviceBoundary struct {
 	Files        []string `yaml:"files"`
 	Ignores      []string `yaml:"ignores"`
 	AllowService []string `yaml:"allowServiceImports"`
+	AllowAdapter []string `yaml:"allowAdapterImports"`
 }
 
 type appBoundary struct {
@@ -197,7 +198,7 @@ func validatePolicy(policy architecturePolicy) error {
 	if err := validateControllerBoundaries(policy.ControllerBoundaries, serviceRoots, adapterRoots); err != nil {
 		return err
 	}
-	if err := validateServiceBoundaries(policy.ServiceBoundaries, serviceRoots); err != nil {
+	if err := validateServiceBoundaries(policy.ServiceBoundaries, serviceRoots, adapterRoots); err != nil {
 		return err
 	}
 	if err := validateAppBoundaries(policy.AppBoundaries, serviceRoots); err != nil {
@@ -253,7 +254,7 @@ func validateControllerBoundaries(
 	return nil
 }
 
-func validateServiceBoundaries(boundaries []serviceBoundary, serviceRoots []string) error {
+func validateServiceBoundaries(boundaries []serviceBoundary, serviceRoots []string, adapterRoots []string) error {
 	seenService := make(map[string]struct{}, len(boundaries))
 	for _, boundary := range boundaries {
 		if strings.TrimSpace(boundary.Name) == "" {
@@ -281,6 +282,13 @@ func validateServiceBoundaries(boundaries []serviceBoundary, serviceRoots []stri
 			fmt.Sprintf("serviceBoundaries[%s].allowServiceImports", boundary.Name),
 			boundary.AllowService,
 			serviceRoots,
+		); err != nil {
+			return err
+		}
+		if err := ensureKnownRoots(
+			fmt.Sprintf("serviceBoundaries[%s].allowAdapterImports", boundary.Name),
+			boundary.AllowAdapter,
+			adapterRoots,
 		); err != nil {
 			return err
 		}
@@ -869,6 +877,27 @@ func buildRuleSpecs(policy architecturePolicy) ([]ruleSpec, error) {
 			Ignores: boundary.Ignores,
 			Regex:   serviceRegex,
 		})
+
+		unapprovedAdapterImports := differenceRoots(adapterRoots, boundary.AllowAdapter)
+		if len(unapprovedAdapterImports) > 0 {
+			adapterRegex, err := importRegex(modulePath, unapprovedAdapterImports, nil, nil)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"build unapproved-adapter regex for service %s: %w",
+					boundary.Name,
+					err,
+				)
+			}
+
+			specs = append(specs, ruleSpec{
+				ID:      "no-" + sanitizeName(boundary.Name) + "-service-unapproved-adapter-imports",
+				Message: serviceAdapterImportsMessage(serviceLabel),
+				Note:    serviceAdapterImportsNote(boundary.AllowAdapter),
+				Files:   boundary.Files,
+				Ignores: boundary.Ignores,
+				Regex:   adapterRegex,
+			})
+		}
 	}
 
 	for _, boundary := range policy.AppBoundaries {
@@ -1109,6 +1138,20 @@ func serviceImportsNote(packageRoot string, allowed []string) string {
 	return fmt.Sprintf(
 		"Approved service imports for this service: %s.",
 		formatAllowList(approved),
+	)
+}
+
+func serviceAdapterImportsMessage(serviceLabel string) string {
+	return fmt.Sprintf(
+		"%s service must only import explicitly approved adapter packages.",
+		serviceLabel,
+	)
+}
+
+func serviceAdapterImportsNote(allowed []string) string {
+	return fmt.Sprintf(
+		"Approved adapter imports for this service: %s.",
+		formatAllowList(allowed),
 	)
 }
 
