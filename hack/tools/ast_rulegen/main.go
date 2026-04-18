@@ -179,6 +179,7 @@ func loadPolicy(policyPath string) (architecturePolicy, error) {
 	return policy, nil
 }
 
+//nolint:gocyclo // Policy validation intentionally checks each boundary section explicitly.
 func validatePolicy(policy architecturePolicy) error {
 	if strings.TrimSpace(policy.ModulePath) == "" {
 		return errors.New("policy modulePath is required")

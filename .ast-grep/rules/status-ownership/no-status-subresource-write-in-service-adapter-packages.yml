@@ -7,7 +7,6 @@ language: Go
 files:
   - internal/service/backup/**/*.go
   - internal/service/certs/**/*.go
-  - internal/service/infra/**/*.go
   - internal/service/init/**/*.go
   - internal/service/opslifecycle/**/*.go
   - internal/service/provisioner/**/*.go
