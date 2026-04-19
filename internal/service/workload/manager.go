@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -77,6 +78,28 @@ func (m *Manager) ScaleDownStatefulSetIfExists(ctx context.Context, logger logr.
 	return m.ScaleStatefulSetIfExists(ctx, logger, cluster, spec, 0)
 }
 
+func (m *Manager) DeleteStatefulSetIfExists(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
+	name := statefulSetNameForSpec(cluster, spec)
+	if name == "" {
+		return nil
+	}
+
+	statefulSet := &appsv1.StatefulSet{}
+	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, statefulSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get StatefulSet %s/%s for deletion: %w", cluster.Namespace, name, err)
+	}
+
+	if err := m.client.Delete(ctx, statefulSet); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete StatefulSet %s/%s: %w", cluster.Namespace, name, err)
+	}
+
+	logger.Info("Deleted StatefulSet", "statefulset", name, "pool", spec.Pool)
+	return nil
+}
+
 func (m *Manager) ScaleStatefulSetIfExists(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec, replicas int32) error {
 	name := statefulSetNameForSpec(cluster, spec)
 	if name == "" {
@@ -102,6 +125,28 @@ func (m *Manager) ScaleStatefulSetIfExists(ctx context.Context, logger logr.Logg
 	}
 
 	logger.Info("Scaled StatefulSet", "statefulset", name, "pool", spec.Pool, "replicas", replicas)
+	return nil
+}
+
+func (m *Manager) DeleteConfigMapIfExists(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
+	cmName := configMapNameForSpec(cluster, spec)
+	if cmName == "" {
+		return nil
+	}
+
+	configMap := &corev1.ConfigMap{}
+	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cmName}, configMap); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get ConfigMap %s/%s for deletion: %w", cluster.Namespace, cmName, err)
+	}
+
+	if err := m.client.Delete(ctx, configMap); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
+	}
+
+	logger.Info("Deleted ConfigMap", "configmap", cmName, "pool", spec.Pool)
 	return nil
 }
 

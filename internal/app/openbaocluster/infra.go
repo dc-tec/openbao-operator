@@ -17,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
@@ -207,11 +206,12 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 		return recon.Result{}, r.mapManagerReconcileError(err)
 	}
 	if readSpec.SkipReconciliation {
-		if err := r.newWorkloadManager().ScaleStatefulSetIfExists(ctx, logger, cluster, workloadsvc.StatefulSetSpec{
-			Name: resourceidentity.ReadReplicaStatefulSetName(cluster),
-			Pool: constants.LabelValueOpenBaoWorkloadPoolReadReplica,
-		}, readSpec.Replicas); err != nil {
+		shouldRequeue, err := r.reconcileDisabledReadReplicas(ctx, logger, cluster, readSpec, readCurrentSTS, readCurrentSTSFound)
+		if err != nil {
 			return recon.Result{}, r.mapManagerReconcileError(err)
+		}
+		if shouldRequeue {
+			return recon.Result{RequeueAfter: infraRequeueShort}, nil
 		}
 	} else {
 		readConfigContent, err := manager.RenderConfig(cluster, bootstrapReadReplicaRenderOptions(cluster, spec))

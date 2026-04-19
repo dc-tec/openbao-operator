@@ -13,8 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -22,6 +24,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
@@ -355,6 +358,141 @@ func TestHandleReadReplicaScaleDownSafety(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReconcileDisabledReadReplicas_DeletesDrainedResources(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+	}
+	readReplicas := int32(0)
+	readSTS := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceidentity.ReadReplicaStatefulSetName(cluster),
+			Namespace: cluster.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &readReplicas,
+		},
+		Status: appsv1.StatefulSetStatus{
+			ObservedGeneration: 1,
+			Replicas:           0,
+			ReadyReplicas:      0,
+			CurrentReplicas:    0,
+		},
+	}
+	readConfig := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceidentity.ReadReplicaConfigMapName(cluster),
+			Namespace: cluster.Namespace,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, readSTS, readConfig).
+		Build()
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			Kubernetes: InfraKubernetesRuntime{
+				Client: k8sClient,
+				Scheme: scheme,
+			},
+		},
+	}
+
+	readSpec := workloadsvc.StatefulSetSpec{
+		Name:               resourceidentity.ReadReplicaStatefulSetName(cluster),
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolReadReplica,
+		Replicas:           0,
+		SkipReconciliation: true,
+	}
+
+	requeue, err := r.reconcileDisabledReadReplicas(context.Background(), logr.Discard(), cluster, readSpec, readSTS, true)
+	assert.NoError(t, err)
+	assert.False(t, requeue)
+
+	err = k8sClient.Get(context.Background(), types.NamespacedName{Namespace: cluster.Namespace, Name: readSTS.Name}, &appsv1.StatefulSet{})
+	assert.True(t, apierrors.IsNotFound(err))
+	err = k8sClient.Get(context.Background(), types.NamespacedName{Namespace: cluster.Namespace, Name: readConfig.Name}, &corev1.ConfigMap{})
+	assert.True(t, apierrors.IsNotFound(err))
+}
+
+func TestReconcileDisabledReadReplicas_RequeuesUntilDrained(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+	}
+	currentReplicas := int32(1)
+	readSTS := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceidentity.ReadReplicaStatefulSetName(cluster),
+			Namespace: cluster.Namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &currentReplicas,
+		},
+		Status: appsv1.StatefulSetStatus{
+			ObservedGeneration: 1,
+			Replicas:           1,
+			ReadyReplicas:      1,
+			CurrentReplicas:    1,
+		},
+	}
+	readConfig := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceidentity.ReadReplicaConfigMapName(cluster),
+			Namespace: cluster.Namespace,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, readSTS, readConfig).
+		Build()
+
+	r := &infraReconciler{
+		deps: InfraDependencies{
+			Kubernetes: InfraKubernetesRuntime{
+				Client: k8sClient,
+				Scheme: scheme,
+			},
+		},
+	}
+
+	readSpec := workloadsvc.StatefulSetSpec{
+		Name:               resourceidentity.ReadReplicaStatefulSetName(cluster),
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolReadReplica,
+		Replicas:           0,
+		SkipReconciliation: true,
+	}
+
+	requeue, err := r.reconcileDisabledReadReplicas(context.Background(), logr.Discard(), cluster, readSpec, readSTS, true)
+	assert.NoError(t, err)
+	assert.True(t, requeue)
+
+	updatedSTS := &appsv1.StatefulSet{}
+	err = k8sClient.Get(context.Background(), types.NamespacedName{Namespace: cluster.Namespace, Name: readSTS.Name}, updatedSTS)
+	assert.NoError(t, err)
+	if assert.NotNil(t, updatedSTS.Spec.Replicas) {
+		assert.EqualValues(t, 0, *updatedSTS.Spec.Replicas)
+	}
+
+	err = k8sClient.Get(context.Background(), types.NamespacedName{Namespace: cluster.Namespace, Name: readConfig.Name}, &corev1.ConfigMap{})
+	assert.NoError(t, err)
 }
 
 func TestInfraReconciler_ResolveOIDC_LazyDiscoveryForSelfInit(t *testing.T) {
