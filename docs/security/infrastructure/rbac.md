@@ -178,6 +178,12 @@ The provisioner writes the RBAC that grants the controller access, but it does n
   ]}
 />
 
+<Callout type="note" title="Controller reconcile waits for the RBAC handoff">
+
+The controller does not treat missing tenant RBAC as a normal write failure anymore. In multi-tenant mode it first checks for the tenant `RoleBinding`, then requeues cleanly until onboarding is complete. That keeps simultaneous `OpenBaoTenant` and `OpenBaoCluster` submissions safe without weakening the split-identity model.
+
+</Callout>
+
 ## What the RBAC model guarantees
 
 <DecisionTable

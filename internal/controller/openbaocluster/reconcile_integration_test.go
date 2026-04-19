@@ -40,6 +40,7 @@ var _ = Describe("OpenBaoCluster Reconcile", func() {
 		}
 
 		createMinimalCluster := func(name string, paused bool) *openbaov1alpha1.OpenBaoCluster {
+			ensureTenantNamespaceProvisioned(ctx, "default")
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,

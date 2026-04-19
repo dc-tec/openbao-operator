@@ -44,6 +44,7 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 				},
 			}
 			_ = k8sClient.Create(ctx, ns)
+			ensureTenantNamespaceProvisioned(ctx, namespace)
 
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{

@@ -83,6 +83,12 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) for dedicated enviro
   ]}
 />
 
+<Callout type="note" title="Onboarding is a real handoff, not just a prerequisite list item">
+
+In multi-tenant mode, the controller does not start mutating `OpenBaoCluster` resources in a namespace until the Provisioner has written the tenant `RoleBinding`. If `OpenBaoTenant` and `OpenBaoCluster` arrive together, reconciliation pauses and requeues until that handoff exists instead of failing with transient status-patch errors.
+
+</Callout>
+
 <DecisionTable
   kind="reference"
   title="Default tenant roles"
@@ -165,7 +171,7 @@ Use [Single-Tenant Mode](../operator/single-tenant-mode.md) for dedicated enviro
   code={`kubectl get openbaotenant <name> -n <namespace> -o yaml
 kubectl get rolebinding,resourcequota,limitrange,networkpolicy -n <target-namespace>`}
 >
-  This gives you the fast check: the onboarding request is provisioned, the namespace-scoped RBAC exists, and the expected tenant guardrails were actually introduced.
+  This gives you the fast check: the onboarding request is provisioned, the namespace-scoped RBAC exists, and the expected tenant guardrails were actually introduced. The tenant `RoleBinding` is also the controller handoff marker for workload reconciliation.
 </CommandBlock>
 
 <CommandBlock

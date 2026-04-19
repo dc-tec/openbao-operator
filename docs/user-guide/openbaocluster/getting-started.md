@@ -31,6 +31,12 @@ journeyStep: 4
 
 </Callout>
 
+<Callout type="tip" title="Same-sync GitOps is now safe in multi-tenant mode">
+
+If your GitOps workflow applies `OpenBaoTenant` and `OpenBaoCluster` together, the controller requeues cleanly until tenant onboarding is finished. You still get the clearest rollout signal by watching `OpenBaoTenant.status.provisioned` and the tenant `RoleBinding` first.
+
+</Callout>
+
 <JourneyRail
   title="The first five moves"
   current={4}

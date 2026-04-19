@@ -3,6 +3,8 @@ package provisioner
 import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 var (
@@ -21,9 +23,9 @@ func cloneStrings(in []string) []string {
 
 const (
 	// TenantRoleName is the name of the Role created in each tenant namespace.
-	TenantRoleName = "openbao-operator-tenant-role"
+	TenantRoleName = constants.TenantRoleName
 	// TenantRoleBindingName is the name of the RoleBinding created in each tenant namespace.
-	TenantRoleBindingName = "openbao-operator-tenant-rolebinding"
+	TenantRoleBindingName = constants.TenantRoleBindingName
 
 	// TenantSecretsReaderRoleName grants read-only access to explicitly enumerated Secret names.
 	// This is used to reduce the blast radius of Secret access in tenant namespaces.
