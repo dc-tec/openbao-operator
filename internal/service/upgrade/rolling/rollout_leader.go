@@ -3,13 +3,11 @@ package rolling
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -184,27 +182,14 @@ func (m *Manager) stepDownLeader(ctx context.Context, logger logr.Logger, cluste
 		return true, nil
 	}
 
-	// The step-down Job can succeed while leadership quickly returns to the same pod.
-	// If that persisted longer than the step-down timeout window, recycle the Job so
-	// the next reconcile performs another step-down attempt for this pod.
+	// A succeeded step-down Job that still leaves the target pod as leader should
+	// not be retried forever. If the target remains leader beyond the timeout
+	// window, fail the upgrade and require an explicit retry after operator/user
+	// intervention.
 	if jobExists && !stepDownJob.CreationTimestamp.IsZero() {
-		elapsed := time.Since(stepDownJob.CreationTimestamp.Time)
-		if elapsed > upgrade.DefaultStepDownTimeout {
-			// Use foreground deletion so the old Job pod is removed before a new
-			// retry Job with the same deterministic name is created.
-			propagationPolicy := metav1.DeletePropagationForeground
-			if err := m.client.Delete(
-				ctx,
-				stepDownJob,
-				&client.DeleteOptions{PropagationPolicy: &propagationPolicy},
-			); err != nil && !apierrors.IsNotFound(err) {
-				return false, fmt.Errorf("failed to delete stale step-down Job %s/%s for retry: %w", cluster.Namespace, stepDownJob.Name, err)
-			}
-			logger.Info("Step-down job succeeded but target pod is still leader; deleting job to retry",
-				"pod", podName,
-				"job", stepDownJob.Name,
-				"elapsed", elapsed)
-			return false, nil
+		if err := failUpgradeIfTimestampTimeout(cluster, &stepDownJob.CreationTimestamp, stepDownTimeout(podName)); err != nil {
+			metrics.IncrementStepDownFailures()
+			return false, err
 		}
 	}
 

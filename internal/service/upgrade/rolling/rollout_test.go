@@ -142,7 +142,7 @@ func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
 	}
 }
 
-func TestStepDownLeader_DeletesStaleSucceededJobWhenTargetStillLeader(t *testing.T) {
+func TestStepDownLeader_FailsWhenSucceededJobStillLeavesTargetAsLeader(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
 	_ = batchv1.AddToScheme(scheme)
@@ -210,23 +210,17 @@ func TestStepDownLeader_DeletesStaleSucceededJobWhenTargetStillLeader(t *testing
 	}, portopenbao.ClientConfig{}, nil, "")
 
 	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	if err == nil {
+		t.Fatal("expected step-down timeout error")
 	}
 	if ok {
-		t.Fatalf("expected step-down to remain in progress while leader transfer is not yet observed")
+		t.Fatalf("expected step-down to remain incomplete after timeout")
 	}
-	if cluster.Status.Upgrade.LastErrorReason != "" {
-		t.Fatalf("expected LastErrorReason to remain empty, got %q", cluster.Status.Upgrade.LastErrorReason)
+	if cluster.Status.Upgrade.LastErrorReason != upgrade.ReasonStepDownTimeout {
+		t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, upgrade.ReasonStepDownTimeout)
 	}
-
-	gotJob := &batchv1.Job{}
-	getErr := c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: jobName}, gotJob)
-	if getErr == nil {
-		t.Fatalf("expected stale succeeded step-down job to be deleted for retry")
-	}
-	if !apierrors.IsNotFound(getErr) {
-		t.Fatalf("expected NotFound after deleting stale step-down job, got %v", getErr)
+	if cluster.Status.Upgrade.LastErrorMessage != "Leader step-down timed out for pod "+podName {
+		t.Fatalf("LastErrorMessage=%q, want %q", cluster.Status.Upgrade.LastErrorMessage, "Leader step-down timed out for pod "+podName)
 	}
 }
 
