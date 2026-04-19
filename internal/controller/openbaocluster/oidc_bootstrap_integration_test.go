@@ -48,6 +48,7 @@ var _ = Describe("OpenBaoCluster OIDC Bootstrap", func() {
 		}
 
 		createOIDCBootstrapCluster := func(name string) *openbaov1alpha1.OpenBaoCluster {
+			ensureTenantNamespaceProvisioned(ctx, "default")
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      name,

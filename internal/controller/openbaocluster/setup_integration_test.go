@@ -15,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -122,6 +123,9 @@ func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant boo
 	t.Cleanup(func() {
 		_ = liveClient.Delete(context.Background(), testNamespace)
 	})
+	if !singleTenant {
+		require.NoError(t, ensureProvisionedTenantNamespace(context.Background(), liveClient, namespace))
+	}
 
 	mgrOptions := ctrl.Options{
 		Scheme:                 scheme,
@@ -175,6 +179,32 @@ func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant boo
 	})
 
 	return liveClient
+}
+
+func ensureProvisionedTenantNamespace(ctx context.Context, c client.Client, namespace string) error {
+	roleBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.TenantRoleBindingName,
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     constants.TenantRoleName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      "openbao-operator-controller",
+				Namespace: "openbao-operator-system",
+			},
+		},
+	}
+	err := c.Create(ctx, roleBinding)
+	if apierrors.IsAlreadyExists(err) {
+		return nil
+	}
+	return err
 }
 
 func newIntegrationScheme(t *testing.T) *runtime.Scheme {
