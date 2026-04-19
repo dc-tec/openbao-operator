@@ -8,7 +8,7 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
 
 <PageHeader
   title="Split-controller control plane"
-  lede="Focused controllers, app-layer orchestration, and narrow domain managers keep workload churn, long-running operations, and status writes separated."
+  lede="Focused controllers, app-layer orchestration, narrow domain managers, and shared platform contracts keep workload churn, long-running operations, and status writes separated."
 />
 
 ## Controller split
@@ -142,9 +142,34 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
   ]}
 />
 
+## Shared contracts below managers
+
+The controller and app layers coordinate managers, but some semantics stay below the manager boundary because they must stay uniform across multiple services.
+
+<DecisionTable
+  kind="reference"
+  title="Shared contracts"
+  columns={['Contract', 'Used by', 'Why it stays separate']}
+  rows={[
+    {
+      cells: ['Configuration service', 'Bootstrap manager and blue-green upgrade startup.', '`config.hcl` semantics should stay in one place even though both workload bootstrap and upgrade orchestration need them.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Resource identity', 'Bootstrap, networking, identity, and workload managers.', 'Names, labels, and selectors define the managed-resource contract and should not drift across services.'],
+    },
+    {
+      cells: ['Owned apply', 'Bootstrap, networking, identity, and workload managers.', 'Generic owner-ref-aware SSA apply behavior is a platform concern; object-specific exceptions still stay in the owning service.'],
+    },
+    {
+      cells: ['Architecture boundary policy', 'Controllers, app packages, services, and selected platform packages.', 'Explicit service and adapter allowlists keep layered architecture rules enforced in CI instead of implied by convention alone.'],
+    },
+  ]}
+/>
+
 <Callout type="note" title="Boundary contract">
 
-Controller import surfaces are intentionally narrow and enforced by generated architecture-boundary rules from `.ast-grep/policy/architecture-boundaries.yml`.
+Controller, app, service, and selected platform import surfaces are intentionally narrow and enforced by generated architecture-boundary rules from `.ast-grep/policy/architecture-boundaries.yml`.
 
 </Callout>
 

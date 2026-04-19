@@ -377,7 +377,11 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 			"internal/service/upgrade/bluegreen",
 			"internal/service/upgrade/rolling",
 		},
-		AdapterImportRoots: []string{"internal/adapter/kube"},
+		AdapterImportRoots: []string{
+			"internal/adapter/auth",
+			"internal/adapter/kube",
+			"internal/adapter/security",
+		},
 		ServiceBoundaries: []serviceBoundary{
 			{
 				Name:         "backup",
@@ -386,6 +390,7 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 				Files:        []string{"internal/service/backup/**/*.go"},
 				Ignores:      []string{"**/*_test.go"},
 				AllowService: []string{"internal/service/opslifecycle"},
+				AllowAdapter: []string{"internal/adapter/kube"},
 			},
 		},
 		AppBoundaries: []appBoundary{
@@ -415,6 +420,10 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 			`internal/service/upgrade(/[^"]*)?|`,
 			`internal/service/upgrade/bluegreen(/[^"]*)?|`,
 			`internal/service/upgrade/rolling(/[^"]*)?)"`,
+		}, ""),
+		"no-backup-service-unapproved-adapter-imports": strings.Join([]string{
+			`"github\.com/dc-tec/openbao-operator/(internal/adapter/auth(/[^"]*)?|`,
+			`internal/adapter/security(/[^"]*)?)"`,
 		}, ""),
 		"no-openbaocluster-app-unapproved-service-imports": strings.Join([]string{
 			`"github\.com/dc-tec/openbao-operator/(internal/service/opslifecycle(/[^"]*)?|`,

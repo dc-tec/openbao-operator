@@ -45,6 +45,7 @@ description: Orchestrate rolling and blue-green upgrades, status-backed resumabi
       items: [
         'target version policy and image alignment',
         'backup readiness and network egress for snapshot prerequisites',
+        'shared configuration rendering semantics for green revision startup config',
         'operation lifecycle coordination for lock, retry, and phase timing',
       ],
     },
@@ -88,6 +89,9 @@ shared mechanics live behind narrower seams:
 - `internal/service/upgrade/raftops` owns executor-side Raft and OpenBao
   coordination such as leader discovery, leader transfer, peer
   join/promote/demote/remove, and autopilot capability fallback.
+- `internal/service/configuration` owns shared `config.hcl` rendering
+  semantics so bootstrap and blue-green startup paths do not fork the config
+  contract.
 - `internal/platform/statusapply` owns the shared AdminOps status apply and
   mutate+apply gateways so upgrade, backup, and adminops flows use the same
   status-subresource ownership rules and field-manager boundaries.
