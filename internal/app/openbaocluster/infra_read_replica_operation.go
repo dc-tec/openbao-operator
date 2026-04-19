@@ -25,9 +25,12 @@ func shouldStageSteadyReadReplicasDown(cluster *openbaov1alpha1.OpenBaoCluster) 
 		return false
 	}
 
-	if cluster.Status.BlueGreen != nil &&
-		cluster.Status.BlueGreen.Phase != "" &&
-		cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
+	phase := openbaov1alpha1.PhaseIdle
+	if cluster.Status.BlueGreen != nil {
+		phase = cluster.Status.BlueGreen.Phase
+	}
+
+	if blueGreenPhaseRequiresReadReplicaStageDown(phase) {
 		return true
 	}
 
@@ -39,7 +42,25 @@ func shouldStageSteadyReadReplicasDown(cluster *openbaov1alpha1.OpenBaoCluster) 
 	case openbaov1alpha1.ClusterOperationRestore:
 		return true
 	case openbaov1alpha1.ClusterOperationUpgrade:
-		return cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen
+		return cluster.Spec.Upgrade != nil &&
+			cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen &&
+			(phase == "" || phase == openbaov1alpha1.PhaseIdle)
+	default:
+		return false
+	}
+}
+
+func blueGreenPhaseRequiresReadReplicaStageDown(phase openbaov1alpha1.BlueGreenPhase) bool {
+	switch phase {
+	case openbaov1alpha1.PhaseDeployingGreen,
+		openbaov1alpha1.PhaseJoiningMesh,
+		openbaov1alpha1.PhaseSyncing,
+		openbaov1alpha1.PhasePromoting,
+		openbaov1alpha1.PhaseDemotingBlue,
+		openbaov1alpha1.PhaseCleanup,
+		openbaov1alpha1.PhaseRollingBack,
+		openbaov1alpha1.PhaseRollbackCleanup:
+		return true
 	default:
 		return false
 	}

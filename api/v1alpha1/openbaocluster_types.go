@@ -2028,7 +2028,7 @@ type AdminOpsControllerStatus struct {
 }
 
 // BlueGreenPhase is a high-level summary of blue/green upgrade state.
-// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;DemotingBlue;Cleanup;RollingBack;RollbackCleanup
+// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;DemotingBlue;Cleanup;RestoringReadReplicas;RollingBack;RollbackCleanup
 type BlueGreenPhase string
 
 const (
@@ -2047,6 +2047,10 @@ const (
 	PhaseDemotingBlue BlueGreenPhase = "DemotingBlue"
 	// PhaseCleanup indicates Blue StatefulSet is being deleted.
 	PhaseCleanup BlueGreenPhase = "Cleanup"
+	// PhaseRestoringReadReplicas indicates the steady-state read-replica pool is
+	// being restored after cutover cleanup and must converge before the upgrade
+	// returns to Idle.
+	PhaseRestoringReadReplicas BlueGreenPhase = "RestoringReadReplicas"
 	// PhaseRollingBack indicates the upgrade is being rolled back.
 	// Blue nodes are re-promoted and Green nodes are demoted.
 	PhaseRollingBack BlueGreenPhase = "RollingBack"

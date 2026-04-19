@@ -145,6 +145,10 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 }
 
 func (m *Manager) handleNoUpgradeNeeded(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
+	if core.CurrentBlueGreenPhase(cluster) != openbaov1alpha1.PhaseIdle {
+		return false, recon.Result{}, nil
+	}
+
 	if cluster.Status.CurrentVersion == "" {
 		logger.Info("CurrentVersion not yet set; waiting for initial version to be established")
 		if err := m.ensureIdleAndCleanupGreen(ctx, logger, cluster); err != nil {
