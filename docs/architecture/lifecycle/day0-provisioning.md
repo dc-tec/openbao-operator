@@ -87,6 +87,8 @@ Day 0 provisioning uses the dedicated tenant-controller path:
 
 This keeps tenant onboarding separate from steady-state cluster reconciliation and makes the tenant boundary explicit before any workload resources exist.
 
+Day 0 also defines the handoff into Day 1. In multi-tenant mode, `OpenBaoCluster` controllers wait until the tenant `RoleBinding` exists before they begin finalizer, status, or workload mutation in that namespace.
+
 <DiagramFrame
   title="Day 0 provisioning flow"
   caption="Provisioning establishes the namespace boundary first, then keeps Secret access aligned with the managed clusters that later appear in that namespace."
@@ -108,6 +110,8 @@ This keeps tenant onboarding separate from steady-state cluster reconciliation a
     Manager->>Namespace: Apply optional quota defaults
     Manager->>Namespace: Sync Secret allowlist roles
     Namespace-->>Admin: Namespace ready for OpenBaoCluster
+    Namespace-->>K8s: Tenant RoleBinding exists
+    K8s-->>Ctrl: OpenBaoCluster reconcile may proceed
   `}
 />
 
@@ -122,6 +126,9 @@ This keeps tenant onboarding separate from steady-state cluster reconciliation a
     },
     {
       cells: ['Operator tenant RBAC', 'Provisioner manager.', 'The operator needs enough namespace-scoped access to manage OpenBao resources there without defaulting to broad cluster-wide permissions.'],
+    },
+    {
+      cells: ['Controller handoff', 'Provisioner manager plus OpenBaoCluster controllers.', 'The tenant `RoleBinding` marks when the namespace is actually writable for cluster reconciliation, which matters for GitOps paths that submit tenant and cluster objects together.'],
     },
     {
       cells: ['Secret allowlists', 'Provisioner manager plus tenant Secret RBAC sync.', 'Multi-tenant safety depends on explicit Secret access derived from actual managed cluster references.'],
