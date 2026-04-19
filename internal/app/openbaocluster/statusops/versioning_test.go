@@ -151,6 +151,48 @@ func TestReconcileCurrentVersion_AdvancesAfterRollingUpgradeFinalization(t *test
 	assert.Equal(t, "2.4.4", cluster.Status.CurrentVersion)
 }
 
+func TestReconcileCurrentVersion_FallsBackToSpecVersionAfterInitialization(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version: "2.4.4",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "",
+		},
+	}
+
+	state := &StatusState{
+		RollingUpgradeInProgress: false,
+		BlueGreenInProgress:      false,
+		UpgradeInProgress:        false,
+	}
+
+	ReconcileCurrentVersion(logr.Discard(), cluster, state, "")
+	assert.Equal(t, "2.4.4", cluster.Status.CurrentVersion)
+}
+
+func TestReconcileCurrentVersion_DoesNotFallbackToSpecVersionDuringBlueGreenUpgrade(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version: "2.4.4",
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "",
+		},
+	}
+
+	state := &StatusState{
+		RollingUpgradeInProgress: false,
+		BlueGreenInProgress:      true,
+		UpgradeInProgress:        true,
+	}
+
+	ReconcileCurrentVersion(logr.Discard(), cluster, state, "")
+	assert.Equal(t, "", cluster.Status.CurrentVersion)
+}
+
 func TestMaybeAdvanceCurrentVersionForBlueGreen_AdvancesOnCompletion(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
