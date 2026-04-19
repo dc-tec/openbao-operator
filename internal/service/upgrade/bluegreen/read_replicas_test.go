@@ -165,3 +165,18 @@ func TestHandlePhaseRestoringReadReplicas_FinalizesWhenHealthy(t *testing.T) {
 		t.Fatal("expected operation lock to be released")
 	}
 }
+
+func TestShouldWaitForSteadyReadReplicaDrain(t *testing.T) {
+	t.Parallel()
+
+	cluster := newBlueGreenCluster()
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+	if !shouldWaitForSteadyReadReplicaDrain(cluster) {
+		t.Fatal("expected cleanup phase to keep waiting for steady read replica drain")
+	}
+
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseRestoringReadReplicas
+	if shouldWaitForSteadyReadReplicaDrain(cluster) {
+		t.Fatal("expected restoring-read-replicas phase to stop waiting for steady read replica drain")
+	}
+}

@@ -85,11 +85,17 @@ func (m *Manager) prepareBlueGreenReconcile(
 		return res, true, err
 	}
 
-	if result, waiting, err := m.ensureSteadyReadReplicasScaledDown(ctx, logger, cluster); waiting || err != nil {
-		return result, true, err
+	if shouldWaitForSteadyReadReplicaDrain(cluster) {
+		if result, waiting, err := m.ensureSteadyReadReplicasScaledDown(ctx, logger, cluster); waiting || err != nil {
+			return result, true, err
+		}
 	}
 
 	return recon.Result{}, false, nil
+}
+
+func shouldWaitForSteadyReadReplicaDrain(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return core.CurrentBlueGreenPhase(cluster) != openbaov1alpha1.PhaseRestoringReadReplicas
 }
 
 func (m *Manager) handleUnexpectedPromoteRequest(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
