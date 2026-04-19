@@ -785,6 +785,166 @@ func TestHandleRunning_FailedJobSetsActionableMessage(t *testing.T) {
 	assert.Contains(t, updated.Status.Message, "create a new OpenBaoRestore to retry")
 }
 
+func TestHandleRunning_SucceededJobWaitsForSteadyReadReplicaRestore(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+				Replicas: 2,
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationRestore,
+				Holder:    constants.ControllerNameOpenBaoRestore + "/test-restore",
+				Message:   "restore default/test-restore",
+			},
+			ReadReplicas: &openbaov1alpha1.ReadReplicaStatus{
+				DesiredReplicas:    2,
+				ReadyReplicas:      1,
+				RegisteredReplicas: 1,
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseRunning,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      restoreJobName(restore),
+			Namespace: "default",
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: 1,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore, job).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handleRunning(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.Equal(t, restoreRequeueImmediately, result.RequeueAfter)
+
+	updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: restore.Name, Namespace: restore.Namespace}, updatedRestore))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseRunning, updatedRestore.Status.Phase)
+	assert.Nil(t, updatedRestore.Status.CompletionTime)
+	assert.Contains(t, updatedRestore.Status.Message, "Waiting for steady read replicas to restore before marking restore complete")
+
+}
+
+func TestHandleRunning_SucceededJobCompletesAfterSteadyReadReplicaRestore(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+				Replicas: 2,
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationRestore,
+				Holder:    constants.ControllerNameOpenBaoRestore + "/test-restore",
+				Message:   "restore default/test-restore",
+			},
+			ReadReplicas: &openbaov1alpha1.ReadReplicaStatus{
+				DesiredReplicas:    2,
+				ReadyReplicas:      2,
+				RegisteredReplicas: 2,
+			},
+			Conditions: []metav1.Condition{
+				{Type: string(openbaov1alpha1.ConditionReadReplicasReady), Status: metav1.ConditionTrue},
+				{Type: string(openbaov1alpha1.ConditionReadServingAvailable), Status: metav1.ConditionTrue},
+				{Type: string(openbaov1alpha1.ConditionRaftMembershipReady), Status: metav1.ConditionTrue},
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseRunning,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      restoreJobName(restore),
+			Namespace: "default",
+		},
+		Status: batchv1.JobStatus{
+			Succeeded: 1,
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore, job).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handleRunning(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.Equal(t, time.Duration(0), result.RequeueAfter)
+
+	updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: restore.Name, Namespace: restore.Namespace}, updatedRestore))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseCompleted, updatedRestore.Status.Phase)
+	assert.NotNil(t, updatedRestore.Status.CompletionTime)
+
+}
+
 func TestReconcilePending_AddsFinalizerThenPatchesStatus(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
