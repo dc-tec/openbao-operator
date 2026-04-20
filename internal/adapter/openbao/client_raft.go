@@ -24,9 +24,6 @@ type JoinRaftClusterResponse struct {
 	Joined bool `json:"joined"`
 }
 
-type RaftAutopilotServerState = portopenbao.RaftAutopilotServerState
-type RaftAutopilotStateResponse = portopenbao.RaftAutopilotStateResponse
-
 type raftPeerActionRequest struct {
 	ServerID string `json:"server_id"`
 }
@@ -124,7 +121,7 @@ func (c *Client) ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftCo
 }
 
 // ReadRaftAutopilotState reads the Raft Autopilot cluster state.
-func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStateResponse, error) {
+func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftAutopilotStateResponse, error) {
 	if c.token == "" {
 		return nil, fmt.Errorf("authentication token required for raft autopilot state read")
 	}
@@ -147,8 +144,8 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*RaftAutopilotStat
 	}
 
 	type raftAutopilotEnvelope struct {
-		Data *RaftAutopilotStateResponse `json:"data,omitempty"`
-		RaftAutopilotStateResponse
+		Data *portopenbao.RaftAutopilotStateResponse `json:"data,omitempty"`
+		portopenbao.RaftAutopilotStateResponse
 	}
 
 	var envelope raftAutopilotEnvelope
