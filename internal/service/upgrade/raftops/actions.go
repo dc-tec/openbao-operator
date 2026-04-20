@@ -13,35 +13,82 @@ import (
 
 // RunRollingStepDownLeader steps down the current cluster leader.
 func RunRollingStepDownLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) error {
-	leaderURL, err := FindLeader(ctx, cfg, "")
-	if err != nil {
-		return fmt.Errorf("failed to find leader: %w", err)
-	}
-	logger.Info("Leader found", "leader_url", leaderURL)
-
-	token, err := LoginJWT(ctx, cfg, leaderURL)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
-	}
-
 	factory, cleanup, err := NewOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	client, err := factory.NewWithToken(leaderURL, token)
-	if err != nil {
-		return fmt.Errorf("failed to create OpenBao client: %w", err)
+	resolveClient := func(ctx context.Context, leaderURL string) (LeaderTransferClient, error) {
+		token, err := LoginJWT(ctx, cfg, leaderURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to authenticate: %w", err)
+		}
+
+		client, err := factory.NewWithToken(leaderURL, token)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create OpenBao client: %w", err)
+		}
+
+		return client, nil
 	}
 
-	logger.Info("Stepping down leader")
-	if err := client.StepDown(ctx); err != nil {
-		return fmt.Errorf("failed to step down leader: %w", err)
+	return runRollingStepDownLeaderWithFuncs(ctx, logger, cfg, RetryPolicy{MaxAttempts: defaultLeaderTransferMaxRetries}, FindLeader, resolveClient, WaitForNewLeaderURL)
+}
+
+func runRollingStepDownLeaderWithFuncs(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	policy RetryPolicy,
+	findLeader func(context.Context, *ExecutorConfig, string) (string, error),
+	resolveClient LeaderTransferClientResolver,
+	waitForLeader LeaderTransferWaitFunc,
+) error {
+	policy = NormalizeLeaderTransferRetryPolicy(policy)
+
+	for _, attempt := range AttemptOrdinals(policy.MaxAttempts) {
+		attemptNumber := attempt + 1
+
+		leaderURL, err := findLeader(ctx, cfg, "")
+		if err != nil {
+			return fmt.Errorf("failed to find leader: %w", err)
+		}
+		logger.Info("Leader found", "leader_url", leaderURL, "attempt", attemptNumber, "max_attempts", policy.MaxAttempts)
+
+		client, err := resolveClient(ctx, leaderURL)
+		if err != nil {
+			return err
+		}
+
+		logger.Info("Stepping down leader", "attempt", attemptNumber, "max_attempts", policy.MaxAttempts)
+		classification, err := StepDownLeader(ctx, logger, client)
+		if err != nil {
+			if classification == BenignErrorClassificationFatal {
+				return fmt.Errorf("failed to step down leader: %w", err)
+			}
+			logger.Info("Retryable leader step-down error observed; retrying", "attempt", attemptNumber, "max_attempts", policy.MaxAttempts, "error", err.Error())
+			continue
+		}
+
+		nextLeaderURL, err := waitForLeader(ctx, logger, cfg, leaderURL)
+		if err != nil {
+			return fmt.Errorf("failed to wait for a new leader after step-down: %w", err)
+		}
+		if strings.TrimSpace(nextLeaderURL) == "" {
+			logger.Info("Leader transfer did not surface a leader URL yet; retrying step-down", "attempt", attemptNumber, "max_attempts", policy.MaxAttempts)
+			continue
+		}
+		if nextLeaderURL == leaderURL {
+			logger.Info("Leader transferred back to the same node after step-down; retrying", "leader_url", leaderURL, "attempt", attemptNumber, "max_attempts", policy.MaxAttempts)
+			continue
+		}
+
+		logger.Info("Leader transferred successfully", "previous_leader_url", leaderURL, "new_leader_url", nextLeaderURL, "attempt", attemptNumber, "max_attempts", policy.MaxAttempts)
+		return nil
 	}
 
-	logger.Info("Leader stepped down")
-	return nil
+	return fmt.Errorf("leader step-down did not transfer leadership after %d attempts", policy.MaxAttempts)
 }
 
 // RunBlueGreenJoinGreenNonVoters joins Green peers as non-voters under the Blue

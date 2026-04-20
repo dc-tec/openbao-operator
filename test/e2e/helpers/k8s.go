@@ -7,6 +7,9 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -15,7 +18,7 @@ import (
 
 // RunWithImpersonation runs the provided action as the specified user/group(s)
 // using Kubernetes impersonation. This is used in E2E tests to validate RBAC and
-// ValidatingAdmissionPolicy enforcement without relying on system:masters.
+// ValidatingAdmissionPolicy enforcement under explicit caller identities.
 func RunWithImpersonation(
 	ctx context.Context,
 	baseConfig *rest.Config,
@@ -50,6 +53,47 @@ func RunWithImpersonation(
 
 	if err := action(impersonatedClient); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// EnsureRoleBinding creates a Role and same-named RoleBinding if they do not already exist.
+func EnsureRoleBinding(ctx context.Context, c client.Client, role *rbacv1.Role, subjects []rbacv1.Subject) error {
+	if ctx == nil {
+		return fmt.Errorf("context is required")
+	}
+	if c == nil {
+		return fmt.Errorf("kubernetes client is required")
+	}
+	if role == nil {
+		return fmt.Errorf("role is required")
+	}
+	if role.Name == "" || role.Namespace == "" {
+		return fmt.Errorf("role name and namespace are required")
+	}
+	if len(subjects) == 0 {
+		return fmt.Errorf("at least one subject is required")
+	}
+
+	if err := c.Create(ctx, role); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create role %s/%s: %w", role.Namespace, role.Name, err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      role.Name + "-binding",
+			Namespace: role.Namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: subjects,
+	}
+	if err := c.Create(ctx, binding); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("create rolebinding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
 	return nil

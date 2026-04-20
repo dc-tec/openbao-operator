@@ -6,7 +6,10 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
+	identitymanager "github.com/dc-tec/openbao-operator/internal/service/identity"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func oidcConfigForInfraManager(oidc *OIDCConfig) *portauth.OIDCConfig {
@@ -24,14 +27,38 @@ func oidcConfigForInfraManager(oidc *OIDCConfig) *portauth.OIDCConfig {
 	}
 }
 
-func (r *infraReconciler) newInfraManager(effectiveOIDC *OIDCConfig) *inframanager.Manager {
-	return inframanager.NewManagerWithReaderAndOIDCConfig(
+func (r *infraReconciler) newBootstrapManager(effectiveOIDC *OIDCConfig) *bootstrapmanager.Manager {
+	return bootstrapmanager.NewManagerWithReaderAndOIDCConfig(
 		r.deps.Kubernetes.Client,
 		r.deps.Kubernetes.APIReader,
 		r.deps.Kubernetes.Scheme,
 		r.deps.Kubernetes.OperatorNamespace,
 		oidcConfigForInfraManager(effectiveOIDC),
+	)
+}
+
+func (r *infraReconciler) newWorkloadManager() *workloadsvc.Manager {
+	return workloadsvc.NewManager(
+		r.deps.Kubernetes.Client,
+		r.deps.Kubernetes.Scheme,
 		r.deps.Kubernetes.Platform,
+	).WithReader(r.deps.Kubernetes.APIReader)
+}
+
+func (r *infraReconciler) newNetworkingManager() *networkingmanager.Manager {
+	return networkingmanager.NewManagerWithReader(
+		r.deps.Kubernetes.Client,
+		r.deps.Kubernetes.APIReader,
+		r.deps.Kubernetes.Scheme,
+		r.deps.Kubernetes.OperatorNamespace,
+		r.deps.Kubernetes.Platform,
+	)
+}
+
+func (r *infraReconciler) newIdentityManager() *identitymanager.Manager {
+	return identitymanager.NewManager(
+		r.deps.Kubernetes.Client,
+		r.deps.Kubernetes.Scheme,
 	)
 }
 
@@ -39,17 +66,17 @@ func (r *infraReconciler) mapManagerReconcileError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, inframanager.ErrOIDCBootstrapAudienceMismatch):
+	case errors.Is(err, bootstrapmanager.ErrOIDCBootstrapAudienceMismatch):
 		return operatorerrors.WithReason(constants.ReasonOIDCBootstrapConfigurationInvalid, err)
-	case errors.Is(err, inframanager.ErrGatewayAPIMissing):
+	case errors.Is(err, networkingmanager.ErrGatewayAPIMissing):
 		return operatorerrors.WithReason(constants.ReasonGatewayAPIMissing, err)
-	case errors.Is(err, inframanager.ErrAPIServerNetworkConfigurationInvalid):
+	case errors.Is(err, networkingmanager.ErrAPIServerNetworkConfigurationInvalid):
 		return operatorerrors.WithReason(constants.ReasonAPIServerNetworkConfigurationInvalid, err)
-	case errors.Is(err, inframanager.ErrStatefulSetPrerequisitesMissing):
+	case errors.Is(err, workloadsvc.ErrStatefulSetPrerequisitesMissing):
 		return operatorerrors.WithReason(constants.ReasonPrerequisitesMissing, err)
-	case errors.Is(err, inframanager.ErrACMEDomainNotResolvable):
+	case errors.Is(err, networkingmanager.ErrACMEDomainNotResolvable):
 		return operatorerrors.WithReason(constants.ReasonACMEDomainNotResolvable, err)
-	case errors.Is(err, inframanager.ErrACMEGatewayNotConfiguredForPassthrough):
+	case errors.Is(err, networkingmanager.ErrACMEGatewayNotConfiguredForPassthrough):
 		return operatorerrors.WithReason(constants.ReasonACMEGatewayNotConfiguredForPassthrough, err)
 	default:
 		return err

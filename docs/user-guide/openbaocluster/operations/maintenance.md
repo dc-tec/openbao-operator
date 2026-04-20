@@ -39,8 +39,8 @@ journey: operate
       cells: [
         'Maintenance mode',
         'Admission policy requires the `openbao.org/maintenance=true` signal before restarts or controlled deletes.',
-        'The operator annotates managed resources so maintenance-only actions are allowed under the configured break-glass groups.',
-        'This is a controlled operational mode for maintenance-only actions under the configured break-glass groups.',
+        'The operator annotates managed resources so callers with maintenance permission on the owning OpenBaoCluster can perform planned restarts or deletes.',
+        'Grant the custom `maintenance` verb on the owning OpenBaoCluster before using this path.',
       ],
     },
     {
@@ -165,23 +165,27 @@ Enable maintenance mode when your admission policies require a deliberate mainte
   maintenance:
     enabled: true`}
 >
-  In this mode, the operator annotates managed Pods and the StatefulSet with `openbao.org/maintenance=true`. By default, maintenance-only bypass is limited to callers in the Kubernetes group `system:masters` unless you changed the configured break-glass groups at install time.
+  In this mode, the operator annotates managed Pods and the StatefulSet with `openbao.org/maintenance=true`. Callers still need normal Kubernetes RBAC on the target resource plus the custom `maintenance` verb on the owning `OpenBaoCluster`.
 </CommandBlock>
 
 This mode is also required for some day 2 changes that need a controlled restart path, such as finishing filesystem expansion after increasing `spec.storage.size`.
 
 ## Trigger a rolling restart
 
-Use `restartAt` when you need the workload to roll because an external dependency changed, such as a certificate chain, secret material, or another input that should force a controlled refresh.
+Use `spec.runtime.restartAt` when you need the workload to roll because an external dependency changed, such as a certificate chain, secret material, or another input that should force a controlled refresh.
 
 <CommandBlock
   language="yaml"
   label="configure"
   title="Request a rolling restart"
   code={`spec:
-  maintenance:
+  runtime:
     restartAt: "2026-01-19T00:00:00Z"`}
 />
+
+This request is independent from maintenance authorization. Set maintenance only when you need disruptive work on managed resources or an operator flow that explicitly requires the maintenance gate.
+
+Use `spec.runtime.restartAt` for new configurations. The older `spec.maintenance.restartAt` path remains temporarily for compatibility.
 
 When a leader Pod must be restarted or evicted, the operator handles graceful step-down automatically before termination so the cluster can elect a new leader cleanly.
 

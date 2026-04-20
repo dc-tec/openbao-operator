@@ -3,15 +3,13 @@ title: Component Design
 hide_title: true
 pageType: concept
 journey: architecture
-description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant, including controller boundaries, manager orchestration, and service-layer coordination.
+description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant, including controller boundaries, app-layer orchestration, and service-layer coordination.
 ---
 
 <PageHeader
   title="Split-controller control plane"
-  lede="Focused controllers, app-layer orchestration, and narrow domain managers keep workload churn, long-running operations, and status writes separated."
+  lede="Focused controllers, app-layer orchestration, narrow domain managers, and shared platform contracts keep workload churn, long-running operations, and status writes separated."
 />
-
-
 
 ## Controller split
 
@@ -19,17 +17,20 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
   title="Controller split"
   caption="Workload, admin operations, and status are separated so high-churn reconciliation, long-running workflows, and API status writes do not block each other."
   code={`graph TD
-    Manager["Manager process"] --> Workload["Workload controller"]
+    Manager["Manager process"] --> WorkloadCtrl["Workload controller"]
     Manager --> Admin["AdminOps controller"]
     Manager --> Status["Status controller"]
 
     subgraph Roles["Responsibilities"]
-      Workload --> Infra["Infra Manager"]
-      Workload --> Cert["Cert Manager"]
-      Workload --> Init["Init Manager"]
+      WorkloadCtrl --> Cert["Cert manager"]
+      WorkloadCtrl --> Bootstrap["Bootstrap manager"]
+      WorkloadCtrl --> Networking["Networking manager"]
+      WorkloadCtrl --> Identity["Identity manager"]
+      WorkloadCtrl --> Init["Init manager"]
+      WorkloadCtrl --> WorkloadMgr["Workload manager"]
 
-      Admin --> Upgrade["Upgrade Manager"]
-      Admin --> Backup["Backup Manager"]
+      Admin --> Upgrade["Upgrade manager"]
+      Admin --> Backup["Backup manager"]
 
       Status --> Conditions["Status conditions"]
     end
@@ -39,8 +40,8 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
     classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
     class Manager process;
-    class Workload,Admin,Status write;
-    class Infra,Cert,Init,Upgrade,Backup,Conditions read;`}
+    class WorkloadCtrl,Admin,Status write;
+    class Cert,Bootstrap,Networking,Identity,Init,WorkloadMgr,Upgrade,Backup,Conditions read;`}
 />
 
 <DecisionTable
@@ -49,7 +50,7 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
   columns={['Controller', 'Primary role', 'Why it stays separate']}
   rows={[
     {
-      cells: ['Workload', 'Reconciles StatefulSets, Services, ConfigMaps, and Secrets.', 'It handles high-churn pod and platform state and needs to react quickly.'],
+      cells: ['Workload', 'Reconciles workload-side certificate, bootstrap, networking, identity, initialization, and StatefulSet resources.', 'It handles high-churn pod and platform state and needs to react quickly.'],
       emphasis: 'recommended',
     },
     {
@@ -83,26 +84,29 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
     OBR["OpenBaoRestore controller"] --> OBRApp["internal/app/openbaorestore"]
     Prov["Provisioner controller"] --> ProvApp["internal/app/provisioner"]
 
-    OBCApp --> Workload["Workload orchestration"]
+    OBCApp --> WorkloadOps["Workload orchestration"]
     OBCApp --> AdminOps["AdminOps orchestration"]
     OBCApp --> StatusOps["Status and deletion orchestration"]
 
-    Workload --> Infra["Infra Manager"]
-    Workload --> Cert["Cert Manager"]
-    Workload --> Init["Init Manager"]
-    AdminOps --> Upgrade["Upgrade Manager"]
-    AdminOps --> Backup["Backup Manager"]
+    WorkloadOps --> Cert["Cert manager"]
+    WorkloadOps --> Bootstrap["Bootstrap manager"]
+    WorkloadOps --> Networking["Networking manager"]
+    WorkloadOps --> Identity["Identity manager"]
+    WorkloadOps --> Init["Init manager"]
+    WorkloadOps --> WorkloadMgr["Workload manager"]
+    AdminOps --> Upgrade["Upgrade manager"]
+    AdminOps --> Backup["Backup manager"]
 
-    OBRApp --> Restore["Restore Manager"]
-    ProvApp --> Provisioner["Provisioner Manager"]
+    OBRApp --> Restore["Restore manager"]
+    ProvApp --> Provisioner["Provisioner manager"]
 
     classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
     classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
     classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
     class OBC,OBR,Prov write;
-    class OBCApp,OBRApp,ProvApp,Workload,AdminOps,StatusOps process;
-    class Infra,Cert,Init,Upgrade,Backup,Restore,Provisioner read;`}
+    class OBCApp,OBRApp,ProvApp,WorkloadOps,AdminOps,StatusOps process;
+    class Cert,Bootstrap,Networking,Identity,Init,WorkloadMgr,Upgrade,Backup,Restore,Provisioner read;`}
 />
 
 <DecisionTable
@@ -111,27 +115,61 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
   columns={['Manager', 'Scope', 'Key reason for separation']}
   rows={[
     {
-      cells: ['Infrastructure Manager', 'Renders config and manages StatefulSet-facing infrastructure.', 'Workload state and rendered configuration change frequently and should stay close to the pod lifecycle.'],
+      cells: ['Bootstrap manager', 'Renders config and prepares bootstrap prerequisites.', 'Config rendering and seal or self-init prerequisites change for different reasons than networking or StatefulSet mutation.'],
       emphasis: 'recommended',
     },
     {
-      cells: ['Cert Manager', 'Handles operator-managed, ACME, and external TLS interactions.', 'TLS integration has its own dependency model and readiness surface.'],
+      cells: ['Networking manager', 'Owns Services, Gateway or Ingress resources, and workload network policy.', 'Reachability and network contract changes should not be coupled to config rendering or RBAC wiring.'],
     },
     {
-      cells: ['Init Manager', 'Coordinates initialization when self-init is disabled.', 'Bootstrap logic is security-sensitive and distinct from normal steady-state reconcile work.'],
+      cells: ['Identity manager', 'Owns the workload ServiceAccount and tenant-scoped RBAC.', 'Workload identity and RBAC should evolve independently from networking and StatefulSet behavior.'],
     },
     {
-      cells: ['Upgrade / Backup / Restore Managers', 'Run lock-aware disruptive operations.', 'These workflows share lifecycle helpers but own different risk profiles and side effects.'],
+      cells: ['Workload manager', 'Owns StatefulSet, PodDisruptionBudget, and rollout-safe workload mutation.', 'Replica intent, pod-template mutation, and rollout triggers belong close to the StatefulSet contract.'],
     },
     {
-      cells: ['Provisioner Manager', 'Onboards tenant namespaces and guardrails.', 'Tenant governance belongs to provisioning time, not to the cluster workload loop.'],
+      cells: ['Cert manager', 'Handles operator-managed, ACME, and external TLS interactions.', 'TLS integration has its own dependency model and readiness surface.'],
+    },
+    {
+      cells: ['Init manager', 'Coordinates initialization when self-init is disabled or needs confirmation.', 'Bootstrap logic is security-sensitive and distinct from normal steady-state reconcile work.'],
+    },
+    {
+      cells: ['Upgrade / Backup / Restore managers', 'Run lock-aware disruptive operations.', 'These workflows share lifecycle helpers but own different risk profiles and side effects.'],
+    },
+    {
+      cells: ['Provisioner manager', 'Onboards tenant namespaces and guardrails.', 'Tenant governance belongs to provisioning time, not to the cluster workload loop.'],
+    },
+  ]}
+/>
+
+## Shared contracts below managers
+
+The controller and app layers coordinate managers, but some semantics stay below the manager boundary because they must stay uniform across multiple services.
+
+<DecisionTable
+  kind="reference"
+  title="Shared contracts"
+  columns={['Contract', 'Used by', 'Why it stays separate']}
+  rows={[
+    {
+      cells: ['Configuration service', 'Bootstrap manager and blue-green upgrade startup.', '`config.hcl` semantics should stay in one place even though both workload bootstrap and upgrade orchestration need them.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Resource identity', 'Bootstrap, networking, identity, and workload managers.', 'Names, labels, and selectors define the managed-resource contract and should not drift across services.'],
+    },
+    {
+      cells: ['Owned apply', 'Bootstrap, networking, identity, and workload managers.', 'Generic owner-ref-aware SSA apply behavior is a platform concern; object-specific exceptions still stay in the owning service.'],
+    },
+    {
+      cells: ['Architecture boundary policy', 'Controllers, app packages, services, and selected platform packages.', 'Explicit service and adapter allowlists keep layered architecture rules enforced in CI instead of implied by convention alone.'],
     },
   ]}
 />
 
 <Callout type="note" title="Boundary contract">
 
-Controller import surfaces are intentionally narrow and enforced by generated architecture-boundary rules from `.ast-grep/policy/architecture-boundaries.yml`.
+Controller, app, service, and selected platform import surfaces are intentionally narrow and enforced by generated architecture-boundary rules from `.ast-grep/policy/architecture-boundaries.yml`.
 
 </Callout>
 
@@ -139,9 +177,9 @@ Controller import surfaces are intentionally narrow and enforced by generated ar
   title="Deep dives"
   items={[
     {
-      label: 'Infrastructure manager',
-      description: 'Configuration rendering and StatefulSet ownership.',
-      docId: 'architecture/infra-manager',
+      label: 'Workload managers',
+      description: 'Bootstrap, networking, identity, and StatefulSet ownership on the workload reconcile path.',
+      docId: 'architecture/workload-managers',
     },
     {
       label: 'Upgrade manager',

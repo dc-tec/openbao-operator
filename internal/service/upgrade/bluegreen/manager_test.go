@@ -16,8 +16,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
 	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
@@ -47,7 +47,7 @@ func TestManager_Reconcile_SkipsWhenNotBlueGreen(t *testing.T) {
 		WithScheme(scheme).
 		WithObjects(cluster).
 		Build()
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	infraMgr := workloadsvc.NewManager(c, scheme, "")
 	mgr := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	result, err := mgr.Reconcile(context.Background(), logr.Discard(), cluster)
@@ -108,7 +108,7 @@ func TestEnsureIdleAndCleanupGreen_CleansStaleGreenAndReleasesLock(t *testing.T)
 		WithObjects(cluster, greenStatefulSet)
 	c := clientBuilder.Build()
 
-	infraMgr := infra.NewManager(c, scheme, "openbao-operator-system", "", nil, "")
+	infraMgr := workloadsvc.NewManager(c, scheme, "")
 	manager := NewManager(c, scheme, infraMgr, backup.NewUpgradeStrategyRuntime(c, scheme), portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), c, nil), security.NewImageVerifier(logr.Discard(), c, nil), "")
 
 	if err := manager.ensureIdleAndCleanupGreen(context.Background(), logr.Discard(), cluster); err != nil {

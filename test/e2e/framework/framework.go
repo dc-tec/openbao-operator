@@ -32,10 +32,6 @@ import (
 )
 
 const (
-	// MaintenanceAnnotationKey enables "maintenance mode" to allow disruptive operations
-	// (e.g., deleting managed resources) that would otherwise be blocked by admission policies.
-	MaintenanceAnnotationKey = "openbao.org/maintenance"
-
 	// ReconcileTriggerAnnotationKey is used by tests to force a reconcile by mutating
 	// an annotation on the OpenBaoCluster.
 	ReconcileTriggerAnnotationKey = "e2e.openbao.org/reconcile-trigger"
@@ -488,8 +484,8 @@ func (f *Framework) WaitForClusterPhase(ctx context.Context, clusterName string,
 	}
 }
 
-// SetMaintenanceMode enables or disables maintenance mode on the OpenBaoCluster by patching the maintenance annotation.
-func (f *Framework) SetMaintenanceMode(ctx context.Context, clusterName string, enabled bool) error {
+// SetMaintenanceEnabled enables or disables cluster maintenance mode through spec.maintenance.enabled.
+func (f *Framework) SetMaintenanceEnabled(ctx context.Context, clusterName string, enabled bool) error {
 	if f == nil || f.Client == nil {
 		return fmt.Errorf("framework client is required")
 	}
@@ -506,20 +502,24 @@ func (f *Framework) SetMaintenanceMode(ctx context.Context, clusterName string, 
 	}
 
 	original := cluster.DeepCopy()
-	annotations := cluster.GetAnnotations()
-	if annotations == nil {
-		annotations = map[string]string{}
-	}
 
 	if enabled {
-		annotations[MaintenanceAnnotationKey] = "true"
+		if cluster.Spec.Maintenance == nil {
+			cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{}
+		}
+		cluster.Spec.Maintenance.Enabled = true
 	} else {
-		delete(annotations, MaintenanceAnnotationKey)
+		if cluster.Spec.Maintenance == nil {
+			return nil
+		}
+		cluster.Spec.Maintenance.Enabled = false
+		if cluster.Spec.Maintenance.RestartAt == "" {
+			cluster.Spec.Maintenance = nil
+		}
 	}
-	cluster.SetAnnotations(annotations)
 
 	if err := f.Client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-		return fmt.Errorf("failed to patch OpenBaoCluster %s/%s maintenance annotation: %w", f.Namespace, clusterName, err)
+		return fmt.Errorf("failed to patch OpenBaoCluster %s/%s maintenance config: %w", f.Namespace, clusterName, err)
 	}
 
 	return nil

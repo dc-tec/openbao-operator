@@ -31,6 +31,17 @@ func ReconcileCurrentVersion(logger logr.Logger, cluster *openbaov1alpha1.OpenBa
 		return
 	}
 
+	if cluster.Status.CurrentVersion == "" {
+		fallbackVersion := strings.TrimSpace(cluster.Spec.Version)
+		if fallbackVersion == "" {
+			return
+		}
+
+		cluster.Status.CurrentVersion = fallbackVersion
+		logger.Info("Set initial CurrentVersion from cluster spec after initialization because pod version labels are unavailable", "version", fallbackVersion)
+		return
+	}
+
 	if observedVersion == "" || cluster.Status.CurrentVersion == "" || cluster.Status.CurrentVersion == observedVersion {
 		return
 	}

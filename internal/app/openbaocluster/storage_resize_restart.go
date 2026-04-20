@@ -13,8 +13,9 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func anyPVCFileSystemResizePending(pvcs []corev1.PersistentVolumeClaim) bool {
@@ -51,7 +52,7 @@ func nextPodNeedingFSResizeRestart(
 
 	var wantRev string
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		wantRev = inframanager.BlueGreenActiveRevision(cluster)
+		wantRev = workloadsvc.BlueGreenActiveRevision(cluster)
 	}
 
 	unique := make(map[string]struct{}, len(candidatePodNames))
@@ -69,6 +70,11 @@ func nextPodNeedingFSResizeRestart(
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
+		poolI := pvcRestartPoolPriority(cluster, candidates[i])
+		poolJ := pvcRestartPoolPriority(cluster, candidates[j])
+		if poolI != poolJ {
+			return poolI < poolJ
+		}
 		oi, okI := podOrdinal(candidates[i])
 		oj, okJ := podOrdinal(candidates[j])
 		if okI && okJ {
@@ -112,6 +118,16 @@ func nextPodNeedingFSResizeRestart(
 	}
 
 	return leaderCandidate, nil
+}
+
+func pvcRestartPoolPriority(cluster *openbaov1alpha1.OpenBaoCluster, podName string) int {
+	if cluster != nil {
+		readPrefix := resourceidentity.ReadReplicaStatefulSetName(cluster) + "-"
+		if strings.HasPrefix(strings.TrimSpace(podName), readPrefix) {
+			return 0
+		}
+	}
+	return 1
 }
 
 func clientForPod(

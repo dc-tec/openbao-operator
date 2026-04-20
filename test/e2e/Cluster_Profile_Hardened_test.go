@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -544,41 +545,61 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		// that auto-unseal works after pod restart.
 		//
 		// ValidatingAdmissionPolicy blocks direct mutations of OpenBao-managed resources
-		// unless maintenance mode is enabled on the object and the request is made by a
-		// break-glass admin (system:masters). For this test, mark each Pod as being in
-		// maintenance mode before deleting it to trigger a restart.
+		// unless maintenance mode is enabled on the object and the caller is authorized
+		// for the custom maintenance verb on the owning OpenBaoCluster.
+		maintenanceGroup := "e2e-hardened-maintainers"
+		maintenanceRole := &rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "e2e-hardened-maintenance",
+				Namespace: f.Namespace,
+			},
+			Rules: []rbacv1.PolicyRule{
+				{
+					APIGroups: []string{""},
+					Resources: []string{"pods"},
+					Verbs:     []string{"get", "list", "delete"},
+				},
+				{
+					APIGroups:     []string{"openbao.org"},
+					Resources:     []string{"openbaoclusters"},
+					ResourceNames: []string{clusterName},
+					Verbs:         []string{"get", "maintenance"},
+				},
+				{
+					APIGroups:     []string{"openbao.org"},
+					Resources:     []string{"openbaoclusters/status"},
+					ResourceNames: []string{clusterName},
+					Verbs:         []string{"get"},
+				},
+			},
+		}
+		Expect(e2ehelpers.EnsureRoleBinding(ctx, c, maintenanceRole, []rbacv1.Subject{
+			{
+				Kind: "Group",
+				Name: maintenanceGroup,
+			},
+		})).To(Succeed())
+		Expect(f.SetMaintenanceEnabled(ctx, clusterName, true)).To(Succeed())
+
 		By("deleting pods to verify auto-unseal works after restart (maintenance mode)")
 		podList := &corev1.PodList{}
-		err = c.List(ctx, podList, client.InNamespace(f.Namespace), client.MatchingLabels{
-			"app.kubernetes.io/instance":   clusterName,
-			"app.kubernetes.io/name":       "openbao",
-			"app.kubernetes.io/managed-by": "openbao-operator",
-		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(len(podList.Items)).To(BeNumerically(">=", 1), "At least one pod should exist")
+		Eventually(func(g Gomega) {
+			g.Expect(c.List(ctx, podList, client.InNamespace(f.Namespace), client.MatchingLabels{
+				"app.kubernetes.io/instance":   clusterName,
+				"app.kubernetes.io/name":       "openbao",
+				"app.kubernetes.io/managed-by": "openbao-operator",
+			})).To(Succeed())
+			g.Expect(podList.Items).NotTo(BeEmpty(), "At least one pod should exist")
+			for _, pod := range podList.Items {
+				g.Expect(pod.Annotations).To(HaveKeyWithValue(constants.AnnotationMaintenance, "true"))
+			}
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 		// Delete all pods to trigger restart
 		for _, pod := range podList.Items {
 			_, _ = fmt.Fprintf(GinkgoWriter, "Deleting pod %q to test auto-unseal after restart\n", pod.Name)
 
-			podPatch := &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Pod",
-					APIVersion: "v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      pod.Name,
-					Namespace: pod.Namespace,
-					Annotations: map[string]string{
-						constants.AnnotationMaintenance: "true",
-					},
-				},
-			}
-
-			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, "e2e-break-glass", []string{"system:masters"}, func(ic client.Client) error {
-				if err := ic.Patch(ctx, podPatch, client.Apply, client.FieldOwner("e2e-break-glass")); err != nil {
-					return err
-				}
+			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, "e2e-hardened-maintainer", []string{"system:authenticated", maintenanceGroup}, func(ic client.Client) error {
 				return ic.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: pod.Name, Namespace: pod.Namespace}})
 			})
 			Expect(err).NotTo(HaveOccurred())

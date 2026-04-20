@@ -8,14 +8,18 @@ layerCoverage:
     app:
       - app
     service:
+      - service/configuration
+      - service/bootstrap
       - service/backup
       - service/certs
-      - service/infra
+      - service/identity
       - service/init
+      - service/networking
       - service/opslifecycle
       - service/provisioner
       - service/restore
       - service/upgrade
+      - service/workload
       - service/workloadidentity
     adapter:
       - adapter/auth
@@ -23,7 +27,6 @@ layerCoverage:
       - adapter/config
       - adapter/kube
       - adapter/openbao
-      - adapter/operationlock
       - adapter/probe
       - adapter/raft
       - adapter/revision
@@ -42,21 +45,33 @@ layerCoverage:
       - platform/openbaotls
       - platform/predicates
       - platform/reconcile
+      - platform/resourceapply
+      - platform/resourceidentity
       - platform/statusapply
+      - platform/statuspatch
       - platform/testutil
 
 controllerCoverage:
   root: internal/controller
 
 serviceImportRoots:
+  - internal/service/configuration
+  - internal/service/bootstrap
   - internal/service/backup
   - internal/service/certs
-  - internal/service/infra
+  - internal/service/identity
   - internal/service/init
+  - internal/service/networking
   - internal/service/opslifecycle
   - internal/service/provisioner
   - internal/service/restore
   - internal/service/upgrade
+  - internal/service/upgrade/bluegreen
+  - internal/service/upgrade/core
+  - internal/service/upgrade/raftops
+  - internal/service/upgrade/rolling
+  - internal/service/upgrade/snapshot
+  - internal/service/workload
   - internal/service/workloadidentity
 
 adapterImportRoots:
@@ -65,7 +80,6 @@ adapterImportRoots:
   - internal/adapter/config
   - internal/adapter/kube
   - internal/adapter/openbao
-  - internal/adapter/operationlock
   - internal/adapter/probe
   - internal/adapter/raft
   - internal/adapter/revision
@@ -81,7 +95,6 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/service/infra
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
@@ -95,7 +108,6 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/service/infra
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
@@ -109,13 +121,294 @@ controllerBoundaries:
     ignores:
       - "**/*_test.go"
     disallowImports:
-      - internal/service/infra
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
     appFacadeRoot: internal/app/provisioner
     allowServiceImports: []
     allowAdapterImports: []
+
+serviceBoundaries:
+  - name: configuration
+    displayName: Configuration
+    packageRoot: internal/service/configuration
+    files:
+      - internal/service/configuration/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/config
+  - name: bootstrap
+    displayName: Bootstrap
+    packageRoot: internal/service/bootstrap
+    files:
+      - internal/service/bootstrap/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/configuration
+    allowAdapterImports:
+      - internal/adapter/auth
+      - internal/adapter/config
+  - name: backup
+    displayName: Backup
+    packageRoot: internal/service/backup
+    files:
+      - internal/service/backup/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/opslifecycle
+      - internal/service/workloadidentity
+    allowAdapterImports:
+      - internal/adapter/auth
+      - internal/adapter/kube
+      - internal/adapter/security
+      - internal/adapter/storage
+      - internal/adapter/storageenv
+  - name: certs
+    displayName: Certs
+    packageRoot: internal/service/certs
+    files:
+      - internal/service/certs/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/cluster
+      - internal/adapter/kube
+  - name: identity
+    displayName: Identity
+    packageRoot: internal/service/identity
+    files:
+      - internal/service/identity/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/revision
+  - name: init
+    displayName: Init
+    packageRoot: internal/service/init
+    files:
+      - internal/service/init/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/openbao
+      - internal/adapter/raft
+  - name: networking
+    displayName: Networking
+    packageRoot: internal/service/networking
+    files:
+      - internal/service/networking/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/revision
+  - name: opslifecycle
+    displayName: OpsLifecycle
+    packageRoot: internal/service/opslifecycle
+    files:
+      - internal/service/opslifecycle/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports: []
+  - name: provisioner
+    displayName: Provisioner
+    packageRoot: internal/service/provisioner
+    files:
+      - internal/service/provisioner/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/cluster
+      - internal/adapter/kube
+  - name: restore
+    displayName: Restore
+    packageRoot: internal/service/restore
+    files:
+      - internal/service/restore/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/opslifecycle
+      - internal/service/workloadidentity
+    allowAdapterImports:
+      - internal/adapter/auth
+      - internal/adapter/kube
+      - internal/adapter/security
+      - internal/adapter/storageenv
+  - name: upgrade
+    displayName: Upgrade
+    packageRoot: internal/service/upgrade
+    files:
+      - internal/service/upgrade/*.go
+    ignores:
+      - "**/*_test.go"
+      - internal/service/upgrade/bluegreen/**/*.go
+      - internal/service/upgrade/core/**/*.go
+      - internal/service/upgrade/raftops/**/*.go
+      - internal/service/upgrade/rolling/**/*.go
+      - internal/service/upgrade/snapshot/**/*.go
+    allowServiceImports:
+      - internal/service/configuration
+      - internal/service/opslifecycle
+      - internal/service/upgrade/core
+      - internal/service/upgrade/raftops
+    allowAdapterImports:
+      - internal/adapter/auth
+      - internal/adapter/kube
+      - internal/adapter/revision
+      - internal/adapter/security
+  - name: upgrade-core
+    displayName: Upgrade Core
+    packageRoot: internal/service/upgrade/core
+    files:
+      - internal/service/upgrade/core/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/upgrade
+      - internal/service/opslifecycle
+    allowAdapterImports: []
+  - name: upgrade-raftops
+    displayName: Upgrade RaftOps
+    packageRoot: internal/service/upgrade/raftops
+    files:
+      - internal/service/upgrade/raftops/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/openbao
+  - name: upgrade-snapshot
+    displayName: Upgrade Snapshot
+    packageRoot: internal/service/upgrade/snapshot
+    files:
+      - internal/service/upgrade/snapshot/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/upgrade
+    allowAdapterImports:
+      - internal/adapter/kube
+  - name: upgrade-rolling
+    displayName: Rolling Upgrade
+    packageRoot: internal/service/upgrade/rolling
+    files:
+      - internal/service/upgrade/rolling/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/opslifecycle
+      - internal/service/upgrade
+      - internal/service/upgrade/core
+      - internal/service/upgrade/raftops
+      - internal/service/upgrade/snapshot
+    allowAdapterImports:
+      - internal/adapter/kube
+  - name: upgrade-bluegreen
+    displayName: BlueGreen Upgrade
+    packageRoot: internal/service/upgrade/bluegreen
+    files:
+      - internal/service/upgrade/bluegreen/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/configuration
+      - internal/service/opslifecycle
+      - internal/service/upgrade
+      - internal/service/upgrade/core
+      - internal/service/upgrade/raftops
+      - internal/service/upgrade/snapshot
+    allowAdapterImports:
+      - internal/adapter/kube
+      - internal/adapter/revision
+      - internal/adapter/security
+  - name: workload
+    displayName: Workload
+    packageRoot: internal/service/workload
+    files:
+      - internal/service/workload/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/revision
+      - internal/adapter/security
+  - name: workloadidentity
+    displayName: WorkloadIdentity
+    packageRoot: internal/service/workloadidentity
+    files:
+      - internal/service/workloadidentity/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports:
+      - internal/adapter/storageenv
+
+appBoundaries:
+  - name: openbaocluster-root
+    displayName: OpenBaoCluster Root
+    files:
+      - internal/app/openbaocluster/*.go
+    ignores:
+      - "**/*_test.go"
+      - internal/app/openbaocluster/adminops/**/*.go
+      - internal/app/openbaocluster/adminopsstatus/**/*.go
+      - internal/app/openbaocluster/deletionops/**/*.go
+      - internal/app/openbaocluster/statusops/**/*.go
+    allowServiceImports:
+      - internal/service/bootstrap
+      - internal/service/certs
+      - internal/service/identity
+      - internal/service/networking
+      - internal/service/upgrade
+      - internal/service/workload
+      - internal/service/workloadidentity
+  - name: openbaocluster-adminops
+    displayName: OpenBaoCluster AdminOps
+    files:
+      - internal/app/openbaocluster/adminops/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/backup
+      - internal/service/networking
+      - internal/service/upgrade
+      - internal/service/upgrade/bluegreen
+      - internal/service/upgrade/rolling
+      - internal/service/workload
+  - name: openbaocluster-statusops
+    displayName: OpenBaoCluster StatusOps
+    files:
+      - internal/app/openbaocluster/statusops/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/networking
+      - internal/service/upgrade
+      - internal/service/workload
+  - name: openbaocluster-deletionops
+    displayName: OpenBaoCluster DeletionOps
+    files:
+      - internal/app/openbaocluster/deletionops/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+  - name: openbaocluster-adminopsstatus
+    displayName: OpenBaoCluster AdminOpsStatus
+    files:
+      - internal/app/openbaocluster/adminopsstatus/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
 
 globalImportBoundaries:
   - id: no-adapter-import-controller-or-service
@@ -127,7 +420,6 @@ globalImportBoundaries:
       - internal/adapter/config/**/*.go
       - internal/adapter/kube/**/*.go
       - internal/adapter/openbao/**/*.go
-      - internal/adapter/operationlock/**/*.go
       - internal/adapter/probe/**/*.go
       - internal/adapter/raft/**/*.go
       - internal/adapter/revision/**/*.go
@@ -139,9 +431,11 @@ globalImportBoundaries:
     disallowImports:
       - internal/controller
       - internal/service/backup
+      - internal/service/bootstrap
       - internal/service/certs
-      - internal/service/infra
+      - internal/service/identity
       - internal/service/init
+      - internal/service/networking
       - internal/service/opslifecycle
       - internal/service/provisioner
       - internal/service/restore
@@ -160,7 +454,6 @@ globalImportBoundaries:
       - internal/adapter/config
       - internal/adapter/kube
       - internal/adapter/openbao
-      - internal/adapter/operationlock
       - internal/adapter/probe
       - internal/adapter/raft
       - internal/adapter/revision
@@ -180,13 +473,22 @@ globalImportBoundaries:
       - internal/adapter/config
       - internal/adapter/kube
       - internal/adapter/openbao
-      - internal/adapter/operationlock
       - internal/adapter/probe
       - internal/adapter/raft
       - internal/adapter/revision
       - internal/adapter/security
       - internal/adapter/storage
       - internal/adapter/storageenv
+  - id: no-direct-config-rendering-outside-configuration-service
+    message: Config rendering should go through internal/service/configuration.
+    note: Keep config.hcl semantics owned by the shared configuration service.
+    files:
+      - internal/service/bootstrap/manager.go
+      - internal/service/upgrade/bluegreen/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/adapter/config
   - id: no-adapter-to-adapter-imports
     message: Adapter packages should not depend on other adapters; use ports/contracts.
     files:
@@ -195,7 +497,6 @@ globalImportBoundaries:
       - internal/adapter/config/**/*.go
       - internal/adapter/kube/**/*.go
       - internal/adapter/openbao/**/*.go
-      - internal/adapter/operationlock/**/*.go
       - internal/adapter/probe/**/*.go
       - internal/adapter/raft/**/*.go
       - internal/adapter/revision/**/*.go
@@ -210,7 +511,6 @@ globalImportBoundaries:
       - internal/adapter/config
       - internal/adapter/kube
       - internal/adapter/openbao
-      - internal/adapter/operationlock
       - internal/adapter/probe
       - internal/adapter/raft
       - internal/adapter/revision
@@ -239,3 +539,15 @@ globalImportBoundaries:
       - internal/controller/**/*.go
     disallowImports:
       - internal/controller
+  - id: no-statusapply-imports-outside-approved-status-writers
+    message: statusapply should only be imported by the approved status-owning packages.
+    note: Keep status apply helpers constrained to the dedicated workload, adminops, and operation-lock status writers.
+    files:
+      - internal/**/*.go
+    ignores:
+      - "**/*_test.go"
+      - internal/service/opslifecycle/lock.go
+      - internal/app/openbaocluster/patch.go
+      - internal/app/openbaocluster/adminopsstatus/mutate.go
+    disallowImports:
+      - internal/platform/statusapply

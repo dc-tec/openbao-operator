@@ -144,6 +144,11 @@ func buildBlueGreenUpgradeMessage(cluster *openbaov1alpha1.OpenBaoCluster) strin
 		return fmt.Sprintf("Blue/green upgrade from %s to %s is demoting Blue revision %s after promoting Green revision %s.", from, to, blueRevision, greenRevision)
 	case openbaov1alpha1.PhaseCleanup:
 		return fmt.Sprintf("Blue/green upgrade from %s to %s is cleaning up Blue revision %s after promoting Green revision %s.", from, to, blueRevision, greenRevision)
+	case openbaov1alpha1.PhaseRestoringReadReplicas:
+		if status.RollbackStartTime != nil {
+			return "Blue/green rollback is restoring steady read replicas before marking the rollback complete."
+		}
+		return "Blue/green upgrade is restoring steady read replicas before marking the rollout complete."
 	case openbaov1alpha1.PhaseRollingBack:
 		return fmt.Sprintf(
 			"Blue/green upgrade from %s to %s is rolling back to Blue revision %s. %s",

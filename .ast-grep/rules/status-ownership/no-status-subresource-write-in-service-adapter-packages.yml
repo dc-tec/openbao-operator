@@ -7,7 +7,6 @@ language: Go
 files:
   - internal/service/backup/**/*.go
   - internal/service/certs/**/*.go
-  - internal/service/infra/**/*.go
   - internal/service/init/**/*.go
   - internal/service/opslifecycle/**/*.go
   - internal/service/provisioner/**/*.go
@@ -18,7 +17,6 @@ files:
   - internal/adapter/config/**/*.go
   - internal/adapter/kube/**/*.go
   - internal/adapter/openbao/**/*.go
-  - internal/adapter/operationlock/**/*.go
   - internal/adapter/probe/**/*.go
   - internal/adapter/raft/**/*.go
   - internal/adapter/revision/**/*.go
@@ -27,10 +25,6 @@ files:
   - internal/adapter/storageenv/**/*.go
 ignores:
   - '**/*_test.go'
-  # Transitional legacy write points pending app-layer ownership consolidation.
-  - internal/service/backup/manager_status.go
-  - internal/adapter/operationlock/lock.go
-  - internal/service/restore/manager_status.go
 rule:
   all:
     - kind: call_expression

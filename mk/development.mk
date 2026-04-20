@@ -12,8 +12,25 @@ bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-
 	else \
 		echo "Skipping docs bootstrap because npm is not available."; \
 	fi
+	@$(MAKE) git-hooks-install
 	@echo "Bootstrap complete."
 	@echo "Run 'make doctor' to validate external prerequisites."
+
+.PHONY: git-hooks-install
+git-hooks-install: ## Configure the repo-local Git hooks path.
+	@chmod +x .githooks/pre-commit .githooks/pre-push hack/dev/pre-commit.sh hack/dev/pre-push.sh
+	@git config --local core.hooksPath .githooks
+	@echo "Configured repo-local Git hooks: .githooks (pre-commit, pre-push)"
+
+.PHONY: git-hooks-uninstall
+git-hooks-uninstall: ## Remove the repo-local Git hooks path.
+	@current="$$(git config --local --get core.hooksPath || true)"; \
+	if [ "$$current" = ".githooks" ]; then \
+		git config --local --unset core.hooksPath; \
+		echo "Removed repo-local Git hooks configuration."; \
+	else \
+		echo "Repo-local Git hooks were not configured."; \
+	fi
 
 .PHONY: doctor
 doctor: ## Validate local prerequisites for the main contributor workflow.
@@ -377,7 +394,7 @@ PERF_SMOKE_SCENARIOS ?= lifecycle
 PERF_BASELINE_OUT ?= hack/perf/baseline/kind-v1.34.3-baseline.json
 PERF_THRESHOLDS_OUT ?= hack/perf/thresholds/kind-v1.34.3.yaml
 
-MUTATION_TARGET_PATH ?= ./internal/adapter/operationlock
+MUTATION_TARGET_PATH ?= ./internal/service/opslifecycle
 MUTATION_PATHS ?= $(shell find ./internal -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | paste -sd, -)
 MUTATION_WORKERS ?= 1
 MUTATION_TIMEOUT ?= 30
@@ -514,10 +531,10 @@ verify-perf-smoke: ## Run a lightweight performance smoke gate (PR-focused).
 		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)"
 
 .PHONY: mutation-smoke
-mutation-smoke: gomu ## Run a fast mutation smoke check (operationlock package).
+mutation-smoke: gomu ## Run a fast mutation smoke check (operation lifecycle package).
 	@out="dist/mutation/smoke-$$(date -u +%Y%m%dT%H%M%SZ)"; \
 	GOMU_BIN="$(GOMU)" bash hack/ci/run-gomu.sh \
-		--path "./internal/adapter/operationlock" \
+		--path "./internal/service/opslifecycle" \
 		--workers "1" \
 		--timeout "20" \
 		--incremental "false" \

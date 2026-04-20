@@ -95,9 +95,11 @@ func TestInitializeUpgrade_EmitsUpgradeStartedEvent(t *testing.T) {
 		WithReturnManagedFields().
 		Build()
 	manager := &Manager{
-		client:   k8sClient,
-		scheme:   scheme,
-		recorder: recorder,
+		client:          k8sClient,
+		reader:          k8sClient,
+		scheme:          scheme,
+		recorder:        recorder,
+		adminOpsMutator: testAdminOpsMutator(k8sClient),
 	}
 
 	if err := upgrade.StartRootUpgradeLifecycle(
@@ -211,9 +213,11 @@ func TestPrepareFailedUpgradeRetry_EmitsRetryEvents(t *testing.T) {
 		WithReturnManagedFields().
 		Build()
 	manager := &Manager{
-		client:   k8sClient,
-		scheme:   scheme,
-		recorder: recorder,
+		client:          k8sClient,
+		reader:          k8sClient,
+		scheme:          scheme,
+		recorder:        recorder,
+		adminOpsMutator: testAdminOpsMutator(k8sClient),
 	}
 
 	resumed, err := manager.prepareFailedUpgradeRetry(context.Background(), logr.Discard(), cluster)

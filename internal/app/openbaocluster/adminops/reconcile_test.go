@@ -32,6 +32,19 @@ func (f fakeSubReconciler) Reconcile(_ context.Context, _ logr.Logger, _ *openba
 	return f.result, f.err
 }
 
+type fakeMutatingSubReconciler struct {
+	result recon.Result
+	err    error
+	mutate func(*openbaov1alpha1.OpenBaoCluster)
+}
+
+func (f fakeMutatingSubReconciler) Reconcile(_ context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	if f.mutate != nil {
+		f.mutate(cluster)
+	}
+	return f.result, f.err
+}
+
 func withAdminOpsReconcilers(t *testing.T, recs ...subReconciler) {
 	t.Helper()
 	orig := adminOpsReconcilersBuilder
@@ -213,6 +226,50 @@ func TestReconcile_AdminOpsRequeueAndSuccess(t *testing.T) {
 		}
 		if cluster.Status.AdminOps.LastError != nil {
 			t.Fatalf("expected LastError to be cleared after success")
+		}
+	})
+
+	t.Run("success recreates adminops status if a subreconciler refresh clears it", func(t *testing.T) {
+		withAdminOpsReconcilers(t, fakeMutatingSubReconciler{
+			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Status.AdminOps = nil
+			},
+		})
+
+		cluster := &openbaov1alpha1.OpenBaoCluster{
+			Status: openbaov1alpha1.OpenBaoClusterStatus{
+				AdminOps: &openbaov1alpha1.AdminOpsControllerStatus{LastError: &openbaov1alpha1.ControllerErrorStatus{Reason: "old"}},
+			},
+		}
+		var patchReasons []string
+
+		result, err := Reconcile(
+			context.Background(),
+			logr.Discard(),
+			Dependencies{},
+			cluster.DeepCopy(),
+			cluster,
+			nil,
+			func(_ context.Context, _ client.Client, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, _ *openbaov1alpha1.OpenBaoCluster, reason string) error {
+				patchReasons = append(patchReasons, reason)
+				return nil
+			},
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("unexpected error on refreshed success path: %v", err)
+		}
+		if result != (recon.Result{}) {
+			t.Fatalf("result=%v, want zero result", result)
+		}
+		if cluster.Status.AdminOps == nil {
+			t.Fatalf("expected AdminOps status to be recreated")
+		}
+		if cluster.Status.AdminOps.LastError != nil {
+			t.Fatalf("expected recreated AdminOps status to have nil LastError")
+		}
+		if len(patchReasons) != 1 || patchReasons[0] != "adminops-complete" {
+			t.Fatalf("patch reasons=%v, want [adminops-complete]", patchReasons)
 		}
 	})
 }

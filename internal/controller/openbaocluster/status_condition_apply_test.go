@@ -41,19 +41,35 @@ func TestBuildSealedConditionAndApplyHelpers(t *testing.T) {
 		cluster := newOpenBaoClusterStatusTestObject()
 		cluster.Spec.Profile = openbaov1alpha1.ProfileDevelopment
 		cluster.Spec.WorkloadHardening = &openbaov1alpha1.WorkloadHardeningConfig{AppArmorEnabled: true}
+		readStorageClassName := "fast"
+		cluster.Spec.ReadReplicas = &openbaov1alpha1.ReadReplicaConfig{
+			Replicas: 1,
+			Storage: &openbaov1alpha1.ReadReplicaStorageConfig{
+				StorageClassName: &readStorageClassName,
+			},
+		}
 		state := &clusterState{
-			ReadyReplicas:            1,
-			Available:                true,
-			Initialized:              true,
-			InitializedKnown:         true,
-			Sealed:                   false,
-			SealedKnown:              true,
-			LeaderCount:              1,
-			LeaderName:               "example-0",
-			BackupInProgress:         true,
-			BackupJobName:            "backup-job",
-			DataPVCCount:             1,
-			DataPVCStorageClassNames: []string{"fast"},
+			ReadyReplicas:                       1,
+			Available:                           true,
+			Initialized:                         true,
+			InitializedKnown:                    true,
+			Sealed:                              false,
+			SealedKnown:                         true,
+			LeaderCount:                         1,
+			LeaderName:                          "example-0",
+			BackupInProgress:                    true,
+			BackupJobName:                       "backup-job",
+			DataPVCCount:                        1,
+			DataPVCStorageClassNames:            []string{"fast"},
+			ReadReplicaReadyReplicas:            1,
+			ReadReplicaRegisteredReplicas:       1,
+			ReadReplicaHealthyReplicas:          1,
+			ReadReplicaMembershipKnown:          true,
+			ReadReplicaAutopilotKnown:           true,
+			ReadServingAvailable:                true,
+			ReadServingKnown:                    true,
+			ReadReplicaDataPVCCount:             1,
+			ReadReplicaDataPVCStorageClassNames: []string{"fast"},
 			StatefulSet: &appsv1.StatefulSet{
 				Status: appsv1.StatefulSetStatus{
 					Conditions: []appsv1.StatefulSetCondition{{
@@ -78,6 +94,11 @@ func TestBuildSealedConditionAndApplyHelpers(t *testing.T) {
 			openbaov1alpha1.ConditionBackingUp,
 			openbaov1alpha1.ConditionUserAccessBootstrap,
 			openbaov1alpha1.ConditionStorageConfigured,
+			openbaov1alpha1.ConditionReadReplicasReady,
+			openbaov1alpha1.ConditionReadServingAvailable,
+			openbaov1alpha1.ConditionRaftMembershipReady,
+			openbaov1alpha1.ConditionReadReplicasAutopilotHealthy,
+			openbaov1alpha1.ConditionReadReplicaStorageConfigured,
 			openbaov1alpha1.ConditionEtcdEncryptionWarning,
 			openbaov1alpha1.ConditionSecurityRisk,
 			openbaov1alpha1.ConditionProductionReady,

@@ -19,7 +19,7 @@ type LeaderStatusResponse struct {
 
 // Health queries the OpenBao health endpoint and returns the current node state.
 // This endpoint does not require authentication by default.
-func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
+func (c *Client) Health(ctx context.Context) (*portopenbao.HealthStatus, error) {
 	req, err := c.newRequest(ctx, http.MethodGet, apiPathSysHealth, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create health request: %w", err)
@@ -38,7 +38,7 @@ func (c *Client) Health(ctx context.Context) (*HealthResponse, error) {
 		)
 	}
 
-	var health HealthResponse
+	var health portopenbao.HealthStatus
 	if err := json.Unmarshal(body, &health); err != nil {
 		return nil, fmt.Errorf("failed to parse health response: %w", err)
 	}

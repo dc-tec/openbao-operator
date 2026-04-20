@@ -662,7 +662,7 @@
   },
   {
     "id": "cluster-restart-at-rolls-pod",
-    "generatedId": "cluster-runtime-controls-rolls-the-openbao-pod-when-maintenance-b1bebf8a",
+    "generatedId": "cluster-runtime-controls-rolls-the-openbao-pod-when-runtime-c0619ab5",
     "caseLabel": "cluster-restart-at-rolls-pod",
     "coverage": [
       "restart-at",
@@ -670,10 +670,10 @@
     ],
     "file": "test/e2e/Cluster_Runtime_Controls_test.go",
     "type": "It",
-    "name": "rolls the OpenBao pod when maintenance.restartAt changes",
+    "name": "rolls the OpenBao pod when runtime.restartAt changes",
     "path": [
       "Cluster Runtime Controls",
-      "rolls the OpenBao pod when maintenance.restartAt changes"
+      "rolls the OpenBao pod when runtime.restartAt changes"
     ],
     "labels": [
       "lifecycle",
@@ -689,7 +689,7 @@
       "runtime"
     ],
     "steps": [
-      "setting spec.maintenance.restartAt to trigger a rolling restart",
+      "setting spec.runtime.restartAt to trigger a rolling restart",
       "waiting for the StatefulSet pod template to carry the restart annotation",
       "waiting for the original pod to be replaced"
     ],
@@ -1619,6 +1619,60 @@
       "verifying the dedicated Secrets writer role only grants the expected allowlisted access",
       "verifying the Secrets writer RoleBinding points at the allowlist role"
     ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-allows-managed-pod-deletion-during-maintenance-80b5ee0d",
+    "generatedId": "security-guardrails-allows-managed-pod-deletion-during-maintenance-80b5ee0d",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "allows managed Pod deletion during maintenance with cluster maintenance permission",
+    "path": [
+      "Security Guardrails",
+      "Resource Locking (anti-tamper)",
+      "allows managed Pod deletion during maintenance with cluster maintenance permission"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-prevents-managed-pod-deletion-during-maintenance-238e18f8",
+    "generatedId": "security-guardrails-prevents-managed-pod-deletion-during-maintenance-238e18f8",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "prevents managed Pod deletion during maintenance without cluster maintenance permission",
+    "path": [
+      "Security Guardrails",
+      "Resource Locking (anti-tamper)",
+      "prevents managed Pod deletion during maintenance without cluster maintenance permission"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "tamper"
+    ],
+    "steps": null,
     "focused": false,
     "pending": false,
     "suiteFile": "",

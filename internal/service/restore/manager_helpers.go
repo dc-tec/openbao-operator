@@ -23,7 +23,7 @@ func restoreLockMessage(restore *openbaov1alpha1.OpenBaoRestore) string {
 }
 
 func restoreWaitingForOperationLockStatusMessage(err error) string {
-	if held, ok := opslifecycle.HeldError(err); ok {
+	if held, ok := opslifecycle.AsHeldError(err); ok {
 		return fmt.Sprintf(
 			"Waiting for cluster operation lock held by operation=%s holder=%s. Restore will retry automatically; use overrideOperationLock with force=true only for disaster recovery.",
 			held.Operation,

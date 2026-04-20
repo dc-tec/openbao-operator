@@ -60,6 +60,8 @@ Provisioning follows a dedicated tenant-controller path:
 
 That keeps tenant onboarding separate from `OpenBaoCluster` steady-state reconciliation while still using the same design system and policy language.
 
+The tenant `RoleBinding` is also the explicit handoff marker into the cluster controllers. Until that object exists, `OpenBaoCluster` workload, admin-operations, and status reconciliation pause and requeue instead of trying to mutate resources in a namespace that is not yet provisioned.
+
 <DecisionTable
   kind="reference"
   title="Owned surfaces"
@@ -71,6 +73,9 @@ That keeps tenant onboarding separate from `OpenBaoCluster` steady-state reconci
     },
     {
       cells: ['Secret allowlists', 'Which Secrets the operator may read or write for managed clusters in the tenant namespace.', 'Multi-tenant safety depends on explicit Secret access instead of wildcard RBAC.'],
+    },
+    {
+      cells: ['Controller handoff', 'When the tenant namespace is actually ready for `OpenBaoCluster` reconciliation.', 'GitOps paths can submit tenant and cluster objects together only if the controller has a deterministic, namespace-scoped readiness marker.'],
     },
     {
       cells: ['Pod Security labels', 'The baseline namespace policy applied to tenant workloads and operator-managed pods.', 'Tenants need a secure default even before any cluster objects are created.'],
@@ -116,6 +121,9 @@ That keeps tenant onboarding separate from `OpenBaoCluster` steady-state reconci
     },
     {
       cells: ['Admission dependencies', 'Tenant Secret allowlists wait for admission-policy dependencies so Secret access is not widened before enforcement is ready.'],
+    },
+    {
+      cells: ['Cluster-controller handoff', 'The tenant `RoleBinding` is the readiness marker that allows `OpenBaoCluster` reconciliation to proceed in multi-tenant mode.'],
     },
     {
       cells: ['Shared RBAC lifecycle', 'Provisioned tenant RBAC avoids OwnerReferences that would let a single cluster deletion garbage-collect shared namespace permissions.'],

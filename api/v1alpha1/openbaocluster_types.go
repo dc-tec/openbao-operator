@@ -20,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -121,6 +122,23 @@ const (
 	// ConditionStorageConfigured indicates persistent storage has either been
 	// explicitly configured or consistently resolved from observed PVCs.
 	ConditionStorageConfigured ConditionType = "StorageConfigured"
+	// ConditionReadReplicasReady indicates whether the read-replica pool has the
+	// desired number of Ready Pods.
+	ConditionReadReplicasReady ConditionType = "ReadReplicasReady"
+	// ConditionReadServingAvailable indicates whether the read-replica pool is
+	// currently observed in a state that should serve reads for the validated
+	// OpenBao version.
+	ConditionReadServingAvailable ConditionType = "ReadServingAvailable"
+	// ConditionRaftMembershipReady indicates whether observed voter and
+	// non-voter membership matches the operator's declared topology.
+	ConditionRaftMembershipReady ConditionType = "RaftMembershipReady"
+	// ConditionReadReplicasAutopilotHealthy indicates whether the read-replica
+	// pool is healthy according to the Raft Autopilot state endpoint.
+	ConditionReadReplicasAutopilotHealthy ConditionType = "ReadReplicasAutopilotHealthy"
+	// ConditionReadReplicaStorageConfigured indicates whether the read-replica
+	// pool storage contract has been explicitly configured or consistently
+	// resolved from observed PVCs.
+	ConditionReadReplicaStorageConfigured ConditionType = "ReadReplicaStorageConfigured"
 )
 
 // TLSMode controls who manages the certificate lifecycle.
@@ -259,6 +277,81 @@ type ServiceConfig struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
+// ReadReplicaServiceConfig controls the optional read-only Service for the
+// read-replica pool.
+type ReadReplicaServiceConfig struct {
+	// Enabled controls whether the operator creates a dedicated Service for the
+	// read-replica pool.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+	// Type is the Kubernetes Service type, for example "ClusterIP" or
+	// "LoadBalancer".
+	// +optional
+	Type corev1.ServiceType `json:"type,omitempty"`
+	// Annotations are additional annotations to apply to the read Service.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+// ReadReplicaSchedulingConfig defines scheduling overrides for read replicas.
+type ReadReplicaSchedulingConfig struct {
+	// NodeSelector defines node-selection constraints for read-replica Pods.
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	// Tolerations defines Pod tolerations for read-replica Pods.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+	// Affinity defines Pod affinity / anti-affinity rules for read-replica Pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+	// TopologySpreadConstraints defines topology spread constraints for
+	// read-replica Pods.
+	// +optional
+	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+}
+
+// ReadReplicaTemplateConfig defines Pod-template overrides for read replicas.
+type ReadReplicaTemplateConfig struct {
+	// Metadata defines additional labels and annotations applied only to the
+	// read-replica Pod template.
+	// +optional
+	Metadata *PodMetadataConfig `json:"metadata,omitempty"`
+	// Resources defines container resource requests and limits for read replicas.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+	// Scheduling defines node-placement and topology overrides for read replicas.
+	// +optional
+	Scheduling *ReadReplicaSchedulingConfig `json:"scheduling,omitempty"`
+}
+
+// ReadReplicaStorageConfig defines storage overrides for the read-replica
+// StatefulSet.
+type ReadReplicaStorageConfig struct {
+	// Size is the requested persistent volume size for read replicas.
+	// +optional
+	Size *resource.Quantity `json:"size,omitempty"`
+	// StorageClassName is an optional StorageClass for read-replica PVCs.
+	// +optional
+	StorageClassName *string `json:"storageClassName,omitempty"`
+}
+
+// ReadReplicaConfig defines the steady-state read-replica pool.
+type ReadReplicaConfig struct {
+	// Replicas is the desired number of permanent non-voters.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+	// Service configures an optional dedicated Service for read traffic.
+	// +optional
+	Service *ReadReplicaServiceConfig `json:"service,omitempty"`
+	// Template configures read-replica-specific Pod template overrides.
+	// +optional
+	Template *ReadReplicaTemplateConfig `json:"template,omitempty"`
+	// Storage configures read-replica-specific storage overrides.
+	// +optional
+	Storage *ReadReplicaStorageConfig `json:"storage,omitempty"`
+}
+
 // IngressConfig controls optional HTTP(S) ingress in front of the OpenBao Service.
 type IngressConfig struct {
 	// Enabled controls whether the Operator manages an Ingress for external access.
@@ -281,7 +374,7 @@ type IngressConfig struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
-// MaintenanceConfig defines supported maintenance and restart operations.
+// MaintenanceConfig defines supported maintenance operations.
 // This is intended to provide a first-class workflow for day-2 operations in
 // clusters that enforce managed-resource mutation locks via admission policy.
 type MaintenanceConfig struct {
@@ -291,6 +384,20 @@ type MaintenanceConfig struct {
 	// admission policies require an explicit maintenance signal.
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
+	// RestartAt triggers a rolling restart when changed.
+	// The operator propagates this value as a Pod template annotation; any change
+	// results in a new StatefulSet revision and a controlled restart.
+	// Recommended value is an RFC3339 timestamp string.
+	// Deprecated: use spec.runtime.restartAt instead. spec.runtime.restartAt
+	// takes precedence when both fields are set.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	RestartAt string `json:"restartAt,omitempty"`
+}
+
+// RuntimeConfig defines explicit runtime control requests for the OpenBao
+// workload.
+type RuntimeConfig struct {
 	// RestartAt triggers a rolling restart when changed.
 	// The operator propagates this value as a Pod template annotation; any change
 	// results in a new StatefulSet revision and a controlled restart.
@@ -1725,16 +1832,22 @@ type OpenBaoClusterSpec struct {
 	// Observability configures telemetry and metrics integration.
 	// +optional
 	Observability *ObservabilityConfig `json:"observability,omitempty"`
-	// Replicas is the desired number of OpenBao pods.
+	// Replicas is the desired number of quorum-carrying voter Pods.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:default=3
 	Replicas int32 `json:"replicas"`
+	// ReadReplicas configures the steady-state non-voter read-replica pool.
+	// +optional
+	ReadReplicas *ReadReplicaConfig `json:"readReplicas,omitempty"`
 	// Paused, when true, pauses reconciliation for this OpenBaoCluster (except delete and finalizers).
 	// +optional
 	Paused bool `json:"paused,omitempty"`
-	// Maintenance configures supported maintenance and restart workflows.
+	// Maintenance configures supported maintenance workflows.
 	// +optional
 	Maintenance *MaintenanceConfig `json:"maintenance,omitempty"`
+	// Runtime configures explicit runtime control requests for the OpenBao workload.
+	// +optional
+	Runtime *RuntimeConfig `json:"runtime,omitempty"`
 	// BreakGlassAck is an explicit acknowledgment token used to exit Break Glass / Safe Mode.
 	//
 	// When the operator enters break glass mode, it writes a nonce to status.breakGlass.nonce.
@@ -1915,7 +2028,7 @@ type AdminOpsControllerStatus struct {
 }
 
 // BlueGreenPhase is a high-level summary of blue/green upgrade state.
-// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;DemotingBlue;Cleanup;RollingBack;RollbackCleanup
+// +kubebuilder:validation:Enum=Idle;DeployingGreen;JoiningMesh;Syncing;Promoting;DemotingBlue;Cleanup;RestoringReadReplicas;RollingBack;RollbackCleanup
 type BlueGreenPhase string
 
 const (
@@ -1934,6 +2047,10 @@ const (
 	PhaseDemotingBlue BlueGreenPhase = "DemotingBlue"
 	// PhaseCleanup indicates Blue StatefulSet is being deleted.
 	PhaseCleanup BlueGreenPhase = "Cleanup"
+	// PhaseRestoringReadReplicas indicates the steady-state read-replica pool is
+	// being restored after cutover cleanup and must converge before the upgrade
+	// returns to Idle.
+	PhaseRestoringReadReplicas BlueGreenPhase = "RestoringReadReplicas"
 	// PhaseRollingBack indicates the upgrade is being rolled back.
 	// Blue nodes are re-promoted and Green nodes are demoted.
 	PhaseRollingBack BlueGreenPhase = "RollingBack"
@@ -2035,6 +2152,42 @@ type BackupStatus struct {
 	LastFailureMessage string `json:"lastFailureMessage,omitempty"`
 }
 
+// ReadReplicaStorageStatus captures observed storage state for the read-replica
+// pool.
+type ReadReplicaStorageStatus struct {
+	// DesiredPVCs is the number of data PVCs expected for the read-replica pool.
+	// +optional
+	DesiredPVCs int32 `json:"desiredPVCs,omitempty"`
+	// BoundPVCs is the number of observed data PVCs for the read-replica pool.
+	// +optional
+	BoundPVCs int32 `json:"boundPVCs,omitempty"`
+	// StorageClassName is the effective StorageClass observed for the
+	// read-replica PVCs when it is consistent.
+	// +optional
+	StorageClassName string `json:"storageClassName,omitempty"`
+}
+
+// ReadReplicaStatus captures observed state for the read-replica pool.
+type ReadReplicaStatus struct {
+	// DesiredReplicas is the desired number of read replicas.
+	// +optional
+	DesiredReplicas int32 `json:"desiredReplicas,omitempty"`
+	// ReadyReplicas is the number of Ready read-replica Pods observed.
+	// +optional
+	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
+	// RegisteredReplicas is the number of observed non-voter peers registered in
+	// Raft membership.
+	// +optional
+	RegisteredReplicas int32 `json:"registeredReplicas,omitempty"`
+	// HealthyReplicas is the number of read-replica peers that are currently
+	// healthy according to the Raft Autopilot state endpoint.
+	// +optional
+	HealthyReplicas int32 `json:"healthyReplicas,omitempty"`
+	// Storage captures read-replica-specific storage observation state.
+	// +optional
+	Storage ReadReplicaStorageStatus `json:"storage,omitempty"`
+}
+
 // DriftStatus tracks drift detection and correction events for a cluster.
 // OpenBaoClusterStatus defines the observed state of an OpenBaoCluster.
 type OpenBaoClusterStatus struct {
@@ -2051,6 +2204,10 @@ type OpenBaoClusterStatus struct {
 	// ReadyReplicas is the number of replicas that are currently Ready.
 	// +optional
 	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
+	// ReadReplicas captures observed state for the read-replica pool.
+	// +optional
+	// +kubebuilder:validation:Nullable
+	ReadReplicas *ReadReplicaStatus `json:"readReplicas,omitempty"`
 	// CurrentVersion is the OpenBao version currently running on the cluster.
 	// +optional
 	CurrentVersion string `json:"currentVersion,omitempty"`

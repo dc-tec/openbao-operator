@@ -127,6 +127,12 @@ If you need additional ingress, use:
 - `spec.network.ingressRules` for additive peer rules
 - `spec.network.trustedIngressPeers` for user-managed ingress or passthrough proxies
 
+<Callout type="note" title="Read replicas are client-serving Pods">
+
+When steady read replicas are enabled, the main client Service can route to both voter and read-replica Pods. That does not create a separate ingress policy surface by itself; the same cluster ingress rules still govern the client listener, and the optional dedicated read Service remains only a second Service object selecting the same client-serving port on the read pool.
+
+</Callout>
+
 </TabItem>
 
 <TabItem value="egress" label="Egress">
@@ -171,6 +177,12 @@ If you need additional ingress, use:
 <Callout type="note" title="Lifecycle jobs use separate egress assumptions">
 
 Backup and restore do not rely on the main workload policy alone. They use separate job identities and separate network assumptions, which is why `BackupConfigurationReady` and `RestoreConfigurationReady` exist as distinct status signals.
+
+</Callout>
+
+<Callout type="note" title="Steady read replicas are staged out of destructive workflows">
+
+Blue-green promotion and restore intentionally drain the steady read pool before destructive membership or snapshot work starts, then restore it before the workflow completes. That is a network and safety boundary as much as a rollout detail: destructive workflows do not keep a second permanent client-serving non-voter tier online while peer removal or snapshot replacement is in progress.
 
 </Callout>
 

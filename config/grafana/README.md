@@ -6,7 +6,7 @@ This directory contains sample Grafana dashboards for monitoring OpenBao Operato
 
 The dashboards provide monitoring of OpenBao Operator operations across several key areas:
 
-- `dashboards/overview.json` - Key cluster signals at a glance (upgrade, backup, replicas, TLS)
+- `dashboards/overview.json` - Key cluster signals at a glance (upgrade, backup, voter replicas, read replicas, TLS)
 - `dashboards/backup-restore.json` - Backups and restore operations
 - `dashboards/upgrades.json` - Upgrade progress and upgrade performance
 - `optional/controller-runtime/dashboard.json` - Operator controller-runtime health signals (workqueues, reconcile metrics) (optional)
@@ -94,6 +94,10 @@ The following metrics are implemented and will display data:
   - `openbao_restore_failure_total`
   - `openbao_restore_duration_seconds`
   - `openbao_cluster_ready_replicas`
+  - `openbao_cluster_read_replicas_desired`
+  - `openbao_cluster_read_replicas_ready`
+  - `openbao_cluster_read_replicas_registered`
+  - `openbao_cluster_read_replicas_healthy`
   - `openbao_cluster_phase`
   - `openbao_reconcile_duration_seconds`
   - `openbao_reconcile_errors_total`

@@ -220,16 +220,3 @@ replacements:
         options:
           delimiter: "'"
           index: 1
-  - source:
-      version: v1
-      kind: ConfigMap
-      name: maintenance-break-glass-settings
-      fieldPath: data.BREAK_GLASS_GROUPS_JSON
-    targets:
-      - select:
-          group: admissionregistration.k8s.io
-          version: v1
-          kind: ValidatingAdmissionPolicy
-          name: openbao-operator-openbao-lock-managed-resource-mutations
-        fieldPaths:
-          - spec.variables.[name=break_glass_admin_groups].expression

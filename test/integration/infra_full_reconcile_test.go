@@ -15,7 +15,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
 )
 
 func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
@@ -28,10 +27,9 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 	})
 
 	controllerClient := newControllerClient(t)
-	manager := infra.NewManager(controllerClient, k8sScheme, "openbao-operator-system", "", nil, "")
 
 	spec := newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
@@ -89,7 +87,7 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 	}
 
 	spec = newTestStatefulSetSpec(cluster)
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after drift error = %v", err)
 	}
 
@@ -125,7 +123,7 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 	}
 
 	// One more pass should be safe/idempotent.
-	if err := manager.Reconcile(ctx, logr.Discard(), cluster, spec); err != nil {
+	if err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("Reconcile() third call error = %v", err)
 	}
 }

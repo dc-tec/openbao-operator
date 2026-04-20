@@ -5,14 +5,13 @@ import (
 	"sort"
 	"strings"
 
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // GreenAutopilotServerObservation captures a Green server seen during sync evaluation.
 type GreenAutopilotServerObservation struct {
 	PodName string
-	Server  openbao.RaftAutopilotServerState
+	Server  portopenbao.RaftAutopilotServerState
 }
 
 // GreenSyncEvaluation describes how far Green servers have progressed toward
@@ -27,7 +26,7 @@ type GreenSyncEvaluation struct {
 }
 
 // EvaluateGreenSyncFromAutopilot computes Green sync progress from autopilot state.
-func EvaluateGreenSyncFromAutopilot(cfg *ExecutorConfig, state *openbao.RaftAutopilotStateResponse, targetIndex uint64) GreenSyncEvaluation {
+func EvaluateGreenSyncFromAutopilot(cfg *ExecutorConfig, state *portopenbao.RaftAutopilotStateResponse, targetIndex uint64) GreenSyncEvaluation {
 	evaluation := GreenSyncEvaluation{
 		AllSynced: true,
 	}
@@ -71,9 +70,9 @@ func EvaluateGreenSyncFromAutopilot(cfg *ExecutorConfig, state *openbao.RaftAuto
 }
 
 // FindAutopilotServerForPod finds the autopilot server state for the pod.
-func FindAutopilotServerForPod(state *openbao.RaftAutopilotStateResponse, podName string) (openbao.RaftAutopilotServerState, bool) {
+func FindAutopilotServerForPod(state *portopenbao.RaftAutopilotStateResponse, podName string) (portopenbao.RaftAutopilotServerState, bool) {
 	if state == nil {
-		return openbao.RaftAutopilotServerState{}, false
+		return portopenbao.RaftAutopilotServerState{}, false
 	}
 
 	for _, server := range state.Servers {
@@ -82,11 +81,11 @@ func FindAutopilotServerForPod(state *openbao.RaftAutopilotStateResponse, podNam
 		}
 	}
 
-	return openbao.RaftAutopilotServerState{}, false
+	return portopenbao.RaftAutopilotServerState{}, false
 }
 
 // AutopilotServerDebugNames returns stable debug names for logging.
-func AutopilotServerDebugNames(state *openbao.RaftAutopilotStateResponse) []string {
+func AutopilotServerDebugNames(state *portopenbao.RaftAutopilotStateResponse) []string {
 	if state == nil {
 		return nil
 	}
@@ -100,7 +99,7 @@ func AutopilotServerDebugNames(state *openbao.RaftAutopilotStateResponse) []stri
 }
 
 // RaftAutopilotLeaderLastIndex returns the leader last index when identifiable.
-func RaftAutopilotLeaderLastIndex(state *openbao.RaftAutopilotStateResponse) (uint64, bool) {
+func RaftAutopilotLeaderLastIndex(state *portopenbao.RaftAutopilotStateResponse) (uint64, bool) {
 	if state == nil {
 		return 0, false
 	}
@@ -127,7 +126,7 @@ func RaftAutopilotLeaderLastIndex(state *openbao.RaftAutopilotStateResponse) (ui
 }
 
 // RaftAutopilotMaxLastIndex returns the maximum last index across all servers.
-func RaftAutopilotMaxLastIndex(state *openbao.RaftAutopilotStateResponse) uint64 {
+func RaftAutopilotMaxLastIndex(state *portopenbao.RaftAutopilotStateResponse) uint64 {
 	if state == nil {
 		return 0
 	}
@@ -143,7 +142,7 @@ func RaftAutopilotMaxLastIndex(state *openbao.RaftAutopilotStateResponse) uint64
 }
 
 // RaftAutopilotServerMatchesPod reports whether the server maps to the pod.
-func RaftAutopilotServerMatchesPod(server openbao.RaftAutopilotServerState, podName string) bool {
+func RaftAutopilotServerMatchesPod(server portopenbao.RaftAutopilotServerState, podName string) bool {
 	if podName == "" {
 		return false
 	}

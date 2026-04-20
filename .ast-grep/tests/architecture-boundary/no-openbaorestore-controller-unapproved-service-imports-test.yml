@@ -11,5 +11,5 @@ invalid:
     var _ = restore.Manager
   - |
     package p
-    import infra "github.com/dc-tec/openbao-operator/internal/service/infra"
-    var _ = infra.Manager
+    import bootstrap "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
+    var _ = bootstrap.Manager

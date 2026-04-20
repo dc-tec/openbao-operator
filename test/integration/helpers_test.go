@@ -17,11 +17,16 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
+	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
+	identitymanager "github.com/dc-tec/openbao-operator/internal/service/identity"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func requireAdmissionDenied(t *testing.T, err error) {
@@ -235,8 +240,8 @@ func discardLogger() logr.Logger {
 }
 
 // newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
-func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) infra.StatefulSetSpec {
-	return infra.StatefulSetSpec{
+func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) workloadsvc.StatefulSetSpec {
+	return workloadsvc.StatefulSetSpec{
 		Name:               cluster.Name,
 		Revision:           "",
 		Image:              cluster.Spec.Image,
@@ -246,4 +251,41 @@ func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) infra.State
 		DisableSelfInit:    false,
 		SkipReconciliation: false,
 	}
+}
+
+func reconcileClusterResources(
+	ctx context.Context,
+	logger logr.Logger,
+	kubeClient client.Client,
+	scheme *runtime.Scheme,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	spec workloadsvc.StatefulSetSpec,
+) error {
+	configContent, err := bootstrapmanager.NewManagerWithReader(
+		kubeClient,
+		kubeClient,
+		scheme,
+		"openbao-operator-system",
+	).PrepareWorkload(ctx, logger, cluster)
+	if err != nil {
+		return err
+	}
+
+	if err := networkingmanager.NewManagerWithReader(
+		kubeClient,
+		kubeClient,
+		scheme,
+		"openbao-operator-system",
+		"",
+	).Reconcile(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	if err := identitymanager.NewManager(kubeClient, scheme).Reconcile(ctx, logger, cluster); err != nil {
+		return err
+	}
+
+	return workloadsvc.NewManager(kubeClient, scheme, "").
+		WithReader(kubeClient).
+		Reconcile(ctx, logger, cluster, configContent, spec)
 }

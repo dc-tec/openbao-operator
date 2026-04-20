@@ -25,6 +25,12 @@ Create the Kubernetes namespace through your normal platform workflow first, the
 
 </Callout>
 
+<Callout type="note" title="GitOps can submit tenant and cluster together">
+
+If your GitOps pipeline applies `OpenBaoTenant` and `OpenBaoCluster` in the same sync, the cluster controllers pause cleanly until tenant onboarding is finished. The handoff is complete once the Provisioner has written the tenant `RoleBinding` and `OpenBaoTenant` reports `status.provisioned: true`.
+
+</Callout>
+
 <JourneyRail
   title="The first five moves"
   current={3}
@@ -168,7 +174,16 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
   title="Inspect the OpenBaoTenant status"
   code={`kubectl get openbaotenant <name> -n <namespace> -o yaml`}
 >
-  Confirm `status.provisioned: true` and a healthy `Provisioned` condition, then apply the first cluster manifest.
+  Confirm `status.provisioned: true` and a healthy `Provisioned` condition. In multi-tenant mode, that is the signal that the namespace-scoped RBAC handoff is complete and cluster reconciliation can proceed.
+</CommandBlock>
+
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Verify the tenant RBAC handoff exists"
+  code={`kubectl get rolebinding openbao-operator-tenant-rolebinding -n <target-namespace>`}
+>
+  This is the concrete handoff marker the controller waits for before it starts mutating `OpenBaoCluster` resources in that namespace.
 </CommandBlock>
 
 <DecisionTable
@@ -186,9 +201,9 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
     },
     {
       cells: [
-        'Provisioning never completes',
-        'The Provisioner is missing, unhealthy, or cannot write the tenant guardrails',
-        'Operator install health and the Provisioner deployment in the operator namespace',
+        'Provisioning never completes or clusters keep requeueing without creating workload resources',
+        'The Provisioner is missing, unhealthy, or cannot write the tenant guardrails and tenant RoleBinding',
+        'Operator install health, the Provisioner deployment, and the tenant `RoleBinding` in the target namespace',
       ],
     },
     {

@@ -17,7 +17,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
 
 var _ = Describe("OpenBaoCluster Networking", func() {
@@ -99,20 +99,16 @@ var _ = Describe("OpenBaoCluster Networking", func() {
 			}
 			Expect(k8sClient.Create(ctx, serverSecret)).To(Succeed())
 
-			infraMgr := infra.NewManager(k8sClient, k8sClient.Scheme(), "openbao-operator-system", "", nil, "")
+			networkingMgr := networkingmanager.NewManagerWithReader(
+				k8sClient,
+				k8sClient,
+				k8sClient.Scheme(),
+				"openbao-operator-system",
+				"",
+			)
 
 			By("reconciling networking resources")
-			spec := infra.StatefulSetSpec{
-				Name:               cluster.Name,
-				Revision:           "",
-				Image:              cluster.Spec.Image,
-				InitContainerImage: "",
-				Replicas:           cluster.Spec.Replicas,
-				ConfigHash:         "",
-				DisableSelfInit:    false,
-				SkipReconciliation: false,
-			}
-			err := infraMgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+			err := networkingMgr.Reconcile(ctx, logr.Discard(), cluster)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("ensuring the HTTPRoute references only the main external service")
@@ -141,17 +137,7 @@ var _ = Describe("OpenBaoCluster Networking", func() {
 
 			By("switching to Cleanup and ensuring the external Service selects the Green revision")
 			cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
-			spec = infra.StatefulSetSpec{
-				Name:               cluster.Name,
-				Revision:           "blue123",
-				Image:              cluster.Spec.Image,
-				InitContainerImage: "",
-				Replicas:           cluster.Spec.Replicas,
-				ConfigHash:         "",
-				DisableSelfInit:    false,
-				SkipReconciliation: false,
-			}
-			err = infraMgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+			err = networkingMgr.Reconcile(ctx, logr.Discard(), cluster)
 			Expect(err).NotTo(HaveOccurred())
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Namespace: cluster.Namespace,

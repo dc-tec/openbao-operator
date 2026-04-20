@@ -562,8 +562,8 @@ const sidebars: SidebarsConfig = {
           items: [
             {
               type: 'doc',
-              id: 'architecture/infra-manager',
-              label: 'Infrastructure manager',
+              id: 'architecture/workload-managers',
+              label: 'Workload managers',
             },
             {
               type: 'doc',

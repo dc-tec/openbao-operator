@@ -6,7 +6,9 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 // computeStatefulSetSpec computes the StatefulSetSpec from the cluster and verified image digests.
@@ -15,8 +17,9 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	verifiedImageDigest string,
 	verifiedInitContainerDigest string,
-) inframanager.StatefulSetSpec {
-	spec := inframanager.StatefulSetSpec{
+) workloadsvc.StatefulSetSpec {
+	spec := workloadsvc.StatefulSetSpec{
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolVoter,
 		Image:              verifiedImageDigest,
 		InitContainerImage: verifiedInitContainerDigest,
 		Replicas:           cluster.Spec.Replicas,
@@ -25,7 +28,7 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	}
 
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		spec.Revision = inframanager.BlueGreenStableRevision(cluster)
+		spec.Revision = workloadsvc.BlueGreenStableRevision(cluster)
 		if spec.Revision == "" {
 			spec.Name = cluster.Name
 		} else {
@@ -46,4 +49,25 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	}
 
 	return spec
+}
+
+func (r *infraReconciler) computeReadReplicaStatefulSetSpec(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	verifiedImageDigest string,
+	verifiedInitContainerDigest string,
+) workloadsvc.StatefulSetSpec {
+	replicas := int32(0)
+	if cluster.Spec.ReadReplicas != nil {
+		replicas = cluster.Spec.ReadReplicas.Replicas
+	}
+
+	return workloadsvc.StatefulSetSpec{
+		Name:               resourceidentity.ReadReplicaStatefulSetName(cluster),
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolReadReplica,
+		Image:              verifiedImageDigest,
+		InitContainerImage: verifiedInitContainerDigest,
+		Replicas:           replicas,
+		DisableSelfInit:    true,
+		SkipReconciliation: cluster.Spec.ReadReplicas == nil,
+	}
 }

@@ -40,6 +40,8 @@ type OpenBaoClusterPredicateOptions struct {
 	ReconcileOnWorkloadError bool
 	// ReconcileOnAdminOpsError enables reconciliation when status.adminOps.lastError changes.
 	ReconcileOnAdminOpsError bool
+	// ReconcileOnOperationLock enables reconciliation when status.operationLock changes.
+	ReconcileOnOperationLock bool
 }
 
 // OpenBaoClusterPredicate filters OpenBaoCluster events to only reconcile on
@@ -111,6 +113,9 @@ func shouldReconcileOpenBaoClusterUpdate(
 		return true
 	}
 	if opts.ReconcileOnAdminOpsError && !equality.Semantic.DeepEqual(adminOpsLastError(oldCluster), adminOpsLastError(newCluster)) {
+		return true
+	}
+	if opts.ReconcileOnOperationLock && !equality.Semantic.DeepEqual(oldCluster.Status.OperationLock, newCluster.Status.OperationLock) {
 		return true
 	}
 

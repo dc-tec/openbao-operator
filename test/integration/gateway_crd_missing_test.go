@@ -25,7 +25,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	"github.com/dc-tec/openbao-operator/internal/service/infra"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
 
 func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.T) {
@@ -53,13 +53,12 @@ func TestInfraNetwork_GatewayAPICRDsMissing_HTTPRouteMode_IsDegraded(t *testing.
 	createTLSSecretForClient(t, ctx, k8sClient, namespace, cluster.Name)
 
 	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
-	mgr := infra.NewManager(controllerClient, scheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
-	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+	err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, scheme, cluster, spec)
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}
-	if !errors.Is(err, infra.ErrGatewayAPIMissing) {
+	if !errors.Is(err, networkingmanager.ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
 	}
 }
@@ -90,13 +89,12 @@ func TestInfraNetwork_GatewayAPICRDsMissing_TLSPassthroughMode_IsDegraded(t *tes
 	createTLSSecretForClient(t, ctx, k8sClient, namespace, cluster.Name)
 
 	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
-	mgr := infra.NewManager(controllerClient, scheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
-	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+	err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, scheme, cluster, spec)
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}
-	if !errors.Is(err, infra.ErrGatewayAPIMissing) {
+	if !errors.Is(err, networkingmanager.ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
 	}
 }
@@ -133,13 +131,12 @@ func TestInfraNetwork_GatewayAPIBackendTLSPolicyCRDMissing_IsDegraded(t *testing
 	createCASecretForClient(t, ctx, k8sClient, namespace, cluster.Name, []byte("ca-1"))
 
 	controllerClient := newPrivilegedImpersonatedClientForConfig(t, envCfg, scheme, controllerUsername)
-	mgr := infra.NewManager(controllerClient, scheme, "openbao-operator-system", "", nil, "")
 	spec := newTestStatefulSetSpec(cluster)
-	err := mgr.Reconcile(ctx, logr.Discard(), cluster, spec)
+	err := reconcileClusterResources(ctx, logr.Discard(), controllerClient, scheme, cluster, spec)
 	if err == nil {
 		t.Fatalf("expected reconcile to fail with ErrGatewayAPIMissing, got nil")
 	}
-	if !errors.Is(err, infra.ErrGatewayAPIMissing) {
+	if !errors.Is(err, networkingmanager.ErrGatewayAPIMissing) {
 		t.Fatalf("expected ErrGatewayAPIMissing, got %T: %v", err, err)
 	}
 }

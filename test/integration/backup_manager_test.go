@@ -4,6 +4,7 @@
 package integration
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -17,10 +18,34 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 )
+
+func newIntegrationBackupManager(t *testing.T) *backup.Manager {
+	t.Helper()
+
+	controllerClient := newControllerClient(t)
+	return backup.NewManager(
+		controllerClient,
+		k8sScheme,
+		portopenbao.ClientConfig{},
+		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+		"",
+	).WithReader(k8sClient).WithAdminOpsStatusMutator(func(
+		ctx context.Context,
+		cluster *openbaov1alpha1.OpenBaoCluster,
+		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
+		forceOwnership bool,
+	) error {
+		return adminopsstatus.MutateWithReader(ctx, k8sClient, k8sClient, cluster, mutate, adminopsstatus.MutateOptions{
+			ForceOwnership:  forceOwnership,
+			RetryOnConflict: !forceOwnership,
+		})
+	})
+}
 
 func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 	namespace := newTestNamespace(t)
@@ -65,8 +90,7 @@ func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 		t.Fatalf("get cluster after trigger: %v", err)
 	}
 
-	controllerClient := newControllerClient(t)
-	mgr := backup.NewManager(controllerClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	mgr := newIntegrationBackupManager(t)
 	result, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -186,8 +210,7 @@ func TestBackupManager_RestoreInProgress_ReleasesStaleBackupLock(t *testing.T) {
 		t.Fatalf("get cluster: %v", err)
 	}
 
-	controllerClient := newControllerClient(t)
-	mgr := backup.NewManager(controllerClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	mgr := newIntegrationBackupManager(t)
 	result, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -264,8 +287,7 @@ func TestBackupManager_ManualTrigger_BlockedByOperationLock(t *testing.T) {
 		t.Fatalf("get cluster after trigger: %v", err)
 	}
 
-	controllerClient := newControllerClient(t)
-	mgr := backup.NewManager(controllerClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	mgr := newIntegrationBackupManager(t)
 	result, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
@@ -323,8 +345,7 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 		t.Fatalf("get cluster: %v", err)
 	}
 
-	controllerClient := newControllerClient(t)
-	mgr := backup.NewManager(controllerClient, k8sScheme, portopenbao.ClientConfig{}, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	mgr := newIntegrationBackupManager(t)
 	firstResult, err := mgr.Reconcile(ctx, logr.Discard(), &latest)
 	if err != nil {
 		t.Fatalf("first reconcile: %v", err)

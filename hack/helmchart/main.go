@@ -323,11 +323,6 @@ func transformPolicyToHelm(content string) string {
 		`'openbao-operator-controller'`,
 		`'{{ include "openbao-operator.controllerServiceAccountName" . }}'`)
 
-	// Replace the default maintenance break-glass admin group list with the Helm values-driven list.
-	content = strings.ReplaceAll(content,
-		`["system:masters"]`,
-		`{{ toJson .Values.admissionPolicies.maintenanceBreakGlassGroups }}`)
-
 	return content
 }
 

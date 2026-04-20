@@ -16,11 +16,12 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	observability "github.com/dc-tec/openbao-operator/internal/platform/observability"
+	"github.com/dc-tec/openbao-operator/internal/platform/statuspatch"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 )
 
 func (m *Manager) patchStatus(ctx context.Context, restore *openbaov1alpha1.OpenBaoRestore, original *openbaov1alpha1.OpenBaoRestore) error {
-	return m.client.Status().Patch(ctx, restore, client.MergeFrom(original))
+	return statuspatch.PatchMerge(ctx, m.client, restore, original)
 }
 
 // failRestore transitions the restore to Failed phase.

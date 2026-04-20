@@ -77,6 +77,153 @@ func TestDetermineStatusRequeue(t *testing.T) {
 			cluster:  &openbaov1alpha1.OpenBaoCluster{},
 			want:     0,
 		},
+		{
+			name: "read replicas partially ready requeue short",
+			state: &clusterState{
+				Available:                true,
+				ReadyReplicas:            3,
+				ReadReplicaReadyReplicas: 1,
+			},
+			original: &openbaov1alpha1.OpenBaoCluster{},
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+					},
+				},
+			},
+			want: int64(constants.RequeueShort),
+		},
+		{
+			name: "read replicas ready but serving unknown requeue short",
+			state: &clusterState{
+				Available:                true,
+				ReadyReplicas:            3,
+				ReadReplicaReadyReplicas: 2,
+			},
+			original: &openbaov1alpha1.OpenBaoCluster{},
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+					},
+				},
+			},
+			want: int64(constants.RequeueShort),
+		},
+		{
+			name: "read replicas ready and serving but membership pending requeue short",
+			state: &clusterState{
+				Available:                  true,
+				ReadyReplicas:              3,
+				ReadReplicaReadyReplicas:   2,
+				ReadServingKnown:           true,
+				ReadServingAvailable:       true,
+				ReadReplicaMembershipKnown: false,
+			},
+			original: &openbaov1alpha1.OpenBaoCluster{},
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+					},
+				},
+			},
+			want: int64(constants.RequeueShort),
+		},
+		{
+			name: "read replica convergence persists with one extra short requeue",
+			state: &clusterState{
+				Available:                     true,
+				ReadyReplicas:                 3,
+				ReadReplicaReadyReplicas:      2,
+				ReadReplicaRegisteredReplicas: 2,
+				ReadReplicaHealthyReplicas:    2,
+				ReadServingKnown:              true,
+				ReadServingAvailable:          true,
+				ReadReplicaMembershipKnown:    true,
+				ReadReplicaAutopilotKnown:     true,
+			},
+			original: &openbaov1alpha1.OpenBaoCluster{
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					ReadyReplicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaStatus{
+						ReadyReplicas:      1,
+						RegisteredReplicas: 1,
+						HealthyReplicas:    1,
+					},
+				},
+			},
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+					},
+				},
+			},
+			want: int64(constants.RequeueShort),
+		},
+		{
+			name: "fully converged read replicas keep zero result",
+			state: &clusterState{
+				Available:                     true,
+				ReadyReplicas:                 3,
+				ReadReplicaReadyReplicas:      2,
+				ReadReplicaRegisteredReplicas: 2,
+				ReadReplicaHealthyReplicas:    2,
+				ReadServingKnown:              true,
+				ReadServingAvailable:          true,
+				ReadReplicaMembershipKnown:    true,
+				ReadReplicaAutopilotKnown:     true,
+			},
+			original: &openbaov1alpha1.OpenBaoCluster{
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					ReadyReplicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaStatus{
+						ReadyReplicas:      2,
+						RegisteredReplicas: 2,
+						HealthyReplicas:    2,
+					},
+				},
+			},
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+					},
+				},
+			},
+			want: 0,
+		},
+		{
+			name: "read replicas healthy but autopilot unknown requeues short",
+			state: &clusterState{
+				Available:                     true,
+				ReadyReplicas:                 3,
+				ReadReplicaReadyReplicas:      2,
+				ReadReplicaRegisteredReplicas: 2,
+				ReadReplicaHealthyReplicas:    2,
+				ReadServingKnown:              true,
+				ReadServingAvailable:          true,
+				ReadReplicaMembershipKnown:    true,
+				ReadReplicaAutopilotKnown:     false,
+			},
+			original: &openbaov1alpha1.OpenBaoCluster{},
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+					},
+				},
+			},
+			want: int64(constants.RequeueShort),
+		},
 	}
 
 	for _, tt := range tests {

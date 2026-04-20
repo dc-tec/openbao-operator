@@ -24,7 +24,14 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 	}
 
 	var autoJoinExpr string
-	if infra.TargetRevisionForJoin != "" {
+	switch {
+	case strings.TrimSpace(infra.RetryJoinLabelSelector) != "":
+		autoJoinExpr = fmt.Sprintf(
+			`provider=k8s namespace=%s label_selector="%s"`,
+			infra.Namespace,
+			strings.TrimSpace(infra.RetryJoinLabelSelector),
+		)
+	case infra.TargetRevisionForJoin != "":
 		autoJoinExpr = fmt.Sprintf(
 			`provider=k8s namespace=%s label_selector="%s=%s,%s=%s"`,
 			infra.Namespace,
@@ -33,15 +40,18 @@ func buildStorageBlock(cluster *openbaov1alpha1.OpenBaoCluster, infra Infrastruc
 			openBaoLabelRevision,
 			infra.TargetRevisionForJoin,
 		)
-		storageAttrs.RetryJoinAsNonVoter = boolPtrValue(true)
-		storageAttrs.ElectionTimeout = stringPtr("30s")
-	} else {
+	default:
 		autoJoinExpr = fmt.Sprintf(
 			`provider=k8s namespace=%s label_selector="%s=%s"`,
 			infra.Namespace,
 			openBaoLabelCluster,
 			cluster.Name,
 		)
+	}
+
+	if infra.RetryJoinAsNonVoter || infra.TargetRevisionForJoin != "" {
+		storageAttrs.RetryJoinAsNonVoter = boolPtrValue(true)
+		storageAttrs.ElectionTimeout = stringPtr("30s")
 	}
 
 	retryJoinAttrs := hclRetryJoin{

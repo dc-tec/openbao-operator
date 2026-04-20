@@ -336,7 +336,7 @@ func TestValidateUpgrade_ResumeHealthAllowsOneUnavailableTarget(t *testing.T) {
 		portopenbao.ClientConfig{},
 		nil,
 		"",
-	)
+	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	if err := mgr.validateUpgrade(context.Background(), testLogger(), cluster); err != nil {
 		t.Fatalf("validateUpgrade() error = %v, want nil", err)
@@ -394,7 +394,7 @@ func TestValidateUpgrade_ResumeHealthBlocksQuorumLoss(t *testing.T) {
 		portopenbao.ClientConfig{},
 		nil,
 		"",
-	)
+	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
 	if err == nil {
@@ -444,7 +444,7 @@ func TestValidateUpgrade_ResumeHealthMarksTimedOutTargetAsPodNotReady(t *testing
 		portopenbao.ClientConfig{},
 		nil,
 		"",
-	)
+	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
 	if err == nil {
@@ -514,7 +514,7 @@ func TestReconcile_PersistsResumeValidationFailureStatus(t *testing.T) {
 		portopenbao.ClientConfig{},
 		nil,
 		"",
-	)
+	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	_, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
 	if err == nil {
@@ -988,6 +988,7 @@ func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
 		WithReturnManagedFields().
 		Build()
 	mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
+	mgr.WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	result, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
 	if err != nil {
@@ -1049,6 +1050,7 @@ func TestReconcile_PersistsFailureWhenUpgradeLockIsBlockedMidUpgrade(t *testing.
 		WithObjects(cluster).
 		Build()
 	mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
+	mgr.WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	_, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
 	if err == nil || !strings.Contains(err.Error(), "operation lock is held by another operation") {

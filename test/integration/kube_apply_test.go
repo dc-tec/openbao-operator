@@ -104,8 +104,17 @@ func ensureProvisionerRBACApplied(t *testing.T) {
 func newImpersonatedClient(t *testing.T, username string) client.Client {
 	t.Helper()
 
+	return newImpersonatedClientWithGroups(t, username)
+}
+
+func newImpersonatedClientWithGroups(t *testing.T, username string, groups ...string) client.Client {
+	t.Helper()
+
 	impersonated := rest.CopyConfig(cfg)
-	impersonated.Impersonate = rest.ImpersonationConfig{UserName: username}
+	impersonated.Impersonate = rest.ImpersonationConfig{
+		UserName: username,
+		Groups:   groups,
+	}
 
 	c, err := client.New(impersonated, client.Options{Scheme: k8sScheme})
 	if err != nil {

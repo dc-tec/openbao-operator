@@ -63,6 +63,31 @@ func applyAllConditions(
 	storageCond.LastTransitionTime = now
 	meta.SetStatusCondition(&cluster.Status.Conditions, storageCond)
 
+	readReadyCond := buildReadReplicasReadyCondition(cluster, state)
+	readReadyCond.ObservedGeneration = gen
+	readReadyCond.LastTransitionTime = now
+	meta.SetStatusCondition(&cluster.Status.Conditions, readReadyCond)
+
+	readServingCond := buildReadServingAvailableCondition(cluster, state)
+	readServingCond.ObservedGeneration = gen
+	readServingCond.LastTransitionTime = now
+	meta.SetStatusCondition(&cluster.Status.Conditions, readServingCond)
+
+	raftMembershipCond := buildRaftMembershipReadyCondition(cluster, state)
+	raftMembershipCond.ObservedGeneration = gen
+	raftMembershipCond.LastTransitionTime = now
+	meta.SetStatusCondition(&cluster.Status.Conditions, raftMembershipCond)
+
+	autopilotHealthCond := buildReadReplicasAutopilotHealthyCondition(cluster, state)
+	autopilotHealthCond.ObservedGeneration = gen
+	autopilotHealthCond.LastTransitionTime = now
+	meta.SetStatusCondition(&cluster.Status.Conditions, autopilotHealthCond)
+
+	readStorageCond := buildReadReplicaStorageConfiguredCondition(cluster, state)
+	readStorageCond.ObservedGeneration = gen
+	readStorageCond.LastTransitionTime = now
+	meta.SetStatusCondition(&cluster.Status.Conditions, readStorageCond)
+
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:               string(openbaov1alpha1.ConditionEtcdEncryptionWarning),
 		Status:             metav1.ConditionTrue,

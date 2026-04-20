@@ -12,15 +12,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/adminopsstatus"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
-	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 	rollingupgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade/rolling"
+	workloadmanager "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 // Dependencies holds dependencies required to build admin operations reconcilers.
@@ -76,9 +76,7 @@ func Reconcile(
 	patchStatus StatusPatcher,
 	errorStatus ErrorStatusBuilder,
 ) (recon.Result, error) {
-	if cluster.Status.AdminOps == nil {
-		cluster.Status.AdminOps = &openbaov1alpha1.AdminOpsControllerStatus{}
-	}
+	ensureAdminOpsStatus(cluster)
 
 	if errorStatus == nil {
 		errorStatus = defaultErrorStatus
@@ -124,6 +122,7 @@ func Reconcile(
 	}
 
 	// Clear previous adminops error after a successful reconcile.
+	ensureAdminOpsStatus(cluster)
 	cluster.Status.AdminOps.LastError = nil
 	if patchStatus != nil {
 		if err := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-complete"); err != nil {
@@ -134,29 +133,35 @@ func Reconcile(
 	return recon.Result{}, nil
 }
 
+func ensureAdminOpsStatus(cluster *openbaov1alpha1.OpenBaoCluster) {
+	if cluster == nil {
+		return
+	}
+	if cluster.Status.AdminOps == nil {
+		cluster.Status.AdminOps = &openbaov1alpha1.AdminOpsControllerStatus{}
+	}
+}
+
 func buildReconcilers(deps Dependencies) []subReconciler {
-	infraMgr := inframanager.NewManagerWithReaderAndOIDCConfig(
-		deps.Client,
-		deps.APIReader,
-		deps.Scheme,
-		deps.OperatorNamespace,
-		&portauth.OIDCConfig{
-			IssuerURL:          deps.OIDCIssuer,
-			OIDCDiscoveryURL:   deps.OIDCDiscoveryURL,
-			OIDCDiscoveryCAPEM: deps.OIDCDiscoveryCAPEM,
-			JWKSURL:            deps.OIDCJWKSURL,
-			JWKSCAPEM:          deps.OIDCJWKSCAPEM,
-			JWKSKeys:           deps.OIDCJWTKeys,
-		},
-		deps.Platform,
-	)
+	workloadMgr := workloadmanager.NewManager(deps.Client, deps.Scheme, deps.Platform).WithReader(deps.APIReader)
 	backupRuntime := backupmanager.NewUpgradeStrategyRuntime(deps.Client, deps.Scheme)
+	adminOpsMutator := func(
+		ctx context.Context,
+		cluster *openbaov1alpha1.OpenBaoCluster,
+		mutate func(obj *openbaov1alpha1.OpenBaoCluster) error,
+		forceOwnership bool,
+	) error {
+		return adminopsstatus.MutateWithReader(ctx, deps.APIReader, deps.Client, cluster, mutate, adminopsstatus.MutateOptions{
+			ForceOwnership:  forceOwnership,
+			RetryOnConflict: !forceOwnership,
+		})
+	}
 
 	return []subReconciler{
 		bluegreen.NewManager(
 			deps.Client,
 			deps.Scheme,
-			infraMgr,
+			workloadMgr,
 			backupRuntime,
 			deps.SmartClientConfig,
 			deps.ImageVerifier,
@@ -172,7 +177,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.Recorder,
-		).WithReader(deps.APIReader),
+		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
 		backupmanager.NewManager(
 			deps.Client,
 			deps.Scheme,
@@ -180,7 +185,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 			deps.OperatorImageVerifier,
 			deps.Platform,
 			deps.Recorder,
-		).WithReader(deps.APIReader),
+		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
 	}
 }
 

@@ -101,11 +101,11 @@ func TestDifferenceRoots(t *testing.T) {
 	t.Parallel()
 
 	got := differenceRoots(
-		[]string{"internal/service/certs", "internal/service/upgrade", "internal/service/infra"},
+		[]string{"internal/service/certs", "internal/service/upgrade", "internal/service/networking"},
 		[]string{"internal/service/certs"},
 	)
 
-	want := []string{"internal/service/infra", "internal/service/upgrade"}
+	want := []string{"internal/service/networking", "internal/service/upgrade"}
 	if len(got) != len(want) {
 		t.Fatalf("unexpected length: want %d got %d", len(want), len(got))
 	}
@@ -264,7 +264,7 @@ func TestValidatePolicyGlobalBoundaryExternalOnly(t *testing.T) {
 
 	policy := architecturePolicy{
 		ModulePath:         "github.com/dc-tec/openbao-operator",
-		ServiceImportRoots: []string{"internal/service/infra"},
+		ServiceImportRoots: []string{"internal/service/networking"},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		GlobalImportBoundaries: []globalImportBoundary{
 			{
@@ -286,7 +286,7 @@ func TestValidatePolicyGlobalBoundaryMissingDisallowLists(t *testing.T) {
 
 	policy := architecturePolicy{
 		ModulePath:         "github.com/dc-tec/openbao-operator",
-		ServiceImportRoots: []string{"internal/service/infra"},
+		ServiceImportRoots: []string{"internal/service/networking"},
 		AdapterImportRoots: []string{"internal/adapter/kube"},
 		GlobalImportBoundaries: []globalImportBoundary{
 			{
@@ -303,5 +303,145 @@ func TestValidatePolicyGlobalBoundaryMissingDisallowLists(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "must define at least one") {
 		t.Fatalf("expected error to mention missing disallow lists, got: %v", err)
+	}
+}
+
+func TestValidatePolicyServiceAndAppBoundaries(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath: "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{
+			"internal/service/backup",
+			"internal/service/networking",
+			"internal/service/opslifecycle",
+		},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
+		ServiceBoundaries: []serviceBoundary{
+			{
+				Name:         "backup",
+				PackageRoot:  "internal/service/backup",
+				Files:        []string{"internal/service/backup/**/*.go"},
+				AllowService: []string{"internal/service/opslifecycle"},
+			},
+		},
+		AppBoundaries: []appBoundary{
+			{
+				Name:         "openbaocluster",
+				Files:        []string{"internal/app/openbaocluster/**/*.go"},
+				AllowService: []string{"internal/service/networking"},
+			},
+		},
+	}
+
+	if err := validatePolicy(policy); err != nil {
+		t.Fatalf("validatePolicy returned error: %v", err)
+	}
+}
+
+func TestValidatePolicyRejectsUnknownServiceBoundaryRoot(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{"internal/service/backup"},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
+		ServiceBoundaries: []serviceBoundary{
+			{
+				Name:        "backup",
+				PackageRoot: "internal/service/ghost",
+				Files:       []string{"internal/service/backup/**/*.go"},
+			},
+		},
+	}
+
+	err := validatePolicy(policy)
+	if err == nil {
+		t.Fatalf("expected validatePolicy to fail for unknown packageRoot")
+	}
+	if !strings.Contains(err.Error(), "serviceBoundaries[backup].packageRoot") {
+		t.Fatalf("expected error to mention service boundary packageRoot, got: %v", err)
+	}
+}
+
+func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath: "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{
+			"internal/service/backup",
+			"internal/service/networking",
+			"internal/service/opslifecycle",
+			"internal/service/upgrade",
+			"internal/service/upgrade/bluegreen",
+			"internal/service/upgrade/rolling",
+		},
+		AdapterImportRoots: []string{
+			"internal/adapter/auth",
+			"internal/adapter/kube",
+			"internal/adapter/security",
+		},
+		ServiceBoundaries: []serviceBoundary{
+			{
+				Name:         "backup",
+				DisplayName:  "Backup",
+				PackageRoot:  "internal/service/backup",
+				Files:        []string{"internal/service/backup/**/*.go"},
+				Ignores:      []string{"**/*_test.go"},
+				AllowService: []string{"internal/service/opslifecycle"},
+				AllowAdapter: []string{"internal/adapter/kube"},
+			},
+		},
+		AppBoundaries: []appBoundary{
+			{
+				Name:        "openbaocluster",
+				DisplayName: "OpenBaoCluster",
+				Files:       []string{"internal/app/openbaocluster/**/*.go"},
+				Ignores:     []string{"**/*_test.go"},
+				AllowService: []string{
+					"internal/service/backup",
+					"internal/service/networking",
+					"internal/service/upgrade/bluegreen",
+					"internal/service/upgrade/rolling",
+				},
+			},
+		},
+	}
+
+	specs, err := buildRuleSpecs(policy)
+	if err != nil {
+		t.Fatalf("buildRuleSpecs returned error: %v", err)
+	}
+
+	want := map[string]string{
+		"no-backup-service-unapproved-service-imports": strings.Join([]string{
+			`"github\.com/dc-tec/openbao-operator/(internal/service/networking(/[^"]*)?|`,
+			`internal/service/upgrade(/[^"]*)?|`,
+			`internal/service/upgrade/bluegreen(/[^"]*)?|`,
+			`internal/service/upgrade/rolling(/[^"]*)?)"`,
+		}, ""),
+		"no-backup-service-unapproved-adapter-imports": strings.Join([]string{
+			`"github\.com/dc-tec/openbao-operator/(internal/adapter/auth(/[^"]*)?|`,
+			`internal/adapter/security(/[^"]*)?)"`,
+		}, ""),
+		"no-openbaocluster-app-unapproved-service-imports": strings.Join([]string{
+			`"github\.com/dc-tec/openbao-operator/(internal/service/opslifecycle(/[^"]*)?|`,
+			`internal/service/upgrade(/[^"]*)?)"`,
+		}, ""),
+	}
+
+	if len(specs) != len(want) {
+		t.Fatalf("unexpected number of rule specs: want %d got %d", len(want), len(specs))
+	}
+
+	for _, spec := range specs {
+		expectedRegex, ok := want[spec.ID]
+		if !ok {
+			t.Fatalf("unexpected rule spec ID: %s", spec.ID)
+		}
+		if spec.Regex != expectedRegex {
+			t.Fatalf("unexpected regex for %s:\nwant: %s\ngot:  %s", spec.ID, expectedRegex, spec.Regex)
+		}
 	}
 }

@@ -35,4 +35,5 @@ resources:
   # if you do not want those helpers be installed with your Project.
   - openbaocluster_admin_role.yaml
   - openbaocluster_editor_role.yaml
+  - openbaocluster_maintenance_role.yaml
   - openbaocluster_viewer_role.yaml

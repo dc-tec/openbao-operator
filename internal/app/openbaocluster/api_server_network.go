@@ -10,7 +10,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
 
 // APIServerNetworkDependencies groups dependencies required to evaluate the
@@ -38,12 +38,11 @@ func EvaluateAPIServerNetwork(
 	deps APIServerNetworkDependencies,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) APIServerNetworkResult {
-	manager := inframanager.NewManagerWithReaderAndOIDCConfig(
+	manager := networkingmanager.NewManagerWithReader(
 		deps.Client,
 		deps.APIReader,
 		deps.Scheme,
 		deps.OperatorNamespace,
-		nil,
 		deps.Platform,
 	)
 

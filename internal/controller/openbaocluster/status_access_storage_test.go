@@ -9,6 +9,10 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+func stringPtr(s string) *string {
+	return &s
+}
+
 func TestBuildUserAccessBootstrapCondition(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -104,7 +108,7 @@ func TestBuildUserAccessBootstrapCondition(t *testing.T) {
 }
 
 func TestBuildStorageConfiguredCondition(t *testing.T) {
-	className := "fast-ssd"
+	const className = "fast-ssd"
 
 	tests := []struct {
 		name       string
@@ -119,7 +123,7 @@ func TestBuildStorageConfiguredCondition(t *testing.T) {
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Storage: openbaov1alpha1.StorageConfig{
-						StorageClassName: &className,
+						StorageClassName: stringPtr(className),
 					},
 				},
 			},
@@ -156,7 +160,7 @@ func TestBuildStorageConfiguredCondition(t *testing.T) {
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Storage: openbaov1alpha1.StorageConfig{
-						StorageClassName: &className,
+						StorageClassName: stringPtr(className),
 					},
 				},
 			},
@@ -201,6 +205,92 @@ func TestBuildStorageConfiguredCondition(t *testing.T) {
 			cond := buildStorageConfiguredCondition(tt.cluster, tt.state)
 
 			assert.Equal(t, string(openbaov1alpha1.ConditionStorageConfigured), cond.Type)
+			assert.Equal(t, tt.wantStatus, cond.Status)
+			assert.Equal(t, tt.wantReason, cond.Reason)
+			assert.Contains(t, cond.Message, tt.wantInMsg)
+		})
+	}
+}
+
+func TestBuildReadReplicaStorageConfiguredCondition(t *testing.T) {
+	const className = "fast-ssd"
+
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		state      *clusterState
+		wantStatus metav1.ConditionStatus
+		wantReason string
+		wantInMsg  string
+	}{
+		{
+			name: "no read replicas configured",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonNoReadReplicasConfigured,
+			wantInMsg:  "No steady-state read replicas are configured",
+		},
+		{
+			name: "explicit read storage class before pvc creation",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+						Storage: &openbaov1alpha1.ReadReplicaStorageConfig{
+							StorageClassName: stringPtr(className),
+						},
+					},
+				},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonStorageClassConfigured,
+			wantInMsg:  "Configured to request",
+		},
+		{
+			name: "default read storage class pending",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+					},
+				},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionUnknown,
+			wantReason: ReasonStorageClassPending,
+			wantInMsg:  "rely on the default StorageClass",
+		},
+		{
+			name: "read storage class mismatch",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 2,
+						Storage: &openbaov1alpha1.ReadReplicaStorageConfig{
+							StorageClassName: stringPtr(className),
+						},
+					},
+				},
+			},
+			state: &clusterState{
+				ReadReplicaDataPVCCount:             2,
+				ReadReplicaDataPVCStorageClassNames: []string{"gp3"},
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonStorageClassMismatch,
+			wantInMsg:  "does not match",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cond := buildReadReplicaStorageConfiguredCondition(tt.cluster, tt.state)
+
+			assert.Equal(t, string(openbaov1alpha1.ConditionReadReplicaStorageConfigured), cond.Type)
 			assert.Equal(t, tt.wantStatus, cond.Status)
 			assert.Equal(t, tt.wantReason, cond.Reason)
 			assert.Contains(t, cond.Message, tt.wantInMsg)

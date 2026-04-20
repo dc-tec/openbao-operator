@@ -126,6 +126,236 @@ func buildBackupCondition(backupInProgress bool, backupJobName string) metav1.Co
 	}
 }
 
+func desiredReadReplicaCount(cluster *openbaov1alpha1.OpenBaoCluster) int32 {
+	if cluster.Spec.ReadReplicas == nil {
+		return 0
+	}
+	return cluster.Spec.ReadReplicas.Replicas
+}
+
+func desiredReadReplicaStorageClassName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster.Spec.ReadReplicas == nil || cluster.Spec.ReadReplicas.Storage == nil || cluster.Spec.ReadReplicas.Storage.StorageClassName == nil {
+		return ""
+	}
+	return strings.TrimSpace(*cluster.Spec.ReadReplicas.Storage.StorageClassName)
+}
+
+// buildReadReplicasReadyCondition reports whether the read-replica pool has the
+// desired number of Ready Pods.
+func buildReadReplicasReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+	desired := desiredReadReplicaCount(cluster)
+	if desired == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasReady),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonNoReadReplicasConfigured,
+			Message: "No steady-state read replicas are configured",
+		}
+	}
+
+	if state == nil {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasReady),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Read-replica readiness has not been observed yet",
+		}
+	}
+
+	if state.ReadReplicaReadyReplicas == desired {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasReady),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonAllReadReplicasReady,
+			Message: fmt.Sprintf("All %d read replicas are ready", desired),
+		}
+	}
+
+	if state.ReadReplicaReadyReplicas == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasReady),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonNoReadyReadReplicas,
+			Message: "No read replicas are ready yet",
+		}
+	}
+
+	return metav1.Condition{
+		Type:    string(openbaov1alpha1.ConditionReadReplicasReady),
+		Status:  metav1.ConditionFalse,
+		Reason:  ReasonReadReplicasNotReady,
+		Message: fmt.Sprintf("Only %d/%d read replicas are ready", state.ReadReplicaReadyReplicas, desired),
+	}
+}
+
+// buildReadServingAvailableCondition reports whether at least one read-replica
+// Pod is observed in a read-serving state.
+func buildReadServingAvailableCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+	desired := desiredReadReplicaCount(cluster)
+	if desired == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadServingAvailable),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonNoReadReplicasConfigured,
+			Message: "No steady-state read replicas are configured",
+		}
+	}
+
+	if state == nil {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadServingAvailable),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Read-serving availability has not been observed yet",
+		}
+	}
+
+	if state.ReadReplicaReadyReplicas == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadServingAvailable),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonNoReadyReadReplicas,
+			Message: "No ready read replicas are available to serve reads",
+		}
+	}
+
+	if !state.ReadServingKnown {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadServingAvailable),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Read-serving availability has not been observed yet",
+		}
+	}
+
+	if state.ReadServingAvailable {
+		reason := ReasonReadServingAvailable
+		message := "At least one read replica is serving reads"
+		if !state.Available {
+			reason = ReasonReadServingWithoutQuorum
+			message = "At least one read replica is serving reads even though the voter pool is not fully available"
+		}
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadServingAvailable),
+			Status:  metav1.ConditionTrue,
+			Reason:  reason,
+			Message: message,
+		}
+	}
+
+	return metav1.Condition{
+		Type:    string(openbaov1alpha1.ConditionReadServingAvailable),
+		Status:  metav1.ConditionFalse,
+		Reason:  ReasonPodsNotServingReads,
+		Message: "Read replicas are ready but none are currently observed in a read-serving state",
+	}
+}
+
+// buildRaftMembershipReadyCondition reports whether observed non-voter
+// membership matches the declared read-replica pool size.
+func buildRaftMembershipReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+	desired := desiredReadReplicaCount(cluster)
+	if desired == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionRaftMembershipReady),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonNoReadReplicasConfigured,
+			Message: "No steady-state read replicas are configured, so no non-voter membership is expected",
+		}
+	}
+
+	if state == nil {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionRaftMembershipReady),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Raft membership has not been observed yet",
+		}
+	}
+
+	if state.ReadReplicaRegisteredReplicas == desired {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionRaftMembershipReady),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonRaftMembershipReady,
+			Message: fmt.Sprintf("Observed %d/%d read replicas registered in Raft membership", desired, desired),
+		}
+	}
+
+	if !state.ReadReplicaMembershipKnown {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionRaftMembershipReady),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Raft membership has not been observed yet",
+		}
+	}
+
+	return metav1.Condition{
+		Type:    string(openbaov1alpha1.ConditionRaftMembershipReady),
+		Status:  metav1.ConditionFalse,
+		Reason:  ReasonReadReplicasNotReady,
+		Message: fmt.Sprintf("Observed %d/%d read replicas registered in Raft membership", state.ReadReplicaRegisteredReplicas, desired),
+	}
+}
+
+// buildReadReplicasAutopilotHealthyCondition reports whether the observed
+// read-replica peers are healthy according to the Raft Autopilot state endpoint.
+func buildReadReplicasAutopilotHealthyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+	desired := desiredReadReplicaCount(cluster)
+	if desired == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonNoReadReplicasConfigured,
+			Message: "No steady-state read replicas are configured, so no read-replica Autopilot health is expected",
+		}
+	}
+
+	if state == nil {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Read-replica Autopilot health has not been observed yet",
+		}
+	}
+
+	if !state.ReadReplicaAutopilotKnown {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Read-replica Autopilot health has not been observed yet",
+		}
+	}
+
+	if state.ReadReplicaHealthyReplicas == desired {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonReadReplicasAutopilotHealthy,
+			Message: fmt.Sprintf("All %d read replicas are healthy according to Raft Autopilot", desired),
+		}
+	}
+
+	if state.ReadReplicaHealthyReplicas == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonReadReplicasAutopilotUnhealthy,
+			Message: "No read replicas are healthy according to Raft Autopilot",
+		}
+	}
+
+	return metav1.Condition{
+		Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+		Status:  metav1.ConditionFalse,
+		Reason:  ReasonReadReplicasAutopilotUnhealthy,
+		Message: fmt.Sprintf("Only %d/%d read replicas are healthy according to Raft Autopilot", state.ReadReplicaHealthyReplicas, desired),
+	}
+}
+
 // buildStorageConfiguredCondition reports whether the workload is using an explicit
 // or consistently resolved storage class, so users can see the effective one-shot choice.
 func buildStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
@@ -214,6 +444,103 @@ func buildStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, st
 		Status:  metav1.ConditionTrue,
 		Reason:  ReasonStorageClassConfigured,
 		Message: fmt.Sprintf("Using configured StorageClass %q on %d data PVCs. This choice is effectively immutable after PVC creation.", observedStorageClassName, state.DataPVCCount),
+	}
+}
+
+// buildReadReplicaStorageConfiguredCondition reports whether the read-replica
+// pool is using an explicit or consistently resolved storage class.
+func buildReadReplicaStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+	desiredReplicas := desiredReadReplicaCount(cluster)
+	if desiredReplicas == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonNoReadReplicasConfigured,
+			Message: "No steady-state read replicas are configured",
+		}
+	}
+
+	desiredStorageClassName := desiredReadReplicaStorageClassName(cluster)
+	if state == nil {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Read-replica storage configuration has not been observed yet",
+		}
+	}
+
+	if state.ReadReplicaDataPVCCount == 0 {
+		if desiredStorageClassName != "" {
+			return metav1.Condition{
+				Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+				Status:  metav1.ConditionTrue,
+				Reason:  ReasonStorageClassConfigured,
+				Message: fmt.Sprintf("Configured to request StorageClass %q when read-replica data PVCs are created. This choice becomes effectively immutable after PVC creation.", desiredStorageClassName),
+			}
+		}
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+			Status:  metav1.ConditionUnknown,
+			Reason:  ReasonStorageClassPending,
+			Message: "No read-replica data PVCs are present yet and spec.readReplicas.storage.storageClassName is unset. The read pool will rely on the default StorageClass when PVCs are created; set it explicitly on new clusters if you need a specific class.",
+		}
+	}
+
+	if state.ReadReplicaDataPVCStorageClassUnset && len(state.ReadReplicaDataPVCStorageClassNames) == 0 {
+		if desiredStorageClassName != "" {
+			return metav1.Condition{
+				Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+				Status:  metav1.ConditionFalse,
+				Reason:  ReasonStorageClassMismatch,
+				Message: fmt.Sprintf("spec.readReplicas.storage.storageClassName=%q does not match the observed read-replica data PVCs, which were created without a StorageClass. Storage class selection is effectively immutable after PVC creation.", desiredStorageClassName),
+			}
+		}
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonStorageClassUnset,
+			Message: fmt.Sprintf("All %d read-replica data PVCs were created without a StorageClass. Set spec.readReplicas.storage.storageClassName explicitly on new clusters if you need a specific class; the effective storage path is immutable after PVC creation.", state.ReadReplicaDataPVCCount),
+		}
+	}
+
+	if state.ReadReplicaDataPVCStorageClassUnset || len(state.ReadReplicaDataPVCStorageClassNames) > 1 {
+		observed := append([]string{}, state.ReadReplicaDataPVCStorageClassNames...)
+		if state.ReadReplicaDataPVCStorageClassUnset {
+			observed = append(observed, "<unset>")
+		}
+		sort.Strings(observed)
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonStorageClassInconsistent,
+			Message: fmt.Sprintf("Observed inconsistent StorageClass values across %d read-replica data PVCs: %s. All read-replica data PVCs should use one effective storage class.", state.ReadReplicaDataPVCCount, strings.Join(observed, ", ")),
+		}
+	}
+
+	observedStorageClassName := state.ReadReplicaDataPVCStorageClassNames[0]
+	if desiredStorageClassName == "" {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonStorageClassDefaulted,
+			Message: fmt.Sprintf("Using default StorageClass %q on %d read-replica data PVCs. Set spec.readReplicas.storage.storageClassName explicitly on new clusters if you need a specific class; this choice is effectively immutable after PVC creation.", observedStorageClassName, state.ReadReplicaDataPVCCount),
+		}
+	}
+	if desiredStorageClassName != observedStorageClassName {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonStorageClassMismatch,
+			Message: fmt.Sprintf("spec.readReplicas.storage.storageClassName=%q does not match the observed read-replica data PVC StorageClass %q. Storage class selection is effectively immutable after PVC creation.", desiredStorageClassName, observedStorageClassName),
+		}
+	}
+
+	return metav1.Condition{
+		Type:    string(openbaov1alpha1.ConditionReadReplicaStorageConfigured),
+		Status:  metav1.ConditionTrue,
+		Reason:  ReasonStorageClassConfigured,
+		Message: fmt.Sprintf("Using configured StorageClass %q on %d read-replica data PVCs. This choice is effectively immutable after PVC creation.", observedStorageClassName, state.ReadReplicaDataPVCCount),
 	}
 }
 

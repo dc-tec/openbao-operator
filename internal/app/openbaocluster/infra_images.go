@@ -13,7 +13,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
-	inframanager "github.com/dc-tec/openbao-operator/internal/service/infra"
+	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
 func imageVerificationFailurePolicy(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -170,7 +170,7 @@ func (r *infraReconciler) verifyOperatorImageDigest(ctx context.Context, logger 
 }
 
 func (r *infraReconciler) resolveInitContainerImage(cluster *openbaov1alpha1.OpenBaoCluster) (string, error) {
-	initImage, err := inframanager.ResolveInitContainerImage(cluster)
+	initImage, err := workloadsvc.ResolveInitContainerImage(cluster)
 	if err != nil {
 		return "", err
 	}
@@ -239,7 +239,7 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 		podReader = r.deps.Kubernetes.APIReader
 	}
 
-	inframanager.EnsureBlueGreenStatus(ctx, logger, podReader, cluster)
+	workloadsvc.EnsureBlueGreenStatus(ctx, logger, podReader, cluster)
 
 	if cluster.Status.BlueGreen != nil && strings.TrimSpace(cluster.Status.BlueGreen.BlueImage) != "" {
 		return strings.TrimSpace(cluster.Status.BlueGreen.BlueImage)
