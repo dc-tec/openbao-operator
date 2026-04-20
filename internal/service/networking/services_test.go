@@ -14,9 +14,10 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
-func TestEnsureExternalService_UsesVoterSelector(t *testing.T) {
+func TestEnsureExternalService_UsesSharedClientSelector(t *testing.T) {
 	cluster := newMinimalCluster("svc-test", "default")
 	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{}
+	cluster.Spec.ReadReplicas = &openbaov1alpha1.ReadReplicaConfig{Replicas: 2}
 
 	client := fake.NewClientBuilder().
 		WithScheme(testScheme).
@@ -37,8 +38,46 @@ func TestEnsureExternalService_UsesVoterSelector(t *testing.T) {
 		t.Fatalf("failed to get external Service: %v", err)
 	}
 
-	if got := service.Spec.Selector[constants.LabelOpenBaoWorkloadPool]; got != constants.LabelValueOpenBaoWorkloadPoolVoter {
-		t.Fatalf("selector workload pool = %q, want %q", got, constants.LabelValueOpenBaoWorkloadPoolVoter)
+	if _, ok := service.Spec.Selector[constants.LabelOpenBaoWorkloadPool]; ok {
+		t.Fatalf("did not expect external Service selector to pin a workload pool")
+	}
+}
+
+func TestEnsureExternalService_BlueGreenSelectorStillPinsActiveRevision(t *testing.T) {
+	cluster := newMinimalCluster("svc-bluegreen", "default")
+	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{}
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+	}
+	cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+		Phase:        openbaov1alpha1.PhasePromoting,
+		BlueRevision: "blue123",
+	}
+
+	client := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+
+	if err := manager.ensureExternalService(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("ensureExternalService() error = %v", err)
+	}
+
+	service := &corev1.Service{}
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      externalServiceName(cluster),
+	}, service); err != nil {
+		t.Fatalf("failed to get external Service: %v", err)
+	}
+
+	if got := service.Spec.Selector[constants.LabelOpenBaoRevision]; got != "blue123" {
+		t.Fatalf("selector revision = %q, want %q", got, "blue123")
+	}
+	if _, ok := service.Spec.Selector[constants.LabelOpenBaoWorkloadPool]; ok {
+		t.Fatalf("did not expect external Service selector to pin a workload pool during blue/green")
 	}
 }
 

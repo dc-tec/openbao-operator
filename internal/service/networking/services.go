@@ -90,7 +90,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 		}
 	}
 
-	selectorLabels := resourceidentity.VoterPodSelectorLabels(cluster)
+	selectorLabels := resourceidentity.PodSelectorLabels(cluster)
 	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
 		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
 	}
@@ -210,7 +210,7 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 		return nil
 	}
 
-	selectorLabels := resourceidentity.VoterPodSelectorLabels(cluster)
+	selectorLabels := resourceidentity.PodSelectorLabels(cluster)
 	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
 		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
 	}
