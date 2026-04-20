@@ -8,6 +8,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
@@ -16,7 +17,7 @@ func TestSealWiring_StaticDefault_MountsUnseal(t *testing.T) {
 
 	env := buildContainerEnv(cluster)
 	mounts := buildContainerVolumeMounts(cluster, path.Dir(openBaoRenderedConfig))
-	volumes := buildStatefulSetVolumes(cluster, "", false)
+	volumes := buildStatefulSetVolumes(cluster, StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter})
 
 	if hasVolume(volumes, sealCredsVolumeName) {
 		t.Fatalf("expected %q volume to be absent for static seal", sealCredsVolumeName)
@@ -67,7 +68,7 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 
 			env := buildContainerEnv(cluster)
 			mounts := buildContainerVolumeMounts(cluster, path.Dir(openBaoRenderedConfig))
-			volumes := buildStatefulSetVolumes(cluster, "", false)
+			volumes := buildStatefulSetVolumes(cluster, StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter})
 
 			if hasVolume(volumes, unsealVolumeName) {
 				t.Fatalf("expected %q volume to be absent for external seal type %q", unsealVolumeName, tc.unsealType)
@@ -116,7 +117,7 @@ func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(
 
 			env := buildContainerEnv(cluster)
 			mounts := buildContainerVolumeMounts(cluster, path.Dir(openBaoRenderedConfig))
-			volumes := buildStatefulSetVolumes(cluster, "", false)
+			volumes := buildStatefulSetVolumes(cluster, StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter})
 
 			if hasVolume(volumes, sealCredsVolumeName) || hasVolumeMount(mounts, sealCredsVolumeName) {
 				t.Fatalf("expected %q volume/mount to be absent when credentialsSecretRef is not set", sealCredsVolumeName)
@@ -183,7 +184,7 @@ func TestSealWiring_StaticExplicitAndImplicit_StillMountsUnseal(t *testing.T) {
 			cluster.Spec.Unseal = tc.unseal
 
 			mounts := buildContainerVolumeMounts(cluster, path.Dir(openBaoRenderedConfig))
-			volumes := buildStatefulSetVolumes(cluster, "", false)
+			volumes := buildStatefulSetVolumes(cluster, StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter})
 
 			if !hasVolume(volumes, unsealVolumeName) || !hasVolumeMount(mounts, unsealVolumeName) {
 				t.Fatalf("expected %q volume and mount for static seal case %q", unsealVolumeName, tc.name)

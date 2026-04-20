@@ -49,6 +49,9 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	if err := m.ensureExternalService(ctx, logger, cluster); err != nil {
 		return err
 	}
+	if err := m.ensureReadReplicaService(ctx, logger, cluster); err != nil {
+		return err
+	}
 	if err := m.ensureACMEChallengeService(ctx, logger, cluster); err != nil {
 		return err
 	}

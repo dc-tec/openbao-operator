@@ -234,7 +234,7 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 // buildContainers builds the container list for the OpenBao pod.
 // The OpenBao container uses a wrapper binary as the entrypoint that manages
 // the OpenBao process and watches for TLS certificate changes.
-func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDigest string, renderedConfigDir string, probes probeExecActions) []corev1.Container {
+func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec, renderedConfigDir string, probes probeExecActions) []corev1.Container {
 	// Add utils volume mount (Read-Only for security)
 	mainVolumeMounts := buildContainerVolumeMounts(cluster, renderedConfigDir)
 
@@ -259,7 +259,7 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 	containers := []corev1.Container{
 		{
 			Name:  constants.ContainerBao,
-			Image: getContainerImage(cluster, verifiedImageDigest),
+			Image: getContainerImage(cluster, spec.Image),
 			SecurityContext: &corev1.SecurityContext{
 				// Prevent privilege escalation (sudo, setuid binaries)
 				AllowPrivilegeEscalation: ptr.To(false),
@@ -270,9 +270,10 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 				// OpenBao writes to mounted volumes (/bao/data, /etc/bao/config, etc.) which are already mounted.
 				ReadOnlyRootFilesystem: ptr.To(true),
 			},
-			Command: cmd,
-			Args:    args,
-			Env:     buildContainerEnv(cluster),
+			Command:   cmd,
+			Args:      args,
+			Env:       buildContainerEnv(cluster),
+			Resources: buildContainerResources(cluster, spec),
 			Ports: []corev1.ContainerPort{
 				{
 					Name:          "api",
@@ -315,4 +316,14 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, verifiedImageDiges
 	}
 
 	return containers
+}
+
+func buildContainerResources(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) corev1.ResourceRequirements {
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica &&
+		cluster.Spec.ReadReplicas != nil &&
+		cluster.Spec.ReadReplicas.Template != nil &&
+		cluster.Spec.ReadReplicas.Template.Resources != nil {
+		return *cluster.Spec.ReadReplicas.Template.Resources.DeepCopy()
+	}
+	return corev1.ResourceRequirements{}
 }

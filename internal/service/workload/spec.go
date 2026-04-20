@@ -6,6 +6,9 @@ type StatefulSetSpec struct {
 	// Name is the StatefulSet name (e.g., "cluster-name" or "cluster-name-revision")
 	Name string
 
+	// Pool identifies the workload pool (for example, voter or read-replica).
+	Pool string
+
 	// Revision is the revision identifier (empty for non-revisioned StatefulSets)
 	Revision string
 

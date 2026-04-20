@@ -55,6 +55,54 @@ func (r *infraReconciler) handleScaleDownSafety(ctx context.Context, cluster *op
 	return nextReplicas, nil
 }
 
+func (r *infraReconciler) handleReadReplicaScaleDownSafety(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, desiredReplicas int32, currentSTS *appsv1.StatefulSet) (int32, error) {
+	if currentSTS.Spec.Replicas == nil {
+		return desiredReplicas, nil
+	}
+	currentReplicas := *currentSTS.Spec.Replicas
+	if desiredReplicas >= currentReplicas {
+		return desiredReplicas, nil
+	}
+	if !cluster.Status.Initialized {
+		return desiredReplicas, nil
+	}
+	if !statefulSetSettledAtReplicas(currentSTS, currentReplicas) {
+		return currentReplicas, fmt.Errorf(
+			"waiting for StatefulSet %s/%s to settle at %d replicas before next read-replica scale-down step",
+			currentSTS.Namespace,
+			currentSTS.Name,
+			currentReplicas,
+		)
+	}
+
+	if r.deps.ScaleDown.ReadReplicaRuntime == nil {
+		return currentReplicas, fmt.Errorf("read-replica scale-down runtime is not configured")
+	}
+
+	nextReplicas := currentReplicas - 1
+	if nextReplicas < desiredReplicas {
+		nextReplicas = desiredReplicas
+	}
+
+	victimOrdinal := currentReplicas - 1
+	victimPodName := fmt.Sprintf("%s-%d", currentSTS.Name, victimOrdinal)
+
+	logger := log.FromContext(ctx).WithValues(
+		"victim", victimPodName,
+		"currentReplicas", currentReplicas,
+		"desiredReplicas", desiredReplicas,
+		"appliedReplicas", nextReplicas,
+	)
+	logger.Info("Detected read-replica scale down operation; preparing safe replica decrement")
+
+	if err := r.deps.ScaleDown.ReadReplicaRuntime.PrepareReadReplicaScaleDown(ctx, logger, cluster, currentSTS.Name, currentReplicas, nextReplicas); err != nil {
+		return currentReplicas, err
+	}
+
+	logger.Info("Safe read-replica scale down step prepared")
+	return nextReplicas, nil
+}
+
 func statefulSetSettledAtReplicas(sts *appsv1.StatefulSet, replicas int32) bool {
 	if sts == nil {
 		return false

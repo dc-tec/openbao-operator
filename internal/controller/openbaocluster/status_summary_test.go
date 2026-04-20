@@ -266,6 +266,231 @@ func TestBuildBackupCondition(t *testing.T) {
 	}
 }
 
+func TestBuildReadReplicasReadyCondition(t *testing.T) {
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		state      *clusterState
+		wantStatus metav1.ConditionStatus
+		wantReason string
+	}{
+		{
+			name:       "no read replicas configured",
+			cluster:    &openbaov1alpha1.OpenBaoCluster{},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonNoReadReplicasConfigured,
+		},
+		{
+			name: "all read replicas ready",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state:      &clusterState{ReadReplicaReadyReplicas: 2},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonAllReadReplicasReady,
+		},
+		{
+			name: "no ready read replicas",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonNoReadyReadReplicas,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cond := buildReadReplicasReadyCondition(tt.cluster, tt.state)
+
+			assert.Equal(t, string(openbaov1alpha1.ConditionReadReplicasReady), cond.Type)
+			assert.Equal(t, tt.wantStatus, cond.Status)
+			assert.Equal(t, tt.wantReason, cond.Reason)
+		})
+	}
+}
+
+func TestBuildReadServingAvailableCondition(t *testing.T) {
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		state      *clusterState
+		wantStatus metav1.ConditionStatus
+		wantReason string
+	}{
+		{
+			name:       "no read replicas configured",
+			cluster:    &openbaov1alpha1.OpenBaoCluster{},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonNoReadReplicasConfigured,
+		},
+		{
+			name: "read serving without quorum",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 1},
+				},
+			},
+			state: &clusterState{
+				Available:                false,
+				ReadReplicaReadyReplicas: 1,
+				ReadServingKnown:         true,
+				ReadServingAvailable:     true,
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonReadServingWithoutQuorum,
+		},
+		{
+			name: "ready replicas not yet observed serving",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 1},
+				},
+			},
+			state:      &clusterState{ReadReplicaReadyReplicas: 1},
+			wantStatus: metav1.ConditionUnknown,
+			wantReason: reasonUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cond := buildReadServingAvailableCondition(tt.cluster, tt.state)
+
+			assert.Equal(t, string(openbaov1alpha1.ConditionReadServingAvailable), cond.Type)
+			assert.Equal(t, tt.wantStatus, cond.Status)
+			assert.Equal(t, tt.wantReason, cond.Reason)
+		})
+	}
+}
+
+func TestBuildRaftMembershipReadyCondition(t *testing.T) {
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		state      *clusterState
+		wantStatus metav1.ConditionStatus
+		wantReason string
+	}{
+		{
+			name:       "no read replicas configured",
+			cluster:    &openbaov1alpha1.OpenBaoCluster{},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonNoReadReplicasConfigured,
+		},
+		{
+			name: "membership observed",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state: &clusterState{
+				ReadReplicaRegisteredReplicas: 2,
+				ReadReplicaMembershipKnown:    true,
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonRaftMembershipReady,
+		},
+		{
+			name: "membership not yet observed",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionUnknown,
+			wantReason: reasonUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cond := buildRaftMembershipReadyCondition(tt.cluster, tt.state)
+
+			assert.Equal(t, string(openbaov1alpha1.ConditionRaftMembershipReady), cond.Type)
+			assert.Equal(t, tt.wantStatus, cond.Status)
+			assert.Equal(t, tt.wantReason, cond.Reason)
+		})
+	}
+}
+
+func TestBuildReadReplicasAutopilotHealthyCondition(t *testing.T) {
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		state      *clusterState
+		wantStatus metav1.ConditionStatus
+		wantReason string
+	}{
+		{
+			name:       "no read replicas configured",
+			cluster:    &openbaov1alpha1.OpenBaoCluster{},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonNoReadReplicasConfigured,
+		},
+		{
+			name: "all read replicas healthy in autopilot",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state: &clusterState{
+				ReadReplicaHealthyReplicas: 2,
+				ReadReplicaAutopilotKnown:  true,
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonReadReplicasAutopilotHealthy,
+		},
+		{
+			name: "partial read replica autopilot health",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state: &clusterState{
+				ReadReplicaHealthyReplicas: 1,
+				ReadReplicaAutopilotKnown:  true,
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonReadReplicasAutopilotUnhealthy,
+		},
+		{
+			name: "autopilot health not yet observed",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionUnknown,
+			wantReason: reasonUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cond := buildReadReplicasAutopilotHealthyCondition(tt.cluster, tt.state)
+
+			assert.Equal(t, string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy), cond.Type)
+			assert.Equal(t, tt.wantStatus, cond.Status)
+			assert.Equal(t, tt.wantReason, cond.Reason)
+		})
+	}
+}
+
 func TestBuildLeaderCondition(t *testing.T) {
 	tests := []struct {
 		name        string

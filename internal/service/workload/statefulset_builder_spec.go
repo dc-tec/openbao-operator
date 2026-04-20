@@ -15,7 +15,17 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
-func desiredStatefulSetReplicas(cluster *openbaov1alpha1.OpenBaoCluster, initialized bool) int32 {
+func desiredStatefulSetReplicas(cluster *openbaov1alpha1.OpenBaoCluster, initialized bool, spec StatefulSetSpec) int32 {
+	if spec.Replicas > 0 || spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica {
+		if !initialized {
+			if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica {
+				return 0
+			}
+			return 1
+		}
+		return spec.Replicas
+	}
+
 	replicas := cluster.Spec.Replicas
 	if !initialized {
 		replicas = 1
@@ -84,7 +94,12 @@ func buildStatefulSetPodSecurityContext(cluster *openbaov1alpha1.OpenBaoCluster,
 	return securityContext
 }
 
-func buildStatefulSetUpdateStrategy(cluster *openbaov1alpha1.OpenBaoCluster) appsv1.StatefulSetUpdateStrategy {
+func buildStatefulSetUpdateStrategy(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) appsv1.StatefulSetUpdateStrategy {
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica {
+		return appsv1.StatefulSetUpdateStrategy{
+			Type: appsv1.RollingUpdateStatefulSetStrategyType,
+		}
+	}
 	// For blue/green deployments, use OnDelete update strategy to preventing
 	// automatic rolling updates. The BlueGreenManager controls when pods are created/updated.
 	// For standard rolling upgrades, use RollingUpdate (the Kubernetes default behavior).
@@ -102,10 +117,20 @@ func buildStatefulSetUpdateStrategy(cluster *openbaov1alpha1.OpenBaoCluster) app
 	}
 }
 
-func buildStatefulSetPVC(cluster *openbaov1alpha1.OpenBaoCluster) (corev1.PersistentVolumeClaim, error) {
-	size, err := resource.ParseQuantity(cluster.Spec.Storage.Size)
-	if err != nil {
-		return corev1.PersistentVolumeClaim{}, fmt.Errorf("invalid storage size %q: %w", cluster.Spec.Storage.Size, err)
+func buildStatefulSetPVC(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) (corev1.PersistentVolumeClaim, error) {
+	var size resource.Quantity
+	switch {
+	case spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica &&
+		cluster.Spec.ReadReplicas != nil &&
+		cluster.Spec.ReadReplicas.Storage != nil &&
+		cluster.Spec.ReadReplicas.Storage.Size != nil:
+		size = cluster.Spec.ReadReplicas.Storage.Size.DeepCopy()
+	default:
+		parsedSize, err := resource.ParseQuantity(cluster.Spec.Storage.Size)
+		if err != nil {
+			return corev1.PersistentVolumeClaim{}, fmt.Errorf("invalid storage size %q: %w", cluster.Spec.Storage.Size, err)
+		}
+		size = parsedSize
 	}
 
 	pvc := corev1.PersistentVolumeClaim{
@@ -125,35 +150,63 @@ func buildStatefulSetPVC(cluster *openbaov1alpha1.OpenBaoCluster) (corev1.Persis
 		},
 	}
 
-	if cluster.Spec.Storage.StorageClassName != nil && *cluster.Spec.Storage.StorageClassName != "" {
+	var storageClassName *string
+	switch {
+	case spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica &&
+		cluster.Spec.ReadReplicas != nil &&
+		cluster.Spec.ReadReplicas.Storage != nil &&
+		cluster.Spec.ReadReplicas.Storage.StorageClassName != nil &&
+		*cluster.Spec.ReadReplicas.Storage.StorageClassName != "":
+		className := *cluster.Spec.ReadReplicas.Storage.StorageClassName
+		storageClassName = &className
+	case cluster.Spec.Storage.StorageClassName != nil && *cluster.Spec.Storage.StorageClassName != "":
 		className := *cluster.Spec.Storage.StorageClassName
+		storageClassName = &className
+	}
+
+	if storageClassName != nil {
+		className := *storageClassName
 		pvc.Spec.StorageClassName = &className
 	}
 
 	return pvc, nil
 }
 
-func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoCluster, revision string, configContent string) (map[string]string, map[string]string) {
-	podLabels := resourceidentity.PodSelectorLabelsWithRevision(cluster, revision)
+func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec, configContent string) (map[string]string, map[string]string) {
+	podLabels := resourceidentity.PodSelectorLabelsForPoolWithRevision(cluster, spec.Pool, spec.Revision)
 
 	if podLabels == nil {
 		podLabels = make(map[string]string)
 	}
-	if cluster.Spec.PodMetadata != nil {
-		for key, value := range cluster.Spec.PodMetadata.Labels {
+	mergeLabels := func(metadata *openbaov1alpha1.PodMetadataConfig) {
+		if metadata == nil {
+			return
+		}
+		for key, value := range metadata.Labels {
 			if _, exists := podLabels[key]; exists {
 				continue
 			}
 			podLabels[key] = value
 		}
 	}
+	mergeLabels(cluster.Spec.PodMetadata)
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica && cluster.Spec.ReadReplicas != nil && cluster.Spec.ReadReplicas.Template != nil {
+		mergeLabels(cluster.Spec.ReadReplicas.Template.Metadata)
+	}
 	podLabels[constants.LabelOpenBaoComponent] = constants.ComponentOpenBaoCluster
 
 	annotations := map[string]string{}
-	if cluster.Spec.PodMetadata != nil {
-		for key, value := range cluster.Spec.PodMetadata.Annotations {
+	mergeAnnotations := func(metadata *openbaov1alpha1.PodMetadataConfig) {
+		if metadata == nil {
+			return
+		}
+		for key, value := range metadata.Annotations {
 			annotations[key] = value
 		}
+	}
+	mergeAnnotations(cluster.Spec.PodMetadata)
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica && cluster.Spec.ReadReplicas != nil && cluster.Spec.ReadReplicas.Template != nil {
+		mergeAnnotations(cluster.Spec.ReadReplicas.Template.Metadata)
 	}
 
 	// Compute config hash and add to annotations to trigger rollout on config changes

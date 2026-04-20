@@ -20,7 +20,11 @@ import (
 //
 // SECURITY: Without a PDB, voluntary disruptions (node drains, cluster autoscaler)
 // could evict all pods simultaneously, causing quorum loss and potential data loss.
-func (m *Manager) ensurePodDisruptionBudget(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) ensurePodDisruptionBudget(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica {
+		return nil
+	}
+
 	pdbName := pdbName(cluster)
 
 	// Skip PDB for clusters with < 3 replicas.
@@ -54,7 +58,7 @@ func (m *Manager) ensurePodDisruptionBudget(ctx context.Context, logger logr.Log
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			MaxUnavailable: &maxUnavailable,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: resourceidentity.PodSelectorLabels(cluster),
+				MatchLabels: resourceidentity.VoterPodSelectorLabels(cluster),
 				// Exclude Job pods (backup, restore, upgrade-snapshot) which don't
 				// support the scale subresource required by PDBs.
 				MatchExpressions: []metav1.LabelSelectorRequirement{

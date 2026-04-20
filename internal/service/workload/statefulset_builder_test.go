@@ -131,7 +131,7 @@ func TestBuildStatefulSet_MaintenanceAnnotations(t *testing.T) {
 		RestartAt: testRuntimeRestartAt,
 	}
 
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", constants.PlatformKubernetes)
 	if err != nil {
 		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
 	}
@@ -154,7 +154,7 @@ func TestBuildStatefulSet_RuntimeRestartAtOverridesDeprecatedMaintenanceRestartA
 		RestartAt: testRuntimeRestartAt,
 	}
 
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", constants.PlatformKubernetes)
 	if err != nil {
 		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
 	}
@@ -170,7 +170,7 @@ func TestBuildStatefulSet_DeprecatedMaintenanceRestartAtFallback(t *testing.T) {
 		RestartAt: testDeprecatedMaintenanceRestart,
 	}
 
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", constants.PlatformKubernetes)
 	if err != nil {
 		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
 	}
@@ -183,7 +183,7 @@ func TestBuildStatefulSet_DeprecatedMaintenanceRestartAtFallback(t *testing.T) {
 func TestBuildStatefulSet_DeletesPVCsOnlyWhenScaledDown(t *testing.T) {
 	cluster := newMinimalCluster("scaledown-pvc-cluster", "default")
 
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", constants.PlatformKubernetes)
 	if err != nil {
 		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
 	}
@@ -203,7 +203,7 @@ func TestBuildStatefulSet_DeletesPVCsOnlyWhenScaledDown(t *testing.T) {
 func TestBuildStatefulSet_DefaultPlacementPolicy(t *testing.T) {
 	cluster := newMinimalCluster("spread-cluster", "default")
 
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", constants.PlatformKubernetes)
 	if err != nil {
 		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
 	}
@@ -212,7 +212,7 @@ func TestBuildStatefulSet_DefaultPlacementPolicy(t *testing.T) {
 		t.Fatalf("expected Pod label %q=%q, got %q", constants.LabelOpenBaoComponent, constants.ComponentOpenBaoCluster, got)
 	}
 
-	placementLabels := statefulSetPlacementLabels(cluster)
+	placementLabels := statefulSetPlacementLabels(cluster, StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter})
 
 	affinity := statefulSet.Spec.Template.Spec.Affinity
 	if affinity == nil || affinity.PodAntiAffinity == nil {
@@ -281,7 +281,7 @@ func TestBuildStatefulSet_PodMetadata(t *testing.T) {
 		RestartAt: "2026-01-19T00:00:00Z",
 	}
 
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", false, constants.PlatformKubernetes)
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", constants.PlatformKubernetes)
 	if err != nil {
 		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
 	}
@@ -307,7 +307,7 @@ func TestBuildStatefulSet_PodMetadata(t *testing.T) {
 func TestBuildStatefulSet_PlacementPolicySpansRevisions(t *testing.T) {
 	cluster := newMinimalCluster("bluegreen-cluster", "default")
 
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "green-revision", false, constants.PlatformKubernetes)
+	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "green-revision", constants.PlatformKubernetes)
 	if err != nil {
 		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
 	}

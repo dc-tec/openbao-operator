@@ -37,6 +37,42 @@ var (
 		[]string{"namespace", "name"},
 	)
 
+	clusterReadReplicasDesiredGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openbao",
+			Name:      "cluster_read_replicas_desired",
+			Help:      "Desired number of steady read replicas for an OpenBaoCluster",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	clusterReadReplicasReadyGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openbao",
+			Name:      "cluster_read_replicas_ready",
+			Help:      "Number of Ready steady read replicas for an OpenBaoCluster",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	clusterReadReplicasRegisteredGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openbao",
+			Name:      "cluster_read_replicas_registered",
+			Help:      "Number of steady read replicas registered in Raft membership for an OpenBaoCluster",
+		},
+		[]string{"namespace", "name"},
+	)
+
+	clusterReadReplicasHealthyGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "openbao",
+			Name:      "cluster_read_replicas_healthy",
+			Help:      "Number of steady read replicas Autopilot considers healthy for an OpenBaoCluster",
+		},
+		[]string{"namespace", "name"},
+	)
+
 	clusterPhaseGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "openbao",
@@ -99,6 +135,10 @@ func init() {
 		reconcileDurationHistogram,
 		reconcileErrorsTotal,
 		clusterReadyReplicasGauge,
+		clusterReadReplicasDesiredGauge,
+		clusterReadReplicasReadyGauge,
+		clusterReadReplicasRegisteredGauge,
+		clusterReadReplicasHealthyGauge,
 		clusterPhaseGauge,
 		// Restore metrics
 		restoreStateGauge,
@@ -162,6 +202,22 @@ func (m *ClusterMetrics) SetReadyReplicas(readyReplicas int32) {
 		Set(float64(readyReplicas))
 }
 
+// SetReadReplicaCounts records the observed steady read-replica counts for the cluster.
+func (m *ClusterMetrics) SetReadReplicaCounts(desiredReplicas, readyReplicas, registeredReplicas, healthyReplicas int32) {
+	clusterReadReplicasDesiredGauge.
+		WithLabelValues(m.namespace, m.name).
+		Set(float64(desiredReplicas))
+	clusterReadReplicasReadyGauge.
+		WithLabelValues(m.namespace, m.name).
+		Set(float64(readyReplicas))
+	clusterReadReplicasRegisteredGauge.
+		WithLabelValues(m.namespace, m.name).
+		Set(float64(registeredReplicas))
+	clusterReadReplicasHealthyGauge.
+		WithLabelValues(m.namespace, m.name).
+		Set(float64(healthyReplicas))
+}
+
 // SetPhase records the current phase for the cluster. The gauge is set to 1
 // for the provided phase. Other historical phase series will naturally age
 // out in Prometheus retention.
@@ -175,6 +231,14 @@ func (m *ClusterMetrics) SetPhase(phase openbaov1alpha1.ClusterPhase) {
 // called during finalization to avoid leaving stale series after deletion.
 func (m *ClusterMetrics) Clear() {
 	clusterReadyReplicasGauge.
+		DeleteLabelValues(m.namespace, m.name)
+	clusterReadReplicasDesiredGauge.
+		DeleteLabelValues(m.namespace, m.name)
+	clusterReadReplicasReadyGauge.
+		DeleteLabelValues(m.namespace, m.name)
+	clusterReadReplicasRegisteredGauge.
+		DeleteLabelValues(m.namespace, m.name)
+	clusterReadReplicasHealthyGauge.
 		DeleteLabelValues(m.namespace, m.name)
 
 	// Clear all known phases for this cluster.

@@ -17,10 +17,25 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
+
+// PodObserver exposes pod-local health observation used for read-serving state.
+type PodObserver interface {
+	Health(ctx context.Context) (*portopenbao.HealthStatus, error)
+}
+
+// PodObserverFactory constructs pod-local observers for OpenBao pods.
+type PodObserverFactory func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (PodObserver, error)
+
+// MembershipRuntime exposes authenticated raft membership reads.
+type MembershipRuntime interface {
+	ReadRaftConfiguration(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftConfigurationResponse, error)
+	ReadRaftAutopilotState(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftAutopilotStateResponse, error)
+}
 
 // LabelConfig supplies labels used during status observation.
 type LabelConfig struct {
@@ -40,6 +55,8 @@ func GatherState(
 	ctx context.Context,
 	logger logr.Logger,
 	reader client.Reader,
+	podObserverFactory PodObserverFactory,
+	membershipRuntime MembershipRuntime,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	labelCfg LabelConfig,
 ) (*StatusState, error) {
@@ -72,6 +89,10 @@ func GatherState(
 	if err := gatherPodState(ctx, reader, cluster, state, labelCfg); err != nil {
 		return nil, err
 	}
+
+	gatherReadServingState(ctx, logger, reader, podObserverFactory, cluster, state, labelCfg)
+	gatherRaftMembershipState(ctx, logger, membershipRuntime, cluster, state)
+	gatherReadReplicaAutopilotHealthState(ctx, logger, membershipRuntime, cluster, state)
 
 	return state, nil
 }
@@ -132,9 +153,21 @@ func gatherPVCState(
 	}
 
 	dataPVCPrefix := constants.VolumeData + "-" + cluster.Name + "-"
+	readDataPVCPrefix := constants.VolumeData + "-" + cluster.Name + "-read-"
 	storageClasses := map[string]struct{}{}
+	readStorageClasses := map[string]struct{}{}
 	for i := range pvcList.Items {
 		pvc := &pvcList.Items[i]
+		if strings.HasPrefix(pvc.Name, readDataPVCPrefix) {
+			state.ReadReplicaDataPVCCount++
+			if pvc.Spec.StorageClassName == nil || strings.TrimSpace(*pvc.Spec.StorageClassName) == "" {
+				state.ReadReplicaDataPVCStorageClassUnset = true
+				continue
+			}
+
+			readStorageClasses[strings.TrimSpace(*pvc.Spec.StorageClassName)] = struct{}{}
+			continue
+		}
 		if !strings.HasPrefix(pvc.Name, dataPVCPrefix) {
 			continue
 		}
@@ -149,14 +182,26 @@ func gatherPVCState(
 	}
 
 	if len(storageClasses) == 0 {
+		if len(readStorageClasses) == 0 {
+			return nil
+		}
+	} else {
+		state.DataPVCStorageClassNames = make([]string, 0, len(storageClasses))
+		for className := range storageClasses {
+			state.DataPVCStorageClassNames = append(state.DataPVCStorageClassNames, className)
+		}
+		sort.Strings(state.DataPVCStorageClassNames)
+	}
+
+	if len(readStorageClasses) == 0 {
 		return nil
 	}
 
-	state.DataPVCStorageClassNames = make([]string, 0, len(storageClasses))
-	for className := range storageClasses {
-		state.DataPVCStorageClassNames = append(state.DataPVCStorageClassNames, className)
+	state.ReadReplicaDataPVCStorageClassNames = make([]string, 0, len(readStorageClasses))
+	for className := range readStorageClasses {
+		state.ReadReplicaDataPVCStorageClassNames = append(state.ReadReplicaDataPVCStorageClassNames, className)
 	}
-	sort.Strings(state.DataPVCStorageClassNames)
+	sort.Strings(state.ReadReplicaDataPVCStorageClassNames)
 
 	return nil
 }
@@ -217,6 +262,30 @@ func gatherStatefulSetState(
 		"available", state.Available,
 		"statusStale", state.StatusStale)
 
+	readReplicaDesired := int32(0)
+	if cluster.Spec.ReadReplicas != nil {
+		readReplicaDesired = cluster.Spec.ReadReplicas.Replicas
+	}
+	if readReplicaDesired == 0 {
+		return nil
+	}
+
+	readStatefulSetName := types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      resourceidentity.ReadReplicaStatefulSetName(cluster),
+	}
+	readStatefulSet := &appsv1.StatefulSet{}
+	if err := reader.Get(ctx, readStatefulSetName, readStatefulSet); err != nil {
+		if apierrors.IsNotFound(err) {
+			state.ReadReplicaReadyReplicas = 0
+			return nil
+		}
+		return fmt.Errorf("failed to get read StatefulSet %s/%s for status update: %w", cluster.Namespace, readStatefulSetName.Name, err)
+	}
+
+	state.ReadReplicaStatefulSet = readStatefulSet
+	state.ReadReplicaReadyReplicas = readStatefulSet.Status.ReadyReplicas
+
 	return nil
 }
 
@@ -227,11 +296,9 @@ func gatherPodState(
 	state *StatusState,
 	labelsCfg LabelConfig,
 ) error {
-	podSelector := map[string]string{
-		labelsCfg.AppInstanceKey:  cluster.Name,
-		labelsCfg.AppNameKey:      labelsCfg.AppNameValue,
-		labelsCfg.AppManagedByKey: labelsCfg.AppManagedByValue,
-	}
+	podSelector := resourceidentity.VoterPodSelectorLabels(cluster)
+	podSelector[labelsCfg.AppNameKey] = labelsCfg.AppNameValue
+	podSelector[labelsCfg.AppManagedByKey] = labelsCfg.AppManagedByValue
 	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen && state.ActiveRevision != "" {
 		podSelector[labelsCfg.OpenBaoRevisionKey] = state.ActiveRevision
 	}
@@ -281,4 +348,151 @@ func gatherPodState(
 	}
 
 	return nil
+}
+
+func gatherReadServingState(
+	ctx context.Context,
+	logger logr.Logger,
+	reader client.Reader,
+	podObserverFactory PodObserverFactory,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	state *StatusState,
+	labelsCfg LabelConfig,
+) {
+	if cluster == nil || cluster.Spec.ReadReplicas == nil || cluster.Spec.ReadReplicas.Replicas == 0 {
+		return
+	}
+	if state == nil || state.ReadReplicaReadyReplicas == 0 || podObserverFactory == nil {
+		return
+	}
+
+	readSelector := resourceidentity.ReadReplicaPodSelectorLabels(cluster)
+	readSelector[labelsCfg.AppNameKey] = labelsCfg.AppNameValue
+	readSelector[labelsCfg.AppManagedByKey] = labelsCfg.AppManagedByValue
+
+	var pods corev1.PodList
+	if err := reader.List(ctx, &pods,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabels(readSelector),
+	); err != nil {
+		logger.Info("Failed to list read-replica pods for read-serving observation", "error", err)
+		return
+	}
+
+	observed := 0
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if !isPodReady(pod) {
+			continue
+		}
+
+		observer, err := podObserverFactory(ctx, cluster, pod.Name)
+		if err != nil {
+			logger.Info("Failed to create pod observer for read-replica pod", "pod", pod.Name, "error", err)
+			continue
+		}
+
+		health, err := observer.Health(ctx)
+		if err != nil {
+			logger.Info("Failed to read pod-local health for read-replica pod", "pod", pod.Name, "error", err)
+			continue
+		}
+
+		observed++
+		if health != nil && health.Initialized && !health.Sealed {
+			state.ReadServingAvailable = true
+		}
+	}
+
+	if observed > 0 {
+		state.ReadServingKnown = true
+	}
+}
+
+func gatherRaftMembershipState(
+	ctx context.Context,
+	logger logr.Logger,
+	membershipRuntime MembershipRuntime,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	state *StatusState,
+) {
+	if cluster == nil || cluster.Spec.ReadReplicas == nil || cluster.Spec.ReadReplicas.Replicas == 0 {
+		return
+	}
+	if membershipRuntime == nil || state == nil {
+		return
+	}
+
+	raftConfig, err := membershipRuntime.ReadRaftConfiguration(ctx, logger, cluster)
+	if err != nil {
+		logger.Info("Failed to observe Raft membership for read replicas", "error", err)
+		return
+	}
+	if raftConfig == nil {
+		return
+	}
+
+	prefix := resourceidentity.ReadReplicaStatefulSetName(cluster) + "-"
+	count := int32(0)
+	for _, server := range raftConfig.Config.Servers {
+		if server.Voter {
+			continue
+		}
+		if strings.HasPrefix(server.NodeID, prefix) || strings.Contains(server.Address, prefix) {
+			count++
+		}
+	}
+
+	state.ReadReplicaRegisteredReplicas = count
+	state.ReadReplicaMembershipKnown = true
+}
+
+func gatherReadReplicaAutopilotHealthState(
+	ctx context.Context,
+	logger logr.Logger,
+	membershipRuntime MembershipRuntime,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	state *StatusState,
+) {
+	if cluster == nil || cluster.Spec.ReadReplicas == nil || cluster.Spec.ReadReplicas.Replicas == 0 {
+		return
+	}
+	if membershipRuntime == nil || state == nil {
+		return
+	}
+
+	autopilotState, err := membershipRuntime.ReadRaftAutopilotState(ctx, logger, cluster)
+	if err != nil {
+		logger.Info("Failed to observe Raft Autopilot health for read replicas", "error", err)
+		return
+	}
+	if autopilotState == nil {
+		return
+	}
+
+	prefix := resourceidentity.ReadReplicaStatefulSetName(cluster) + "-"
+	count := int32(0)
+	for _, server := range autopilotState.Servers {
+		if strings.HasPrefix(server.ID, prefix) || strings.HasPrefix(server.Name, prefix) || strings.Contains(server.Address, prefix) {
+			if server.Healthy {
+				count++
+			}
+		}
+	}
+
+	state.ReadReplicaHealthyReplicas = count
+	state.ReadReplicaAutopilotKnown = true
+}
+
+func isPodReady(pod *corev1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+	for i := range pod.Status.Conditions {
+		c := pod.Status.Conditions[i]
+		if c.Type == corev1.PodReady {
+			return c.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }

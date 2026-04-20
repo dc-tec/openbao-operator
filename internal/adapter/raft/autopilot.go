@@ -31,6 +31,7 @@ const (
 type Client interface {
 	portopenbao.AutopilotConfigurer
 	ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftConfigurationResponse, error)
+	ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftAutopilotStateResponse, error)
 	RemoveRaftPeer(ctx context.Context, serverID string) error
 	StepDownLeader(ctx context.Context) error
 }
@@ -283,6 +284,127 @@ func (m *Manager) PrepareScaleDown(
 	return nil
 }
 
+// PrepareReadReplicaScaleDown stages a single safe steady-state read-replica
+// scale-down step by removing the departing non-voter before the StatefulSet
+// shrinks. Unlike voter scale-down, there is no leader step-down or autopilot
+// min_quorum adjustment.
+func (m *Manager) PrepareReadReplicaScaleDown(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	statefulSetName string,
+	currentReplicas int32,
+	desiredReplicas int32,
+) error {
+	if currentReplicas <= desiredReplicas {
+		return nil
+	}
+	if cluster == nil {
+		return fmt.Errorf("cluster is required")
+	}
+	if strings.TrimSpace(statefulSetName) == "" {
+		return fmt.Errorf("statefulset name is required")
+	}
+
+	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to create authenticated OpenBao client for read-replica scale down: %w", err)
+	}
+
+	configCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	raftConfig, err := client.ReadRaftConfiguration(configCtx)
+	if err != nil {
+		return m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to read Raft configuration before read-replica scale down: %w", err),
+		)
+	}
+
+	victimPodName := fmt.Sprintf("%s-%d", statefulSetName, currentReplicas-1)
+	victimServer, found := findRaftServerForPod(raftConfig, victimPodName)
+	if !found {
+		logger.Info("Read-replica victim pod already absent from Raft configuration; continuing with scale down", "victim", victimPodName)
+		return nil
+	}
+	if victimServer.Voter {
+		return operatorerrors.WrapPermanentPrerequisitesMissing(
+			fmt.Errorf("read-replica pod %s is registered as a voter; refusing read-replica scale down", victimPodName),
+		)
+	}
+
+	logger.Info("Removing read-replica Raft peer before scale down", "victim", victimPodName, "node_id", victimServer.NodeID)
+	if err := client.RemoveRaftPeer(configCtx, victimServer.NodeID); err != nil {
+		return m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to remove read-replica Raft peer %q before scale down: %w", victimServer.NodeID, err),
+		)
+	}
+
+	return nil
+}
+
+// ReadRaftConfiguration reads the current authenticated Raft configuration for
+// status observation and topology checks.
+func (m *Manager) ReadRaftConfiguration(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (*portopenbao.RaftConfigurationResponse, error) {
+	if cluster == nil {
+		return nil, fmt.Errorf("cluster is required")
+	}
+
+	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authenticated OpenBao client for raft membership read: %w", err)
+	}
+
+	configCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	raftConfig, err := client.ReadRaftConfiguration(configCtx)
+	if err != nil {
+		return nil, m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to read Raft configuration for status observation: %w", err),
+		)
+	}
+
+	return raftConfig, nil
+}
+
+// ReadRaftAutopilotState reads the current authenticated Raft Autopilot state
+// for status observation and topology health checks.
+func (m *Manager) ReadRaftAutopilotState(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (*portopenbao.RaftAutopilotStateResponse, error) {
+	if cluster == nil {
+		return nil, fmt.Errorf("cluster is required")
+	}
+
+	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authenticated OpenBao client for raft autopilot state read: %w", err)
+	}
+
+	configCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	autopilotState, err := client.ReadRaftAutopilotState(configCtx)
+	if err != nil {
+		return nil, m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to read Raft Autopilot state for status observation: %w", err),
+		)
+	}
+
+	return autopilotState, nil
+}
+
 // ConfigureAutopilot configures Raft Autopilot for automatic dead server cleanup.
 // This is called after cluster initialization with the root token.
 func (m *Manager) ConfigureAutopilot(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, rootToken string) error {
@@ -481,7 +603,7 @@ func (m *Manager) wrapScaleDownPermissionError(cluster *openbaov1alpha1.OpenBaoC
 
 	return operatorerrors.WrapPermanentPrerequisitesMissing(
 		fmt.Errorf(
-			"safe scale down requires the operator JWT policy in cluster %s/%s to allow Raft configuration reads and remove-peer updates: %w",
+			"controller raft maintenance in cluster %s/%s requires the operator JWT policy to allow Raft configuration reads, Autopilot state reads, and remove-peer updates: %w",
 			cluster.Namespace,
 			cluster.Name,
 			err,
