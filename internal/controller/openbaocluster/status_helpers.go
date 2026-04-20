@@ -78,6 +78,11 @@ func applyAllConditions(
 	raftMembershipCond.LastTransitionTime = now
 	meta.SetStatusCondition(&cluster.Status.Conditions, raftMembershipCond)
 
+	autopilotHealthCond := buildReadReplicasAutopilotHealthyCondition(cluster, state)
+	autopilotHealthCond.ObservedGeneration = gen
+	autopilotHealthCond.LastTransitionTime = now
+	meta.SetStatusCondition(&cluster.Status.Conditions, autopilotHealthCond)
+
 	readStorageCond := buildReadReplicaStorageConfiguredCondition(cluster, state)
 	readStorageCond.ObservedGeneration = gen
 	readStorageCond.LastTransitionTime = now

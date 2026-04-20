@@ -22,7 +22,8 @@ const (
 path "sys/step-down" { capabilities = ["sudo", "update"] }
 path "sys/storage/raft/configuration" { capabilities = ["read"] }
 path "sys/storage/raft/remove-peer" { capabilities = ["update"] }
-path "sys/storage/raft/autopilot/configuration" { capabilities = ["read", "update"] }`
+path "sys/storage/raft/autopilot/configuration" { capabilities = ["read", "update"] }
+path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }`
 
 	jwtPolicyUpgradeRolling = `path "sys/health" { capabilities = ["read"] }
 path "sys/step-down" { capabilities = ["sudo", "update"] }

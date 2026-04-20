@@ -23,6 +23,7 @@ func TestClusterMetrics_NoPanic(t *testing.T) {
 	m := NewClusterMetrics("ns", "name")
 
 	m.SetReadyReplicas(3)
+	m.SetReadReplicaCounts(2, 2, 2, 2)
 	m.SetPhase(openbaov1alpha1.ClusterPhaseInitializing)
 	m.SetPhase(openbaov1alpha1.ClusterPhaseRunning)
 	m.Clear()
@@ -83,4 +84,37 @@ func TestRestoreMetrics_EmitsSeries(t *testing.T) {
 	if durationAfter != durationBefore+1 {
 		t.Fatalf("expected restore duration histogram series to increase by 1 (before=%d, after=%d)", durationBefore, durationAfter)
 	}
+}
+
+func TestClusterMetrics_ReadReplicaSeries(t *testing.T) {
+	namespace := fmt.Sprintf("ns-%s", t.Name())
+	name := fmt.Sprintf("name-%s", t.Name())
+
+	desiredBefore := testutil.CollectAndCount(clusterReadReplicasDesiredGauge)
+	readyBefore := testutil.CollectAndCount(clusterReadReplicasReadyGauge)
+	registeredBefore := testutil.CollectAndCount(clusterReadReplicasRegisteredGauge)
+	healthyBefore := testutil.CollectAndCount(clusterReadReplicasHealthyGauge)
+
+	m := NewClusterMetrics(namespace, name)
+	m.SetReadReplicaCounts(2, 2, 2, 1)
+
+	desiredAfter := testutil.CollectAndCount(clusterReadReplicasDesiredGauge)
+	readyAfter := testutil.CollectAndCount(clusterReadReplicasReadyGauge)
+	registeredAfter := testutil.CollectAndCount(clusterReadReplicasRegisteredGauge)
+	healthyAfter := testutil.CollectAndCount(clusterReadReplicasHealthyGauge)
+
+	if desiredAfter != desiredBefore+1 {
+		t.Fatalf("expected read replica desired series to increase by 1 (before=%d, after=%d)", desiredBefore, desiredAfter)
+	}
+	if readyAfter != readyBefore+1 {
+		t.Fatalf("expected read replica ready series to increase by 1 (before=%d, after=%d)", readyBefore, readyAfter)
+	}
+	if registeredAfter != registeredBefore+1 {
+		t.Fatalf("expected read replica registered series to increase by 1 (before=%d, after=%d)", registeredBefore, registeredAfter)
+	}
+	if healthyAfter != healthyBefore+1 {
+		t.Fatalf("expected read replica healthy series to increase by 1 (before=%d, after=%d)", healthyBefore, healthyAfter)
+	}
+
+	m.Clear()
 }

@@ -250,6 +250,7 @@ type fakeScaleDownClient struct {
 	configureCalls []portopenbao.AutopilotConfig
 	configureErr   error
 	raftConfig     *portopenbao.RaftConfigurationResponse
+	autopilotState *portopenbao.RaftAutopilotStateResponse
 	readErr        error
 	removeCalls    []string
 	removeErr      error
@@ -267,6 +268,13 @@ func (c *fakeScaleDownClient) ReadRaftConfiguration(context.Context) (*portopenb
 		return nil, c.readErr
 	}
 	return c.raftConfig, nil
+}
+
+func (c *fakeScaleDownClient) ReadRaftAutopilotState(context.Context) (*portopenbao.RaftAutopilotStateResponse, error) {
+	if c.readErr != nil {
+		return nil, c.readErr
+	}
+	return c.autopilotState, nil
 }
 
 func (c *fakeScaleDownClient) RemoveRaftPeer(_ context.Context, serverID string) error {

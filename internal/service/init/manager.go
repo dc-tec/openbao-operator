@@ -116,6 +116,13 @@ func (a raftClientAdapter) ReadRaftConfiguration(ctx context.Context) (*portopen
 	return a.client.ReadRaftConfiguration(ctx)
 }
 
+func (a raftClientAdapter) ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftAutopilotStateResponse, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("OpenBao client is required")
+	}
+	return a.client.ReadRaftAutopilotState(ctx)
+}
+
 func (a raftClientAdapter) RemoveRaftPeer(ctx context.Context, serverID string) error {
 	if a.client == nil {
 		return fmt.Errorf("OpenBao client is required")

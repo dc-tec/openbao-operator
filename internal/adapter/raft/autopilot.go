@@ -31,6 +31,7 @@ const (
 type Client interface {
 	portopenbao.AutopilotConfigurer
 	ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftConfigurationResponse, error)
+	ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftAutopilotStateResponse, error)
 	RemoveRaftPeer(ctx context.Context, serverID string) error
 	StepDownLeader(ctx context.Context) error
 }
@@ -374,6 +375,36 @@ func (m *Manager) ReadRaftConfiguration(
 	return raftConfig, nil
 }
 
+// ReadRaftAutopilotState reads the current authenticated Raft Autopilot state
+// for status observation and topology health checks.
+func (m *Manager) ReadRaftAutopilotState(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (*portopenbao.RaftAutopilotStateResponse, error) {
+	if cluster == nil {
+		return nil, fmt.Errorf("cluster is required")
+	}
+
+	client, err := m.newScaleDownClient(ctx, logger, cluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create authenticated OpenBao client for raft autopilot state read: %w", err)
+	}
+
+	configCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	autopilotState, err := client.ReadRaftAutopilotState(configCtx)
+	if err != nil {
+		return nil, m.wrapScaleDownPermissionError(
+			cluster,
+			fmt.Errorf("failed to read Raft Autopilot state for status observation: %w", err),
+		)
+	}
+
+	return autopilotState, nil
+}
+
 // ConfigureAutopilot configures Raft Autopilot for automatic dead server cleanup.
 // This is called after cluster initialization with the root token.
 func (m *Manager) ConfigureAutopilot(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, rootToken string) error {
@@ -572,7 +603,7 @@ func (m *Manager) wrapScaleDownPermissionError(cluster *openbaov1alpha1.OpenBaoC
 
 	return operatorerrors.WrapPermanentPrerequisitesMissing(
 		fmt.Errorf(
-			"safe scale down requires the operator JWT policy in cluster %s/%s to allow Raft configuration reads and remove-peer updates: %w",
+			"controller raft maintenance in cluster %s/%s requires the operator JWT policy to allow Raft configuration reads, Autopilot state reads, and remove-peer updates: %w",
 			cluster.Namespace,
 			cluster.Name,
 			err,

@@ -24,6 +24,7 @@ type StatusPodObserverFactory func(ctx context.Context, cluster *openbaov1alpha1
 // StatusMembershipRuntime exposes authenticated raft membership observation.
 type StatusMembershipRuntime interface {
 	ReadRaftConfiguration(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftConfigurationResponse, error)
+	ReadRaftAutopilotState(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftAutopilotStateResponse, error)
 }
 
 // StatusDependencies provides dependencies needed for status state observation.

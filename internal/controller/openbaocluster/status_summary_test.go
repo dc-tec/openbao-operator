@@ -424,6 +424,73 @@ func TestBuildRaftMembershipReadyCondition(t *testing.T) {
 	}
 }
 
+func TestBuildReadReplicasAutopilotHealthyCondition(t *testing.T) {
+	tests := []struct {
+		name       string
+		cluster    *openbaov1alpha1.OpenBaoCluster
+		state      *clusterState
+		wantStatus metav1.ConditionStatus
+		wantReason string
+	}{
+		{
+			name:       "no read replicas configured",
+			cluster:    &openbaov1alpha1.OpenBaoCluster{},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonNoReadReplicasConfigured,
+		},
+		{
+			name: "all read replicas healthy in autopilot",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state: &clusterState{
+				ReadReplicaHealthyReplicas: 2,
+				ReadReplicaAutopilotKnown:  true,
+			},
+			wantStatus: metav1.ConditionTrue,
+			wantReason: ReasonReadReplicasAutopilotHealthy,
+		},
+		{
+			name: "partial read replica autopilot health",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state: &clusterState{
+				ReadReplicaHealthyReplicas: 1,
+				ReadReplicaAutopilotKnown:  true,
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonReadReplicasAutopilotUnhealthy,
+		},
+		{
+			name: "autopilot health not yet observed",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{Replicas: 2},
+				},
+			},
+			state:      &clusterState{},
+			wantStatus: metav1.ConditionUnknown,
+			wantReason: reasonUnknown,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cond := buildReadReplicasAutopilotHealthyCondition(tt.cluster, tt.state)
+
+			assert.Equal(t, string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy), cond.Type)
+			assert.Equal(t, tt.wantStatus, cond.Status)
+			assert.Equal(t, tt.wantReason, cond.Reason)
+		})
+	}
+}
+
 func TestBuildLeaderCondition(t *testing.T) {
 	tests := []struct {
 		name        string

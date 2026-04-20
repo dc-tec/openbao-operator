@@ -147,6 +147,12 @@ func TestGatherState_ObservesReadServingAndMembership(t *testing.T) {
 				},
 			},
 		},
+		autopilot: &portopenbao.RaftAutopilotStateResponse{
+			Servers: map[string]portopenbao.RaftAutopilotServerState{
+				"example-read-0": {ID: "example-read-0", Healthy: true},
+				"example-read-1": {ID: "example-read-1", Healthy: false},
+			},
+		},
 	}
 
 	state, err := GatherState(context.Background(), logr.Discard(), reader, factory, membership, cluster, LabelConfig{
@@ -165,6 +171,8 @@ func TestGatherState_ObservesReadServingAndMembership(t *testing.T) {
 	require.True(t, state.ReadServingAvailable)
 	require.True(t, state.ReadReplicaMembershipKnown)
 	require.EqualValues(t, 2, state.ReadReplicaRegisteredReplicas)
+	require.True(t, state.ReadReplicaAutopilotKnown)
+	require.EqualValues(t, 1, state.ReadReplicaHealthyReplicas)
 }
 
 type fakePodObserver struct {
@@ -181,8 +189,9 @@ func (f fakePodObserver) Health(context.Context) (*portopenbao.HealthStatus, err
 }
 
 type fakeMembershipRuntime struct {
-	config *portopenbao.RaftConfigurationResponse
-	err    error
+	config    *portopenbao.RaftConfigurationResponse
+	autopilot *portopenbao.RaftAutopilotStateResponse
+	err       error
 }
 
 func (f fakeMembershipRuntime) ReadRaftConfiguration(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftConfigurationResponse, error) {
@@ -190,4 +199,11 @@ func (f fakeMembershipRuntime) ReadRaftConfiguration(context.Context, logr.Logge
 		return nil, f.err
 	}
 	return f.config, nil
+}
+
+func (f fakeMembershipRuntime) ReadRaftAutopilotState(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftAutopilotStateResponse, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.autopilot, nil
 }

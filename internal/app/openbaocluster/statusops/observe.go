@@ -34,6 +34,7 @@ type PodObserverFactory func(ctx context.Context, cluster *openbaov1alpha1.OpenB
 // MembershipRuntime exposes authenticated raft membership reads.
 type MembershipRuntime interface {
 	ReadRaftConfiguration(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftConfigurationResponse, error)
+	ReadRaftAutopilotState(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftAutopilotStateResponse, error)
 }
 
 // LabelConfig supplies labels used during status observation.
@@ -91,6 +92,7 @@ func GatherState(
 
 	gatherReadServingState(ctx, logger, reader, podObserverFactory, cluster, state, labelCfg)
 	gatherRaftMembershipState(ctx, logger, membershipRuntime, cluster, state)
+	gatherReadReplicaAutopilotHealthState(ctx, logger, membershipRuntime, cluster, state)
 
 	return state, nil
 }
@@ -443,6 +445,43 @@ func gatherRaftMembershipState(
 
 	state.ReadReplicaRegisteredReplicas = count
 	state.ReadReplicaMembershipKnown = true
+}
+
+func gatherReadReplicaAutopilotHealthState(
+	ctx context.Context,
+	logger logr.Logger,
+	membershipRuntime MembershipRuntime,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	state *StatusState,
+) {
+	if cluster == nil || cluster.Spec.ReadReplicas == nil || cluster.Spec.ReadReplicas.Replicas == 0 {
+		return
+	}
+	if membershipRuntime == nil || state == nil {
+		return
+	}
+
+	autopilotState, err := membershipRuntime.ReadRaftAutopilotState(ctx, logger, cluster)
+	if err != nil {
+		logger.Info("Failed to observe Raft Autopilot health for read replicas", "error", err)
+		return
+	}
+	if autopilotState == nil {
+		return
+	}
+
+	prefix := resourceidentity.ReadReplicaStatefulSetName(cluster) + "-"
+	count := int32(0)
+	for _, server := range autopilotState.Servers {
+		if strings.HasPrefix(server.ID, prefix) || strings.HasPrefix(server.Name, prefix) || strings.Contains(server.Address, prefix) {
+			if server.Healthy {
+				count++
+			}
+		}
+	}
+
+	state.ReadReplicaHealthyReplicas = count
+	state.ReadReplicaAutopilotKnown = true
 }
 
 func isPodReady(pod *corev1.Pod) bool {

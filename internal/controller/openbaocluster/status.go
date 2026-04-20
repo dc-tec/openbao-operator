@@ -102,6 +102,16 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	// Update per-cluster metrics.
 	clusterMetrics := observability.NewClusterMetrics(cluster.Namespace, cluster.Name)
 	clusterMetrics.SetReadyReplicas(state.ReadyReplicas)
+	if cluster.Status.ReadReplicas != nil {
+		clusterMetrics.SetReadReplicaCounts(
+			cluster.Status.ReadReplicas.DesiredReplicas,
+			cluster.Status.ReadReplicas.ReadyReplicas,
+			cluster.Status.ReadReplicas.RegisteredReplicas,
+			cluster.Status.ReadReplicas.HealthyReplicas,
+		)
+	} else {
+		clusterMetrics.SetReadReplicaCounts(0, 0, 0, 0)
+	}
 	clusterMetrics.SetPhase(cluster.Status.Phase)
 
 	if appopenbaocluster.ShouldWarnSelfInitDisabled(cluster) {
@@ -138,6 +148,7 @@ func buildReadReplicaStatus(cluster *openbaov1alpha1.OpenBaoCluster, state *clus
 	if state != nil {
 		status.ReadyReplicas = state.ReadReplicaReadyReplicas
 		status.RegisteredReplicas = state.ReadReplicaRegisteredReplicas
+		status.HealthyReplicas = state.ReadReplicaHealthyReplicas
 		status.Storage.DesiredPVCs = cluster.Spec.ReadReplicas.Replicas
 		status.Storage.BoundPVCs = int32(state.ReadReplicaDataPVCCount)
 		switch {

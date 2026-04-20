@@ -76,6 +76,8 @@ const (
 	ReasonReadServingWithoutQuorum               = "ReadServingWithoutQuorum"
 	ReasonPodsNotServingReads                    = "PodsNotServingReads"
 	ReasonRaftMembershipReady                    = "RaftMembershipReady"
+	ReasonReadReplicasAutopilotHealthy           = "ReadReplicasAutopilotHealthy"
+	ReasonReadReplicasAutopilotUnhealthy         = "ReadReplicasAutopilotUnhealthy"
 
 	ReasonStorageInvalidSize             = constants.ReasonStorageInvalidSize
 	ReasonStorageShrinkNotSupported      = constants.ReasonStorageShrinkNotSupported

@@ -18,6 +18,7 @@ func TestPatchStatusSSAPersistsObservedGeneration(t *testing.T) {
 	cluster.Status.ReadReplicas = &openbaov1alpha1.ReadReplicaStatus{
 		DesiredReplicas: 2,
 		ReadyReplicas:   1,
+		HealthyReplicas: 1,
 		Storage: openbaov1alpha1.ReadReplicaStorageStatus{
 			DesiredPVCs:      2,
 			BoundPVCs:        1,
@@ -56,5 +57,8 @@ func TestPatchStatusSSAPersistsObservedGeneration(t *testing.T) {
 	}
 	if updated.Status.ReadReplicas.Storage.StorageClassName != "fast-ssd" {
 		t.Fatalf("persisted readReplicas.storage.storageClassName = %q, want %q", updated.Status.ReadReplicas.Storage.StorageClassName, "fast-ssd")
+	}
+	if updated.Status.ReadReplicas.HealthyReplicas != 1 {
+		t.Fatalf("persisted readReplicas.healthyReplicas = %d, want 1", updated.Status.ReadReplicas.HealthyReplicas)
 	}
 }

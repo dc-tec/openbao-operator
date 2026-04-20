@@ -24,30 +24,8 @@ type JoinRaftClusterResponse struct {
 	Joined bool `json:"joined"`
 }
 
-// RaftAutopilotServerState represents the server state returned by Raft Autopilot.
-type RaftAutopilotServerState struct {
-	ID          string          `json:"id"`
-	Name        string          `json:"name"`
-	Address     string          `json:"address"`
-	NodeStatus  string          `json:"node_status"`
-	LastContact string          `json:"last_contact"`
-	LastTerm    uint64          `json:"last_term"`
-	LastIndex   uint64          `json:"last_index"`
-	Healthy     bool            `json:"healthy"`
-	StableSince string          `json:"stable_since"`
-	Status      string          `json:"status"`
-	Meta        json.RawMessage `json:"meta,omitempty"`
-}
-
-// RaftAutopilotStateResponse represents the response from GET /v1/sys/storage/raft/autopilot/state.
-type RaftAutopilotStateResponse struct {
-	Healthy          bool                                `json:"healthy"`
-	FailureTolerance int                                 `json:"failure_tolerance"`
-	Servers          map[string]RaftAutopilotServerState `json:"servers"`
-	Leader           string                              `json:"leader"`
-	Voters           []string                            `json:"voters"`
-	NonVoters        []string                            `json:"non_voters"`
-}
+type RaftAutopilotServerState = portopenbao.RaftAutopilotServerState
+type RaftAutopilotStateResponse = portopenbao.RaftAutopilotStateResponse
 
 type raftPeerActionRequest struct {
 	ServerID string `json:"server_id"`

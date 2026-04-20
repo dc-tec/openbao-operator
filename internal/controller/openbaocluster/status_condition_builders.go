@@ -299,6 +299,63 @@ func buildRaftMembershipReadyCondition(cluster *openbaov1alpha1.OpenBaoCluster, 
 	}
 }
 
+// buildReadReplicasAutopilotHealthyCondition reports whether the observed
+// read-replica peers are healthy according to the Raft Autopilot state endpoint.
+func buildReadReplicasAutopilotHealthyCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {
+	desired := desiredReadReplicaCount(cluster)
+	if desired == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonNoReadReplicasConfigured,
+			Message: "No steady-state read replicas are configured, so no read-replica Autopilot health is expected",
+		}
+	}
+
+	if state == nil {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Read-replica Autopilot health has not been observed yet",
+		}
+	}
+
+	if !state.ReadReplicaAutopilotKnown {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonUnknown,
+			Message: "Read-replica Autopilot health has not been observed yet",
+		}
+	}
+
+	if state.ReadReplicaHealthyReplicas == desired {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionTrue,
+			Reason:  ReasonReadReplicasAutopilotHealthy,
+			Message: fmt.Sprintf("All %d read replicas are healthy according to Raft Autopilot", desired),
+		}
+	}
+
+	if state.ReadReplicaHealthyReplicas == 0 {
+		return metav1.Condition{
+			Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+			Status:  metav1.ConditionFalse,
+			Reason:  ReasonReadReplicasAutopilotUnhealthy,
+			Message: "No read replicas are healthy according to Raft Autopilot",
+		}
+	}
+
+	return metav1.Condition{
+		Type:    string(openbaov1alpha1.ConditionReadReplicasAutopilotHealthy),
+		Status:  metav1.ConditionFalse,
+		Reason:  ReasonReadReplicasAutopilotUnhealthy,
+		Message: fmt.Sprintf("Only %d/%d read replicas are healthy according to Raft Autopilot", state.ReadReplicaHealthyReplicas, desired),
+	}
+}
+
 // buildStorageConfiguredCondition reports whether the workload is using an explicit
 // or consistently resolved storage class, so users can see the effective one-shot choice.
 func buildStorageConfiguredCondition(cluster *openbaov1alpha1.OpenBaoCluster, state *clusterState) metav1.Condition {

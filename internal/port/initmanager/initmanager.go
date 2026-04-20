@@ -36,6 +36,7 @@ type ReadReplicaScaleDownRuntime interface {
 // observation for steady-state read replicas.
 type MembershipRuntime interface {
 	ReadRaftConfiguration(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftConfigurationResponse, error)
+	ReadRaftAutopilotState(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (*portopenbao.RaftAutopilotStateResponse, error)
 }
 
 // AutopilotProvider allows init managers to optionally expose an autopilot runtime.

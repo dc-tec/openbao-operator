@@ -17,7 +17,9 @@ type StatusState struct {
 	ReadReplicaStatefulSet        *appsv1.StatefulSet
 	ReadReplicaReadyReplicas      int32
 	ReadReplicaRegisteredReplicas int32
+	ReadReplicaHealthyReplicas    int32
 	ReadReplicaMembershipKnown    bool
+	ReadReplicaAutopilotKnown     bool
 	ReadServingAvailable          bool
 	ReadServingKnown              bool
 

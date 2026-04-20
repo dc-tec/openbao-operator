@@ -132,6 +132,9 @@ const (
 	// ConditionRaftMembershipReady indicates whether observed voter and
 	// non-voter membership matches the operator's declared topology.
 	ConditionRaftMembershipReady ConditionType = "RaftMembershipReady"
+	// ConditionReadReplicasAutopilotHealthy indicates whether the read-replica
+	// pool is healthy according to the Raft Autopilot state endpoint.
+	ConditionReadReplicasAutopilotHealthy ConditionType = "ReadReplicasAutopilotHealthy"
 	// ConditionReadReplicaStorageConfigured indicates whether the read-replica
 	// pool storage contract has been explicitly configured or consistently
 	// resolved from observed PVCs.
@@ -2172,6 +2175,10 @@ type ReadReplicaStatus struct {
 	// Raft membership.
 	// +optional
 	RegisteredReplicas int32 `json:"registeredReplicas,omitempty"`
+	// HealthyReplicas is the number of read-replica peers that are currently
+	// healthy according to the Raft Autopilot state endpoint.
+	// +optional
+	HealthyReplicas int32 `json:"healthyReplicas,omitempty"`
 	// Storage captures read-replica-specific storage observation state.
 	// +optional
 	Storage ReadReplicaStorageStatus `json:"storage,omitempty"`
