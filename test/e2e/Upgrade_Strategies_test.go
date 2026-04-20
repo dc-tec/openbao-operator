@@ -32,7 +32,9 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
@@ -475,6 +477,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					Version:  initialVersion,
 					Image:    initialImage,
 					Replicas: 3,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 1,
+						Service: &openbaov1alpha1.ReadReplicaServiceConfig{
+							Enabled: true,
+						},
+					},
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
 						Enabled: true,
 						Image:   configInitImage,
@@ -516,6 +524,38 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 			tenantFW.WaitForStatefulSetReady(ctx, upgradeCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.ReadReplicas).NotTo(BeNil())
+				g.Expect(updated.Status.ReadReplicas.DesiredReplicas).To(Equal(int32(1)))
+				g.Expect(updated.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(1)))
+				g.Expect(updated.Status.ReadReplicas.RegisteredReplicas).To(Equal(int32(1)))
+
+				for _, condType := range []openbaov1alpha1.ConditionType{
+					openbaov1alpha1.ConditionReadReplicasReady,
+					openbaov1alpha1.ConditionReadServingAvailable,
+					openbaov1alpha1.ConditionRaftMembershipReady,
+					openbaov1alpha1.ConditionReadReplicaStorageConfigured,
+				} {
+					cond := meta.FindStatusCondition(updated.Status.Conditions, string(condType))
+					g.Expect(cond).NotTo(BeNil(), "expected read-replica condition %s", condType)
+					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue), "expected read-replica condition %s to be true", condType)
+				}
+
+				readSts := &appsv1.StatefulSet{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      resourceidentity.ReadReplicaStatefulSetName(upgradeCluster),
+					Namespace: tenantNamespace,
+				}, readSts)).To(Succeed())
+				g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(1)))
+
+				readSvc := &corev1.Service{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      resourceidentity.ReadReplicaServiceName(upgradeCluster),
+					Namespace: tenantNamespace,
+				}, readSvc)).To(Succeed())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
 		AfterAll(func() {
@@ -536,7 +576,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			dumpRollingUpgradeDiagnostics(ctx, admin, tenantNamespace, upgradeCluster.Name)
 		})
 
-		It("performs rolling upgrade", func() {
+		It("performs rolling upgrade", Label("read-replicas", "read-replicas-rolling"), func() {
 			cfg, err := ctrlconfig.GetConfig()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -580,6 +620,63 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.Upgrade.TargetVersion).To(Equal(targetVersion))
 				g.Expect(updated.Status.Upgrade.FromVersion).To(Equal(initialVersion))
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("Verifying the steady read pool converges before voter rollout starts")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.ReadReplicas).NotTo(BeNil())
+				g.Expect(updated.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(1)))
+				g.Expect(updated.Status.ReadReplicas.RegisteredReplicas).To(Equal(int32(1)))
+				for _, condType := range []openbaov1alpha1.ConditionType{
+					openbaov1alpha1.ConditionReadReplicasReady,
+					openbaov1alpha1.ConditionReadServingAvailable,
+					openbaov1alpha1.ConditionRaftMembershipReady,
+				} {
+					cond := meta.FindStatusCondition(updated.Status.Conditions, string(condType))
+					g.Expect(cond).NotTo(BeNil(), "expected read-replica condition %s", condType)
+					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue), "expected read-replica condition %s to be true", condType)
+				}
+
+				readSts := &appsv1.StatefulSet{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      resourceidentity.ReadReplicaStatefulSetName(upgradeCluster),
+					Namespace: tenantNamespace,
+				}, readSts)).To(Succeed())
+				g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(1)))
+
+				readPods := &corev1.PodList{}
+				g.Expect(admin.List(ctx, readPods,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster:      upgradeCluster.Name,
+						constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolReadReplica,
+					},
+				)).To(Succeed())
+				g.Expect(readPods.Items).To(HaveLen(1))
+				for _, pod := range readPods.Items {
+					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, targetVersion)
+				}
+
+				voterPods := &corev1.PodList{}
+				g.Expect(admin.List(ctx, voterPods,
+					client.InNamespace(tenantNamespace),
+					client.MatchingLabels{
+						constants.LabelOpenBaoCluster:      upgradeCluster.Name,
+						constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolVoter,
+					},
+				)).To(Succeed())
+				g.Expect(voterPods.Items).To(HaveLen(int(upgradeCluster.Spec.Replicas)))
+
+				voterRolloutStarted := false
+				for _, pod := range voterPods.Items {
+					if pod.Labels[portopenbao.LabelVersion] == targetVersion {
+						voterRolloutStarted = true
+						break
+					}
+				}
+				g.Expect(voterRolloutStarted).To(BeTrue(), "expected voter rollout to start after the steady read pool converged")
+			}, 20*time.Minute, 5*time.Second).Should(Succeed())
 
 			By("Monitoring rolling invariants during upgrade")
 			var (
@@ -672,6 +769,20 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.Upgrade).To(BeNil(), "Status.Upgrade should be cleared when upgrade completes")
 				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
 				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.ClusterPhaseRunning))
+				g.Expect(updated.Status.ReadReplicas).NotTo(BeNil())
+				g.Expect(updated.Status.ReadReplicas.DesiredReplicas).To(Equal(int32(1)))
+				g.Expect(updated.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(1)))
+				g.Expect(updated.Status.ReadReplicas.RegisteredReplicas).To(Equal(int32(1)))
+				for _, condType := range []openbaov1alpha1.ConditionType{
+					openbaov1alpha1.ConditionReadReplicasReady,
+					openbaov1alpha1.ConditionReadServingAvailable,
+					openbaov1alpha1.ConditionRaftMembershipReady,
+					openbaov1alpha1.ConditionReadReplicaStorageConfigured,
+				} {
+					cond := meta.FindStatusCondition(updated.Status.Conditions, string(condType))
+					g.Expect(cond).NotTo(BeNil(), "expected read-replica condition %s", condType)
+					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue), "expected read-replica condition %s to be true", condType)
+				}
 
 				// Strict verification: Check that all pods are running the target image
 				podList := &corev1.PodList{}
@@ -684,6 +795,13 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				for _, pod := range podList.Items {
 					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, targetVersion)
 				}
+
+				readSts := &appsv1.StatefulSet{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      resourceidentity.ReadReplicaStatefulSetName(upgradeCluster),
+					Namespace: tenantNamespace,
+				}, readSts)).To(Succeed())
+				g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(1)))
 			}, 20*time.Minute, 10*time.Second).Should(Succeed())
 
 			By("Verifying rolling step-down jobs are deterministic and successful")
