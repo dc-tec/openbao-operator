@@ -118,12 +118,33 @@ path "sys/step-down" {
   capabilities = ["sudo", "update"]
 }
 
+path "sys/storage/raft/configuration" {
+  capabilities = ["read"]
+}
+
+path "sys/storage/raft/remove-peer" {
+  capabilities = ["update"]
+}
+
 path "sys/storage/raft/autopilot/configuration" {
   capabilities = ["read", "update"]
+}
+
+path "sys/storage/raft/autopilot/state" {
+  capabilities = ["read"]
 }`}
 >
   This is the steady-state controller scope. Keep backup, restore, and blue-green peer management in separate roles unless you are intentionally changing the model.
 </CommandBlock>
+
+<Callout type="warning" title="Existing clusters must update the controller policy manually">
+
+The operator does not rewrite OpenBao policies after bootstrap. If an operator upgrade adds a new
+controller-side capability, such as `read` on `sys/storage/raft/autopilot/state`, update the
+`openbao-operator` policy manually on existing clusters. Until that policy includes the new path,
+features that depend on it will report `Unknown` rather than a concrete health state.
+
+</Callout>
 
 </TabItem>
 
@@ -203,6 +224,38 @@ path "sys/storage/raft/demote" {
 </TabItem>
 
 </Tabs>
+
+## Policy upgrade notes
+
+<DecisionTable
+  kind="reference"
+  title="When the controller policy surface changes"
+  columns={['Situation', 'What the operator does', 'What you must do']}
+  rows={[
+    {
+      cells: [
+        'A new operator release adds a controller-side capability',
+        'Uses the new capability if the `openbao-operator` policy already includes it, otherwise reports `Unknown` or a permission error for the dependent feature.',
+        'Update the `openbao-operator` policy manually on existing clusters. The operator does not rewrite OpenBao policies after bootstrap.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'A cluster was bootstrapped with self-init in an earlier release',
+        'Keeps using the already-created JWT role and policy.',
+        'Treat the policy as cluster security configuration that you own after bootstrap. Review release notes and add any newly required paths deliberately.',
+      ],
+    },
+    {
+      cells: [
+        'JWT auth and policies are fully manually managed',
+        'Never mutates that auth surface.',
+        'Carry the full policy diff yourself as part of operator upgrades.',
+      ],
+    },
+  ]}
+/>
 
 <DecisionTable
   kind="reference"

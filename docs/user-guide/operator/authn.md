@@ -75,6 +75,15 @@ If you use self-init, create human access in the same bootstrap contract through
 
 </Callout>
 
+<Callout type="warning" title="Bootstrap does not mean ongoing policy reconciliation">
+
+`spec.selfInit.oidc.enabled: true` bootstraps the controller JWT auth method, policy, and role.
+After bootstrap, the operator uses that auth surface but does not continue mutating OpenBao
+policies on its own. When a later operator release needs an additional controller capability,
+the human operator must update the `openbao-operator` policy explicitly.
+
+</Callout>
+
 <DecisionTable
   title="Bootstrap authentication surfaces"
   columns={['Surface', 'Where it is defined', 'Why it exists']}
@@ -124,6 +133,29 @@ If you use self-init, create human access in the same bootstrap contract through
   ]}
 />
 
+<DecisionTable
+  kind="reference"
+  title="Who owns policy changes after bootstrap"
+  columns={['Install shape', 'Who creates the initial policy', 'Who updates it later']}
+  rows={[
+    {
+      cells: [
+        'Self-init with OIDC',
+        'The bootstrap contract created by the operator during self-init.',
+        'The human operator. Self-init does not keep mutating OpenBao policies after the cluster is initialized.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Manual JWT configuration',
+        'The cluster administrator.',
+        'The cluster administrator.',
+      ],
+    },
+  ]}
+/>
+
 <CommandBlock
   language="hcl"
   label="configure"
@@ -136,8 +168,20 @@ path "sys/step-down" {
   capabilities = ["sudo", "update"]
 }
 
+path "sys/storage/raft/configuration" {
+  capabilities = ["read"]
+}
+
+path "sys/storage/raft/remove-peer" {
+  capabilities = ["update"]
+}
+
 path "sys/storage/raft/autopilot/configuration" {
   capabilities = ["read", "update"]
+}
+
+path "sys/storage/raft/autopilot/state" {
+  capabilities = ["read"]
 }`}
 >
   Keep the controller policy focused on maintenance work. Backup, restore, and upgrade jobs authenticate through their own roles instead of inheriting the controller scope.

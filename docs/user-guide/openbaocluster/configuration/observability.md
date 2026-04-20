@@ -182,6 +182,13 @@ spec:
     },
     {
       cells: [
+        "Steady read pool",
+        "`openbao_cluster_read_replicas_desired`, `_ready`, `_registered`, `_healthy`, plus read-replica conditions such as `ReadServingAvailable` and `ReadReplicasAutopilotHealthy`",
+        "This tells you whether the steady read tier exists, has actually joined, and is still healthy enough for the topology you placed it in.",
+      ],
+    },
+    {
+      cells: [
         "Backup freshness",
         "`openbao_backup_last_success_timestamp`, `openbao_backup_consecutive_failures`, and the backup status conditions",
         "These signals show whether the snapshots you plan to restore are current and successful.",
@@ -222,11 +229,17 @@ spec:
         - alert: OpenBaoBackupStale
           expr: time() - openbao_backup_last_success_timestamp > 86400
           for: 15m
+        - alert: OpenBaoReadReplicaPoolDegraded
+          expr: openbao_cluster_read_replicas_desired > openbao_cluster_read_replicas_healthy
+          for: 10m
+        - alert: OpenBaoReadReplicaPoolNotRegistered
+          expr: openbao_cluster_read_replicas_desired > openbao_cluster_read_replicas_registered
+          for: 10m
         - alert: OpenBaoReconcileErrors
           expr: rate(openbao_reconcile_errors_total[5m]) > 0.1
           for: 10m`}
 >
-  Keep the first alert set small. Availability, backup freshness, and sustained reconcile failure are the highest-value starting signals.
+  Keep the first alert set small. Availability, backup freshness, sustained read-pool degradation, and sustained reconcile failure are the highest-value starting signals.
 </CommandBlock>
 
 ## Dashboards, logs, and health
@@ -255,6 +268,12 @@ spec:
 <Callout type="tip" title="Keep operator metrics and workload telemetry separate in your dashboards">
 
 Build dashboards that show both surfaces together and still make it obvious whether a failure is in the operator control plane or in the OpenBao workload itself.
+
+</Callout>
+
+<Callout type="note" title="The overview dashboard now includes the steady read pool">
+
+`config/grafana/dashboards/overview.json` now shows desired, ready, registered, and Autopilot-healthy read-replica counts next to the existing cluster-level signals. Use that view for the first operational pass, then build more topology-specific dashboards if your placement strategy needs them.
 
 </Callout>
 
