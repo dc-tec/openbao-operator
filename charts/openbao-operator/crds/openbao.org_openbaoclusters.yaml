@@ -4852,6 +4852,12 @@ spec:
                     description: DesiredReplicas is the desired number of read replicas.
                     format: int32
                     type: integer
+                  healthyReplicas:
+                    description: |-
+                      HealthyReplicas is the number of read-replica peers that are currently
+                      healthy according to the Raft Autopilot state endpoint.
+                    format: int32
+                    type: integer
                   readyReplicas:
                     description: ReadyReplicas is the number of Ready read-replica
                       Pods observed.
