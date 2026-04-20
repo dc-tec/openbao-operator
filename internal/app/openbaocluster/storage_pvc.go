@@ -15,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster) (resource.Quantity, string, error) {
@@ -34,25 +35,67 @@ func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster) (resource.Quant
 	return desiredQty, desiredStorageClassName, nil
 }
 
-func listClusterPVCs(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster) ([]corev1.PersistentVolumeClaim, error) {
+func desiredReadReplicaStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster, voterQty resource.Quantity, voterStorageClassName string) (resource.Quantity, string, bool, error) {
+	if cluster == nil || cluster.Spec.ReadReplicas == nil || cluster.Spec.ReadReplicas.Replicas == 0 {
+		return resource.Quantity{}, "", false, nil
+	}
+
+	desiredQty := voterQty.DeepCopy()
+	desiredStorageClassName := voterStorageClassName
+
+	if cluster.Spec.ReadReplicas.Storage != nil {
+		if cluster.Spec.ReadReplicas.Storage.Size != nil {
+			desiredQty = cluster.Spec.ReadReplicas.Storage.Size.DeepCopy()
+		}
+		if cluster.Spec.ReadReplicas.Storage.StorageClassName != nil && *cluster.Spec.ReadReplicas.Storage.StorageClassName != "" {
+			desiredStorageClassName = *cluster.Spec.ReadReplicas.Storage.StorageClassName
+		}
+	}
+
+	if desiredQty.Cmp(voterQty) < 0 {
+		return resource.Quantity{}, "", false, operatorerrors.WithReason(
+			constants.ReasonStorageInvalidSize,
+			operatorerrors.WrapPermanentConfig(fmt.Errorf(
+				"spec.readReplicas.storage.size cannot be smaller than spec.storage.size (%s < %s)",
+				desiredQty.String(), voterQty.String(),
+			)),
+		)
+	}
+
+	return desiredQty, desiredStorageClassName, true, nil
+}
+
+type clusterDataPVCs struct {
+	Voters       []corev1.PersistentVolumeClaim
+	ReadReplicas []corev1.PersistentVolumeClaim
+}
+
+func listClusterPVCs(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster) (clusterDataPVCs, error) {
 	var pvcList corev1.PersistentVolumeClaimList
 	if err := c.List(ctx, &pvcList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabels(map[string]string{labelOpenBaoCluster: cluster.Name}),
 	); err != nil {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
-			return nil, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
+			return clusterDataPVCs{}, operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err))
 		}
-		return nil, fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+		return clusterDataPVCs{}, fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
 
-	dataPVCs := make([]corev1.PersistentVolumeClaim, 0, len(pvcList.Items))
+	dataPVCs := clusterDataPVCs{
+		Voters:       make([]corev1.PersistentVolumeClaim, 0, len(pvcList.Items)),
+		ReadReplicas: make([]corev1.PersistentVolumeClaim, 0, len(pvcList.Items)),
+	}
 	for i := range pvcList.Items {
 		pvc := pvcList.Items[i]
 		if !isManagedDataPVC(cluster.Name, pvc.Name) {
 			continue
 		}
-		dataPVCs = append(dataPVCs, pvc)
+		if isReadReplicaDataPVC(cluster, pvc.Name) {
+			dataPVCs.ReadReplicas = append(dataPVCs.ReadReplicas, pvc)
+			continue
+		}
+		dataPVCs.Voters = append(dataPVCs.Voters, pvc)
 	}
 
 	return dataPVCs, nil
@@ -62,7 +105,11 @@ func isManagedDataPVC(clusterName, pvcName string) bool {
 	return strings.HasPrefix(pvcName, storageVolumeDataPrefix+clusterName+"-")
 }
 
-func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageClassName string, pvcs []corev1.PersistentVolumeClaim) error {
+func isReadReplicaDataPVC(cluster *openbaov1alpha1.OpenBaoCluster, pvcName string) bool {
+	return strings.HasPrefix(pvcName, storageVolumeDataPrefix+resourceidentity.ReadReplicaStatefulSetName(cluster)+"-")
+}
+
+func validateStorageChangeAllowed(fieldPath string, desiredQty resource.Quantity, desiredStorageClassName string, pvcs []corev1.PersistentVolumeClaim) error {
 	for i := range pvcs {
 		pvc := &pvcs[i]
 		currentStorageClassName := ""
@@ -74,8 +121,8 @@ func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageCl
 			return operatorerrors.WithReason(
 				constants.ReasonStorageClassChangeNotSupported,
 				operatorerrors.WrapPermanentConfig(fmt.Errorf(
-					"spec.storage.storageClassName cannot be changed for an existing cluster (PVC %s has %q, desired %q)",
-					pvc.Name, currentStorageClassName, desiredStorageClassName,
+					"%s.storageClassName cannot be changed for an existing cluster (PVC %s has %q, desired %q)",
+					fieldPath, pvc.Name, currentStorageClassName, desiredStorageClassName,
 				)),
 			)
 		}
@@ -88,8 +135,8 @@ func validateStorageChangeAllowed(desiredQty resource.Quantity, desiredStorageCl
 			return operatorerrors.WithReason(
 				constants.ReasonStorageShrinkNotSupported,
 				operatorerrors.WrapPermanentConfig(fmt.Errorf(
-					"spec.storage.size cannot be decreased (requested %s but PVC %s already requests %s); revert the change",
-					desiredQty.String(), pvc.Name, curr.String(),
+					"%s.size cannot be decreased (requested %s but PVC %s already requests %s); revert the change",
+					fieldPath, desiredQty.String(), pvc.Name, curr.String(),
 				)),
 			)
 		}

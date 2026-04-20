@@ -118,7 +118,22 @@ func (m *Manager) completeBlueGreenUpgrade(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (phaseOutcome, error) {
-	if err := m.finalizeUpgradeTerminalState(ctx, logger, cluster, true); err != nil {
+	if shouldRestoreSteadyReadReplicas(cluster) {
+		beginSteadyReadReplicaRestore(logger, cluster)
+		m.transitionToPhase(logger, cluster, openbaov1alpha1.PhaseRestoringReadReplicas)
+		return requeueAfterOutcome(constants.RequeueShort), nil
+	}
+
+	return m.finalizeCompletedBlueGreenUpgrade(ctx, logger, cluster, true)
+}
+
+func (m *Manager) finalizeCompletedBlueGreenUpgrade(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	promoteGreenToBlue bool,
+) (phaseOutcome, error) {
+	if err := m.finalizeUpgradeTerminalState(ctx, logger, cluster, promoteGreenToBlue); err != nil {
 		logger.Error(err, "Failed to finalize blue/green terminal state")
 		return phaseOutcome{}, err
 	}

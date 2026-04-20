@@ -32,6 +32,18 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 
 	podStartTime := time.Now()
 
+	alreadyRolledOut, err := m.targetPodAlreadyRolledOut(ctx, logger, cluster, target)
+	if err != nil {
+		return false, err
+	}
+	if alreadyRolledOut {
+		if err := m.setStatefulSetPartition(ctx, cluster, target.NextPartition); err != nil {
+			return false, fmt.Errorf("failed to advance partition while resuming rolled-out target: %w", err)
+		}
+		recordCompletedTargetPodUpgrade(logger, cluster, metrics, target, podStartTime)
+		return target.NextPartition == 0, nil
+	}
+
 	stepDownComplete, err := m.ensureTargetPodLeadershipTransferred(ctx, logger, cluster, target, metrics)
 	if err != nil {
 		return false, err
@@ -54,6 +66,29 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 
 	recordCompletedTargetPodUpgrade(logger, cluster, metrics, target, podStartTime)
 	return target.NextPartition == 0, nil
+}
+
+func (m *Manager) targetPodAlreadyRolledOut(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	target rolloutTargetPod,
+) (bool, error) {
+	revisionUpdated, err := m.waitForPodRevisionUpdated(ctx, logger, cluster, target.Name)
+	if err != nil || !revisionUpdated {
+		return false, err
+	}
+
+	podReady, err := m.waitForPodReady(ctx, logger, cluster, target.Name)
+	if err != nil || !podReady {
+		return false, err
+	}
+
+	logger.Info("Target pod is already updated and ready; resuming rolling-upgrade progress and deferring full health verification to finalization",
+		"pod", target.Name,
+		"partition", target.CurrentPartition,
+		"nextPartition", target.NextPartition)
+	return true, nil
 }
 
 type rolloutTargetPod struct {

@@ -55,13 +55,14 @@ func (m *Manager) executeStateMachine(ctx context.Context, logger logr.Logger, c
 		openbaov1alpha1.PhaseDeployingGreen: func(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (phaseOutcome, error) {
 			return m.handlePhaseDeployingGreen(ctx, logger, cluster, verifiedImageDigest)
 		},
-		openbaov1alpha1.PhaseJoiningMesh:     m.handlePhaseJoiningMesh,
-		openbaov1alpha1.PhaseSyncing:         m.handlePhaseSyncing,
-		openbaov1alpha1.PhasePromoting:       m.handlePhasePromoting,
-		openbaov1alpha1.PhaseDemotingBlue:    m.handlePhaseDemotingBlue,
-		openbaov1alpha1.PhaseCleanup:         m.handlePhaseCleanup,
-		openbaov1alpha1.PhaseRollingBack:     m.handlePhaseRollingBack,
-		openbaov1alpha1.PhaseRollbackCleanup: m.handlePhaseRollbackCleanup,
+		openbaov1alpha1.PhaseJoiningMesh:           m.handlePhaseJoiningMesh,
+		openbaov1alpha1.PhaseSyncing:               m.handlePhaseSyncing,
+		openbaov1alpha1.PhasePromoting:             m.handlePhasePromoting,
+		openbaov1alpha1.PhaseDemotingBlue:          m.handlePhaseDemotingBlue,
+		openbaov1alpha1.PhaseCleanup:               m.handlePhaseCleanup,
+		openbaov1alpha1.PhaseRestoringReadReplicas: m.handlePhaseRestoringReadReplicas,
+		openbaov1alpha1.PhaseRollingBack:           m.handlePhaseRollingBack,
+		openbaov1alpha1.PhaseRollbackCleanup:       m.handlePhaseRollbackCleanup,
 	}
 
 	handler, ok := handlers[phase]

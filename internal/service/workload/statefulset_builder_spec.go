@@ -212,6 +212,19 @@ func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoClu
 	// Compute config hash and add to annotations to trigger rollout on config changes
 	annotations[configHashAnnotation] = computeConfigHash(configContent)
 
+	restartAt := effectiveRestartAt(cluster, spec)
+	if restartAt != "" {
+		annotations[constants.AnnotationRestartAt] = restartAt
+	}
+
+	return podLabels, annotations
+}
+
+func effectiveRestartAt(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) string {
+	if spec.RestartAt != nil {
+		return strings.TrimSpace(*spec.RestartAt)
+	}
+
 	restartAt := ""
 	if cluster.Spec.Runtime != nil {
 		restartAt = strings.TrimSpace(cluster.Spec.Runtime.RestartAt)
@@ -219,9 +232,5 @@ func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoClu
 	if restartAt == "" && cluster.Spec.Maintenance != nil {
 		restartAt = strings.TrimSpace(cluster.Spec.Maintenance.RestartAt)
 	}
-	if restartAt != "" {
-		annotations[constants.AnnotationRestartAt] = restartAt
-	}
-
-	return podLabels, annotations
+	return restartAt
 }

@@ -180,6 +180,28 @@ func TestBuildStatefulSet_DeprecatedMaintenanceRestartAtFallback(t *testing.T) {
 	}
 }
 
+func TestBuildStatefulSetForSpec_UsesPoolSpecificRestartOverride(t *testing.T) {
+	cluster := newMinimalCluster("read-restart-override-cluster", "default")
+	cluster.Spec.Runtime = &openbaov1alpha1.RuntimeConfig{
+		RestartAt: testRuntimeRestartAt,
+	}
+
+	override := "2026-01-20T00:00:00Z"
+	statefulSet, err := buildStatefulSetForSpec(cluster, "test-config", true, StatefulSetSpec{
+		Name:      "read-restart-override-cluster-read",
+		Pool:      constants.LabelValueOpenBaoWorkloadPoolReadReplica,
+		Replicas:  1,
+		RestartAt: &override,
+	}, constants.PlatformKubernetes)
+	if err != nil {
+		t.Fatalf("buildStatefulSetForSpec() error = %v", err)
+	}
+
+	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != override {
+		t.Fatalf("expected pool-specific restart override %q, got %q", override, got)
+	}
+}
+
 func TestBuildStatefulSet_DeletesPVCsOnlyWhenScaledDown(t *testing.T) {
 	cluster := newMinimalCluster("scaledown-pvc-cluster", "default")
 

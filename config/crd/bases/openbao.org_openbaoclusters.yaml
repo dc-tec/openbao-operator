@@ -4654,6 +4654,7 @@ spec:
                     - Promoting
                     - DemotingBlue
                     - Cleanup
+                    - RestoringReadReplicas
                     - RollingBack
                     - RollbackCleanup
                     type: string

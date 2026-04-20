@@ -358,7 +358,7 @@ _Underlying type:_ _string_
 BlueGreenPhase is a high-level summary of blue/green upgrade state.
 
 _Validation:_
-- Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RollingBack RollbackCleanup]
+- Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RestoringReadReplicas RollingBack RollbackCleanup]
 
 _Appears in:_
 - [BlueGreenStatus](#bluegreenstatus)
@@ -372,6 +372,7 @@ _Appears in:_
 | `Promoting` | PhasePromoting indicates Green nodes are being promoted to voters.<br /> |
 | `DemotingBlue` | PhaseDemotingBlue indicates Blue nodes are being demoted to non-voters.<br /> |
 | `Cleanup` | PhaseCleanup indicates Blue StatefulSet is being deleted.<br /> |
+| `RestoringReadReplicas` | PhaseRestoringReadReplicas indicates the steady-state read-replica pool is<br />being restored after cutover cleanup and must converge before the upgrade<br />returns to Idle.<br /> |
 | `RollingBack` | PhaseRollingBack indicates the upgrade is being rolled back.<br />Blue nodes are re-promoted and Green nodes are demoted.<br /> |
 | `RollbackCleanup` | PhaseRollbackCleanup indicates Green StatefulSet is being deleted after rollback.<br /> |
 
@@ -389,7 +390,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `phase` _[BlueGreenPhase](#bluegreenphase)_ | Phase is the current phase of the blue/green upgrade. |  | Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RollingBack RollbackCleanup] <br /> |
+| `phase` _[BlueGreenPhase](#bluegreenphase)_ | Phase is the current phase of the blue/green upgrade. |  | Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RestoringReadReplicas RollingBack RollbackCleanup] <br /> |
 | `blueRevision` _string_ | BlueRevision is the hash/name of the currently active cluster. |  |  |
 | `blueImage` _string_ | BlueImage is the container image used by the Blue cluster.<br />This ensures the Blue cluster is not actively upgraded when spec.image changes. |  |  |
 | `greenRevision` _string_ | GreenRevision is the hash/name of the next cluster (if upgrade in progress). |  |  |

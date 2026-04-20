@@ -108,7 +108,7 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 	mkdir -p dist; \
 	cp -R config "$$tmp/config"; \
 	for f in "$$tmp/config/manager/controller.yaml" "$$tmp/config/manager/provisioner.yaml"; do \
-		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\\n\\s*-\\s*name:\\s*OPERATOR_VERSION\\s*\\n\\s*value:\\s*)(\\\"[^\\\"]*\\\"|[^\\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)"; \
+		python3 -c 'import pathlib,re,sys; p=pathlib.Path(sys.argv[1]); v=sys.argv[2]; q=chr(34); s=p.read_text(encoding="utf-8"); s=re.sub(r"(\n\s*-\s*name:\s*OPERATOR_VERSION\s*\n\s*value:\s*)(\"[^\"]*\"|[^\n#]+)", lambda m: m.group(1)+q+v+q, s, count=1); p.write_text(s, encoding="utf-8")' "$$f" "$(OPERATOR_VERSION)"; \
 	done; \
 		( cd "$$tmp/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG} ); \
 		"$(KUSTOMIZE)" build "$$tmp/config/default" > "$$out"

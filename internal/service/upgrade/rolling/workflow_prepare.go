@@ -37,6 +37,13 @@ func (m *Manager) prepareUpgradeExecution(
 		return recon.Result{}, false, err
 	}
 
+	if result, waiting, err := m.ensureReadReplicaPoolReadyForRollingUpgrade(ctx, logger, cluster); waiting || err != nil {
+		if waiting && err == nil {
+			m.recordInProgressMetrics(metrics, cluster)
+		}
+		return result, waiting, err
+	}
+
 	m.recordInProgressMetrics(metrics, cluster)
 	return recon.Result{}, false, nil
 }

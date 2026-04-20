@@ -26,6 +26,11 @@ func baseClusterForPredicate() *openbaov1alpha1.OpenBaoCluster {
 			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
 				Phase: openbaov1alpha1.PhaseSyncing,
 			},
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationUpgrade,
+				Holder:    "holder-a",
+				Message:   "in progress",
+			},
 			BreakGlass: &openbaov1alpha1.BreakGlassStatus{Active: false},
 			Workload:   &openbaov1alpha1.WorkloadControllerStatus{LastError: &openbaov1alpha1.ControllerErrorStatus{Reason: "X", Message: "Y"}},
 			AdminOps:   &openbaov1alpha1.AdminOpsControllerStatus{LastError: &openbaov1alpha1.ControllerErrorStatus{Reason: "A", Message: "B"}},
@@ -156,6 +161,18 @@ func TestShouldReconcileOpenBaoClusterUpdate_StatusOptions(t *testing.T) {
 			opts: OpenBaoClusterPredicateOptions{ReconcileOnAdminOpsError: true},
 			mutate: func(newC *openbaov1alpha1.OpenBaoCluster) {
 				newC.Status.AdminOps.LastError = &openbaov1alpha1.ControllerErrorStatus{Reason: "Changed", Message: "changed"}
+			},
+			want: true,
+		},
+		{
+			name: "operation lock change with option enabled",
+			opts: OpenBaoClusterPredicateOptions{ReconcileOnOperationLock: true},
+			mutate: func(newC *openbaov1alpha1.OpenBaoCluster) {
+				newC.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+					Operation: openbaov1alpha1.ClusterOperationRestore,
+					Holder:    "holder-b",
+					Message:   "restore running",
+				}
 			},
 			want: true,
 		},

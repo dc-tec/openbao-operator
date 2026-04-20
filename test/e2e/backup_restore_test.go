@@ -27,6 +27,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	restoresvc "github.com/dc-tec/openbao-operator/internal/service/restore"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
@@ -281,6 +282,9 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 					Version:  openBaoVersion,
 					Image:    openBaoImage,
 					Replicas: 1,
+					ReadReplicas: &openbaov1alpha1.ReadReplicaConfig{
+						Replicas: 1,
+					},
 					InitContainer: &openbaov1alpha1.InitContainerConfig{
 						Enabled: true,
 						Image:   configInitImage,
@@ -441,6 +445,33 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.ReadReplicas).NotTo(BeNil())
+				g.Expect(updated.Status.ReadReplicas.DesiredReplicas).To(Equal(int32(1)))
+				g.Expect(updated.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(1)))
+				g.Expect(updated.Status.ReadReplicas.RegisteredReplicas).To(Equal(int32(1)))
+
+				for _, condType := range []openbaov1alpha1.ConditionType{
+					openbaov1alpha1.ConditionReadReplicasReady,
+					openbaov1alpha1.ConditionReadServingAvailable,
+					openbaov1alpha1.ConditionRaftMembershipReady,
+					openbaov1alpha1.ConditionReadReplicaStorageConfigured,
+				} {
+					cond := meta.FindStatusCondition(updated.Status.Conditions, string(condType))
+					g.Expect(cond).NotTo(BeNil(), "expected read-replica condition %s", condType)
+					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue), "expected read-replica condition %s to be true", condType)
+				}
+
+				readSts := &appsv1.StatefulSet{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      resourceidentity.ReadReplicaStatefulSetName(drCluster),
+					Namespace: tenantNamespace,
+				}, readSts)).To(Succeed())
+				g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(1)))
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 			tenantFW.WaitForConditionReason(drCluster.Name, openbaov1alpha1.ConditionBackupConfigurationReady, metav1.ConditionTrue, "Ready")
 		})
@@ -454,7 +485,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
-		It("triggers manual backup to S3", func() {
+		It("triggers manual backup to S3", Label("read-replicas", "read-replicas-restore"), func() {
 			By("Writing a secret before backup")
 			secretPath := "secret/backup-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
@@ -500,7 +531,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
-		It("executes backup job successfully to S3", func() {
+		It("executes backup job successfully to S3", Label("read-replicas", "read-replicas-restore"), func() {
 			By("waiting for the S3 backup job to complete successfully")
 			Eventually(func(g Gomega) {
 				var jobs batchv1.JobList
@@ -533,7 +564,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed())
 		})
 
-		It("restores from S3 backup using OpenBaoRestore CR", func() {
+		It("restores from S3 backup using OpenBaoRestore CR", Label("read-replicas", "read-replicas-restore"), func() {
 			Expect(backupKey).NotTo(BeEmpty(), "backup key should have been set by previous test")
 
 			restore := &openbaov1alpha1.OpenBaoRestore{
@@ -576,11 +607,71 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(configuration.Reason).To(Equal("Ready"))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+			By("waiting for restore to drain steady read replicas before execution continues")
+			Eventually(func(g Gomega) {
+				updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
+				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updatedRestore)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(updatedRestore.Status.Phase).NotTo(Equal(openbaov1alpha1.RestorePhaseFailed))
+
+				cluster := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, cluster)).To(Succeed())
+				g.Expect(cluster.Status.ReadReplicas).NotTo(BeNil())
+				g.Expect(cluster.Status.ReadReplicas.DesiredReplicas).To(Equal(int32(1)))
+				if updatedRestore.Status.Phase == openbaov1alpha1.RestorePhaseRunning {
+					g.Expect(cluster.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(0)))
+
+					readReady := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionReadReplicasReady))
+					g.Expect(readReady).NotTo(BeNil())
+					g.Expect(readReady.Status).To(Equal(metav1.ConditionFalse))
+
+					readServing := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionReadServingAvailable))
+					g.Expect(readServing).NotTo(BeNil())
+					g.Expect(readServing.Status).To(Equal(metav1.ConditionFalse))
+
+					raftMembership := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionRaftMembershipReady))
+					g.Expect(raftMembership).NotTo(BeNil())
+					g.Expect(raftMembership.Status).To(Equal(metav1.ConditionFalse))
+
+					readSts := &appsv1.StatefulSet{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{
+						Name:      resourceidentity.ReadReplicaStatefulSetName(drCluster),
+						Namespace: tenantNamespace,
+					}, readSts)).To(Succeed())
+					g.Expect(readSts.Spec.Replicas).NotTo(BeNil())
+					g.Expect(*readSts.Spec.Replicas).To(Equal(int32(0)))
+					g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(0)))
+				}
+			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed())
+
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoRestore{}
 				err := admin.Get(ctx, types.NamespacedName{Name: restore.Name, Namespace: tenantNamespace}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseCompleted))
+
+				cluster := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, cluster)).To(Succeed())
+				g.Expect(cluster.Status.ReadReplicas).NotTo(BeNil())
+				g.Expect(cluster.Status.ReadReplicas.DesiredReplicas).To(Equal(int32(1)))
+				g.Expect(cluster.Status.ReadReplicas.ReadyReplicas).To(Equal(int32(1)))
+				g.Expect(cluster.Status.ReadReplicas.RegisteredReplicas).To(Equal(int32(1)))
+				for _, condType := range []openbaov1alpha1.ConditionType{
+					openbaov1alpha1.ConditionReadReplicasReady,
+					openbaov1alpha1.ConditionReadServingAvailable,
+					openbaov1alpha1.ConditionRaftMembershipReady,
+				} {
+					cond := meta.FindStatusCondition(cluster.Status.Conditions, string(condType))
+					g.Expect(cond).NotTo(BeNil(), "expected read-replica condition %s", condType)
+					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue), "expected read-replica condition %s to be true", condType)
+				}
+
+				readSts := &appsv1.StatefulSet{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      resourceidentity.ReadReplicaStatefulSetName(drCluster),
+					Namespace: tenantNamespace,
+				}, readSts)).To(Succeed())
+				g.Expect(readSts.Status.ReadyReplicas).To(Equal(int32(1)))
 			}, 15*time.Minute, 30*time.Second).Should(Succeed())
 
 			By("Verifying secret persists after restore")

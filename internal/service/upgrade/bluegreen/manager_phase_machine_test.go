@@ -667,6 +667,53 @@ func TestHandlePhaseCleanup_Branches(t *testing.T) {
 			t.Fatal("expected operation lock to be released")
 		}
 	})
+
+	t.Run("transitions to read replica restore before idle when steady reads are configured", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Spec.Replicas = 1
+		cluster.Spec.ReadReplicas = &openbaov1alpha1.ReadReplicaConfig{Replicas: 2}
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+			Operation: openbaov1alpha1.ClusterOperationUpgrade,
+			Holder:    core.UpgradeOperationLockHolder,
+			Message:   "blue/green upgrade phase Cleanup",
+		}
+		greenPod := newRevisionPod(cluster, cluster.Status.BlueGreen.GreenRevision, "green-0")
+		markPodReadyUnsealed(greenPod)
+		greenPod.Labels[portopenbao.LabelActive] = testBoolTrue
+		job := succeededExecutorJob(cluster, ActionRemoveBluePeers)
+		manager := &Manager{
+			client: fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+				WithObjects(cluster, greenPod, job).
+				Build(),
+			scheme: scheme,
+		}
+
+		outcome, err := manager.handlePhaseCleanup(context.Background(), logr.Discard(), cluster)
+		if err != nil {
+			t.Fatalf("handlePhaseCleanup() error = %v", err)
+		}
+		if outcome.kind != phaseOutcomeRequeueAfter || outcome.after != constants.RequeueShort {
+			t.Fatalf("handlePhaseCleanup() outcome = %+v, want short requeue", outcome)
+		}
+		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseRestoringReadReplicas {
+			t.Fatalf("phase = %s, want %s", cluster.Status.BlueGreen.Phase, openbaov1alpha1.PhaseRestoringReadReplicas)
+		}
+		if cluster.Status.BlueGreen.BlueRevision == "" {
+			t.Fatal("expected active revision to be promoted before read replica restore")
+		}
+		if cluster.Status.BlueGreen.GreenRevision != "" {
+			t.Fatalf("green revision = %q, want empty", cluster.Status.BlueGreen.GreenRevision)
+		}
+		if cluster.Status.OperationLock == nil {
+			t.Fatal("expected operation lock to stay held until steady reads are restored")
+		}
+	})
 }
 
 func TestHandlePhaseRollingBack_AdvancesWhenConsensusIsRepaired(t *testing.T) {
