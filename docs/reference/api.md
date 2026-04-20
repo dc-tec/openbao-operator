@@ -1246,6 +1246,7 @@ _Appears in:_
 | `desiredReplicas` _integer_ | DesiredReplicas is the desired number of read replicas. |  | Optional: \{\} <br /> |
 | `readyReplicas` _integer_ | ReadyReplicas is the number of Ready read-replica Pods observed. |  | Optional: \{\} <br /> |
 | `registeredReplicas` _integer_ | RegisteredReplicas is the number of observed non-voter peers registered in<br />Raft membership. |  | Optional: \{\} <br /> |
+| `healthyReplicas` _integer_ | HealthyReplicas is the number of read-replica peers that are currently<br />healthy according to the Raft Autopilot state endpoint. |  | Optional: \{\} <br /> |
 | `storage` _[ReadReplicaStorageStatus](#readreplicastoragestatus)_ | Storage captures read-replica-specific storage observation state. |  | Optional: \{\} <br /> |
 
 
