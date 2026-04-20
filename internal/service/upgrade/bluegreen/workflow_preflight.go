@@ -85,7 +85,17 @@ func (m *Manager) prepareBlueGreenReconcile(
 		return res, true, err
 	}
 
+	if shouldWaitForSteadyReadReplicaDrain(cluster) {
+		if result, waiting, err := m.ensureSteadyReadReplicasScaledDown(ctx, logger, cluster); waiting || err != nil {
+			return result, true, err
+		}
+	}
+
 	return recon.Result{}, false, nil
+}
+
+func shouldWaitForSteadyReadReplicaDrain(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return core.CurrentBlueGreenPhase(cluster) != openbaov1alpha1.PhaseRestoringReadReplicas
 }
 
 func (m *Manager) handleUnexpectedPromoteRequest(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
@@ -141,6 +151,10 @@ func (m *Manager) maybeAcquireUpgradeLock(ctx context.Context, logger logr.Logge
 }
 
 func (m *Manager) handleNoUpgradeNeeded(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, recon.Result, error) {
+	if core.CurrentBlueGreenPhase(cluster) != openbaov1alpha1.PhaseIdle {
+		return false, recon.Result{}, nil
+	}
+
 	if cluster.Status.CurrentVersion == "" {
 		logger.Info("CurrentVersion not yet set; waiting for initial version to be established")
 		if err := m.ensureIdleAndCleanupGreen(ctx, logger, cluster); err != nil {

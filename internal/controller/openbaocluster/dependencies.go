@@ -8,6 +8,7 @@ import (
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 	"k8s.io/client-go/rest"
 )
@@ -16,6 +17,10 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 	var scaleDownRuntime initmanagerport.ScaleDownRuntime
 	if provider, ok := r.InitManager.(initmanagerport.ScaleDownProvider); ok {
 		scaleDownRuntime = provider.ScaleDownRuntime()
+	}
+	var readReplicaScaleDownRuntime initmanagerport.ReadReplicaScaleDownRuntime
+	if provider, ok := r.InitManager.(initmanagerport.ReadReplicaScaleDownProvider); ok {
+		readReplicaScaleDownRuntime = provider.ReadReplicaScaleDownRuntime()
 	}
 
 	return appopenbaocluster.InfraDependencies{
@@ -53,7 +58,8 @@ func (r *OpenBaoClusterReconciler) infraDependencies() appopenbaocluster.InfraDe
 			},
 		},
 		ScaleDown: appopenbaocluster.InfraScaleDownRuntime{
-			Runtime: scaleDownRuntime,
+			Runtime:            scaleDownRuntime,
+			ReadReplicaRuntime: readReplicaScaleDownRuntime,
 		},
 	}
 }
@@ -125,8 +131,28 @@ func (r *OpenBaoClusterReconciler) storageResizeRestartDependencies() appopenbao
 }
 
 func (r *OpenBaoClusterReconciler) statusDependencies() appopenbaocluster.StatusDependencies {
+	var membershipRuntime appopenbaocluster.StatusMembershipRuntime
+	if provider, ok := r.InitManager.(initmanagerport.MembershipProvider); ok {
+		membershipRuntime = provider.MembershipRuntime()
+	}
+
 	return appopenbaocluster.StatusDependencies{
-		Reader: r.Client,
+		Reader:            r.Client,
+		MembershipRuntime: membershipRuntime,
+		PodObserverFactory: func(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, podName string) (appopenbaocluster.StatusPodObserver, error) {
+			actions, err := r.clientForPod(ctx, cluster, podName)
+			if err != nil {
+				return nil, err
+			}
+
+			observer, ok := actions.(interface {
+				Health(ctx context.Context) (*portopenbao.HealthStatus, error)
+			})
+			if !ok {
+				return nil, fmt.Errorf("OpenBao client for pod %s does not expose health observation", podName)
+			}
+			return observer, nil
+		},
 	}
 }
 

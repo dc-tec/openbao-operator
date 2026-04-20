@@ -198,6 +198,11 @@ func FuzzApplyAllConditions(f *testing.F) {
 			openbaov1alpha1.ConditionUpgrading,
 			openbaov1alpha1.ConditionBackingUp,
 			openbaov1alpha1.ConditionStorageConfigured,
+			openbaov1alpha1.ConditionReadReplicasReady,
+			openbaov1alpha1.ConditionReadServingAvailable,
+			openbaov1alpha1.ConditionRaftMembershipReady,
+			openbaov1alpha1.ConditionReadReplicasAutopilotHealthy,
+			openbaov1alpha1.ConditionReadReplicaStorageConfigured,
 			openbaov1alpha1.ConditionEtcdEncryptionWarning,
 			openbaov1alpha1.ConditionProductionReady,
 		}

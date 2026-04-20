@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
@@ -387,7 +386,7 @@ func TestRaftAutopilotLeaderLastIndex(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		state     *openbao.RaftAutopilotStateResponse
+		state     *portopenbao.RaftAutopilotStateResponse
 		wantIndex uint64
 		wantFound bool
 	}{
@@ -399,9 +398,9 @@ func TestRaftAutopilotLeaderLastIndex(t *testing.T) {
 		},
 		{
 			name: "leader key exists in map",
-			state: &openbao.RaftAutopilotStateResponse{
+			state: &portopenbao.RaftAutopilotStateResponse{
 				Leader: "leader-key",
-				Servers: map[string]openbao.RaftAutopilotServerState{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"leader-key": {ID: "pod-0", LastIndex: 42},
 					"other":      {ID: "pod-1", LastIndex: 10},
 				},
@@ -411,9 +410,9 @@ func TestRaftAutopilotLeaderLastIndex(t *testing.T) {
 		},
 		{
 			name: "leader resolved by server id",
-			state: &openbao.RaftAutopilotStateResponse{
+			state: &portopenbao.RaftAutopilotStateResponse{
 				Leader: "pod-0",
-				Servers: map[string]openbao.RaftAutopilotServerState{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"not-leader": {ID: "pod-0", LastIndex: 55},
 				},
 			},
@@ -422,9 +421,9 @@ func TestRaftAutopilotLeaderLastIndex(t *testing.T) {
 		},
 		{
 			name: "leader resolved by server name",
-			state: &openbao.RaftAutopilotStateResponse{
+			state: &portopenbao.RaftAutopilotStateResponse{
 				Leader: "pod-0",
-				Servers: map[string]openbao.RaftAutopilotServerState{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"server-a": {Name: "pod-0", LastIndex: 77},
 				},
 			},
@@ -433,9 +432,9 @@ func TestRaftAutopilotLeaderLastIndex(t *testing.T) {
 		},
 		{
 			name: "fallback to server status leader",
-			state: &openbao.RaftAutopilotStateResponse{
+			state: &portopenbao.RaftAutopilotStateResponse{
 				Leader: "unknown",
-				Servers: map[string]openbao.RaftAutopilotServerState{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"server-a": {ID: "pod-0", Status: "leader", LastIndex: 99},
 				},
 			},
@@ -444,9 +443,9 @@ func TestRaftAutopilotLeaderLastIndex(t *testing.T) {
 		},
 		{
 			name: "leader not found",
-			state: &openbao.RaftAutopilotStateResponse{
+			state: &portopenbao.RaftAutopilotStateResponse{
 				Leader: "unknown",
-				Servers: map[string]openbao.RaftAutopilotServerState{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"server-a": {ID: "pod-0", LastIndex: 12},
 				},
 			},
@@ -474,7 +473,7 @@ func TestRaftAutopilotMaxLastIndex(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		state *openbao.RaftAutopilotStateResponse
+		state *portopenbao.RaftAutopilotStateResponse
 		want  uint64
 	}{
 		{
@@ -484,15 +483,15 @@ func TestRaftAutopilotMaxLastIndex(t *testing.T) {
 		},
 		{
 			name: "empty servers",
-			state: &openbao.RaftAutopilotStateResponse{
-				Servers: map[string]openbao.RaftAutopilotServerState{},
+			state: &portopenbao.RaftAutopilotStateResponse{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{},
 			},
 			want: 0,
 		},
 		{
 			name: "returns max index",
-			state: &openbao.RaftAutopilotStateResponse{
-				Servers: map[string]openbao.RaftAutopilotServerState{
+			state: &portopenbao.RaftAutopilotStateResponse{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"a": {LastIndex: 101},
 					"b": {LastIndex: 88},
 					"c": {LastIndex: 333},
@@ -517,37 +516,37 @@ func TestRaftAutopilotServerMatchesPod(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		server  openbao.RaftAutopilotServerState
+		server  portopenbao.RaftAutopilotServerState
 		podName string
 		want    bool
 	}{
 		{
 			name:    "empty pod name",
-			server:  openbao.RaftAutopilotServerState{ID: "pod-0"},
+			server:  portopenbao.RaftAutopilotServerState{ID: "pod-0"},
 			podName: "",
 			want:    false,
 		},
 		{
 			name:    "matches id",
-			server:  openbao.RaftAutopilotServerState{ID: "pod-0"},
+			server:  portopenbao.RaftAutopilotServerState{ID: "pod-0"},
 			podName: "pod-0",
 			want:    true,
 		},
 		{
 			name:    "matches name",
-			server:  openbao.RaftAutopilotServerState{Name: "pod-1"},
+			server:  portopenbao.RaftAutopilotServerState{Name: "pod-1"},
 			podName: "pod-1",
 			want:    true,
 		},
 		{
 			name:    "matches address",
-			server:  openbao.RaftAutopilotServerState{Address: "https://pod-2.cluster.svc:8201"},
+			server:  portopenbao.RaftAutopilotServerState{Address: "https://pod-2.cluster.svc:8201"},
 			podName: "pod-2",
 			want:    true,
 		},
 		{
 			name:    "no match",
-			server:  openbao.RaftAutopilotServerState{ID: "other"},
+			server:  portopenbao.RaftAutopilotServerState{ID: "other"},
 			podName: "pod-3",
 			want:    false,
 		},
@@ -575,7 +574,7 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 
 	tests := []struct {
 		name               string
-		state              *openbao.RaftAutopilotStateResponse
+		state              *portopenbao.RaftAutopilotStateResponse
 		targetIndex        uint64
 		wantAllSynced      bool
 		wantMaxDelta       uint64
@@ -585,8 +584,8 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 	}{
 		{
 			name: "all green pods synced",
-			state: &openbao.RaftAutopilotStateResponse{
-				Servers: map[string]openbao.RaftAutopilotServerState{
+			state: &portopenbao.RaftAutopilotStateResponse{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"a": {ID: "openbao-green-0", LastIndex: 100, Healthy: true},
 					"b": {ID: "openbao-green-1", LastIndex: 95, Healthy: true},
 				},
@@ -599,8 +598,8 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 		},
 		{
 			name: "missing green pod blocks sync",
-			state: &openbao.RaftAutopilotStateResponse{
-				Servers: map[string]openbao.RaftAutopilotServerState{
+			state: &portopenbao.RaftAutopilotStateResponse{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"a": {ID: "openbao-green-0", LastIndex: 100, Healthy: true},
 				},
 			},
@@ -613,8 +612,8 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 		},
 		{
 			name: "delta above threshold blocks sync",
-			state: &openbao.RaftAutopilotStateResponse{
-				Servers: map[string]openbao.RaftAutopilotServerState{
+			state: &portopenbao.RaftAutopilotStateResponse{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"a": {ID: "openbao-green-0", LastIndex: 100, Healthy: true},
 					"b": {ID: "openbao-green-1", LastIndex: 80, Healthy: true},
 				},
@@ -627,8 +626,8 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 		},
 		{
 			name: "unhealthy green is tracked but not blocking by itself",
-			state: &openbao.RaftAutopilotStateResponse{
-				Servers: map[string]openbao.RaftAutopilotServerState{
+			state: &portopenbao.RaftAutopilotStateResponse{
+				Servers: map[string]portopenbao.RaftAutopilotServerState{
 					"a": {ID: "openbao-green-0", LastIndex: 100, Healthy: false, Status: "follower"},
 					"b": {ID: "openbao-green-1", LastIndex: 100, Healthy: true},
 				},
@@ -682,8 +681,8 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 func TestFindAutopilotServerForPod(t *testing.T) {
 	t.Parallel()
 
-	state := &openbao.RaftAutopilotStateResponse{
-		Servers: map[string]openbao.RaftAutopilotServerState{
+	state := &portopenbao.RaftAutopilotStateResponse{
+		Servers: map[string]portopenbao.RaftAutopilotServerState{
 			"a": {ID: "openbao-green-0", LastIndex: 10},
 		},
 	}
@@ -705,8 +704,8 @@ func TestFindAutopilotServerForPod(t *testing.T) {
 func TestAutopilotServerDebugNames(t *testing.T) {
 	t.Parallel()
 
-	state := &openbao.RaftAutopilotStateResponse{
-		Servers: map[string]openbao.RaftAutopilotServerState{
+	state := &portopenbao.RaftAutopilotStateResponse{
+		Servers: map[string]portopenbao.RaftAutopilotServerState{
 			"z": {ID: "id-z", Name: "pod-z", Address: "https://pod-z"},
 			"a": {ID: "id-a", Name: "pod-a", Address: "https://pod-a"},
 		},

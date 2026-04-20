@@ -116,6 +116,13 @@ func (a raftClientAdapter) ReadRaftConfiguration(ctx context.Context) (*portopen
 	return a.client.ReadRaftConfiguration(ctx)
 }
 
+func (a raftClientAdapter) ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftAutopilotStateResponse, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("OpenBao client is required")
+	}
+	return a.client.ReadRaftAutopilotState(ctx)
+}
+
 func (a raftClientAdapter) RemoveRaftPeer(ctx context.Context, serverID string) error {
 	if a.client == nil {
 		return fmt.Errorf("OpenBao client is required")
@@ -142,6 +149,16 @@ func (m *Manager) AutopilotRuntime() initmanagerport.AutopilotRuntime {
 
 // ScaleDownRuntime returns the optional day-2 scale-down runtime.
 func (m *Manager) ScaleDownRuntime() initmanagerport.ScaleDownRuntime {
+	return m.raftManager
+}
+
+// MembershipRuntime returns the optional authenticated raft membership reader.
+func (m *Manager) MembershipRuntime() initmanagerport.MembershipRuntime {
+	return m.raftManager
+}
+
+// ReadReplicaScaleDownRuntime returns the optional read-replica scale-down runtime.
+func (m *Manager) ReadReplicaScaleDownRuntime() initmanagerport.ReadReplicaScaleDownRuntime {
 	return m.raftManager
 }
 

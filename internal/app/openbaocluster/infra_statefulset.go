@@ -6,6 +6,8 @@ import (
 	"github.com/go-logr/logr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
@@ -17,6 +19,7 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	verifiedInitContainerDigest string,
 ) workloadsvc.StatefulSetSpec {
 	spec := workloadsvc.StatefulSetSpec{
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolVoter,
 		Image:              verifiedImageDigest,
 		InitContainerImage: verifiedInitContainerDigest,
 		Replicas:           cluster.Spec.Replicas,
@@ -46,4 +49,25 @@ func (r *infraReconciler) computeStatefulSetSpec(
 	}
 
 	return spec
+}
+
+func (r *infraReconciler) computeReadReplicaStatefulSetSpec(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	verifiedImageDigest string,
+	verifiedInitContainerDigest string,
+) workloadsvc.StatefulSetSpec {
+	replicas := int32(0)
+	if cluster.Spec.ReadReplicas != nil {
+		replicas = cluster.Spec.ReadReplicas.Replicas
+	}
+
+	return workloadsvc.StatefulSetSpec{
+		Name:               resourceidentity.ReadReplicaStatefulSetName(cluster),
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolReadReplica,
+		Image:              verifiedImageDigest,
+		InitContainerImage: verifiedInitContainerDigest,
+		Replicas:           replicas,
+		DisableSelfInit:    true,
+		SkipReconciliation: cluster.Spec.ReadReplicas == nil,
+	}
 }

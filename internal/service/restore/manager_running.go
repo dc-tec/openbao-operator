@@ -31,37 +31,6 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 		return ctrl.Result{}, fmt.Errorf("failed to get target cluster: %w", err)
 	}
 
-	lock := restoreOperationLock(restore)
-	lockHeldByUs := lock.IsHeldBy(cluster.Status.OperationLock)
-	if err := opslifecycle.AcquireWithReader(ctx, m.reader, m.client, cluster, lock, opslifecycle.AcquireOptions{
-		Message: restoreLockMessage(restore),
-	}); err != nil {
-		if opslifecycle.IsLockHeld(err) {
-			logging.LogAuditEvent(logger, logging.EventRestoreLockLost, map[string]string{
-				"cluster_namespace": restore.Namespace,
-				"cluster_name":      restore.Spec.Cluster,
-				"restore_name":      restore.Name,
-			})
-			m.emitWarningEvent(restore, ReasonOperationLockLost, "Restore lost the cluster operation lock while running")
-			return m.failRestore(
-				ctx,
-				logger,
-				restore,
-				"Restore stopped because another operation took the cluster operation lock while the restore Job was running. Check concurrent backup or upgrade activity, then create a new OpenBaoRestore to retry.",
-			)
-		}
-		return ctrl.Result{}, fmt.Errorf("failed to renew cluster operation lock: %w", err)
-	}
-	if !lockHeldByUs {
-		logging.LogAuditEvent(logger, logging.EventOperationLockAcquired, map[string]string{
-			"cluster_namespace": restore.Namespace,
-			"cluster_name":      restore.Spec.Cluster,
-			"restore_name":      restore.Name,
-			"operation":         string(openbaov1alpha1.ClusterOperationRestore),
-			"holder":            lock.Holder,
-		})
-	}
-
 	// Check if job already exists
 	jobName := restoreJobName(restore)
 	job := &batchv1.Job{}
@@ -71,6 +40,13 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 	}, job)
 
 	if apierrors.IsNotFound(err) {
+		done, err := m.renewRunningRestoreLock(ctx, logger, restore, cluster)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if done {
+			return ctrl.Result{}, nil
+		}
 		return m.createRestoreJob(ctx, logger, restore, cluster, jobName)
 	} else if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get restore job: %w", err)
@@ -78,9 +54,20 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 
 	// Check job status
 	if job.Status.Succeeded > 0 {
-		if err := m.completeRestore(ctx, logger, restore, "Restore completed successfully"); err != nil {
+		if err := m.handleSucceededRestoreJob(ctx, logger, restore, cluster); err != nil {
 			return ctrl.Result{}, err
 		}
+		if restore.Status.Phase == openbaov1alpha1.RestorePhaseCompleted {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{RequeueAfter: restoreRequeueImmediately}, nil
+	}
+
+	done, err := m.renewRunningRestoreLock(ctx, logger, restore, cluster)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if done {
 		return ctrl.Result{}, nil
 	}
 
@@ -96,6 +83,89 @@ func (m *Manager) handleRunning(ctx context.Context, logger logr.Logger, restore
 	}
 
 	return ctrl.Result{RequeueAfter: restoreRequeueJobPoll}, nil
+}
+
+func (m *Manager) renewRunningRestoreLock(
+	ctx context.Context,
+	logger logr.Logger,
+	restore *openbaov1alpha1.OpenBaoRestore,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) (bool, error) {
+	lock := restoreOperationLock(restore)
+	lockHeldByUs := lock.IsHeldBy(cluster.Status.OperationLock)
+	if err := opslifecycle.AcquireWithReader(ctx, m.reader, m.client, cluster, lock, opslifecycle.AcquireOptions{
+		Message: restoreLockMessage(restore),
+	}); err != nil {
+		if opslifecycle.IsLockHeld(err) {
+			logging.LogAuditEvent(logger, logging.EventRestoreLockLost, map[string]string{
+				"cluster_namespace": restore.Namespace,
+				"cluster_name":      restore.Spec.Cluster,
+				"restore_name":      restore.Name,
+			})
+			m.emitWarningEvent(restore, ReasonOperationLockLost, "Restore lost the cluster operation lock while running")
+			_, failErr := m.failRestore(
+				ctx,
+				logger,
+				restore,
+				"Restore stopped because another operation took the cluster operation lock while the restore Job was running. Check concurrent backup or upgrade activity, then create a new OpenBaoRestore to retry.",
+			)
+			return true, failErr
+		}
+		return false, fmt.Errorf("failed to renew cluster operation lock: %w", err)
+	}
+	if !lockHeldByUs {
+		logging.LogAuditEvent(logger, logging.EventOperationLockAcquired, map[string]string{
+			"cluster_namespace": restore.Namespace,
+			"cluster_name":      restore.Spec.Cluster,
+			"restore_name":      restore.Name,
+			"operation":         string(openbaov1alpha1.ClusterOperationRestore),
+			"holder":            lock.Holder,
+		})
+	}
+
+	return false, nil
+}
+
+func (m *Manager) handleSucceededRestoreJob(
+	ctx context.Context,
+	logger logr.Logger,
+	restore *openbaov1alpha1.OpenBaoRestore,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+) error {
+	if !shouldWaitForSteadyReadReplicaRestore(cluster) {
+		return m.completeRestore(ctx, logger, restore, "Restore completed successfully")
+	}
+
+	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
+		return fmt.Errorf("failed to release cluster operation lock while waiting for steady read replicas to restore: %w", err)
+	}
+
+	if steadyReadReplicaRestoreComplete(cluster) {
+		return m.completeRestore(ctx, logger, restore, "Restore completed successfully")
+	}
+
+	readyReplicas := int32(0)
+	registeredReplicas := int32(0)
+	if cluster.Status.ReadReplicas != nil {
+		readyReplicas = cluster.Status.ReadReplicas.ReadyReplicas
+		registeredReplicas = cluster.Status.ReadReplicas.RegisteredReplicas
+	}
+
+	original := restore.DeepCopy()
+	restore.Status.Message = fmt.Sprintf(
+		"Waiting for steady read replicas to restore before marking restore complete: desiredReadReplicas=%d readyReadReplicas=%d registeredReadReplicas=%d readReplicasReady=%t readServingAvailable=%t raftMembershipReady=%t",
+		cluster.Spec.ReadReplicas.Replicas,
+		readyReplicas,
+		registeredReplicas,
+		restoreConditionTrue(cluster, openbaov1alpha1.ConditionReadReplicasReady),
+		restoreConditionTrue(cluster, openbaov1alpha1.ConditionReadServingAvailable),
+		restoreConditionTrue(cluster, openbaov1alpha1.ConditionRaftMembershipReady),
+	)
+	if err := m.patchStatus(ctx, restore, original); err != nil {
+		return fmt.Errorf("failed to patch restore status while waiting for steady read replicas to restore: %w", err)
+	}
+
+	return nil
 }
 
 func (m *Manager) createRestoreJob(

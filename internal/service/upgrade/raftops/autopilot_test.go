@@ -3,7 +3,6 @@ package raftops
 import (
 	"testing"
 
-	openbao "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -20,8 +19,8 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 	t.Run("all green pods present and within threshold", func(t *testing.T) {
 		t.Parallel()
 
-		state := &openbao.RaftAutopilotStateResponse{
-			Servers: map[string]openbao.RaftAutopilotServerState{
+		state := &portopenbao.RaftAutopilotStateResponse{
+			Servers: map[string]portopenbao.RaftAutopilotServerState{
 				"vault-green-0": {ID: "vault-green-0", LastIndex: 100, Healthy: true},
 				"vault-green-1": {ID: "vault-green-1", LastIndex: 97, Healthy: true},
 				"vault-green-2": {ID: "vault-green-2", LastIndex: 100, Healthy: true},
@@ -46,8 +45,8 @@ func TestEvaluateGreenSyncFromAutopilot(t *testing.T) {
 	t.Run("missing unhealthy and lagging green pods block sync", func(t *testing.T) {
 		t.Parallel()
 
-		state := &openbao.RaftAutopilotStateResponse{
-			Servers: map[string]openbao.RaftAutopilotServerState{
+		state := &portopenbao.RaftAutopilotStateResponse{
+			Servers: map[string]portopenbao.RaftAutopilotServerState{
 				"vault-green-0": {ID: "vault-green-0", LastIndex: 92, Healthy: true},
 				"vault-green-1": {ID: "vault-green-1", LastIndex: 100, Healthy: false},
 			},
@@ -81,9 +80,9 @@ func TestRaftAutopilotLeaderIndexHelpers(t *testing.T) {
 	t.Run("leader last index resolves by leader map key", func(t *testing.T) {
 		t.Parallel()
 
-		state := &openbao.RaftAutopilotStateResponse{
+		state := &portopenbao.RaftAutopilotStateResponse{
 			Leader: "leader-key",
-			Servers: map[string]openbao.RaftAutopilotServerState{
+			Servers: map[string]portopenbao.RaftAutopilotServerState{
 				"leader-key": {ID: "vault-green-0", LastIndex: 101},
 				"other":      {ID: "vault-blue-0", LastIndex: 88},
 			},
@@ -98,8 +97,8 @@ func TestRaftAutopilotLeaderIndexHelpers(t *testing.T) {
 	t.Run("leader last index falls back to status leader", func(t *testing.T) {
 		t.Parallel()
 
-		state := &openbao.RaftAutopilotStateResponse{
-			Servers: map[string]openbao.RaftAutopilotServerState{
+		state := &portopenbao.RaftAutopilotStateResponse{
+			Servers: map[string]portopenbao.RaftAutopilotServerState{
 				"server-a": {ID: "vault-green-0", Status: "leader", LastIndex: 77},
 				"server-b": {ID: "vault-green-1", LastIndex: 55},
 			},

@@ -68,6 +68,16 @@ const (
 	ReasonNotReady                               = "NotReady"
 	ReasonAllReplicasReady                       = "AllReplicasReady"
 	ReasonNoReplicasReady                        = "NoReplicasReady"
+	ReasonNoReadReplicasConfigured               = "NoReadReplicasConfigured"
+	ReasonAllReadReplicasReady                   = "AllReadReplicasReady"
+	ReasonReadReplicasNotReady                   = "ReadReplicasNotReady"
+	ReasonNoReadyReadReplicas                    = "NoReadyReadReplicas"
+	ReasonReadServingAvailable                   = "ReadServingAvailable"
+	ReasonReadServingWithoutQuorum               = "ReadServingWithoutQuorum"
+	ReasonPodsNotServingReads                    = "PodsNotServingReads"
+	ReasonRaftMembershipReady                    = "RaftMembershipReady"
+	ReasonReadReplicasAutopilotHealthy           = "ReadReplicasAutopilotHealthy"
+	ReasonReadReplicasAutopilotUnhealthy         = "ReadReplicasAutopilotUnhealthy"
 
 	ReasonStorageInvalidSize             = constants.ReasonStorageInvalidSize
 	ReasonStorageShrinkNotSupported      = constants.ReasonStorageShrinkNotSupported

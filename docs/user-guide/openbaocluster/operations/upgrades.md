@@ -161,6 +161,12 @@ If leadership moves while the rollout is in progress, you may see multiple step-
 
 </Callout>
 
+<Callout type="note" title="Read replicas change the rollout ordering">
+
+When steady read replicas are configured, the operator upgrades the read pool first and only then starts the voter partition rollout. For blue-green, the operator stages the steady read pool down before cutover, restores it afterward, and only then returns the workflow to `Idle`.
+
+</Callout>
+
 ## Use blue-green when you need a controlled cutover
 
 Choose `BlueGreen` when you need parallel validation, a manual promotion point, or stronger rollback boundaries before the new revision takes over production traffic.

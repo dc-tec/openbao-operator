@@ -12,6 +12,7 @@ const (
 	LabelOpenBaoBackupType         = "openbao.org/backup-type"
 	LabelOpenBaoTenant             = "openbao.org/tenant"
 	LabelOpenBaoRevision           = "openbao.org/revision"
+	LabelOpenBaoWorkloadPool       = "openbao.org/workload-pool"
 	LabelOpenBaoProfile            = "openbao.org/profile"
 	LabelOpenBaoServiceAccountRole = "openbao.org/service-account-role"
 	// LabelOpenBaoDigestEnforcement indicates whether digest-only image refs are required.
@@ -30,6 +31,9 @@ const (
 	// Component label values for operator pods.
 	LabelValueAppComponentController  = "controller"
 	LabelValueAppComponentProvisioner = "provisioner"
+
+	LabelValueOpenBaoWorkloadPoolVoter       = "voter"
+	LabelValueOpenBaoWorkloadPoolReadReplica = "read-replica"
 )
 
 // ServiceAccount role label values for operator-managed ServiceAccounts.

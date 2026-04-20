@@ -135,6 +135,61 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 	return nil
 }
 
+func (m *Manager) ensureReadReplicaService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	svcName := resourceidentity.ReadReplicaServiceName(cluster)
+
+	enabled := cluster.Spec.ReadReplicas != nil &&
+		cluster.Spec.ReadReplicas.Replicas > 0 &&
+		cluster.Spec.ReadReplicas.Service != nil &&
+		cluster.Spec.ReadReplicas.Service.Enabled
+	if !enabled {
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, svcName); err != nil {
+			return fmt.Errorf("failed to delete read-replica Service %s/%s: %w", cluster.Namespace, svcName, err)
+		}
+		return nil
+	}
+
+	serviceCfg := cluster.Spec.ReadReplicas.Service
+	svcType := corev1.ServiceTypeClusterIP
+	annotations := map[string]string{}
+	if serviceCfg.Type != "" {
+		svcType = serviceCfg.Type
+	}
+	for k, v := range serviceCfg.Annotations {
+		annotations[k] = v
+	}
+
+	service := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        svcName,
+			Namespace:   cluster.Namespace,
+			Labels:      resourceidentity.Labels(cluster),
+			Annotations: annotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     svcType,
+			Selector: resourceidentity.ReadReplicaPodSelectorLabels(cluster),
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "api",
+					Port:     constants.PortAPI,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+
+	if err := m.applyResource(ctx, service, cluster); err != nil {
+		return fmt.Errorf("failed to ensure read-replica Service %s/%s: %w", cluster.Namespace, svcName, err)
+	}
+
+	return nil
+}
+
 // ensureACMEChallengeService manages a dedicated Service for ACME validation in ACME TLS mode.
 //
 // In ACME mode, OpenBao must complete ACME challenges before it can become Ready (it has no

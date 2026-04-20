@@ -62,11 +62,20 @@ func (m *Manager) waitForFinalizationConverged(ctx context.Context, logger logr.
 		partition = *sts.Spec.UpdateStrategy.RollingUpdate.Partition
 	}
 
-	rolloutComplete := sts.Status.ReadyReplicas == cluster.Spec.Replicas &&
+	statefulSetRevisionsConverged := sts.Status.ReadyReplicas == cluster.Spec.Replicas &&
 		sts.Status.UpdatedReplicas == cluster.Spec.Replicas &&
 		sts.Status.CurrentRevision != "" &&
-		sts.Status.CurrentRevision == sts.Status.UpdateRevision &&
-		partition == 0
+		sts.Status.CurrentRevision == sts.Status.UpdateRevision
+	if statefulSetRevisionsConverged && partition != 0 && cluster.Status.Upgrade != nil && cluster.Status.Upgrade.CurrentPartition == 0 {
+		logger.Info("Repairing stale StatefulSet partition before finalizing rolling upgrade",
+			"partition", partition)
+		if err := m.setStatefulSetPartition(ctx, cluster, 0); err != nil {
+			return false, fmt.Errorf("failed to repair stale StatefulSet partition before finalization: %w", err)
+		}
+		return false, nil
+	}
+
+	rolloutComplete := statefulSetRevisionsConverged && partition == 0
 	if !rolloutComplete {
 		logger.Info("Waiting for StatefulSet convergence before finalizing rolling upgrade",
 			"readyReplicas", sts.Status.ReadyReplicas,

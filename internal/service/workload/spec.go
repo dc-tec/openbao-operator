@@ -6,6 +6,9 @@ type StatefulSetSpec struct {
 	// Name is the StatefulSet name (e.g., "cluster-name" or "cluster-name-revision")
 	Name string
 
+	// Pool identifies the workload pool (for example, voter or read-replica).
+	Pool string
+
 	// Revision is the revision identifier (empty for non-revisioned StatefulSets)
 	Revision string
 
@@ -21,6 +24,11 @@ type StatefulSetSpec struct {
 
 	// ConfigHash is used for pod annotations to trigger restarts on config changes
 	ConfigHash string
+
+	// RestartAt overrides the effective pod-template restart annotation for this
+	// workload pool. Nil falls back to the cluster-level runtime or deprecated
+	// maintenance restart request.
+	RestartAt *string
 
 	// DisableSelfInit prevents pod self-initialization (used for Green pods in BlueGreen)
 	DisableSelfInit bool

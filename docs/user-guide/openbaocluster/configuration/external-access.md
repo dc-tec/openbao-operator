@@ -81,8 +81,8 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
   caption="The service boundary is a choice between where traffic enters, where TLS terminates, and how much of the edge behavior the operator is expected to own."
   code={`flowchart LR
     Client["Client"] --> Edge["Gateway / Ingress / L4 LB"]
-    Edge --> OpenBao["OpenBao public Service"]
-    OpenBao --> Pods["OpenBao Pods"]
+    Edge --> OpenBao["OpenBao client Service"]
+    OpenBao --> Pods["Voter and optional read-replica Pods"]
 
     classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
     classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
@@ -92,6 +92,14 @@ description: Choose how clients reach OpenBao, decide where TLS terminates, and 
     class Edge process;
     class OpenBao,Pods write;`}
 />
+
+<Callout type="note" title="The default client endpoint is shared">
+
+When steady read replicas are enabled, the operator keeps the main external endpoint attached to the shared client Service. That Service can fan out to both voter and read-replica Pods, relying on OpenBao to serve read-only requests locally and forward write requests to the active leader.
+
+The dedicated read-replica Service remains available for explicit consumers, but the operator does not create a second Gateway or Ingress route for it automatically. Keep the primary hostname as the default client path, and treat the dedicated read Service as an opt-in endpoint for workloads that should land only on the steady read pool.
+
+</Callout>
 
 ## Representative configurations
 
@@ -215,6 +223,11 @@ If you use Traefik v3 with backend TLS validation, configure a `ServersTransport
       label: "Gateway API support",
       description: "Use the detailed Gateway API page when Gateway is the primary edge path.",
       docId: "user-guide/openbaocluster/configuration/gateway-api",
+    },
+    {
+      label: "Read replicas",
+      description: "See the steady-state read-pool contract, status conditions, and day-2 lifecycle before exposing a dedicated read Service.",
+      docId: "user-guide/openbaocluster/configuration/read-replicas",
     },
     {
       label: "Network configuration",

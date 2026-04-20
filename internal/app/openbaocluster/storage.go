@@ -73,25 +73,44 @@ func ReconcileStorage(
 	if err != nil {
 		return recon.Result{}, err
 	}
+	readDesiredQty, readDesiredStorageClassName, readPoolConfigured, err := desiredReadReplicaStorageSpec(cluster, desiredQty, desiredStorageClassName)
+	if err != nil {
+		return recon.Result{}, err
+	}
 
 	pvcs, err := listClusterPVCs(ctx, deps.Resources.Client, cluster)
 	if err != nil {
 		return recon.Result{}, err
 	}
-	if len(pvcs) == 0 {
+	if len(pvcs.Voters) == 0 && len(pvcs.ReadReplicas) == 0 {
 		return recon.Result{}, nil
 	}
 
-	if err := validateStorageChangeAllowed(desiredQty, desiredStorageClassName, pvcs); err != nil {
+	if err := validateStorageChangeAllowed("spec.storage", desiredQty, desiredStorageClassName, pvcs.Voters); err != nil {
 		return recon.Result{}, err
 	}
+	if readPoolConfigured {
+		if err := validateStorageChangeAllowed("spec.readReplicas.storage", readDesiredQty, readDesiredStorageClassName, pvcs.ReadReplicas); err != nil {
+			return recon.Result{}, err
+		}
+	}
 
-	patched, err := expandPVCs(ctx, deps.Resources.Client, deps.Events.Recorder, cluster, logger, desiredQty, pvcs)
+	patched, err := expandPVCs(ctx, deps.Resources.Client, deps.Events.Recorder, cluster, logger, desiredQty, pvcs.Voters)
 	if err != nil {
 		return recon.Result{}, err
 	}
 	if patched > 0 {
-		logger.Info("Requested PVC storage expansion", "count", patched, "desired", desiredQty.String())
+		logger.Info("Requested voter PVC storage expansion", "count", patched, "desired", desiredQty.String())
+	}
+
+	if readPoolConfigured {
+		readPatched, err := expandPVCs(ctx, deps.Resources.Client, deps.Events.Recorder, cluster, logger, readDesiredQty, pvcs.ReadReplicas)
+		if err != nil {
+			return recon.Result{}, err
+		}
+		if readPatched > 0 {
+			logger.Info("Requested read-replica PVC storage expansion", "count", readPatched, "desired", readDesiredQty.String())
+		}
 	}
 
 	return recon.Result{}, nil

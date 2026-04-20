@@ -16,7 +16,7 @@ import (
 
 const maintenanceAnnotationEnabledValue = "true"
 
-func (m *Manager) reconcileMaintenanceAnnotationsForPods(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, revision string) error {
+func (m *Manager) reconcileMaintenanceAnnotationsForPods(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) error {
 	if cluster == nil {
 		return nil
 	}
@@ -26,7 +26,7 @@ func (m *Manager) reconcileMaintenanceAnnotationsForPods(ctx context.Context, lo
 	var pods corev1.PodList
 	if err := m.client.List(ctx, &pods,
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(resourceidentity.PodSelectorLabelsWithRevision(cluster, revision)),
+		client.MatchingLabels(resourceidentity.PodSelectorLabelsForPoolWithRevision(cluster, spec.Pool, spec.Revision)),
 	); err != nil {
 		return fmt.Errorf("failed to list pods: %w", err)
 	}

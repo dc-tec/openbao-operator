@@ -56,5 +56,5 @@ func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 
 //nolint:unparam // test helpers vary these inputs across workload builder tests.
 func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, platform string) (*appsv1.StatefulSet, error) {
-	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", false, platform)
+	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", platform)
 }

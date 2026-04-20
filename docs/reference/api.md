@@ -358,7 +358,7 @@ _Underlying type:_ _string_
 BlueGreenPhase is a high-level summary of blue/green upgrade state.
 
 _Validation:_
-- Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RollingBack RollbackCleanup]
+- Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RestoringReadReplicas RollingBack RollbackCleanup]
 
 _Appears in:_
 - [BlueGreenStatus](#bluegreenstatus)
@@ -372,6 +372,7 @@ _Appears in:_
 | `Promoting` | PhasePromoting indicates Green nodes are being promoted to voters.<br /> |
 | `DemotingBlue` | PhaseDemotingBlue indicates Blue nodes are being demoted to non-voters.<br /> |
 | `Cleanup` | PhaseCleanup indicates Blue StatefulSet is being deleted.<br /> |
+| `RestoringReadReplicas` | PhaseRestoringReadReplicas indicates the steady-state read-replica pool is<br />being restored after cutover cleanup and must converge before the upgrade<br />returns to Idle.<br /> |
 | `RollingBack` | PhaseRollingBack indicates the upgrade is being rolled back.<br />Blue nodes are re-promoted and Green nodes are demoted.<br /> |
 | `RollbackCleanup` | PhaseRollbackCleanup indicates Green StatefulSet is being deleted after rollback.<br /> |
 
@@ -389,7 +390,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `phase` _[BlueGreenPhase](#bluegreenphase)_ | Phase is the current phase of the blue/green upgrade. |  | Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RollingBack RollbackCleanup] <br /> |
+| `phase` _[BlueGreenPhase](#bluegreenphase)_ | Phase is the current phase of the blue/green upgrade. |  | Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RestoringReadReplicas RollingBack RollbackCleanup] <br /> |
 | `blueRevision` _string_ | BlueRevision is the hash/name of the currently active cluster. |  |  |
 | `blueImage` _string_ | BlueImage is the container image used by the Blue cluster.<br />This ensures the Blue cluster is not actively upgraded when spec.image changes. |  |  |
 | `greenRevision` _string_ | GreenRevision is the hash/name of the next cluster (if upgrade in progress). |  |  |
@@ -909,7 +910,8 @@ _Appears in:_
 | `podMetadata` _[PodMetadataConfig](#podmetadataconfig)_ | PodMetadata configures additional labels and annotations for the OpenBao Pod template.<br />This is useful for platform integrations that select Pods via metadata, such as<br />Azure Workload Identity. Operator-managed Pod metadata takes precedence. |  | Optional: \{\} <br /> |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core) array_ | ImagePullSecrets is a list of references to secrets in the same namespace<br />to use for pulling any images used by this Cluster (server, init, sidecars). |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configures telemetry and metrics integration. |  | Optional: \{\} <br /> |
-| `replicas` _integer_ | Replicas is the desired number of OpenBao pods. | 3 | Minimum: 1 <br /> |
+| `replicas` _integer_ | Replicas is the desired number of quorum-carrying voter Pods. | 3 | Minimum: 1 <br /> |
+| `readReplicas` _[ReadReplicaConfig](#readreplicaconfig)_ | ReadReplicas configures the steady-state non-voter read-replica pool. |  | Optional: \{\} <br /> |
 | `paused` _boolean_ | Paused, when true, pauses reconciliation for this OpenBaoCluster (except delete and finalizers). |  | Optional: \{\} <br /> |
 | `maintenance` _[MaintenanceConfig](#maintenanceconfig)_ | Maintenance configures supported maintenance workflows. |  | Optional: \{\} <br /> |
 | `runtime` _[RuntimeConfig](#runtimeconfig)_ | Runtime configures explicit runtime control requests for the OpenBao workload. |  | Optional: \{\} <br /> |
@@ -956,6 +958,7 @@ _Appears in:_
 | `phase` _[ClusterPhase](#clusterphase)_ | Phase is a high-level summary of the cluster state. |  | Enum: [Initializing Running Upgrading BackingUp Failed] <br />Optional: \{\} <br /> |
 | `activeLeader` _string_ | ActiveLeader is the current Raft leader pod name, for example "prod-cluster-0". |  | Optional: \{\} <br /> |
 | `readyReplicas` _integer_ | ReadyReplicas is the number of replicas that are currently Ready. |  | Optional: \{\} <br /> |
+| `readReplicas` _[ReadReplicaStatus](#readreplicastatus)_ | ReadReplicas captures observed state for the read-replica pool. |  | Optional: \{\} <br /> |
 | `currentVersion` _string_ | CurrentVersion is the OpenBao version currently running on the cluster. |  | Optional: \{\} <br /> |
 | `initialized` _boolean_ | Initialized indicates whether the OpenBao cluster has been initialized.<br />This is set to true after the first pod is initialized using bao operator init<br />or after self-initialization completes. |  | Optional: \{\} <br /> |
 | `selfInitialized` _boolean_ | SelfInitialized indicates whether the cluster was initialized using<br />OpenBao's self-initialization feature. When true, no root token Secret<br />exists for this cluster (the root token was auto-revoked). |  | Optional: \{\} <br /> |
@@ -1106,6 +1109,7 @@ PodMetadataConfig configures additional metadata for the OpenBao Pod template.
 
 _Appears in:_
 - [OpenBaoClusterSpec](#openbaoclusterspec)
+- [ReadReplicaTemplateConfig](#readreplicatemplateconfig)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1168,6 +1172,138 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `performanceMultiplier` _integer_ | PerformanceMultiplier scales the Raft timing parameters. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `autopilot` _[RaftAutopilotConfig](#raftautopilotconfig)_ | Autopilot configures Raft Autopilot settings.<br />By default, dead server cleanup is enabled with a 5-minute threshold. |  | Optional: \{\} <br /> |
+
+
+#### ReadReplicaConfig
+
+
+
+ReadReplicaConfig defines the steady-state read-replica pool.
+
+
+
+_Appears in:_
+- [OpenBaoClusterSpec](#openbaoclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `replicas` _integer_ | Replicas is the desired number of permanent non-voters. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `service` _[ReadReplicaServiceConfig](#readreplicaserviceconfig)_ | Service configures an optional dedicated Service for read traffic. |  | Optional: \{\} <br /> |
+| `template` _[ReadReplicaTemplateConfig](#readreplicatemplateconfig)_ | Template configures read-replica-specific Pod template overrides. |  | Optional: \{\} <br /> |
+| `storage` _[ReadReplicaStorageConfig](#readreplicastorageconfig)_ | Storage configures read-replica-specific storage overrides. |  | Optional: \{\} <br /> |
+
+
+#### ReadReplicaSchedulingConfig
+
+
+
+ReadReplicaSchedulingConfig defines scheduling overrides for read replicas.
+
+
+
+_Appears in:_
+- [ReadReplicaTemplateConfig](#readreplicatemplateconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `nodeSelector` _object (keys:string, values:string)_ | NodeSelector defines node-selection constraints for read-replica Pods. |  | Optional: \{\} <br /> |
+| `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#toleration-v1-core) array_ | Tolerations defines Pod tolerations for read-replica Pods. |  | Optional: \{\} <br /> |
+| `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#affinity-v1-core)_ | Affinity defines Pod affinity / anti-affinity rules for read-replica Pods. |  | Optional: \{\} <br /> |
+| `topologySpreadConstraints` _[TopologySpreadConstraint](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#topologyspreadconstraint-v1-core) array_ | TopologySpreadConstraints defines topology spread constraints for<br />read-replica Pods. |  | Optional: \{\} <br /> |
+
+
+#### ReadReplicaServiceConfig
+
+
+
+ReadReplicaServiceConfig controls the optional read-only Service for the
+read-replica pool.
+
+
+
+_Appears in:_
+- [ReadReplicaConfig](#readreplicaconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled controls whether the operator creates a dedicated Service for the<br />read-replica pool. |  | Optional: \{\} <br /> |
+| `type` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#servicetype-v1-core)_ | Type is the Kubernetes Service type, for example "ClusterIP" or<br />"LoadBalancer". |  | Optional: \{\} <br /> |
+| `annotations` _object (keys:string, values:string)_ | Annotations are additional annotations to apply to the read Service. |  | Optional: \{\} <br /> |
+
+
+#### ReadReplicaStatus
+
+
+
+ReadReplicaStatus captures observed state for the read-replica pool.
+
+
+
+_Appears in:_
+- [OpenBaoClusterStatus](#openbaoclusterstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `desiredReplicas` _integer_ | DesiredReplicas is the desired number of read replicas. |  | Optional: \{\} <br /> |
+| `readyReplicas` _integer_ | ReadyReplicas is the number of Ready read-replica Pods observed. |  | Optional: \{\} <br /> |
+| `registeredReplicas` _integer_ | RegisteredReplicas is the number of observed non-voter peers registered in<br />Raft membership. |  | Optional: \{\} <br /> |
+| `healthyReplicas` _integer_ | HealthyReplicas is the number of read-replica peers that are currently<br />healthy according to the Raft Autopilot state endpoint. |  | Optional: \{\} <br /> |
+| `storage` _[ReadReplicaStorageStatus](#readreplicastoragestatus)_ | Storage captures read-replica-specific storage observation state. |  | Optional: \{\} <br /> |
+
+
+#### ReadReplicaStorageConfig
+
+
+
+ReadReplicaStorageConfig defines storage overrides for the read-replica
+StatefulSet.
+
+
+
+_Appears in:_
+- [ReadReplicaConfig](#readreplicaconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `size` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#quantity-resource-api)_ | Size is the requested persistent volume size for read replicas. |  | Optional: \{\} <br /> |
+| `storageClassName` _string_ | StorageClassName is an optional StorageClass for read-replica PVCs. |  | Optional: \{\} <br /> |
+
+
+#### ReadReplicaStorageStatus
+
+
+
+ReadReplicaStorageStatus captures observed storage state for the read-replica
+pool.
+
+
+
+_Appears in:_
+- [ReadReplicaStatus](#readreplicastatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `desiredPVCs` _integer_ | DesiredPVCs is the number of data PVCs expected for the read-replica pool. |  | Optional: \{\} <br /> |
+| `boundPVCs` _integer_ | BoundPVCs is the number of observed data PVCs for the read-replica pool. |  | Optional: \{\} <br /> |
+| `storageClassName` _string_ | StorageClassName is the effective StorageClass observed for the<br />read-replica PVCs when it is consistent. |  | Optional: \{\} <br /> |
+
+
+#### ReadReplicaTemplateConfig
+
+
+
+ReadReplicaTemplateConfig defines Pod-template overrides for read replicas.
+
+
+
+_Appears in:_
+- [ReadReplicaConfig](#readreplicaconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `metadata` _[PodMetadataConfig](#podmetadataconfig)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
+| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#resourcerequirements-v1-core)_ | Resources defines container resource requests and limits for read replicas. |  | Optional: \{\} <br /> |
+| `scheduling` _[ReadReplicaSchedulingConfig](#readreplicaschedulingconfig)_ | Scheduling defines node-placement and topology overrides for read replicas. |  | Optional: \{\} <br /> |
 
 
 #### RestoreConfig

@@ -24,30 +24,33 @@ const (
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
 // verifiedInitContainerDigest is the resolved init container image to use.
 // When operator image verification is enabled, this should be a digest.
-// revision is an optional revision identifier for blue/green deployments.
-// disableSelfInit prevents adding self-init logic (used for Green pods).
-func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, disableSelfInit bool, platform string) (*appsv1.StatefulSet, error) {
-	labels := resourceidentity.PodSelectorLabelsWithRevision(cluster, revision)
+// spec identifies the target workload pool and rollout shape.
+func buildStatefulSetForSpec(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, spec StatefulSetSpec, platform string) (*appsv1.StatefulSet, error) {
+	if spec.Pool == "" {
+		spec.Pool = constants.LabelValueOpenBaoWorkloadPoolVoter
+	}
 
-	replicas := desiredStatefulSetReplicas(cluster, initialized)
+	labels := resourceidentity.PodSelectorLabelsForPoolWithRevision(cluster, spec.Pool, spec.Revision)
 
-	pvc, err := buildStatefulSetPVC(cluster)
+	replicas := desiredStatefulSetReplicas(cluster, initialized, spec)
+
+	pvc, err := buildStatefulSetPVC(cluster, spec)
 	if err != nil {
 		return nil, err
 	}
 
-	podLabels, annotations := buildStatefulSetPodLabelsAndAnnotations(cluster, revision, configContent)
+	podLabels, annotations := buildStatefulSetPodLabelsAndAnnotations(cluster, spec, configContent)
 
 	probes := buildStatefulSetProbeExecActions(cluster)
 	renderedConfigDir := path.Dir(openBaoRenderedConfig)
-	volumes := buildStatefulSetVolumes(cluster, revision, disableSelfInit)
+	volumes := buildStatefulSetVolumes(cluster, spec)
 
-	initContainers, err := buildInitContainers(cluster, verifiedInitContainerDigest, disableSelfInit)
+	initContainers, err := buildInitContainers(cluster, spec.InitContainerImage, spec.DisableSelfInit)
 	if err != nil {
 		return nil, err
 	}
 
-	statefulSetName := statefulSetNameWithRevision(cluster, revision)
+	statefulSetName := statefulSetNameForSpec(cluster, spec)
 	var statefulSetAnnotations map[string]string
 	if cluster.Spec.Maintenance != nil && cluster.Spec.Maintenance.Enabled {
 		statefulSetAnnotations = map[string]string{
@@ -72,7 +75,7 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
-			UpdateStrategy: buildStatefulSetUpdateStrategy(cluster),
+			UpdateStrategy: buildStatefulSetUpdateStrategy(cluster, spec),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      podLabels,
@@ -86,16 +89,18 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 					ShareProcessNamespace: ptr.To(false),
 					// Use soft spread defaults so production clusters distribute Raft members
 					// across nodes/zones without making small dev clusters unschedulable.
-					Affinity: buildStatefulSetAffinity(cluster),
+					Affinity: buildStatefulSetAffinity(cluster, spec),
 					// SECURITY: Explicitly disable automount for all containers, then mount
 					// ServiceAccount token only where needed (OpenBao container for Kubernetes Auth)
 					AutomountServiceAccountToken: ptr.To(false),
 					ServiceAccountName:           resourceidentity.ServiceAccountName(cluster),
+					NodeSelector:                 buildStatefulSetNodeSelector(cluster, spec),
 					SecurityContext:              buildStatefulSetPodSecurityContext(cluster, platform),
 					InitContainers:               initContainers,
-					Containers:                   buildContainers(cluster, verifiedImageDigest, renderedConfigDir, probes),
+					Tolerations:                  buildStatefulSetTolerations(cluster, spec),
+					Containers:                   buildContainers(cluster, spec, renderedConfigDir, probes),
 					ImagePullSecrets:             cluster.Spec.ImagePullSecrets,
-					TopologySpreadConstraints:    buildStatefulSetTopologySpreadConstraints(cluster),
+					TopologySpreadConstraints:    buildStatefulSetTopologySpreadConstraints(cluster, spec),
 					Volumes:                      volumes,
 				},
 			},
@@ -110,6 +115,20 @@ func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, confi
 	return statefulSet, nil
 }
 
+// buildStatefulSetWithRevision retains the blue/green-friendly voter path used by
+// existing callers while delegating to the pool-aware builder.
+func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, platform string) (*appsv1.StatefulSet, error) {
+	return buildStatefulSetForSpec(cluster, configContent, initialized, StatefulSetSpec{
+		Name:               statefulSetNameWithRevision(cluster, revision),
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolVoter,
+		Revision:           revision,
+		Image:              verifiedImageDigest,
+		InitContainerImage: verifiedInitContainerDigest,
+		Replicas:           cluster.Spec.Replicas,
+		DisableSelfInit:    false,
+	}, platform)
+}
+
 func buildStatefulSetPVCRetentionPolicy() *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy {
 	return &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
 		WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
@@ -117,7 +136,15 @@ func buildStatefulSetPVCRetentionPolicy() *appsv1.StatefulSetPersistentVolumeCla
 	}
 }
 
-func buildStatefulSetAffinity(cluster *openbaov1alpha1.OpenBaoCluster) *corev1.Affinity {
+func buildStatefulSetAffinity(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) *corev1.Affinity {
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica &&
+		cluster.Spec.ReadReplicas != nil &&
+		cluster.Spec.ReadReplicas.Template != nil &&
+		cluster.Spec.ReadReplicas.Template.Scheduling != nil &&
+		cluster.Spec.ReadReplicas.Template.Scheduling.Affinity != nil {
+		return cluster.Spec.ReadReplicas.Template.Scheduling.Affinity.DeepCopy()
+	}
+
 	return &corev1.Affinity{
 		PodAntiAffinity: &corev1.PodAntiAffinity{
 			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
@@ -125,7 +152,7 @@ func buildStatefulSetAffinity(cluster *openbaov1alpha1.OpenBaoCluster) *corev1.A
 					Weight: statefulSetPlacementPreferredWeight,
 					PodAffinityTerm: corev1.PodAffinityTerm{
 						LabelSelector: &metav1.LabelSelector{
-							MatchLabels: statefulSetPlacementLabels(cluster),
+							MatchLabels: statefulSetPlacementLabels(cluster, spec),
 						},
 						TopologyKey: statefulSetTopologyKeyHostname,
 					},
@@ -135,8 +162,16 @@ func buildStatefulSetAffinity(cluster *openbaov1alpha1.OpenBaoCluster) *corev1.A
 	}
 }
 
-func buildStatefulSetTopologySpreadConstraints(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.TopologySpreadConstraint {
-	placementLabels := statefulSetPlacementLabels(cluster)
+func buildStatefulSetTopologySpreadConstraints(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) []corev1.TopologySpreadConstraint {
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica &&
+		cluster.Spec.ReadReplicas != nil &&
+		cluster.Spec.ReadReplicas.Template != nil &&
+		cluster.Spec.ReadReplicas.Template.Scheduling != nil &&
+		cluster.Spec.ReadReplicas.Template.Scheduling.TopologySpreadConstraints != nil {
+		return append([]corev1.TopologySpreadConstraint(nil), cluster.Spec.ReadReplicas.Template.Scheduling.TopologySpreadConstraints...)
+	}
+
+	placementLabels := statefulSetPlacementLabels(cluster, spec)
 
 	return []corev1.TopologySpreadConstraint{
 		{
@@ -158,8 +193,41 @@ func buildStatefulSetTopologySpreadConstraints(cluster *openbaov1alpha1.OpenBaoC
 	}
 }
 
-func statefulSetPlacementLabels(cluster *openbaov1alpha1.OpenBaoCluster) map[string]string {
-	labels := resourceidentity.PodSelectorLabels(cluster)
+func buildStatefulSetNodeSelector(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) map[string]string {
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica &&
+		cluster.Spec.ReadReplicas != nil &&
+		cluster.Spec.ReadReplicas.Template != nil &&
+		cluster.Spec.ReadReplicas.Template.Scheduling != nil &&
+		cluster.Spec.ReadReplicas.Template.Scheduling.NodeSelector != nil {
+		return mapClone(cluster.Spec.ReadReplicas.Template.Scheduling.NodeSelector)
+	}
+	return nil
+}
+
+func buildStatefulSetTolerations(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) []corev1.Toleration {
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolReadReplica &&
+		cluster.Spec.ReadReplicas != nil &&
+		cluster.Spec.ReadReplicas.Template != nil &&
+		cluster.Spec.ReadReplicas.Template.Scheduling != nil &&
+		cluster.Spec.ReadReplicas.Template.Scheduling.Tolerations != nil {
+		return append([]corev1.Toleration(nil), cluster.Spec.ReadReplicas.Template.Scheduling.Tolerations...)
+	}
+	return nil
+}
+
+func mapClone(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func statefulSetPlacementLabels(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) map[string]string {
+	labels := resourceidentity.PodSelectorLabelsForPool(cluster, spec.Pool)
 	if labels == nil {
 		labels = make(map[string]string)
 	}
