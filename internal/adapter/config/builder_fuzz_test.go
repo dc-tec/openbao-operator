@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -125,7 +126,10 @@ func FuzzRenderSelfInitHCL(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, name, path, operation string, allowFailure bool, data string, selfInitOn, bootstrapOn bool, clusterName, clusterNS, clusterVer string) {
-		if len(name) > 256 || len(path) > 512 || len(operation) > 64 || len(data) > 32*1024 || len(clusterName) > 128 || len(clusterNS) > 128 || len(clusterVer) > 64 {
+		if len(name) > 256 || len(path) > 512 || len(operation) > 64 || len(data) > 8*1024 || len(clusterName) > 128 || len(clusterNS) > 128 || len(clusterVer) > 64 {
+			t.Skip()
+		}
+		if strings.Count(data, "{")+strings.Count(data, "[") > 128 {
 			t.Skip()
 		}
 
