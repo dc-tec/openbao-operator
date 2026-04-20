@@ -37,6 +37,9 @@ func (m *Manager) performPodByPodUpgrade(ctx context.Context, logger logr.Logger
 		return false, err
 	}
 	if alreadyRolledOut {
+		if err := m.setStatefulSetPartition(ctx, cluster, target.NextPartition); err != nil {
+			return false, fmt.Errorf("failed to advance partition while resuming rolled-out target: %w", err)
+		}
 		recordCompletedTargetPodUpgrade(logger, cluster, metrics, target, podStartTime)
 		return target.NextPartition == 0, nil
 	}

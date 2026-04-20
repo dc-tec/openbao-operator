@@ -482,6 +482,16 @@ func TestPerformPodByPodUpgrade_ResumesWhenTargetAlreadyRolledOut(t *testing.T) 
 	if len(cluster.Status.Upgrade.CompletedPods) != 3 || cluster.Status.Upgrade.CompletedPods[2] != 0 {
 		t.Fatalf("CompletedPods=%v, want [2 1 0]", cluster.Status.Upgrade.CompletedPods)
 	}
+	updatedSTS := &appsv1.StatefulSet{}
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(sts), updatedSTS); err != nil {
+		t.Fatalf("expected to reload StatefulSet, got %v", err)
+	}
+	if updatedSTS.Spec.UpdateStrategy.RollingUpdate == nil || updatedSTS.Spec.UpdateStrategy.RollingUpdate.Partition == nil {
+		t.Fatalf("expected StatefulSet partition to be set")
+	}
+	if *updatedSTS.Spec.UpdateStrategy.RollingUpdate.Partition != 0 {
+		t.Fatalf("partition=%d, want 0", *updatedSTS.Spec.UpdateStrategy.RollingUpdate.Partition)
+	}
 
 	jobList := &batchv1.JobList{}
 	if err := c.List(context.Background(), jobList); err != nil {

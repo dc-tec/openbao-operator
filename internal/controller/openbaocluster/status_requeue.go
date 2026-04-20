@@ -18,12 +18,15 @@ func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, st
 	desiredReadReplicas := desiredReadReplicaCount(cluster)
 	previousReadReadyReplicas := int32(0)
 	previousReadRegisteredReplicas := int32(0)
+	previousReadHealthyReplicas := int32(0)
 	if original.Status.ReadReplicas != nil {
 		previousReadReadyReplicas = original.Status.ReadReplicas.ReadyReplicas
 		previousReadRegisteredReplicas = original.Status.ReadReplicas.RegisteredReplicas
+		previousReadHealthyReplicas = original.Status.ReadReplicas.HealthyReplicas
 	}
 	readReadyReplicasChanged := state.ReadReplicaReadyReplicas != previousReadReadyReplicas
 	readRegisteredReplicasChanged := state.ReadReplicaRegisteredReplicas != previousReadRegisteredReplicas
+	readHealthyReplicasChanged := state.ReadReplicaHealthyReplicas != previousReadHealthyReplicas
 
 	if state.StatusStale {
 		logger.V(1).Info("StatefulSet status may be stale; requeuing to check status")
@@ -66,14 +69,21 @@ func (r *OpenBaoClusterReconciler) determineStatusRequeue(logger logr.Logger, st
 				"desiredReadReplicas", desiredReadReplicas)
 			return ctrl.Result{RequeueAfter: constants.RequeueShort}
 		}
+		if !state.ReadReplicaAutopilotKnown {
+			logger.V(1).Info("Read replica Autopilot health has not been observed yet; requeuing to refresh status",
+				"desiredReadReplicas", desiredReadReplicas)
+			return ctrl.Result{RequeueAfter: constants.RequeueShort}
+		}
 	}
 
-	if desiredReadReplicas > 0 && (readReadyReplicasChanged || readRegisteredReplicasChanged) {
+	if desiredReadReplicas > 0 && (readReadyReplicasChanged || readRegisteredReplicasChanged || readHealthyReplicasChanged) {
 		logger.V(1).Info("Read replica status changed; requeuing once to ensure status is persisted",
 			"readReplicaReadyReplicas", state.ReadReplicaReadyReplicas,
 			"previousReadReplicaReadyReplicas", previousReadReadyReplicas,
 			"readReplicaRegisteredReplicas", state.ReadReplicaRegisteredReplicas,
-			"previousReadReplicaRegisteredReplicas", previousReadRegisteredReplicas)
+			"previousReadReplicaRegisteredReplicas", previousReadRegisteredReplicas,
+			"readReplicaHealthyReplicas", state.ReadReplicaHealthyReplicas,
+			"previousReadReplicaHealthyReplicas", previousReadHealthyReplicas)
 		return ctrl.Result{RequeueAfter: constants.RequeueShort}
 	}
 

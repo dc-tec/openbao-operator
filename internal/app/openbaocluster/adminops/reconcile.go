@@ -76,9 +76,7 @@ func Reconcile(
 	patchStatus StatusPatcher,
 	errorStatus ErrorStatusBuilder,
 ) (recon.Result, error) {
-	if cluster.Status.AdminOps == nil {
-		cluster.Status.AdminOps = &openbaov1alpha1.AdminOpsControllerStatus{}
-	}
+	ensureAdminOpsStatus(cluster)
 
 	if errorStatus == nil {
 		errorStatus = defaultErrorStatus
@@ -124,6 +122,7 @@ func Reconcile(
 	}
 
 	// Clear previous adminops error after a successful reconcile.
+	ensureAdminOpsStatus(cluster)
 	cluster.Status.AdminOps.LastError = nil
 	if patchStatus != nil {
 		if err := patchStatus(ctx, deps.Client, logger, original, cluster, "adminops-complete"); err != nil {
@@ -132,6 +131,15 @@ func Reconcile(
 	}
 
 	return recon.Result{}, nil
+}
+
+func ensureAdminOpsStatus(cluster *openbaov1alpha1.OpenBaoCluster) {
+	if cluster == nil {
+		return
+	}
+	if cluster.Status.AdminOps == nil {
+		cluster.Status.AdminOps = &openbaov1alpha1.AdminOpsControllerStatus{}
+	}
 }
 
 func buildReconcilers(deps Dependencies) []subReconciler {
