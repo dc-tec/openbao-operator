@@ -202,7 +202,9 @@ When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins
 
 <Callout type="note" title="Blue-green upgrades keep the route stable">
 
-During blue-green cutover, the operator keeps the Gateway route attached to the stable external Service and updates the Service selector behind it. That means the route object stays steady while the selected revision changes underneath.
+During blue-green cutover, the operator keeps the Gateway route attached to the stable external Service and updates the Service selector behind it. When steady read replicas are enabled, that same external Service can fan out to both voter and read-replica Pods during normal operation, relying on OpenBao to serve reads locally and forward writes to the active leader. During blue-green cutover the selector is temporarily narrowed to the active voter revision, so the route object stays steady while the selected backend set changes underneath.
+
+The operator does not create a second Gateway route for the dedicated read-replica Service yet. If you need an explicit read-only hostname, keep that as a separate edge concern for now.
 
 </Callout>
 
@@ -213,6 +215,11 @@ During blue-green cutover, the operator keeps the Gateway route attached to the 
       label: "Network configuration",
       description: "Align trusted ingress peers and external dependency egress with the Gateway path you just chose.",
       docId: "user-guide/openbaocluster/configuration/network",
+    },
+    {
+      label: "Read replicas",
+      description: "Review the shared client endpoint and optional dedicated read Service before exposing the cluster through a Gateway.",
+      docId: "user-guide/openbaocluster/configuration/read-replicas",
     },
     {
       label: "External access",

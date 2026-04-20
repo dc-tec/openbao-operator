@@ -144,7 +144,7 @@ The bootstrap manager prepares everything the workload needs before the Stateful
 
 The networking manager owns how traffic and policy reach the cluster:
 
-- headless and external Services
+- headless and external Services, including the shared client Service and optional dedicated read Service
 - Ingress and Gateway API resources
 - gateway CA export and backend TLS policy resources
 - workload and job network policies
@@ -163,10 +163,18 @@ The identity manager owns the steady-state Kubernetes identity for the cluster w
 The workload manager owns the StatefulSet-facing contract:
 
 - StatefulSet render and apply
+- steady-state read-replica StatefulSet lifecycle and safe drain or delete behavior
 - PodDisruptionBudget reconciliation
 - rollout triggers from rendered config or certificate hash changes
 - single-replica bootstrap and later scale-out after initialization
 - revision-scoped workload resources used by blue/green and rollout-safe updates
+- read-first or restore-safe operational ordering delegated by the app layer for rolling upgrades, blue-green, and restore
+
+<Callout type="note" title="The shared client endpoint is intentional">
+
+The networking manager keeps the main client Service attached to the shared client-serving selector, which can include both voters and steady read replicas. The optional dedicated read Service remains a separate networking surface for explicit consumers, but the primary endpoint stays stable so OpenBao can handle standby reads and request forwarding itself.
+
+</Callout>
 
 ## Shared contracts on the workload path
 

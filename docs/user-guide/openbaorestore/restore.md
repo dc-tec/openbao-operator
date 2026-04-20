@@ -120,6 +120,12 @@ That keeps the restore path aligned with the backup path you have already proven
 
 </Callout>
 
+<Callout type="note" title="Restore drains and restores steady read replicas deliberately">
+
+When the target cluster has steady read replicas enabled, restore first drains that pool to zero, then launches the restore Job. After the snapshot is forced into the cluster, the operator restores the steady read pool and only marks the `OpenBaoRestore` as `Completed` once the read-replica conditions are healthy again.
+
+</Callout>
+
 ## Configure the snapshot source
 
 <Tabs groupId="restore-source-provider">

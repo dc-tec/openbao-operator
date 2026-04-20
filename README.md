@@ -20,7 +20,7 @@
 
 ---
 
-OpenBao Operator is a Kubernetes operator for [OpenBao](https://openbao.org) that automates lifecycle management: provisioning, TLS, backups/restores, upgrades, and multi-tenancy controls.
+OpenBao Operator is a Kubernetes operator for [OpenBao](https://openbao.org) that automates lifecycle management: provisioning, TLS, backups/restores, upgrades, horizontal read scaling, and multi-tenancy controls.
 
 ## Documentation
 
@@ -64,6 +64,7 @@ For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openba
 - **Streaming Raft Backups**: Snapshot streaming to S3/GCS/Azure with retention controls (no local staging).
 - **Declarative Restores**: Restore workflows via `OpenBaoRestore` with operation locking and safe overrides.
 - **Safe Upgrades**: Rolling and blue/green upgrade strategies, including pre-upgrade snapshots. `RollingUpdate` is the default recommended strategy.
+- **Horizontal Read Scaling**: Steady-state read replicas as non-voters, with a dedicated read Service and a shared primary endpoint that can include read replicas.
 - **Multi-Tenancy**: Namespace-scoped tenancy model with policy enforcement via `OpenBaoTenant`. Multi-tenant mode is the default and recommended production operating model.
 
 ## Security Model
