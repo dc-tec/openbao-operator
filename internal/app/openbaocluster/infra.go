@@ -138,6 +138,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 
 	currentSTS := &appsv1.StatefulSet{}
 	readCurrentSTS := &appsv1.StatefulSet{}
+	readCurrentSTSFound := false
 	reader := r.deps.Kubernetes.APIReader
 	if reader == nil {
 		reader = r.deps.Kubernetes.Client
@@ -168,6 +169,7 @@ func (r *infraReconciler) Reconcile(ctx context.Context, logger logr.Logger, clu
 	err = reader.Get(ctx, client.ObjectKey{Name: readSpec.Name, Namespace: cluster.Namespace}, readCurrentSTS)
 	switch {
 	case err == nil:
+		readCurrentSTSFound = true
 		declaredReadReplicas := readSpec.Replicas
 		appliedReplicas, err := r.handleReadReplicaScaleDownSafety(ctx, cluster, declaredReadReplicas, readCurrentSTS)
 		if err != nil {
