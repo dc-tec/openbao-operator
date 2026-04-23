@@ -44,7 +44,7 @@
     "@docusaurus/tsconfig": "3.10.0",
     "@docusaurus/types": "3.10.0",
     "@playwright/test": "^1.59.1",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.3"
   },
   "browserslist": {
     "production": [
