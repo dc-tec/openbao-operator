@@ -154,6 +154,17 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
+          label: 'Read Scaling',
+          items: [
+            {
+              type: 'doc',
+              id: 'user-guide/openbaocluster/configuration/read-replicas',
+              label: 'Read replicas',
+            },
+          ],
+        },
+        {
+          type: 'category',
           label: 'Platform Readiness',
           items: [
             {
