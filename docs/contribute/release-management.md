@@ -38,7 +38,7 @@ journey: contribute
         "Stable release",
         "Merge the release-please PR so the `Release Tag` workflow can resolve the merged release PR, create the signed stable version tag, and create the draft GitHub Release from `main`.",
         "GitHub Release assets, OCI Helm chart, signed images, stable docs snapshot, docs deployment, and provenance evidence.",
-        "Stable releases become permanent versioned docs and own the default `/docs` route.",
+        "Stable releases become permanent release-line docs and own the default `/docs` route.",
       ],
       emphasis: "recommended",
     },
@@ -47,7 +47,7 @@ journey: contribute
         "Prerelease",
         "Prefer a tiny PR that carries an empty commit with `Release-As: 0.1.0-rc.6`, then merge the resulting release-please PR so the `Release Tag` workflow creates the signed prerelease tag and draft GitHub Release.",
         "GitHub Release assets, OCI Helm chart, signed images, docs site deployment, and provenance evidence.",
-        "Prereleases use `/docs/next` plus release notes; do not create a permanent versioned docs snapshot unless there is a deliberate preview exception.",
+        "Prereleases use `/docs/next` plus release notes; do not create a permanent versioned docs snapshot.",
       ],
     },
     {
@@ -69,17 +69,17 @@ journey: contribute
   ]}
 />
 
-<Callout type="important" title="Stable release docs snapshots">
+<Callout type="important" title="Stable release-line docs snapshots">
 
-Before merging a stable release PR, snapshot the docs for the outgoing version and commit the generated artifacts. Prereleases continue to use `/docs/next` and do not need a permanent versioned docs snapshot.
+Before merging the first stable `X.Y.0` release PR for a release line, snapshot the docs for that release line and commit the generated artifacts. Patch releases in the same line publish release notes and reuse the `X.Y.0` docs snapshot. Prereleases continue to use `/docs/next` and release notes only; do not add patch, `-alpha`, `-beta`, or `-rc` entries to `website/versions.json`.
 
 </Callout>
 
 <CommandBlock
   language="bash"
   label="configure"
-  title="Snapshot docs for the stable release version"
-  code={`make docs-version DOCS_VERSION=X.Y.Z`}
+  title="Snapshot docs for the stable release line"
+  code={`make docs-version DOCS_VERSION=X.Y.0`}
 >
   This updates `website/versioned_docs/`, `website/versioned_sidebars/`, and `website/versions.json`.
 </CommandBlock>
@@ -107,7 +107,7 @@ git commit --allow-empty -m $'chore: release 0.1.0-rc.6\n\nRelease-As: 0.1.0-rc.
     {
       cells: [
         "Pre-flight",
-        "Release-please PR looks correct, docs are updated, stable releases have a committed docs snapshot, compatibility docs are current, CI is green, the PR gate is satisfied, and the performance baseline evidence matches `make verify-perf`.",
+        "Release-please PR looks correct, docs are updated, new stable release lines have a committed `X.Y.0` docs snapshot, compatibility docs are current, CI is green, full E2E release evidence is clean, nightly regressions are reviewed, and performance findings are either cleared or explicitly accepted by maintainers.",
       ],
       emphasis: "recommended",
     },

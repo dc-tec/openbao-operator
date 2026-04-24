@@ -934,7 +934,7 @@ jobs:
       - name: Install docs dependencies
         run: npm --prefix website ci
 
-      - name: Verify stable docs snapshot
+      - name: Verify stable release-line docs snapshot
         if: ${{ !contains(needs.prepare.outputs.version, '-') }}
         env:
           VERSION: ${{ needs.prepare.outputs.version }}

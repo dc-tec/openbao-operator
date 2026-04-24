@@ -156,7 +156,6 @@ const config: Config = {
             from: [
               '/docs/validated-deployments/runbooks/scheduled-backups-s3-compatible',
               '/docs/next/validated-deployments/runbooks/scheduled-backups-s3-compatible',
-              '/docs/0.1.0-rc.5/validated-deployments/runbooks/scheduled-backups-s3-compatible',
             ],
           },
           {
@@ -164,7 +163,6 @@ const config: Config = {
             from: [
               '/docs/validated-deployments/runbooks/restore-from-s3-compatible-snapshot',
               '/docs/next/validated-deployments/runbooks/restore-from-s3-compatible-snapshot',
-              '/docs/0.1.0-rc.5/validated-deployments/runbooks/restore-from-s3-compatible-snapshot',
             ],
           },
         ],

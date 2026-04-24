@@ -10,11 +10,18 @@ if (!version) {
   process.exit(1);
 }
 
-function isPrerelease(candidate) {
-  return candidate.includes('-');
+function isStableLineVersion(candidate) {
+  return /^\d+\.\d+\.0$/.test(candidate);
 }
 
-async function reorderVersions() {
+if (!isStableLineVersion(version)) {
+  console.error(
+    `Docs snapshots are only published for stable release-line versions (X.Y.0). Prereleases and patch releases use release notes plus the release-line docs: ${version}`,
+  );
+  process.exit(1);
+}
+
+async function dedupeVersions() {
   const raw = await fs.readFile(versionsPath, 'utf8');
   const versions = JSON.parse(raw);
 
@@ -23,21 +30,7 @@ async function reorderVersions() {
   }
 
   const deduped = [...new Set(versions)];
-
-  if (!isPrerelease(version)) {
-    await fs.writeFile(versionsPath, `${JSON.stringify(deduped, null, 2)}\n`);
-    return;
-  }
-
-  const stableVersions = deduped.filter((candidate) => !isPrerelease(candidate));
-  if (stableVersions.length === 0) {
-    await fs.writeFile(versionsPath, `${JSON.stringify(deduped, null, 2)}\n`);
-    return;
-  }
-
-  const reordered = deduped.filter((candidate) => candidate !== version);
-  reordered.splice(1, 0, version);
-  await fs.writeFile(versionsPath, `${JSON.stringify(reordered, null, 2)}\n`);
+  await fs.writeFile(versionsPath, `${JSON.stringify(deduped, null, 2)}\n`);
 }
 
 const result = spawnSync(
@@ -52,4 +45,4 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1);
 }
 
-await reorderVersions();
+await dedupeVersions();

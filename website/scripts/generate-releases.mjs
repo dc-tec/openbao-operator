@@ -10,6 +10,19 @@ function slugForVersion(version) {
   return version.toLowerCase();
 }
 
+function isPrerelease(version) {
+  return version.includes('-');
+}
+
+function isStableVersion(version) {
+  return /^\d+\.\d+\.\d+$/.test(version);
+}
+
+function docsSnapshotVersionFor(version) {
+  const [major, minor] = version.split('.');
+  return `${major}.${minor}.0`;
+}
+
 async function loadChangelog() {
   return fs.readFile(changelogPath, 'utf8');
 }
@@ -29,11 +42,20 @@ function getDocsUrl(version, docsVersions) {
     return '/docs/next';
   }
 
-  if (!docsVersions.includes(version)) {
+  if (isPrerelease(version)) {
     return null;
   }
 
-  return docsVersions[0] === version ? '/docs' : `/docs/${slugForVersion(version)}`;
+  if (!isStableVersion(version)) {
+    return null;
+  }
+
+  const docsVersion = docsSnapshotVersionFor(version);
+  if (!docsVersions.includes(docsVersion)) {
+    return null;
+  }
+
+  return docsVersions[0] === docsVersion ? '/docs' : `/docs/${slugForVersion(docsVersion)}`;
 }
 
 function parseSections(changelog) {
