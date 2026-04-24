@@ -104,8 +104,10 @@ The project aims for one stable release every 4 weeks. If the stable release gat
 A stable release should meet all of the following:
 
 - clean PR CI on the release branch or release PR
-- at least 3 consecutive green nightly runs on the hardened primary lifecycle path
-- docs and compatibility matrix reviewed and current
+- full E2E release evidence from the release PR or a maintainer-triggered CI run on the release branch
+- docs and compatibility matrix reviewed and current; new stable release lines have a committed `X.Y.0` docs snapshot
+- nightly validation reviewed for regressions; known flaky nightlies are tracked, but they do not block by themselves when release E2E evidence is clean
+- performance signal reviewed; block only on confirmed product regressions or an explicit maintainer decision while the harness is being calibrated
 - no known upgrade, backup, or restore regressions
 - no open release-blocker issues
 

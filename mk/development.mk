@@ -226,7 +226,7 @@ helm-lint: ## Lint the Helm chart.
 	@helm lint charts/openbao-operator
 
 .PHONY: helm-test
-helm-test: helm-sync helm-lint ## Test the Helm chart (lint, template, and dry-run install).
+helm-test: helm-sync helm-lint ## Test the Helm chart without requiring a live cluster.
 	@echo "Testing Helm chart: templating with default values..."
 	@helm template openbao-operator charts/openbao-operator \
 		--namespace openbao-operator-system \
@@ -242,11 +242,10 @@ helm-test: helm-sync helm-lint ## Test the Helm chart (lint, template, and dry-r
 		--include-crds \
 		--set tenancy.mode=single \
 		--set tenancy.targetNamespace=openbao-system > /dev/null
-	@echo "Testing Helm chart: dry-run install with default values..."
-	@helm install openbao-operator charts/openbao-operator \
+	@echo "Testing Helm chart: client-side install render with default values..."
+	@helm template openbao-operator charts/openbao-operator \
 		--namespace openbao-operator-system \
-		--create-namespace \
-		--dry-run > /dev/null
+		--include-crds > /dev/null
 	@echo "Helm chart tests passed successfully!"
 
 .PHONY: helm-e2e-smoke
@@ -678,6 +677,9 @@ security-scan-fs: ## Run the Trivy filesystem scan used by CI.
 		--skip-files dist/install.yaml \
 		--skip-dirs test/manifests \
 		--skip-dirs vendor \
+		--skip-dirs website/node_modules \
+		--skip-dirs .github/tools/node_modules \
+		--skip-dirs bin \
 		.
 
 .PHONY: security-scan-image

@@ -35,22 +35,22 @@ test('docs navbar dropdown routes to validated deployments', async ({page}) => {
   ).toBeVisible();
 });
 
-test('version dropdown switches from next docs to the archived release', async ({page}) => {
+test('version dropdown switches from next docs to the stable release line', async ({page}) => {
   await page.goto('docs/next/get-started/deployment-decision-guide');
 
   const versionDropdown = page.locator('.navbar').getByText(/^next$/, {exact: true}).first();
   await versionDropdown.hover();
 
   const archivedRelease = page.locator('.dropdown__menu').getByRole('link', {
-    name: '0.1.0-rc.5',
+    name: '0.1.0',
     exact: true,
   });
   await expect(archivedRelease).toBeVisible();
   await archivedRelease.click();
 
-  await expect(page).toHaveURL(/\/openbao-operator\/docs\/0\.1\.0-rc\.5\/get-started\/deployment-decision-guide$/);
-  await expect(page.getByText('Prerelease documentation')).toBeVisible();
-  await expect(page.getByText('Version: 0.1.0-rc.5')).toBeVisible();
+  await expect(page).toHaveURL(/\/openbao-operator\/docs\/get-started\/deployment-decision-guide$/);
+  await expect(page.getByText('Published release documentation')).toBeVisible();
+  await expect(page.getByText('Version: 0.1.0')).toBeVisible();
 });
 
 test.describe('curated legacy redirects stay alive', () => {

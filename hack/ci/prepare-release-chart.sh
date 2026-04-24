@@ -7,9 +7,15 @@ set -euo pipefail
 
 CHART_DIR="${CHART_DIR:-charts/openbao-operator}"
 CHART_FILE="${CHART_DIR}/Chart.yaml"
+CHANGELOG_FILE="${CHANGELOG_FILE:-CHANGELOG.md}"
 
 if [[ ! -f "${CHART_FILE}" ]]; then
   echo "chart file not found: ${CHART_FILE}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${CHANGELOG_FILE}" ]]; then
+  echo "changelog file not found: ${CHANGELOG_FILE}" >&2
   exit 1
 fi
 
@@ -28,6 +34,151 @@ sed -E -i.bak \
   's|^([[:space:]]*artifacthub\.io/prerelease:[[:space:]]*).*$|\1"'"${prerelease}"'"|' \
   "${CHART_FILE}"
 rm -f "${CHART_FILE}.bak"
+
+python3 - "${CHART_FILE}" "${CHANGELOG_FILE}" "${CHART_VERSION}" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+chart_path = Path(sys.argv[1])
+changelog_path = Path(sys.argv[2])
+version = sys.argv[3]
+
+
+def heading_version(line):
+    match = re.match(r"^## \[([^\]]+)\]\([^)]+\)(?: \([^)]+\))?$", line)
+    if match:
+        return match.group(1).strip()
+
+    match = re.match(r"^## ([^(\n]+?)(?: \([^)]+\))?$", line)
+    if match:
+        return match.group(1).strip()
+
+    return None
+
+
+def change_kind(section):
+    normalized = section.lower()
+    if "security" in normalized:
+        return "security"
+    if "bug" in normalized or "fix" in normalized:
+        return "fixed"
+    if "feature" in normalized:
+        return "added"
+    if "deprecat" in normalized:
+        return "deprecated"
+    if "remove" in normalized:
+        return "removed"
+    return "changed"
+
+
+def clean_description(raw):
+    value = re.sub(r"\s+\(\[#\d+\]\([^)]+\)\)", "", raw)
+    value = re.sub(r"\s+\(\[[0-9a-f]{7,40}\]\([^)]+\)\)", "", value)
+    value = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", value)
+    value = value.replace("**", "").replace("`", "")
+    value = re.sub(r"\s+", " ", value).strip()
+    return value
+
+
+def release_changes(changelog):
+    lines = changelog.splitlines()
+    start = None
+    for index, line in enumerate(lines):
+        if heading_version(line) == version:
+            start = index + 1
+            break
+
+    if start is None:
+        raise SystemExit(f"release {version} was not found in {changelog_path}")
+
+    end = len(lines)
+    for index in range(start, len(lines)):
+        if lines[index].startswith("## "):
+            end = index
+            break
+
+    changes = []
+    current_kind = "changed"
+    current_change = None
+
+    for line in lines[start:end]:
+        section_match = re.match(r"^### (.+)$", line)
+        if section_match:
+            current_kind = change_kind(section_match.group(1))
+            current_change = None
+            continue
+
+        bullet_match = re.match(r"^\* (.+)$", line)
+        if bullet_match:
+            description = clean_description(bullet_match.group(1))
+            if description:
+                kind = "security" if re.match(r"^security\s*:", description, re.IGNORECASE) else current_kind
+                current_change = {"kind": kind, "description": description}
+                changes.append(current_change)
+            continue
+
+        if current_change and line.startswith(("  ", "\t")):
+            continuation = clean_description(line)
+            if continuation:
+                current_change["description"] = f"{current_change['description']} {continuation}"
+
+    if not changes:
+        changes.append({"kind": "changed", "description": f"Release {version}"})
+
+    return changes
+
+
+def replace_annotation_block(lines, key, replacement):
+    start = None
+    for index, line in enumerate(lines):
+        if re.match(rf"^  {re.escape(key)}:", line):
+            start = index
+            break
+
+    if start is None:
+        insert_at = None
+        for index, line in enumerate(lines):
+            if re.match(r"^  artifacthub\.io/images:", line):
+                insert_at = index
+                break
+        if insert_at is None:
+            raise SystemExit(f"{key} annotation not found and artifacthub.io/images insertion point is missing")
+        return lines[:insert_at] + replacement + lines[insert_at:]
+
+    end = start + 1
+    while end < len(lines):
+        line = lines[end]
+        if re.match(r"^  artifacthub\.io/", line) or re.match(r"^[^ ]", line):
+            break
+        end += 1
+
+    return lines[:start] + replacement + lines[end:]
+
+
+def replace_contains_security_updates(lines, enabled):
+    replacement = f"  artifacthub.io/containsSecurityUpdates: '{str(enabled).lower()}'"
+    for index, line in enumerate(lines):
+        if re.match(r"^  artifacthub\.io/containsSecurityUpdates:", line):
+            lines[index] = replacement
+            return lines
+    raise SystemExit("artifacthub.io/containsSecurityUpdates annotation not found")
+
+
+changes = release_changes(changelog_path.read_text())
+has_security_changes = any(change["kind"] == "security" for change in changes)
+
+changes_block = ["  artifacthub.io/changes: |"]
+for change in changes:
+    changes_block.append(f"    - kind: {change['kind']}")
+    changes_block.append(f"      description: {json.dumps(change['description'])}")
+
+chart_lines = chart_path.read_text().splitlines()
+chart_lines = replace_contains_security_updates(chart_lines, has_security_changes)
+chart_lines = replace_annotation_block(chart_lines, "artifacthub.io/changes", changes_block)
+chart_path.write_text("\n".join(chart_lines) + "\n")
+PY
 
 if ! grep -Eq '^[[:space:]]*artifacthub\.io/images:' "${CHART_FILE}"; then
   echo "artifacthub.io/images annotation not found in ${CHART_FILE}" >&2
@@ -76,6 +227,16 @@ mv "${CHART_FILE}.tmp" "${CHART_FILE}"
 actual_prerelease="$(sed -nE 's/^[[:space:]]*artifacthub\.io\/prerelease:[[:space:]]*"(true|false)"[[:space:]]*$/\1/p' "${CHART_FILE}" | head -n1)"
 if [[ -z "${actual_prerelease}" || "${actual_prerelease}" != "${prerelease}" ]]; then
   echo "artifacthub.io/prerelease mismatch: expected=${prerelease} actual=${actual_prerelease:-<empty>}" >&2
+  exit 1
+fi
+
+if ! grep -Eq '^[[:space:]]*artifacthub\.io/changes:[[:space:]]*\|[[:space:]]*$' "${CHART_FILE}"; then
+  echo "artifacthub.io/changes annotation not found in ${CHART_FILE}" >&2
+  exit 1
+fi
+
+if ! grep -Eq '^[[:space:]]*-[[:space:]]*kind:[[:space:]]*(added|changed|deprecated|removed|fixed|security)[[:space:]]*$' "${CHART_FILE}"; then
+  echo "artifacthub.io/changes entries missing or invalid in ${CHART_FILE}" >&2
   exit 1
 fi
 
