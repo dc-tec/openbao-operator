@@ -100,6 +100,12 @@ git commit --allow-empty -m $'chore: release 0.1.0-rc.6\n\nRelease-As: 0.1.0-rc.
 
 </Callout>
 
+<Callout type="note" title="Helm chart changelog">
+
+Release-please remains the source of truth for release notes. After release-please opens or updates a release PR, the `Release Please PR` workflow syncs `charts/openbao-operator/Chart.yaml` so Artifact Hub receives `artifacthub.io/changes`, image metadata, prerelease state, and security-update state from the release-please changelog.
+
+</Callout>
+
 <DecisionTable
   title="Release manager checklist"
   columns={["Stage", "What to prove before moving on"]}

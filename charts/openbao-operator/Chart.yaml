@@ -28,6 +28,13 @@ annotations:
   artifacthub.io/operatorCapabilities: Full Lifecycle
   artifacthub.io/prerelease: "false"
   artifacthub.io/containsSecurityUpdates: 'false'
+  artifacthub.io/changes: |
+    - kind: fixed
+      description: "ci: allow PR label sync to write labels"
+    - kind: fixed
+      description: "ci: replace dangerous PR labeling workflow"
+    - kind: fixed
+      description: "upgrade: verify default helper images for hardened clusters"
   artifacthub.io/images: |
     - name: openbao-operator
       image: ghcr.io/dc-tec/openbao-operator:0.1.1

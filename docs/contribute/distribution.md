@@ -67,13 +67,13 @@ The project currently treats Artifact Hub plus GHCR Helm OCI publication as the 
     {
       cells: [
         "Chart annotations",
-        "`artifacthub.io/category`, `license`, `operator`, `operatorCapabilities`, image metadata, CRD cards/examples, maintainers, and useful links.",
+        "`artifacthub.io/category`, `license`, `operator`, `operatorCapabilities`, release changes, image metadata, CRD cards/examples, maintainers, and useful links.",
       ],
     },
     {
       cells: [
         "Prerelease and security state",
-        "`artifacthub.io/prerelease` for prereleases and `artifacthub.io/containsSecurityUpdates` when applicable for the release.",
+        "`artifacthub.io/prerelease` for prereleases, `artifacthub.io/changes` from the release-please changelog, and `artifacthub.io/containsSecurityUpdates` when applicable for the release.",
       ],
     },
     {
