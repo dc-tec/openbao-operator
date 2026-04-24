@@ -106,6 +106,7 @@ type ciLaneConfig struct {
 	IncludeInPRMatrix        *bool    `yaml:"includeInPRMatrix"`
 	ExcludePentestOnDefault  bool     `yaml:"excludePentestOnDefaultPR"`
 	HardenedSigned           bool     `yaml:"hardenedSigned"`
+	EnableServiceClaims      bool     `yaml:"enableServiceClaims"`
 	OpenBaoImage             string   `yaml:"openbaoImage"`
 	HardenedInitImage        string   `yaml:"hardenedInitImage"`
 	HardenedUpgradeImage     string   `yaml:"hardenedUpgradeExecutorImage"`
@@ -136,6 +137,7 @@ type matrixRow struct {
 	Profile                  string `json:"profile,omitempty"`
 	ExcludePentestOnDefault  string `json:"exclude_pentest_on_default_pr"`
 	HardenedSigned           string `json:"hardened_signed"`
+	EnableServiceClaims      string `json:"enable_service_claims"`
 	OpenBaoImage             string `json:"openbao_image"`
 	HardenedInitImage        string `json:"hardened_init_image"`
 	HardenedUpgradeImage     string `json:"hardened_upgrade_executor_image"`
@@ -556,6 +558,7 @@ func matrixRowFromLane(policy versionPolicy, parallelism parallelismPolicy, lane
 		KindNodeImage:            "kindest/node:v" + policy.Kubernetes.Primary,
 		ExcludePentestOnDefault:  strconv.FormatBool(lane.ExcludePentestOnDefault),
 		HardenedSigned:           strconv.FormatBool(lane.HardenedSigned),
+		EnableServiceClaims:      strconv.FormatBool(lane.EnableServiceClaims),
 		OpenBaoImage:             openBaoImage,
 		HardenedInitImage:        lane.HardenedInitImage,
 		HardenedUpgradeImage:     lane.HardenedUpgradeImage,
@@ -625,6 +628,7 @@ func matrixRowFromNightlyLane(
 var allowedPRScopes = map[string]bool{
 	"always":   true,
 	"backup":   true,
+	"claims":   true,
 	"hardened": true,
 	"manual":   true,
 	"upgrade":  true,

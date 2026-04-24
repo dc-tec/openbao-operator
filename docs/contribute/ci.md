@@ -120,6 +120,13 @@ Inline `nosemgrep` suppressions are reserved for bounded intentional exceptions.
     },
     {
       cells: [
+        "PR touches service claims or service catalog code",
+        "The `claims` E2E shard runs with `E2E_ENABLE_SERVICE_CLAIMS=true`. Maintainers can also add `claims` or `service-catalog` to rerun that shard.",
+        "The claim-capable Helm path needs explicit runtime wiring, so it has its own CI route instead of relying on the generic E2E shards.",
+      ],
+    },
+    {
+      cells: [
         "Maintainer adds `ci:full-e2e`",
         "The broader E2E suite runs.",
         "This is appropriate when the change spans enough surface area that targeted routing is no longer sufficient.",

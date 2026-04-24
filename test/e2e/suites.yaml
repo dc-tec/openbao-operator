@@ -197,6 +197,24 @@ ciLanes:
     preloadHardenedAssets: false
     preloadStorageEmulators: []
 
+  - id: service-claims
+    name: "Service Claims"
+    labelFilter: "(claims && !openshift)"
+    prScope: claims
+    timeoutMinutes: 100
+    e2eTimeout: 90m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    enableServiceClaims: true
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators:
+      - rustfs
+
   - id: platform-openshift
     name: "OpenShift Platform"
     labelFilter: "(openshift && platform)"

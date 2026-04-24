@@ -29,6 +29,11 @@ on:
         required: false
         default: false
         type: boolean
+      force_claims_e2e:
+        description: Run the service-claims PR E2E shard.
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -50,6 +55,7 @@ jobs:
       manual_backup_e2e: ${{ steps.diff.outputs.manual_backup_e2e }}
       manual_upgrade_e2e: ${{ steps.diff.outputs.manual_upgrade_e2e }}
       manual_hardened_e2e: ${{ steps.diff.outputs.manual_hardened_e2e }}
+      manual_claims_e2e: ${{ steps.diff.outputs.manual_claims_e2e }}
       chart: ${{ steps.diff.outputs.chart }}
       workflow: ${{ steps.diff.outputs.workflow }}
       docs: ${{ steps.diff.outputs.docs }}
@@ -63,6 +69,7 @@ jobs:
       e2e_backup: ${{ steps.diff.outputs.e2e_backup }}
       e2e_upgrade: ${{ steps.diff.outputs.e2e_upgrade }}
       e2e_hardened: ${{ steps.diff.outputs.e2e_hardened }}
+      e2e_claims: ${{ steps.diff.outputs.e2e_claims }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -74,11 +81,12 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          MANUAL_E2E_REQUESTED: ${{ (inputs.force_full_e2e || inputs.force_backup_e2e || inputs.force_upgrade_e2e || inputs.force_hardened_e2e) && 'true' || 'false' }}
+          MANUAL_E2E_REQUESTED: ${{ (inputs.force_full_e2e || inputs.force_backup_e2e || inputs.force_upgrade_e2e || inputs.force_hardened_e2e || inputs.force_claims_e2e) && 'true' || 'false' }}
           MANUAL_FULL_E2E: ${{ inputs.force_full_e2e && 'true' || 'false' }}
           MANUAL_BACKUP_E2E: ${{ inputs.force_backup_e2e && 'true' || 'false' }}
           MANUAL_UPGRADE_E2E: ${{ inputs.force_upgrade_e2e && 'true' || 'false' }}
           MANUAL_HARDENED_E2E: ${{ inputs.force_hardened_e2e && 'true' || 'false' }}
+          MANUAL_CLAIMS_E2E: ${{ inputs.force_claims_e2e && 'true' || 'false' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
@@ -95,7 +103,8 @@ jobs:
               echo "manual_backup_e2e=${MANUAL_BACKUP_E2E}"
               echo "manual_upgrade_e2e=${MANUAL_UPGRADE_E2E}"
               echo "manual_hardened_e2e=${MANUAL_HARDENED_E2E}"
-              for key in chart workflow docs go_quality go_tests config_compat security_scan security_image fuzz e2e e2e_backup e2e_upgrade e2e_hardened; do
+              echo "manual_claims_e2e=${MANUAL_CLAIMS_E2E}"
+              for key in chart workflow docs go_quality go_tests config_compat security_scan security_image fuzz e2e e2e_backup e2e_upgrade e2e_hardened e2e_claims; do
                 echo "${key}=false"
               done
             } >> "${GITHUB_OUTPUT}"
@@ -109,6 +118,7 @@ jobs:
             echo "manual_backup_e2e=false"
             echo "manual_upgrade_e2e=false"
             echo "manual_hardened_e2e=false"
+            echo "manual_claims_e2e=false"
           } >> "${GITHUB_OUTPUT}"
 
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
@@ -205,6 +215,12 @@ jobs:
             echo "e2e_hardened=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if echo "${changed}" | grep -qE '^(api/|cmd/controller/|internal/(adapter/(config/|kube/admission/openbaoclusterclaim/|storage/)|app/(openbaoclusterclaim|openbaoclusterclaimbackuprequest|openbaoclusterclaimrestorerequest|openbaoclusterclaimupgraderequest)/|controller/(openbaoclusterclaim|openbaoclusterclaimbackuprequest|openbaoclusterclaimrestorerequest|openbaoclusterclaimupgraderequest)/|platform/(admission/|constants/|observability/|resourceapply/)|service/(backup/|bootstrap/|claimcontract/|connectionpublishing/|networking/|provisioner/|restore/|upgrade/|webhookcerts/))|config/(crd/|grafana/|manager/|network-policy/|policy/|rbac/)|charts/openbao-operator/|docs/(architecture/service-claims\.md|reference/(api|status-and-events)\.md|user-guide/service-claims/)|test/e2e/(Claims_.*|claims_helpers_test\.go|e2e_.*|framework/.*|helpers/.*)|Makefile|mk/)'; then
+            echo "e2e_claims=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "e2e_claims=false" >> "${GITHUB_OUTPUT}"
           fi
   security:
     name: Security (vulncheck + Semgrep + Trivy FS)
@@ -638,7 +654,7 @@ jobs:
   build-artifacts:
     name: Build Artifacts
     needs: changes
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || ((((needs.changes.outputs.e2e == 'true' || needs.changes.outputs.e2e_claims == 'true') || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller') || contains(github.event.pull_request.labels.*.name, 'claims') || contains(github.event.pull_request.labels.*.name, 'service-catalog'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: *runner
     steps:
       - name: Checkout
@@ -665,7 +681,7 @@ jobs:
     name: Build E2E Images Once
     runs-on: *runner
     needs: [changes, build-artifacts]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || ((((needs.changes.outputs.e2e == 'true' || needs.changes.outputs.e2e_claims == 'true') || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller') || contains(github.event.pull_request.labels.*.name, 'claims') || contains(github.event.pull_request.labels.*.name, 'service-catalog'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     permissions:
       contents: read
       packages: write
@@ -796,7 +812,7 @@ jobs:
     name: Plan E2E Matrix
     runs-on: *runner
     needs: changes
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || ((((needs.changes.outputs.e2e == 'true' || needs.changes.outputs.e2e_claims == 'true') || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller') || contains(github.event.pull_request.labels.*.name, 'claims') || contains(github.event.pull_request.labels.*.name, 'service-catalog'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
@@ -826,7 +842,7 @@ jobs:
 
   e2e:
     needs: [changes, e2e-matrix, build-e2e-images]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || ((((needs.changes.outputs.e2e == 'true' || needs.changes.outputs.e2e_claims == 'true') || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller') || contains(github.event.pull_request.labels.*.name, 'claims') || contains(github.event.pull_request.labels.*.name, 'service-catalog'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     name: E2E (${{ matrix.name }})
     runs-on: *runner
     permissions:
@@ -854,9 +870,12 @@ jobs:
             ${{ needs.changes.outputs.manual_upgrade_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades')) }}
           PR_HARDENED: >-
             ${{ needs.changes.outputs.manual_hardened_e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))) }}
+          PR_CLAIMS: >-
+            ${{ needs.changes.outputs.manual_claims_e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'claims') || contains(github.event.pull_request.labels.*.name, 'service-catalog'))) }}
           E2E_BACKUP_CHANGED: ${{ needs.changes.outputs.e2e_backup }}
           E2E_UPGRADE_CHANGED: ${{ needs.changes.outputs.e2e_upgrade }}
           E2E_HARDENED_CHANGED: ${{ needs.changes.outputs.e2e_hardened }}
+          E2E_CLAIMS_CHANGED: ${{ needs.changes.outputs.e2e_claims }}
           EXCLUDE_PENTEST_ON_DEFAULT_PR: ${{ matrix.exclude_pentest_on_default_pr }}
           LABEL_FILTER: ${{ matrix.label_filter }}
           PR_LABEL_FILTER: ${{ matrix.pr_label_filter }}
@@ -891,6 +910,11 @@ jobs:
               ;;
             hardened)
               if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_HARDENED}" == "true" ]] || [[ "${E2E_HARDENED_CHANGED}" == "true" ]]; then
+                SHOULD_RUN="true"
+              fi
+              ;;
+            claims)
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_CLAIMS}" == "true" ]] || [[ "${E2E_CLAIMS_CHANGED}" == "true" ]]; then
                 SHOULD_RUN="true"
               fi
               ;;
@@ -977,6 +1001,7 @@ jobs:
           E2E_SKIP_IMAGE_BUILD: "true"
           E2E_INSTALL_CSI_HOSTPATH: ${{ matrix.install_csi_hostpath }}
           E2E_ENABLE_HARDENED_SIGNED_SUITE: ${{ matrix.hardened_signed }}
+          E2E_ENABLE_SERVICE_CLAIMS: ${{ matrix.enable_service_claims }}
           E2E_OPERATOR_IMAGE: ${{ needs.build-e2e-images.outputs.manager_ref }}
           E2E_OPENBAO_IMAGE: ${{ matrix.openbao_image }}
           E2E_RUSTFS_IMAGE: ${{ steps.prepare-e2e-lane.outputs['rustfs-image'] }}

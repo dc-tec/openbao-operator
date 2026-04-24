@@ -91,6 +91,9 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 	if row.InstallCSIHostPath != matrixBoolTrue {
 		t.Fatalf("install csi hostpath = %q, want true", row.InstallCSIHostPath)
 	}
+	if row.EnableServiceClaims != matrixBoolFalse {
+		t.Fatalf("enable service claims = %q, want false", row.EnableServiceClaims)
+	}
 	if row.PreloadStorageEmulators != matrixBoolTrue {
 		t.Fatalf("preload storage emulators = %q, want true", row.PreloadStorageEmulators)
 	}
@@ -438,6 +441,9 @@ func TestGithubMatrixJSONShape(t *testing.T) {
 	}
 	if !strings.Contains(out, `"install_csi_hostpath":"false"`) {
 		t.Fatalf("matrix json missing csi hostpath install flag: %s", out)
+	}
+	if !strings.Contains(out, `"enable_service_claims":"false"`) {
+		t.Fatalf("matrix json missing service claims flag: %s", out)
 	}
 	if !strings.Contains(out, `"preload_storage_emulators":"false"`) {
 		t.Fatalf("matrix json missing storage emulator preload flag: %s", out)

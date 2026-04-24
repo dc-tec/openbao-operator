@@ -2,7 +2,7 @@
 # Maps file patterns to labels for automatic PR labeling.
 #
 # Routing-sensitive labels used by CI E2E reruns:
-# backup, upgrades, security, provisioner, admission, controller.
+# backup, upgrades, security, provisioner, admission, controller, claims, service-catalog.
 
 # Documentation changes
 documentation:
@@ -102,6 +102,71 @@ controller:
           - 'cmd/controller/**/*'
           - 'charts/openbao-operator/templates/controller/**/*'
           - 'config/manager/controller.yaml'
+
+# Service claims / service catalog changes
+claims:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'api/v1alpha1/openbaoclusterclaim*_types.go'
+          - 'api/v1alpha1/openbao*profile_types.go'
+          - 'api/v1alpha1/openbaobackup*_types.go'
+          - 'api/v1alpha1/openbaoserviceoffering_types.go'
+          - 'api/v1alpha1/openbaoentrypoint_types.go'
+          - 'api/v1alpha1/openbaoexposureclass_types.go'
+          - 'api/v1alpha1/openbaoingresspolicy_types.go'
+          - 'internal/app/openbaoclusterclaim*/**/*'
+          - 'internal/controller/openbaoclusterclaim*/**/*'
+          - 'internal/service/claimcontract/**/*'
+          - 'internal/service/connectionpublishing/**/*'
+          - 'internal/service/webhookcerts/**/*'
+          - 'internal/adapter/kube/admission/openbaoclusterclaim/**/*'
+          - 'config/crd/bases/openbao.org_openbaoclusterclaim*.yaml'
+          - 'config/crd/bases/openbao.org_openbao*profiles.yaml'
+          - 'config/crd/bases/openbao.org_openbaoserviceofferings.yaml'
+          - 'config/crd/bases/openbao.org_openbaoentrypoints.yaml'
+          - 'config/crd/bases/openbao.org_openbaoexposureclasses.yaml'
+          - 'config/crd/bases/openbao.org_openbaoingresspolicies.yaml'
+          - 'config/crd/bases/openbao.org_openbaobackup*.yaml'
+          - 'config/policy/*openbaoclusterclaim*'
+          - 'config/policy/*service-catalog*'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoclusterclaim*.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbao*profiles.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoserviceofferings.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoentrypoints.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoexposureclasses.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoingresspolicies.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaobackup*.yaml'
+          - 'charts/openbao-operator/templates/admission/*openbaoclusterclaim*'
+          - 'charts/openbao-operator/templates/admission/*service-catalog*'
+          - 'docs/user-guide/service-claims/**/*'
+          - 'docs/architecture/service-claims.md'
+          - 'test/e2e/Claims_*'
+          - 'test/e2e/catalog/suites/Claims_*'
+          - 'test/e2e/claims_helpers_test.go'
+
+service-catalog:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'api/v1alpha1/openbao*profile_types.go'
+          - 'api/v1alpha1/openbaoserviceoffering_types.go'
+          - 'api/v1alpha1/openbaoentrypoint_types.go'
+          - 'api/v1alpha1/openbaoexposureclass_types.go'
+          - 'api/v1alpha1/openbaoingresspolicy_types.go'
+          - 'api/v1alpha1/openbaobackup*_types.go'
+          - 'internal/service/claimcontract/**/*'
+          - 'config/crd/bases/openbao.org_openbao*profiles.yaml'
+          - 'config/crd/bases/openbao.org_openbaoserviceofferings.yaml'
+          - 'config/crd/bases/openbao.org_openbaoentrypoints.yaml'
+          - 'config/crd/bases/openbao.org_openbaoexposureclasses.yaml'
+          - 'config/crd/bases/openbao.org_openbaoingresspolicies.yaml'
+          - 'config/crd/bases/openbao.org_openbaobackup*.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbao*profiles.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoserviceofferings.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoentrypoints.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoexposureclasses.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaoingresspolicies.yaml'
+          - 'charts/openbao-operator/crds/openbao.org_openbaobackup*.yaml'
+          - 'docs/user-guide/service-claims/service-catalog.md'
 
 # Provisioner changes
 provisioner:

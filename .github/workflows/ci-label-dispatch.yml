@@ -16,7 +16,7 @@ concurrency:
 jobs:
   dispatch:
     name: Dispatch CI Rerun
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && (github.event.label.name == 'ci:full-e2e' || github.event.label.name == 'backup' || github.event.label.name == 'upgrades' || github.event.label.name == 'security' || github.event.label.name == 'provisioner' || github.event.label.name == 'admission' || github.event.label.name == 'controller')
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && (github.event.label.name == 'ci:full-e2e' || github.event.label.name == 'backup' || github.event.label.name == 'upgrades' || github.event.label.name == 'security' || github.event.label.name == 'provisioner' || github.event.label.name == 'admission' || github.event.label.name == 'controller' || github.event.label.name == 'claims' || github.event.label.name == 'service-catalog')
     runs-on: ubuntu-24.04
     steps:
       - name: Dispatch CI workflow
@@ -29,6 +29,7 @@ jobs:
           FORCE_BACKUP_E2E: ${{ contains(github.event.pull_request.labels.*.name, 'backup') && 'true' || 'false' }}
           FORCE_UPGRADE_E2E: ${{ contains(github.event.pull_request.labels.*.name, 'upgrades') && 'true' || 'false' }}
           FORCE_HARDENED_E2E: ${{ (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller')) && 'true' || 'false' }}
+          FORCE_CLAIMS_E2E: ${{ (contains(github.event.pull_request.labels.*.name, 'claims') || contains(github.event.pull_request.labels.*.name, 'service-catalog')) && 'true' || 'false' }}
         run: |
           set -euo pipefail
 
@@ -40,6 +41,7 @@ jobs:
             --arg force_backup_e2e "${FORCE_BACKUP_E2E}" \
             --arg force_upgrade_e2e "${FORCE_UPGRADE_E2E}" \
             --arg force_hardened_e2e "${FORCE_HARDENED_E2E}" \
+            --arg force_claims_e2e "${FORCE_CLAIMS_E2E}" \
             '{
               ref: $ref,
               inputs: {
@@ -47,7 +49,8 @@ jobs:
                 force_full_e2e: $force_full_e2e,
                 force_backup_e2e: $force_backup_e2e,
                 force_upgrade_e2e: $force_upgrade_e2e,
-                force_hardened_e2e: $force_hardened_e2e
+                force_hardened_e2e: $force_hardened_e2e,
+                force_claims_e2e: $force_claims_e2e
               }
             }' > "${payload_file}"
 
