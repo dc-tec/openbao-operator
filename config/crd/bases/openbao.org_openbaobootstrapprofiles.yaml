@@ -1,0 +1,235 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaobootstrapprofiles.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoBootstrapProfile
+    listKind: OpenBaoBootstrapProfileList
+    plural: openbaobootstrapprofiles
+    singular: openbaobootstrapprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.operatorLifecycleAuth.mode
+      name: Lifecycle Auth
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoBootstrapProfile is the immutable platform-owned bootstrap
+          bundle catalog object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoBootstrapProfileSpec defines the desired state of
+              OpenBaoBootstrapProfile.
+            properties:
+              audit:
+                description: Audit defines audit devices that should exist after bootstrap.
+                properties:
+                  devices:
+                    description: Devices lists audit devices that should exist after
+                      bootstrap.
+                    items:
+                      description: OpenBaoBootstrapAuditDeviceSpec defines one audit
+                        device bootstrap entry.
+                      properties:
+                        sinkRef:
+                          description: SinkRef identifies platform-managed sink wiring
+                            for the audit device.
+                          properties:
+                            kind:
+                              description: Kind is the referenced object kind.
+                              minLength: 1
+                              type: string
+                            name:
+                              description: Name is the referenced object name.
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: Namespace is the referenced object namespace
+                                when applicable.
+                              type: string
+                          required:
+                          - kind
+                          - name
+                          type: object
+                        type:
+                          description: Type is the audit device type to enable.
+                          minLength: 1
+                          type: string
+                      required:
+                      - type
+                      type: object
+                    type: array
+                type: object
+              auth:
+                description: Auth defines auth methods that should exist after bootstrap.
+                properties:
+                  methods:
+                    description: Methods lists auth methods that should exist after
+                      bootstrap.
+                    items:
+                      description: OpenBaoBootstrapAuthMethodSpec defines one auth
+                        method bootstrap entry.
+                      properties:
+                        configRef:
+                          description: ConfigRef identifies platform-managed configuration
+                            for the auth method.
+                          properties:
+                            kind:
+                              description: Kind is the referenced object kind.
+                              minLength: 1
+                              type: string
+                            name:
+                              description: Name is the referenced object name.
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: Namespace is the referenced object namespace
+                                when applicable.
+                              type: string
+                          required:
+                          - kind
+                          - name
+                          type: object
+                        path:
+                          description: Path is the mount path for the auth method.
+                          minLength: 1
+                          type: string
+                        type:
+                          description: Type is the auth method type to enable.
+                          minLength: 1
+                          type: string
+                      required:
+                      - path
+                      - type
+                      type: object
+                    type: array
+                type: object
+              operatorLifecycleAuth:
+                description: OperatorLifecycleAuth defines operator lifecycle-auth
+                  posture for initialized clusters.
+                properties:
+                  jwt:
+                    description: JWT carries JWT-specific lifecycle-auth configuration.
+                    properties:
+                      audience:
+                        description: Audience is the lifecycle JWT audience the initialized
+                          cluster should accept.
+                        minLength: 1
+                        type: string
+                    required:
+                    - audience
+                    type: object
+                  mode:
+                    description: Mode identifies the lifecycle-auth mode.
+                    enum:
+                    - JWT
+                    type: string
+                required:
+                - mode
+                type: object
+              policies:
+                description: Policies defines policy bundles that should exist after
+                  bootstrap.
+                properties:
+                  bundles:
+                    description: Bundles lists policy bundles that should exist after
+                      bootstrap.
+                    items:
+                      description: OpenBaoBootstrapPolicyBundleSpec defines one policy
+                        bundle entry.
+                      properties:
+                        contentRef:
+                          description: ContentRef identifies policy content to apply
+                            during bootstrap.
+                          properties:
+                            kind:
+                              description: Kind is the referenced object kind.
+                              minLength: 1
+                              type: string
+                            name:
+                              description: Name is the referenced object name.
+                              minLength: 1
+                              type: string
+                            namespace:
+                              description: Namespace is the referenced object namespace
+                                when applicable.
+                              type: string
+                          required:
+                          - kind
+                          - name
+                          type: object
+                        name:
+                          description: Name identifies the bundle inside the bootstrap
+                            profile.
+                          minLength: 1
+                          type: string
+                      required:
+                      - contentRef
+                      - name
+                      type: object
+                    type: array
+                type: object
+              secretEngines:
+                description: SecretEngines defines secret-engine mounts that should
+                  exist after bootstrap.
+                properties:
+                  mounts:
+                    description: Mounts lists secret-engine mounts that should exist
+                      after bootstrap.
+                    items:
+                      description: OpenBaoBootstrapSecretEngineMountSpec defines one
+                        secret-engine mount entry.
+                      properties:
+                        path:
+                          description: Path is the mount path for the secret engine.
+                          minLength: 1
+                          type: string
+                        type:
+                          description: Type is the secret-engine type to enable.
+                          minLength: 1
+                          type: string
+                      required:
+                      - path
+                      - type
+                      type: object
+                    type: array
+                type: object
+            required:
+            - operatorLifecycleAuth
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

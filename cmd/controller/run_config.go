@@ -3,7 +3,11 @@ package controller
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
+	"net"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,22 +22,32 @@ import (
 )
 
 type runConfig struct {
-	metricsAddr              string
-	metricsCertPath          string
-	metricsCertName          string
-	metricsCertKey           string
-	enableLeaderElection     bool
-	probeAddr                string
-	secureMetrics            bool
-	enableHTTP2              bool
-	platform                 string
-	clientQPS                float64
-	clientBurst              int
-	clientCBFailureThreshold int
-	clientCBOpenDuration     time.Duration
-	jwtAuthStrategy          string
-	admissionEnforcement     string
-	admissionStartupTimeout  time.Duration
+	metricsAddr                                     string
+	metricsCertPath                                 string
+	metricsCertName                                 string
+	metricsCertKey                                  string
+	enableLeaderElection                            bool
+	probeAddr                                       string
+	secureMetrics                                   bool
+	enableHTTP2                                     bool
+	platform                                        string
+	clientQPS                                       float64
+	clientBurst                                     int
+	clientCBFailureThreshold                        int
+	clientCBOpenDuration                            time.Duration
+	jwtAuthStrategy                                 string
+	admissionEnforcement                            string
+	admissionStartupTimeout                         time.Duration
+	enableServiceClaims                             bool
+	serviceClaimsAPIServerCIDR                      string
+	serviceClaimsAPIServerEndpointIPs               []string
+	serviceClaimsDNSEndpointIPs                     []string
+	serviceClaimsTransitUnsealAddress               string
+	serviceClaimsTransitUnsealKeyName               string
+	serviceClaimsTransitUnsealMountPath             string
+	serviceClaimsTransitUnsealNamespace             string
+	serviceClaimsTransitUnsealTLSServerName         string
+	serviceClaimsTransitUnsealCredentialsSecretName string
 }
 
 func parseRunConfig() (runConfig, error) {
@@ -72,7 +86,6 @@ func parseRunConfig() (runConfig, error) {
 		"The duration the circuit breaker remains open before testing the connection.")
 
 	entrypoint.BindAdmissionFlags(flag.CommandLine, &cfg.admissionEnforcement, &cfg.admissionStartupTimeout)
-
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -92,7 +105,161 @@ func parseRunConfig() (runConfig, error) {
 	}
 	cfg.admissionEnforcement = admissionEnforcement
 
+	enableServiceClaims, err := serviceClaimsEnabledFromEnv()
+	if err != nil {
+		return runConfig{}, err
+	}
+	cfg.enableServiceClaims = enableServiceClaims
+	networkConfig, err := serviceClaimsNetworkConfigFromEnv()
+	if err != nil {
+		return runConfig{}, err
+	}
+	cfg.serviceClaimsAPIServerCIDR = networkConfig.apiServerCIDR
+	cfg.serviceClaimsAPIServerEndpointIPs = networkConfig.apiServerEndpointIPs
+	cfg.serviceClaimsDNSEndpointIPs = networkConfig.dnsEndpointIPs
+	transitUnsealConfig, err := serviceClaimsTransitUnsealConfigFromEnv()
+	if err != nil {
+		return runConfig{}, err
+	}
+	cfg.serviceClaimsTransitUnsealAddress = transitUnsealConfig.address
+	cfg.serviceClaimsTransitUnsealKeyName = transitUnsealConfig.keyName
+	cfg.serviceClaimsTransitUnsealMountPath = transitUnsealConfig.mountPath
+	cfg.serviceClaimsTransitUnsealNamespace = transitUnsealConfig.namespace
+	cfg.serviceClaimsTransitUnsealTLSServerName = transitUnsealConfig.tlsServerName
+	cfg.serviceClaimsTransitUnsealCredentialsSecretName = transitUnsealConfig.credentialsSecretName
+
 	return cfg, nil
+}
+
+func serviceClaimsEnabledFromEnv() (bool, error) {
+	return boolEnv(constants.EnvOperatorEnableServiceClaims)
+}
+
+func boolEnv(key string) (bool, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return false, nil
+	}
+
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", key, err)
+	}
+
+	return value, nil
+}
+
+type serviceClaimsTransitUnsealEnvConfig struct {
+	address               string
+	keyName               string
+	mountPath             string
+	namespace             string
+	tlsServerName         string
+	credentialsSecretName string
+}
+
+func serviceClaimsTransitUnsealConfigFromEnv() (serviceClaimsTransitUnsealEnvConfig, error) {
+	cfg := serviceClaimsTransitUnsealEnvConfig{
+		address:       strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealAddress)),
+		keyName:       strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealKeyName)),
+		mountPath:     strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealMountPath)),
+		namespace:     strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealNamespace)),
+		tlsServerName: strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSServerName)),
+		credentialsSecretName: strings.TrimSpace(
+			os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealCredentialsSecretName),
+		),
+	}
+
+	if cfg == (serviceClaimsTransitUnsealEnvConfig{}) {
+		return cfg, nil
+	}
+
+	missing := make([]string, 0, 4)
+	if cfg.address == "" {
+		missing = append(missing, constants.EnvOperatorServiceClaimsTransitUnsealAddress)
+	}
+	if cfg.keyName == "" {
+		missing = append(missing, constants.EnvOperatorServiceClaimsTransitUnsealKeyName)
+	}
+	if cfg.mountPath == "" {
+		missing = append(missing, constants.EnvOperatorServiceClaimsTransitUnsealMountPath)
+	}
+	if cfg.credentialsSecretName == "" {
+		missing = append(missing, constants.EnvOperatorServiceClaimsTransitUnsealCredentialsSecretName)
+	}
+	if len(missing) > 0 {
+		return serviceClaimsTransitUnsealEnvConfig{}, fmt.Errorf(
+			"service-claims transit unseal config is incomplete: missing %s",
+			strings.Join(missing, ", "),
+		)
+	}
+
+	return cfg, nil
+}
+
+type serviceClaimsNetworkEnvConfig struct {
+	apiServerCIDR        string
+	apiServerEndpointIPs []string
+	dnsEndpointIPs       []string
+}
+
+func serviceClaimsNetworkConfigFromEnv() (serviceClaimsNetworkEnvConfig, error) {
+	apiServerCIDR := strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsAPIServerCIDR))
+	if apiServerCIDR != "" {
+		_, _, err := net.ParseCIDR(apiServerCIDR)
+		if err != nil {
+			return serviceClaimsNetworkEnvConfig{}, fmt.Errorf(
+				"%s: invalid CIDR %q: %w",
+				constants.EnvOperatorServiceClaimsAPIServerCIDR,
+				apiServerCIDR,
+				err,
+			)
+		}
+	}
+
+	apiServerEndpointIPs, err := parseIPListEnv(constants.EnvOperatorServiceClaimsAPIServerEndpointIPs)
+	if err != nil {
+		return serviceClaimsNetworkEnvConfig{}, err
+	}
+	dnsEndpointIPs, err := parseIPListEnv(constants.EnvOperatorServiceClaimsDNSEndpointIPs)
+	if err != nil {
+		return serviceClaimsNetworkEnvConfig{}, err
+	}
+
+	return serviceClaimsNetworkEnvConfig{
+		apiServerCIDR:        apiServerCIDR,
+		apiServerEndpointIPs: apiServerEndpointIPs,
+		dnsEndpointIPs:       dnsEndpointIPs,
+	}, nil
+}
+
+func parseIPListEnv(key string) ([]string, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(raw, ",")
+	seen := map[string]struct{}{}
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		ip := strings.TrimSpace(part)
+		if ip == "" {
+			continue
+		}
+		parsed := net.ParseIP(ip)
+		if parsed == nil {
+			return nil, fmt.Errorf("%s: invalid IP address %q", key, ip)
+		}
+		canonical := parsed.String()
+		if _, exists := seen[canonical]; exists {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		values = append(values, canonical)
+	}
+	slices.Sort(values)
+	return values, nil
 }
 
 func buildMetricsServerOptions(cfg runConfig) metricsserver.Options {

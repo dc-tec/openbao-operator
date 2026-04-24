@@ -1,0 +1,24 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-restrict-service-catalog-mutations-binding
+spec:
+  policyName: openbao-restrict-service-catalog-mutations
+  validationActions: [Deny]
+  matchResources:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources:
+          - openbaoserviceprofiles
+          - openbaobootstrapprofiles
+          - openbaoexposureclasses
+          - openbaostorageprofiles
+          - openbaounsealprofiles
+          - openbaoruntimeprofiles
+          - openbaoobservabilityprofiles
+          - openbaonetworkprofiles
+          - openbaoupgradepolicies
+          - openbaobackupprofiles
+          - openbaoentrypoints

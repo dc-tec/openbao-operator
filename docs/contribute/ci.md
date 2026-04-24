@@ -81,6 +81,13 @@ make ci-core`}
         "Label filters and the existing-cluster path provide smaller or platform-specific reproductions.",
       ],
     },
+    {
+      cells: [
+        "Service-claim E2E parity",
+        "`E2E_ENABLE_SERVICE_CLAIMS=true make test-e2e E2E_LABEL_FILTER='claims' ...`",
+        "The claim lane uses the claim-capable Helm install path and covers same-cluster claims, guardrails, upgrade requests, manual backup requests, and restore requests.",
+      ],
+    },
   ]}
 />
 
@@ -139,6 +146,16 @@ Inline `nosemgrep` suppressions are reserved for bounded intentional exceptions.
   E2E_PARALLEL_NODES=2
 
 make helm-e2e-smoke
+
+E2E_ENABLE_SERVICE_CLAIMS=true make test-e2e \\
+  E2E_LABEL_FILTER='claims-smoke || claims-guardrails' \\
+  E2E_KEEP_GOING=true \\
+  E2E_TIMEOUT=60m
+
+E2E_ENABLE_SERVICE_CLAIMS=true make test-e2e \\
+  E2E_LABEL_FILTER='claims-functional && (claims-upgrade || case:claims-functional-backup-request || case:claims-functional-restore-request)' \\
+  E2E_KEEP_GOING=true \\
+  E2E_TIMEOUT=90m
 
 make fuzz
 FUZZ_TARGET_FILTER='FuzzDiscoverConfig|internal/service/upgrade' make fuzz`}

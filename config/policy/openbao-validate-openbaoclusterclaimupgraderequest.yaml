@@ -1,0 +1,32 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-validate-openbaoclusterclaimupgraderequest
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["openbaoclusterclaimupgraderequests"]
+  validations:
+    # API contract: upgrade request specs are immutable after creation.
+    - expression: >-
+        oldObject == null || object.spec == oldObject.spec
+      message: "spec is immutable; create a new OpenBaoClusterClaimUpgradeRequest for changed upgrade intent."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-validate-openbaoclusterclaimupgraderequest-binding
+spec:
+  policyName: openbao-validate-openbaoclusterclaimupgraderequest
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector: {}
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["openbaoclusterclaimupgraderequests"]

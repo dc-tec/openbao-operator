@@ -15,9 +15,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -88,6 +90,20 @@ func TestNewManager_InvalidNamespacePodSecurityLabelsMode(t *testing.T) {
 			t.Fatalf("NewManager() error = %q, want it to contain %q", err.Error(), want)
 		}
 	}
+}
+
+type noMatchOnClaimListClient struct {
+	client.Client
+}
+
+func (c noMatchOnClaimListClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	if _, ok := list.(*openbaov1alpha1.OpenBaoClusterClaimList); ok {
+		return &meta.NoKindMatchError{
+			GroupKind:        schema.GroupKind{Group: "openbao.org", Kind: "OpenBaoClusterClaim"},
+			SearchedVersions: []string{"v1alpha1"},
+		}
+	}
+	return c.Client.List(ctx, list, opts...)
 }
 
 func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
@@ -804,6 +820,316 @@ func TestAccumulateRestoreTenantSecretNames_SkipsTokenSecretWhenJWTAuthConfigure
 	want := []string{"restore-creds"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("restore reader allowlist = %v, want %v", got, want)
+	}
+}
+
+func TestEnsureTenantSecretRBAC_TracksProjectedBootstrapSecretRefsFromClusters(t *testing.T) {
+	namespace := testNamespace
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "bao",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.0",
+			Image:    "openbao:2.4.0",
+			Replicas: 1,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+				Mode:    openbaov1alpha1.TLSModeOperatorManaged,
+			},
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				Requests: []openbaov1alpha1.SelfInitRequest{
+					{
+						Name: "auth",
+						AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
+							Type: "kubernetes",
+							ConfigFromRef: &openbaov1alpha1.TypedObjectReference{
+								Kind: "Secret",
+								Name: "claim-bootstrap-authcfg-2b783c49140b",
+							},
+						},
+					},
+					{
+						Name: "policy",
+						Policy: &openbaov1alpha1.SelfInitPolicy{
+							ContentFromRef: &openbaov1alpha1.TypedObjectReference{
+								Kind: "Secret",
+								Name: "claim-bootstrap-policy-2b64dd88e206",
+							},
+						},
+					},
+					{
+						Name: "audit",
+						Path: "sys/audit/file",
+						AuditDevice: &openbaov1alpha1.SelfInitAuditDevice{
+							Type: "file",
+							SinkFromRef: &openbaov1alpha1.TypedObjectReference{
+								Kind: "Secret",
+								Name: "claim-bootstrap-audit-697c5a587a3f",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	k8sClient := newTestClient(t, cluster)
+	logger := logr.Discard()
+	manager, err := NewManager(k8sClient, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := manager.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
+		t.Fatalf("EnsureTenantSecretRBAC() error = %v", err)
+	}
+
+	readerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsReaderRoleName}, readerRole); err != nil {
+		t.Fatalf("expected reader Role to exist: %v", err)
+	}
+	wantReaderNames := []string{
+		"claim-bootstrap-audit-697c5a587a3f",
+		"claim-bootstrap-authcfg-2b783c49140b",
+		"claim-bootstrap-policy-2b64dd88e206",
+	}
+	if got := extractSecretResourceNames(readerRole.Rules); !reflect.DeepEqual(got, wantReaderNames) {
+		t.Errorf("reader Role allowlist = %v, want %v", got, wantReaderNames)
+	}
+}
+
+func TestEnsureTenantSecretRBAC_TracksSameClusterClaimBootstrapSourceSecrets(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "openbao-operator-system")
+
+	namespace := testNamespace
+
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "payments",
+			Namespace: "openbao-operator-system",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	claim := &openbaov1alpha1.OpenBaoClusterClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "payments-bao",
+			Namespace: "openbao-operator-system",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterClaimSpec{
+			TenantRef:         openbaov1alpha1.LocalReference{Name: tenant.Name},
+			ServiceProfileRef: openbaov1alpha1.LocalReference{Name: "standard-ha-v1"},
+		},
+	}
+	serviceProfile := &openbaov1alpha1.OpenBaoServiceProfile{
+		ObjectMeta: metav1.ObjectMeta{Name: "standard-ha-v1"},
+		Spec: openbaov1alpha1.OpenBaoServiceProfileSpec{
+			Bootstrap: openbaov1alpha1.OpenBaoServiceProfileBootstrapSpec{
+				Mode:       openbaov1alpha1.OpenBaoBootstrapModeSelfInit,
+				ProfileRef: &openbaov1alpha1.LocalReference{Name: "bootstrap-v1"},
+			},
+			Cluster: openbaov1alpha1.OpenBaoServiceProfileClusterSpec{
+				Version: "2.4.0",
+			},
+			Storage: openbaov1alpha1.OpenBaoServiceProfileStorageSpec{
+				PrimarySize: "10Gi",
+			},
+			Exposure: openbaov1alpha1.OpenBaoServiceProfileExposureSpec{
+				ClassRef: openbaov1alpha1.LocalReference{Name: "internal-v1"},
+			},
+			Backup: openbaov1alpha1.OpenBaoServiceProfileBackupSpec{
+				ProfileRef: openbaov1alpha1.LocalReference{Name: "backup-v1"},
+			},
+		},
+	}
+	bootstrapProfile := &openbaov1alpha1.OpenBaoBootstrapProfile{
+		ObjectMeta: metav1.ObjectMeta{Name: "bootstrap-v1"},
+		Spec: openbaov1alpha1.OpenBaoBootstrapProfileSpec{
+			Auth: &openbaov1alpha1.OpenBaoBootstrapAuthSpec{
+				Methods: []openbaov1alpha1.OpenBaoBootstrapAuthMethodSpec{
+					{
+						Type: "kubernetes",
+						Path: "kubernetes",
+						ConfigRef: &openbaov1alpha1.TypedObjectReference{
+							Kind:      "Secret",
+							Name:      "source-auth",
+							Namespace: namespace,
+						},
+					},
+				},
+			},
+			Policies: &openbaov1alpha1.OpenBaoBootstrapPoliciesSpec{
+				Bundles: []openbaov1alpha1.OpenBaoBootstrapPolicyBundleSpec{
+					{
+						Name: "base",
+						ContentRef: openbaov1alpha1.TypedObjectReference{
+							Kind:      "Secret",
+							Name:      "source-policy",
+							Namespace: namespace,
+						},
+					},
+				},
+			},
+			Audit: &openbaov1alpha1.OpenBaoBootstrapAuditSpec{
+				Devices: []openbaov1alpha1.OpenBaoBootstrapAuditDeviceSpec{
+					{
+						Type: "file",
+						SinkRef: &openbaov1alpha1.TypedObjectReference{
+							Kind:      "Secret",
+							Name:      "source-audit",
+							Namespace: namespace,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	k8sClient := newTestClient(t, tenant, claim, serviceProfile, bootstrapProfile)
+	logger := logr.Discard()
+	manager, err := NewManager(k8sClient, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := manager.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
+		t.Fatalf("EnsureTenantSecretRBAC() error = %v", err)
+	}
+
+	readerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsReaderRoleName}, readerRole); err != nil {
+		t.Fatalf("expected reader Role to exist: %v", err)
+	}
+	wantReaderNames := []string{
+		"source-audit",
+		"source-auth",
+		"source-policy",
+	}
+	if got := extractSecretResourceNames(readerRole.Rules); !reflect.DeepEqual(got, wantReaderNames) {
+		t.Errorf("reader Role allowlist = %v, want %v", got, wantReaderNames)
+	}
+}
+
+func TestEnsureTenantSecretRBAC_TracksAppliedClaimBootstrapProjectionSecrets(t *testing.T) {
+	t.Setenv("OPERATOR_NAMESPACE", "openbao-operator-system")
+
+	namespace := testNamespace
+
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "payments",
+			Namespace: "openbao-operator-system",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	claim := &openbaov1alpha1.OpenBaoClusterClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "payments-bao",
+			Namespace: "openbao-operator-system",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterClaimSpec{
+			TenantRef:         openbaov1alpha1.LocalReference{Name: tenant.Name},
+			ServiceProfileRef: openbaov1alpha1.LocalReference{Name: "standard-ha-v1"},
+		},
+		Status: openbaov1alpha1.OpenBaoClusterClaimStatus{
+			Applied: openbaov1alpha1.OpenBaoClusterClaimAppliedStatus{
+				RenderedDependencies: &openbaov1alpha1.OpenBaoClusterClaimRenderedDependencyStatus{
+					BootstrapProjectionRefs: []openbaov1alpha1.TypedObjectReference{
+						{Kind: "Secret", Name: "claim-bootstrap-authcfg-a1b2c3d4"},
+						{Kind: "ConfigMap", Name: "claim-bootstrap-policy-a1b2c3d4"},
+						{Kind: "Secret", Name: "claim-bootstrap-audit-a1b2c3d4"},
+					},
+				},
+			},
+		},
+	}
+
+	k8sClient := newTestClient(t, tenant, claim)
+	logger := logr.Discard()
+	manager, err := NewManager(k8sClient, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := manager.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
+		t.Fatalf("EnsureTenantSecretRBAC() error = %v", err)
+	}
+
+	readerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsReaderRoleName}, readerRole); err != nil {
+		t.Fatalf("expected reader Role to exist: %v", err)
+	}
+	wantReaderNames := []string{
+		"claim-bootstrap-audit-a1b2c3d4",
+		"claim-bootstrap-authcfg-a1b2c3d4",
+	}
+	if got := extractSecretResourceNames(readerRole.Rules); !reflect.DeepEqual(got, wantReaderNames) {
+		t.Errorf("reader Role allowlist = %v, want %v", got, wantReaderNames)
+	}
+}
+
+func TestEnsureTenantSecretRBAC_IgnoresMissingClaimAPI(t *testing.T) {
+	namespace := testNamespace
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "bao",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.0",
+			Image:    "openbao:2.4.0",
+			Replicas: 1,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+				Mode:    openbaov1alpha1.TLSModeOperatorManaged,
+			},
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				Requests: []openbaov1alpha1.SelfInitRequest{
+					{
+						Name: "auth",
+						AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
+							Type: "kubernetes",
+							ConfigFromRef: &openbaov1alpha1.TypedObjectReference{
+								Kind: "Secret",
+								Name: "tenant-auth-config",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	baseClient := newTestClient(t, cluster)
+	logger := logr.Discard()
+	manager, err := NewManager(noMatchOnClaimListClient{Client: baseClient}, logger)
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := manager.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
+		t.Fatalf("EnsureTenantSecretRBAC() error = %v", err)
+	}
+
+	readerRole := &rbacv1.Role{}
+	if err := baseClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsReaderRoleName}, readerRole); err != nil {
+		t.Fatalf("expected reader Role to exist: %v", err)
+	}
+	if got := extractSecretResourceNames(readerRole.Rules); !reflect.DeepEqual(got, []string{"tenant-auth-config"}) {
+		t.Fatalf("reader Role allowlist = %v, want [tenant-auth-config] when claim API is unavailable", got)
 	}
 }
 

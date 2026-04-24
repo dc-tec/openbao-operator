@@ -1,0 +1,103 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-lock-materialized-openbaoclusterclaim-spec
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["openbaoclusterclaims"]
+  variables:
+    - name: operator_namespace
+      expression: >-
+        'openbao-operator-system'
+    - name: controller_serviceaccount_name
+      expression: >-
+        'openbao-operator-controller'
+    - name: controller_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name
+    - name: is_controller
+      expression: >-
+        request.userInfo.username == variables.controller_principal
+    - name: old_materialization_mode
+      expression: >-
+        oldObject != null &&
+        has(oldObject.status) &&
+        has(oldObject.status.materialization) &&
+        has(oldObject.status.materialization.mode) ?
+          oldObject.status.materialization.mode : ""
+    - name: is_materialized
+      expression: >-
+        variables.old_materialization_mode != ""
+    - name: new_tenant_name
+      expression: >-
+        object != null && has(object.spec) && has(object.spec.tenantRef) && has(object.spec.tenantRef.name) ?
+          object.spec.tenantRef.name : ""
+    - name: old_tenant_name
+      expression: >-
+        oldObject != null && has(oldObject.spec) && has(oldObject.spec.tenantRef) && has(oldObject.spec.tenantRef.name) ?
+          oldObject.spec.tenantRef.name : ""
+    - name: new_service_profile_name
+      expression: >-
+        object != null && has(object.spec) && has(object.spec.serviceProfileRef) && has(object.spec.serviceProfileRef.name) ?
+          object.spec.serviceProfileRef.name : ""
+    - name: old_service_profile_name
+      expression: >-
+        oldObject != null && has(oldObject.spec) && has(oldObject.spec.serviceProfileRef) && has(oldObject.spec.serviceProfileRef.name) ?
+          oldObject.spec.serviceProfileRef.name : ""
+    - name: new_service_offering_name
+      expression: >-
+        object != null && has(object.spec) && has(object.spec.serviceOfferingRef) &&
+        object.spec.serviceOfferingRef != null && has(object.spec.serviceOfferingRef.name) ?
+          object.spec.serviceOfferingRef.name : ""
+    - name: old_service_offering_name
+      expression: >-
+        oldObject != null && has(oldObject.spec) && has(oldObject.spec.serviceOfferingRef) &&
+        oldObject.spec.serviceOfferingRef != null && has(oldObject.spec.serviceOfferingRef.name) ?
+          oldObject.spec.serviceOfferingRef.name : ""
+    - name: new_backup_location
+      expression: >-
+        object != null && has(object.spec) && has(object.spec.serviceParameters) &&
+        object.spec.serviceParameters != null && has(object.spec.serviceParameters.backup) &&
+        object.spec.serviceParameters.backup != null && has(object.spec.serviceParameters.backup.location) ?
+          object.spec.serviceParameters.backup.location : ""
+    - name: old_backup_location
+      expression: >-
+        oldObject != null && has(oldObject.spec) && has(oldObject.spec.serviceParameters) &&
+        oldObject.spec.serviceParameters != null && has(oldObject.spec.serviceParameters.backup) &&
+        oldObject.spec.serviceParameters.backup != null && has(oldObject.spec.serviceParameters.backup.location) ?
+          oldObject.spec.serviceParameters.backup.location : ""
+    - name: new_backup_partition
+      expression: >-
+        object != null && has(object.spec) && has(object.spec.serviceParameters) &&
+        object.spec.serviceParameters != null && has(object.spec.serviceParameters.backup) &&
+        object.spec.serviceParameters.backup != null && has(object.spec.serviceParameters.backup.partition) ?
+          object.spec.serviceParameters.backup.partition : ""
+    - name: old_backup_partition
+      expression: >-
+        oldObject != null && has(oldObject.spec) && has(oldObject.spec.serviceParameters) &&
+        oldObject.spec.serviceParameters != null && has(oldObject.spec.serviceParameters.backup) &&
+        oldObject.spec.serviceParameters.backup != null && has(oldObject.spec.serviceParameters.backup.partition) ?
+          oldObject.spec.serviceParameters.backup.partition : ""
+    - name: immutable_spec_fields_unchanged
+      expression: >-
+        variables.new_tenant_name == variables.old_tenant_name &&
+        variables.new_service_offering_name == variables.old_service_offering_name &&
+        variables.new_service_profile_name == variables.old_service_profile_name &&
+        variables.new_backup_location == variables.old_backup_location &&
+        variables.new_backup_partition == variables.old_backup_partition
+    - name: controller_allowed_upgrade_transition
+      expression: >-
+        variables.new_tenant_name == variables.old_tenant_name &&
+        variables.new_backup_location == variables.old_backup_location &&
+        variables.new_backup_partition == variables.old_backup_partition
+  validations:
+    - expression: >-
+        !variables.is_materialized ||
+        variables.immutable_spec_fields_unchanged ||
+        (variables.is_controller && variables.controller_allowed_upgrade_transition)
+      message: "OpenBaoClusterClaim spec fields that affect bound service identity are immutable after materialization until explicit rollout support is implemented."

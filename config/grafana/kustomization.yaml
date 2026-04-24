@@ -12,4 +12,6 @@ configMapGenerator:
       - dashboards/overview.json
       - dashboards/backup-restore.json
       - dashboards/upgrades.json
+      - dashboards/claims-overview.json
+      - dashboards/claims-workflows.json
       - dashboards/controller-runtime.json

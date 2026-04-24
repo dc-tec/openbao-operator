@@ -7,17 +7,21 @@ const (
 	LabelAppManagedBy = "app.kubernetes.io/managed-by"
 	LabelAppComponent = "app.kubernetes.io/component"
 
-	LabelOpenBaoCluster            = "openbao.org/cluster"
-	LabelOpenBaoComponent          = "openbao.org/component"
-	LabelOpenBaoBackupType         = "openbao.org/backup-type"
-	LabelOpenBaoTenant             = "openbao.org/tenant"
-	LabelOpenBaoRevision           = "openbao.org/revision"
-	LabelOpenBaoWorkloadPool       = "openbao.org/workload-pool"
-	LabelOpenBaoProfile            = "openbao.org/profile"
-	LabelOpenBaoCredentialPurpose  = "openbao.org/credential-purpose"
-	LabelOpenBaoServiceAccountRole = "openbao.org/service-account-role"
-	LabelOpenBaoAuditFileStorage   = "openbao.org/audit-file-storage"
-	LabelOpenBaoSensitive          = "openbao.org/sensitive"
+	LabelOpenBaoCluster             = "openbao.org/cluster"
+	LabelOpenBaoComponent           = "openbao.org/component"
+	LabelOpenBaoBackupType          = "openbao.org/backup-type"
+	LabelOpenBaoTenant              = "openbao.org/tenant"
+	LabelOpenBaoRevision            = "openbao.org/revision"
+	LabelOpenBaoWorkloadPool        = "openbao.org/workload-pool"
+	LabelOpenBaoProfile             = "openbao.org/profile"
+	LabelOpenBaoCredentialPurpose   = "openbao.org/credential-purpose"
+	LabelOpenBaoServiceAccountRole  = "openbao.org/service-account-role"
+	LabelOpenBaoAuditFileStorage    = "openbao.org/audit-file-storage"
+	LabelOpenBaoSensitive           = "openbao.org/sensitive"
+	LabelOpenBaoOwnershipMode       = "openbao.org/ownership-mode"
+	LabelOpenBaoClaimNamespace      = "openbao.org/claim-namespace"
+	LabelOpenBaoClaimName           = "openbao.org/claim-name"
+	LabelOpenBaoClaimRestoreRequest = "openbao.org/claim-restore-request"
 	// LabelOpenBaoDigestEnforcement indicates whether digest-only image refs are required.
 	LabelOpenBaoDigestEnforcement = "openbao.org/digest-enforcement"
 )
@@ -39,6 +43,8 @@ const (
 	LabelValueOpenBaoWorkloadPoolReadReplica = "read-replica"
 	LabelValueCredentialPurposeRestoreToken  = "restore-token"
 	LabelValueSensitiveAudit                 = "audit"
+	LabelValueOpenBaoOwnershipClaimManaged   = "ClaimManaged"
+	LabelValueOpenBaoOwnershipDirectManaged  = "DirectManaged"
 )
 
 // ServiceAccount role label values for operator-managed ServiceAccounts.

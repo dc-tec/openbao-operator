@@ -4,14 +4,14 @@ slug: /get-started
 hide_title: true
 pageType: landing
 journey: get-started
-description: Choose a deployment model, install OpenBao Operator, onboard the target namespace, create your first cluster, and leave with a clear day 2 plan.
+description: Choose a deployment model, install OpenBao Operator, onboard the target namespace, choose the first provisioning model, and leave with a clear day 2 plan.
 ---
 
 <PageHero
   variant="landing"
   eyebrow="Get Started"
   title="Get started with OpenBao Operator"
-  lede="Choose a deployment model, install the operator, onboard the target namespace, and create a first cluster."
+  lede="Choose a deployment model, install the operator, onboard the target namespace, then continue into either the direct-cluster or service-claim provisioning path."
   actions={[
     {label: 'Choose a deployment model', docId: 'user-guide/operator/deployment-decision-guide', variant: 'primary'},
     {label: 'Jump to installation', docId: 'user-guide/operator/installation', variant: 'secondary'},
@@ -22,7 +22,7 @@ description: Choose a deployment model, install OpenBao Operator, onboard the ta
     items={[
       'the right tenancy and namespace model',
       'a repeatable install path and the right target namespace onboarding step',
-      'a first cluster shape that will not trap later decisions',
+      'a first provisioning model and service shape that will not trap later decisions',
       'a clear next move into backups, upgrades, and exposure',
     ]}
   />
@@ -63,6 +63,11 @@ description: Choose a deployment model, install OpenBao Operator, onboard the ta
 <NextActions
   title="Supporting decisions"
   items={[
+    {
+      label: 'Choose a provisioning model',
+      description: 'Decide whether the first service should be managed directly as OpenBaoCluster or requested through the catalog-driven service-claim path.',
+      docId: 'user-guide/service-claims/overview',
+    },
     {
       label: 'Single-tenant mode',
       description: 'Use this path when one team directly owns one namespace and intentionally bypasses the default tenant onboarding step.',

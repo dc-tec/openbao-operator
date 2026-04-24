@@ -2,7 +2,9 @@ package resourceapply
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -13,6 +15,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
+
+var ErrApplySchemaMismatch = errors.New("resource apply schema mismatch")
 
 func ApplyOwned(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, obj client.Object) error {
 	if err := PrepareOwned(obj, owner, scheme); err != nil {
@@ -46,10 +50,17 @@ func PrepareOwned(obj client.Object, owner client.Object, scheme *runtime.Scheme
 func ApplyConfiguration(ctx context.Context, c client.Client, obj client.Object, applyConfig runtime.ApplyConfiguration) error {
 	applyOpts := []client.ApplyOption{client.ForceOwnership, client.FieldOwner(constants.FieldOwnerOpenBaoOperator)}
 	if err := c.Apply(ctx, applyConfig, applyOpts...); err != nil {
+		if isApplySchemaMismatch(err) {
+			return fmt.Errorf("%w: failed to apply resource %s/%s: %w", ErrApplySchemaMismatch, obj.GetNamespace(), obj.GetName(), err)
+		}
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
 		}
 		return fmt.Errorf("failed to apply resource %s/%s: %w", obj.GetNamespace(), obj.GetName(), err)
 	}
 	return nil
+}
+
+func isApplySchemaMismatch(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "expected objects with types from the same schema")
 }

@@ -149,6 +149,13 @@ The provisioner writes the RBAC that grants the controller access, but it does n
     },
     {
       cells: [
+        'Watch `OpenBaoClusterClaim` and read cluster-scoped catalog objects',
+        'The claim controller must bind tenant-facing claims through the service catalog before it can materialize a same-cluster workload.',
+        'Catalog reads stay cluster-scoped, but workload mutation still requires the tenant namespace handoff before anything concrete is created there.',
+      ],
+    },
+    {
+      cells: [
         'Manage tenant-scoped workload resources',
         'StatefulSets, Services, ConfigMaps, Jobs, ServiceMonitors, and related resources are the normal lifecycle surface.',
         'This access only exists where the provisioner already introduced the controller via RoleBinding.',
@@ -213,6 +220,13 @@ Kubernetes RBAC controls who can read or mutate the PVC object; it does not prot
     },
     {
       cells: [
+        'Claim output custody',
+        'Connection Secrets and projected bootstrap artifacts should not become name-only takeover points inside tenant namespaces.',
+        'Name-scoped Secret roles, custody checks on operator-managed outputs, and claim-managed object guardrails.',
+      ],
+    },
+    {
+      cells: [
         'Privilege separation',
         'The identity that grants access is not the identity that consumes it.',
         'Split provisioner/controller model plus admission guardrails.',
@@ -251,6 +265,11 @@ Installing with admission policies disabled materially weakens the RBAC defense-
       label: 'Tenant isolation',
       description: 'Connect the RBAC model back to the multi-tenant operating guarantees.',
       docId: 'security/multi-tenancy/tenant-isolation',
+    },
+    {
+      label: 'Open service claims',
+      description: 'See how the claim path uses the same RBAC boundary while adding catalog reads and claim-managed output custody.',
+      docId: 'user-guide/service-claims/overview',
     },
   ]}
 />

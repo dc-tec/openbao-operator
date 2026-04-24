@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -131,13 +130,19 @@ func TestOpenBaoClusterStatusReconciler_BypassesTenantOnboardingGateInSingleTena
 	}
 }
 
-func TestOpenBaoClusterStatusReconciler_BypassesTenantOnboardingGateWhenRoleBindingExists(t *testing.T) {
+func TestOpenBaoClusterStatusReconciler_BypassesTenantOnboardingGateWhenProvisionedTenantExists(t *testing.T) {
 	t.Parallel()
 
-	cluster, parent := newTenantOnboardingTestContext(t, false, &rbacv1.RoleBinding{
+	cluster, parent := newTenantOnboardingTestContext(t, false, &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.TenantRoleBindingName,
-			Namespace: "default",
+			Name:      "tenant-default",
+			Namespace: "openbao-operator-system",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: "default",
+		},
+		Status: openbaov1alpha1.OpenBaoTenantStatus{
+			Provisioned: true,
 		},
 	})
 	current := &openbaov1alpha1.OpenBaoCluster{}
@@ -147,6 +152,60 @@ func TestOpenBaoClusterStatusReconciler_BypassesTenantOnboardingGateWhenRoleBind
 	current.Spec.Paused = true
 	if err := parent.Update(context.Background(), current); err != nil {
 		t.Fatalf("Update() paused cluster: %v", err)
+	}
+
+	reconciler := &openBaoClusterStatusReconciler{parent: parent}
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result.RequeueAfter != 0 {
+		t.Fatalf("Reconcile() requeueAfter = %s, want 0", result.RequeueAfter)
+	}
+}
+
+func TestOpenBaoClusterStatusReconciler_BypassesTenantOnboardingGateForClaimManagedClusterWhenReferencedTenantProvisioned(t *testing.T) {
+	t.Parallel()
+
+	cluster, parent := newTenantOnboardingTestContext(
+		t,
+		false,
+		&openbaov1alpha1.OpenBaoClusterClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "payments-bao",
+				Namespace: "openbao-operator-system",
+			},
+			Spec: openbaov1alpha1.OpenBaoClusterClaimSpec{
+				TenantRef: openbaov1alpha1.LocalReference{Name: "payments"},
+			},
+		},
+		&openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "payments",
+				Namespace: "openbao-operator-system",
+			},
+			Spec: openbaov1alpha1.OpenBaoTenantSpec{
+				TargetNamespace: "default",
+			},
+			Status: openbaov1alpha1.OpenBaoTenantStatus{
+				Provisioned: true,
+			},
+		},
+	)
+	current := &openbaov1alpha1.OpenBaoCluster{}
+	if err := parent.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, current); err != nil {
+		t.Fatalf("Get() cluster: %v", err)
+	}
+	current.Spec.Paused = true
+	current.Labels = map[string]string{
+		constants.LabelOpenBaoOwnershipMode:  constants.LabelValueOpenBaoOwnershipClaimManaged,
+		constants.LabelOpenBaoClaimNamespace: "openbao-operator-system",
+		constants.LabelOpenBaoClaimName:      "payments-bao",
+	}
+	if err := parent.Update(context.Background(), current); err != nil {
+		t.Fatalf("Update() claim-managed cluster: %v", err)
 	}
 
 	reconciler := &openBaoClusterStatusReconciler{parent: parent}
@@ -290,6 +349,43 @@ func TestOpenBaoClusterStatusReconciler_FinalizerRemoveUsesMergePatch(t *testing
 	}
 }
 
+func TestOpenBaoClusterStatusReconciler_FailsWhenMultipleTenantsTargetNamespace(t *testing.T) {
+	t.Parallel()
+
+	cluster, parent := newTenantOnboardingTestContext(
+		t,
+		false,
+		&openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "tenant-a",
+				Namespace: "openbao-operator-system",
+			},
+			Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "default"},
+			Status: openbaov1alpha1.OpenBaoTenantStatus{
+				Provisioned: true,
+			},
+		},
+		&openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "tenant-b",
+				Namespace: "openbao-operator-system",
+			},
+			Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "default"},
+			Status: openbaov1alpha1.OpenBaoTenantStatus{
+				Provisioned: true,
+			},
+		},
+	)
+
+	reconciler := &openBaoClusterStatusReconciler{parent: parent}
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	if err == nil || err.Error() != "failed to verify tenant onboarding for namespace default: multiple OpenBaoTenants target namespace default" {
+		t.Fatalf("Reconcile() error = %v, want multiple OpenBaoTenants error", err)
+	}
+}
+
 func newTenantOnboardingTestContext(t *testing.T, singleTenant bool, objects ...client.Object) (*openbaov1alpha1.OpenBaoCluster, *OpenBaoClusterReconciler) {
 	t.Helper()
 
@@ -325,9 +421,10 @@ func newTenantOnboardingTestContext(t *testing.T, singleTenant bool, objects ...
 	parent := &OpenBaoClusterReconciler{
 		Client: fakeClient,
 		ControllerRuntime: ControllerRuntime{
-			APIReader:        fakeClient,
-			Scheme:           scheme,
-			SingleTenantMode: singleTenant,
+			APIReader:         fakeClient,
+			Scheme:            scheme,
+			OperatorNamespace: "openbao-operator-system",
+			SingleTenantMode:  singleTenant,
 		},
 	}
 

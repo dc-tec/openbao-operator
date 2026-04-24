@@ -12,6 +12,7 @@ rules:
     resources:
       - namespaces
     verbs:
+      - create
       - get
 {{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "enforce" }}
       - update
@@ -36,6 +37,17 @@ rules:
     resources:
       - openbaoclusters
       - openbaorestores
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusterclaims
+      - openbaoserviceofferings
+      - openbaoserviceprofiles
+      - openbaobootstrapprofiles
     verbs:
       - get
       - list

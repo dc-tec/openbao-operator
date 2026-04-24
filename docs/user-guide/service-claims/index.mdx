@@ -1,0 +1,98 @@
+---
+title: Service claims
+slug: /service-claims
+hide_title: true
+pageType: landing
+journey: get-started
+description: Catalog-driven OpenBao service provisioning for same-cluster claims, including platform-owned service policy and tenant-facing claim workflows.
+---
+
+<PageHero
+  variant="landing"
+  eyebrow="Service Claims"
+  title="Provision OpenBao through service claims"
+  lede="Use the catalog-driven claim path when platform teams want to publish bounded service shapes and tenant users should request service through a stable offering instead of assembling an OpenBaoCluster directly."
+  actions={[
+    {label: 'Choose claims or direct clusters', docId: 'user-guide/service-claims/overview', variant: 'primary'},
+    {label: 'Apply a first claim', docId: 'user-guide/service-claims/getting-started', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use this section to"
+    items={[
+      'decide whether service claims fit the environment better than direct OpenBaoCluster management',
+      'understand the platform-owned catalog objects that shape the service boundary',
+      'apply and verify a first same-cluster OpenBaoClusterClaim',
+      'operate bounded claim day-2 workflows such as explicit upgrades, backups, and restores',
+      'troubleshoot claim readiness, edge publication, and bootstrap dependency issues',
+    ]}
+  />
+</PageHero>
+
+<RouteList
+  title="Service-claim routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Choose the provisioning model',
+      description: 'Decide when to use a service claim and when direct OpenBaoCluster management is still the better fit.',
+      docId: 'user-guide/service-claims/overview',
+    },
+    {
+      eyebrow: '02',
+      title: 'Apply the first claim',
+      description: 'Use the same-cluster quickstart after operator installation, tenant onboarding, and catalog setup are complete.',
+      docId: 'user-guide/service-claims/getting-started',
+    },
+    {
+      eyebrow: '03',
+      title: 'Run day-2 workflows',
+      description: 'Use explicit request objects for in-place upgrades, manual backups, and restore from the latest successful or selected completed claim backup.',
+      docId: 'user-guide/service-claims/day-2-workflows',
+    },
+    {
+      eyebrow: '04',
+      title: 'Understand the catalog',
+      description: 'Review the platform-owned service profile, offering, exposure, ingress, bootstrap, and backup objects behind the claim path.',
+      docId: 'user-guide/service-claims/service-catalog',
+    },
+    {
+      eyebrow: '05',
+      title: 'Plan exposure and bootstrap',
+      description: 'See how internal, gateway, and ingress publication work and how secret-backed bootstrap data is projected safely into the tenant namespace.',
+      docId: 'user-guide/service-claims/exposure',
+    },
+    {
+      eyebrow: '06',
+      title: 'Troubleshoot and stay within scope',
+      description: 'Route common claim failures quickly and keep unsupported workflows explicit.',
+      docId: 'user-guide/service-claims/troubleshooting',
+    },
+  ]}
+/>
+
+<NextActions
+  title="Related sections"
+  items={[
+    {
+      label: 'Onboard the target namespace',
+      description: 'OpenBaoTenant remains the namespace introduction point for both direct clusters and claims in multi-tenant mode.',
+      docId: 'user-guide/openbaotenant/onboarding',
+    },
+    {
+      label: 'Create a direct cluster',
+      description: 'Use the direct OpenBaoCluster path when teams should own the workload contract directly instead of consuming a cataloged service.',
+      docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Read service-claim architecture',
+      description: 'Follow the internal claim-to-contract-to-materialization pipeline when you need the controller and ownership model behind the feature.',
+      docId: 'architecture/service-claims',
+    },
+    {
+      label: 'Review tenant isolation',
+      description: 'Connect service claims back to the shared-operator RBAC, admission, and secret-boundary model.',
+      docId: 'security/multi-tenancy/tenant-isolation',
+    },
+  ]}
+/>

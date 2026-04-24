@@ -1,0 +1,285 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoexposureclasses.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoExposureClass
+    listKind: OpenBaoExposureClassList
+    plural: openbaoexposureclasses
+    singular: openbaoexposureclass
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.publishMode
+      name: Mode
+      type: string
+    - jsonPath: .spec.entrypointRef.name
+      name: Entrypoint
+      type: string
+    - jsonPath: .spec.ingressPolicyRef.name
+      name: IngressPolicy
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoExposureClass is the immutable platform-owned exposure
+          catalog object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoExposureClassSpec defines the desired state of OpenBaoExposureClass.
+            properties:
+              entrypointRef:
+                description: EntrypointRef identifies the reusable platform-managed
+                  entrypoint when needed.
+                properties:
+                  name:
+                    description: Name is the referenced object name.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              gatewayAnnotations:
+                additionalProperties:
+                  type: string
+                description: GatewayAnnotations are copied to generated Gateway API
+                  resources.
+                type: object
+              hostnamePolicy:
+                description: HostnamePolicy defines hostname posture for published
+                  traffic.
+                properties:
+                  claim:
+                    description: Claim allows bounded tenant-provided hostnames.
+                    properties:
+                      allowedSuffixes:
+                        description: |-
+                          AllowedSuffixes limits tenant-provided hostnames to these DNS suffixes.
+                          When omitted, DomainSuffix is used as the only allowed suffix.
+                        items:
+                          type: string
+                        type: array
+                      enabled:
+                        description: Enabled allows claims to request a hostname through
+                          service parameters.
+                        type: boolean
+                    type: object
+                  domainSuffix:
+                    description: DomainSuffix is the generated-hostname suffix when
+                      Mode is Generated.
+                    type: string
+                  mode:
+                    description: Mode identifies hostname policy mode.
+                    enum:
+                    - Generated
+                    - Fixed
+                    type: string
+                  value:
+                    description: Value is the fixed hostname when Mode is Fixed.
+                    type: string
+                required:
+                - mode
+                type: object
+              ingressPolicyRef:
+                description: |-
+                  IngressPolicyRef identifies the reusable platform-managed ingress policy
+                  when publishMode is Ingress.
+                properties:
+                  name:
+                    description: Name is the referenced object name.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              publishMode:
+                description: PublishMode identifies how the service should be published.
+                enum:
+                - ClusterInternal
+                - Ingress
+                - Gateway
+                type: string
+              readReplicaServicePolicy:
+                description: ReadReplicaServicePolicy defines backing Service posture
+                  for read replicas.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations are copied to the rendered read-replica
+                      Service.
+                    type: object
+                  enabled:
+                    description: Enabled controls whether a read-replica Service is
+                      rendered.
+                    type: boolean
+                  type:
+                    default: ClusterIP
+                    description: Type controls the rendered read-replica Service type.
+                    enum:
+                    - ClusterIP
+                    - NodePort
+                    - LoadBalancer
+                    type: string
+                type: object
+              routing:
+                description: Routing defines route-shape posture.
+                properties:
+                  path:
+                    description: Path is the HTTP path prefix when the route type
+                      supports it.
+                    type: string
+                  tlsPassthrough:
+                    description: TLSPassthrough identifies whether TLS should remain
+                      encrypted through the entrypoint.
+                    type: boolean
+                type: object
+              servicePolicy:
+                description: ServicePolicy defines backing Service posture.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations are additional annotations to apply to
+                      the backing Service.
+                    type: object
+                  backendTLSMode:
+                    default: Required
+                    description: BackendTLSMode identifies backend TLS posture.
+                    enum:
+                    - Required
+                    - Disabled
+                    type: string
+                  type:
+                    default: ClusterIP
+                    description: Type identifies the backing Service type.
+                    enum:
+                    - ClusterIP
+                    - NodePort
+                    - LoadBalancer
+                    type: string
+                type: object
+              tlsPolicy:
+                description: TLSPolicy defines TLS posture for published traffic.
+                properties:
+                  acme:
+                    description: ACME configures native OpenBao ACME listener TLS
+                      when Mode is ACME.
+                    properties:
+                      directoryURL:
+                        description: DirectoryURL is the ACME directory URL.
+                        minLength: 1
+                        type: string
+                      domain:
+                        description: |-
+                          Domain is the domain name for which to obtain the certificate.
+                          Deprecated: use Domains to request a certificate with multiple SANs.
+                        minLength: 1
+                        type: string
+                      domains:
+                        description: |-
+                          Domains is the list of domain names for which to obtain the certificate.
+
+                          When empty, the operator relies on OpenBaoCluster ACME defaults for private
+                          cluster-internal ACME deployments.
+                        items:
+                          type: string
+                        minItems: 1
+                        type: array
+                      email:
+                        description: Email is the email address to use for ACME registration.
+                        type: string
+                    required:
+                    - directoryURL
+                    type: object
+                    x-kubernetes-validations:
+                    - message: acme.domain and acme.domains are mutually exclusive;
+                        use only one
+                      rule: '!(has(self.domain) && has(self.domains) && size(self.domains)
+                        > 0)'
+                  certificateRef:
+                    description: CertificateRef identifies externally managed certificate
+                      material when required.
+                    properties:
+                      kind:
+                        description: Kind is the referenced object kind.
+                        minLength: 1
+                        type: string
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                      namespace:
+                        description: Namespace is the referenced object namespace
+                          when applicable.
+                        type: string
+                    required:
+                    - kind
+                    - name
+                    type: object
+                  minVersion:
+                    default: TLS12
+                    description: MinVersion identifies the minimum allowed TLS version.
+                    enum:
+                    - TLS12
+                    - TLS13
+                    type: string
+                  mode:
+                    description: Mode identifies TLS posture.
+                    enum:
+                    - External
+                    - OperatorManaged
+                    - ACME
+                    type: string
+                required:
+                - mode
+                type: object
+                x-kubernetes-validations:
+                - message: tlsPolicy.acme is required when mode is ACME
+                  rule: self.mode != 'ACME' || has(self.acme)
+                - message: tlsPolicy.acme is only supported when mode is ACME
+                  rule: self.mode == 'ACME' || !has(self.acme)
+            required:
+            - hostnamePolicy
+            - publishMode
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+            - message: spec.ingressPolicyRef is required when publishMode is Ingress
+              rule: self.publishMode != 'Ingress' || has(self.ingressPolicyRef)
+            - message: spec.ingressPolicyRef is only supported when publishMode is
+                Ingress
+              rule: self.publishMode == 'Ingress' || !has(self.ingressPolicyRef)
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

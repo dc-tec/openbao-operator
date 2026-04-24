@@ -300,6 +300,63 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 			},
 		},
 		{
+			name: "SelfInit ref-backed bootstrap secrets are readable",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: objectMeta("bootstrap-secrets"),
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeOperatorManaged,
+					},
+					SelfInit: &openbaov1alpha1.SelfInitConfig{
+						Enabled: true,
+						Requests: []openbaov1alpha1.SelfInitRequest{
+							{
+								Name: "auth",
+								AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
+									Type: "kubernetes",
+									ConfigFromRef: &openbaov1alpha1.TypedObjectReference{
+										Kind: "Secret",
+										Name: "claim-bootstrap-authcfg-1234",
+									},
+								},
+							},
+							{
+								Name: "policy",
+								Policy: &openbaov1alpha1.SelfInitPolicy{
+									ContentFromRef: &openbaov1alpha1.TypedObjectReference{
+										Kind: "Secret",
+										Name: "claim-bootstrap-policy-1234",
+									},
+								},
+							},
+							{
+								Name: "audit",
+								Path: "sys/audit/file",
+								AuditDevice: &openbaov1alpha1.SelfInitAuditDevice{
+									Type: "file",
+									SinkFromRef: &openbaov1alpha1.TypedObjectReference{
+										Kind: "Secret",
+										Name: "claim-bootstrap-audit-1234",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantWriters: []string{
+				"bootstrap-secrets-tls-ca",
+				"bootstrap-secrets-tls-server",
+				"bootstrap-secrets-unseal-key",
+			},
+			wantReaders: []string{
+				"claim-bootstrap-audit-1234",
+				"claim-bootstrap-authcfg-1234",
+				"claim-bootstrap-policy-1234",
+			},
+		},
+		{
 			name: "Full configuration with all secret types",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: objectMeta("full"),

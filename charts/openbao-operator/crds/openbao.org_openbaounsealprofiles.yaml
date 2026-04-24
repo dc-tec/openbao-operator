@@ -1,0 +1,511 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaounsealprofiles.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoUnsealProfile
+    listKind: OpenBaoUnsealProfileList
+    plural: openbaounsealprofiles
+    singular: openbaounsealprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.mode
+      name: Mode
+      type: string
+    - jsonPath: .spec.credentialsSecretRef.name
+      name: Credentials
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoUnsealProfile is the immutable platform-owned unseal implementation
+          catalog object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoUnsealProfileSpec defines the desired state of OpenBaoUnsealProfile.
+            properties:
+              awskms:
+                description: AWSKMS configures the AWS KMS seal type when Mode is
+                  AWSKMS.
+                properties:
+                  accessKey:
+                    description: |-
+                      AccessKey is the AWS access key ID to use.
+                      Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity (IRSA) instead.
+                    type: string
+                  endpoint:
+                    description: |-
+                      Endpoint is the KMS API endpoint to be used for AWS KMS requests.
+                      Useful when connecting to KMS over a VPC Endpoint.
+                    type: string
+                  kmsKeyID:
+                    description: |-
+                      KMSKeyID is the AWS KMS key ID or ARN to use for encryption and decryption.
+                      An alias in the format "alias/key-alias-name" may also be used.
+                    minLength: 1
+                    type: string
+                  region:
+                    description: Region is the AWS region where the encryption key
+                      lives.
+                    minLength: 1
+                    type: string
+                  secretKey:
+                    description: |-
+                      SecretKey is the AWS secret access key to use.
+                      Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity (IRSA) instead.
+                    type: string
+                  sessionToken:
+                    description: SessionToken specifies the AWS session token.
+                    type: string
+                required:
+                - kmsKeyID
+                - region
+                type: object
+              azureKeyVault:
+                description: AzureKeyVault configures the Azure Key Vault seal type
+                  when Mode is AzureKeyVault.
+                properties:
+                  clientID:
+                    description: ClientID is the Azure client ID.
+                    type: string
+                  clientSecret:
+                    description: |-
+                      ClientSecret is the Azure client secret.
+                      Note: It is strongly recommended to use CredentialsSecretRef or Managed Service Identity instead.
+                    type: string
+                  environment:
+                    description: Environment is the Azure environment (e.g., "AzurePublicCloud",
+                      "AzureUSGovernmentCloud").
+                    type: string
+                  keyName:
+                    description: KeyName is the name of the key in the Azure Key Vault.
+                    minLength: 1
+                    type: string
+                  resource:
+                    description: |-
+                      Resource is the Azure AD resource endpoint.
+                      For Managed HSM, this should usually be "managedhsm.azure.net".
+                    type: string
+                  tenantID:
+                    description: TenantID is the Azure tenant ID.
+                    type: string
+                  vaultName:
+                    description: VaultName is the name of the Azure Key Vault.
+                    minLength: 1
+                    type: string
+                required:
+                - keyName
+                - vaultName
+                type: object
+              credentialsSecretRef:
+                description: |-
+                  CredentialsSecretRef references provider credentials in the target namespace.
+                  Omit this when the profile relies on ambient workload identity.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              gcpCloudKMS:
+                description: GCPCloudKMS configures the GCP Cloud KMS seal type when
+                  Mode is GCPCloudKMS.
+                properties:
+                  credentials:
+                    description: |-
+                      Credentials is the path to the GCP credentials JSON file.
+                      Note: It is strongly recommended to use CredentialsSecretRef or Workload Identity instead.
+                    type: string
+                  cryptoKey:
+                    description: CryptoKey is the name of the GCP KMS crypto key.
+                    minLength: 1
+                    type: string
+                  keyRing:
+                    description: KeyRing is the name of the GCP KMS key ring.
+                    minLength: 1
+                    type: string
+                  project:
+                    description: Project is the GCP project ID.
+                    minLength: 1
+                    type: string
+                  region:
+                    description: Region is the GCP region where the key ring lives.
+                    minLength: 1
+                    type: string
+                required:
+                - cryptoKey
+                - keyRing
+                - project
+                - region
+                type: object
+              kmip:
+                description: KMIP configures the KMIP seal type when Mode is KMIP.
+                properties:
+                  caCert:
+                    description: CACert is the path to the CA certificate for KMIP
+                      communication.
+                    type: string
+                  clientCert:
+                    description: ClientCert is the path to the client certificate
+                      used for KMIP communication.
+                    minLength: 1
+                    type: string
+                  clientKey:
+                    description: ClientKey is the path to the private key used for
+                      KMIP communication.
+                    minLength: 1
+                    type: string
+                  disabled:
+                    description: Disabled disables this seal configuration, for example
+                      during seal migration.
+                    type: boolean
+                  encryptAlg:
+                    description: EncryptAlg is the encryption algorithm used for KMIP
+                      requests.
+                    enum:
+                    - AES_GCM
+                    - RSA_OAEP_SHA256
+                    - RSA_OAEP_SHA384
+                    - RSA_OAEP_SHA512
+                    type: string
+                  endpoint:
+                    description: Endpoint is the KMIP server endpoint.
+                    minLength: 1
+                    type: string
+                  kmsKeyID:
+                    description: KMSKeyID is the unique identifier of the KMIP key
+                      to use.
+                    minLength: 1
+                    type: string
+                  serverName:
+                    description: ServerName is the TLS server name to use when connecting
+                      to the KMIP endpoint.
+                    type: string
+                  timeout:
+                    description: Timeout is the timeout in seconds for KMIP requests.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  tls12Ciphers:
+                    description: |-
+                      TLS12Ciphers configures the TLS 1.2 cipher suites to use when connecting
+                      to the KMIP endpoint.
+                    type: string
+                required:
+                - clientCert
+                - clientKey
+                - endpoint
+                - kmsKeyID
+                type: object
+              mode:
+                description: Mode identifies the unseal implementation.
+                enum:
+                - OperatorManagedStatic
+                - Transit
+                - AWSKMS
+                - GCPCloudKMS
+                - AzureKeyVault
+                - OCIKMS
+                - KMIP
+                - PKCS11
+                type: string
+              ocikms:
+                description: OCIKMS configures the OCI KMS seal type when Mode is
+                  OCIKMS.
+                properties:
+                  authTypeAPIKey:
+                    description: |-
+                      AuthTypeAPIKey enables OCI API key authentication through an OCI SDK config file.
+                      When false or omitted, OpenBao uses the default OCI principal flow for the runtime
+                      environment, such as instance principal.
+                    type: boolean
+                  cryptoEndpoint:
+                    description: CryptoEndpoint is the OCI KMS crypto endpoint.
+                    minLength: 1
+                    type: string
+                  disabled:
+                    description: Disabled disables this seal configuration, for example
+                      during seal migration.
+                    type: boolean
+                  keyID:
+                    description: KeyID is the OCID of the master encryption key.
+                    minLength: 1
+                    type: string
+                  managementEndpoint:
+                    description: ManagementEndpoint is the OCI KMS management endpoint.
+                    minLength: 1
+                    type: string
+                required:
+                - cryptoEndpoint
+                - keyID
+                - managementEndpoint
+                type: object
+              pkcs11:
+                description: PKCS11 configures the PKCS#11 seal type when Mode is
+                  PKCS11.
+                properties:
+                  disableSoftwareEncryption:
+                    description: DisableSoftwareEncryption disables the software encryption
+                      fallback.
+                    type: boolean
+                  disabled:
+                    description: Disabled disables this seal configuration, for example
+                      during seal migration.
+                    type: boolean
+                  keyID:
+                    description: KeyID is the PKCS#11 key identifier to use instead
+                      of KeyLabel.
+                    type: string
+                  keyLabel:
+                    description: KeyLabel is the label for the encryption key used
+                      by OpenBao.
+                    minLength: 1
+                    type: string
+                  lib:
+                    description: Lib is the path to the PKCS#11 library provided by
+                      the HSM vendor.
+                    minLength: 1
+                    type: string
+                  mechanism:
+                    description: Mechanism overrides the PKCS#11 wrapping or encryption
+                      mechanism.
+                    type: string
+                  pin:
+                    description: |-
+                      PIN is the PIN for accessing the HSM token.
+                      Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
+                    type: string
+                  rsaOAEPHash:
+                    description: |-
+                      RSAOAEPHash specifies the hash algorithm to use for RSA with OAEP padding.
+                      Valid values: sha1, sha224, sha256, sha384, sha512.
+                    enum:
+                    - sha1
+                    - sha224
+                    - sha256
+                    - sha384
+                    - sha512
+                    type: string
+                  runtime:
+                    description: |-
+                      Runtime configures local PKCS#11 vendor runtime wiring such as library
+                      lookup paths and environment variables sourced from credentialsSecretRef.
+                    properties:
+                      env:
+                        description: |-
+                          Env exposes literal environment variables from keys in
+                          spec.unseal.credentialsSecretRef. Use this for vendor runtime settings
+                          such as HSM endpoints or authentication key references.
+                        items:
+                          description: |-
+                            PKCS11RuntimeEnvVar maps a PKCS#11 runtime environment variable to a key in
+                            spec.unseal.credentialsSecretRef.
+                          properties:
+                            name:
+                              description: |-
+                                Name is the environment variable name to expose to the OpenBao process.
+                                Names owned by OpenBao's PKCS#11 seal configuration, such as BAO_HSM_PIN,
+                                are managed by the operator and must not be configured here.
+                              pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+                              type: string
+                            secretKey:
+                              description: |-
+                                SecretKey is the key in spec.unseal.credentialsSecretRef to source as the
+                                environment variable value.
+                              minLength: 1
+                              pattern: ^[-._A-Za-z0-9]+$
+                              type: string
+                          required:
+                          - name
+                          - secretKey
+                          type: object
+                        maxItems: 16
+                        type: array
+                      fileEnv:
+                        description: |-
+                          FileEnv exposes environment variables whose values are paths to files
+                          mounted from keys in spec.unseal.credentialsSecretRef. Use this for vendor
+                          settings that expect a config file path, for example SOFTHSM2_CONF or
+                          vendor-specific PKCS#11 client configuration variables.
+                        items:
+                          description: |-
+                            PKCS11RuntimeFileEnvVar maps a PKCS#11 runtime environment variable to the
+                            mounted file path for a key in spec.unseal.credentialsSecretRef.
+                          properties:
+                            name:
+                              description: Name is the environment variable name to
+                                expose to the OpenBao process.
+                              pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+                              type: string
+                            secretKey:
+                              description: |-
+                                SecretKey is the key in spec.unseal.credentialsSecretRef whose mounted
+                                file path should become the environment variable value.
+                              minLength: 1
+                              pattern: ^[-._A-Za-z0-9]+$
+                              type: string
+                          required:
+                          - name
+                          - secretKey
+                          type: object
+                        maxItems: 16
+                        type: array
+                      libraryPath:
+                        description: |-
+                          LibraryPath sets LD_LIBRARY_PATH for the OpenBao process. Use this when
+                          the configured PKCS#11 module depends on sibling vendor libraries that
+                          are not in the image's default dynamic linker search path.
+                        type: string
+                    type: object
+                  slot:
+                    description: Slot is the slot number where the HSM token is located.
+                    type: string
+                  tokenLabel:
+                    description: TokenLabel is the token label of the HSM slot to
+                      use instead of Slot.
+                    type: string
+                required:
+                - keyLabel
+                - lib
+                type: object
+                x-kubernetes-validations:
+                - message: spec.unseal.pkcs11.slot or spec.unseal.pkcs11.tokenLabel
+                    is required
+                  rule: (has(self.slot) && size(self.slot) > 0) || (has(self.tokenLabel)
+                    && size(self.tokenLabel) > 0)
+                - message: spec.unseal.pkcs11.slot and spec.unseal.pkcs11.tokenLabel
+                    are mutually exclusive
+                  rule: '!(has(self.slot) && size(self.slot) > 0 && has(self.tokenLabel)
+                    && size(self.tokenLabel) > 0)'
+              static:
+                description: Static configures the static seal type when Mode is OperatorManagedStatic.
+                properties:
+                  currentKey:
+                    description: |-
+                      CurrentKey is the path to the static unseal key file.
+                      Defaults to "file:///etc/bao/unseal/key" (operator-managed).
+                    type: string
+                  currentKeyID:
+                    description: |-
+                      CurrentKeyID is the identifier for the current unseal key.
+                      Defaults to "operator-generated-v1" (operator-managed).
+                    type: string
+                type: object
+              transit:
+                description: Transit configures the transit seal type when Mode is
+                  Transit.
+                properties:
+                  address:
+                    description: Address is the full HTTPS address to the OpenBao
+                      cluster providing the Transit seal.
+                    minLength: 1
+                    type: string
+                  disableRenewal:
+                    description: |-
+                      DisableRenewal disables automatic token renewal.
+                      Set to true if token lifecycle is managed externally (e.g., by OpenBao Agent).
+                    type: boolean
+                  keyName:
+                    description: KeyName is the transit key to use for encryption
+                      and decryption.
+                    minLength: 1
+                    type: string
+                  mountPath:
+                    description: MountPath is the mount path to the transit secret
+                      engine.
+                    minLength: 1
+                    type: string
+                  namespace:
+                    description: Namespace is the namespace path to the transit secret
+                      engine.
+                    type: string
+                  tlsCACert:
+                    description: TLSCACert is the path to the CA certificate file
+                      for TLS communication.
+                    type: string
+                  tlsClientCert:
+                    description: TLSClientCert is the path to the client certificate
+                      for TLS communication.
+                    type: string
+                  tlsClientKey:
+                    description: TLSClientKey is the path to the private key for TLS
+                      communication.
+                    type: string
+                  tlsServerName:
+                    description: TLSServerName is the SNI host name to use when connecting
+                      via TLS.
+                    type: string
+                  tlsSkipVerify:
+                    description: |-
+                      TLSSkipVerify disables verification of TLS certificates.
+                      Using this option is highly discouraged and decreases security.
+                    type: boolean
+                  token:
+                    description: |-
+                      Token is the OpenBao token to use for authentication.
+                      Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly.
+                    type: string
+                required:
+                - address
+                - keyName
+                - mountPath
+                type: object
+            required:
+            - mode
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+            - message: spec.transit is required when mode is Transit
+              rule: self.mode != 'Transit' || has(self.transit)
+            - message: spec.awskms is required when mode is AWSKMS
+              rule: self.mode != 'AWSKMS' || has(self.awskms)
+            - message: spec.gcpCloudKMS is required when mode is GCPCloudKMS
+              rule: self.mode != 'GCPCloudKMS' || has(self.gcpCloudKMS)
+            - message: spec.azureKeyVault is required when mode is AzureKeyVault
+              rule: self.mode != 'AzureKeyVault' || has(self.azureKeyVault)
+            - message: spec.ocikms is required when mode is OCIKMS
+              rule: self.mode != 'OCIKMS' || has(self.ocikms)
+            - message: spec.kmip is required when mode is KMIP
+              rule: self.mode != 'KMIP' || has(self.kmip)
+            - message: spec.pkcs11 is required when mode is PKCS11
+              rule: self.mode != 'PKCS11' || has(self.pkcs11)
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

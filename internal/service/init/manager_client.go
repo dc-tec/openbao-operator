@@ -14,6 +14,9 @@ import (
 // newOpenBaoClient constructs a minimal OpenBao client for talking to the pod-0 instance
 // of the StatefulSet using the cluster's client trust contract.
 func (m *Manager) newOpenBaoClient(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (*openbao.Client, error) {
+	if m.newClient != nil {
+		return m.newClient(ctx, cluster)
+	}
 	if strings.TrimSpace(cluster.Name) == "" || strings.TrimSpace(cluster.Namespace) == "" {
 		return nil, fmt.Errorf("cluster name and namespace are required to build OpenBao client")
 	}

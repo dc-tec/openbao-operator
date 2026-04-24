@@ -636,6 +636,73 @@ func TestKustomizeDefault_ManagerMetricsResourcesExposeControllerAndProvisioner(
 	}
 }
 
+func TestKustomizeDefault_ProvisionerHasStartupProbeAndResourceFloor(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
+		return u.GetAPIVersion() == "apps/v1" &&
+			u.GetKind() == "Deployment" &&
+			u.GetName() == "openbao-operator-provisioner"
+	})
+
+	if len(objs) != 1 {
+		t.Fatalf("expected exactly one provisioner deployment, got %d", len(objs))
+	}
+
+	containers, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "template", "spec", "containers")
+	if err != nil || !found || len(containers) != 1 {
+		t.Fatalf("read provisioner containers: found=%v err=%v len=%d", found, err, len(containers))
+	}
+
+	container, ok := containers[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected provisioner container map, got %T", containers[0])
+	}
+
+	startupProbe, found, err := unstructured.NestedMap(container, "startupProbe")
+	if err != nil || !found {
+		t.Fatalf("read provisioner startupProbe: found=%v err=%v", found, err)
+	}
+	if got := numericMapValue(t, startupProbe, "failureThreshold"); got != 30 {
+		t.Fatalf("provisioner startupProbe failureThreshold=%d, want 30", got)
+	}
+	if got := numericMapValue(t, startupProbe, "timeoutSeconds"); got != 5 {
+		t.Fatalf("provisioner startupProbe timeoutSeconds=%d, want 5", got)
+	}
+
+	livenessProbe, found, err := unstructured.NestedMap(container, "livenessProbe")
+	if err != nil || !found {
+		t.Fatalf("read provisioner livenessProbe: found=%v err=%v", found, err)
+	}
+	if got := numericMapValue(t, livenessProbe, "timeoutSeconds"); got != 5 {
+		t.Fatalf("provisioner livenessProbe timeoutSeconds=%d, want 5", got)
+	}
+
+	readinessProbe, found, err := unstructured.NestedMap(container, "readinessProbe")
+	if err != nil || !found {
+		t.Fatalf("read provisioner readinessProbe: found=%v err=%v", found, err)
+	}
+	if got := numericMapValue(t, readinessProbe, "timeoutSeconds"); got != 5 {
+		t.Fatalf("provisioner readinessProbe timeoutSeconds=%d, want 5", got)
+	}
+
+	resources, found, err := unstructured.NestedMap(container, "resources")
+	if err != nil || !found {
+		t.Fatalf("read provisioner resources: found=%v err=%v", found, err)
+	}
+	if got, _, err := unstructured.NestedString(resources, "requests", "memory"); err != nil || got != "128Mi" {
+		t.Fatalf("provisioner requests.memory=%q err=%v, want 128Mi", got, err)
+	}
+	if got, _, err := unstructured.NestedString(resources, "requests", "cpu"); err != nil || got != "50m" {
+		t.Fatalf("provisioner requests.cpu=%q err=%v, want 50m", got, err)
+	}
+	if got, _, err := unstructured.NestedString(resources, "limits", "memory"); err != nil || got != "256Mi" {
+		t.Fatalf("provisioner limits.memory=%q err=%v, want 256Mi", got, err)
+	}
+	if got, _, err := unstructured.NestedString(resources, "limits", "cpu"); err != nil || got != "500m" {
+		t.Fatalf("provisioner limits.cpu=%q err=%v, want 500m", got, err)
+	}
+}
+
 func TestKustomizeDefault_ProvisionerRoleDoesNotReadServiceAccounts(t *testing.T) {
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
@@ -1013,6 +1080,29 @@ func kustomizeProjectedTokenAudience(t *testing.T, obj *unstructured.Unstructure
 
 	t.Fatalf("volume %s not found", volumeName)
 	return ""
+}
+
+func numericMapValue(t *testing.T, m map[string]any, key string) int64 {
+	t.Helper()
+
+	value, ok := m[key]
+	if !ok {
+		t.Fatalf("key %s not found", key)
+	}
+
+	switch typed := value.(type) {
+	case int:
+		return int64(typed)
+	case int32:
+		return int64(typed)
+	case int64:
+		return typed
+	case float64:
+		return int64(typed)
+	default:
+		t.Fatalf("key %s has unexpected numeric type %T", key, value)
+		return 0
+	}
 }
 
 func isClusterScopedManifestObject(gvk schema.GroupVersionKind) bool {

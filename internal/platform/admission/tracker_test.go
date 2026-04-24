@@ -5,8 +5,21 @@ import (
 	"testing"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+type errorReader struct {
+	err error
+}
+
+func (r errorReader) Get(context.Context, client.ObjectKey, client.Object, ...client.GetOption) error {
+	return r.err
+}
+
+func (r errorReader) List(context.Context, client.ObjectList, ...client.ListOption) error {
+	return r.err
+}
 
 func TestTracker_SetAndCurrent(t *testing.T) {
 	t.Parallel()
@@ -129,5 +142,46 @@ func TestTracker_RefreshBypassesRecentCache(t *testing.T) {
 	}
 	if len(current.Dependencies) != 1 || current.Dependencies[0].Ready {
 		t.Fatalf("Refresh() lost dependency details: %#v", current)
+	}
+}
+
+func TestTracker_EnsureFreshPreservesLastKnownStatusOnRefreshError(t *testing.T) {
+	defer SetAdmissionDependenciesReady(false)
+
+	tracker := NewTracker(
+		errorReader{err: context.DeadlineExceeded},
+		[]Dependency{{
+			Name:        "timeout-policy",
+			PolicyName:  "timeout-policy",
+			BindingName: "timeout-binding",
+		}},
+		[]string{""},
+		time.Second,
+	)
+	checkedAt := time.Now().Add(-2 * time.Minute)
+	tracker.mu.Lock()
+	tracker.status = &Status{
+		CheckedAt:    checkedAt,
+		OverallReady: true,
+		Dependencies: []DependencyStatus{{
+			Dependency: Dependency{Name: "timeout-policy"},
+			Ready:      true,
+		}},
+	}
+	tracker.mu.Unlock()
+	SetAdmissionDependenciesReady(true)
+
+	current, err := tracker.EnsureFresh(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureFresh() returned unexpected error: %v", err)
+	}
+	if current == nil || !current.OverallReady {
+		t.Fatalf("EnsureFresh() returned unexpected status: %#v", current)
+	}
+	if len(current.Dependencies) != 1 || !current.Dependencies[0].Ready {
+		t.Fatalf("EnsureFresh() lost dependency details: %#v", current)
+	}
+	if !current.CheckedAt.After(checkedAt) {
+		t.Fatalf("EnsureFresh() did not refresh cached timestamp: got %v want after %v", current.CheckedAt, checkedAt)
 	}
 }

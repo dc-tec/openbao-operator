@@ -17,6 +17,7 @@ import (
 
 type architecturePolicy struct {
 	ModulePath             string                 `yaml:"modulePath"`
+	Modules                []moduleBoundary       `yaml:"modules"`
 	LayerCoverage          layerCoverage          `yaml:"layerCoverage"`
 	ControllerCoverage     controllerCoverage     `yaml:"controllerCoverage"`
 	ServiceImportRoots     []string               `yaml:"serviceImportRoots"`
@@ -25,6 +26,26 @@ type architecturePolicy struct {
 	ServiceBoundaries      []serviceBoundary      `yaml:"serviceBoundaries"`
 	AppBoundaries          []appBoundary          `yaml:"appBoundaries"`
 	GlobalImportBoundaries []globalImportBoundary `yaml:"globalImportBoundaries"`
+}
+
+type moduleBoundary struct {
+	Name                      string          `yaml:"name"`
+	DisplayName               string          `yaml:"displayName"`
+	Required                  bool            `yaml:"required"`
+	Owns                      moduleOwnership `yaml:"owns"`
+	MayDependOn               []string        `yaml:"mayDependOn"`
+	Files                     []string        `yaml:"files"`
+	Ignores                   []string        `yaml:"ignores"`
+	DisallowImports           []string        `yaml:"disallowImports"`
+	DisallowAPISymbols        []string        `yaml:"disallowAPISymbols"`
+	DisallowAPISymbolPatterns []string        `yaml:"disallowAPISymbolPatterns"`
+}
+
+type moduleOwnership struct {
+	APIs        []string `yaml:"apis"`
+	Controllers []string `yaml:"controllers"`
+	Apps        []string `yaml:"apps"`
+	Services    []string `yaml:"services"`
 }
 
 type layerCoverage struct {
@@ -84,6 +105,7 @@ type ruleSpec struct {
 	Note    string
 	Files   []string
 	Ignores []string
+	Kind    string
 	Regex   string
 }
 
@@ -195,6 +217,9 @@ func validatePolicy(policy architecturePolicy) error {
 		return errors.New("policy adapterImportRoots must not be empty")
 	}
 
+	if err := validateModuleBoundaries(policy.Modules); err != nil {
+		return err
+	}
 	if err := validateControllerBoundaries(policy.ControllerBoundaries, serviceRoots, adapterRoots); err != nil {
 		return err
 	}
@@ -206,6 +231,43 @@ func validatePolicy(policy architecturePolicy) error {
 	}
 	if err := validateGlobalImportBoundaries(policy.GlobalImportBoundaries); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func validateModuleBoundaries(modules []moduleBoundary) error {
+	seenModule := make(map[string]struct{}, len(modules))
+	for _, module := range modules {
+		if strings.TrimSpace(module.Name) == "" {
+			return errors.New("modules.name is required")
+		}
+		if _, exists := seenModule[module.Name]; exists {
+			return fmt.Errorf("duplicate modules entry for %q", module.Name)
+		}
+		seenModule[module.Name] = struct{}{}
+
+		hasDisallowRules := len(module.DisallowImports) > 0 ||
+			len(module.DisallowAPISymbols) > 0 ||
+			len(module.DisallowAPISymbolPatterns) > 0
+		if hasDisallowRules {
+			if len(module.Files) == 0 {
+				return fmt.Errorf("modules[%s].files must not be empty when disallow rules are configured", module.Name)
+			}
+		}
+		for _, dep := range normalizedUnique(module.MayDependOn) {
+			if dep == module.Name {
+				return fmt.Errorf("modules[%s].mayDependOn must not include itself", module.Name)
+			}
+		}
+	}
+
+	for _, module := range modules {
+		for _, dep := range normalizedUnique(module.MayDependOn) {
+			if _, exists := seenModule[dep]; !exists {
+				return fmt.Errorf("modules[%s].mayDependOn contains unknown module %q", module.Name, dep)
+			}
+		}
 	}
 
 	return nil
@@ -743,13 +805,56 @@ func buildRuleSpecs(policy architecturePolicy) ([]ruleSpec, error) {
 	specs := make(
 		[]ruleSpec,
 		0,
-		len(policy.ControllerBoundaries)*4+
+		len(policy.Modules)*3+
+			len(policy.ControllerBoundaries)*4+
 			len(policy.ServiceBoundaries)+
 			len(policy.AppBoundaries)+
 			len(policy.GlobalImportBoundaries),
 	)
 
 	modulePath := strings.TrimSuffix(strings.TrimSpace(policy.ModulePath), "/")
+
+	for _, module := range policy.Modules {
+		moduleLabel := strings.TrimSpace(module.DisplayName)
+		if moduleLabel == "" {
+			moduleLabel = strings.TrimSpace(module.Name)
+		}
+		moduleName := sanitizeName(module.Name)
+
+		if len(module.DisallowImports) > 0 {
+			regex, err := importRegex(modulePath, module.DisallowImports, nil, nil)
+			if err != nil {
+				return nil, fmt.Errorf("build disallowed-import regex for module %s: %w", module.Name, err)
+			}
+			specs = append(specs, ruleSpec{
+				ID:      "no-" + moduleName + "-module-forbidden-imports",
+				Message: moduleForbiddenImportsMessage(moduleLabel),
+				Note:    moduleForbiddenImportsNote(module.DisallowImports),
+				Files:   module.Files,
+				Ignores: module.Ignores,
+				Kind:    "import_spec",
+				Regex:   regex,
+			})
+		}
+
+		apiSymbolRegex, err := apiSymbolRegex(module.DisallowAPISymbols, module.DisallowAPISymbolPatterns)
+		if err != nil {
+			return nil, fmt.Errorf("build disallowed-api-symbol regex for module %s: %w", module.Name, err)
+		}
+		if apiSymbolRegex != "" {
+			for _, kind := range []string{"type_identifier", "field_identifier"} {
+				specs = append(specs, ruleSpec{
+					ID:      "no-" + moduleName + "-module-forbidden-api-" + strings.ReplaceAll(kind, "_", "-") + "s",
+					Message: moduleForbiddenAPISymbolsMessage(moduleLabel),
+					Note:    moduleForbiddenAPISymbolsNote(module.DisallowAPISymbols, module.DisallowAPISymbolPatterns),
+					Files:   module.Files,
+					Ignores: module.Ignores,
+					Kind:    kind,
+					Regex:   apiSymbolRegex,
+				})
+			}
+		}
+	}
 
 	for _, boundary := range policy.ControllerBoundaries {
 		controllerLabel := strings.TrimSpace(boundary.DisplayName)
@@ -1005,6 +1110,30 @@ func appSubpackageRegex(modulePath, appFacadeRoot string) (string, error) {
 	return fmt.Sprintf(`"%s/%s/.+"`, regexp.QuoteMeta(modulePath), regexp.QuoteMeta(root)), nil
 }
 
+func apiSymbolRegex(symbols, patterns []string) (string, error) {
+	exactSymbols := normalizedUnique(symbols)
+	symbolPatterns := normalizedUnique(patterns)
+	if len(exactSymbols) == 0 && len(symbolPatterns) == 0 {
+		return "", nil
+	}
+
+	parts := make([]string, 0, len(exactSymbols)+len(symbolPatterns))
+	for _, symbol := range exactSymbols {
+		if strings.ContainsAny(symbol, "/. \t\n") {
+			return "", fmt.Errorf("api symbol %q must be a single identifier", symbol)
+		}
+		parts = append(parts, regexp.QuoteMeta(symbol))
+	}
+	for _, pattern := range symbolPatterns {
+		if strings.TrimSpace(pattern) == "" {
+			continue
+		}
+		parts = append(parts, pattern)
+	}
+
+	return fmt.Sprintf(`^(%s)$`, strings.Join(parts, "|")), nil
+}
+
 func normalizedUnique(values []string) []string {
 	seen := make(map[string]struct{}, len(values))
 	result := make([]string, 0, len(values))
@@ -1066,6 +1195,36 @@ func sanitizeName(name string) string {
 		return "controller"
 	}
 	return sanitized
+}
+
+func moduleForbiddenImportsMessage(moduleLabel string) string {
+	return fmt.Sprintf(
+		"%s module must not import packages owned by forbidden modules.",
+		moduleLabel,
+	)
+}
+
+func moduleForbiddenImportsNote(disallowed []string) string {
+	return fmt.Sprintf(
+		"Forbidden module imports for this module: %s.",
+		formatAllowList(disallowed),
+	)
+}
+
+func moduleForbiddenAPISymbolsMessage(moduleLabel string) string {
+	return fmt.Sprintf(
+		"%s module must not reference API symbols owned by forbidden modules.",
+		moduleLabel,
+	)
+}
+
+func moduleForbiddenAPISymbolsNote(symbols, patterns []string) string {
+	values := append([]string{}, symbols...)
+	values = append(values, patterns...)
+	return fmt.Sprintf(
+		"Forbidden API symbols or patterns for this module: %s.",
+		formatAllowList(values),
+	)
 }
 
 func controllerDirectDomainMessage(controllerLabel string) string {
@@ -1196,6 +1355,10 @@ func writeRuleSpecs(policyPath, outDir string, specs []ruleSpec) error {
 	}
 
 	for _, spec := range specs {
+		kind := strings.TrimSpace(spec.Kind)
+		if kind == "" {
+			kind = "import_spec"
+		}
 		doc := astRuleDoc{
 			ID:       spec.ID,
 			Message:  spec.Message,
@@ -1205,7 +1368,7 @@ func writeRuleSpecs(policyPath, outDir string, specs []ruleSpec) error {
 			Ignores:  spec.Ignores,
 			Rule: astRule{
 				All: []astPredicate{
-					{Kind: "import_spec"},
+					{Kind: kind},
 					{Regex: spec.Regex},
 				},
 			},

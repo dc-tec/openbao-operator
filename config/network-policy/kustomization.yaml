@@ -2,3 +2,4 @@ resources:
   - deny-all-ingress.yaml
   - allow-metrics-traffic.yaml
   - allow-health-probes.yaml
+  - allow-webhook.yaml

@@ -1,0 +1,114 @@
+{{- if .Values.admissionPolicies.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-claim-managed-openbaocluster-mutations
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["openbaoclusters"]
+  variables:
+    - name: operator_namespace
+      expression: >-
+        '{{ .Release.Namespace }}'
+    - name: controller_serviceaccount_name
+      expression: >-
+        '{{ include "openbao-operator.controllerServiceAccountName" . }}'
+    - name: controller_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name
+    - name: is_controller
+      expression: >-
+        request.userInfo.username == variables.controller_principal
+    - name: new_labels
+      expression: >-
+        request.operation == "DELETE" ?
+          {} :
+          ((
+            object != null &&
+            has(object.metadata) &&
+            has(object.metadata.labels)
+          ) ? object.metadata.labels : {})
+    - name: old_labels
+      expression: >-
+        request.operation == "CREATE" ?
+          {} :
+          ((
+            oldObject != null &&
+            has(oldObject.metadata) &&
+            has(oldObject.metadata.labels)
+          ) ? oldObject.metadata.labels : {})
+    - name: new_ownership_mode
+      expression: >-
+        ("openbao.org/ownership-mode" in variables.new_labels) ?
+          variables.new_labels["openbao.org/ownership-mode"] : ""
+    - name: old_ownership_mode
+      expression: >-
+        ("openbao.org/ownership-mode" in variables.old_labels) ?
+          variables.old_labels["openbao.org/ownership-mode"] : ""
+    - name: new_claim_namespace
+      expression: >-
+        ("openbao.org/claim-namespace" in variables.new_labels) ?
+          variables.new_labels["openbao.org/claim-namespace"] : ""
+    - name: old_claim_namespace
+      expression: >-
+        ("openbao.org/claim-namespace" in variables.old_labels) ?
+          variables.old_labels["openbao.org/claim-namespace"] : ""
+    - name: new_claim_name
+      expression: >-
+        ("openbao.org/claim-name" in variables.new_labels) ?
+          variables.new_labels["openbao.org/claim-name"] : ""
+    - name: old_claim_name
+      expression: >-
+        ("openbao.org/claim-name" in variables.old_labels) ?
+          variables.old_labels["openbao.org/claim-name"] : ""
+    - name: new_is_claim_managed
+      expression: >-
+        variables.new_ownership_mode == "ClaimManaged"
+    - name: old_is_claim_managed
+      expression: >-
+        variables.old_ownership_mode == "ClaimManaged"
+    - name: ownership_labels_unchanged
+      expression: >-
+        variables.new_ownership_mode == variables.old_ownership_mode &&
+        variables.new_claim_namespace == variables.old_claim_namespace &&
+        variables.new_claim_name == variables.old_claim_name
+  validations:
+    - expression: >-
+        request.operation != "CREATE" ||
+        !variables.new_is_claim_managed ||
+        variables.is_controller
+      message: "Only the controller may create claim-managed OpenBaoCluster resources."
+    - expression: >-
+        request.operation != "UPDATE" ||
+        variables.is_controller ||
+        variables.ownership_labels_unchanged
+      message: "Claim ownership labels on OpenBaoCluster resources are immutable for non-controller writers."
+    - expression: >-
+        request.operation != "DELETE" ||
+        variables.is_controller ||
+        !variables.old_is_claim_managed
+      message: "Only the controller may delete claim-managed OpenBaoCluster resources."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-restrict-claim-managed-openbaocluster-mutations-binding
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "openbao-operator.fullname" . }}-openbao-restrict-claim-managed-openbaocluster-mutations
+  validationActions: [Deny]
+  matchResources:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["openbaoclusters"]
+{{- end }}

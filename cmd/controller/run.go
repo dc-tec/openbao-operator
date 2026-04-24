@@ -18,6 +18,7 @@ package controller
 
 import (
 	"os"
+	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -25,11 +26,13 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
+	"github.com/dc-tec/openbao-operator/internal/service/webhookcerts"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
@@ -71,6 +74,20 @@ func Run(args []string) {
 	watchNamespace := watchNamespaceFromEnv()
 	singleTenantMode := watchNamespace != ""
 	logTenancyMode(watchNamespace)
+	operatorNamespace := operatorNamespaceFromEnv()
+	managerContext := ctrl.SetupSignalHandler()
+
+	claimWebhookRuntime, err := webhookcerts.PrepareClaimWebhookRuntime(
+		managerContext,
+		kubernetes.NewForConfigOrDie(config),
+		operatorNamespace,
+		cfg.enableServiceClaims,
+		strings.TrimSpace(os.Getenv("OPERATOR_NAME_PREFIX")),
+	)
+	if err != nil {
+		setupLog.Error(err, "unable to prepare OpenBaoClusterClaim webhook runtime")
+		os.Exit(1)
+	}
 
 	mgrOpts := newManagerOptions(
 		scheme,
@@ -78,6 +95,7 @@ func Run(args []string) {
 		cfg.probeAddr,
 		cfg.enableLeaderElection,
 		watchNamespace,
+		claimWebhookRuntime.CertDir,
 	)
 	mgr, err := ctrl.NewManager(config, mgrOpts)
 	if err != nil {
@@ -90,6 +108,7 @@ func Run(args []string) {
 		setupLog.Error(err, "unable to initialize controller runtime")
 		os.Exit(1)
 	}
+	setupLog.Info("Feature gate evaluated", "feature", "service-claims", "enabled", processRuntime.enableServiceClaims)
 
 	if err := setupControllers(mgr, processRuntime); err != nil {
 		setupLog.Error(err, "unable to register controllers")
@@ -102,7 +121,7 @@ func Run(args []string) {
 	}
 
 	setupLog.Info("starting controller manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(managerContext); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}

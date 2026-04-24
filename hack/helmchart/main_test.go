@@ -119,6 +119,115 @@ func TestSyncAggregatedRBAC_IncludesHelperImageDelegationRole(t *testing.T) {
 	}
 }
 
+func TestSyncCRDsFiltersToCoreChartAndPrunesStaleOutputs(t *testing.T) {
+	inputDir := t.TempDir()
+	outputDir := t.TempDir()
+
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobackupauthprofiles.yaml"), sampleCRD("openbaobackupauthprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobackupbackends.yaml"), sampleCRD("openbaobackupbackends.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobackupprofiles.yaml"), sampleCRD("openbaobackupprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobackuptargets.yaml"), sampleCRD("openbaobackuptargets.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobootstrapprofiles.yaml"), sampleCRD("openbaobootstrapprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoclusters.yaml"), sampleCRD("openbaoclusters.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoclusterclaims.yaml"), sampleCRD("openbaoclusterclaims.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_unrelateds.yaml"), sampleCRD("unrelateds.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoentrypoints.yaml"), sampleCRD("openbaoentrypoints.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoexposureclasses.yaml"), sampleCRD("openbaoexposureclasses.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoingresspolicies.yaml"), sampleCRD("openbaoingresspolicies.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaonetworkprofiles.yaml"), sampleCRD("openbaonetworkprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoobservabilityprofiles.yaml"), sampleCRD("openbaoobservabilityprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaorestores.yaml"), sampleCRD("openbaorestores.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoruntimeprofiles.yaml"), sampleCRD("openbaoruntimeprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoserviceofferings.yaml"), sampleCRD("openbaoserviceofferings.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoserviceprofiles.yaml"), sampleCRD("openbaoserviceprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaostorageprofiles.yaml"), sampleCRD("openbaostorageprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaotenants.yaml"), sampleCRD("openbaotenants.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaotransferprofiles.yaml"), sampleCRD("openbaotransferprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaounsealprofiles.yaml"), sampleCRD("openbaounsealprofiles.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoupgradepolicies.yaml"), sampleCRD("openbaoupgradepolicies.openbao.org"))
+	writeYAML(t, filepath.Join(outputDir, "openbao.org_unrelateds.yaml"), "stale")
+
+	err := syncCRDs(options{crdInputDir: inputDir, crdOutputDir: outputDir})
+	if err != nil {
+		t.Fatalf("syncCRDs() error = %v", err)
+	}
+
+	for _, name := range []string{
+		"openbao.org_openbaobackupauthprofiles.yaml",
+		"openbao.org_openbaobackupbackends.yaml",
+		"openbao.org_openbaobackupprofiles.yaml",
+		"openbao.org_openbaobackuptargets.yaml",
+		"openbao.org_openbaobootstrapprofiles.yaml",
+		"openbao.org_openbaoclusters.yaml",
+		"openbao.org_openbaoclusterclaims.yaml",
+		"openbao.org_openbaoentrypoints.yaml",
+		"openbao.org_openbaoexposureclasses.yaml",
+		"openbao.org_openbaoingresspolicies.yaml",
+		"openbao.org_openbaonetworkprofiles.yaml",
+		"openbao.org_openbaoobservabilityprofiles.yaml",
+		"openbao.org_openbaorestores.yaml",
+		"openbao.org_openbaoruntimeprofiles.yaml",
+		"openbao.org_openbaoserviceofferings.yaml",
+		"openbao.org_openbaoserviceprofiles.yaml",
+		"openbao.org_openbaostorageprofiles.yaml",
+		"openbao.org_openbaotenants.yaml",
+		"openbao.org_openbaotransferprofiles.yaml",
+		"openbao.org_openbaounsealprofiles.yaml",
+		"openbao.org_openbaoupgradepolicies.yaml",
+	} {
+		path := filepath.Join(outputDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read synced CRD %q: %v", name, err)
+		}
+		if string(data) == "stale" {
+			t.Fatalf("synced CRD %q was not refreshed", name)
+		}
+		if !strings.Contains(string(data), "helm.sh/resource-policy: keep") {
+			t.Fatalf("synced CRD %q missing keep annotation", name)
+		}
+	}
+
+	for _, name := range []string{
+		"openbao.org_unrelateds.yaml",
+	} {
+		if _, err := os.Stat(filepath.Join(outputDir, name)); !os.IsNotExist(err) {
+			t.Fatalf("excluded CRD %q was not pruned", name)
+		}
+	}
+}
+
+func writeYAML(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %q: %v", path, err)
+	}
+}
+
+func sampleCRD(name string) string {
+	return "" +
+		"apiVersion: apiextensions.k8s.io/v1\n" +
+		"kind: CustomResourceDefinition\n" +
+		"metadata:\n" +
+		"  name: " + name + "\n" +
+		"  annotations:\n" +
+		"    controller-gen.kubebuilder.io/version: v0.19.0\n" +
+		"spec:\n" +
+		"  group: openbao.org\n"
+}
+
+func TestCoreChartCRDFilesIncludeStartupRequiredSurfaces(t *testing.T) {
+	for _, name := range []string{
+		"openbao.org_openbaoclusterclaims.yaml",
+		"openbao.org_openbaoserviceofferings.yaml",
+		"openbao.org_openbaoingresspolicies.yaml",
+	} {
+		if _, ok := coreChartCRDFiles[name]; !ok {
+			t.Fatalf("coreChartCRDFiles missing required startup surface %q", name)
+		}
+	}
+}
+
 func TestAddNamespacePodSecurityLabelRBACMode_ConditionsNamespaceMutationVerbs(t *testing.T) {
 	input := `apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -130,6 +239,7 @@ rules:
     resources:
       - namespaces
     verbs:
+      - create
       - get
       - update
       - patch
@@ -142,8 +252,8 @@ rules:
 	if !strings.Contains(got, `{{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "enforce" }}`) {
 		t.Fatalf("transformed RBAC missing namespace Pod Security label mode conditional:\n%s", got)
 	}
-	if !strings.Contains(got, "      - get\n{{ if") {
-		t.Fatalf("transformed RBAC should leave get outside the conditional:\n%s", got)
+	if !strings.Contains(got, "      - create\n      - get\n{{ if") {
+		t.Fatalf("transformed RBAC should leave create/get outside the conditional:\n%s", got)
 	}
 }
 
@@ -173,6 +283,57 @@ spec:
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("transformed policy missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestHelmTemplateRetainsProvisionerNamespaceCreateAndWebhookIngress(t *testing.T) {
+	rendered := string(renderChart(t))
+
+	if !strings.Contains(rendered, "kind: ClusterRole") ||
+		!strings.Contains(rendered, "name: test-openbao-operator-provisioner") ||
+		!strings.Contains(rendered, "resources:\n      - namespaces") ||
+		!strings.Contains(rendered, "verbs:\n      - create\n      - get\n      - update\n      - patch") {
+		t.Fatalf("rendered chart missing provisioner namespace create surface:\n%s", rendered)
+	}
+
+	if !strings.Contains(rendered, "kind: NetworkPolicy") ||
+		!strings.Contains(rendered, "name: test-openbao-operator-allow-webhook") ||
+		!strings.Contains(rendered, "- port: 9443") {
+		t.Fatalf("rendered chart missing webhook ingress allow rule:\n%s", rendered)
+	}
+
+	if !strings.Contains(rendered, "system:controller:namespace-controller") ||
+		!strings.Contains(rendered, "system:serviceaccount:kube-system:namespace-controller") {
+		t.Fatalf("rendered chart missing namespace-controller managed-resource deletion allowance:\n%s", rendered)
+	}
+
+	if !strings.Contains(rendered, "name: test-openbao-operator-provisioner") ||
+		!strings.Contains(rendered, "startupProbe:") ||
+		!strings.Contains(rendered, "failureThreshold: 30") ||
+		!strings.Contains(rendered, "timeoutSeconds: 5") ||
+		!strings.Contains(rendered, "memory: 256Mi") ||
+		!strings.Contains(rendered, "cpu: 500m") {
+		t.Fatalf("rendered chart missing provisioner startup or resource hardening:\n%s", rendered)
+	}
+}
+
+func TestHelmTemplateIncludesRequiredCRDs(t *testing.T) {
+	rendered := string(renderChart(t))
+
+	for _, name := range []string{
+		"openbaoclusterclaims.openbao.org",
+		"openbaoserviceofferings.openbao.org",
+		"openbaoingresspolicies.openbao.org",
+		"openbaostorageprofiles.openbao.org",
+		"openbaounsealprofiles.openbao.org",
+		"openbaoruntimeprofiles.openbao.org",
+		"openbaoobservabilityprofiles.openbao.org",
+		"openbaonetworkprofiles.openbao.org",
+		"openbaoupgradepolicies.openbao.org",
+	} {
+		if !strings.Contains(rendered, "name: "+name) {
+			t.Fatalf("rendered chart missing CRD %q", name)
 		}
 	}
 }

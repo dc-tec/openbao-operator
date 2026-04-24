@@ -1,0 +1,17 @@
+{{- $serviceName := printf "%s-controller-webhook" (include "openbao-operator.fullname" .) -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  ports:
+    - name: https-webhook
+      port: 443
+      protocol: TCP
+      targetPort: webhook-server
+  selector:
+    {{- include "openbao-operator.controllerSelectorLabels" . | nindent 4 }}

@@ -1,0 +1,103 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoingresspolicies.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoIngressPolicy
+    listKind: OpenBaoIngressPolicyList
+    plural: openbaoingresspolicies
+    singular: openbaoingresspolicy
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.pathType
+      name: PathType
+      type: string
+    - jsonPath: .spec.readinessMode
+      name: Readiness
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoIngressPolicy is the immutable platform-owned ingress
+          publication policy object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoIngressPolicySpec defines the desired state of OpenBaoIngressPolicy.
+            properties:
+              annotations:
+                additionalProperties:
+                  type: string
+                description: |-
+                  Annotations are the concrete controller-specific annotations applied to the
+                  managed Ingress resource.
+                type: object
+              backendTLS:
+                description: |-
+                  BackendTLS defines how backend TLS posture is published for the selected
+                  ingress controller.
+                properties:
+                  publicationMode:
+                    default: None
+                    description: |-
+                      PublicationMode identifies how backend TLS posture is expressed for this
+                      ingress controller.
+                    enum:
+                    - None
+                    - Annotation
+                    type: string
+                type: object
+              pathType:
+                default: Prefix
+                description: PathType identifies how the ingress controller should
+                  interpret the route path.
+                enum:
+                - Prefix
+                - Exact
+                - ImplementationSpecific
+                type: string
+              readinessMode:
+                default: LoadBalancerPublished
+                description: |-
+                  ReadinessMode identifies how the operator should decide whether ingress
+                  integration is ready for claim-facing endpoint publication.
+                enum:
+                - Created
+                - LoadBalancerPublished
+                type: string
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

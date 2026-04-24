@@ -41,16 +41,90 @@ rules:
   - apiGroups:
       - openbao.org
     resources:
+      - openbaoclusterclaims
+      - openbaoclusterclaims/status
+      - openbaoclusterclaims/finalizers
+      - openbaoclusterclaimbackuprequests
+      - openbaoclusterclaimbackuprequests/status
+      - openbaoclusterclaimbackuprequests/finalizers
+      - openbaoclusterclaimrestorerequests
+      - openbaoclusterclaimrestorerequests/status
+      - openbaoclusterclaimrestorerequests/finalizers
+      - openbaoclusterclaimupgraderequests
+      - openbaoclusterclaimupgraderequests/status
+      - openbaoclusterclaimupgraderequests/finalizers
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - openbao.org
+    resources:
       - openbaoclusters
     verbs:
       - get
       - list
       - watch
   - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoserviceprofiles
+      - openbaoserviceofferings
+      - openbaobootstrapprofiles
+      - openbaoexposureclasses
+      - openbaoingresspolicies
+      - openbaostorageprofiles
+      - openbaounsealprofiles
+      - openbaoruntimeprofiles
+      - openbaoobservabilityprofiles
+      - openbaonetworkprofiles
+      - openbaoupgradepolicies
+      - openbaobackupprofiles
+      - openbaoentrypoints
+      - openbaobackuptargets
+      - openbaobackupbackends
+      - openbaobackupauthprofiles
+      - openbaotransferprofiles
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaotenants
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - delete
+      - patch
+  - apiGroups:
       - admissionregistration.k8s.io
     resources:
+      - mutatingwebhookconfigurations
       - validatingadmissionpolicies
       - validatingadmissionpolicybindings
+    verbs:
+      - create
+      - delete
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingressclasses
     verbs:
       - get
   - apiGroups:
@@ -131,4 +205,3 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "openbao-operator.controllerServiceAccountName" . }}
     namespace: {{ .Release.Namespace }}
-

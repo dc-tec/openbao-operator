@@ -1,5 +1,481 @@
 [
   {
+    "id": "claims-functional-restore-request",
+    "generatedId": "claims-functional-executes-a-claim-restore-request-from-c61d9ae9",
+    "caseLabel": "claims-functional-restore-request",
+    "coverage": [
+      "claim-restore-request",
+      "claim-restore-backup-request-source",
+      "claim-restore-status-projection"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "executes a claim restore request from a selected completed backup request",
+    "path": [
+      "Claims Functional",
+      "executes a claim restore request from a selected completed backup request"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-restore-request",
+      "covers:claim-restore-request",
+      "covers:claim-restore-backup-request-source",
+      "covers:claim-restore-status-projection"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional"
+    ],
+    "steps": [
+      "creating a fresh successful backup for the restore request to consume",
+      "surfacing the completed claim backup in the namespaced backup request inventory",
+      "waiting for the restore request to start or complete",
+      "publishing the active restore workflow on claim status",
+      "waiting for the restore request to complete successfully",
+      "clearing the active restore workflow from claim status after completion"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-functional-backup-request",
+    "generatedId": "claims-functional-executes-a-manual-claim-backup-request-0cd71fcc",
+    "caseLabel": "claims-functional-backup-request",
+    "coverage": [
+      "claim-backup-request",
+      "claim-backup-status-projection"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "executes a manual claim backup request and projects the result onto claim status",
+    "path": [
+      "Claims Functional",
+      "executes a manual claim backup request and projects the result onto claim status"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-backup-request",
+      "covers:claim-backup-request",
+      "covers:claim-backup-status-projection"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional"
+    ],
+    "steps": [
+      "waiting for the claim to publish the active backup workflow summary",
+      "waiting for the backup request to complete successfully",
+      "surfacing the completed claim backup in the namespaced backup request inventory",
+      "projecting the completed backup onto claim status and clearing the workflow summary"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-functional-upgrade-request",
+    "generatedId": "claims-functional-executes-an-in-place-claim-upgrade-9594909c",
+    "caseLabel": "claims-functional-upgrade-request",
+    "coverage": [
+      "claim-upgrade-request",
+      "claim-upgrade-rollout"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "executes an in-place claim upgrade request against a new service-profile revision",
+    "path": [
+      "Claims Functional",
+      "executes an in-place claim upgrade request against a new service-profile revision"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-upgrade-request",
+      "covers:claim-upgrade-request",
+      "covers:claim-upgrade-rollout",
+      "claims-upgrade"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional",
+      "claims-upgrade"
+    ],
+    "steps": [
+      "publishing the next immutable service-profile revision on the same offering alias",
+      "waiting for the request to enter rollout",
+      "waiting for the claim to publish an active maintenance summary",
+      "waiting for the claim to converge onto the upgraded revision",
+      "waiting for the upgrade request to complete and the claim workflow summary to clear",
+      "projecting the upgraded backup schedule onto the local OpenBaoCluster"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-functional-missing-bootstrap-source",
+    "generatedId": "claims-functional-keeps-the-claim-pending-when-a-e6a05016",
+    "caseLabel": "claims-functional-missing-bootstrap-source",
+    "coverage": [
+      "claim-missing-bootstrap-source"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "keeps the claim pending when a secret-backed bootstrap source is missing",
+    "path": [
+      "Claims Functional",
+      "keeps the claim pending when a secret-backed bootstrap source is missing"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-missing-bootstrap-source",
+      "covers:claim-missing-bootstrap-source",
+      "negative"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional",
+      "negative"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-functional-catalog-profiles",
+    "generatedId": "claims-functional-projects-production-catalog-profiles-into-the-8b3e81aa",
+    "caseLabel": "claims-functional-catalog-profiles",
+    "coverage": [
+      "claim-catalog-runtime-profile",
+      "claim-catalog-network-profile",
+      "claim-catalog-upgrade-policy",
+      "claim-catalog-read-replica-profile"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "projects production catalog profiles into the claim-managed cluster",
+    "path": [
+      "Claims Functional",
+      "projects production catalog profiles into the claim-managed cluster"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-catalog-profiles",
+      "covers:claim-catalog-runtime-profile",
+      "covers:claim-catalog-network-profile",
+      "covers:claim-catalog-upgrade-policy",
+      "covers:claim-catalog-read-replica-profile"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-functional-gateway",
+    "generatedId": "claims-functional-publishes-the-external-gateway-hostname-once-265ffa07",
+    "caseLabel": "claims-functional-gateway",
+    "coverage": [
+      "claim-gateway",
+      "claim-external-endpoint-publication"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "publishes the external gateway hostname once gateway integration is ready",
+    "path": [
+      "Claims Functional",
+      "publishes the external gateway hostname once gateway integration is ready"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-gateway",
+      "covers:claim-gateway",
+      "covers:claim-external-endpoint-publication",
+      "requires-gateway-api"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional",
+      "requires-gateway-api"
+    ],
+    "steps": [
+      "marking the referenced Gateway as programmed"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-functional-ingress",
+    "generatedId": "claims-functional-publishes-the-external-ingress-hostname-once-5c177257",
+    "caseLabel": "claims-functional-ingress",
+    "coverage": [
+      "claim-ingress",
+      "claim-external-endpoint-publication"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "publishes the external ingress hostname once ingress integration is ready",
+    "path": [
+      "Claims Functional",
+      "publishes the external ingress hostname once ingress integration is ready"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-ingress",
+      "covers:claim-ingress",
+      "covers:claim-external-endpoint-publication"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional"
+    ],
+    "steps": [
+      "publishing a load balancer address on the managed Ingress"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-guardrails-child-delete",
+    "generatedId": "claims-guardrails-denies-direct-deletion-of-a-claim-e5819b0b",
+    "caseLabel": "claims-guardrails-child-delete",
+    "coverage": [
+      "claim-managed-child-protection"
+    ],
+    "file": "test/e2e/Claims_Guardrails_test.go",
+    "type": "It",
+    "name": "denies direct deletion of a claim-managed local OpenBaoCluster",
+    "path": [
+      "Claims Guardrails",
+      "denies direct deletion of a claim-managed local OpenBaoCluster"
+    ],
+    "labels": [
+      "claims",
+      "claims-guardrails",
+      "security",
+      "admission",
+      "case:claims-guardrails-child-delete",
+      "covers:claim-managed-child-protection"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-guardrails",
+      "security",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-guardrails-offering-pin",
+    "generatedId": "claims-guardrails-denies-materialized-claim-spec-mutation-b031911a",
+    "caseLabel": "claims-guardrails-offering-pin",
+    "coverage": [
+      "claim-offering-pin"
+    ],
+    "file": "test/e2e/Claims_Guardrails_test.go",
+    "type": "It",
+    "name": "denies materialized claim spec mutation",
+    "path": [
+      "Claims Guardrails",
+      "denies materialized claim spec mutation"
+    ],
+    "labels": [
+      "claims",
+      "claims-guardrails",
+      "security",
+      "admission",
+      "case:claims-guardrails-offering-pin",
+      "covers:claim-offering-pin"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-guardrails",
+      "security",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-guardrails-spec-lock",
+    "generatedId": "claims-guardrails-denies-materialized-claim-spec-mutation-b031911a",
+    "caseLabel": "claims-guardrails-spec-lock",
+    "coverage": [
+      "claim-spec-lock"
+    ],
+    "file": "test/e2e/Claims_Guardrails_test.go",
+    "type": "It",
+    "name": "denies materialized claim spec mutation",
+    "path": [
+      "Claims Guardrails",
+      "denies materialized claim spec mutation"
+    ],
+    "labels": [
+      "claims",
+      "claims-guardrails",
+      "security",
+      "admission",
+      "case:claims-guardrails-spec-lock",
+      "covers:claim-spec-lock"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-guardrails",
+      "security",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-guardrails-materialize",
+    "generatedId": "claims-guardrails-materializes-a-same-cluster-claim-before-f4aeb3ec",
+    "caseLabel": "claims-guardrails-materialize",
+    "coverage": [
+      "claim-materialization"
+    ],
+    "file": "test/e2e/Claims_Guardrails_test.go",
+    "type": "It",
+    "name": "materializes a same-cluster claim before guardrail checks",
+    "path": [
+      "Claims Guardrails",
+      "materializes a same-cluster claim before guardrail checks"
+    ],
+    "labels": [
+      "claims",
+      "claims-guardrails",
+      "security",
+      "admission",
+      "case:claims-guardrails-materialize",
+      "covers:claim-materialization"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-guardrails",
+      "security",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-smoke-offering-secret-bootstrap",
+    "generatedId": "claims-smoke-binds-a-stable-service-offering-to-30b8c3cf",
+    "caseLabel": "claims-smoke-offering-secret-bootstrap",
+    "coverage": [
+      "service-offering-binding",
+      "secret-bootstrap-projection",
+      "same-cluster-materialization",
+      "same-cluster-connection"
+    ],
+    "file": "test/e2e/Claims_Smoke_test.go",
+    "type": "It",
+    "name": "binds a stable service offering to a ready same-cluster claim with secret-backed bootstrap",
+    "path": [
+      "Claims Smoke",
+      "binds a stable service offering to a ready same-cluster claim with secret-backed bootstrap"
+    ],
+    "labels": [
+      "claims",
+      "claims-smoke",
+      "critical",
+      "case:claims-smoke-offering-secret-bootstrap",
+      "covers:service-offering-binding",
+      "covers:secret-bootstrap-projection",
+      "covers:same-cluster-materialization",
+      "covers:same-cluster-connection"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-smoke",
+      "critical"
+    ],
+    "steps": [
+      "waiting for the claim to bind the selected offering to one immutable service profile",
+      "waiting for the claim to reach Ready",
+      "waiting for the same-cluster materialization to point at a concrete local OpenBaoCluster",
+      "waiting for the local OpenBaoCluster to report Running",
+      "waiting for the claim-owned connection Secret to be published"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-smoke-cleanup",
+    "generatedId": "claims-smoke-deletes-the-claim-and-cleans-up-f678d349",
+    "caseLabel": "claims-smoke-cleanup",
+    "coverage": [
+      "claim-deletion",
+      "same-cluster-cleanup"
+    ],
+    "file": "test/e2e/Claims_Smoke_test.go",
+    "type": "It",
+    "name": "deletes the claim and cleans up local materialization artifacts",
+    "path": [
+      "Claims Smoke",
+      "deletes the claim and cleans up local materialization artifacts"
+    ],
+    "labels": [
+      "claims",
+      "claims-smoke",
+      "critical",
+      "case:claims-smoke-cleanup",
+      "covers:claim-deletion",
+      "covers:same-cluster-cleanup"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-smoke",
+      "critical"
+    ],
+    "steps": [
+      "deleting the claim",
+      "waiting for the claim to be removed",
+      "waiting for the local OpenBaoCluster to be removed",
+      "waiting for the claim-owned connection Secret to be removed"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "deletion-policy-delete-all",
     "generatedId": "cluster-deletionpolicy-deletes-pvcs-and-secrets-when-policy-4358a35f",
     "caseLabel": "deletion-policy-delete-all",

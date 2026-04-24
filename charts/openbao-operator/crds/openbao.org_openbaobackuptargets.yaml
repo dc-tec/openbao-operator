@@ -1,0 +1,164 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaobackuptargets.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoBackupTarget
+    listKind: OpenBaoBackupTargetList
+    plural: openbaobackuptargets
+    singular: openbaobackuptarget
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.backendRef.name
+      name: Backend
+      type: string
+    - jsonPath: .spec.authProfileRef.name
+      name: Auth
+      type: string
+    - jsonPath: .spec.transportProfileRef.name
+      name: Transfer
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoBackupTarget is the immutable platform-owned backup destination
+          policy object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoBackupTargetSpec defines the desired state of OpenBaoBackupTarget.
+            properties:
+              authProfileRef:
+                description: AuthProfileRef identifies the immutable concrete backup
+                  auth profile revision when required.
+                properties:
+                  name:
+                    description: Name is the referenced object name.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              backendRef:
+                description: BackendRef identifies the immutable concrete backup backend
+                  revision.
+                properties:
+                  name:
+                    description: Name is the referenced object name.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              locationPolicy:
+                description: LocationPolicy defines where backups are allowed to land
+                  and how keys are laid out.
+                properties:
+                  keyPrefix:
+                    description: KeyPrefix defines deterministic key-prefix posture
+                      under the selected location.
+                    properties:
+                      allowClaimPartition:
+                        description: AllowClaimPartition identifies whether claim.serviceParameters.backup.partition
+                          may influence the rendered prefix.
+                        type: boolean
+                      template:
+                        description: Template is the deterministic rendered key-prefix
+                          template.
+                        minLength: 1
+                        type: string
+                    required:
+                    - template
+                    type: object
+                  location:
+                    description: Location defines how the top-level backup location
+                      is selected.
+                    properties:
+                      mode:
+                        description: Mode identifies how the location is selected.
+                        enum:
+                        - Fixed
+                        - Template
+                        - ClaimValue
+                        type: string
+                      template:
+                        description: Template is the deterministic location template
+                          when Mode is Template.
+                        type: string
+                      validationPattern:
+                        description: ValidationPattern constrains claim-provided or
+                          rendered location values when set.
+                        type: string
+                      value:
+                        description: Value is the fixed location when Mode is Fixed.
+                        type: string
+                    required:
+                    - mode
+                    type: object
+                required:
+                - keyPrefix
+                - location
+                type: object
+              policy:
+                description: Policy defines service-removal posture for external backup
+                  data.
+                properties:
+                  deletionBehavior:
+                    default: Retain
+                    description: DeletionBehavior identifies how external backups
+                      are treated when the owning service is removed.
+                    enum:
+                    - Retain
+                    - DeleteWithService
+                    type: string
+                type: object
+              transportProfileRef:
+                description: TransportProfileRef identifies the immutable upload/transfer
+                  tuning profile when required.
+                properties:
+                  name:
+                    description: Name is the referenced object name.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+            required:
+            - backendRef
+            - locationPolicy
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

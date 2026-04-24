@@ -1,0 +1,275 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoserviceprofiles.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoServiceProfile
+    listKind: OpenBaoServiceProfileList
+    plural: openbaoserviceprofiles
+    singular: openbaoserviceprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.cluster.version
+      name: Version
+      type: string
+    - jsonPath: .spec.cluster.securityProfile
+      name: Security
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoServiceProfile is the immutable platform-owned service
+          offering catalog object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoServiceProfileSpec defines the desired state of OpenBaoServiceProfile.
+            properties:
+              backup:
+                description: Backup defines the approved backup posture.
+                properties:
+                  profileRef:
+                    description: ProfileRef identifies the selected immutable backup
+                      profile revision.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - profileRef
+                type: object
+              bootstrap:
+                description: Bootstrap defines the approved bootstrap posture.
+                properties:
+                  mode:
+                    description: Mode identifies the approved bootstrap mode.
+                    enum:
+                    - ManagedInit
+                    - SelfInit
+                    type: string
+                  profileRef:
+                    description: ProfileRef identifies the selected immutable bootstrap
+                      profile revision when needed.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - mode
+                type: object
+              cluster:
+                description: Cluster defines the approved cluster service shape.
+                properties:
+                  readReplicas:
+                    description: ReadReplicas is the approved steady-state read-replica
+                      count.
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  securityProfile:
+                    description: SecurityProfile is the approved cluster security
+                      posture.
+                    enum:
+                    - Hardened
+                    - Development
+                    type: string
+                  version:
+                    description: Version is the approved OpenBao version.
+                    minLength: 1
+                    type: string
+                  voters:
+                    description: Voters is the approved voter replica count.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                required:
+                - securityProfile
+                - version
+                - voters
+                type: object
+              exposure:
+                description: Exposure defines the approved exposure posture.
+                properties:
+                  classRef:
+                    description: ClassRef identifies the selected immutable exposure
+                      class revision.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - classRef
+                type: object
+              lifecycle:
+                description: Lifecycle defines approved steady-state lifecycle policy.
+                properties:
+                  policyRef:
+                    description: PolicyRef identifies the selected immutable upgrade-policy
+                      revision.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  preUpgradeSnapshot:
+                    description: PreUpgradeSnapshot identifies whether upgrades should
+                      take a safety snapshot.
+                    type: boolean
+                  upgradeStrategy:
+                    default: RollingUpdate
+                    description: UpgradeStrategy identifies the approved upgrade strategy.
+                    enum:
+                    - RollingUpdate
+                    - BlueGreen
+                    type: string
+                type: object
+              network:
+                description: Network defines the approved network dependency posture.
+                properties:
+                  profileRef:
+                    description: ProfileRef identifies the selected immutable network
+                      implementation profile revision.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+              observability:
+                description: Observability defines the approved observability and
+                  telemetry posture.
+                properties:
+                  profileRef:
+                    description: ProfileRef identifies the selected immutable observability
+                      implementation profile revision.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+              runtime:
+                description: Runtime defines the approved workload runtime integration
+                  posture.
+                properties:
+                  profileRef:
+                    description: ProfileRef identifies the selected immutable runtime
+                      implementation profile revision.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+              storage:
+                description: Storage defines the approved service storage capacities.
+                properties:
+                  primarySize:
+                    description: PrimarySize is the approved primary storage size.
+                    minLength: 1
+                    type: string
+                  profileRef:
+                    description: |-
+                      ProfileRef identifies the selected immutable storage implementation profile revision.
+                      Capacity remains part of the service profile; storage classes and auxiliary storage
+                      implementation details live in the referenced profile.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  readReplicaSize:
+                    description: ReadReplicaSize is the approved read-replica storage
+                      size.
+                    minLength: 1
+                    type: string
+                required:
+                - primarySize
+                type: object
+              unseal:
+                description: Unseal defines the approved unseal posture.
+                properties:
+                  profileRef:
+                    description: |-
+                      ProfileRef identifies the selected immutable unseal implementation profile revision.
+                      When omitted, Development profiles use operator-managed static unseal and Hardened
+                      profiles use the operator's same-cluster transit defaults.
+                    properties:
+                      name:
+                        description: Name is the referenced object name.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+            required:
+            - backup
+            - bootstrap
+            - cluster
+            - exposure
+            - lifecycle
+            - storage
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

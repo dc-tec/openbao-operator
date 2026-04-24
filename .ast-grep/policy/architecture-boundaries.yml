@@ -1,5 +1,155 @@
 modulePath: github.com/dc-tec/openbao-operator
 
+modules:
+  - name: shared-platform
+    displayName: Shared Platform Kernel
+    required: true
+    owns:
+      apis:
+        - LocalReference
+        - NamespacedReference
+        - TypedObjectReference
+        - ConditionReason
+      controllers: []
+      apps: []
+      services: []
+    mayDependOn: []
+  - name: core
+    displayName: Core Lifecycle
+    required: true
+    owns:
+      apis:
+        - OpenBaoCluster
+        - OpenBaoRestore
+      controllers:
+        - openbaocluster
+        - openbaorestore
+      apps:
+        - internal/app/openbaocluster
+        - internal/app/openbaorestore
+      services:
+        - internal/service/backup
+        - internal/service/bootstrap
+        - internal/service/certs
+        - internal/service/configuration
+        - internal/service/init
+        - internal/service/networking
+        - internal/service/opslifecycle
+        - internal/service/restore
+        - internal/service/upgrade
+        - internal/service/workload
+        - internal/service/workloadidentity
+    mayDependOn:
+      - shared-platform
+  - name: tenantops
+    displayName: TenantOps
+    required: false
+    owns:
+      apis:
+        - OpenBaoTenant
+      controllers:
+        - provisioner
+      apps:
+        - internal/app/provisioner
+      services:
+        - internal/service/provisioner
+    mayDependOn:
+      - core
+      - shared-platform
+  - name: serviceclaims
+    displayName: Service Catalog / Claims
+    required: false
+    owns:
+      apis:
+        - OpenBaoBackupAuthProfile
+        - OpenBaoBackupBackend
+        - OpenBaoBackupProfile
+        - OpenBaoBackupTarget
+        - OpenBaoBootstrapProfile
+        - OpenBaoClusterClaim
+        - OpenBaoClusterClaimBackupRequest
+        - OpenBaoClusterClaimRestoreRequest
+        - OpenBaoClusterClaimUpgradeRequest
+        - OpenBaoEntrypoint
+        - OpenBaoExposureClass
+        - OpenBaoIngressPolicy
+        - OpenBaoNetworkProfile
+        - OpenBaoObservabilityProfile
+        - OpenBaoRuntimeProfile
+        - OpenBaoServiceOffering
+        - OpenBaoServiceProfile
+        - OpenBaoStorageProfile
+        - OpenBaoTransferProfile
+        - OpenBaoUnsealProfile
+        - OpenBaoUpgradePolicy
+      controllers:
+        - openbaoclusterclaim
+        - openbaoclusterclaimbackuprequest
+        - openbaoclusterclaimrestorerequest
+        - openbaoclusterclaimupgraderequest
+      apps:
+        - internal/app/openbaoclusterclaim
+        - internal/app/openbaoclusterclaimbackuprequest
+        - internal/app/openbaoclusterclaimrestorerequest
+        - internal/app/openbaoclusterclaimupgraderequest
+      services:
+        - internal/service/claimcontract
+        - internal/service/connectionpublishing
+        - internal/service/webhookcerts
+    mayDependOn:
+      - core
+      - tenantops
+      - shared-platform
+    files:
+      - api/v1alpha1/openbaobackupauthprofile_types.go
+      - api/v1alpha1/openbaobackupbackend_types.go
+      - api/v1alpha1/openbaobackupprofile_types.go
+      - api/v1alpha1/openbaobackuptarget_types.go
+      - api/v1alpha1/openbaobootstrapprofile_types.go
+      - api/v1alpha1/openbaoclusterclaim_types.go
+      - api/v1alpha1/openbaoclusterclaimbackuprequest_types.go
+      - api/v1alpha1/openbaoclusterclaimrestorerequest_types.go
+      - api/v1alpha1/openbaoclusterclaimupgraderequest_types.go
+      - api/v1alpha1/openbaoentrypoint_types.go
+      - api/v1alpha1/openbaoexposureclass_types.go
+      - api/v1alpha1/openbaoingresspolicy_types.go
+      - api/v1alpha1/openbaonetworkprofile_types.go
+      - api/v1alpha1/openbaoobservabilityprofile_types.go
+      - api/v1alpha1/openbaoruntimeprofile_types.go
+      - api/v1alpha1/openbaoserviceoffering_types.go
+      - api/v1alpha1/openbaoserviceprofile_types.go
+      - api/v1alpha1/openbaostorageprofile_types.go
+      - api/v1alpha1/openbaotransferprofile_types.go
+      - api/v1alpha1/openbaounsealprofile_types.go
+      - api/v1alpha1/openbaoupgradepolicy_types.go
+      - cmd/controller/runtime_setup_claims.go
+      - internal/app/openbaoclusterclaim/**/*.go
+      - internal/app/openbaoclusterclaimbackuprequest/**/*.go
+      - internal/app/openbaoclusterclaimrestorerequest/**/*.go
+      - internal/app/openbaoclusterclaimupgraderequest/**/*.go
+      - internal/controller/openbaoclusterclaim/**/*.go
+      - internal/controller/openbaoclusterclaimbackuprequest/**/*.go
+      - internal/controller/openbaoclusterclaimrestorerequest/**/*.go
+      - internal/controller/openbaoclusterclaimupgraderequest/**/*.go
+      - internal/service/claimcontract/**/*.go
+      - internal/service/connectionpublishing/**/*.go
+      - internal/service/webhookcerts/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/service/placement
+      - internal/service/remoteexecution
+    disallowAPISymbols:
+      - MultiClusterConditionReason
+      - OpenBaoClusterClaimMaterializationModeMultiCluster
+      - OpenBaoClusterClaimPlacementSpec
+      - RemoteRef
+      - TargetClusterRef
+    disallowAPISymbolPatterns:
+      - ManagedCluster.*
+      - OpenBaoClusterExecution.*
+      - RemoteOpenBaoCluster.*
+
 layerCoverage:
   root: internal
   layers:
@@ -12,6 +162,8 @@ layerCoverage:
       - service/bootstrap
       - service/backup
       - service/certs
+      - service/claimcontract
+      - service/connectionpublishing
       - service/identity
       - service/init
       - service/networking
@@ -19,6 +171,7 @@ layerCoverage:
       - service/provisioner
       - service/restore
       - service/upgrade
+      - service/webhookcerts
       - service/workload
       - service/workloadidentity
     adapter:
@@ -60,6 +213,8 @@ serviceImportRoots:
   - internal/service/bootstrap
   - internal/service/backup
   - internal/service/certs
+  - internal/service/claimcontract
+  - internal/service/connectionpublishing
   - internal/service/identity
   - internal/service/init
   - internal/service/networking
@@ -72,6 +227,7 @@ serviceImportRoots:
   - internal/service/upgrade/raftops
   - internal/service/upgrade/rolling
   - internal/service/upgrade/snapshot
+  - internal/service/webhookcerts
   - internal/service/workload
   - internal/service/workloadidentity
 
@@ -128,6 +284,58 @@ controllerBoundaries:
     appFacadeRoot: internal/app/provisioner
     allowServiceImports: []
     allowAdapterImports: []
+  - name: openbaoclusterclaim
+    displayName: OpenBaoClusterClaim
+    files:
+      - internal/controller/openbaoclusterclaim/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/service/upgrade
+      - internal/adapter/revision
+      - internal/platform/logging
+    appFacadeRoot: internal/app/openbaoclusterclaim
+    allowServiceImports: []
+    allowAdapterImports: []
+  - name: openbaoclusterclaimbackuprequest
+    displayName: OpenBaoClusterClaimBackupRequest
+    files:
+      - internal/controller/openbaoclusterclaimbackuprequest/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/service/upgrade
+      - internal/adapter/revision
+      - internal/platform/logging
+    appFacadeRoot: internal/app/openbaoclusterclaimbackuprequest
+    allowServiceImports: []
+    allowAdapterImports: []
+  - name: openbaoclusterclaimrestorerequest
+    displayName: OpenBaoClusterClaimRestoreRequest
+    files:
+      - internal/controller/openbaoclusterclaimrestorerequest/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/service/upgrade
+      - internal/adapter/revision
+      - internal/platform/logging
+    appFacadeRoot: internal/app/openbaoclusterclaimrestorerequest
+    allowServiceImports: []
+    allowAdapterImports: []
+  - name: openbaoclusterclaimupgraderequest
+    displayName: OpenBaoClusterClaimUpgradeRequest
+    files:
+      - internal/controller/openbaoclusterclaimupgraderequest/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/service/upgrade
+      - internal/adapter/revision
+      - internal/platform/logging
+    appFacadeRoot: internal/app/openbaoclusterclaimupgraderequest
+    allowServiceImports: []
+    allowAdapterImports: []
 
 serviceBoundaries:
   - name: configuration
@@ -179,6 +387,33 @@ serviceBoundaries:
     allowAdapterImports:
       - internal/adapter/cluster
       - internal/adapter/kube
+  - name: claimcontract
+    displayName: Claim Contract
+    packageRoot: internal/service/claimcontract
+    files:
+      - internal/service/claimcontract/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports: []
+  - name: connectionpublishing
+    displayName: Connection Publishing
+    packageRoot: internal/service/connectionpublishing
+    files:
+      - internal/service/connectionpublishing/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports: []
+  - name: webhookcerts
+    displayName: Webhook Certs
+    packageRoot: internal/service/webhookcerts
+    files:
+      - internal/service/webhookcerts/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+    allowAdapterImports: []
   - name: identity
     displayName: Identity
     packageRoot: internal/service/identity
@@ -355,6 +590,37 @@ serviceBoundaries:
       - internal/adapter/storageenv
 
 appBoundaries:
+  - name: openbaoclusterclaim-root
+    displayName: OpenBaoClusterClaim Root
+    files:
+      - internal/app/openbaoclusterclaim/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/claimcontract
+      - internal/service/connectionpublishing
+  - name: openbaoclusterclaimbackuprequest-root
+    displayName: OpenBaoClusterClaimBackupRequest Root
+    files:
+      - internal/app/openbaoclusterclaimbackuprequest/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+  - name: openbaoclusterclaimrestorerequest-root
+    displayName: OpenBaoClusterClaimRestoreRequest Root
+    files:
+      - internal/app/openbaoclusterclaimrestorerequest/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
+  - name: openbaoclusterclaimupgraderequest-root
+    displayName: OpenBaoClusterClaimUpgradeRequest Root
+    files:
+      - internal/app/openbaoclusterclaimupgraderequest/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports:
+      - internal/service/claimcontract
   - name: openbaocluster-root
     displayName: OpenBaoCluster Root
     files:
@@ -434,6 +700,8 @@ globalImportBoundaries:
       - internal/service/backup
       - internal/service/bootstrap
       - internal/service/certs
+      - internal/service/claimcontract
+      - internal/service/connectionpublishing
       - internal/service/identity
       - internal/service/init
       - internal/service/networking
@@ -441,6 +709,7 @@ globalImportBoundaries:
       - internal/service/provisioner
       - internal/service/restore
       - internal/service/upgrade
+      - internal/service/webhookcerts
       - internal/service/workloadidentity
   - id: no-adapter-imports-in-app-layer
     message: App layer should not import adapter packages directly; depend on ports/contracts.

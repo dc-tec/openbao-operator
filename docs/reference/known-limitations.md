@@ -22,6 +22,10 @@ journey: reference
       cells: ['Cluster adoption', 'The operator assumes it manages clusters it created and reconciles; generic import of arbitrary unmanaged OpenBao clusters is out of scope.', 'Create operator-managed clusters directly, or use backup and restore workflows when you need to move data into a new operator-managed cluster.'],
     },
     {
+      cells: ['Service claims', 'The current `OpenBaoClusterClaim` surface is bounded to same-cluster provisioning plus explicit in-place compatible upgrade, manual backup, and restore from the latest successful or selected completed claim backup request. Adoption, migration, arbitrary restore-source selection, non-`SelfInit` bootstrap modes, and broader multi-cluster claim convergence are out of scope.', 'Use direct `OpenBaoCluster` and `OpenBaoRestore` workflows when you need the full workload or restore surface, and wait for explicit adoption or migration workflows before moving existing direct clusters into claim ownership.'],
+      emphasis: 'caution',
+    },
+    {
       cells: ['Operator downgrade', 'Routine downgrades are unsupported.', 'Use the recovery and restore guidance when a release cannot move forward safely.'],
       emphasis: 'caution',
     },

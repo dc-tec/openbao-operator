@@ -11,10 +11,19 @@ resources:
   - openbao-restrict-controller-serviceaccounts-binding.yaml
   - openbao-restrict-controller-secret-writes.yaml
   - openbao-restrict-controller-secret-writes-binding.yaml
+  - openbao-restrict-claim-managed-openbaocluster-mutations.yaml
+  - openbao-restrict-claim-managed-openbaocluster-mutations-binding.yaml
+  - openbao-lock-materialized-openbaoclusterclaim-spec.yaml
+  - openbao-lock-materialized-openbaoclusterclaim-spec-binding.yaml
+  - openbao-restrict-service-catalog-mutations.yaml
+  - openbao-restrict-service-catalog-mutations-binding.yaml
   - openbao-validate-openbaocluster.yaml
   - openbao-validate-openbaocluster-binding.yaml
   - openbao-validate-openbaorestore.yaml
   - openbao-validate-openbaorestore-binding.yaml
+  - openbao-validate-openbaoclusterclaimbackuprequest.yaml
+  - openbao-validate-openbaoclusterclaimrestorerequest.yaml
+  - openbao-validate-openbaoclusterclaimupgraderequest.yaml
   - openbao-validate-openbao-tenant.yaml
   - openbao-validate-openbao-tenant-binding.yaml
   - openbao-restrict-provisioner-rbac.yaml

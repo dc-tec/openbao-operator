@@ -21,6 +21,7 @@ journeyStep: 2
       'confirm Kubernetes compatibility and cluster-admin access for CRDs, RBAC, and admission policies',
       'decide whether Helm or raw manifests own the install lifecycle',
       'decide whether you are staying multi-tenant or intentionally switching to single-tenant mode',
+      'decide whether this install will also offer the service-claim surface',
       'if you stay multi-tenant, know who will create the first OpenBaoTenant and in which namespace',
       'pin a released operator version for production instead of relying on floating tags',
     ]}
@@ -126,6 +127,12 @@ Use `config/overlays/single-tenant-custom-identity` when you also need a custom 
 Start with Helm, keep the default multi-tenant mode, pin the chart release for production,
 and leave admission policies enabled. Move away from that path only for explicit raw-manifest
 control or single-tenant namespace ownership requirements.
+
+</Callout>
+
+<Callout type="note" title="Service claims use the full multi-tenant Helm surface">
+
+If you plan to offer `OpenBaoClusterClaim`, use the multi-tenant Helm install path and render the claim runtime settings explicitly. The supported claim model depends on the full admission, webhook, and policy surface rather than a partially patched development install.
 
 </Callout>
 
@@ -507,6 +514,11 @@ kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/download/X
       label: 'Onboard the target namespace',
       description: 'In the default multi-tenant path, create OpenBaoTenant, then create the first cluster.',
       docId: 'user-guide/openbaotenant/onboarding',
+    },
+    {
+      label: 'Choose service claims',
+      description: 'Use the claim path when platform teams will publish a service catalog and tenant users should not manage OpenBaoCluster directly.',
+      docId: 'user-guide/service-claims/overview',
     },
     {
       label: 'Create your first cluster',

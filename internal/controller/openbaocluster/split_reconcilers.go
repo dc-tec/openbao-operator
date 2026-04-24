@@ -74,7 +74,7 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, nil
 	}
 
-	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameWorkload, cluster.Namespace); blocked {
+	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameWorkload, cluster); blocked {
 		return result, err
 	}
 
@@ -196,7 +196,7 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, nil
 	}
 
-	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameAdminOps, cluster.Namespace); blocked {
+	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameAdminOps, cluster); blocked {
 		return result, err
 	}
 
@@ -238,7 +238,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoCluster %s/%s: %w", req.Namespace, req.Name, err)
 	}
 
-	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameStatus, cluster.Namespace); blocked {
+	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameStatus, cluster); blocked {
 		return result, err
 	}
 

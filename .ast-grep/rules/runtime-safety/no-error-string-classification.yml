@@ -11,6 +11,7 @@ ignores:
   - '**/*_test.go'
   - 'internal/platform/admission/canary.go'
   - 'internal/adapter/security/image_verifier_verify.go'
+  - 'internal/platform/resourceapply/apply.go'
 rule:
   any:
     - pattern: strings.Contains($ERR.Error(), $MSG)

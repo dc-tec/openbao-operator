@@ -9,6 +9,7 @@ const (
 	suffixTLSServer = "-tls-server"
 	suffixRootToken = "-root-token"
 	suffixUnsealKey = "-unseal-key"
+	kindSecret      = "Secret"
 )
 
 // SecretPermission describes access requirements for a named Secret.
@@ -99,6 +100,7 @@ func GetRequiredSecretPermissions(c *openbaov1alpha1.OpenBaoCluster) []SecretPer
 			Permission: PermissionRead,
 		})
 	}
+	accumulateSelfInitSecretPermissions(c, &perms)
 
 	if c.Spec.ImageVerification != nil && c.Spec.ImageVerification.Enabled {
 		for _, secretRef := range c.Spec.ImageVerification.ImagePullSecrets {
@@ -119,6 +121,33 @@ func GetRequiredSecretPermissions(c *openbaov1alpha1.OpenBaoCluster) []SecretPer
 	}
 
 	return perms
+}
+
+func accumulateSelfInitSecretPermissions(c *openbaov1alpha1.OpenBaoCluster, perms *[]SecretPermission) {
+	if c == nil || c.Spec.SelfInit == nil || !c.Spec.SelfInit.Enabled || perms == nil {
+		return
+	}
+
+	for _, req := range c.Spec.SelfInit.Requests {
+		if req.AuthMethod != nil && req.AuthMethod.ConfigFromRef != nil && req.AuthMethod.ConfigFromRef.Kind == kindSecret && req.AuthMethod.ConfigFromRef.Name != "" {
+			*perms = append(*perms, SecretPermission{
+				Name:       req.AuthMethod.ConfigFromRef.Name,
+				Permission: PermissionRead,
+			})
+		}
+		if req.Policy != nil && req.Policy.ContentFromRef != nil && req.Policy.ContentFromRef.Kind == kindSecret && req.Policy.ContentFromRef.Name != "" {
+			*perms = append(*perms, SecretPermission{
+				Name:       req.Policy.ContentFromRef.Name,
+				Permission: PermissionRead,
+			})
+		}
+		if req.AuditDevice != nil && req.AuditDevice.SinkFromRef != nil && req.AuditDevice.SinkFromRef.Kind == kindSecret && req.AuditDevice.SinkFromRef.Name != "" {
+			*perms = append(*perms, SecretPermission{
+				Name:       req.AuditDevice.SinkFromRef.Name,
+				Permission: PermissionRead,
+			})
+		}
+	}
 }
 
 // IsStaticUnseal returns true if the cluster uses static (Shamir) unsealing.

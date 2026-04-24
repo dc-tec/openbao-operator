@@ -1,0 +1,108 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoentrypoints.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoEntrypoint
+    listKind: OpenBaoEntrypointList
+    plural: openbaoentrypoints
+    singular: openbaoentrypoint
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.mode
+      name: Mode
+      type: string
+    - jsonPath: .spec.objectRef.kind
+      name: Kind
+      type: string
+    - jsonPath: .spec.objectRef.name
+      name: Name
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoEntrypoint is the immutable platform-owned network entrypoint
+          catalog object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoEntrypointSpec defines the desired state of OpenBaoEntrypoint.
+            properties:
+              listenerPolicy:
+                description: ListenerPolicy defines listener or section binding posture.
+                properties:
+                  sectionName:
+                    description: SectionName identifies the listener or route section
+                      to bind when required.
+                    type: string
+                type: object
+              mode:
+                description: Mode identifies the reusable network anchor type.
+                enum:
+                - Gateway
+                - Ingress
+                - Service
+                type: string
+              objectRef:
+                description: ObjectRef identifies the concrete Kubernetes object that
+                  anchors this entrypoint.
+                properties:
+                  apiGroup:
+                    description: APIGroup is the API group of the referenced object.
+                    minLength: 1
+                    type: string
+                  kind:
+                    description: Kind is the referenced object kind.
+                    minLength: 1
+                    type: string
+                  name:
+                    description: Name is the referenced object name.
+                    minLength: 1
+                    type: string
+                  namespace:
+                    description: Namespace is the referenced object namespace when
+                      applicable.
+                    type: string
+                required:
+                - apiGroup
+                - kind
+                - name
+                type: object
+            required:
+            - mode
+            - objectRef
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

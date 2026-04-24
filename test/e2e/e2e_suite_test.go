@@ -34,17 +34,14 @@ import (
 	. "github.com/onsi/gomega"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/test/utils"
 )
 
@@ -54,6 +51,11 @@ const (
 	defaultBackupExecutorImage  = "openbao-backup:dev"
 	defaultUpgradeExecutorImage = "openbao-upgrade:dev"
 	defaultHardenedConfigInit   = ""
+
+	operatorInstallModeKustomize = "kustomize"
+	operatorInstallModeHelm      = "helm"
+
+	e2eMetricsReaderBindingName = "openbao-operator-metrics-binding"
 )
 
 type suiteBootstrap struct {
@@ -61,6 +63,7 @@ type suiteBootstrap struct {
 	Kubeconfigs             []string `json:"kubeconfigs"`
 	CertManagerPreinstalled []bool   `json:"certManagerPreinstalled"`
 	StorageClass            string   `json:"storageClass,omitempty"`
+	OperatorInstallMode     string   `json:"operatorInstallMode,omitempty"`
 }
 
 var (
@@ -302,123 +305,8 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "e2e suite")
 }
 
-func envOrDefault(key, defaultValue string) string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		return defaultValue
-	}
-	return value
-}
-
-func envBoolDefaultTrue(key string) bool {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		return true
-	}
-	return !strings.EqualFold(value, "false")
-}
-
-func waitForDeploymentsAvailable(namespace string, timeout time.Duration) error {
-	if strings.TrimSpace(namespace) == "" {
-		return fmt.Errorf("namespace is required")
-	}
-	if timeout <= 0 {
-		return fmt.Errorf("timeout must be > 0")
-	}
-
-	seconds := int(timeout.Seconds())
-	if seconds < 1 {
-		seconds = 1
-	}
-
-	cmd := exec.Command("kubectl",
-		"wait",
-		"--for=condition=Available",
-		"deployment",
-		"-l", "app.kubernetes.io/name=openbao-operator",
-		"-n", namespace,
-		"--timeout", fmt.Sprintf("%ds", seconds),
-	) // #nosec G204 -- test harness command
-	_, err := utils.Run(cmd)
-	return err
-}
-
-func waitForCRDsEstablished(timeout time.Duration) error {
-	if timeout <= 0 {
-		return fmt.Errorf("timeout must be > 0")
-	}
-
-	deadline := time.Now().Add(timeout)
-	for _, crd := range []string{
-		"openbaoclusters.openbao.org",
-		"openbaotenants.openbao.org",
-		"openbaorestores.openbao.org",
-	} {
-		if err := waitForCRDEstablished(crd, deadline); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func waitForCRDEstablished(crd string, deadline time.Time) error {
-	var lastErr error
-	for {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			if lastErr != nil {
-				return fmt.Errorf("timed out waiting for CRD %s to become Established: %w", crd, lastErr)
-			}
-			return fmt.Errorf("timed out waiting for CRD %s to become Established", crd)
-		}
-
-		attemptTimeout := remaining
-		if attemptTimeout > 15*time.Second {
-			attemptTimeout = 15 * time.Second
-		}
-		seconds := int(attemptTimeout.Seconds())
-		if seconds < 1 {
-			seconds = 1
-		}
-
-		cmd := exec.Command("kubectl",
-			"wait",
-			"--for=condition=Established",
-			"crd/"+crd,
-			"--timeout", fmt.Sprintf("%ds", seconds),
-		) // #nosec G204 -- test harness command
-		if _, err := utils.Run(cmd); err == nil {
-			return nil
-		} else {
-			lastErr = err
-		}
-
-		if sleep := time.Until(deadline); sleep > 0 {
-			if sleep > time.Second {
-				sleep = time.Second
-			}
-			time.Sleep(sleep)
-		}
-	}
-}
-
-func waitForCoreDNSAvailable(timeout time.Duration) error {
-	if timeout <= 0 {
-		return fmt.Errorf("timeout must be > 0")
-	}
-
-	seconds := int(timeout.Seconds())
-	if seconds < 1 {
-		seconds = 1
-	}
-
-	cmd := exec.Command("kubectl",
-		"wait",
-		"--for=condition=Available",
-		"deployment/coredns",
-		"-n", "kube-system",
-		"--timeout", fmt.Sprintf("%ds", seconds),
-	) // #nosec G204 -- test harness command
+func deleteE2EMetricsReaderBinding() error {
+	cmd := exec.Command("kubectl", "delete", "clusterrolebinding", e2eMetricsReaderBindingName, "--ignore-not-found") // #nosec G204 -- test harness command
 	_, err := utils.Run(cmd)
 	return err
 }
@@ -449,9 +337,22 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			Clusters:                []string{existingClusterName},
 			Kubeconfigs:             []string{kubeconfigPath},
 			CertManagerPreinstalled: []bool{},
+			OperatorInstallMode:     operatorInstallModeForE2E(),
 		}
 
 		withEnv("KUBECONFIG", kubeconfigPath, func() {
+			By("resolving the Kubernetes API service CIDR for E2E claim networking")
+			resolvedCIDR, err := resolveE2EAPIServerCIDR(context.Background())
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to resolve Kubernetes API service CIDR")
+			apiServerCIDR = resolvedCIDR
+			_, _ = fmt.Fprintf(GinkgoWriter, "Using E2E API server CIDR %q\n", apiServerCIDR)
+			if serviceClaimsE2EEnabled() {
+				resolvedEndpointIPs, err := resolveE2EAPIServerEndpointIPs(context.Background())
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to resolve Kubernetes API endpoint IPs")
+				apiServerEndpointIPs = resolvedEndpointIPs
+				_, _ = fmt.Fprintf(GinkgoWriter, "Using E2E API server endpoint IPs %q\n", apiServerEndpointIPs)
+			}
+
 			certManagerPreinstalled := false
 			if !skipCertManagerInstall {
 				By("checking if cert manager is installed already")
@@ -465,6 +366,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			}
 			bootstrap.CertManagerPreinstalled = append(bootstrap.CertManagerPreinstalled, certManagerPreinstalled)
 
+			By("removing stale E2E metrics RBAC binding")
+			ExpectWithOffset(1, deleteE2EMetricsReaderBinding()).To(Succeed(), "Failed to delete stale E2E metrics RBAC binding")
+
+			By("waiting for the operator namespace to become reusable")
+			ExpectWithOffset(1, waitForNamespaceDeletionIfTerminating(context.Background(), operatorNamespace, 60*time.Second, time.Second)).
+				To(Succeed(), "Operator namespace is stuck terminating")
+
 			By("creating operator namespace")
 			cmd = exec.Command("kubectl", "create", "ns", operatorNamespace) // #nosec G204 -- test harness command
 			_, err = utils.Run(cmd)
@@ -477,16 +385,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 				"pod-security.kubernetes.io/enforce=restricted") // #nosec G204 -- test harness command
 			_, _ = utils.Run(cmd)
 
-			By("installing CRDs")
-			cmd = exec.Command("make", "install")
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
-			ExpectWithOffset(1, waitForCRDsEstablished(2*time.Minute)).To(Succeed(), "CRDs did not become Established in time")
-
-			By("deploying the controller-manager and provisioner")
-			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the operator")
+			By(fmt.Sprintf("installing the operator via %s (existing cluster)", bootstrap.OperatorInstallMode))
+			ExpectWithOffset(1, installOperatorForE2E(context.Background(), operatorNamespace)).
+				To(Succeed(), "Failed to install the operator")
 
 			By("applying kube-apiserver token audience override when configured")
 			ExpectWithOffset(1, patchOperatorKubeAPITokenAudience(context.Background(), operatorNamespace)).
@@ -495,6 +396,14 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			By("waiting for operator deployments to become Available")
 			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
 				To(Succeed(), "Operator deployments did not become Available in time")
+			if serviceClaimsE2EEnabled() {
+				By("waiting for the controller admission webhook to publish ready endpoints")
+				ExpectWithOffset(1, waitForServiceEndpoints(operatorNamespace, operatorControllerWebhookServiceName, 2*time.Minute)).
+					To(Succeed(), "Controller admission webhook did not publish ready endpoints in time")
+				By("waiting for claim admission dry-run requests to succeed")
+				ExpectWithOffset(1, waitForClaimAdmissionWebhookReady(operatorNamespace, 2*time.Minute)).
+					To(Succeed(), "Claim admission webhook did not become reachable in time")
+			}
 
 			By("applying controller env overrides when configured")
 			ExpectWithOffset(1, applyControllerEnvOverrides(operatorNamespace)).
@@ -570,6 +479,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		Kubeconfigs:             []string{kubeconfigPath},
 		CertManagerPreinstalled: []bool{},
 		StorageClass:            "",
+		OperatorInstallMode:     operatorInstallModeForE2E(),
 	}
 
 	By(fmt.Sprintf("exporting kubeconfig for Kind cluster %q", clusterName))
@@ -579,6 +489,18 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 
 	withEnv("KUBECONFIG", kubeconfigPath, func() {
 		withEnv("KIND_CLUSTER", clusterName, func() {
+			By(fmt.Sprintf("resolving the Kubernetes API service CIDR for E2E claim networking (cluster=%s)", clusterName))
+			resolvedCIDR, err := resolveE2EAPIServerCIDR(context.Background())
+			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to resolve Kubernetes API service CIDR (cluster=%s)", clusterName))
+			apiServerCIDR = resolvedCIDR
+			_, _ = fmt.Fprintf(GinkgoWriter, "Using E2E API server CIDR %q (cluster=%s)\n", apiServerCIDR, clusterName)
+			if serviceClaimsE2EEnabled() {
+				resolvedEndpointIPs, err := resolveE2EAPIServerEndpointIPs(context.Background())
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to resolve Kubernetes API endpoint IPs (cluster=%s)", clusterName))
+				apiServerEndpointIPs = resolvedEndpointIPs
+				_, _ = fmt.Fprintf(GinkgoWriter, "Using E2E API server endpoint IPs %q (cluster=%s)\n", apiServerEndpointIPs, clusterName)
+			}
+
 			By(fmt.Sprintf("waiting for CoreDNS to become Available (cluster=%s)", clusterName))
 			ExpectWithOffset(1, waitForCoreDNSAvailable(2*time.Minute)).To(Succeed(), "CoreDNS did not become Available in time")
 
@@ -686,6 +608,13 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			}
 			bootstrap.CertManagerPreinstalled = append(bootstrap.CertManagerPreinstalled, certManagerPreinstalled)
 
+			By(fmt.Sprintf("removing stale E2E metrics RBAC binding (cluster=%s)", clusterName))
+			ExpectWithOffset(1, deleteE2EMetricsReaderBinding()).To(Succeed(), fmt.Sprintf("Failed to delete stale E2E metrics RBAC binding (cluster=%s)", clusterName))
+
+			By(fmt.Sprintf("waiting for the operator namespace to become reusable (cluster=%s)", clusterName))
+			ExpectWithOffset(1, waitForNamespaceDeletionIfTerminating(context.Background(), operatorNamespace, 60*time.Second, time.Second)).
+				To(Succeed(), fmt.Sprintf("Operator namespace is stuck terminating (cluster=%s)", clusterName))
+
 			By(fmt.Sprintf("creating operator namespace (cluster=%s)", clusterName))
 			cmd = exec.Command("kubectl", "create", "ns", operatorNamespace)
 			_, err = utils.Run(cmd)
@@ -700,16 +629,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to label operator namespace with restricted policy (cluster=%s)", clusterName))
 
-			By(fmt.Sprintf("installing CRDs (cluster=%s)", clusterName))
-			cmd = exec.Command("make", "install")
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to install CRDs (cluster=%s)", clusterName))
-			ExpectWithOffset(1, waitForCRDsEstablished(2*time.Minute)).To(Succeed(), fmt.Sprintf("CRDs did not become Established in time (cluster=%s)", clusterName))
-
-			By(fmt.Sprintf("deploying the controller-manager and provisioner (cluster=%s)", clusterName))
-			cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to deploy the operator (cluster=%s)", clusterName))
+			By(fmt.Sprintf("installing the operator via %s (cluster=%s)", bootstrap.OperatorInstallMode, clusterName))
+			ExpectWithOffset(1, installOperatorForE2E(context.Background(), operatorNamespace)).
+				To(Succeed(), fmt.Sprintf("Failed to install the operator (cluster=%s)", clusterName))
 
 			By(fmt.Sprintf("applying kube-apiserver token audience override when configured (cluster=%s)", clusterName))
 			ExpectWithOffset(1, patchOperatorKubeAPITokenAudience(context.Background(), operatorNamespace)).
@@ -718,6 +640,14 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			By(fmt.Sprintf("waiting for operator deployments to become Available (cluster=%s)", clusterName))
 			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
 				To(Succeed(), fmt.Sprintf("Operator deployments did not become Available in time (cluster=%s)", clusterName))
+			if serviceClaimsE2EEnabled() {
+				By(fmt.Sprintf("waiting for the controller admission webhook to publish ready endpoints (cluster=%s)", clusterName))
+				ExpectWithOffset(1, waitForServiceEndpoints(operatorNamespace, operatorControllerWebhookServiceName, 2*time.Minute)).
+					To(Succeed(), fmt.Sprintf("Controller admission webhook did not publish ready endpoints in time (cluster=%s)", clusterName))
+				By(fmt.Sprintf("waiting for claim admission dry-run requests to succeed (cluster=%s)", clusterName))
+				ExpectWithOffset(1, waitForClaimAdmissionWebhookReady(operatorNamespace, 2*time.Minute)).
+					To(Succeed(), fmt.Sprintf("Claim admission webhook did not become reachable in time (cluster=%s)", clusterName))
+			}
 
 			By(fmt.Sprintf("applying controller env overrides when configured (cluster=%s)", clusterName))
 			ExpectWithOffset(1, applyControllerEnvOverrides(operatorNamespace)).
@@ -765,7 +695,7 @@ var _ = SynchronizedAfterSuite(func() {
 	}
 
 	if suiteBootstrapState == nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "suite bootstrap state not initialized; skipping shared cleanup\n")
+		_, _ = fmt.Fprintf(GinkgoWriter, "Skipping shared cleanup because suite bootstrap state was not initialized\n")
 		return
 	}
 
@@ -776,6 +706,9 @@ var _ = SynchronizedAfterSuite(func() {
 
 		withEnv("KIND_CLUSTER", clusterName, func() {
 			withEnv("KUBECONFIG", kubeconfigPath, func() {
+				By(fmt.Sprintf("cleaning up the E2E metrics RBAC binding (cluster=%s)", clusterName))
+				_ = deleteE2EMetricsReaderBinding()
+
 				By(fmt.Sprintf("cleaning up the curl pod for metrics (cluster=%s)", clusterName))
 				cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", operatorNamespace, "--ignore-not-found")
 				_, _ = utils.Run(cmd)
@@ -788,10 +721,11 @@ var _ = SynchronizedAfterSuite(func() {
 				}
 				cancel()
 
-				By(fmt.Sprintf("undeploying the operator (cluster=%s)", clusterName))
+				By(fmt.Sprintf("removing the operator via %s (cluster=%s)", suiteBootstrapState.OperatorInstallMode, clusterName))
 				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
-				cmd = exec.CommandContext(ctx, "make", "undeploy", "ignore-not-found=true", "wait=false")
-				_, _ = utils.Run(cmd)
+				if err := uninstallOperatorForE2E(ctx, operatorNamespace, suiteBootstrapState.OperatorInstallMode); err != nil {
+					_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: operator uninstall failed (cluster=%s): %v\n", clusterName, err)
+				}
 				cancel()
 
 				if !useExistingCluster || existingClusterFullCleanup {
@@ -804,11 +738,19 @@ var _ = SynchronizedAfterSuite(func() {
 					_, _ = fmt.Fprintf(GinkgoWriter, "E2E_USE_EXISTING_CLUSTER: skipping CRD uninstall (set E2E_EXISTING_CLUSTER_FULL_CLEANUP=true to enable)\n")
 				}
 
-				By(fmt.Sprintf("removing operator namespace (cluster=%s)", clusterName))
-				ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
-				cmd = exec.CommandContext(ctx, "kubectl", "delete", "ns", operatorNamespace, "--ignore-not-found", "--wait=false")
-				_, _ = utils.Run(cmd)
-				cancel()
+				if !useExistingCluster || existingClusterFullCleanup {
+					By(fmt.Sprintf("removing operator namespace (cluster=%s)", clusterName))
+					ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
+					cmd = exec.CommandContext(ctx, "kubectl", "delete", "ns", operatorNamespace, "--ignore-not-found", "--wait=false")
+					_, _ = utils.Run(cmd)
+					cancel()
+				} else {
+					_, _ = fmt.Fprintf(
+						GinkgoWriter,
+						"E2E_USE_EXISTING_CLUSTER: keeping operator namespace %q to avoid shared-cluster termination races (set E2E_EXISTING_CLUSTER_FULL_CLEANUP=true to enable deletion)\n",
+						operatorNamespace,
+					)
+				}
 
 				// Teardown CertManager after the suite if not skipped and if it was not already installed.
 				// In existing-cluster mode, keep cert-manager by default.
@@ -827,180 +769,3 @@ var _ = SynchronizedAfterSuite(func() {
 	// Gateway API CRDs are managed per-test, not in AfterSuite.
 	// Individual tests that install Gateway API should clean up using UninstallGatewayAPI.
 })
-
-func cleanupOpenBaoCustomResources(ctx context.Context) error {
-	cfg, scheme, err := buildSuiteClientConfig()
-	if err != nil {
-		return err
-	}
-
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		return fmt.Errorf("failed to create cleanup client: %w", err)
-	}
-
-	if err := deleteAllOpenBaoCustomResources(ctx, c); err != nil {
-		return err
-	}
-
-	// Wait briefly for resources to be deleted (most should delete quickly)
-	if err := waitForOpenBaoCustomResourcesDeleted(ctx, c, 10*time.Second, 1*time.Second); err == nil {
-		return nil
-	}
-
-	// If resources are stuck (usually finalizers), remove finalizers and try again.
-	// This is faster than waiting for the full timeout
-	if err := removeFinalizersFromOpenBaoCustomResources(ctx, c); err != nil {
-		return err
-	}
-	if err := deleteAllOpenBaoCustomResources(ctx, c); err != nil {
-		return err
-	}
-
-	// Wait again with remaining context time (but cap at 10 seconds)
-	deadline, hasDeadline := ctx.Deadline()
-	if hasDeadline {
-		remainingTimeout := time.Until(deadline)
-		if remainingTimeout > 10*time.Second {
-			remainingTimeout = 10 * time.Second
-		}
-		if remainingTimeout > 0 {
-			if err := waitForOpenBaoCustomResourcesDeleted(ctx, c, remainingTimeout, 1*time.Second); err != nil {
-				// Log but don't fail - undeploy will clean up remaining resources
-				_, _ = fmt.Fprintf(GinkgoWriter, "WARNING: Some resources may still exist after cleanup: %v\n", err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func buildSuiteClientConfig() (*rest.Config, *runtime.Scheme, error) {
-	cfg, err := ctrlconfig.GetConfig()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get kube config: %w", err)
-	}
-
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return nil, nil, fmt.Errorf("failed to add client-go scheme: %w", err)
-	}
-	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
-		return nil, nil, fmt.Errorf("failed to add openbao scheme: %w", err)
-	}
-
-	return cfg, scheme, nil
-}
-
-func deleteAllOpenBaoCustomResources(ctx context.Context, c client.Client) error {
-	var clusters openbaov1alpha1.OpenBaoClusterList
-	if err := c.List(ctx, &clusters); err != nil {
-		return fmt.Errorf("failed to list OpenBaoClusters: %w", err)
-	}
-	for i := range clusters.Items {
-		cluster := clusters.Items[i]
-		if err := c.Delete(ctx, &cluster); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-		}
-	}
-
-	var tenants openbaov1alpha1.OpenBaoTenantList
-	if err := c.List(ctx, &tenants); err != nil {
-		return fmt.Errorf("failed to list OpenBaoTenants: %w", err)
-	}
-	for i := range tenants.Items {
-		tenant := tenants.Items[i]
-		if err := c.Delete(ctx, &tenant); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete OpenBaoTenant %s/%s: %w", tenant.Namespace, tenant.Name, err)
-		}
-	}
-
-	var namespaces corev1.NamespaceList
-	if err := c.List(ctx, &namespaces); err != nil {
-		return fmt.Errorf("failed to list namespaces: %w", err)
-	}
-	for i := range namespaces.Items {
-		ns := namespaces.Items[i]
-		if !strings.HasPrefix(ns.Name, "e2e-") {
-			continue
-		}
-		if err := c.Delete(ctx, &ns); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete namespace %q: %w", ns.Name, err)
-		}
-	}
-
-	return nil
-}
-
-func waitForOpenBaoCustomResourcesDeleted(ctx context.Context, c client.Client, timeout time.Duration, pollInterval time.Duration) error {
-	if timeout <= 0 {
-		return fmt.Errorf("timeout must be positive")
-	}
-	if pollInterval <= 0 {
-		return fmt.Errorf("poll interval must be positive")
-	}
-
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-
-	for {
-		var clusters openbaov1alpha1.OpenBaoClusterList
-		if err := c.List(ctx, &clusters); err != nil {
-			return fmt.Errorf("failed to list OpenBaoClusters: %w", err)
-		}
-		var tenants openbaov1alpha1.OpenBaoTenantList
-		if err := c.List(ctx, &tenants); err != nil {
-			return fmt.Errorf("failed to list OpenBaoTenants: %w", err)
-		}
-
-		if len(clusters.Items) == 0 && len(tenants.Items) == 0 {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("context canceled while waiting for OpenBao custom resources to be deleted: %w", ctx.Err())
-		case <-deadline.C:
-			return fmt.Errorf("timed out waiting for OpenBao custom resources to be deleted (clusters=%d tenants=%d)", len(clusters.Items), len(tenants.Items))
-		case <-ticker.C:
-		}
-	}
-}
-
-func removeFinalizersFromOpenBaoCustomResources(ctx context.Context, c client.Client) error {
-	var clusters openbaov1alpha1.OpenBaoClusterList
-	if err := c.List(ctx, &clusters); err != nil {
-		return fmt.Errorf("failed to list OpenBaoClusters for finalizer removal: %w", err)
-	}
-	for i := range clusters.Items {
-		cluster := clusters.Items[i]
-		if len(cluster.Finalizers) == 0 {
-			continue
-		}
-		original := cluster.DeepCopy()
-		cluster.Finalizers = nil
-		if err := c.Patch(ctx, &cluster, client.MergeFrom(original)); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to remove finalizers from OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
-		}
-	}
-
-	var tenants openbaov1alpha1.OpenBaoTenantList
-	if err := c.List(ctx, &tenants); err != nil {
-		return fmt.Errorf("failed to list OpenBaoTenants for finalizer removal: %w", err)
-	}
-	for i := range tenants.Items {
-		tenant := tenants.Items[i]
-		if len(tenant.Finalizers) == 0 {
-			continue
-		}
-		original := tenant.DeepCopy()
-		tenant.Finalizers = nil
-		if err := c.Patch(ctx, &tenant, client.MergeFrom(original)); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to remove finalizers from OpenBaoTenant %s/%s: %w", tenant.Namespace, tenant.Name, err)
-		}
-	}
-
-	return nil
-}

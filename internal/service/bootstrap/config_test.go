@@ -6,6 +6,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -490,6 +491,197 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 		`sys/policies/acl/openbao-operator-backup`,
 	}
 
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(content, snippet) {
+			t.Errorf("expected ConfigMap content to contain %q, got:\n%s", snippet, content)
+		}
+	}
+}
+
+func TestEnsureSelfInitConfigMap_ResolvesAuthMethodConfigFromSecret(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "enable-kubernetes-auth",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/auth/kubernetes",
+				AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
+					Type: "kubernetes",
+					ConfigFromRef: &openbaov1alpha1.TypedObjectReference{
+						Kind: "Secret",
+						Name: "kubernetes-auth-config",
+					},
+				},
+			},
+		},
+	}
+
+	authConfigSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "kubernetes-auth-config",
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"default_role":       []byte("operator"),
+			"token_reviewer_jwt": []byte("secret-token"),
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClientWithObjects(t, authConfigSecret)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
+
+	if err := manager.ensureSelfInitConfigMap(ctx, logger, cluster); err != nil {
+		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
+	}
+
+	configMap := &corev1.ConfigMap{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      resourceidentity.ConfigInitMapName(cluster),
+	}, configMap); err != nil {
+		t.Fatalf("expected self-init ConfigMap to exist: %v", err)
+	}
+
+	content := configMap.Data[configFileName]
+	expectedSnippets := []string{
+		`initialize "enable-kubernetes-auth"`,
+		`path      = "sys/auth/kubernetes"`,
+		`type = "kubernetes"`,
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(content, snippet) {
+			t.Errorf("expected ConfigMap content to contain %q, got:\n%s", snippet, content)
+		}
+	}
+	expectedPatterns := []string{
+		`default_role\s*=\s*"operator"`,
+		`token_reviewer_jwt\s*=\s*"secret-token"`,
+	}
+	for _, pattern := range expectedPatterns {
+		if !regexp.MustCompile(pattern).MatchString(content) {
+			t.Errorf("expected ConfigMap content to match %q, got:\n%s", pattern, content)
+		}
+	}
+}
+
+func TestEnsureSelfInitConfigMap_ResolvesPolicyContentFromSecret(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "create-app-policy",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/policies/acl/app-readwrite",
+				Policy: &openbaov1alpha1.SelfInitPolicy{
+					ContentFromRef: &openbaov1alpha1.TypedObjectReference{
+						Kind: "Secret",
+						Name: "app-policy",
+					},
+				},
+			},
+		},
+	}
+
+	policySecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "app-policy",
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"policy.hcl": []byte(`path "secret/data/app" { capabilities = ["read"] }`),
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClientWithObjects(t, policySecret)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
+
+	if err := manager.ensureSelfInitConfigMap(ctx, logger, cluster); err != nil {
+		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
+	}
+
+	configMap := &corev1.ConfigMap{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      resourceidentity.ConfigInitMapName(cluster),
+	}, configMap); err != nil {
+		t.Fatalf("expected self-init ConfigMap to exist: %v", err)
+	}
+
+	content := configMap.Data[configFileName]
+	expectedSnippets := []string{
+		`initialize "create-app-policy"`,
+		`path      = "sys/policies/acl/app-readwrite"`,
+		`policy = "path \"secret/data/app\" { capabilities = [\"read\"] }"`,
+	}
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(content, snippet) {
+			t.Errorf("expected ConfigMap content to contain %q, got:\n%s", snippet, content)
+		}
+	}
+}
+
+func TestEnsureSelfInitConfigMap_ResolvesAuditSinkFromSecret(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "enable-http-audit",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/audit/http",
+				AuditDevice: &openbaov1alpha1.SelfInitAuditDevice{
+					Type: "http",
+					SinkFromRef: &openbaov1alpha1.TypedObjectReference{
+						Kind: "Secret",
+						Name: "http-audit-sink",
+					},
+				},
+			},
+		},
+	}
+
+	sinkSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "http-audit-sink",
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{
+			"sink.json": []byte(`{"path":"http","description":"external audit","httpOptions":{"uri":"https://audit.example.test"}}`),
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClientWithObjects(t, sinkSecret)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
+
+	if err := manager.ensureSelfInitConfigMap(ctx, logger, cluster); err != nil {
+		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
+	}
+
+	configMap := &corev1.ConfigMap{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      resourceidentity.ConfigInitMapName(cluster),
+	}, configMap); err != nil {
+		t.Fatalf("expected self-init ConfigMap to exist: %v", err)
+	}
+
+	content := configMap.Data[configFileName]
+	expectedSnippets := []string{
+		`initialize "enable-http-audit"`,
+		`path      = "sys/audit/http"`,
+		`type = "http"`,
+		`description = "external audit"`,
+		`uri = "https://audit.example.test"`,
+	}
 	for _, snippet := range expectedSnippets {
 		if !strings.Contains(content, snippet) {
 			t.Errorf("expected ConfigMap content to contain %q, got:\n%s", snippet, content)

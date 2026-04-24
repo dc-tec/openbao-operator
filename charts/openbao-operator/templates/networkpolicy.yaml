@@ -68,4 +68,28 @@ spec:
     - ports:
         - port: {{ .Values.healthProbes.port }}
           protocol: TCP
+---
+# Allow Webhook Admission Traffic
+#
+# The Kubernetes API server source IP is not portable across environments, and on
+# some distributions it reaches pod endpoints from outside the pod CIDR. Allow the
+# controller webhook port from any source so admission requests can reach the
+# service-backed webhook endpoint reliably.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-allow-webhook
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "openbao-operator.controllerSelectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 9443
+          protocol: TCP
 {{- end }}

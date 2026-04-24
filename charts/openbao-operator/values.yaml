@@ -132,11 +132,22 @@ provisioner:
   # -- Resource requests and limits for the provisioner
   resources:
     limits:
-      cpu: 100m
-      memory: 64Mi
+      cpu: 500m
+      memory: 256Mi
     requests:
-      cpu: 10m
-      memory: 32Mi
+      cpu: 50m
+      memory: 128Mi
+
+  # -- Timeout in seconds for provisioner health probes.
+  probeTimeoutSeconds: 5
+
+  # -- Provisioner startup probe configuration.
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
 
   # -- Additional environment variables for the provisioner
   extraEnv: []

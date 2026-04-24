@@ -126,6 +126,13 @@ Use <SiteLink docId="user-guide/openbaotenant/onboarding">Onboard the target nam
     },
     {
       cells: [
+        "Claim-managed outputs stay operator-owned",
+        "Connection Secrets and projected bootstrap artifacts do not become unowned tenant inventory just because they live in the tenant namespace.",
+        "Claim custody checks, managed-resource guardrails, and claim-managed local-cluster protection.",
+      ],
+    },
+    {
+      cells: [
         "No all-powerful long-running operator credential",
         "The component that grants access does not also reconcile every tenant workload with the same credential.",
         "Provisioner/controller identity split.",
@@ -170,6 +177,13 @@ Use <SiteLink docId="user-guide/openbaotenant/onboarding">Onboard the target nam
         "Separate identities, prefixes, or trust roots per tenant or per environment where required.",
       ],
     },
+    {
+      cells: [
+        "The claim surface stays within the supported scope",
+        "Unsupported workflows such as adoption, migration, or non-SelfInit bootstrap are blocked instead of quietly weakening the tenant boundary through hidden controller behavior.",
+        "Keep the current claim release scoped to same-cluster provisioning and treat unsupported workflows as real boundaries, not temporary defaults.",
+      ],
+    },
   ]}
 />
 
@@ -190,6 +204,11 @@ Use <SiteLink docId="user-guide/openbaotenant/onboarding">Onboard the target nam
       label: "Tenant onboarding",
       description: "Switch to the user-guide workflow when you need to create or review an `OpenBaoTenant` request.",
       docId: "user-guide/openbaotenant/onboarding",
+    },
+    {
+      label: "Open service claims",
+      description: "See the tenant-facing claim workflow that uses this isolation model without broadening tenant access to direct workload internals.",
+      docId: "user-guide/service-claims/overview",
     },
   ]}
 />

@@ -1,0 +1,25 @@
+# Allow Webhook Admission Traffic
+#
+# The Kubernetes API server source IP is not portable across environments, and on
+# some distributions it reaches pod endpoints from outside the pod CIDR. Allow the
+# controller webhook port from any source so admission requests can reach the
+# service-backed webhook endpoint reliably.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-webhook
+  namespace: system
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: openbao-operator
+      app.kubernetes.io/component: controller
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 9443
+          protocol: TCP

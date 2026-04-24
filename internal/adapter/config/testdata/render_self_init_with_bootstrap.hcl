@@ -54,15 +54,3 @@ initialize "enable-stdout-audit" {
     }
   }
 }
-initialize "configure-autopilot" {
-  request "configure-autopilot-request" {
-    operation = "update"
-    path      = "sys/storage/raft/autopilot/configuration"
-    data {
-      cleanup_dead_servers               = true
-      dead_server_last_contact_threshold = "24h"
-      min_quorum                         = "3"
-      server_stabilization_time          = "10s"
-    }
-  }
-}

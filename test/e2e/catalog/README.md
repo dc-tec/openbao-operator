@@ -11,15 +11,18 @@ Notes:
 
 ## Summary
 
-- Files: `19`
-- Specs: `82`
-- Explicit case IDs: `33`
-- Coverage tags: `44`
+- Files: `22`
+- Specs: `95`
+- Explicit case IDs: `46`
+- Coverage tags: `69`
 
 ## Suites
 
 | Suite | Cases | Tracked | Pending | Labels | Source |
 | --- | ---: | ---: | ---: | --- | --- |
+| [Claims Functional](suites/Claims_Functional_test.md) | 7 | 7 | 0 | `claims`, `claims-functional`, `claims-upgrade`, `negative`, `requires-gateway-api` | `test/e2e/Claims_Functional_test.go` |
+| [Claims Guardrails](suites/Claims_Guardrails_test.md) | 4 | 4 | 0 | `claims`, `claims-guardrails`, `security`, `admission` | `test/e2e/Claims_Guardrails_test.go` |
+| [Claims Smoke](suites/Claims_Smoke_test.md) | 2 | 2 | 0 | `claims`, `claims-smoke`, `critical` | `test/e2e/Claims_Smoke_test.go` |
 | [Cluster Lifecycle: Deletion Policy](suites/Cluster_DeletionPolicy_test.md) | 3 | 3 | 0 | `lifecycle`, `cluster`, `deletion` | `test/e2e/Cluster_DeletionPolicy_test.go` |
 | [Cluster Lifecycle](suites/Cluster_Lifecycle_test.md) | 8 | 0 | 0 | `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke`, `critical`, `tenant`, `audit` | `test/e2e/Cluster_Lifecycle_test.go` |
 | [Hardened profile (External TLS + Transit auto-unseal + SelfInit)](suites/Cluster_Profile_Hardened_test.md) | 5 | 3 | 0 | `profile-hardened`, `security`, `cluster`, `upgrade`, `bluegreen`, `hardened`, `rolling` | `test/e2e/Cluster_Profile_Hardened_test.go` |
@@ -46,12 +49,32 @@ Notes:
 | --- | ---: |
 | `deletion-policy` | 3 |
 | `anti-tamper` | 2 |
+| `claim-external-endpoint-publication` | 2 |
 | `pvc-cleanup` | 2 |
 | `recoverability-secret-cleanup` | 2 |
 | `admission-runtime-recheck` | 1 |
 | `backup-queueing` | 1 |
 | `bluegreen-drift` | 1 |
 | `cert-replacement` | 1 |
+| `claim-backup-request` | 1 |
+| `claim-backup-status-projection` | 1 |
+| `claim-catalog-network-profile` | 1 |
+| `claim-catalog-read-replica-profile` | 1 |
+| `claim-catalog-runtime-profile` | 1 |
+| `claim-catalog-upgrade-policy` | 1 |
+| `claim-deletion` | 1 |
+| `claim-gateway` | 1 |
+| `claim-ingress` | 1 |
+| `claim-managed-child-protection` | 1 |
+| `claim-materialization` | 1 |
+| `claim-missing-bootstrap-source` | 1 |
+| `claim-offering-pin` | 1 |
+| `claim-restore-backup-request-source` | 1 |
+| `claim-restore-request` | 1 |
+| `claim-restore-status-projection` | 1 |
+| `claim-spec-lock` | 1 |
+| `claim-upgrade-request` | 1 |
+| `claim-upgrade-rollout` | 1 |
 | `configmap-protection` | 1 |
 | `controller-failover` | 1 |
 | `controller-outage` | 1 |
@@ -77,8 +100,13 @@ Notes:
 | `restart-at` | 1 |
 | `restore-static-token-secret-identity` | 1 |
 | `rolling-upgrade` | 1 |
+| `same-cluster-cleanup` | 1 |
+| `same-cluster-connection` | 1 |
+| `same-cluster-materialization` | 1 |
 | `scale-reconcile` | 1 |
+| `secret-bootstrap-projection` | 1 |
 | `secret-regeneration` | 1 |
+| `service-offering-binding` | 1 |
 | `stale-green-cleanup` | 1 |
 | `statefulset-protection` | 1 |
 | `target-revision-drift` | 1 |

@@ -195,8 +195,13 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		}
 	}
 
+	resolvedCluster, err := m.resolveSelfInitRefs(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to resolve self-init bootstrap refs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+
 	// Render self-init stanzas
-	initConfig, err := configbuilder.RenderSelfInitHCL(cluster, bootstrapConfig)
+	initConfig, err := configbuilder.RenderSelfInitHCL(resolvedCluster, bootstrapConfig)
 	if err != nil {
 		return fmt.Errorf("failed to render self-init config.hcl for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}

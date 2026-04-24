@@ -7,11 +7,12 @@ metadata:
     app.kubernetes.io/component: provisioner
     app.kubernetes.io/managed-by: kustomize
 rules:
-  # 1. Namespace Access (get/update/patch only - no list/watch)
+  # 1. Namespace Access (targeted create/get/update/patch only - no list/watch)
   # SECURITY: The Provisioner no longer watches namespaces. Instead, it watches
   # OpenBaoTenant CRDs which explicitly declare target namespaces. This eliminates
   # the ability for a compromised Provisioner to survey the cluster topology.
-  # The Provisioner only needs get/update/patch to:
+  # The Provisioner only needs create/get/update/patch to:
+  # - Create the explicitly-declared tenant target namespace (create)
   # - Verify target namespace exists (get)
   # - Apply Pod Security Standards labels (update/patch)
   - apiGroups:
@@ -19,6 +20,7 @@ rules:
     resources:
       - namespaces
     verbs:
+      - create
       - get
       - update
       - patch
@@ -49,8 +51,21 @@ rules:
       - get
       - list
       - watch
+  # 2c. Claim and catalog read-only access
+  # Required for same-cluster claim secret-source allowlists in tenant namespaces.
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusterclaims
+      - openbaoserviceofferings
+      - openbaoserviceprofiles
+      - openbaobootstrapprofiles
+    verbs:
+      - get
+      - list
+      - watch
 
-  # 2c. Kubernetes event emission in tenant namespaces.
+  # 2d. Kubernetes event emission in tenant namespaces.
   # Required when recording OpenBaoTenant reconciliation events outside the operator namespace.
   - apiGroups:
       - ""
@@ -67,7 +82,7 @@ rules:
       - create
       - patch
 
-  # 2d. Admission policy dependency checks (get only)
+  # 2e. Admission policy dependency checks (get only)
   # Required for fail-closed startup validation that ValidatingAdmissionPolicies are present and enforced.
   - apiGroups:
       - admissionregistration.k8s.io
@@ -77,7 +92,7 @@ rules:
     verbs:
       - get
 
-  # 2e. Tenant quota/limits management (namespaced)
+  # 2f. Tenant quota/limits management (namespaced)
   # NOTE: Server-Side Apply may create objects when they don't exist yet, which requires 'create' permission.
   - apiGroups:
       - ""

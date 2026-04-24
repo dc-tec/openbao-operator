@@ -39,8 +39,14 @@ type Status struct {
 
 const (
 	dependencyOpenBaoValidateOpenBaoCluster             = "openbao-validate-openbaocluster"
+	dependencyOpenBaoValidateOpenBaoClusterClaimBackup  = "openbao-validate-openbaoclusterclaimbackuprequest"
+	dependencyOpenBaoValidateOpenBaoClusterClaimRestore = "openbao-validate-openbaoclusterclaimrestorerequest"
+	dependencyOpenBaoValidateOpenBaoClusterClaimUpgrade = "openbao-validate-openbaoclusterclaimupgraderequest"
 	dependencyOpenBaoValidateOpenBaoTenant              = "openbao-validate-openbao-tenant"
 	dependencyOpenBaoValidateOpenBaoRestore             = "openbao-validate-openbaorestore"
+	dependencyOpenBaoRestrictClaimManagedClusters       = "openbao-restrict-claim-managed-openbaocluster-mutations"
+	dependencyOpenBaoLockMaterializedClaimSpec          = "openbao-lock-materialized-openbaoclusterclaim-spec"
+	dependencyOpenBaoRestrictServiceCatalogMutations    = "openbao-restrict-service-catalog-mutations"
 	dependencyOpenBaoLockControllerStatefulSetMutations = "openbao-lock-controller-statefulset-mutations"
 	dependencyOpenBaoLockManagedResourceMutations       = "openbao-lock-managed-resource-mutations"
 	dependencyOpenBaoEnforceManagedImageDigests         = "openbao-enforce-managed-image-digests"
@@ -51,8 +57,14 @@ const (
 	dependencyOpenBaoRestrictControllerServiceAccounts  = "openbao-restrict-controller-serviceaccounts"
 	dependencyOpenBaoRestrictControllerSecretWrites     = "openbao-restrict-controller-secret-writes"
 	dependencyBindingValidateOpenBaoCluster             = "openbao-validate-openbaocluster-binding"
+	dependencyBindingValidateOpenBaoClusterClaimBackup  = "openbao-validate-openbaoclusterclaimbackuprequest-binding"
+	dependencyBindingValidateOpenBaoClusterClaimRestore = "openbao-validate-openbaoclusterclaimrestorerequest-binding"
+	dependencyBindingValidateOpenBaoClusterClaimUpgrade = "openbao-validate-openbaoclusterclaimupgraderequest-binding"
 	dependencyBindingValidateOpenBaoTenant              = "openbao-validate-openbao-tenant-binding"
 	dependencyBindingValidateOpenBaoRestore             = "openbao-validate-openbaorestore-binding"
+	dependencyBindingRestrictClaimManagedClusters       = "openbao-restrict-claim-managed-openbaocluster-mutations-binding"
+	dependencyBindingLockMaterializedClaimSpec          = "openbao-lock-materialized-openbaoclusterclaim-spec-binding"
+	dependencyBindingRestrictServiceCatalogMutations    = "openbao-restrict-service-catalog-mutations-binding"
 	dependencyBindingLockControllerStatefulSetMutations = "openbao-lock-controller-statefulset-mutations-binding"
 	dependencyBindingLockManagedResourceMutations       = "openbao-lock-managed-resource-mutations-binding"
 	dependencyBindingEnforceManagedImageDigests         = "openbao-enforce-managed-image-digests-binding"
@@ -165,6 +177,61 @@ func DefaultDependencies() []Dependency {
 			BindingName: dependencyBindingEnforceManagedImageDigests,
 		},
 	}
+}
+
+// ServiceClaimDependencies returns admission dependencies that become
+// release-critical only when service claims are enabled.
+func ServiceClaimDependencies() []Dependency {
+	return []Dependency{
+		{
+			Name:        dependencyOpenBaoValidateOpenBaoClusterClaimBackup,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoClusterClaimBackup,
+			BindingName: dependencyBindingValidateOpenBaoClusterClaimBackup,
+		},
+		{
+			Name:        dependencyOpenBaoValidateOpenBaoClusterClaimRestore,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoClusterClaimRestore,
+			BindingName: dependencyBindingValidateOpenBaoClusterClaimRestore,
+		},
+		{
+			Name:        dependencyOpenBaoValidateOpenBaoClusterClaimUpgrade,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoClusterClaimUpgrade,
+			BindingName: dependencyBindingValidateOpenBaoClusterClaimUpgrade,
+		},
+		{
+			Name:        dependencyOpenBaoRestrictClaimManagedClusters,
+			PolicyName:  dependencyOpenBaoRestrictClaimManagedClusters,
+			BindingName: dependencyBindingRestrictClaimManagedClusters,
+		},
+		{
+			Name:        dependencyOpenBaoLockMaterializedClaimSpec,
+			PolicyName:  dependencyOpenBaoLockMaterializedClaimSpec,
+			BindingName: dependencyBindingLockMaterializedClaimSpec,
+		},
+		{
+			Name:        dependencyOpenBaoRestrictServiceCatalogMutations,
+			PolicyName:  dependencyOpenBaoRestrictServiceCatalogMutations,
+			BindingName: dependencyBindingRestrictServiceCatalogMutations,
+		},
+	}
+}
+
+// DependenciesForFeatures returns the admission dependencies required for the
+// enabled controller feature set.
+func DependenciesForFeatures(serviceClaims bool) []Dependency {
+	deps := append([]Dependency(nil), DefaultDependencies()...)
+	if serviceClaims {
+		deps = append(deps, ServiceClaimDependencies()...)
+	}
+	return deps
+}
+
+// AllDependencies returns the union of all known admission dependency
+// inventories shipped with the operator.
+func AllDependencies() []Dependency {
+	deps := append([]Dependency(nil), DefaultDependencies()...)
+	deps = append(deps, ServiceClaimDependencies()...)
+	return deps
 }
 
 // CheckDependencies validates that the required ValidatingAdmissionPolicy and

@@ -1,0 +1,13 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-lock-materialized-openbaoclusterclaim-spec-binding
+spec:
+  policyName: openbao-lock-materialized-openbaoclusterclaim-spec
+  validationActions: [Deny]
+  matchResources:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["openbaoclusterclaims"]

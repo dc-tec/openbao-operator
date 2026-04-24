@@ -1,0 +1,139 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaostorageprofiles.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoStorageProfile
+    listKind: OpenBaoStorageProfileList
+    plural: openbaostorageprofiles
+    singular: openbaostorageprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.primary.storageClassName
+      name: PrimaryClass
+      type: string
+    - jsonPath: .spec.readReplica.storageClassName
+      name: ReadClass
+      type: string
+    - jsonPath: .spec.acmeCache.mode
+      name: ACMECache
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoStorageProfile is the immutable platform-owned storage
+          implementation catalog object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoStorageProfileSpec defines the desired state of OpenBaoStorageProfile.
+            properties:
+              acmeCache:
+                description: |-
+                  ACMECache defines the shared RWX filesystem cache used by OpenBao native
+                  ACME listener TLS when selected by the exposure policy.
+                properties:
+                  existingClaimName:
+                    description: |-
+                      ExistingClaimName is the name of a pre-created RWX PVC in the same namespace.
+                      Required when Mode is ExistingPVC.
+                    minLength: 1
+                    type: string
+                  mode:
+                    description: Mode selects whether the operator creates a dedicated
+                      RWX PVC or mounts an existing one.
+                    enum:
+                    - ManagedPVC
+                    - ExistingPVC
+                    type: string
+                  size:
+                    description: |-
+                      Size is the requested capacity for the managed ACME cache PVC.
+                      Required when Mode is ManagedPVC.
+                    minLength: 1
+                    type: string
+                  storageClassName:
+                    description: StorageClassName is an optional StorageClass for
+                      the managed ACME cache PVC.
+                    type: string
+                required:
+                - mode
+                type: object
+                x-kubernetes-validations:
+                - message: spec.acmeCache.existingClaimName is only supported when
+                    mode is ExistingPVC
+                  rule: self.mode != 'ManagedPVC' || !has(self.existingClaimName)
+                    || size(self.existingClaimName) == 0
+                - message: spec.acmeCache.existingClaimName is required when mode
+                    is ExistingPVC
+                  rule: self.mode != 'ExistingPVC' || size(self.existingClaimName)
+                    > 0
+                - message: spec.acmeCache.size is only supported when mode is ManagedPVC
+                  rule: self.mode != 'ExistingPVC' || !has(self.size) || size(self.size)
+                    == 0
+                - message: spec.acmeCache.storageClassName is only supported when
+                    mode is ManagedPVC
+                  rule: self.mode != 'ExistingPVC' || !has(self.storageClassName)
+                    || size(self.storageClassName) == 0
+                - message: spec.acmeCache.size is required when mode is ManagedPVC
+                  rule: self.mode != 'ManagedPVC' || size(self.size) > 0
+              primary:
+                description: Primary defines primary Raft PVC storage-class posture.
+                properties:
+                  storageClassName:
+                    description: |-
+                      StorageClassName is an optional StorageClass for the PVCs.
+                      When omitted, the cluster default StorageClass is used.
+                    type: string
+                type: object
+              readReplica:
+                description: ReadReplica defines read-replica PVC storage-class posture.
+                properties:
+                  storageClassName:
+                    description: |-
+                      StorageClassName is an optional StorageClass for read-replica PVCs.
+                      When omitted and UsePrimaryStorageClass is true or omitted, read replicas
+                      inherit the primary storage class.
+                    type: string
+                  usePrimaryStorageClass:
+                    default: true
+                    description: |-
+                      UsePrimaryStorageClass controls whether read replicas inherit the primary
+                      storage class when StorageClassName is omitted.
+                    type: boolean
+                type: object
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

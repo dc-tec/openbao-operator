@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dc-tec/openbao-operator/test/utils"
@@ -27,6 +28,13 @@ const (
 	metricsReaderClusterRoleName = "openbao-operator-metrics-reader"
 	metricsReaderBindingName     = "openbao-operator-metrics-binding"
 )
+
+var controllerMetricsServiceNames = []string{
+	// Manifest installs apply the kustomize name prefix to controller-metrics-service.
+	controllerMetricsServiceName,
+	// Helm installs name the service from the release fullname plus controller-metrics.
+	"openbao-operator-controller-metrics",
+}
 
 func findFreeLocalPort() (int, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -45,15 +53,37 @@ func findFreeLocalPort() (int, error) {
 }
 
 func ensureMetricsReaderClusterRoleBinding(operatorNamespace string) error {
-	// Create is easiest; tolerate AlreadyExists to make this idempotent across tests.
 	// Try both install naming conventions for the ClusterRole.
 	roleNames := []string{metricsReaderClusterRoleName, "metrics-reader"}
 
 	var lastErr error
 	var lastOut string
+	selectedRoleName := ""
 	for _, roleName := range roleNames {
+		cmd := exec.Command("kubectl", "get", "clusterrole", roleName)
+		out, err := utils.Run(cmd)
+		if err != nil {
+			lastErr = err
+			lastOut = out
+			if strings.Contains(out, "NotFound") || strings.Contains(strings.ToLower(out), "not found") {
+				continue
+			}
+			return err
+		}
+		selectedRoleName = roleName
+		break
+	}
+
+	if selectedRoleName == "" {
+		if lastErr != nil && lastOut != "" {
+			return fmt.Errorf("%w: %s", lastErr, lastOut)
+		}
+		return lastErr
+	}
+
+	createBinding := func() error {
 		cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsReaderBindingName,
-			fmt.Sprintf("--clusterrole=%s", roleName),
+			fmt.Sprintf("--clusterrole=%s", selectedRoleName),
 			fmt.Sprintf("--serviceaccount=%s:%s", operatorNamespace, controllerServiceAccountName),
 		)
 		out, err := utils.Run(cmd)
@@ -62,23 +92,51 @@ func ensureMetricsReaderClusterRoleBinding(operatorNamespace string) error {
 		}
 		outLower := strings.ToLower(out)
 		if strings.Contains(out, "AlreadyExists") || strings.Contains(outLower, "already exists") {
-			return nil
-		}
-
-		lastErr = err
-		lastOut = out
-
-		// If the role name is wrong for this install method, try the next candidate.
-		if strings.Contains(out, "NotFound") || strings.Contains(strings.ToLower(out), "not found") {
-			continue
+			return err
 		}
 		return err
 	}
 
-	if lastErr != nil && lastOut != "" {
-		return fmt.Errorf("%w: %s", lastErr, lastOut)
+	if err := createBinding(); err == nil {
+		return nil
+	} else {
+		cmd := exec.Command("kubectl", "get", "clusterrolebinding", metricsReaderBindingName, "-o", "jsonpath={.roleRef.name}")
+		out, getErr := utils.Run(cmd)
+		if getErr != nil {
+			return err
+		}
+		if strings.TrimSpace(out) == selectedRoleName {
+			return nil
+		}
 	}
-	return lastErr
+
+	cmd := exec.Command("kubectl", "delete", "clusterrolebinding", metricsReaderBindingName)
+	if _, err := utils.Run(cmd); err != nil {
+		return err
+	}
+	return createBinding()
+}
+
+func findControllerMetricsServiceName(operatorNamespace string) (string, error) {
+	var lastErr error
+	var lastOut string
+	for _, serviceName := range controllerMetricsServiceNames {
+		cmd := exec.Command("kubectl", "get", "service", serviceName, "-n", operatorNamespace)
+		out, err := utils.Run(cmd)
+		if err == nil {
+			return serviceName, nil
+		}
+		lastErr = err
+		lastOut = out
+		if strings.Contains(out, "NotFound") || strings.Contains(strings.ToLower(out), "not found") {
+			continue
+		}
+		return "", err
+	}
+	if lastErr != nil && lastOut != "" {
+		return "", fmt.Errorf("%w: %s", lastErr, lastOut)
+	}
+	return "", lastErr
 }
 
 func createServiceAccountToken(operatorNamespace string) (string, error) {
@@ -142,7 +200,46 @@ func WaitForControllerMetricSubstrings(operatorNamespace string, timeout time.Du
 	if err != nil {
 		return "", err
 	}
+	metricsServiceName, err := findControllerMetricsServiceName(operatorNamespace)
+	if err != nil {
+		return "", err
+	}
 
+	deadline := time.Now().Add(timeout)
+	var lastOutput string
+	var lastErr error
+	for time.Now().Before(deadline) {
+		metricsOutput, err := waitForControllerMetricSubstringsWithPortForward(operatorNamespace, metricsServiceName, token, deadline, substrings...)
+		if metricsOutput != "" {
+			lastOutput = metricsOutput
+		}
+		if err == nil {
+			return metricsOutput, nil
+		}
+		lastErr = err
+
+		sleep := time.Second
+		if remaining := time.Until(deadline); remaining < sleep {
+			sleep = remaining
+		}
+		if sleep > 0 {
+			time.Sleep(sleep)
+		}
+	}
+
+	if lastErr != nil {
+		return lastOutput, fmt.Errorf("timed out waiting for controller metrics after %s: %w", timeout, lastErr)
+	}
+	return lastOutput, fmt.Errorf("timed out waiting for controller metrics after %s", timeout)
+}
+
+func waitForControllerMetricSubstringsWithPortForward(
+	operatorNamespace string,
+	metricsServiceName string,
+	token string,
+	deadline time.Time,
+	substrings ...string,
+) (string, error) {
 	localPort, err := findFreeLocalPort()
 	if err != nil {
 		return "", err
@@ -154,17 +251,12 @@ func WaitForControllerMetricSubstrings(operatorNamespace string, timeout time.Du
 		maxTimeSeconds        = 3
 		sleepSeconds          = 1
 	)
-	perAttemptBudget := time.Duration(maxTimeSeconds+sleepSeconds) * time.Second
-	attempts := int(timeout / perAttemptBudget)
-	if attempts < 1 {
-		attempts = 1
-	}
-
-	serviceRef := fmt.Sprintf("service/%s", controllerMetricsServiceName)
+	serviceRef := fmt.Sprintf("service/%s", metricsServiceName)
 	portForwardArg := fmt.Sprintf("%d:8443", localPort)
 	portForwardCmd := exec.Command("kubectl", "port-forward", "--namespace", operatorNamespace, serviceRef, portForwardArg)
 	portForwardCmd.Stdout = io.Discard
-	portForwardCmd.Stderr = io.Discard
+	portForwardStderr := &lockedStringBuffer{}
+	portForwardCmd.Stderr = portForwardStderr
 
 	if err := portForwardCmd.Start(); err != nil {
 		return "", err
@@ -185,14 +277,17 @@ func WaitForControllerMetricSubstrings(operatorNamespace string, timeout time.Du
 	}()
 
 	forwardReadyDeadline := time.Now().Add(20 * time.Second)
+	if deadline.Before(forwardReadyDeadline) {
+		forwardReadyDeadline = deadline
+	}
 	forwardReady := false
 	for time.Now().Before(forwardReadyDeadline) {
 		select {
 		case waitErr := <-waitCh:
 			if waitErr != nil {
-				return "", fmt.Errorf("kubectl port-forward exited early: %w", waitErr)
+				return "", fmt.Errorf("kubectl port-forward exited early: %w%s", waitErr, formattedPortForwardStderr(portForwardStderr))
 			}
-			return "", fmt.Errorf("kubectl port-forward exited before becoming ready")
+			return "", fmt.Errorf("kubectl port-forward exited before becoming ready%s", formattedPortForwardStderr(portForwardStderr))
 		default:
 		}
 
@@ -206,7 +301,7 @@ func WaitForControllerMetricSubstrings(operatorNamespace string, timeout time.Du
 		time.Sleep(200 * time.Millisecond)
 	}
 	if !forwardReady {
-		return "", fmt.Errorf("timed out waiting for kubectl port-forward to become ready on localhost:%d", localPort)
+		return "", fmt.Errorf("timed out waiting for kubectl port-forward to become ready on localhost:%d%s", localPort, formattedPortForwardStderr(portForwardStderr))
 	}
 
 	metricsURL := fmt.Sprintf("https://127.0.0.1:%d/metrics", localPort)
@@ -219,7 +314,16 @@ func WaitForControllerMetricSubstrings(operatorNamespace string, timeout time.Du
 	}
 
 	var lastOutput string
-	for i := 0; i < attempts; i++ {
+	for time.Now().Before(deadline) {
+		select {
+		case waitErr := <-waitCh:
+			if waitErr != nil {
+				return lastOutput, fmt.Errorf("kubectl port-forward exited while reading metrics: %w%s", waitErr, formattedPortForwardStderr(portForwardStderr))
+			}
+			return lastOutput, fmt.Errorf("kubectl port-forward exited while reading metrics%s", formattedPortForwardStderr(portForwardStderr))
+		default:
+		}
+
 		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, metricsURL, nil)
 		if reqErr != nil {
 			return "", reqErr
@@ -251,8 +355,35 @@ func WaitForControllerMetricSubstrings(operatorNamespace string, timeout time.Du
 	}
 
 	return lastOutput, fmt.Errorf(
-		"timed out waiting for metrics endpoint %q to contain expected substrings after %d attempts",
+		"timed out waiting for metrics endpoint %q to contain expected substrings",
 		metricsURL,
-		attempts,
 	)
+}
+
+type lockedStringBuffer struct {
+	mu      sync.Mutex
+	builder strings.Builder
+}
+
+func (b *lockedStringBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.builder.Write(p)
+}
+
+func (b *lockedStringBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.builder.String()
+}
+
+func formattedPortForwardStderr(stderr *lockedStringBuffer) string {
+	if stderr == nil {
+		return ""
+	}
+	output := strings.TrimSpace(stderr.String())
+	if output == "" {
+		return ""
+	}
+	return ": " + output
 }

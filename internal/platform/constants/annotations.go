@@ -12,4 +12,6 @@ const (
 	AnnotationMaintenanceAllowed = "openbao.org/maintenance-allowed"
 	// AnnotationRestartAt is the annotation key used to trigger a rolling restart via Pod template updates.
 	AnnotationRestartAt = "openbao.org/restart-at"
+	// AnnotationClaimUpgradeRequest records the claim-upgrade request that promoted claim service selectors.
+	AnnotationClaimUpgradeRequest = "openbao.org/claim-upgrade-request"
 )

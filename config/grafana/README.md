@@ -9,6 +9,8 @@ The dashboards provide monitoring of OpenBao Operator operations across several 
 - `dashboards/overview.json` - Key cluster signals at a glance (upgrade, backup, voter replicas, read replicas, TLS)
 - `dashboards/backup-restore.json` - Backups and restore operations
 - `dashboards/upgrades.json` - Upgrade progress and upgrade performance
+- `dashboards/claims-overview.json` - Claim service-instance health, availability, rollout, and summary state
+- `dashboards/claims-workflows.json` - Claim upgrade, backup, and restore workflow activity
 - `optional/controller-runtime/dashboard.json` - Operator controller-runtime health signals (workqueues, reconcile metrics) (optional)
 
 > **Note**: `dashboard.json` is a monolithic dashboard kept for backwards compatibility.
@@ -55,9 +57,10 @@ The dashboard uses template variables for filtering:
 
 - **DS_PROMETHEUS**: Prometheus data source (auto-detected)
 - **namespace**: Kubernetes namespace filter (populated from metrics)
-- **cluster**: OpenBaoCluster name filter (populated from metrics)
+- **cluster**: OpenBaoCluster name filter for cluster/runtime dashboards
+- **claim**: OpenBaoClusterClaim name filter for claim dashboards
 
-These variables allow you to filter the dashboard to a specific cluster or view all clusters.
+These variables allow you to filter dashboards to the right operational surface without mixing cluster-runtime and claim workflow views.
 
 ## Metrics Coverage
 
@@ -93,6 +96,20 @@ The following metrics are implemented and will display data:
   - `openbao_restore_success_total`
   - `openbao_restore_failure_total`
   - `openbao_restore_duration_seconds`
+
+- **Claim Metrics:**
+  - `openbao_claim_phase`
+  - `openbao_claim_condition`
+  - `openbao_claim_rollout_state`
+  - `openbao_claim_materialization_mode`
+  - `openbao_claim_summary`
+  - `openbao_claim_info`
+  - `openbao_claim_restore_state`
+  - `openbao_claim_upgrade_request_state`
+  - `openbao_claim_upgrade_request_classification`
+  - `openbao_claim_backup_request_state`
+
+- **Core Runtime Metrics:**
   - `openbao_cluster_ready_replicas`
   - `openbao_cluster_read_replicas_desired`
   - `openbao_cluster_read_replicas_ready`
@@ -134,7 +151,7 @@ The dashboard can be customized to fit your needs:
    - Check that Prometheus is scraping the operator's metrics endpoint
 
 4. **Check template variables:**
-   - Ensure namespace and cluster variables are populated
+   - Ensure namespace and cluster or claim variables are populated
    - Try selecting "All" if available, or manually enter values
 
 ### Missing Metrics

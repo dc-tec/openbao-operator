@@ -1,0 +1,31 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-validate-openbaoclusterclaimrestorerequest
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["openbaoclusterclaimrestorerequests"]
+  validations:
+    - expression: "object.spec == oldObject.spec"
+      reason: Invalid
+      message: "spec is immutable; create a new OpenBaoClusterClaimRestoreRequest for changed restore intent."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openbao-validate-openbaoclusterclaimrestorerequest-binding
+spec:
+  policyName: openbao-validate-openbaoclusterclaimrestorerequest
+  validationActions:
+    - Deny
+  matchResources:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["openbaoclusterclaimrestorerequests"]

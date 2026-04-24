@@ -101,6 +101,11 @@ If the target namespace changes, delete and recreate the `OpenBaoTenant` instead
       docId: 'user-guide/openbaotenant/onboarding',
     },
     {
+      label: 'Choose service claims',
+      description: 'Open the catalog-driven claim path when tenant users should request service through a stable offering instead of managing OpenBaoCluster directly.',
+      docId: 'user-guide/service-claims/overview',
+    },
+    {
       label: 'Create your first cluster',
       description: 'Return to the main path once the namespace introduction is complete.',
       docId: 'user-guide/openbaocluster/getting-started',

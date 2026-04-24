@@ -247,6 +247,57 @@ func TestCRD_OpenBaoTenant_RejectsMissingSpec(t *testing.T) {
 	requireInvalidRequest(t, err)
 }
 
+func TestCRD_OpenBaoClusterClaimUpgradeRequest_RejectsMissingTarget(t *testing.T) {
+	namespace := newTestNamespace(t)
+
+	request := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "openbao.org/v1alpha1",
+			"kind":       "OpenBaoClusterClaimUpgradeRequest",
+			"metadata": map[string]any{
+				"name":      "claim-upgrade-missing-target",
+				"namespace": namespace,
+			},
+			"spec": map[string]any{
+				"claimRef": map[string]any{
+					"name": "payments-bao",
+				},
+				"target": map[string]any{},
+			},
+		},
+	}
+
+	err := k8sClient.Create(ctx, request)
+	requireInvalidRequest(t, err)
+}
+
+func TestCRD_OpenBaoClusterClaimUpgradeRequest_RejectsMultipleTargets(t *testing.T) {
+	namespace := newTestNamespace(t)
+
+	request := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "openbao.org/v1alpha1",
+			"kind":       "OpenBaoClusterClaimUpgradeRequest",
+			"metadata": map[string]any{
+				"name":      "claim-upgrade-multiple-targets",
+				"namespace": namespace,
+			},
+			"spec": map[string]any{
+				"claimRef": map[string]any{
+					"name": "payments-bao",
+				},
+				"target": map[string]any{
+					"serviceOfferingRef": map[string]any{"name": "standard"},
+					"serviceProfileRef":  map[string]any{"name": "standard-v2"},
+				},
+			},
+		},
+	}
+
+	err := k8sClient.Create(ctx, request)
+	requireInvalidRequest(t, err)
+}
+
 func TestVAP_OpenBaoRestore_RejectsSpecMutation(t *testing.T) {
 	ensureDefaultAdmissionPoliciesApplied(t)
 	namespace := newTestNamespace(t)
@@ -297,6 +348,142 @@ func TestVAP_OpenBaoRestore_RejectsSpecMutation(t *testing.T) {
 	}
 
 	t.Fatalf("expected VAP to deny OpenBaoRestore spec mutation after retries")
+}
+
+func TestVAP_OpenBaoClusterClaimUpgradeRequest_RejectsSpecMutation(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+	namespace := newTestNamespace(t)
+
+	for attempt := 0; attempt < 25; attempt++ {
+		name := fmt.Sprintf("claim-upgrade-immutable-%d", attempt)
+		request := &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Spec: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestSpec{
+				ClaimRef: openbaov1alpha1.LocalReference{Name: "payments-bao"},
+				Target: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestTargetSpec{
+					ServiceOfferingRef: &openbaov1alpha1.LocalReference{Name: "standard"},
+				},
+			},
+		}
+
+		if err := k8sClient.Create(ctx, request); err != nil {
+			t.Fatalf("create OpenBaoClusterClaimUpgradeRequest: %v", err)
+		}
+
+		var latest openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: request.Name}, &latest); err != nil {
+			t.Fatalf("get OpenBaoClusterClaimUpgradeRequest: %v", err)
+		}
+		original := latest.DeepCopy()
+		latest.Spec.Target.ServiceProfileRef = &openbaov1alpha1.LocalReference{Name: "standard-v2"}
+		latest.Spec.Target.ServiceOfferingRef = nil
+
+		err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original))
+		if err == nil {
+			_ = k8sClient.Delete(ctx, &latest)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec is immutable") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny OpenBaoClusterClaimUpgradeRequest spec mutation after retries")
+}
+
+func TestVAP_OpenBaoClusterClaimBackupRequest_RejectsSpecMutation(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+	namespace := newTestNamespace(t)
+
+	for attempt := 0; attempt < 25; attempt++ {
+		name := fmt.Sprintf("claim-backup-immutable-%d", attempt)
+		request := &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Spec: openbaov1alpha1.OpenBaoClusterClaimBackupRequestSpec{
+				ClaimRef: openbaov1alpha1.LocalReference{Name: "payments-bao"},
+			},
+		}
+
+		if err := k8sClient.Create(ctx, request); err != nil {
+			t.Fatalf("create OpenBaoClusterClaimBackupRequest: %v", err)
+		}
+
+		var latest openbaov1alpha1.OpenBaoClusterClaimBackupRequest
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: request.Name}, &latest); err != nil {
+			t.Fatalf("get OpenBaoClusterClaimBackupRequest: %v", err)
+		}
+		original := latest.DeepCopy()
+		latest.Spec.ClaimRef.Name = "other-bao"
+
+		err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original))
+		if err == nil {
+			_ = k8sClient.Delete(ctx, &latest)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec is immutable") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny OpenBaoClusterClaimBackupRequest spec mutation after retries")
+}
+
+func TestVAP_OpenBaoClusterClaimRestoreRequest_RejectsSpecMutation(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+	namespace := newTestNamespace(t)
+
+	for attempt := 0; attempt < 25; attempt++ {
+		name := fmt.Sprintf("claim-restore-immutable-%d", attempt)
+		request := &openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+			},
+			Spec: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestSpec{
+				ClaimRef: openbaov1alpha1.LocalReference{Name: "payments-bao"},
+			},
+		}
+
+		if err := k8sClient.Create(ctx, request); err != nil {
+			t.Fatalf("create OpenBaoClusterClaimRestoreRequest: %v", err)
+		}
+
+		var latest openbaov1alpha1.OpenBaoClusterClaimRestoreRequest
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: request.Name}, &latest); err != nil {
+			t.Fatalf("get OpenBaoClusterClaimRestoreRequest: %v", err)
+		}
+		original := latest.DeepCopy()
+		latest.Spec.ClaimRef.Name = "other-bao"
+
+		err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original))
+		if err == nil {
+			_ = k8sClient.Delete(ctx, &latest)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec is immutable") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny OpenBaoClusterClaimRestoreRequest spec mutation after retries")
 }
 
 func TestCRD_OpenBaoCluster_RequiresProfile(t *testing.T) {

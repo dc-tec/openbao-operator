@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
 
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/raft"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
@@ -36,6 +37,7 @@ type Manager struct {
 	clientMgr   *openbao.ClientManager
 	raftManager *raft.Manager
 	recorder    events.EventRecorder
+	newClient   func(context.Context, *openbaov1alpha1.OpenBaoCluster) (*openbao.Client, error)
 }
 
 type raftClientFactoryProvider struct {

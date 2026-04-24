@@ -31,9 +31,9 @@ By default, tenant onboarding applies Restricted Pod Security labels to the targ
 
 </Callout>
 
-<Callout type="note" title="GitOps can submit tenant and cluster together">
+<Callout type="note" title="GitOps can submit tenant and workload intent together">
 
-If your GitOps pipeline applies `OpenBaoTenant` and `OpenBaoCluster` in the same sync, the cluster controllers pause cleanly until tenant onboarding is finished. The handoff is complete once the Provisioner has written the tenant `RoleBinding` and `OpenBaoTenant` reports `status.provisioned: true`.
+If your GitOps pipeline applies `OpenBaoTenant` and `OpenBaoCluster` or `OpenBaoClusterClaim` in the same sync, reconciliation pauses cleanly until tenant onboarding is finished. The handoff is complete once the Provisioner has written the tenant `RoleBinding` and `OpenBaoTenant` reports `status.provisioned: true`.
 
 </Callout>
 
@@ -236,6 +236,11 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
       label: 'Create your first cluster',
       description: 'Apply the first OpenBaoCluster only after the target namespace is provisioned and ready.',
       docId: 'user-guide/openbaocluster/getting-started',
+    },
+    {
+      label: 'Apply the first claim',
+      description: 'Use the service-claim quickstart when the platform team published a service catalog and tenant users should request service through that bounded path.',
+      docId: 'user-guide/service-claims/getting-started',
     },
     {
       label: 'Review tenancy & governance',

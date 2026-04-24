@@ -89,6 +89,34 @@ make ci-core`}
 
 <CommandBlock
   language="bash"
+  label="verify"
+  title="Service-claim E2E validation"
+  code={`E2E_ENABLE_SERVICE_CLAIMS=true make test-e2e \\
+  E2E_LABEL_FILTER='claims' \\
+  E2E_KEEP_GOING=true \\
+  E2E_TIMEOUT=90m
+
+E2E_ENABLE_SERVICE_CLAIMS=true make test-e2e \\
+  E2E_LABEL_FILTER='claims-smoke || claims-guardrails' \\
+  E2E_KEEP_GOING=true \\
+  E2E_TIMEOUT=60m
+
+E2E_ENABLE_SERVICE_CLAIMS=true make test-e2e \\
+  E2E_LABEL_FILTER='claims-functional && (claims-upgrade || case:claims-functional-backup-request || case:claims-functional-restore-request)' \\
+  E2E_KEEP_GOING=true \\
+  E2E_TIMEOUT=90m`}
+>
+  Use the full `claims` lane when claim API, catalog, guardrail, workflow, backup, restore, or service-claim Helm install behavior changed. The focused lanes are useful when you only need smoke or day-2 workflow coverage.
+</CommandBlock>
+
+<Callout type="note" title="E2E packages require the e2e build tag">
+
+The `test/e2e` package is intended to compile through the E2E harness with the `e2e` build tag. If a local hook or ad hoc typecheck invokes Go directly against `test/e2e` without `-tags=e2e`, rerun through `make test-e2e` for live cluster validation or `go test -tags=e2e ./test/e2e -run '^$'` for a compile-only check.
+
+</Callout>
+
+<CommandBlock
+  language="bash"
   label="inspect"
   title="Focused fuzz and existing-cluster checks"
   code={`make fuzz

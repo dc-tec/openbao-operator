@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"hash/fnv"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -116,6 +119,13 @@ func collectCases(opts options) ([]testCase, error) {
 
 	var cases []testCase
 	for _, file := range files {
+		importsGinkgo, err := fileImportsPackage(file, "github.com/onsi/ginkgo/v2")
+		if err != nil {
+			return nil, err
+		}
+		if !importsGinkgo {
+			continue
+		}
 		outline, err := outlineFile(opts.GinkgoPath, file)
 		if err != nil {
 			return nil, err
@@ -131,6 +141,23 @@ func collectCases(opts options) ([]testCase, error) {
 	})
 
 	return cases, nil
+}
+
+func fileImportsPackage(filePath string, packagePath string) (bool, error) {
+	parsed, err := parser.ParseFile(token.NewFileSet(), filePath, nil, parser.ImportsOnly)
+	if err != nil {
+		return false, fmt.Errorf("parse imports for %s: %w", filePath, err)
+	}
+	for _, importSpec := range parsed.Imports {
+		path, err := strconv.Unquote(importSpec.Path.Value)
+		if err != nil {
+			return false, fmt.Errorf("parse import path for %s: %w", filePath, err)
+		}
+		if path == packagePath {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func outlineFile(ginkgoPath, filePath string) ([]outlineNode, error) {

@@ -752,6 +752,11 @@ type RestoreConfig struct {
 	//
 	// +optional
 	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
+
+	// Image is the container image to use for restore operations.
+	// If not specified, restore requests default to the backup helper image.
+	// +optional
+	Image string `json:"image,omitempty"`
 }
 
 // BackupRetention defines retention policy for backups.
@@ -1103,11 +1108,13 @@ type SelfInitRequest struct {
 // via self-init requests. This replaces the need for raw JSON in the Data field.
 // See: https://openbao.org/api-docs/system/audit/
 // +kubebuilder:validation:XValidation:rule="self.type == 'file' || !has(self.fileOptions)",message="fileOptions is only supported when type is file"
-// +kubebuilder:validation:XValidation:rule="self.type != 'file' || has(self.fileOptions)",message="fileOptions is required when type is file"
+// +kubebuilder:validation:XValidation:rule="self.type != 'file' || has(self.fileOptions) || has(self.sinkFromRef)",message="fileOptions or sinkFromRef is required when type is file"
 // +kubebuilder:validation:XValidation:rule="self.type == 'http' || !has(self.httpOptions)",message="httpOptions is only supported when type is http"
-// +kubebuilder:validation:XValidation:rule="self.type != 'http' || has(self.httpOptions)",message="httpOptions is required when type is http"
+// +kubebuilder:validation:XValidation:rule="self.type != 'http' || has(self.httpOptions) || has(self.sinkFromRef)",message="httpOptions or sinkFromRef is required when type is http"
 // +kubebuilder:validation:XValidation:rule="self.type == 'syslog' || !has(self.syslogOptions)",message="syslogOptions is only supported when type is syslog"
 // +kubebuilder:validation:XValidation:rule="self.type == 'socket' || !has(self.socketOptions)",message="socketOptions is only supported when type is socket"
+// +kubebuilder:validation:XValidation:rule="!(has(self.sinkFromRef) && ((has(self.description) && self.description != \"\") || has(self.fileOptions) || has(self.httpOptions) || has(self.syslogOptions) || has(self.socketOptions)))",message="sinkFromRef is mutually exclusive with inline audit sink configuration"
+// +kubebuilder:validation:XValidation:rule="!has(self.sinkFromRef) || !has(self.sinkFromRef.namespace) || self.sinkFromRef.namespace == \"\"",message="sinkFromRef.namespace is not supported; refs are same-namespace only"
 type SelfInitAuditDevice struct {
 	// Type is the type of audit device (e.g., "file", "syslog", "socket", "http").
 	// +kubebuilder:validation:Enum=file;syslog;socket;http
@@ -1132,11 +1139,17 @@ type SelfInitAuditDevice struct {
 	// Only used when Type is "socket".
 	// +optional
 	SocketOptions *SocketAuditOptions `json:"socketOptions,omitempty"`
+	// SinkFromRef identifies same-namespace audit sink configuration to resolve
+	// just before self-init execution.
+	// +optional
+	SinkFromRef *TypedObjectReference `json:"sinkFromRef,omitempty"`
 }
 
 // SelfInitAuthMethod provides structured configuration for enabling auth methods
 // via self-init requests. This replaces the need for raw JSON in the Data field.
 // See: https://openbao.org/api-docs/system/auth/
+// +kubebuilder:validation:XValidation:rule="!(has(self.configFromRef) && has(self.config) && size(self.config) > 0)",message="config and configFromRef are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!has(self.configFromRef) || !has(self.configFromRef.namespace) || self.configFromRef.namespace == \"\"",message="configFromRef.namespace is not supported; refs are same-namespace only"
 type SelfInitAuthMethod struct {
 	// Type is the type of auth method (e.g., "jwt", "kubernetes", "userpass", "ldap").
 	// +kubebuilder:validation:MinLength=1
@@ -1148,6 +1161,10 @@ type SelfInitAuthMethod struct {
 	// Common fields include: default_lease_ttl, max_lease_ttl, listing_visibility, etc.
 	// +optional
 	Config map[string]string `json:"config,omitempty"`
+	// ConfigFromRef identifies same-namespace auth-method configuration to
+	// resolve just before self-init execution.
+	// +optional
+	ConfigFromRef *TypedObjectReference `json:"configFromRef,omitempty"`
 }
 
 // SelfInitSecretEngine provides structured configuration for enabling secret engines
@@ -1170,11 +1187,19 @@ type SelfInitSecretEngine struct {
 // SelfInitPolicy provides structured configuration for creating/updating policies
 // via self-init requests. This replaces the need for raw JSON in the Data field.
 // See: https://openbao.org/api-docs/system/policies-acl/
+// +kubebuilder:validation:XValidation:rule="(has(self.policy) && size(self.policy) > 0) || has(self.contentFromRef)",message="policy or contentFromRef is required"
+// +kubebuilder:validation:XValidation:rule="!((has(self.policy) && size(self.policy) > 0) && has(self.contentFromRef))",message="policy and contentFromRef are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!has(self.contentFromRef) || !has(self.contentFromRef.namespace) || self.contentFromRef.namespace == \"\"",message="contentFromRef.namespace is not supported; refs are same-namespace only"
 type SelfInitPolicy struct {
 	// Policy is the HCL or JSON policy content.
 	// This is the actual policy rules that will be applied.
 	// +kubebuilder:validation:MinLength=1
-	Policy string `json:"policy"`
+	// +optional
+	Policy string `json:"policy,omitempty"`
+	// ContentFromRef identifies same-namespace policy content to resolve just
+	// before self-init execution.
+	// +optional
+	ContentFromRef *TypedObjectReference `json:"contentFromRef,omitempty"`
 }
 
 // GatewayConfig configures Kubernetes Gateway API access for the OpenBao cluster.

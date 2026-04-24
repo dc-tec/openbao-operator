@@ -7,6 +7,32 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
 rules:
+  # Read/write access to OpenBaoClusterClaim resources across the cluster.
+  # The claim controller is namespaced but cluster-scoped in tenancy mode, so it
+  # needs full lifecycle and status access on its primary CRD.
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusterclaims
+      - openbaoclusterclaims/status
+      - openbaoclusterclaims/finalizers
+      - openbaoclusterclaimbackuprequests
+      - openbaoclusterclaimbackuprequests/status
+      - openbaoclusterclaimbackuprequests/finalizers
+      - openbaoclusterclaimrestorerequests
+      - openbaoclusterclaimrestorerequests/status
+      - openbaoclusterclaimrestorerequests/finalizers
+      - openbaoclusterclaimupgraderequests
+      - openbaoclusterclaimupgraderequests/status
+      - openbaoclusterclaimupgraderequests/finalizers
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
   # Read-only access to OpenBaoCluster resources across the cluster.
   # This is required for controller-runtime to establish a watch on the
   # primary CRD using its shared cache. All write operations on
@@ -20,13 +46,72 @@ rules:
       - get
       - list
       - watch
+  # Read-only access to claim-facing cluster-scoped catalog inputs.
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoserviceprofiles
+      - openbaoserviceofferings
+      - openbaobootstrapprofiles
+      - openbaoexposureclasses
+      - openbaoingresspolicies
+      - openbaostorageprofiles
+      - openbaounsealprofiles
+      - openbaoruntimeprofiles
+      - openbaoobservabilityprofiles
+      - openbaonetworkprofiles
+      - openbaoupgradepolicies
+      - openbaobackupprofiles
+      - openbaoentrypoints
+      - openbaobackuptargets
+      - openbaobackupbackends
+      - openbaobackupauthprofiles
+      - openbaotransferprofiles
+    verbs:
+      - get
+      - list
+      - watch
+  # Read-only access to tenant governance objects used to resolve claim targets.
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaotenants
+    verbs:
+      - get
+      - list
+      - watch
+  # Claim-owned Secret writes are admission-constrained rather than namespace-enumerating.
+  # This allows the controller to publish claim connection Secrets and projected
+  # bootstrap Secret artifacts without broad Secret read access.
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - delete
+      - patch
   # Read-only access to admission policies that are required security dependencies.
   # The controller only needs deterministic-name GETs (no list/watch).
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
+      - mutatingwebhookconfigurations
       - validatingadmissionpolicies
       - validatingadmissionpolicybindings
+    verbs:
+      - create
+      - delete
+      - get
+      - patch
+      - update
+  # Read-only access to the referenced Gateway and GatewayClass used by spec.gateway.
+  # This remains non-enumerating: the controller performs deterministic-name GETs only
+  # and does not require list/watch for Gateway reachability validation.
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingressclasses
     verbs:
       - get
   # Read-only access to the referenced Gateway and GatewayClass used by spec.gateway.

@@ -21,13 +21,24 @@ import (
 )
 
 type controllerProcessRuntime struct {
-	operatorNamespace        string
-	platform                 string
-	singleTenantMode         bool
-	admissionTracker         *admission.Tracker
-	oidcRuntime              openbaoclustercontroller.OIDCRuntime
-	openBaoRuntime           openbaoclustercontroller.OpenBaoRuntime
-	imageVerificationRuntime openbaoclustercontroller.ImageVerificationRuntime
+	operatorNamespace                               string
+	operatorServiceAccountName                      string
+	platform                                        string
+	singleTenantMode                                bool
+	enableServiceClaims                             bool
+	serviceClaimsAPIServerCIDR                      string
+	serviceClaimsAPIServerEndpointIPs               []string
+	serviceClaimsDNSEndpointIPs                     []string
+	serviceClaimsTransitUnsealAddress               string
+	serviceClaimsTransitUnsealKeyName               string
+	serviceClaimsTransitUnsealMountPath             string
+	serviceClaimsTransitUnsealNamespace             string
+	serviceClaimsTransitUnsealTLSServerName         string
+	serviceClaimsTransitUnsealCredentialsSecretName string
+	admissionTracker                                *admission.Tracker
+	oidcRuntime                                     openbaoclustercontroller.OIDCRuntime
+	openBaoRuntime                                  openbaoclustercontroller.OpenBaoRuntime
+	imageVerificationRuntime                        openbaoclustercontroller.ImageVerificationRuntime
 }
 
 func buildControllerProcessRuntime(
@@ -61,6 +72,7 @@ func buildControllerProcessRuntime(
 	)
 
 	operatorNamespace := operatorNamespaceFromEnv()
+	operatorServiceAccountName := operatorServiceAccountNameFromEnv()
 	if missingHelperImages := unavailableHelperImageDefaultFields(); len(missingHelperImages) > 0 {
 		setupLog.Info(
 			"Operator-managed default helper images are unavailable until OPERATOR_VERSION is configured; "+
@@ -71,13 +83,29 @@ func buildControllerProcessRuntime(
 	}
 
 	oidcConfig := discoverStartupOIDC(config)
-	admissionTracker := initializeAdmissionTracker(mgr, cfg.admissionEnforcement, cfg.admissionStartupTimeout)
+	admissionTracker := initializeAdmissionTracker(
+		mgr,
+		cfg.admissionEnforcement,
+		cfg.admissionStartupTimeout,
+		cfg.enableServiceClaims,
+	)
 
 	return controllerProcessRuntime{
-		operatorNamespace: operatorNamespace,
-		platform:          platform,
-		singleTenantMode:  singleTenantMode,
-		admissionTracker:  admissionTracker,
+		operatorNamespace:                               operatorNamespace,
+		operatorServiceAccountName:                      operatorServiceAccountName,
+		platform:                                        platform,
+		singleTenantMode:                                singleTenantMode,
+		enableServiceClaims:                             cfg.enableServiceClaims,
+		serviceClaimsAPIServerCIDR:                      cfg.serviceClaimsAPIServerCIDR,
+		serviceClaimsAPIServerEndpointIPs:               append([]string(nil), cfg.serviceClaimsAPIServerEndpointIPs...),
+		serviceClaimsDNSEndpointIPs:                     append([]string(nil), cfg.serviceClaimsDNSEndpointIPs...),
+		serviceClaimsTransitUnsealAddress:               cfg.serviceClaimsTransitUnsealAddress,
+		serviceClaimsTransitUnsealKeyName:               cfg.serviceClaimsTransitUnsealKeyName,
+		serviceClaimsTransitUnsealMountPath:             cfg.serviceClaimsTransitUnsealMountPath,
+		serviceClaimsTransitUnsealNamespace:             cfg.serviceClaimsTransitUnsealNamespace,
+		serviceClaimsTransitUnsealTLSServerName:         cfg.serviceClaimsTransitUnsealTLSServerName,
+		serviceClaimsTransitUnsealCredentialsSecretName: cfg.serviceClaimsTransitUnsealCredentialsSecretName,
+		admissionTracker:                                admissionTracker,
 		oidcRuntime: openbaoclustercontroller.OIDCRuntime{
 			OIDCIssuer:         oidcConfig.IssuerURL,
 			OIDCDiscoveryURL:   oidcConfig.OIDCDiscoveryURL,
@@ -140,6 +168,10 @@ func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error 
 		Platform:              runtime.platform,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller %s: %w", controllerNameOpenBaoRestore, err)
+	}
+
+	if err := setupClaimControllers(mgr, runtime); err != nil {
+		return err
 	}
 
 	return nil

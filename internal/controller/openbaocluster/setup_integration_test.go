@@ -200,10 +200,48 @@ func ensureProvisionedTenantNamespace(ctx context.Context, c client.Client, name
 		},
 	}
 	err := c.Create(ctx, roleBinding)
-	if apierrors.IsAlreadyExists(err) {
+	if err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+
+	tenants := &openbaov1alpha1.OpenBaoTenantList{}
+	if err := c.List(ctx, tenants, client.InNamespace(namespace)); err != nil {
+		return err
+	}
+	for i := range tenants.Items {
+		tenant := &tenants.Items[i]
+		if tenant.Spec.TargetNamespace != namespace {
+			continue
+		}
+		if tenant.Status.Provisioned {
+			return nil
+		}
+		updated := tenant.DeepCopy()
+		updated.Status.Provisioned = true
+		return c.Status().Patch(ctx, updated, client.MergeFrom(tenant))
+	}
+
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tenant-" + namespace,
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	if err := c.Create(ctx, tenant); err != nil && !apierrors.IsAlreadyExists(err) {
+		return err
+	}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(tenant), tenant); err != nil {
+		return err
+	}
+	if tenant.Status.Provisioned {
 		return nil
 	}
-	return err
+	updated := tenant.DeepCopy()
+	updated.Status.Provisioned = true
+	return c.Status().Patch(ctx, updated, client.MergeFrom(tenant))
 }
 
 func newIntegrationScheme(t *testing.T) *runtime.Scheme {

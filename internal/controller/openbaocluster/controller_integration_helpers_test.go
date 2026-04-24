@@ -11,8 +11,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
@@ -64,4 +66,35 @@ func ensureTenantNamespaceProvisioned(ctx context.Context, namespace string) {
 			},
 		},
 	})).To(Succeed())
+
+	tenants := &openbaov1alpha1.OpenBaoTenantList{}
+	Expect(k8sClient.List(ctx, tenants, client.InNamespace(namespace))).To(Succeed())
+
+	for i := range tenants.Items {
+		tenant := &tenants.Items[i]
+		if tenant.Spec.TargetNamespace != namespace {
+			continue
+		}
+		if !tenant.Status.Provisioned {
+			updated := tenant.DeepCopy()
+			updated.Status.Provisioned = true
+			Expect(k8sClient.Status().Patch(ctx, updated, client.MergeFrom(tenant))).To(Succeed())
+		}
+		return
+	}
+
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tenant-" + namespace,
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+	Expect(k8sClient.Create(ctx, tenant)).To(Succeed())
+
+	updated := tenant.DeepCopy()
+	updated.Status.Provisioned = true
+	Expect(k8sClient.Status().Patch(ctx, updated, client.MergeFrom(tenant))).To(Succeed())
 }

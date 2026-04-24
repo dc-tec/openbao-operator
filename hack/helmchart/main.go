@@ -18,6 +18,14 @@ const (
 	specMarker     = "spec:"
 	rulesMarker    = "rules:"
 	helmFullname   = `{{ include "openbao-operator.fullname" . }}`
+
+	claimManagedClusterMutationsPolicyFile  = "openbao-restrict-claim-managed-openbaocluster-mutations.yaml"
+	claimManagedClusterMutationsBindingFile = "openbao-restrict-claim-managed-openbaocluster-mutations-binding.yaml"
+	lockMaterializedClaimSpecPolicyFile     = "openbao-lock-materialized-openbaoclusterclaim-spec.yaml"
+	lockMaterializedClaimSpecBindingFile    = "openbao-lock-materialized-openbaoclusterclaim-spec-binding.yaml"
+	serviceCatalogMutationsPolicyFile       = "openbao-restrict-service-catalog-mutations.yaml"
+	serviceCatalogMutationsBindingFile      = "openbao-restrict-service-catalog-mutations-binding.yaml"
+	provisionerNamespaceBindingFile         = "openbao-restrict-provisioner-namespace-mutations-binding.yaml"
 )
 
 var helmManagedLabelKeys = map[string]struct{}{
@@ -26,6 +34,33 @@ var helmManagedLabelKeys = map[string]struct{}{
 	"app.kubernetes.io/instance":   {},
 	"app.kubernetes.io/managed-by": {},
 	"app.kubernetes.io/version":    {},
+}
+
+var coreChartCRDFiles = map[string]struct{}{
+	"openbao.org_openbaobackupauthprofiles.yaml":          {},
+	"openbao.org_openbaobackupbackends.yaml":              {},
+	"openbao.org_openbaobackupprofiles.yaml":              {},
+	"openbao.org_openbaobackuptargets.yaml":               {},
+	"openbao.org_openbaobootstrapprofiles.yaml":           {},
+	"openbao.org_openbaoclusters.yaml":                    {},
+	"openbao.org_openbaoclusterclaimbackuprequests.yaml":  {},
+	"openbao.org_openbaoclusterclaims.yaml":               {},
+	"openbao.org_openbaoclusterclaimrestorerequests.yaml": {},
+	"openbao.org_openbaoclusterclaimupgraderequests.yaml": {},
+	"openbao.org_openbaoentrypoints.yaml":                 {},
+	"openbao.org_openbaoexposureclasses.yaml":             {},
+	"openbao.org_openbaoingresspolicies.yaml":             {},
+	"openbao.org_openbaonetworkprofiles.yaml":             {},
+	"openbao.org_openbaoobservabilityprofiles.yaml":       {},
+	"openbao.org_openbaorestores.yaml":                    {},
+	"openbao.org_openbaoruntimeprofiles.yaml":             {},
+	"openbao.org_openbaoserviceofferings.yaml":            {},
+	"openbao.org_openbaoserviceprofiles.yaml":             {},
+	"openbao.org_openbaostorageprofiles.yaml":             {},
+	"openbao.org_openbaotenants.yaml":                     {},
+	"openbao.org_openbaotransferprofiles.yaml":            {},
+	"openbao.org_openbaounsealprofiles.yaml":              {},
+	"openbao.org_openbaoupgradepolicies.yaml":             {},
 }
 
 type options struct {
@@ -124,6 +159,7 @@ func syncCRDs(opts options) error {
 		return fmt.Errorf("create CRD output dir %q: %w", opts.crdOutputDir, err)
 	}
 
+	desired := make(map[string]struct{})
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -132,6 +168,10 @@ func syncCRDs(opts options) error {
 		if !strings.HasSuffix(name, ".yaml") {
 			continue
 		}
+		if _, ok := coreChartCRDFiles[name]; !ok {
+			continue
+		}
+		desired[name] = struct{}{}
 
 		inPath := filepath.Join(opts.crdInputDir, name)
 		lines, err := readLines(inPath)
@@ -147,6 +187,27 @@ func syncCRDs(opts options) error {
 		outPath := filepath.Join(opts.crdOutputDir, name)
 		if err := writeFile(outPath, strings.Join(lines, "\n")+"\n"); err != nil {
 			return fmt.Errorf("write %q: %w", outPath, err)
+		}
+	}
+
+	outputEntries, err := os.ReadDir(opts.crdOutputDir)
+	if err != nil {
+		return fmt.Errorf("read CRD output dir %q: %w", opts.crdOutputDir, err)
+	}
+	for _, entry := range outputEntries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".yaml") {
+			continue
+		}
+		if _, ok := desired[name]; ok {
+			continue
+		}
+		outPath := filepath.Join(opts.crdOutputDir, name)
+		if err := os.Remove(outPath); err != nil {
+			return fmt.Errorf("remove stale CRD output %q: %w", outPath, err)
 		}
 	}
 
@@ -175,30 +236,39 @@ func ensureHelmKeepAnnotation(lines []string) ([]string, error) {
 
 // Policy file mapping from kustomize to Helm output names.
 var policyFileMapping = map[string]string{
-	"openbao-lock-managed-resource-mutations.yaml":                  "lock-managed-resources.yaml",
-	"openbao-lock-managed-resource-mutations-binding.yaml":          "lock-managed-resources.yaml", // merged
-	"openbao-enforce-managed-image-digests.yaml":                    "enforce-managed-image-digests.yaml",
-	"openbao-enforce-managed-image-digests-binding.yaml":            "enforce-managed-image-digests.yaml", // merged
-	"openbao-lock-controller-statefulset-mutations.yaml":            "validating-policies.yaml",
-	"openbao-lock-controller-statefulset-mutations-binding.yaml":    "validating-policies.yaml", // merged
-	"openbao-restrict-provisioner-rbac.yaml":                        "provisioner-rbac.yaml",
-	"openbao-restrict-provisioner-rbac-binding.yaml":                "provisioner-rbac.yaml", // merged
-	"openbao-restrict-provisioner-tenant-governance.yaml":           "provisioner-tenant-governance.yaml",
-	"openbao-restrict-provisioner-tenant-governance-binding.yaml":   "provisioner-tenant-governance.yaml", // merged
-	"openbao-validate-openbaocluster.yaml":                          "validate-openbaocluster.yaml",
-	"openbao-validate-openbaocluster-binding.yaml":                  "validate-openbaocluster.yaml", // merged
-	"openbao-validate-openbaorestore.yaml":                          "validate-openbaorestore.yaml",
-	"openbao-validate-openbaorestore-binding.yaml":                  "validate-openbaorestore.yaml", // merged
-	"openbao-validate-openbao-tenant.yaml":                          "validate-openbao-tenant.yaml",
-	"openbao-validate-openbao-tenant-binding.yaml":                  "validate-openbao-tenant.yaml", // merged
-	"openbao-restrict-controller-rbac-binding.yaml":                 "controller-rbac.yaml",         // merged
-	"openbao-restrict-controller-rbac.yaml":                         "controller-rbac.yaml",
-	"openbao-restrict-controller-serviceaccounts.yaml":              "controller-serviceaccounts.yaml",
-	"openbao-restrict-controller-serviceaccounts-binding.yaml":      "controller-serviceaccounts.yaml", // merged
-	"openbao-restrict-controller-secret-writes.yaml":                "controller-secret-writes.yaml",
-	"openbao-restrict-controller-secret-writes-binding.yaml":        "controller-secret-writes.yaml", // merged
-	"openbao-restrict-provisioner-namespace-mutations.yaml":         "provisioner-namespace-mutations.yaml",
-	"openbao-restrict-provisioner-namespace-mutations-binding.yaml": "provisioner-namespace-mutations.yaml", // merged
+	"openbao-lock-managed-resource-mutations.yaml":                "lock-managed-resources.yaml",
+	"openbao-lock-managed-resource-mutations-binding.yaml":        "lock-managed-resources.yaml", // merged
+	"openbao-enforce-managed-image-digests.yaml":                  "enforce-managed-image-digests.yaml",
+	"openbao-enforce-managed-image-digests-binding.yaml":          "enforce-managed-image-digests.yaml", // merged
+	"openbao-lock-controller-statefulset-mutations.yaml":          "validating-policies.yaml",
+	"openbao-lock-controller-statefulset-mutations-binding.yaml":  "validating-policies.yaml", // merged
+	"openbao-restrict-provisioner-rbac.yaml":                      "provisioner-rbac.yaml",
+	"openbao-restrict-provisioner-rbac-binding.yaml":              "provisioner-rbac.yaml", // merged
+	"openbao-restrict-provisioner-tenant-governance.yaml":         "provisioner-tenant-governance.yaml",
+	"openbao-restrict-provisioner-tenant-governance-binding.yaml": "provisioner-tenant-governance.yaml", // merged
+	"openbao-validate-openbaocluster.yaml":                        "validate-openbaocluster.yaml",
+	"openbao-validate-openbaocluster-binding.yaml":                "validate-openbaocluster.yaml", // merged
+	"openbao-validate-openbaoclusterclaimbackuprequest.yaml":      "validate-openbaoclusterclaimbackuprequest.yaml",
+	"openbao-validate-openbaoclusterclaimrestorerequest.yaml":     "validate-openbaoclusterclaimrestorerequest.yaml",
+	"openbao-validate-openbaoclusterclaimupgraderequest.yaml":     "validate-openbaoclusterclaimupgraderequest.yaml",
+	"openbao-validate-openbaorestore.yaml":                        "validate-openbaorestore.yaml",
+	"openbao-validate-openbaorestore-binding.yaml":                "validate-openbaorestore.yaml", // merged
+	"openbao-validate-openbao-tenant.yaml":                        "validate-openbao-tenant.yaml",
+	"openbao-validate-openbao-tenant-binding.yaml":                "validate-openbao-tenant.yaml", // merged
+	"openbao-restrict-controller-rbac-binding.yaml":               "controller-rbac.yaml",         // merged
+	"openbao-restrict-controller-rbac.yaml":                       "controller-rbac.yaml",
+	claimManagedClusterMutationsPolicyFile:                        "claim-managed-openbaocluster-mutations.yaml",
+	claimManagedClusterMutationsBindingFile:                       "claim-managed-openbaocluster-mutations.yaml", // merged
+	lockMaterializedClaimSpecPolicyFile:                           "materialized-openbaoclusterclaim-spec.yaml",
+	lockMaterializedClaimSpecBindingFile:                          "materialized-openbaoclusterclaim-spec.yaml", // merged
+	serviceCatalogMutationsPolicyFile:                             "service-catalog-mutations.yaml",
+	serviceCatalogMutationsBindingFile:                            "service-catalog-mutations.yaml", // merged
+	"openbao-restrict-controller-serviceaccounts.yaml":            "controller-serviceaccounts.yaml",
+	"openbao-restrict-controller-serviceaccounts-binding.yaml":    "controller-serviceaccounts.yaml", // merged
+	"openbao-restrict-controller-secret-writes.yaml":              "controller-secret-writes.yaml",
+	"openbao-restrict-controller-secret-writes-binding.yaml":      "controller-secret-writes.yaml", // merged
+	"openbao-restrict-provisioner-namespace-mutations.yaml":       "provisioner-namespace-mutations.yaml",
+	provisionerNamespaceBindingFile:                               "provisioner-namespace-mutations.yaml", // merged
 }
 
 // syncPolicies syncs ValidatingAdmissionPolicy YAMLs from config/policy to Helm templates.
@@ -436,6 +506,11 @@ func syncRBAC(opts options) error {
 		return fmt.Errorf("sync leader election RBAC: %w", err)
 	}
 
+	// Sync controller namespace-scoped runtime RBAC.
+	if err := syncControllerRuntimeRBAC(opts); err != nil {
+		return fmt.Errorf("sync controller runtime RBAC: %w", err)
+	}
+
 	// Sync aggregated ClusterRoles
 	if err := syncAggregatedRBAC(opts); err != nil {
 		return fmt.Errorf("sync aggregated RBAC: %w", err)
@@ -485,6 +560,20 @@ func syncProvisionerRBAC(opts options) error {
 }
 
 func addNamespacePodSecurityLabelRBACMode(content string) (string, error) {
+	const namespaceVerbsWithCreate = `    verbs:
+      - create
+      - get
+      - update
+      - patch
+`
+	const namespaceVerbsWithCreateAndMode = `    verbs:
+      - create
+      - get
+{{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "enforce" }}
+      - update
+      - patch
+{{ end }}
+`
 	const namespaceVerbs = `    verbs:
       - get
       - update
@@ -497,10 +586,13 @@ func addNamespacePodSecurityLabelRBACMode(content string) (string, error) {
       - patch
 {{ end }}
 `
-	if !strings.Contains(content, namespaceVerbs) {
-		return "", fmt.Errorf("namespace get/update/patch verbs block not found")
+	if strings.Contains(content, namespaceVerbsWithCreate) {
+		return strings.Replace(content, namespaceVerbsWithCreate, namespaceVerbsWithCreateAndMode, 1), nil
 	}
-	return strings.Replace(content, namespaceVerbs, namespaceVerbsWithMode, 1), nil
+	if strings.Contains(content, namespaceVerbs) {
+		return strings.Replace(content, namespaceVerbs, namespaceVerbsWithMode, 1), nil
+	}
+	return "", fmt.Errorf("namespace create/get/update/patch or get/update/patch verbs block not found")
 }
 
 // syncControllerRBAC syncs controller-related RBAC.
@@ -564,7 +656,7 @@ func syncControllerRBAC(opts options) error {
 	)
 	parts = append(parts, restoreRoleBinding)
 
-	output := strings.Join(parts, "---\n") + "\n"
+	output := strings.TrimRight(strings.Join(parts, "---\n"), "\n") + "\n"
 	outPath := filepath.Join(opts.rbacOutputDir, "controller-clusterroles.yaml")
 	return writeFile(outPath, output)
 }
@@ -659,6 +751,41 @@ subjects:
 
 	output := role + controllerBinding + provisionerBinding
 	outPath := filepath.Join(opts.rbacOutputDir, "leader-election.yaml")
+	return writeFile(outPath, output)
+}
+
+// syncControllerRuntimeRBAC syncs controller-only namespace-scoped runtime RBAC.
+func syncControllerRuntimeRBAC(opts options) error {
+	role, err := readFile(filepath.Join(opts.rbacInputDir, "controller_runtime_role.yaml"))
+	if err != nil {
+		return fmt.Errorf("read controller_runtime_role.yaml: %w", err)
+	}
+
+	role = transformRBACToHelm(role, "controller-runtime", false)
+	role = strings.Replace(role, "kind: ClusterRole", "kind: Role", 1)
+	role = addNamespaceToMetadata(role)
+
+	binding := `---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-controller-runtime
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "openbao-operator.fullname" . }}-controller-runtime
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "openbao-operator.controllerServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+`
+
+	output := role + binding
+	outPath := filepath.Join(opts.rbacOutputDir, "controller-runtime.yaml")
 	return writeFile(outPath, output)
 }
 

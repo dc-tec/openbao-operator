@@ -1,0 +1,113 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaobackupauthprofiles.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoBackupAuthProfile
+    listKind: OpenBaoBackupAuthProfileList
+    plural: openbaobackupauthprofiles
+    singular: openbaobackupauthprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.mode
+      name: Mode
+      type: string
+    - jsonPath: .spec.staticCredentials.secretName
+      name: Secret
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoBackupAuthProfile is the immutable platform-owned backup
+          auth posture object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoBackupAuthProfileSpec defines the desired state of
+              OpenBaoBackupAuthProfile.
+            properties:
+              mode:
+                description: Mode identifies how backup executor jobs obtain storage
+                  credentials.
+                enum:
+                - WorkloadIdentity
+                - StaticCredentials
+                type: string
+              roleArn:
+                description: RoleARN identifies an explicit web-identity role assumption
+                  target when the provider requires it.
+                type: string
+              staticCredentials:
+                description: StaticCredentials defines the Secret-backed credentials
+                  posture when required.
+                properties:
+                  secretName:
+                    description: SecretName is the Secret name expected in the materialized
+                      cluster namespace.
+                    minLength: 1
+                    type: string
+                required:
+                - secretName
+                type: object
+              workloadIdentity:
+                description: WorkloadIdentity defines provider-specific metadata for
+                  workload-identity-backed storage access.
+                properties:
+                  podLabels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      PodLabels are merged into the generated backup or restore Job pod template.
+                      This is typically used for provider-specific selectors such as Azure Workload Identity.
+                      Operator-managed labels take precedence if the same key is specified here.
+                    type: object
+                  serviceAccountAnnotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      ServiceAccountAnnotations are merged into the generated backup or restore ServiceAccount.
+                      This is typically used for provider-specific bindings such as GKE Workload Identity
+                      or webhook-based AWS/Azure workload identity integrations.
+                    type: object
+                type: object
+            required:
+            - mode
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+            - message: spec.staticCredentials is required when mode is StaticCredentials
+              rule: self.mode != 'StaticCredentials' || has(self.staticCredentials)
+            - message: spec.staticCredentials is only supported when mode is StaticCredentials
+              rule: self.mode == 'StaticCredentials' || !has(self.staticCredentials)
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

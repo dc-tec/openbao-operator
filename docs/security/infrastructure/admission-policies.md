@@ -64,6 +64,13 @@ description: How ValidatingAdmissionPolicy guardrails enforce managed-resource o
         '`openbao-restrict-controller-rbac`, ServiceAccount, and Secret-write policies.',
       ],
     },
+    {
+      cells: [
+        'Claim guardrails',
+        'Protects materialized claim spec locking, claim-managed local cluster ownership, and service-catalog mutation boundaries.',
+        '`openbao-lock-materialized-openbaoclusterclaim-spec`, `openbao-restrict-claim-managed-openbaocluster-mutations`, and `openbao-restrict-service-catalog-mutations`.',
+      ],
+    },
   ]}
 />
 
@@ -120,6 +127,18 @@ The required fail-closed dependency set includes:
 - `openbao-restrict-controller-secret-writes`
 - `openbao-lock-managed-resource-mutations`
 - `openbao-enforce-managed-image-digests`
+
+When the service-claim surface is enabled, the dependency set also includes:
+
+- `openbao-lock-materialized-openbaoclusterclaim-spec`
+- `openbao-restrict-claim-managed-openbaocluster-mutations`
+- `openbao-restrict-service-catalog-mutations`
+
+<Callout type="note" title="Claims add one mutating admission surface">
+
+The claim path also uses a mutating admission webhook to resolve `spec.serviceOfferingRef` to the pinned immutable service-profile revision. The webhook is part of the supported claim install surface alongside the validating policies listed here.
+
+</Callout>
 
 <Callout type="warning" title="Unsafe mode is not a production posture">
 
@@ -229,6 +248,11 @@ Admission policy is one of the reasons the operator can separate user intent fro
       label: 'Threat model',
       description: 'STRIDE threats mitigated by the admission guardrails.',
       docId: 'security/fundamentals/threat-model',
+    },
+    {
+      label: 'Open service claims',
+      description: 'See the tenant-facing claim workflow that depends on the claim-specific mutating webhook and validating guardrails.',
+      docId: 'user-guide/service-claims/overview',
     },
   ]}
 />

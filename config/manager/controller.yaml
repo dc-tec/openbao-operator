@@ -48,7 +48,10 @@ spec:
               value: "0.0.0"
             - name: OPENBAO_JWT_AUDIENCE
               value: "openbao-internal"
-          ports: []
+          ports:
+            - name: webhook-server
+              containerPort: 9443
+              protocol: TCP
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -81,6 +84,8 @@ spec:
             - name: openbao-token
               mountPath: /var/run/secrets/tokens
               readOnly: true
+            - name: webhook-runtime
+              mountPath: /tmp/k8s-webhook-server
       serviceAccountName: controller
       terminationGracePeriodSeconds: 10
       volumes:
@@ -109,3 +114,5 @@ spec:
                   expirationSeconds: 3600
                   audience: openbao-internal
             defaultMode: 420
+        - name: webhook-runtime
+          emptyDir: {}

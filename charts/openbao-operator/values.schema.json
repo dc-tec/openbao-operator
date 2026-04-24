@@ -187,6 +187,43 @@
         "resources": {
           "$ref": "#/$defs/resources"
         },
+        "probeTimeoutSeconds": {
+          "type": "integer",
+          "description": "Timeout in seconds for provisioner health probes",
+          "minimum": 1,
+          "default": 5
+        },
+        "startupProbe": {
+          "type": "object",
+          "description": "Provisioner startup probe configuration",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "initialDelaySeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 5
+            },
+            "periodSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 5
+            },
+            "failureThreshold": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 30
+            }
+          }
+        },
         "extraEnv": {
           "$ref": "#/$defs/envVars"
         },

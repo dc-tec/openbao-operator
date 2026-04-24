@@ -94,12 +94,24 @@ spec:
               port: {{ .Values.healthProbes.port }}
             initialDelaySeconds: {{ .Values.healthProbes.livenessInitialDelaySeconds }}
             periodSeconds: {{ .Values.healthProbes.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.provisioner.probeTimeoutSeconds }}
           readinessProbe:
             httpGet:
               path: /readyz
               port: {{ .Values.healthProbes.port }}
             initialDelaySeconds: {{ .Values.healthProbes.readinessInitialDelaySeconds }}
             periodSeconds: {{ .Values.healthProbes.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.provisioner.probeTimeoutSeconds }}
+          {{- if .Values.provisioner.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.healthProbes.port }}
+            initialDelaySeconds: {{ .Values.provisioner.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.provisioner.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.provisioner.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.provisioner.startupProbe.failureThreshold }}
+          {{- end }}
           resources:
             {{- toYaml .Values.provisioner.resources | nindent 12 }}
           securityContext:

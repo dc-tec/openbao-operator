@@ -126,6 +126,10 @@ spec:
       expression: >-
         request.userInfo.groups.exists(g, g == "system:serviceaccounts:kube-system") ||
         request.userInfo.username.startsWith("system:serviceaccount:kube-system:")
+    - name: is_namespace_controller
+      expression: >-
+        request.userInfo.username == "system:controller:namespace-controller" ||
+        request.userInfo.username == "system:serviceaccount:kube-system:namespace-controller"
     - name: is_endpoints_controller_request
       expression: >-
         request.resource.resource in ["endpoints", "endpointslices"]
@@ -360,6 +364,7 @@ spec:
         (variables.is_kube_controller_manager && (request.operation == "DELETE" || request.resource.resource == "pods")) ||
         (variables.is_system_controller && request.operation == "DELETE") ||
         (variables.is_garbage_collector_sa && (request.operation == "DELETE" || request.operation == "UPDATE")) ||
+        (variables.is_namespace_controller && request.operation == "DELETE") ||
         (variables.is_system_controller && request.resource.resource == "pods") ||
         (variables.is_system_controller && variables.is_endpoints_controller_request) ||
         (variables.is_kube_system_controller && request.resource.resource == "pods" && (request.operation == "CREATE" || request.operation == "DELETE")) ||

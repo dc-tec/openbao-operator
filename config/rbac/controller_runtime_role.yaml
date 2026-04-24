@@ -1,0 +1,21 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/managed-by: kustomize
+  name: controller-runtime-role
+rules:
+  # Namespace-scoped controller runtime artifacts that must stay writable even in
+  # multi-tenant mode. This intentionally excludes the provisioner.
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - delete
+      - get
+      - patch
+      - update

@@ -89,10 +89,20 @@ const (
 	EnvRestoreUsePathStyle = "RESTORE_USE_PATH_STYLE"
 
 	// Operator
-	EnvOperatorVersion                      = "OPERATOR_VERSION"
-	EnvOpenBaoJWTAudience                   = "OPENBAO_JWT_AUDIENCE"
-	EnvOpenBaoJWTAuthStrategy               = "OPENBAO_JWT_AUTH_STRATEGY"
-	EnvTenantNamespacePodSecurityLabelsMode = "OPENBAO_TENANT_NAMESPACE_POD_SECURITY_LABELS_MODE"
+	EnvOperatorVersion                                         = "OPERATOR_VERSION"
+	EnvOpenBaoJWTAudience                                      = "OPENBAO_JWT_AUDIENCE"
+	EnvOpenBaoJWTAuthStrategy                                  = "OPENBAO_JWT_AUTH_STRATEGY"
+	EnvTenantNamespacePodSecurityLabelsMode                    = "OPENBAO_TENANT_NAMESPACE_POD_SECURITY_LABELS_MODE"
+	EnvOperatorEnableServiceClaims                             = "OPERATOR_ENABLE_SERVICE_CLAIMS"
+	EnvOperatorServiceClaimsAPIServerCIDR                      = "OPERATOR_SERVICE_CLAIMS_API_SERVER_CIDR"
+	EnvOperatorServiceClaimsAPIServerEndpointIPs               = "OPERATOR_SERVICE_CLAIMS_API_SERVER_ENDPOINT_IPS"
+	EnvOperatorServiceClaimsDNSEndpointIPs                     = "OPERATOR_SERVICE_CLAIMS_DNS_ENDPOINT_IPS"
+	EnvOperatorServiceClaimsTransitUnsealAddress               = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_ADDRESS"
+	EnvOperatorServiceClaimsTransitUnsealKeyName               = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_KEY_NAME"
+	EnvOperatorServiceClaimsTransitUnsealMountPath             = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_MOUNT_PATH"
+	EnvOperatorServiceClaimsTransitUnsealNamespace             = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_NAMESPACE"
+	EnvOperatorServiceClaimsTransitUnsealTLSServerName         = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_TLS_SERVER_NAME"
+	EnvOperatorServiceClaimsTransitUnsealCredentialsSecretName = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_CREDENTIALS_SECRET_NAME"
 
 	// Operator-managed image repositories
 	EnvOperatorBackupImageRepo  = "OPERATOR_BACKUP_IMAGE_REPOSITORY"

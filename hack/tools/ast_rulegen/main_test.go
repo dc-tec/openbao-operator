@@ -445,3 +445,153 @@ func TestBuildRuleSpecsServiceAndAppBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestValidatePolicyModuleBoundaries(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{"internal/service/placement"},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
+		Modules: []moduleBoundary{
+			{
+				Name:        "serviceclaims",
+				DisplayName: "Service Claims",
+				MayDependOn: []string{
+					"core",
+				},
+				Files: []string{"internal/app/openbaoclusterclaim/**/*.go"},
+				DisallowImports: []string{
+					"internal/service/placement",
+				},
+			},
+			{
+				Name: "core",
+			},
+		},
+	}
+
+	if err := validatePolicy(policy); err != nil {
+		t.Fatalf("validatePolicy returned error: %v", err)
+	}
+}
+
+func TestValidatePolicyModuleBoundaryRejectsMissingFiles(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{"internal/service/placement"},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
+		Modules: []moduleBoundary{
+			{
+				Name: "serviceclaims",
+				DisallowAPISymbols: []string{
+					"RemoteRef",
+				},
+			},
+		},
+	}
+
+	err := validatePolicy(policy)
+	if err == nil {
+		t.Fatalf("expected validatePolicy to fail for module boundary without files")
+	}
+	if !strings.Contains(err.Error(), "modules[serviceclaims].files") {
+		t.Fatalf("expected error to mention missing module files, got: %v", err)
+	}
+}
+
+func TestValidatePolicyModuleBoundaryRejectsUnknownDependency(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath:         "github.com/dc-tec/openbao-operator",
+		ServiceImportRoots: []string{"internal/service/placement"},
+		AdapterImportRoots: []string{"internal/adapter/kube"},
+		Modules: []moduleBoundary{
+			{
+				Name:        "serviceclaims",
+				MayDependOn: []string{"core"},
+			},
+		},
+	}
+
+	err := validatePolicy(policy)
+	if err == nil {
+		t.Fatalf("expected validatePolicy to fail for unknown module dependency")
+	}
+	if !strings.Contains(err.Error(), "unknown module") {
+		t.Fatalf("expected error to mention unknown module dependency, got: %v", err)
+	}
+}
+
+func TestBuildRuleSpecsModuleBoundaries(t *testing.T) {
+	t.Parallel()
+
+	policy := architecturePolicy{
+		ModulePath: "github.com/dc-tec/openbao-operator",
+		Modules: []moduleBoundary{
+			{
+				Name:        "serviceclaims",
+				DisplayName: "Service Claims",
+				Files:       []string{"internal/app/openbaoclusterclaim/**/*.go"},
+				Ignores:     []string{"**/*_test.go"},
+				DisallowImports: []string{
+					"internal/service/remoteexecution",
+					"internal/service/placement",
+				},
+				DisallowAPISymbols: []string{
+					"TargetClusterRef",
+					"RemoteRef",
+				},
+				DisallowAPISymbolPatterns: []string{
+					"ManagedCluster.*",
+				},
+			},
+		},
+	}
+
+	specs, err := buildRuleSpecs(policy)
+	if err != nil {
+		t.Fatalf("buildRuleSpecs returned error: %v", err)
+	}
+
+	want := map[string]struct {
+		kind  string
+		regex string
+	}{
+		"no-serviceclaims-module-forbidden-imports": {
+			kind: "import_spec",
+			regex: strings.Join([]string{
+				`"github\.com/dc-tec/openbao-operator/(internal/service/placement(/[^"]*)?|`,
+				`internal/service/remoteexecution(/[^"]*)?)"`,
+			}, ""),
+		},
+		"no-serviceclaims-module-forbidden-api-type-identifiers": {
+			kind:  "type_identifier",
+			regex: `^(RemoteRef|TargetClusterRef|ManagedCluster.*)$`,
+		},
+		"no-serviceclaims-module-forbidden-api-field-identifiers": {
+			kind:  "field_identifier",
+			regex: `^(RemoteRef|TargetClusterRef|ManagedCluster.*)$`,
+		},
+	}
+
+	if len(specs) != len(want) {
+		t.Fatalf("unexpected number of rule specs: want %d got %d", len(want), len(specs))
+	}
+
+	for _, spec := range specs {
+		expected, ok := want[spec.ID]
+		if !ok {
+			t.Fatalf("unexpected rule spec ID: %s", spec.ID)
+		}
+		if spec.Kind != expected.kind {
+			t.Fatalf("unexpected kind for %s: want %s got %s", spec.ID, expected.kind, spec.Kind)
+		}
+		if spec.Regex != expected.regex {
+			t.Fatalf("unexpected regex for %s:\nwant: %s\ngot:  %s", spec.ID, expected.regex, spec.Regex)
+		}
+	}
+}

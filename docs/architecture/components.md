@@ -3,7 +3,7 @@ title: Component Design
 hide_title: true
 pageType: concept
 journey: architecture
-description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, and OpenBaoTenant, including controller boundaries, app-layer orchestration, and service-layer coordination.
+description: Split-controller architecture for OpenBaoCluster, OpenBaoClusterClaim, OpenBaoRestore, and OpenBaoTenant, including controller boundaries, app-layer orchestration, and service-layer coordination.
 ---
 
 <PageHeader
@@ -11,15 +11,16 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
   lede="Focused controllers, app-layer orchestration, narrow domain managers, and shared platform contracts keep workload churn, long-running operations, and status writes separated."
 />
 
-## Controller split
+## Cluster lifecycle controllers
 
 <DiagramFrame
-  title="Controller split"
-  caption="Workload, admin operations, and status are separated so high-churn reconciliation, long-running workflows, and API status writes do not block each other."
+  title="Cluster lifecycle controllers"
+  caption="Workload, admin operations, status, and destructive restore stay separated so high-churn reconciliation, long-running workflows, and status writes do not block each other."
   code={`graph TD
     Manager["Manager process"] --> WorkloadCtrl["Workload controller"]
     Manager --> Admin["AdminOps controller"]
     Manager --> Status["Status controller"]
+    Manager --> RestoreCtrl["OpenBaoRestore controller"]
 
     subgraph Roles["Responsibilities"]
       WorkloadCtrl --> Cert["Cert manager"]
@@ -33,6 +34,7 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
       Admin --> Backup["Backup manager"]
 
       Status --> Conditions["Status conditions"]
+      RestoreCtrl --> Restore["Restore manager"]
     end
 
     classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
@@ -40,8 +42,36 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
     classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
     class Manager process;
-    class WorkloadCtrl,Admin,Status write;
-    class Cert,Bootstrap,Networking,Identity,Init,WorkloadMgr,Upgrade,Backup,Conditions read;`}
+    class WorkloadCtrl,Admin,Status,RestoreCtrl write;
+    class Cert,Bootstrap,Networking,Identity,Init,WorkloadMgr,Upgrade,Backup,Conditions,Restore read;`}
+/>
+
+## Tenant and service-request controllers
+
+<DiagramFrame
+  title="Tenant and claim controllers"
+  caption="Provisioner and claim controllers stay separate from the direct workload path. Provisioner introduces namespace access and guardrails. Claim reconciliation binds catalog intent, plans materialization, and publishes the connection contract without becoming a second workload engine."
+  code={`graph TD
+    Manager["Manager process"] --> Prov["Provisioner controller"]
+    Manager --> Claim["OpenBaoClusterClaim controller"]
+
+    subgraph Responsibilities["Responsibilities"]
+      Prov --> Tenant["OpenBaoTenant onboarding"]
+      Prov --> Guardrails["Tenant RBAC, Secret allowlists, namespace guardrails"]
+
+      Claim --> Catalog["Catalog resolution and continuity"]
+      Claim --> Placement["Placement and materialization planning"]
+      Claim --> Materialize["Same-cluster OpenBaoCluster materialization"]
+      Claim --> Connect["Connection publication"]
+    end
+
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+
+    class Manager process;
+    class Prov,Claim write;
+    class Tenant,Guardrails,Catalog,Placement,Materialize,Connect read;`}
 />
 
 <DecisionTable
@@ -60,6 +90,9 @@ description: Split-controller architecture for OpenBaoCluster, OpenBaoRestore, a
       cells: ['Status', 'Aggregates state and writes status updates.', 'Serializing status writes avoids ResourceVersion conflicts and keeps conditions stable.'],
     },
     {
+      cells: ['OpenBaoClusterClaim', 'Resolves tenant-facing claims through the service catalog, materializes supported same-cluster workloads, and publishes the claim connection contract.', 'Claim binding, continuity, and connection publication are a different control surface from direct workload reconciliation.'],
+    },
+    {
       cells: ['OpenBaoRestore', 'Reconciles destructive restore workflows.', 'Restore needs its own lock-aware control surface instead of riding on normal cluster reconcile loops.'],
     },
     {
@@ -74,11 +107,11 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
 
 </Callout>
 
-## App orchestration and managers
+## Cluster runtime orchestration
 
 <DiagramFrame
-  title="App-layer orchestration"
-  caption="Controllers hand off to narrow app-layer facades first, then into focused managers and shared lifecycle services. This keeps import surfaces small and responsibilities explicit."
+  title="Cluster runtime orchestration"
+  caption="The direct cluster runtime stays split between workload, admin-operations, restore, and provisioning paths. Each controller hands off to a narrow app facade before reaching its managers."
   code={`graph TD
     OBC["OpenBaoCluster controllers"] --> OBCApp["internal/app/openbaocluster"]
     OBR["OpenBaoRestore controller"] --> OBRApp["internal/app/openbaorestore"]
@@ -107,6 +140,32 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
     class OBC,OBR,Prov write;
     class OBCApp,OBRApp,ProvApp,WorkloadOps,AdminOps,StatusOps process;
     class Cert,Bootstrap,Networking,Identity,Init,WorkloadMgr,Upgrade,Backup,Restore,Provisioner read;`}
+/>
+
+## Claim orchestration
+
+<DiagramFrame
+  title="Claim orchestration"
+  caption="The claim path binds a tenant-facing request through the catalog, renders a bounded execution contract, then materializes the supported same-cluster runtime and publishes the connection contract."
+  code={`graph TD
+    ClaimCtrl["OpenBaoClusterClaim controller"] --> ClaimApp["internal/app/openbaoclusterclaim"]
+
+    ClaimApp --> Catalog["claimcontract catalog binding"]
+    ClaimApp --> Approved["Approved service contract"]
+    ClaimApp --> Rendered["Rendered execution contract"]
+    ClaimApp --> Placement["placement and materialization state"]
+    ClaimApp --> Local["Same-cluster OpenBaoCluster materialization"]
+    ClaimApp --> Connection["connectionpublishing"]
+
+    Local --> Runtime["OpenBaoCluster runtime path"]
+
+    classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
+    classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
+    classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
+
+    class ClaimCtrl,ClaimApp process;
+    class Catalog,Approved,Rendered,Placement,Connection read;
+    class Local,Runtime write;`}
 />
 
 <DecisionTable
@@ -138,6 +197,24 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
     },
     {
       cells: ['Provisioner manager', 'Onboards tenant namespaces and guardrails.', 'Tenant governance belongs to provisioning time, not to the cluster workload loop.'],
+    },
+  ]}
+/>
+
+<DecisionTable
+  kind="reference"
+  title="Claim-specific orchestration surfaces"
+  columns={['Surface', 'Scope', 'Why it stays separate']}
+  rows={[
+    {
+      cells: ['Claim contract pipeline', 'Catalog binding, continuity checks, approved-contract identity, rendered execution contract, and same-cluster projection planning.', 'Tenant-facing service policy should stay separate from direct workload managers so unsupported shapes can fail closed before the runtime seam is touched.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Connection publication', 'Tenant-facing connection Secret and endpoint publication for internal, ingress, and gateway claim shapes.', 'Claim output custody and external endpoint timing are different concerns from direct workload networking reconciliation.'],
+    },
+    {
+      cells: ['Placement and materialization state', 'Current same-cluster materialization plus future explicit remote placement state.', 'The claim path needs a clear service-request state machine without turning placement into hidden behavior inside workload managers.'],
     },
   ]}
 />
@@ -190,6 +267,11 @@ Controller, app, service, and selected platform import surfaces are intentionall
       label: 'Restore manager',
       description: 'Destructive restore path and lock lifecycle behind OpenBaoRestore.',
       docId: 'architecture/restore-manager',
+    },
+    {
+      label: 'Service claims',
+      description: 'Claim-to-contract-to-materialization flow and the current scope limits behind the bounded claim model.',
+      docId: 'architecture/service-claims',
     },
     {
       label: 'Lifecycle architecture',

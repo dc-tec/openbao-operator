@@ -198,8 +198,15 @@ func NewSetup(ctx context.Context, baseName string, operatorNamespace string) (*
 // RequireGatewayAPI ensures Gateway API CRDs are installed.
 // It returns a cleanup function that should be called in AfterAll.
 func (f *Framework) RequireGatewayAPI() (func(), error) {
+	alreadyInstalled, err := gatewayAPIInstalled()
+	if err != nil {
+		return nil, err
+	}
 	if err := f.InstallGatewayAPI(); err != nil {
 		return nil, err
+	}
+	if alreadyInstalled {
+		return func() {}, nil
 	}
 	return func() {
 		_ = f.UninstallGatewayAPI()
@@ -208,6 +215,14 @@ func (f *Framework) RequireGatewayAPI() (func(), error) {
 
 // InstallGatewayAPI installs the Gateway API CRDs.
 func (f *Framework) InstallGatewayAPI() error {
+	alreadyInstalled, err := gatewayAPIInstalled()
+	if err != nil {
+		return err
+	}
+	if alreadyInstalled {
+		return nil
+	}
+
 	// Re-using the logic from utils, but making it a method of Framework for convenience
 	manifestPath := "test/manifests/gateway-api/v1.5.1/crds"
 	// In a real framework, we might want to check env vars or default paths here
@@ -229,6 +244,25 @@ func (f *Framework) InstallGatewayAPI() error {
 		return fmt.Errorf("failed to wait for Gateway API CRDs: %w", err)
 	}
 	return nil
+}
+
+func gatewayAPIInstalled() (bool, error) {
+	cmd := exec.Command(
+		"kubectl",
+		"get",
+		"crd",
+		"gatewayclasses.gateway.networking.k8s.io",
+		"gateways.gateway.networking.k8s.io",
+		"httproutes.gateway.networking.k8s.io",
+		"tlsroutes.gateway.networking.k8s.io",
+	)
+	if _, err := utils.Run(cmd); err != nil {
+		if strings.Contains(err.Error(), "NotFound") {
+			return false, nil
+		}
+		return false, fmt.Errorf("check Gateway API CRDs: %w", err)
+	}
+	return true, nil
 }
 
 // UninstallGatewayAPI removes the Gateway API CRDs.

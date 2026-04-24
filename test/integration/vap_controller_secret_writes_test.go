@@ -52,7 +52,7 @@ func TestVAP_ControllerSecretWrites_DeniesUnexpectedSecretName(t *testing.T) {
 		}
 
 		requireAdmissionDenied(t, err)
-		if !strings.Contains(err.Error(), "controller can only create, update, or delete operator-managed Secret objects") {
+		if !strings.Contains(err.Error(), "controller can only create, update, or delete operator-managed cluster Secrets") {
 			t.Fatalf("unexpected error message: %v", err)
 		}
 		return

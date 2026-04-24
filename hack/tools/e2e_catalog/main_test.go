@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -99,6 +101,44 @@ func TestCollectStepsIgnoresUndefinedAndEmptyText(t *testing.T) {
 
 	if got, want := strings.Join(steps, ","), "first checkpoint,second checkpoint"; got != want {
 		t.Fatalf("steps = %q, want %q", got, want)
+	}
+}
+
+func TestFileImportsPackage(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	ginkgoFile := filepath.Join(dir, "suite_test.go")
+	if err := os.WriteFile(ginkgoFile, []byte(`package e2e
+
+import . "github.com/onsi/ginkgo/v2"
+
+var _ = Describe("Example", func() {})
+`), 0o644); err != nil {
+		t.Fatalf("write ginkgo file: %v", err)
+	}
+	helperFile := filepath.Join(dir, "helpers_test.go")
+	if err := os.WriteFile(helperFile, []byte(`package e2e
+
+func helper() {}
+`), 0o644); err != nil {
+		t.Fatalf("write helper file: %v", err)
+	}
+
+	importsGinkgo, err := fileImportsPackage(ginkgoFile, "github.com/onsi/ginkgo/v2")
+	if err != nil {
+		t.Fatalf("fileImportsPackage(ginkgo) error = %v", err)
+	}
+	if !importsGinkgo {
+		t.Fatal("fileImportsPackage(ginkgo) = false, want true")
+	}
+
+	importsGinkgo, err = fileImportsPackage(helperFile, "github.com/onsi/ginkgo/v2")
+	if err != nil {
+		t.Fatalf("fileImportsPackage(helper) error = %v", err)
+	}
+	if importsGinkgo {
+		t.Fatal("fileImportsPackage(helper) = true, want false")
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -139,21 +138,28 @@ func newAdmissionRuntimeTestContext(t *testing.T) (*openbaov1alpha1.OpenBaoClust
 		},
 	}
 
-	roleBinding := &rbacv1.RoleBinding{
+	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.TenantRoleBindingName,
-			Namespace: cluster.Namespace,
+			Name:      "tenant-default",
+			Namespace: "openbao-operator-system",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: cluster.Namespace,
+		},
+		Status: openbaov1alpha1.OpenBaoTenantStatus{
+			Provisioned: true,
 		},
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, roleBinding).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, tenant).Build()
 	tracker := admission.NewTracker(fakeClient, admission.DefaultDependencies(), admission.DefaultNamePrefixes(), time.Hour)
 	parent := &OpenBaoClusterReconciler{
 		Client: fakeClient,
 		ControllerRuntime: ControllerRuntime{
-			APIReader:        fakeClient,
-			Scheme:           scheme,
-			AdmissionTracker: tracker,
+			APIReader:         fakeClient,
+			Scheme:            scheme,
+			AdmissionTracker:  tracker,
+			OperatorNamespace: "openbao-operator-system",
 		},
 	}
 

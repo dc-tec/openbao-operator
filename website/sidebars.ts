@@ -32,13 +32,18 @@ const sidebars: SidebarsConfig = {
             },
             {
               type: 'doc',
+              id: 'user-guide/service-claims/overview',
+              label: '4. Choose the provisioning model',
+            },
+            {
+              type: 'doc',
               id: 'user-guide/openbaocluster/getting-started',
-              label: '4. Create your first cluster',
+              label: '5. Create your first cluster',
             },
             {
               type: 'doc',
               id: 'user-guide/openbaocluster/next-steps',
-              label: '5. Prepare for day 2',
+              label: '6. Prepare for day 2',
             },
           ],
         },
@@ -67,6 +72,56 @@ const sidebars: SidebarsConfig = {
               label: 'Operator authorization',
             },
           ],
+        },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Service Claims',
+      link: {
+        type: 'doc',
+        id: 'user-guide/service-claims/index',
+      },
+      items: [
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/overview',
+          label: 'Choose service claims',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/getting-started',
+          label: 'Apply the first claim',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/day-2-workflows',
+          label: 'Run day-2 workflows',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/service-catalog',
+          label: 'Understand the service catalog',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/exposure',
+          label: 'Plan claim exposure',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/bootstrap-dependencies',
+          label: 'Understand bootstrap dependencies',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/troubleshooting',
+          label: 'Troubleshoot a claim',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/unsupported-workflows',
+          label: 'Unsupported claim workflows',
         },
       ],
     },
@@ -559,6 +614,11 @@ const sidebars: SidebarsConfig = {
               type: 'doc',
               id: 'architecture/components',
               label: 'Component design',
+            },
+            {
+              type: 'doc',
+              id: 'architecture/service-claims',
+              label: 'Service claims',
             },
             {
               type: 'doc',

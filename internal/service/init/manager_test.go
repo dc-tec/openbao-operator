@@ -3,6 +3,8 @@ package init
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -44,19 +46,19 @@ func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...s
 func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 	tests := []struct {
 		name            string
-		podReady        bool
+		healthBody      string
 		wantInitialized bool
 		wantSelfInit    bool
 	}{
 		{
-			name:            "pod not ready does not mark initialized",
-			podReady:        false,
+			name:            "health not initialized does not mark initialized",
+			healthBody:      `{"initialized":false,"sealed":true}`,
 			wantInitialized: false,
 			wantSelfInit:    false,
 		},
 		{
-			name:            "pod ready marks initialized",
-			podReady:        true,
+			name:            "health initialized and unsealed marks initialized even before pod ready",
+			healthBody:      `{"initialized":true,"sealed":false}`,
 			wantInitialized: true,
 			wantSelfInit:    true,
 		},
@@ -74,11 +76,6 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 						Enabled: true,
 					},
 				},
-			}
-
-			readyStatus := corev1.ConditionFalse
-			if tt.podReady {
-				readyStatus = corev1.ConditionTrue
 			}
 
 			pod := &corev1.Pod{
@@ -107,7 +104,7 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 					Conditions: []corev1.PodCondition{
 						{
 							Type:   corev1.PodReady,
-							Status: readyStatus,
+							Status: corev1.ConditionFalse,
 						},
 					},
 				},
@@ -116,6 +113,7 @@ func TestReconcileSelfInitUsesPodReadiness(t *testing.T) {
 			clientset := kubernetesfake.NewClientset(pod)
 			clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
 			manager := NewManager(&rest.Config{}, clientset, clientMgr)
+			manager.newClient = newTestHealthClientFactory(t, tt.healthBody)
 
 			if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 				t.Fatalf("Reconcile() error = %v, want no error", err)
@@ -178,6 +176,7 @@ func TestReconcileSelfInitReady_EmitsInitEvents(t *testing.T) {
 	clientset := kubernetesfake.NewClientset(pod)
 	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
 	manager := NewManager(&rest.Config{}, clientset, clientMgr, recorder)
+	manager.newClient = newTestHealthClientFactory(t, `{"initialized":true,"sealed":false}`)
 
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -185,6 +184,24 @@ func TestReconcileSelfInitReady_EmitsInitEvents(t *testing.T) {
 
 	expectEventContains(t, recorder, "Normal", ReasonInitStarted)
 	expectEventContains(t, recorder, "Normal", ReasonInitCompleted)
+}
+
+func newTestHealthClientFactory(t *testing.T, responseBody string) func(context.Context, *openbaov1alpha1.OpenBaoCluster) (*openbao.Client, error) {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/sys/health" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(responseBody))
+	}))
+	t.Cleanup(server.Close)
+
+	return func(_ context.Context, _ *openbaov1alpha1.OpenBaoCluster) (*openbao.Client, error) {
+		return openbao.NewClient(portopenbao.ClientConfig{BaseURL: server.URL})
+	}
 }
 
 func TestReconcileOperatorInitFailure_EmitsInitFailedEvent(t *testing.T) {

@@ -99,7 +99,62 @@ func TestDefaultDependencies(t *testing.T) {
 	}
 }
 
-func TestDefaultDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
+func TestServiceClaimDependencies(t *testing.T) {
+	t.Parallel()
+
+	expected := []Dependency{
+		{
+			Name:        dependencyOpenBaoValidateOpenBaoClusterClaimBackup,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoClusterClaimBackup,
+			BindingName: dependencyBindingValidateOpenBaoClusterClaimBackup,
+		},
+		{
+			Name:        dependencyOpenBaoValidateOpenBaoClusterClaimRestore,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoClusterClaimRestore,
+			BindingName: dependencyBindingValidateOpenBaoClusterClaimRestore,
+		},
+		{
+			Name:        dependencyOpenBaoValidateOpenBaoClusterClaimUpgrade,
+			PolicyName:  dependencyOpenBaoValidateOpenBaoClusterClaimUpgrade,
+			BindingName: dependencyBindingValidateOpenBaoClusterClaimUpgrade,
+		},
+		{
+			Name:        dependencyOpenBaoRestrictClaimManagedClusters,
+			PolicyName:  dependencyOpenBaoRestrictClaimManagedClusters,
+			BindingName: dependencyBindingRestrictClaimManagedClusters,
+		},
+		{
+			Name:        dependencyOpenBaoLockMaterializedClaimSpec,
+			PolicyName:  dependencyOpenBaoLockMaterializedClaimSpec,
+			BindingName: dependencyBindingLockMaterializedClaimSpec,
+		},
+		{
+			Name:        dependencyOpenBaoRestrictServiceCatalogMutations,
+			PolicyName:  dependencyOpenBaoRestrictServiceCatalogMutations,
+			BindingName: dependencyBindingRestrictServiceCatalogMutations,
+		},
+	}
+
+	got := ServiceClaimDependencies()
+	if !reflect.DeepEqual(expected, got) {
+		t.Fatalf("ServiceClaimDependencies() mismatch\nwant: %#v\ngot:  %#v", expected, got)
+	}
+}
+
+func TestDependenciesForFeatures(t *testing.T) {
+	t.Parallel()
+
+	if got := DependenciesForFeatures(false); !reflect.DeepEqual(DefaultDependencies(), got) {
+		t.Fatalf("DependenciesForFeatures(false) mismatch\nwant: %#v\ngot:  %#v", DefaultDependencies(), got)
+	}
+
+	want := append(append([]Dependency(nil), DefaultDependencies()...), ServiceClaimDependencies()...)
+	if got := DependenciesForFeatures(true); !reflect.DeepEqual(want, got) {
+		t.Fatalf("DependenciesForFeatures(true) mismatch\nwant: %#v\ngot:  %#v", want, got)
+	}
+}
+
+func TestAllDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
 	t.Parallel()
 
 	configPolicies, err := readConfigPolicyNames(filepath.Join("..", "..", "..", "config", "policy"))
@@ -110,8 +165,8 @@ func TestDefaultDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
 		t.Fatal("expected at least one ValidatingAdmissionPolicy in config/policy")
 	}
 
-	dependencyPolicies := make(map[string]struct{}, len(DefaultDependencies()))
-	for _, dep := range DefaultDependencies() {
+	dependencyPolicies := make(map[string]struct{}, len(AllDependencies()))
+	for _, dep := range AllDependencies() {
 		dependencyPolicies[dep.PolicyName] = struct{}{}
 	}
 
@@ -133,7 +188,7 @@ func TestDefaultDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
 
 	if len(missingFromDependencies) > 0 || len(missingFromConfig) > 0 {
 		t.Fatalf(
-			"DefaultDependencies() and config/policy VAP set drifted: missing_from_dependencies=%v missing_from_config=%v",
+			"AllDependencies() and config/policy VAP set drifted: missing_from_dependencies=%v missing_from_config=%v",
 			missingFromDependencies,
 			missingFromConfig,
 		)

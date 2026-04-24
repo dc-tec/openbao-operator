@@ -17,6 +17,8 @@ resources:
   # Controller RBAC: OpenBaoRestore watch
   - controller_openbaorestore_clusterrole.yaml
   - controller_openbaorestore_clusterrolebinding.yaml
+  - controller_runtime_role.yaml
+  - controller_runtime_role_binding.yaml
   - leader_election_role_binding.yaml
   - openbaotenant_editor_role.yaml
   # The following RBAC configurations are used to protect

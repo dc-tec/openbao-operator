@@ -1,6 +1,6 @@
 ---
 title: Operator Invariants
-description: Cross-cutting invariants preserved by OpenBao Operator across identity boundaries, production posture, configuration ownership, and lifecycle safety.
+description: Cross-cutting invariants preserved by OpenBao Operator across identity boundaries, claim and workload boundaries, production posture, configuration ownership, and lifecycle safety.
 hide_title: true
 pageType: concept
 journey: architecture
@@ -19,6 +19,12 @@ journey: architecture
 
 </Callout>
 
+<Callout type="note" title="Claim contract">
+
+`OpenBaoClusterClaim` is a bounded service-request contract. In the supported same-cluster path it resolves catalog intent and still materializes through the direct `OpenBaoCluster` runtime seam instead of creating a second hidden workload engine.
+
+</Callout>
+
 <DecisionTable
   title="Invariant families"
   columns={['Family', 'What the operator is trying to preserve', 'Why it matters']}
@@ -30,6 +36,13 @@ journey: architecture
         'This keeps privileged access narrow and prevents tenant onboarding or operator RBAC from drifting into normal reconcile paths.',
       ],
       emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Provisioning model boundaries',
+        'Direct workload management and catalog-driven service claims stay distinct, and unsupported claim workflows fail closed instead of broadening the runtime contract implicitly.',
+        'This keeps tenant-facing service requests bounded while preserving the direct OpenBaoCluster seam as the concrete runtime boundary.',
+      ],
     },
     {
       cells: [
@@ -98,6 +111,13 @@ journey: architecture
         'Validating admission policy inventory, runtime admission tracking, and degraded conditions.',
       ],
     },
+    {
+      cells: [
+        'Claim-managed outputs stay custody-checked.',
+        'Connection Secrets, projected bootstrap artifacts, and claim-managed local clusters must not become name-only takeover points in tenant namespaces.',
+        'Claim custody checks, managed-resource locks, and claim-managed mutation restrictions.',
+      ],
+    },
   ]}
 />
 
@@ -130,6 +150,13 @@ Related reading: <SiteLink docId="security/infrastructure/rbac">RBAC Architectur
         'Self-init is the supported production bootstrap path.',
         'Production bootstrap should stay declarative and avoid persisting the initial root token.',
         'Self-init validation, hardened profile requirements, and production posture evaluation.',
+      ],
+    },
+    {
+      cells: [
+        'Claims do not relax the workload production posture.',
+        'A same-cluster claim still materializes into the direct runtime path, so hardened constraints such as self-init, trusted TLS, and a non-static unseal path still apply.',
+        'Claim contract validation, rendered execution validation, and the same direct OpenBaoCluster readiness model behind materialized claims.',
       ],
     },
     {
@@ -173,6 +200,13 @@ Related reading: <SiteLink docId="security/fundamentals/profiles">Security Profi
         'Dedicated job identities, readiness evaluation, and explicit backup/restore status reasons.',
       ],
     },
+    {
+      cells: [
+        'Same-cluster claims only support service shapes that map honestly into the direct runtime seam.',
+        'When a cataloged service shape cannot be projected into `OpenBaoCluster` safely, the claim path must block instead of inventing hidden execution behavior.',
+        'Approved and rendered contract validation, same-cluster projection checks, and fail-closed claim status.',
+      ],
+    },
   ]}
 />
 
@@ -214,6 +248,13 @@ Related reading: <SiteLink docId="reference/status-and-events">Status and Events
         'Supervisor pattern, API-driven backup/restore flows, and OpenBao-led snapshot semantics.',
       ],
     },
+    {
+      cells: [
+        'Claim rollout, migration, and adoption remain explicit future workflows.',
+        'The claim surface should not quietly drift into implicit adoption or mutation of existing direct-managed workloads.',
+        'Post-materialization spec locking, claim-managed local-cluster protections, and current scope limits on claim workflows.',
+      ],
+    },
   ]}
 />
 
@@ -232,6 +273,11 @@ If a change weakens one of these invariants, update the related architecture, se
       label: 'Component design',
       description: 'Where controllers, app facades, and managers split responsibilities to preserve these invariants.',
       docId: 'architecture/components',
+    },
+    {
+      label: 'Service claims',
+      description: 'Claim-to-contract-to-materialization flow and the same-cluster scope boundaries behind the bounded claim model.',
+      docId: 'architecture/service-claims',
     },
     {
       label: 'Operation lifecycle',

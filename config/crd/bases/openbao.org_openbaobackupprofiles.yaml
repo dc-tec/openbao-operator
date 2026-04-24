@@ -1,0 +1,92 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaobackupprofiles.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoBackupProfile
+    listKind: OpenBaoBackupProfileList
+    plural: openbaobackupprofiles
+    singular: openbaobackupprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.schedule
+      name: Schedule
+      type: string
+    - jsonPath: .spec.targetRef.name
+      name: Target
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoBackupProfile is the immutable platform-owned backup catalog
+          object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoBackupProfileSpec defines the desired state of OpenBaoBackupProfile.
+            properties:
+              retention:
+                description: Retention defines backup retention posture.
+                properties:
+                  maxAge:
+                    description: |-
+                      MaxAge is the maximum age of backups to retain, e.g., "168h" for 7 days.
+                      Backups older than this are deleted after successful new backup upload.
+                    type: string
+                  maxCount:
+                    description: MaxCount is the maximum number of backups to retain
+                      (0 = unlimited).
+                    format: int32
+                    minimum: 0
+                    type: integer
+                type: object
+              schedule:
+                description: Schedule is the recurring backup schedule when backups
+                  are enabled.
+                type: string
+              targetRef:
+                description: TargetRef identifies the immutable backup target policy
+                  revision when backups are enabled.
+                properties:
+                  name:
+                    description: Name is the referenced object name.
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

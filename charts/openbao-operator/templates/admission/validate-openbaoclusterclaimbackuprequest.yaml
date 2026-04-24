@@ -1,0 +1,35 @@
+{{- if .Values.admissionPolicies.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-validate-openbaoclusterclaimbackuprequest
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["openbaoclusterclaimbackuprequests"]
+  validations:
+    - expression: "object.spec == oldObject.spec"
+      reason: Invalid
+      message: "spec is immutable; create a new OpenBaoClusterClaimBackupRequest for changed backup intent."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "openbao-operator.fullname" . }}-openbao-validate-openbaoclusterclaimbackuprequest-binding
+spec:
+  policyName: {{ include "openbao-operator.fullname" . }}-openbao-validate-openbaoclusterclaimbackuprequest
+  validationActions:
+    - Deny
+  matchResources:
+    resourceRules:
+      - apiGroups: ["openbao.org"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["openbaoclusterclaimbackuprequests"]
+{{- end }}

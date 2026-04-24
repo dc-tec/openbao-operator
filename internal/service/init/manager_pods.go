@@ -14,20 +14,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
-func isPodReady(pod *corev1.Pod) bool {
-	if pod == nil {
-		return false
-	}
-
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == corev1.PodReady {
-			return condition.Status == corev1.ConditionTrue
-		}
-	}
-
-	return false
-}
-
 // findFirstPod finds the first pod (pod-0) for the given cluster.
 // During initial cluster creation, this should be the only pod.
 func (m *Manager) findFirstPod(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (*corev1.Pod, error) {
@@ -96,5 +82,14 @@ func isContainerRunning(pod *corev1.Pod) bool {
 		}
 	}
 
+	return false
+}
+
+func isPodReady(pod *corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady {
+			return condition.Status == corev1.ConditionTrue
+		}
+	}
 	return false
 }

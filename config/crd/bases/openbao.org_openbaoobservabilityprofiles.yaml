@@ -1,0 +1,342 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: openbaoobservabilityprofiles.openbao.org
+spec:
+  group: openbao.org
+  names:
+    kind: OpenBaoObservabilityProfile
+    listKind: OpenBaoObservabilityProfileList
+    plural: openbaoobservabilityprofiles
+    singular: openbaoobservabilityprofile
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.observability.metrics.enabled
+      name: Metrics
+      type: boolean
+    - jsonPath: .spec.observability.metrics.serviceMonitor.enabled
+      name: ServiceMonitor
+      type: boolean
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OpenBaoObservabilityProfile is the immutable platform-owned observability
+          catalog object.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpenBaoObservabilityProfileSpec defines the desired state
+              of OpenBaoObservabilityProfile.
+            properties:
+              observability:
+                description: Observability configures metrics and ServiceMonitor integration.
+                properties:
+                  metrics:
+                    description: Metrics configures integration with Prometheus/OpenMetrics.
+                    properties:
+                      enabled:
+                        default: false
+                        description: Enabled configures the OpenBao telemetry stanza
+                          and creates a ServiceMonitor.
+                        type: boolean
+                      metricsOnlyListener:
+                        description: |-
+                          MetricsOnlyListener configures a dedicated listener for metrics scraping.
+                          It is enabled automatically when scrapeProfile is AllNodes.
+                        properties:
+                          enabled:
+                            description: |-
+                              Enabled controls whether to render the dedicated metrics-only listener.
+                              When omitted, the listener is enabled automatically for the AllNodes scrape profile.
+                            type: boolean
+                          port:
+                            default: 8202
+                            description: Port is the dedicated metrics listener port.
+                            format: int32
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                          unauthenticatedMetricsAccess:
+                            description: |-
+                              UnauthenticatedMetricsAccess allows unauthenticated access to /v1/sys/metrics
+                              on the metrics-only listener. AllNodes scraping needs this so standby nodes can
+                              expose metrics. Restrict this listener with NetworkPolicy.
+                            type: boolean
+                        type: object
+                      scrapeProfile:
+                        default: Active
+                        description: |-
+                          ScrapeProfile selects which OpenBao pods are targeted by generated scrape resources.
+                          Active targets only the active OpenBao pod. AllNodes targets every OpenBao pod and
+                          requires a dedicated metrics-only listener.
+                        enum:
+                        - Active
+                        - AllNodes
+                        type: string
+                      serviceMonitor:
+                        description: ServiceMonitor controls whether to create a Prometheus
+                          Operator ServiceMonitor.
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations are added to the ServiceMonitor
+                              metadata.
+                            type: object
+                          authorization:
+                            description: |-
+                              Authorization configures an optional ServiceMonitor authorization block.
+                              Use this for authenticated /v1/sys/metrics scraping.
+                            properties:
+                              credentialsSecret:
+                                description: |-
+                                  CredentialsSecret references a Secret key containing the authorization credentials.
+                                  The Secret must exist in the same namespace as the ServiceMonitor.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type:
+                                description: |-
+                                  Type is the authorization type.
+                                  Defaults to Bearer when credentialsSecret is set.
+                                type: string
+                            required:
+                            - credentialsSecret
+                            type: object
+                          enabled:
+                            default: true
+                            description: |-
+                              Enabled controls whether to create the ServiceMonitor.
+                              Defaults to true if Metrics are enabled.
+                            type: boolean
+                          interval:
+                            default: 30s
+                            description: Interval is the scrape interval.
+                            type: string
+                          jobLabel:
+                            description: |-
+                              JobLabel selects the Service label Prometheus uses as the job label.
+                              Defaults to app.kubernetes.io/name.
+                            type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              Labels are added to the ServiceMonitor metadata.
+                              Use this for Prometheus selectors, such as release labels used by kube-prometheus-stack.
+                            type: object
+                          scrapeTimeout:
+                            default: 10s
+                            description: ScrapeTimeout is the scrape timeout.
+                            type: string
+                          tlsConfig:
+                            description: TLSConfig configures TLS verification for
+                              the OpenBao scrape endpoint.
+                            properties:
+                              caConfigMap:
+                                description: |-
+                                  CAConfigMap references a ConfigMap key containing the CA certificate.
+                                  Mutually exclusive with CASecret.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              caSecret:
+                                description: |-
+                                  CASecret references a Secret key containing the CA certificate.
+                                  Mutually exclusive with CAConfigMap.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              insecureSkipVerify:
+                                description: |-
+                                  InsecureSkipVerify disables TLS certificate verification.
+                                  Use only for temporary non-production environments.
+                                type: boolean
+                              serverName:
+                                description: ServerName verifies the hostname in the
+                                  OpenBao serving certificate.
+                                type: string
+                            type: object
+                        required:
+                        - enabled
+                        type: object
+                    required:
+                    - enabled
+                    type: object
+                type: object
+              telemetry:
+                description: Telemetry configures OpenBao telemetry reporting.
+                properties:
+                  circonusAPIApp:
+                    description: CirconusAPIApp is the API app name for Circonus.
+                    type: string
+                  circonusAPIKey:
+                    description: |-
+                      Circonus-specific options
+                      CirconusAPIKey is the API key for Circonus.
+                    type: string
+                  circonusAPIURL:
+                    description: CirconusAPIURL is the API URL for Circonus.
+                    type: string
+                  circonusBrokerID:
+                    description: CirconusBrokerID is the broker ID for Circonus.
+                    type: string
+                  circonusBrokerSelectTag:
+                    description: CirconusBrokerSelectTag is the broker select tag
+                      for Circonus.
+                    type: string
+                  circonusCheckDisplayName:
+                    description: CirconusCheckDisplayName is the display name for
+                      Circonus.
+                    type: string
+                  circonusCheckForceMetricActivation:
+                    description: CirconusCheckForceMetricActivation forces metric
+                      activation in Circonus.
+                    type: string
+                  circonusCheckID:
+                    description: CirconusCheckID is the check ID for Circonus.
+                    type: string
+                  circonusCheckInstanceID:
+                    description: CirconusCheckInstanceID is the instance ID for Circonus.
+                    type: string
+                  circonusCheckSearchTag:
+                    description: CirconusCheckSearchTag is the search tag for Circonus.
+                    type: string
+                  circonusCheckTags:
+                    description: CirconusCheckTags is the tags for Circonus.
+                    type: string
+                  circonusSubmissionInterval:
+                    description: CirconusSubmissionInterval is the submission interval
+                      for Circonus.
+                    type: string
+                  disableHostname:
+                    description: DisableHostname specifies if gauge values should
+                      be prefixed with the local hostname.
+                    type: boolean
+                  dogStatsdAddress:
+                    description: |-
+                      DogStatsD-specific options
+                      DogStatsdAddress is the address of the DogStatsD server.
+                    type: string
+                  dogStatsdTags:
+                    description: DogStatsdTags are tags to add to all metrics.
+                    items:
+                      type: string
+                    type: array
+                  enableHostnameLabel:
+                    description: EnableHostnameLabel specifies if all metric values
+                      should contain the host label.
+                    type: boolean
+                  leaseMetricsEpsilon:
+                    description: LeaseMetricsEpsilon specifies the size of the bucket
+                      used to measure future lease expiration.
+                    type: string
+                  maximumGaugeCardinality:
+                    description: MaximumGaugeCardinality is the maximum cardinality
+                      of gauge labels.
+                    format: int32
+                    type: integer
+                  metricsPrefix:
+                    description: MetricsPrefix specifies the prefix used for metric
+                      values.
+                    type: string
+                  prometheusRetentionTime:
+                    description: |-
+                      Prometheus-specific options
+                      PrometheusRetentionTime specifies how long to retain metrics in Prometheus format.
+                    type: string
+                  stackdriverDebugLogs:
+                    description: StackdriverDebugLogs specifies if OpenBao writes
+                      additional stackdriver debug logs.
+                    type: boolean
+                  stackdriverLocation:
+                    description: StackdriverLocation is the GCP or AWS region.
+                    type: string
+                  stackdriverNamespace:
+                    description: StackdriverNamespace is a namespace identifier for
+                      the telemetry data.
+                    type: string
+                  stackdriverProjectID:
+                    description: |-
+                      Stackdriver-specific options
+                      StackdriverProjectID is the Google Cloud Project ID.
+                    type: string
+                  statsdAddress:
+                    description: |-
+                      StatsD-specific options
+                      StatsdAddress is the address of the StatsD server.
+                    type: string
+                  statsiteAddress:
+                    description: |-
+                      Statsite-specific options
+                      StatsiteAddress is the address of the statsite server.
+                    type: string
+                  usageGaugePeriod:
+                    description: |-
+                      Common telemetry options
+                      UsageGaugePeriod specifies the interval at which high-cardinality usage data is collected.
+                    type: string
+                type: object
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable after creation
+              rule: self == oldSelf
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}

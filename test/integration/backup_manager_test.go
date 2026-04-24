@@ -157,6 +157,9 @@ func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 			t.Fatalf("expected trigger annotation to be cleared")
 		}
 	}
+	if after.Status.Backup == nil || after.Status.Backup.LastHandledManualTrigger != "true" {
+		t.Fatalf("expected LastHandledManualTrigger to persist manual request token, got %#v", after.Status.Backup)
+	}
 }
 
 func TestBackupManager_RestoreInProgress_ReleasesStaleBackupLock(t *testing.T) {

@@ -60,9 +60,13 @@ func ensureDefaultAdmissionPoliciesApplied(t *testing.T) {
 func isDefaultIntegrationPolicyNameAllowed(policyName string) bool {
 	allowedSuffixes := []string{
 		"openbao-validate-openbaocluster",
+		"openbao-validate-openbaoclusterclaimbackuprequest",
+		"openbao-validate-openbaoclusterclaimrestorerequest",
+		"openbao-validate-openbaoclusterclaimupgraderequest",
 		"openbao-validate-openbaorestore",
 		"openbao-validate-openbao-tenant",
 		"openbao-lock-managed-resource-mutations",
+		"openbao-lock-materialized-openbaoclusterclaim-spec",
 		"openbao-restrict-provisioner-rbac",
 		"openbao-restrict-provisioner-tenant-governance",
 		"openbao-restrict-controller-serviceaccounts",

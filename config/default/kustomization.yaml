@@ -123,6 +123,42 @@ patchesJson6902:
       group: admissionregistration.k8s.io
       version: v1
       kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-validate-openbaoclusterclaimbackuprequest
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-validate-openbaoclusterclaimbackuprequest-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-validate-openbaoclusterclaimrestorerequest
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-validate-openbaoclusterclaimrestorerequest-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-validate-openbaoclusterclaimupgraderequest
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-validate-openbaoclusterclaimupgraderequest-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
       name: openbao-operator-openbao-validate-openbao-tenant
     path: policy_strip_namespace_patch.yaml
   - target:
@@ -178,6 +214,42 @@ patchesJson6902:
       version: v1
       kind: ValidatingAdmissionPolicyBinding
       name: openbao-operator-openbao-restrict-controller-secret-writes-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-claim-managed-openbaocluster-mutations
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-restrict-claim-managed-openbaocluster-mutations-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-lock-materialized-openbaoclusterclaim-spec
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-lock-materialized-openbaoclusterclaim-spec-binding
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-service-catalog-mutations
+    path: policy_strip_namespace_patch.yaml
+  - target:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicyBinding
+      name: openbao-operator-openbao-restrict-service-catalog-mutations-binding
     path: policy_strip_namespace_patch.yaml
   - target:
       group: admissionregistration.k8s.io
@@ -295,6 +367,16 @@ replacements:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-service-catalog-mutations
+        fieldPaths:
+          - spec.variables.[name=controller_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-provisioner-rbac
         fieldPaths:
           - spec.variables.[name=controller_serviceaccount_name].expression
@@ -352,6 +434,16 @@ replacements:
           version: v1
           kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-controller-secret-writes
+        fieldPaths:
+          - spec.variables.[name=operator_namespace].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-service-catalog-mutations
         fieldPaths:
           - spec.variables.[name=operator_namespace].expression
         options:
@@ -443,6 +535,16 @@ replacements:
         options:
           delimiter: "'"
           index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-restrict-service-catalog-mutations
+        fieldPaths:
+          - spec.variables.[name=provisioner_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
   - source:
       group: admissionregistration.k8s.io
       version: v1
@@ -525,6 +627,20 @@ replacements:
           version: v1
           kind: ValidatingAdmissionPolicyBinding
           name: openbao-operator-openbao-restrict-controller-secret-writes-binding
+        fieldPaths:
+          - spec.policyName
+  - source:
+      group: admissionregistration.k8s.io
+      version: v1
+      kind: ValidatingAdmissionPolicy
+      name: openbao-operator-openbao-restrict-service-catalog-mutations
+      fieldPath: metadata.name
+    targets:
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicyBinding
+          name: openbao-operator-openbao-restrict-service-catalog-mutations-binding
         fieldPaths:
           - spec.policyName
   - source:
@@ -671,8 +787,9 @@ replacements:
   #         index: 1
   #         create: true
 
-  # Webhooks are intentionally not used by this operator. Admission control is
-  # implemented via ValidatingAdmissionPolicy and CRD structural validation.
+  # Request-time claim mutation is shipped through the Helm chart. The default
+  # kustomize install continues to omit webhook resources and relies on
+  # reconcile-time pre-materialization pinning for service-offering selectors.
 # - source: # Uncomment the following block if you have a DefaultingWebhook (--defaulting )
 #     kind: Certificate
 #     group: cert-manager.io

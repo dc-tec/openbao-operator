@@ -83,6 +83,9 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           ports:
+            - name: webhook-server
+              containerPort: 9443
+              protocol: TCP
             {{- if .Values.metrics.enabled }}
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
@@ -115,6 +118,8 @@ spec:
             - name: openbao-token
               mountPath: /var/run/secrets/tokens
               readOnly: true
+            - name: webhook-runtime
+              mountPath: /tmp/k8s-webhook-server
       volumes:
         - name: kube-api-access
           projected:
@@ -144,6 +149,8 @@ spec:
                   expirationSeconds: 3600
                   audience: {{ .Values.serviceAccountToken.openBaoAudience | quote }}
             defaultMode: 292
+        - name: webhook-runtime
+          emptyDir: {}
       {{- with .Values.controller.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

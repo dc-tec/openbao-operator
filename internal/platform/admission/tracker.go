@@ -2,6 +2,7 @@ package admission
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,8 +18,9 @@ type Tracker struct {
 	namePrefixes    []string
 	refreshInterval time.Duration
 
-	mu     sync.RWMutex
-	status *Status
+	mu        sync.RWMutex
+	status    *Status
+	refreshMu sync.Mutex
 }
 
 // NewTracker creates an admission dependency tracker.
@@ -85,7 +87,19 @@ func (t *Tracker) EnsureFresh(ctx context.Context) (*Status, error) {
 		return current, nil
 	}
 
-	return t.Refresh(ctx)
+	t.refreshMu.Lock()
+	defer t.refreshMu.Unlock()
+
+	t.mu.RLock()
+	current = cloneStatus(t.status)
+	refreshInterval = t.refreshInterval
+	t.mu.RUnlock()
+
+	if current != nil && time.Since(current.CheckedAt) < refreshInterval {
+		return current, nil
+	}
+
+	return t.refreshLocked(ctx, current)
 }
 
 // Refresh re-checks admission dependencies immediately, bypassing the cached age window.
@@ -99,16 +113,63 @@ func (t *Tracker) Refresh(ctx context.Context) (*Status, error) {
 		return cloneStatus(&status), nil
 	}
 
+	t.refreshMu.Lock()
+	defer t.refreshMu.Unlock()
+
+	t.mu.RLock()
+	current := cloneStatus(t.status)
+	t.mu.RUnlock()
+
+	return t.refreshLocked(ctx, current)
+}
+
+func (t *Tracker) refreshLocked(ctx context.Context, current *Status) (*Status, error) {
 	status, err := CheckDependencies(ctx, t.reader, t.dependencies, t.namePrefixes)
 	if err != nil {
+		if current != nil {
+			// Preserve the last known-good dependency state across transient API
+			// read failures so concurrent reconcilers do not all fail closed on
+			// the same timeout spike.
+			current.CheckedAt = time.Now()
+			t.Set(*current)
+			return cloneStatus(current), nil
+		}
 		status = Status{
 			CheckedAt:    time.Now(),
 			OverallReady: false,
 		}
 	}
+	if current != nil && !status.OverallReady && hasOnlyDependencyReadFailures(status) {
+		// Preserve the last known dependency state when the refresh reached the
+		// API server but only surfaced transient read failures. This keeps
+		// runtime reconcilers from failing closed on API hiccups while still
+		// allowing a successful later refresh to revoke readiness.
+		current.CheckedAt = time.Now()
+		t.Set(*current)
+		return cloneStatus(current), nil
+	}
 
 	t.Set(status)
 	return cloneStatus(&status), err
+}
+
+func hasOnlyDependencyReadFailures(status Status) bool {
+	sawReadFailure := false
+	for _, dep := range status.Dependencies {
+		if dep.Ready {
+			continue
+		}
+		if len(dep.Issues) == 0 {
+			return false
+		}
+		for _, issue := range dep.Issues {
+			if !strings.HasPrefix(issue, "failed to read ") {
+				return false
+			}
+			sawReadFailure = true
+		}
+	}
+	return sawReadFailure
 }
 
 func cloneStatus(status *Status) *Status {

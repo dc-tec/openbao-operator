@@ -23,6 +23,11 @@ journeyStep: 4
     ]}
   />
 
+<Callout type="note" title="Use this page only for the direct workload path">
+
+This page is the direct `OpenBaoCluster` workflow. If the platform team published a service catalog and wants tenant users to request service through `OpenBaoClusterClaim`, use [Choose service claims](../service-claims/overview.md) and [Apply the first claim](../service-claims/getting-started.md) instead.
+
+</Callout>
 
 <Callout type="note" title="Choose the namespace handoff first">
 
@@ -243,6 +248,11 @@ Confirm the cluster is available, TLS and storage match the shape you intended, 
       label: 'Prepare for day 2',
       description: 'Choose the next operating concern instead of leaving the cluster in a half-configured state.',
       docId: 'user-guide/openbaocluster/next-steps',
+    },
+    {
+      label: 'Choose service claims',
+      description: 'Switch to the catalog-driven claim path when the platform should own the workload shape and tenant users should request only a bounded service surface.',
+      docId: 'user-guide/service-claims/overview',
     },
     {
       label: 'Expose the cluster',

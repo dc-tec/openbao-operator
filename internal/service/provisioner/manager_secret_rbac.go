@@ -7,6 +7,7 @@ import (
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -46,6 +47,9 @@ func (m *Manager) EnsureTenantSecretRBAC(ctx context.Context, namespace string) 
 	}
 	for i := range restoreList.Items {
 		accumulateRestoreTenantSecretNames(&restoreList.Items[i], clustersByName, readerNames)
+	}
+	if err := m.accumulateClaimSourceSecretNames(ctx, namespace, readerNames); err != nil {
+		return err
 	}
 
 	type secretsRBACSpec struct {
@@ -120,6 +124,182 @@ func restoreUsesStaticTokenAuth(restore *openbaov1alpha1.OpenBaoRestore, cluster
 		cluster != nil && portauth.OperatorJWTBootstrapEnabled(cluster),
 		portauth.RoleNameRestore,
 	) == ""
+}
+
+func (m *Manager) accumulateClaimSourceSecretNames(ctx context.Context, targetNamespace string, reader map[string]struct{}) error {
+	for _, claimNamespace := range m.claimSearchNamespaces(targetNamespace) {
+		claims := &openbaov1alpha1.OpenBaoClusterClaimList{}
+		if err := m.client.List(ctx, claims, client.InNamespace(claimNamespace)); err != nil {
+			if meta.IsNoMatchError(err) {
+				m.logger.Info(
+					"Skipping tenant claim secret RBAC sync because claim APIs are unavailable",
+					"namespace", targetNamespace,
+					"claimNamespace", claimNamespace,
+				)
+				return nil
+			}
+			return fmt.Errorf("failed to list OpenBaoClusterClaims in namespace %s while syncing tenant secret RBAC for namespace %s: %w", claimNamespace, targetNamespace, err)
+		}
+
+		for i := range claims.Items {
+			claim := &claims.Items[i]
+			if claim.DeletionTimestamp != nil {
+				continue
+			}
+
+			target, ok, err := m.claimTargetNamespace(ctx, claim)
+			if err != nil {
+				return err
+			}
+			if !ok || target != targetNamespace {
+				continue
+			}
+
+			if err := m.accumulateClaimBootstrapSourceSecretNames(ctx, claim, targetNamespace, reader); err != nil {
+				return err
+			}
+			accumulateClaimProjectedBootstrapSecretNames(claim, reader)
+		}
+	}
+
+	return nil
+}
+
+func (m *Manager) claimSearchNamespaces(targetNamespace string) []string {
+	namespaces := make([]string, 0, 2)
+	if operatorNamespace := m.operatorSA.Namespace; operatorNamespace != "" {
+		namespaces = append(namespaces, operatorNamespace)
+	}
+	if targetNamespace != "" && targetNamespace != m.operatorSA.Namespace {
+		namespaces = append(namespaces, targetNamespace)
+	}
+	return namespaces
+}
+
+func (m *Manager) claimTargetNamespace(ctx context.Context, claim *openbaov1alpha1.OpenBaoClusterClaim) (string, bool, error) {
+	if claim == nil || claim.Spec.TenantRef.Name == "" {
+		return "", false, nil
+	}
+
+	tenant := &openbaov1alpha1.OpenBaoTenant{}
+	key := types.NamespacedName{Namespace: claim.Namespace, Name: claim.Spec.TenantRef.Name}
+	if err := m.client.Get(ctx, key, tenant); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("get OpenBaoTenant %s/%s while syncing tenant secret RBAC: %w", key.Namespace, key.Name, err)
+	}
+	if tenant.Spec.TargetNamespace == "" {
+		return "", false, nil
+	}
+	return tenant.Spec.TargetNamespace, true, nil
+}
+
+func (m *Manager) accumulateClaimBootstrapSourceSecretNames(
+	ctx context.Context,
+	claim *openbaov1alpha1.OpenBaoClusterClaim,
+	targetNamespace string,
+	reader map[string]struct{},
+) error {
+	serviceProfileName, ok, err := m.claimServiceProfileName(ctx, claim)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	serviceProfile := &openbaov1alpha1.OpenBaoServiceProfile{}
+	if err := m.client.Get(ctx, types.NamespacedName{Name: serviceProfileName}, serviceProfile); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("get OpenBaoServiceProfile %s while syncing tenant secret RBAC: %w", serviceProfileName, err)
+	}
+	if serviceProfile.Spec.Bootstrap.Mode != openbaov1alpha1.OpenBaoBootstrapModeSelfInit || serviceProfile.Spec.Bootstrap.ProfileRef == nil || serviceProfile.Spec.Bootstrap.ProfileRef.Name == "" {
+		return nil
+	}
+
+	bootstrapProfile := &openbaov1alpha1.OpenBaoBootstrapProfile{}
+	if err := m.client.Get(ctx, types.NamespacedName{Name: serviceProfile.Spec.Bootstrap.ProfileRef.Name}, bootstrapProfile); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("get OpenBaoBootstrapProfile %s while syncing tenant secret RBAC: %w", serviceProfile.Spec.Bootstrap.ProfileRef.Name, err)
+	}
+
+	if bootstrapProfile.Spec.Auth != nil {
+		for _, method := range bootstrapProfile.Spec.Auth.Methods {
+			if name, ok := sameClusterSourceSecretName(targetNamespace, method.ConfigRef); ok {
+				reader[name] = struct{}{}
+			}
+		}
+	}
+	if bootstrapProfile.Spec.Policies != nil {
+		for _, bundle := range bootstrapProfile.Spec.Policies.Bundles {
+			if name, ok := sameClusterSourceSecretName(targetNamespace, &bundle.ContentRef); ok {
+				reader[name] = struct{}{}
+			}
+		}
+	}
+	if bootstrapProfile.Spec.Audit != nil {
+		for _, device := range bootstrapProfile.Spec.Audit.Devices {
+			if name, ok := sameClusterSourceSecretName(targetNamespace, device.SinkRef); ok {
+				reader[name] = struct{}{}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (m *Manager) claimServiceProfileName(ctx context.Context, claim *openbaov1alpha1.OpenBaoClusterClaim) (string, bool, error) {
+	if claim == nil {
+		return "", false, nil
+	}
+	if claim.Spec.ServiceProfileRef.Name != "" {
+		return claim.Spec.ServiceProfileRef.Name, true, nil
+	}
+	if claim.Spec.ServiceOfferingRef == nil || claim.Spec.ServiceOfferingRef.Name == "" {
+		return "", false, nil
+	}
+
+	offering := &openbaov1alpha1.OpenBaoServiceOffering{}
+	if err := m.client.Get(ctx, types.NamespacedName{Name: claim.Spec.ServiceOfferingRef.Name}, offering); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("get OpenBaoServiceOffering %s while syncing tenant secret RBAC: %w", claim.Spec.ServiceOfferingRef.Name, err)
+	}
+	if offering.Spec.CurrentRevisionRef.Name == "" {
+		return "", false, nil
+	}
+	return offering.Spec.CurrentRevisionRef.Name, true, nil
+}
+
+func sameClusterSourceSecretName(targetNamespace string, ref *openbaov1alpha1.TypedObjectReference) (string, bool) {
+	if ref == nil || ref.Kind != "Secret" || ref.Name == "" {
+		return "", false
+	}
+	if ref.Namespace != "" && ref.Namespace != targetNamespace {
+		return "", false
+	}
+	return ref.Name, true
+}
+
+func accumulateClaimProjectedBootstrapSecretNames(
+	claim *openbaov1alpha1.OpenBaoClusterClaim,
+	reader map[string]struct{},
+) {
+	if claim == nil || claim.Status.Applied.RenderedDependencies == nil {
+		return
+	}
+	for _, ref := range claim.Status.Applied.RenderedDependencies.BootstrapProjectionRefs {
+		if ref.Kind != "Secret" || ref.Name == "" {
+			continue
+		}
+		reader[ref.Name] = struct{}{}
+	}
 }
 
 func sortedUniqueSecretNames(names map[string]struct{}) []string {

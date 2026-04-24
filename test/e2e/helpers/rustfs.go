@@ -75,6 +75,33 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 	if cfg.StorageSize == "" {
 		cfg.StorageSize = "10Gi"
 	}
+	rustfsAddr := fmt.Sprintf("http://%s-svc.%s.svc:9000", cfg.Name, cfg.Namespace)
+
+	currentDeployment := &appsv1.Deployment{}
+	err := c.Get(ctx, types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}, currentDeployment)
+	if err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to get RustFS Deployment %s/%s: %w", cfg.Namespace, cfg.Name, err)
+	}
+	if err == nil {
+		if err := waitForRustFSDeploymentReady(ctx, c, cfg.Namespace, cfg.Name); err != nil {
+			return err
+		}
+		if err := waitForRustFSReadiness(ctx, c, cfg.Namespace, cfg.Name); err != nil {
+			return err
+		}
+		if len(cfg.Buckets) > 0 {
+			if restCfg == nil {
+				return fmt.Errorf("rest config is required to create buckets")
+			}
+			if err := createRustFSBuckets(ctx, restCfg, c, cfg, rustfsAddr); err != nil {
+				return fmt.Errorf("failed to create RustFS buckets: %w", err)
+			}
+		}
+		if err := waitForRustFSRemoteS3Readiness(ctx, restCfg, c, cfg, rustfsAddr); err != nil {
+			return fmt.Errorf("failed to verify RustFS cross-node readiness: %w", err)
+		}
+		return nil
+	}
 
 	// Create credentials Secret
 	credentialsSecret := &corev1.Secret{
@@ -88,7 +115,7 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 			"secret_key": []byte(cfg.SecretKey),
 		},
 	}
-	err := c.Create(ctx, credentialsSecret)
+	err = c.Create(ctx, credentialsSecret)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create RustFS credentials Secret %s/%s: %w", cfg.Namespace, credentialsSecret.Name, err)
 	}
@@ -301,72 +328,12 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 		return fmt.Errorf("failed to create RustFS Deployment %s/%s: %w", cfg.Namespace, cfg.Name, err)
 	}
 
-	// Wait for Deployment to be ready
-	deploymentReadyDeadline := time.NewTimer(5 * time.Minute)
-	defer deploymentReadyDeadline.Stop()
-	deploymentReadyTicker := time.NewTicker(2 * time.Second)
-	defer deploymentReadyTicker.Stop()
-
-	for {
-		current := &appsv1.Deployment{}
-		if err := c.Get(ctx, types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}, current); err != nil {
-			return fmt.Errorf("failed to get RustFS Deployment %s/%s: %w", cfg.Namespace, cfg.Name, err)
-		}
-
-		if current.Status.ReadyReplicas >= cfg.Replicas && current.Status.ReadyReplicas == current.Status.Replicas {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf(
-				"context canceled while waiting for RustFS Deployment %s/%s to be ready: %w",
-				cfg.Namespace,
-				cfg.Name,
-				ctx.Err(),
-			)
-		case <-deploymentReadyDeadline.C:
-			return fmt.Errorf(
-				"timed out waiting for RustFS Deployment %s/%s to be ready (ready=%d/%d, replicas=%d)\n%s",
-				cfg.Namespace,
-				cfg.Name,
-				current.Status.ReadyReplicas,
-				cfg.Replicas,
-				current.Status.Replicas,
-				formatDeploymentPodDiagnostics(ctx, c, cfg.Namespace, cfg.Name),
-			)
-		case <-deploymentReadyTicker.C:
-		}
+	if err := waitForRustFSDeploymentReady(ctx, c, cfg.Namespace, cfg.Name); err != nil {
+		return err
 	}
 
-	// Wait for RustFS to be ready to accept connections
-	rustfsAddr := fmt.Sprintf("http://%s-svc.%s.svc:9000", cfg.Name, cfg.Namespace)
-
-	var lastErr error
-	readinessTimer := time.NewTimer(2 * time.Minute)
-	defer readinessTimer.Stop()
-	readinessTicker := time.NewTicker(2 * time.Second)
-	defer readinessTicker.Stop()
-
-	for {
-		if err := checkRustFSReadiness(ctx, c, cfg.Namespace, cfg.Name); err != nil {
-			lastErr = err
-		} else {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf(
-				"context canceled while waiting for RustFS %s/%s to be ready: %w",
-				cfg.Namespace,
-				cfg.Name,
-				ctx.Err(),
-			)
-		case <-readinessTimer.C:
-			return fmt.Errorf("timed out waiting for RustFS %s/%s to be ready: %w", cfg.Namespace, cfg.Name, lastErr)
-		case <-readinessTicker.C:
-		}
+	if err := waitForRustFSReadiness(ctx, c, cfg.Namespace, cfg.Name); err != nil {
+		return err
 	}
 
 	// Create buckets if specified
@@ -378,15 +345,79 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 			return fmt.Errorf("failed to create RustFS buckets: %w", err)
 		}
 	}
+	if err := waitForRustFSRemoteS3Readiness(ctx, restCfg, c, cfg, rustfsAddr); err != nil {
+		return fmt.Errorf("failed to verify RustFS cross-node readiness: %w", err)
+	}
 
 	return nil
 }
 
+func waitForRustFSDeploymentReady(ctx context.Context, c client.Client, namespace, name string) error {
+	deploymentReadyDeadline := time.NewTimer(5 * time.Minute)
+	defer deploymentReadyDeadline.Stop()
+	deploymentReadyTicker := time.NewTicker(2 * time.Second)
+	defer deploymentReadyTicker.Stop()
+
+	for {
+		current := &appsv1.Deployment{}
+		if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, current); err != nil {
+			return fmt.Errorf("failed to get RustFS Deployment %s/%s: %w", namespace, name, err)
+		}
+		if current.Status.Replicas > 0 && current.Status.ReadyReplicas == current.Status.Replicas {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context canceled while waiting for RustFS Deployment %s/%s to be ready: %w", namespace, name, ctx.Err())
+		case <-deploymentReadyDeadline.C:
+			return fmt.Errorf(
+				"timed out waiting for RustFS Deployment %s/%s to be ready (ready=%d/%d)\n%s",
+				namespace,
+				name,
+				current.Status.ReadyReplicas,
+				current.Status.Replicas,
+				formatDeploymentPodDiagnostics(ctx, c, namespace, name),
+			)
+		case <-deploymentReadyTicker.C:
+		}
+	}
+}
+
+func waitForRustFSReadiness(ctx context.Context, c client.Client, namespace, name string) error {
+	var lastErr error
+	readinessTimer := time.NewTimer(2 * time.Minute)
+	defer readinessTimer.Stop()
+	readinessTicker := time.NewTicker(2 * time.Second)
+	defer readinessTicker.Stop()
+
+	for {
+		if err := checkRustFSReadiness(ctx, c, namespace, name); err != nil {
+			lastErr = err
+		} else {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("context canceled while waiting for RustFS %s/%s to be ready: %w", namespace, name, ctx.Err())
+		case <-readinessTimer.C:
+			return fmt.Errorf("timed out waiting for RustFS %s/%s to be ready: %w", namespace, name, lastErr)
+		case <-readinessTicker.C:
+		}
+	}
+}
+
 // checkRustFSReadiness checks if RustFS is ready by checking the health endpoint.
 func checkRustFSReadiness(ctx context.Context, c client.Client, namespace, name string) error {
+	selector, err := rustfsPodSelector(ctx, c, namespace, name)
+	if err != nil {
+		return err
+	}
+
 	// Get a pod from the deployment
 	var pods corev1.PodList
-	if err := c.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels{"app": name}); err != nil {
+	if err := c.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels(selector)); err != nil {
 		return fmt.Errorf("failed to list RustFS pods: %w", err)
 	}
 
@@ -407,6 +438,179 @@ func checkRustFSReadiness(ctx context.Context, c client.Client, namespace, name 
 	}
 
 	return fmt.Errorf("no ready RustFS pods found")
+}
+
+func rustfsPodSelector(ctx context.Context, c client.Client, namespace, name string) (map[string]string, error) {
+	deployment := &appsv1.Deployment{}
+	if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, deployment); err != nil {
+		return nil, fmt.Errorf("failed to get RustFS Deployment %s/%s: %w", namespace, name, err)
+	}
+	if len(deployment.Spec.Selector.MatchLabels) > 0 {
+		selector := make(map[string]string, len(deployment.Spec.Selector.MatchLabels))
+		for key, value := range deployment.Spec.Selector.MatchLabels {
+			selector[key] = value
+		}
+		return selector, nil
+	}
+	return map[string]string{"app": name}, nil
+}
+
+func waitForRustFSRemoteS3Readiness(
+	ctx context.Context,
+	restCfg *rest.Config,
+	c client.Client,
+	cfg RustFSConfig,
+	endpoint string,
+) error {
+	if restCfg == nil {
+		return nil
+	}
+
+	readyPod, err := readyRustFSPod(ctx, c, cfg.Namespace, cfg.Name)
+	if err != nil {
+		return err
+	}
+	if readyPod.Spec.NodeName == "" {
+		return nil
+	}
+
+	targetNodeName, ok, err := alternateReadyNode(ctx, c, readyPod.Spec.NodeName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	verifyCommand := fmt.Sprintf(
+		"for i in $(seq 1 30); do aws --endpoint-url=%s s3 ls",
+		endpoint,
+	)
+	for _, bucket := range cfg.Buckets {
+		if strings.TrimSpace(bucket) == "" {
+			continue
+		}
+		verifyCommand += fmt.Sprintf(" && aws --endpoint-url=%s s3 ls s3://%s", endpoint, bucket)
+		break
+	}
+	verifyCommand += " && exit 0; sleep 2; done; exit 1"
+
+	suffix, err := randomHexSuffix(4)
+	if err != nil {
+		return fmt.Errorf("failed to generate cross-node probe pod suffix: %w", err)
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-cross-node-check-%s", cfg.Name, suffix),
+			Namespace: cfg.Namespace,
+			Labels: map[string]string{
+				"openbao.org/component": "rustfs-cross-node-check",
+				"openbao.org/rustfs":    cfg.Name,
+			},
+		},
+		Spec: corev1.PodSpec{
+			NodeName:      targetNodeName,
+			RestartPolicy: corev1.RestartPolicyNever,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: ptr.To(true),
+				RunAsUser:    ptr.To(int64(1000)),
+				RunAsGroup:   ptr.To(int64(1000)),
+				FSGroup:      ptr.To(int64(1000)),
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeRuntimeDefault,
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "aws-cli",
+					Image: "amazon/aws-cli:latest",
+					Env: []corev1.EnvVar{
+						{Name: "AWS_ACCESS_KEY_ID", Value: cfg.AccessKey},
+						{Name: "AWS_SECRET_ACCESS_KEY", Value: cfg.SecretKey},
+						{Name: "AWS_DEFAULT_REGION", Value: "us-east-1"},
+					},
+					Command: []string{"/bin/sh", "-ec"},
+					Args:    []string{verifyCommand},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: ptr.To(false),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						RunAsNonRoot: ptr.To(true),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 90*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to run RustFS cross-node probe pod: %w", err)
+	}
+	if result.Phase != corev1.PodSucceeded {
+		return fmt.Errorf("RustFS cross-node probe pod failed, phase=%s, logs:\n%s", result.Phase, result.Logs)
+	}
+
+	_ = DeletePodBestEffort(ctx, c, cfg.Namespace, pod.Name)
+	return nil
+}
+
+func readyRustFSPod(ctx context.Context, c client.Client, namespace, name string) (*corev1.Pod, error) {
+	selector, err := rustfsPodSelector(ctx, c, namespace, name)
+	if err != nil {
+		return nil, err
+	}
+
+	var pods corev1.PodList
+	if err := c.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels(selector)); err != nil {
+		return nil, fmt.Errorf("failed to list RustFS pods: %w", err)
+	}
+
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.Status.Phase != corev1.PodRunning {
+			continue
+		}
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+				return pod, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no ready RustFS pods found")
+}
+
+func alternateReadyNode(ctx context.Context, c client.Client, excludeNodeName string) (string, bool, error) {
+	var nodes corev1.NodeList
+	if err := c.List(ctx, &nodes); err != nil {
+		return "", false, fmt.Errorf("failed to list nodes for RustFS cross-node readiness: %w", err)
+	}
+
+	for i := range nodes.Items {
+		node := nodes.Items[i]
+		if node.Name == excludeNodeName || node.Spec.Unschedulable {
+			continue
+		}
+		if nodeReady(&node) {
+			return node.Name, true, nil
+		}
+	}
+
+	return "", false, nil
+}
+
+func nodeReady(node *corev1.Node) bool {
+	if node == nil {
+		return false
+	}
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 // createRustFSBuckets creates the specified buckets in RustFS using AWS CLI.

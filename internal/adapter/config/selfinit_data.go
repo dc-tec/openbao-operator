@@ -13,6 +13,9 @@ func buildAuditDeviceData(device *openbaov1alpha1.SelfInitAuditDevice) (cty.Valu
 	if err := validateSelfInitAuditDevice(device); err != nil {
 		return cty.NilVal, err
 	}
+	if device.SinkFromRef != nil {
+		return cty.NilVal, fmt.Errorf("audit device sinkFromRef must be resolved before rendering self-init data")
+	}
 
 	var optionsMap map[string]cty.Value
 
@@ -61,6 +64,9 @@ func buildAuditDeviceData(device *openbaov1alpha1.SelfInitAuditDevice) (cty.Valu
 func buildAuthMethodData(authMethod *openbaov1alpha1.SelfInitAuthMethod) (cty.Value, error) {
 	if authMethod == nil {
 		return cty.NilVal, fmt.Errorf("auth method config is nil")
+	}
+	if authMethod.ConfigFromRef != nil {
+		return cty.NilVal, fmt.Errorf("auth method configFromRef must be resolved before rendering self-init data")
 	}
 
 	dataMap := map[string]cty.Value{
@@ -111,6 +117,9 @@ func buildSecretEngineData(secretEngine *openbaov1alpha1.SelfInitSecretEngine) (
 func buildPolicyData(policy *openbaov1alpha1.SelfInitPolicy) (cty.Value, error) {
 	if policy == nil {
 		return cty.NilVal, fmt.Errorf("policy config is nil")
+	}
+	if policy.ContentFromRef != nil {
+		return cty.NilVal, fmt.Errorf("policy contentFromRef must be resolved before rendering self-init data")
 	}
 	if policy.Policy == "" {
 		return cty.NilVal, fmt.Errorf("policy content is required")

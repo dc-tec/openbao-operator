@@ -3273,6 +3273,11 @@ spec:
                 description: Restore configures optional restore authentication bootstrap
                   for the cluster.
                 properties:
+                  image:
+                    description: |-
+                      Image is the container image to use for restore operations.
+                      If not specified, restore requests default to the backup helper image.
+                    type: string
                   jwtAuthRole:
                     description: |-
                       JWTAuthRole is the name of the JWT Auth role configured in OpenBao
@@ -3641,6 +3646,27 @@ spec:
                               required:
                               - uri
                               type: object
+                            sinkFromRef:
+                              description: |-
+                                SinkFromRef identifies same-namespace audit sink configuration to resolve
+                                just before self-init execution.
+                              properties:
+                                kind:
+                                  description: Kind is the referenced object kind.
+                                  minLength: 1
+                                  type: string
+                                name:
+                                  description: Name is the referenced object name.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: Namespace is the referenced object
+                                    namespace when applicable.
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              type: object
                             socketOptions:
                               description: |-
                                 SocketOptions configures options for socket audit devices.
@@ -3695,18 +3721,32 @@ spec:
                           x-kubernetes-validations:
                           - message: fileOptions is only supported when type is file
                             rule: self.type == 'file' || !has(self.fileOptions)
-                          - message: fileOptions is required when type is file
-                            rule: self.type != 'file' || has(self.fileOptions)
+                          - message: fileOptions or sinkFromRef is required when type
+                              is file
+                            rule: self.type != 'file' || has(self.fileOptions) ||
+                              has(self.sinkFromRef)
                           - message: httpOptions is only supported when type is http
                             rule: self.type == 'http' || !has(self.httpOptions)
-                          - message: httpOptions is required when type is http
-                            rule: self.type != 'http' || has(self.httpOptions)
+                          - message: httpOptions or sinkFromRef is required when type
+                              is http
+                            rule: self.type != 'http' || has(self.httpOptions) ||
+                              has(self.sinkFromRef)
                           - message: syslogOptions is only supported when type is
                               syslog
                             rule: self.type == 'syslog' || !has(self.syslogOptions)
                           - message: socketOptions is only supported when type is
                               socket
                             rule: self.type == 'socket' || !has(self.socketOptions)
+                          - message: sinkFromRef is mutually exclusive with inline
+                              audit sink configuration
+                            rule: '!(has(self.sinkFromRef) && ((has(self.description)
+                              && self.description != "") || has(self.fileOptions)
+                              || has(self.httpOptions) || has(self.syslogOptions)
+                              || has(self.socketOptions)))'
+                          - message: sinkFromRef.namespace is not supported; refs
+                              are same-namespace only
+                            rule: '!has(self.sinkFromRef) || !has(self.sinkFromRef.namespace)
+                              || self.sinkFromRef.namespace == ""'
                         authMethod:
                           description: |-
                             AuthMethod configures an auth method when Path starts with "sys/auth/".
@@ -3720,6 +3760,27 @@ spec:
                                 Config contains optional configuration for the auth method mount.
                                 Common fields include: default_lease_ttl, max_lease_ttl, listing_visibility, etc.
                               type: object
+                            configFromRef:
+                              description: |-
+                                ConfigFromRef identifies same-namespace auth-method configuration to
+                                resolve just before self-init execution.
+                              properties:
+                                kind:
+                                  description: Kind is the referenced object kind.
+                                  minLength: 1
+                                  type: string
+                                name:
+                                  description: Name is the referenced object name.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: Namespace is the referenced object
+                                    namespace when applicable.
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              type: object
                             description:
                               description: Description is an optional description
                                 for the auth method.
@@ -3732,6 +3793,14 @@ spec:
                           required:
                           - type
                           type: object
+                          x-kubernetes-validations:
+                          - message: config and configFromRef are mutually exclusive
+                            rule: '!(has(self.configFromRef) && has(self.config) &&
+                              size(self.config) > 0)'
+                          - message: configFromRef.namespace is not supported; refs
+                              are same-namespace only
+                            rule: '!has(self.configFromRef) || !has(self.configFromRef.namespace)
+                              || self.configFromRef.namespace == ""'
                         data:
                           description: |-
                             Data contains the request payload for paths that don't have structured types.
@@ -3785,15 +3854,44 @@ spec:
                             This provides structured configuration for creating/updating policies.
                             Only used when Path matches the pattern "sys/policies/*".
                           properties:
+                            contentFromRef:
+                              description: |-
+                                ContentFromRef identifies same-namespace policy content to resolve just
+                                before self-init execution.
+                              properties:
+                                kind:
+                                  description: Kind is the referenced object kind.
+                                  minLength: 1
+                                  type: string
+                                name:
+                                  description: Name is the referenced object name.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: Namespace is the referenced object
+                                    namespace when applicable.
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              type: object
                             policy:
                               description: |-
                                 Policy is the HCL or JSON policy content.
                                 This is the actual policy rules that will be applied.
                               minLength: 1
                               type: string
-                          required:
-                          - policy
                           type: object
+                          x-kubernetes-validations:
+                          - message: policy or contentFromRef is required
+                            rule: (has(self.policy) && size(self.policy) > 0) || has(self.contentFromRef)
+                          - message: policy and contentFromRef are mutually exclusive
+                            rule: '!((has(self.policy) && size(self.policy) > 0) &&
+                              has(self.contentFromRef))'
+                          - message: contentFromRef.namespace is not supported; refs
+                              are same-namespace only
+                            rule: '!has(self.contentFromRef) || !has(self.contentFromRef.namespace)
+                              || self.contentFromRef.namespace == ""'
                         secretEngine:
                           description: |-
                             SecretEngine configures a secret engine when Path starts with "sys/mounts/".

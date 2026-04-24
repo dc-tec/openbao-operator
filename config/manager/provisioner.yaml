@@ -59,19 +59,29 @@ spec:
               port: 8081
             initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /readyz
               port: 8081
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
+              cpu: 50m
+              memory: 128Mi
             limits:
-              cpu: 100m
-              memory: 64Mi
+              cpu: 500m
+              memory: 256Mi
           volumeMounts:
             - name: kube-api-access
               mountPath: /var/run/secrets/kubernetes.io/serviceaccount

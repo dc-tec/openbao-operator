@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
@@ -73,6 +74,7 @@ func newManagerOptions(
 	probeAddr string,
 	enableLeaderElection bool,
 	watchNamespace string,
+	claimWebhookCertDir string,
 ) ctrl.Options {
 	singleTenantMode := watchNamespace != ""
 	mgrOpts := ctrl.Options{
@@ -81,6 +83,14 @@ func newManagerOptions(
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "openbao-controller-leader.openbao.org",
+	}
+	if claimWebhookCertDir != "" {
+		mgrOpts.WebhookServer = webhook.NewServer(webhook.Options{
+			Port:     9443,
+			CertDir:  claimWebhookCertDir,
+			CertName: claimAdmissionServingCertFile,
+			KeyName:  claimAdmissionServingKeyFile,
+		})
 	}
 
 	if singleTenantMode {
@@ -145,10 +155,12 @@ func initializeAdmissionTracker(
 	mgr ctrl.Manager,
 	admissionEnforcement string,
 	admissionStartupTimeout time.Duration,
+	enableServiceClaims bool,
 ) *admission.Tracker {
+	dependencies := admission.DependenciesForFeatures(enableServiceClaims)
 	admissionTracker := admission.NewTracker(
 		mgr.GetAPIReader(),
-		admission.DefaultDependencies(),
+		dependencies,
 		admission.DefaultNamePrefixes(),
 		30*time.Second,
 	)
@@ -171,7 +183,7 @@ func initializeAdmissionTracker(
 		status, err := admission.WaitForDependencies(
 			context.Background(),
 			mgr.GetAPIReader(),
-			admission.DefaultDependencies(),
+			dependencies,
 			admission.DefaultNamePrefixes(),
 			admissionStartupTimeout,
 			2*time.Second,
@@ -200,7 +212,7 @@ func initializeAdmissionTracker(
 		status, err := admission.CheckDependencies(
 			admissionCtx,
 			mgr.GetAPIReader(),
-			admission.DefaultDependencies(),
+			dependencies,
 			admission.DefaultNamePrefixes(),
 		)
 		admissionStatus = status
@@ -240,6 +252,22 @@ func operatorNamespaceFromEnv() string {
 
 	setupLog.Info("Using operator namespace from POD_NAMESPACE", "namespace", operatorNamespace)
 	return operatorNamespace
+}
+
+func operatorServiceAccountNameFromEnv() string {
+	serviceAccountName := strings.TrimSpace(os.Getenv("OPERATOR_SERVICE_ACCOUNT_NAME"))
+	if serviceAccountName == "" {
+		serviceAccountName = "controller"
+		setupLog.Info("OPERATOR_SERVICE_ACCOUNT_NAME not set, using default", "serviceAccountName", serviceAccountName)
+		return serviceAccountName
+	}
+
+	setupLog.Info(
+		"Using controller service account name from OPERATOR_SERVICE_ACCOUNT_NAME",
+		"serviceAccountName",
+		serviceAccountName,
+	)
+	return serviceAccountName
 }
 
 func watchNamespaceFromEnv() string {

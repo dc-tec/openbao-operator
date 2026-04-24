@@ -391,7 +391,7 @@ The OpenBaoCluster controller manages the workload `ServiceMonitor` when `spec.o
   title="Install the bundled Grafana dashboards"
   code={`kubectl apply -k config/grafana -n monitoring`}
 >
-  The per-feature dashboards under `config/grafana/dashboards/` are the better starting point. The old monolithic dashboard still exists, but it is no longer the recommended default.
+  The per-feature dashboards under `config/grafana/dashboards/` are the better starting point. Core cluster lifecycle and operator runtime dashboards stay separate from the dedicated claim service-instance and claim workflow dashboards, so the self-service surface does not muddy the workload-runtime view. The old monolithic dashboard still exists, but it is no longer the recommended default.
 </CommandBlock>
 
 <CommandBlock

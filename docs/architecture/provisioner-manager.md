@@ -27,7 +27,7 @@ description: Provision tenant namespaces with scoped RBAC, Secret allowlists, Po
       label: 'Owns',
       items: [
         'tenant-scoped operator Role and RoleBinding resources',
-        'reader and writer Secret allowlists derived from tenant clusters',
+        'reader and writer Secret allowlists derived from tenant clusters and same-cluster claim bootstrap inputs',
         'Pod Security labels when configured plus optional ResourceQuota and LimitRange defaults',
       ],
     },
@@ -44,7 +44,7 @@ description: Provision tenant namespaces with scoped RBAC, Secret allowlists, Po
       items: [
         'OpenBaoTenant namespace targeting rules and resource policies',
         'admission dependencies before tenant Secret RBAC sync can proceed',
-        'current OpenBaoCluster objects that still exist in the tenant namespace',
+        'current OpenBaoCluster and same-cluster OpenBaoClusterClaim objects that still exist in the tenant namespace',
       ],
     },
   ]}
@@ -60,7 +60,7 @@ Provisioning follows a dedicated tenant-controller path:
 
 That keeps tenant onboarding separate from `OpenBaoCluster` steady-state reconciliation while still using the same design system and policy language.
 
-The tenant `RoleBinding` is also the explicit handoff marker into the cluster controllers. Until that object exists, `OpenBaoCluster` workload, admin-operations, and status reconciliation pause and requeue instead of trying to mutate resources in a namespace that is not yet provisioned.
+The tenant `RoleBinding` is also the explicit handoff marker into the cluster and claim controllers. Until that object exists, `OpenBaoCluster` workload, admin-operations, status, and `OpenBaoClusterClaim` reconciliation pause and requeue instead of trying to mutate resources in a namespace that is not yet provisioned.
 
 <DecisionTable
   kind="reference"
@@ -73,6 +73,9 @@ The tenant `RoleBinding` is also the explicit handoff marker into the cluster co
     },
     {
       cells: ['Secret allowlists', 'Which Secrets the operator may read or write for managed clusters in the tenant namespace.', 'Multi-tenant safety depends on explicit Secret access instead of wildcard RBAC.'],
+    },
+    {
+      cells: ['Claim bootstrap inputs', 'Which tenant Secret and ConfigMap references a same-cluster claim may consume through the published service profile.', 'The claim path still needs least-privilege Secret access instead of falling back to wildcard tenant reads.'],
     },
     {
       cells: ['Controller handoff', 'When the tenant namespace is actually ready for `OpenBaoCluster` reconciliation.', 'GitOps paths can submit tenant and cluster objects together only if the controller has a deterministic, namespace-scoped readiness marker.'],
@@ -90,7 +93,7 @@ The tenant `RoleBinding` is also the explicit handoff marker into the cluster co
 
 <DiagramFrame
   title="Tenant onboarding flow"
-  caption="Provisioning applies namespace-scoped guardrails first, then keeps Secret allowlists synchronized as managed clusters appear or disappear in the tenant namespace. Pod Security labels can be owned by the Provisioner or by platform policy."
+  caption="Provisioning applies namespace-scoped guardrails first, then keeps Secret allowlists synchronized as managed clusters and same-cluster claims appear or disappear in the tenant namespace. Pod Security labels can be owned by the Provisioner or by platform policy."
   code={`graph TD
     Tenant["OpenBaoTenant"] --> Ctrl["Provisioner controller"]
     Ctrl --> App["internal/app/provisioner"]
@@ -99,7 +102,7 @@ The tenant `RoleBinding` is also the explicit handoff marker into the cluster co
     Manager --> Secrets["Reader / writer Secret allowlists"]
     Manager -. enforce mode .-> Labels["Pod Security labels"]
     Manager --> Quotas["ResourceQuota / LimitRange"]
-    Quotas --> Ready["Tenant namespace ready for OpenBaoCluster"]
+    Quotas --> Ready["Tenant namespace ready for OpenBaoCluster and OpenBaoClusterClaim"]
 
     classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
     classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#f8fafc;
@@ -123,13 +126,16 @@ The tenant `RoleBinding` is also the explicit handoff marker into the cluster co
       cells: ['Admission dependencies', 'Tenant Secret allowlists wait for admission-policy dependencies so Secret access is not widened before enforcement is ready.'],
     },
     {
-      cells: ['Cluster-controller handoff', 'The tenant `RoleBinding` is the readiness marker that allows `OpenBaoCluster` reconciliation to proceed in multi-tenant mode.'],
+      cells: ['Cluster-controller handoff', 'The tenant `RoleBinding` is the readiness marker that allows `OpenBaoCluster` and `OpenBaoClusterClaim` reconciliation to proceed in multi-tenant mode.'],
     },
     {
       cells: ['Shared RBAC lifecycle', 'Provisioned tenant RBAC avoids OwnerReferences that would let a single cluster deletion garbage-collect shared namespace permissions.'],
     },
     {
       cells: ['Secret scope', 'Reader and writer Secret Roles are derived from explicit cluster references instead of wildcard list or get access to every Secret in the namespace.'],
+    },
+    {
+      cells: ['Claim bootstrap sources', 'Tenant Secret and ConfigMap access for same-cluster claims is derived from published claim contracts and synchronized separately from general namespace inventory.'],
     },
   ]}
 />
@@ -169,6 +175,11 @@ The tenant `RoleBinding` is also the explicit handoff marker into the cluster co
       label: 'Day 0 lifecycle flow',
       description: 'Follow where tenant provisioning sits before cluster creation begins.',
       docId: 'architecture/lifecycle/day0-provisioning',
+    },
+    {
+      label: 'Service claims',
+      description: 'See how claim binding depends on the same tenant handoff and secret-boundary model without broadening tenant Secret access.',
+      docId: 'architecture/service-claims',
     },
   ]}
 />
