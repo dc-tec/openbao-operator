@@ -222,7 +222,11 @@ jobs:
           set -euo pipefail
           work_dir="$(mktemp -d)"
           cp -a source-under-test/charts/openbao-operator "${work_dir}/openbao-operator"
-          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash .github-workflow-src/hack/ci/prepare-release-chart.sh
+          CHANGELOG_FILE="${GITHUB_WORKSPACE}/source-under-test/CHANGELOG.md" \
+            CHART_DIR="${work_dir}/openbao-operator" \
+            CHART_VERSION="${CHART_VERSION}" \
+            OWNER="${OWNER}" \
+            bash .github-workflow-src/hack/ci/prepare-release-chart.sh
           find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
           helm package "${work_dir}/openbao-operator" -d dist/primary
           test -f "dist/primary/openbao-operator-${CHART_VERSION}.tgz"
@@ -236,7 +240,11 @@ jobs:
           set -euo pipefail
           work_dir="$(mktemp -d)"
           cp -a source-under-test/charts/openbao-operator "${work_dir}/openbao-operator"
-          CHART_DIR="${work_dir}/openbao-operator" CHART_VERSION="${CHART_VERSION}" OWNER="${OWNER}" bash .github-workflow-src/hack/ci/prepare-release-chart.sh
+          CHANGELOG_FILE="${GITHUB_WORKSPACE}/source-under-test/CHANGELOG.md" \
+            CHART_DIR="${work_dir}/openbao-operator" \
+            CHART_VERSION="${CHART_VERSION}" \
+            OWNER="${OWNER}" \
+            bash .github-workflow-src/hack/ci/prepare-release-chart.sh
           find "${work_dir}/openbao-operator" -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
           helm package "${work_dir}/openbao-operator" -d dist/rebuild
           test -f "dist/rebuild/openbao-operator-${CHART_VERSION}.tgz"
