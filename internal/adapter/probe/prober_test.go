@@ -73,17 +73,101 @@ func TestHTTPProber_CheckStartup(t *testing.T) {
 		CAFile:        "",
 		ServerName:    "",
 		Timeout:       4 * time.Second,
+		StartupPath:   "/v1/sys/health?sealedcode=204&uninitcode=204",
 		LivenessPath:  "/v1/sys/health",
 		ReadinessPath: "/v1/sys/health",
 	})
 	if err != nil {
 		t.Fatalf("NewProber() error = %v", err)
 	}
+	httpProber := prober.(*HTTPProber)
+	httpProber.client = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // #nosec G402 -- Test only
+			},
+		},
+	}
 
 	ctx := context.Background()
 	err = prober.CheckStartup(ctx)
 	if err != nil {
 		t.Fatalf("CheckStartup() error = %v", err)
+	}
+}
+
+func TestHTTPProber_CheckStartup_StatusCodes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		statusCode int
+		wantErr    bool
+	}{
+		{
+			name:       "healthy",
+			statusCode: http.StatusOK,
+			wantErr:    false,
+		},
+		{
+			name:       "sealed remapped by startup path",
+			statusCode: http.StatusNoContent,
+			wantErr:    false,
+		},
+		{
+			name:       "standby",
+			statusCode: http.StatusTooManyRequests,
+			wantErr:    false,
+		},
+		{
+			name:       "performance standby",
+			statusCode: 473,
+			wantErr:    false,
+		},
+		{
+			name:       "unexpected server error",
+			statusCode: http.StatusInternalServerError,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/sys/health" {
+					t.Fatalf("startup path=%q, want /v1/sys/health", r.URL.Path)
+				}
+				w.WriteHeader(tt.statusCode)
+			}))
+			defer server.Close()
+
+			prober, err := NewProber(ProberConfig{
+				Addr:          server.URL,
+				Timeout:       4 * time.Second,
+				StartupPath:   "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204",
+				LivenessPath:  "/v1/sys/health",
+				ReadinessPath: "/v1/sys/health?standbyok=true",
+			})
+			if err != nil {
+				t.Fatalf("NewProber() error = %v", err)
+			}
+
+			httpProber := prober.(*HTTPProber)
+			httpProber.client = &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true, // #nosec G402 -- Test only
+					},
+				},
+			}
+
+			err = prober.CheckStartup(context.Background())
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("CheckStartup() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 

@@ -63,12 +63,12 @@ func NewManager(config *rest.Config, clientset kubernetes.Interface, clientMgr *
 	}
 }
 
-func (p raftClientFactoryProvider) FactoryFor(clusterKey string, caCert []byte) raft.ClientFactory {
+func (p raftClientFactoryProvider) FactoryFor(clusterKey string, caCert []byte, tlsServerName string) raft.ClientFactory {
 	if p.clientMgr == nil {
 		return nil
 	}
 
-	factory := p.clientMgr.FactoryFor(clusterKey, caCert)
+	factory := p.clientMgr.FactoryFor(clusterKey, caCert, tlsServerName)
 	if factory == nil {
 		return nil
 	}

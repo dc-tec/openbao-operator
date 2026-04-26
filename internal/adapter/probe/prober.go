@@ -37,6 +37,7 @@ type HTTPProber struct {
 	addr          string
 	hostPort      string
 	isLoopback    bool
+	timeout       time.Duration
 }
 
 // ProberConfig holds configuration for creating a Prober.
@@ -53,6 +54,10 @@ type ProberConfig struct {
 
 // NewProber creates a new HTTPProber with the given configuration.
 func NewProber(cfg ProberConfig) (Prober, error) {
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = 4 * time.Second
+	}
+
 	parsedServerName, hostPort, isLoopback, err := parseAddr(cfg.Addr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid addr %q: %w", cfg.Addr, err)
@@ -86,12 +91,41 @@ func NewProber(cfg ProberConfig) (Prober, error) {
 		addr:          cfg.Addr,
 		hostPort:      hostPort,
 		isLoopback:    isLoopback,
+		timeout:       cfg.Timeout,
 	}, nil
 }
 
-// CheckStartup performs a TCP dial check to verify the service is listening.
+// CheckStartup verifies that OpenBao is serving its HTTP health endpoint.
+// The startup path accepts sealed and uninitialized states so bootstrap can
+// proceed without starting readiness checks while the listener is still coming up.
 func (p *HTTPProber) CheckStartup(ctx context.Context) error {
-	return tcpDial(ctx, p.hostPort)
+	base := strings.TrimRight(p.addr, "/")
+	probeURL := base + p.startupPath
+
+	reqCtx, cancel := context.WithTimeout(ctx, p.timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, probeURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
+	}
+	if resp.StatusCode == 429 || resp.StatusCode == 473 {
+		return nil
+	}
+	return fmt.Errorf("startup check failed with status %d", resp.StatusCode)
 }
 
 // CheckLiveness performs a liveness check.
@@ -100,7 +134,7 @@ func (p *HTTPProber) CheckLiveness(ctx context.Context) error {
 	probeURL := base + p.livenessPath
 
 	baseCtx := ctx
-	reqCtx, cancel := context.WithTimeout(baseCtx, 4*time.Second)
+	reqCtx, cancel := context.WithTimeout(baseCtx, p.timeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, probeURL, nil)
@@ -160,7 +194,7 @@ func (p *HTTPProber) CheckReadiness(ctx context.Context) error {
 			}
 		}
 
-		reqCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+		reqCtx, cancel := context.WithTimeout(ctx, p.timeout)
 		req, reqErr := http.NewRequestWithContext(reqCtx, http.MethodGet, probeURL, nil)
 		if reqErr != nil {
 			cancel()
