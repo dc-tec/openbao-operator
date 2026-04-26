@@ -37,18 +37,17 @@ func buildStatefulSetProbeExecActions(cluster *openbaov1alpha1.OpenBaoCluster) p
 		}
 	}
 
-	// Startup probe only does TCP dial, so it doesn't need a CA file.
-	// In ACME mode, the default CA file (/etc/bao/tls/ca.crt) doesn't exist, so
-	// explicitly set -ca-file="" to avoid trying to read it.
 	startupProbeCmd := []string{
 		constants.PathProbeBinary,
 		"-mode=startup",
 		"-addr=" + probeAddr,
 		"-timeout=" + openBaoStartupProbeTimeout,
 	}
-	// Only set empty CA file for ACME mode where the default CA file won't exist
-	if usesACMEMode(cluster) {
-		startupProbeCmd = append(startupProbeCmd, "-ca-file=")
+	if probeServerName != "" {
+		startupProbeCmd = append(startupProbeCmd, "-servername="+probeServerName)
+	}
+	if probeCAFile != "" {
+		startupProbeCmd = append(startupProbeCmd, "-ca-file="+probeCAFile)
 	}
 	startupProbeExec := &corev1.ExecAction{
 		Command: startupProbeCmd,

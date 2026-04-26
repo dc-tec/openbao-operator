@@ -291,9 +291,10 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSp
 				ProbeHandler: corev1.ProbeHandler{
 					Exec: probes.startup,
 				},
-				TimeoutSeconds:   10,
-				PeriodSeconds:    5,
-				FailureThreshold: 60,
+				InitialDelaySeconds: 10,
+				TimeoutSeconds:      10,
+				PeriodSeconds:       5,
+				FailureThreshold:    60,
 			},
 			LivenessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
@@ -307,7 +308,7 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSp
 				ProbeHandler: corev1.ProbeHandler{
 					Exec: probes.readiness,
 				},
-				InitialDelaySeconds: 5,
+				InitialDelaySeconds: 20,
 				TimeoutSeconds:      10,
 				PeriodSeconds:       10,
 				FailureThreshold:    6,

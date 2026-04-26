@@ -51,6 +51,21 @@ func TestClientManager_FactoryFor_DifferentStateForDifferentClusters(t *testing.
 	}
 }
 
+func TestClientManager_FactoryFor_AppliesTLSServerNameOverride(t *testing.T) {
+	t.Parallel()
+
+	mgr := NewClientManager(ClientConfig{})
+	defer mgr.Close()
+
+	factory := mgr.FactoryFor("ns/cluster", nil, "acme.example.com")
+	if factory == nil {
+		t.Fatal("expected factory")
+	}
+	if factory.template.TLSServerName != "acme.example.com" {
+		t.Fatalf("TLSServerName=%q, want acme.example.com", factory.template.TLSServerName)
+	}
+}
+
 func TestClientManager_ClusterCount(t *testing.T) {
 	t.Parallel()
 
