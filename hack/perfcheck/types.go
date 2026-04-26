@@ -29,30 +29,36 @@ var p95MetricSet = map[string]struct{}{
 	metricUpgradePodP95: {},
 }
 
+const (
+	metricPolicyUpperBound = "upper_bound"
+	metricPolicyMustBeZero = "must_be_zero"
+	metricPolicyIgnore     = "ignore"
+
+	metricSeverityFail = "fail"
+	metricSeverityWarn = "warn"
+
+	metricMultiplierP95 = "p95"
+	metricMultiplierMax = "max"
+)
+
 type scenarioSpec struct {
-	Name        string `json:"name" yaml:"name"`
-	LabelFilter string `json:"labelFilter" yaml:"labelFilter"`
+	Name           string                      `json:"name" yaml:"name"`
+	Description    string                      `json:"description,omitempty" yaml:"description,omitempty"`
+	LabelFilter    string                      `json:"labelFilter" yaml:"labelFilter"`
+	MetricPolicies map[string]metricPolicySpec `json:"metricPolicies" yaml:"metricPolicies"`
 }
 
-var defaultScenarios = []scenarioSpec{
-	{
-		Name:        "lifecycle",
-		LabelFilter: "lifecycle && critical && tenant && !slow && !openshift && !pentest",
-	},
-	{
-		Name:        "backup-restore",
-		LabelFilter: "dr && backup && restore && !failure-injection",
-	},
-	{
-		Name:        "rolling-upgrade",
-		LabelFilter: "upgrade && rolling && !failure && !bluegreen",
-	},
+type scenarioManifest struct {
+	Version   string         `json:"version" yaml:"version"`
+	Scenarios []scenarioSpec `json:"scenarios" yaml:"scenarios"`
 }
 
-var scenarioByName = map[string]scenarioSpec{
-	"lifecycle":       defaultScenarios[0],
-	"backup-restore":  defaultScenarios[1],
-	"rolling-upgrade": defaultScenarios[2],
+type metricPolicySpec struct {
+	Policy     string   `json:"policy" yaml:"policy"`
+	Severity   string   `json:"severity,omitempty" yaml:"severity,omitempty"`
+	Multiplier string   `json:"multiplier,omitempty" yaml:"multiplier,omitempty"`
+	Floor      *float64 `json:"floor,omitempty" yaml:"floor,omitempty"`
+	Threshold  *float64 `json:"threshold,omitempty" yaml:"threshold,omitempty"`
 }
 
 type runResult struct {
@@ -67,9 +73,10 @@ type runResult struct {
 }
 
 type scenarioBaseline struct {
-	LabelFilter string             `json:"labelFilter"`
-	Runs        []runResult        `json:"runs"`
-	MaxMetrics  map[string]float64 `json:"maxMetrics"`
+	LabelFilter    string                      `json:"labelFilter"`
+	MetricPolicies map[string]metricPolicySpec `json:"metricPolicies,omitempty"`
+	Runs           []runResult                 `json:"runs"`
+	MaxMetrics     map[string]float64          `json:"maxMetrics"`
 }
 
 type baselineDocument struct {
@@ -97,14 +104,16 @@ type thresholdDocument struct {
 }
 
 type scenarioThresholds struct {
-	LabelFilter string             `json:"labelFilter" yaml:"labelFilter"`
-	Metrics     map[string]float64 `json:"metrics" yaml:"metrics"`
+	LabelFilter    string                      `json:"labelFilter" yaml:"labelFilter"`
+	MetricPolicies map[string]metricPolicySpec `json:"metricPolicies,omitempty" yaml:"metricPolicies,omitempty"`
+	Metrics        map[string]float64          `json:"metrics" yaml:"metrics"`
 }
 
 type options struct {
 	Mode            string
 	Runs            int
 	ScenarioNames   []string
+	ScenarioPath    string
 	NodeImage       string
 	KindBin         string
 	MakeBin         string

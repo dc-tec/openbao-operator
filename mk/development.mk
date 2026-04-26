@@ -390,6 +390,7 @@ PERF_RUNS ?= 5
 PERF_SCENARIO_TIMEOUT ?= 90m
 PERF_SMOKE_SCENARIO_TIMEOUT ?= 45m
 PERF_SMOKE_SCENARIOS ?= lifecycle
+PERF_SCENARIOS_FILE ?= hack/perf/scenarios.yaml
 PERF_BASELINE_OUT ?= hack/perf/baseline/kind-v1.34.3-baseline.json
 PERF_THRESHOLDS_OUT ?= hack/perf/thresholds/kind-v1.34.3.yaml
 
@@ -505,6 +506,7 @@ perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and 
 	go run ./hack/perfcheck capture \
 		--runs="$(PERF_RUNS)" \
 		--scenarios=all \
+		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
 		--baseline-out="$(PERF_BASELINE_OUT)" \
@@ -515,6 +517,7 @@ perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and 
 verify-perf: ## Run performance regression gate against committed thresholds.
 	go run ./hack/perfcheck verify \
 		--scenarios=all \
+		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
 		--thresholds="$(PERF_THRESHOLDS_OUT)" \
@@ -524,6 +527,7 @@ verify-perf: ## Run performance regression gate against committed thresholds.
 verify-perf-smoke: ## Run a lightweight performance smoke gate (PR-focused).
 	go run ./hack/perfcheck verify \
 		--scenarios="$(PERF_SMOKE_SCENARIOS)" \
+		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
 		--thresholds="$(PERF_THRESHOLDS_OUT)" \
