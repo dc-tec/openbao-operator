@@ -49,7 +49,24 @@ rules:
       - list
       - watch
 
-  # 2c. Admission policy dependency checks (get only)
+  # 2c. Kubernetes event emission in tenant namespaces.
+  # Required when recording OpenBaoTenant reconciliation events outside the operator namespace.
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+
+  # 2d. Admission policy dependency checks (get only)
   # Required for fail-closed startup validation that ValidatingAdmissionPolicies are present and enforced.
   - apiGroups:
       - admissionregistration.k8s.io
@@ -59,7 +76,7 @@ rules:
     verbs:
       - get
 
-  # 2d. Tenant quota/limits management (namespaced)
+  # 2e. Tenant quota/limits management (namespaced)
   # NOTE: Server-Side Apply may create objects when they don't exist yet, which requires 'create' permission.
   - apiGroups:
       - ""

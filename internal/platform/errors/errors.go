@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -73,6 +74,11 @@ var ErrTransientConnection = errors.New("transient connection error")
 // OpenBao (excluding endpoints like /sys/health where status codes represent state rather than failure).
 var ErrTransientRemoteOverloaded = errors.New("transient remote overloaded")
 
+// ErrTransientClusterState indicates a cluster is temporarily not in the state
+// required for the requested operation. This covers externally observable
+// convergence states such as leader election or readiness settling.
+var ErrTransientClusterState = errors.New("transient cluster state")
+
 // ErrTransientKubernetesAPI indicates a transient Kubernetes API error that should be retried.
 // This includes rate limiting, temporary server errors, and network issues.
 var ErrTransientKubernetesAPI = errors.New("transient Kubernetes API error")
@@ -102,6 +108,9 @@ func IsTransientConnection(err error) bool {
 	}
 
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, os.ErrDeadlineExceeded) || errors.Is(err, net.ErrClosed) {
+		return true
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return true
 	}
 
@@ -164,6 +173,16 @@ func IsTransientRemoteOverloaded(err error) bool {
 	return errors.Is(err, ErrTransientRemoteOverloaded)
 }
 
+// IsTransientClusterState checks if an error indicates the target cluster is
+// temporarily not ready for the requested operation.
+func IsTransientClusterState(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	return errors.Is(err, ErrTransientClusterState)
+}
+
 // WrapTransientConnection wraps an error as a transient connection error.
 // If the error is already a transient connection error, it is returned as-is.
 func WrapTransientConnection(err error) error {
@@ -190,6 +209,20 @@ func WrapTransientRemoteOverloaded(err error) error {
 	}
 
 	return fmt.Errorf("%w: %w", ErrTransientRemoteOverloaded, err)
+}
+
+// WrapTransientClusterState wraps an error as a transient cluster state error.
+// If the error is already a transient cluster state error, it is returned as-is.
+func WrapTransientClusterState(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if IsTransientClusterState(err) {
+		return err
+	}
+
+	return fmt.Errorf("%w: %w", ErrTransientClusterState, err)
 }
 
 // WrapTransientKubernetesAPI wraps an error as a transient Kubernetes API error.
@@ -224,9 +257,11 @@ func WrapPermanentPrerequisitesMissing(err error) error {
 }
 
 // IsTransient checks if an error is transient (should be retried).
-// Returns true for transient connection or Kubernetes API errors.
 func IsTransient(err error) bool {
-	return IsTransientConnection(err) || IsTransientRemoteOverloaded(err) || IsTransientKubernetesAPI(err)
+	return IsTransientConnection(err) ||
+		IsTransientRemoteOverloaded(err) ||
+		IsTransientClusterState(err) ||
+		IsTransientKubernetesAPI(err)
 }
 
 // IsPermanent checks if an error is permanent (requires user intervention).
@@ -255,6 +290,10 @@ func ShouldRequeue(err error) (bool, time.Duration) {
 		// For remote overloaded errors, requeue with a longer delay to reduce pressure
 		if IsTransientRemoteOverloaded(err) {
 			return true, 15 * time.Second
+		}
+		// For transient cluster convergence states, requeue with a short delay
+		if IsTransientClusterState(err) {
+			return true, 5 * time.Second
 		}
 		// For transient Kubernetes API errors, requeue with a short delay
 		if IsTransientKubernetesAPI(err) {
