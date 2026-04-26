@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -153,6 +155,41 @@ func TestPatchAdminOpsOwnedFields_IgnoresBackupOnlyChanges(t *testing.T) {
 	}
 	if !reflect.DeepEqual(stored.Status.Backup, original.Status.Backup) {
 		t.Fatalf("stored backup = %#v, want original %#v", stored.Status.Backup, original.Status.Backup)
+	}
+}
+
+func TestPatchWorkloadOwnedFields_IgnoresDeletedCluster(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workload-deleted",
+			Namespace: "default",
+		},
+	}
+	original := cluster.DeepCopy()
+	desired := cluster.DeepCopy()
+	desired.Status.Workload = &openbaov1alpha1.WorkloadControllerStatus{
+		LastError: &openbaov1alpha1.ControllerErrorStatus{
+			Reason:  "Test",
+			Message: "status update raced with deletion",
+		},
+	}
+
+	scheme := newPatchTestScheme(t)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(cluster).
+		WithObjects(cluster.DeepCopy()).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceApply: func(context.Context, client.Client, string, runtime.ApplyConfiguration, ...client.SubResourceApplyOption) error {
+				return apierrors.NewNotFound(schema.GroupResource{Group: openbaov1alpha1.GroupVersion.Group, Resource: "openbaoclusters"}, cluster.Name)
+			},
+		}).
+		Build()
+
+	if err := PatchWorkloadOwnedFields(context.Background(), k8sClient, logr.Discard(), original, desired, "workload-deleted"); err != nil {
+		t.Fatalf("PatchWorkloadOwnedFields() error = %v", err)
 	}
 }
 

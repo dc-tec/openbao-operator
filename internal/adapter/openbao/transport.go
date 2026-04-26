@@ -255,7 +255,11 @@ func (c *Client) doAndReadAll(req *http.Request, httpClient *http.Client, op str
 		if c.state != nil {
 			c.state.after(req, false)
 		}
-		return nil, nil, fmt.Errorf("%s: failed to read response body: %w", op, err)
+		wrapped := fmt.Errorf("%s: failed to read response body: %w", op, err)
+		if operatorerrors.IsTransientConnection(err) {
+			return nil, nil, operatorerrors.WrapTransientConnection(wrapped)
+		}
+		return nil, nil, wrapped
 	}
 
 	// The health endpoint encodes state in HTTP status codes (sealed, standby, etc.),

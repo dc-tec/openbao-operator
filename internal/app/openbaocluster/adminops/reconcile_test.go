@@ -79,6 +79,12 @@ func TestReconcile_AdminOpsErrorPaths(t *testing.T) {
 			wantPatchReason:  "adminops-error",
 		},
 		{
+			name:             "transient cluster state error requeues with delay",
+			reconcilerErr:    operatorerrors.WrapTransientClusterState(errors.New("no leader found in cluster")),
+			wantRequeueAfter: 5 * time.Second,
+			wantPatchReason:  "adminops-error",
+		},
+		{
 			name:            "patch failure takes precedence",
 			reconcilerErr:   operatorerrors.WrapPermanentConfig(errors.New("bad config")),
 			patchErr:        errors.New("status patch failed"),
