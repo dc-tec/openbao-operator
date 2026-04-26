@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 )
 
@@ -28,7 +29,11 @@ func Handle(ctx context.Context, logger logr.Logger, deps Dependencies, cluster 
 
 	// CRITICAL: When DeletionPolicy is Retain, orphan required secrets before finalizer removal.
 	if policy == openbaov1alpha1.DeletionPolicyRetain {
-		if err := OrphanRetentionSecrets(ctx, logger, deps.Client, cluster, deps.RetentionSecrets); err != nil {
+		retentionSecrets := deps.RetentionSecrets
+		if len(retentionSecrets) == 0 {
+			retentionSecrets = DefaultRetentionSecrets(cluster)
+		}
+		if err := OrphanRetentionSecrets(ctx, logger, deps.Client, cluster, retentionSecrets); err != nil {
 			return fmt.Errorf("failed to orphan retention secrets: %w", err)
 		}
 	}
@@ -43,4 +48,12 @@ func Handle(ctx context.Context, logger logr.Logger, deps Dependencies, cluster 
 
 	// Backup deletion for DeletionPolicyDeleteAll will be implemented alongside BackupManager data path.
 	return nil
+}
+
+// DefaultRetentionSecrets returns the generated secrets that must survive a retained cluster deletion.
+func DefaultRetentionSecrets(cluster *openbaov1alpha1.OpenBaoCluster) []string {
+	return []string{
+		cluster.Name + constants.SuffixUnsealKey,
+		cluster.Name + constants.SuffixRootToken,
+	}
 }

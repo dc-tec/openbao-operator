@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -65,6 +66,10 @@ func PatchWorkloadOwnedFields(
 	}
 
 	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner(workloadFieldOwner)); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(1).Info("Skipping workload status patch because OpenBaoCluster no longer exists", "reason", reason)
+			return nil
+		}
 		return fmt.Errorf("failed to patch workload status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
 	logger.V(1).Info("Patched OpenBaoCluster workload status (SSA)", "reason", reason, "fieldOwner", workloadFieldOwner)

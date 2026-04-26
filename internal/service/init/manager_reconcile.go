@@ -147,7 +147,11 @@ func (m *Manager) markSelfInitComplete(ctx context.Context, logger logr.Logger, 
 	cluster.Status.SelfInitialized = true
 
 	if err := m.raftManager.ReconcileAutopilotConfig(ctx, logger, cluster); err != nil {
-		logger.Error(err, "Failed to configure Raft Autopilot for self-init cluster; will retry via reconciler")
+		if operatorerrors.IsTransient(err) {
+			logger.V(1).Info("Raft Autopilot configuration not ready for self-init cluster; will retry via reconciler", "error", err)
+		} else {
+			logger.Error(err, "Failed to configure Raft Autopilot for self-init cluster; will retry via reconciler")
+		}
 	}
 	emitNormalEvent(m.recorder, cluster, ReasonInitCompleted, "Self-initialization completed for cluster %s", cluster.Name)
 }
