@@ -285,6 +285,69 @@ func TestValidateUpgrade_BlocksInvalidVersionSelection(t *testing.T) {
 	}
 }
 
+func TestValidateUpgrade_LeaderUnknownIsTransientClusterState(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.5.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			CurrentVersion: "2.4.4",
+		},
+	}
+
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: cluster.Name, Namespace: cluster.Namespace},
+		Status: appsv1.StatefulSetStatus{
+			Replicas:      3,
+			ReadyReplicas: 3,
+		},
+	}
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + constants.SuffixTLSCA,
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string][]byte{"ca.crt": []byte("fake-ca")},
+	}
+	pod0 := readyRollingTestPod(cluster, 0, false)
+	pod1 := readyRollingTestPod(cluster, 1, false)
+	pod2 := readyRollingTestPod(cluster, 2, false)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
+	mgr := NewManagerWithClientFactory(
+		k8sClient,
+		scheme,
+		nil,
+		rollingTestClientFactory(),
+		portopenbao.ClientConfig{},
+		nil,
+		"",
+	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
+
+	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !operatorerrors.IsTransientClusterState(err) {
+		t.Fatalf("expected transient cluster state error, got %v", err)
+	}
+	reason, ok := operatorerrors.Reason(err)
+	if !ok {
+		t.Fatalf("expected reasoned error, got %v", err)
+	}
+	if reason != upgrade.ReasonLeaderUnknown {
+		t.Fatalf("reason=%q, want %q", reason, upgrade.ReasonLeaderUnknown)
+	}
+	if !strings.Contains(err.Error(), "no leader found in cluster") {
+		t.Fatalf("error=%q, want no leader detail", err.Error())
+	}
+}
+
 func TestValidateUpgrade_ResumeHealthAllowsOneUnavailableTarget(t *testing.T) {
 	t.Parallel()
 

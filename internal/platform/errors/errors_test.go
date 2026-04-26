@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"reflect"
@@ -179,6 +180,16 @@ func TestIsTransientConnection(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "response body EOF",
+			err:  io.EOF,
+			want: true,
+		},
+		{
+			name: "response body unexpected EOF",
+			err:  fmt.Errorf("read failed: %w", io.ErrUnexpectedEOF),
+			want: true,
+		},
+		{
 			name: "no such host",
 			err:  newDNSError(),
 			want: true,
@@ -346,6 +357,44 @@ func TestIsTransientRemoteOverloaded(t *testing.T) {
 	}
 }
 
+func TestIsTransientClusterState(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "well-known error",
+			err:  ErrTransientClusterState,
+			want: true,
+		},
+		{
+			name: "wrapped well-known error",
+			err:  fmt.Errorf("context: %w", ErrTransientClusterState),
+			want: true,
+		},
+		{
+			name: "non-transient error",
+			err:  errors.New("invalid configuration"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsTransientClusterState(tt.err)
+			if got != tt.want {
+				t.Errorf("IsTransientClusterState() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsCRDMissingError(t *testing.T) {
 	tests := []struct {
 		name string
@@ -489,6 +538,38 @@ func TestWrapTransientRemoteOverloaded(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWrapTransientClusterState(t *testing.T) {
+	tests := []transientWrapTestCase{
+		{
+			name:            "nil error",
+			err:             nil,
+			wantWrapped:     false,
+			wantIsTransient: false,
+		},
+		{
+			name:            "already transient cluster state error",
+			err:             ErrTransientClusterState,
+			wantWrapped:     false,
+			wantIsTransient: true,
+		},
+		{
+			name:            "non-transient error",
+			err:             errors.New("leader election has not settled"),
+			wantWrapped:     true,
+			wantIsTransient: true,
+		},
+	}
+
+	runTransientWrapTests(
+		t,
+		"WrapTransientClusterState",
+		ErrTransientClusterState,
+		WrapTransientClusterState,
+		IsTransientClusterState,
+		tests,
+	)
 }
 
 func TestWrapTransientKubernetesAPI(t *testing.T) {
@@ -666,6 +747,11 @@ func TestIsTransient(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "transient cluster state",
+			err:  ErrTransientClusterState,
+			want: true,
+		},
+		{
 			name: "connection refused",
 			err:  newConnectionRefusedError(),
 			want: true,
@@ -767,6 +853,12 @@ func TestShouldRequeue(t *testing.T) {
 		{
 			name:        "transient K8s API",
 			err:         ErrTransientKubernetesAPI,
+			wantRequeue: true,
+			wantAfter:   5 * time.Second,
+		},
+		{
+			name:        "transient cluster state",
+			err:         ErrTransientClusterState,
 			wantRequeue: true,
 			wantAfter:   5 * time.Second,
 		},

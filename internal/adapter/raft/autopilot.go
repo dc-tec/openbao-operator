@@ -204,8 +204,7 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	defer cancel()
 
 	if err := client.ConfigureRaftAutopilot(autopilotCtx, desiredConfig); err != nil {
-		// Don't fail reconciliation on autopilot config errors - log and continue
-		logger.Error(err, "Failed to update Raft Autopilot configuration; will retry on next reconcile")
+		logger.V(1).Info("Raft Autopilot configuration not ready; will retry on next reconcile", "error", err)
 		return operatorerrors.WrapTransientConnection(
 			fmt.Errorf("failed to configure Raft Autopilot: %w", err),
 		)
@@ -456,7 +455,7 @@ func (m *Manager) configureAutopilotWithClient(ctx context.Context, logger logr.
 	defer cancel()
 
 	if err := client.ConfigureRaftAutopilot(autopilotCtx, desiredConfig); err != nil {
-		logger.Error(err, "Failed to update Raft Autopilot configuration; will retry on next reconcile")
+		logger.V(1).Info("Raft Autopilot configuration not ready; will retry on next reconcile", "error", err)
 		return operatorerrors.WrapTransientConnection(
 			fmt.Errorf("failed to configure Raft Autopilot: %w", err),
 		)

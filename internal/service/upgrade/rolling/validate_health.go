@@ -11,7 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
@@ -28,7 +30,12 @@ func (m *Manager) verifyClusterHealth(ctx context.Context, logger logr.Logger, c
 	}
 
 	if sts.Status.ReadyReplicas != cluster.Spec.Replicas {
-		return fmt.Errorf("not all replicas are ready (%d/%d)", sts.Status.ReadyReplicas, cluster.Spec.Replicas)
+		return transientClusterStatef(
+			upgrade.ReasonClusterNotReady,
+			"not all replicas are ready (%d/%d)",
+			sts.Status.ReadyReplicas,
+			cluster.Spec.Replicas,
+		)
 	}
 
 	podList, err := m.getClusterPods(ctx, cluster)
@@ -36,7 +43,12 @@ func (m *Manager) verifyClusterHealth(ctx context.Context, logger logr.Logger, c
 		return fmt.Errorf("failed to list cluster pods: %w", err)
 	}
 	if len(podList) != int(cluster.Spec.Replicas) {
-		return fmt.Errorf("unexpected number of pods (%d/%d)", len(podList), cluster.Spec.Replicas)
+		return transientClusterStatef(
+			upgrade.ReasonClusterNotReady,
+			"unexpected number of pods (%d/%d)",
+			len(podList),
+			cluster.Spec.Replicas,
+		)
 	}
 
 	counts, err := m.requireHealthyLeaderQuorum(ctx, logger, cluster, podList)
@@ -103,7 +115,7 @@ func (m *Manager) getUpgradeStatefulSet(ctx context.Context, cluster *openbaov1a
 	}
 	if err := m.client.Get(ctx, stsName, sts); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("StatefulSet not found; cluster may not be fully initialized")
+			return nil, transientClusterStatef(upgrade.ReasonClusterNotReady, "StatefulSet not found; cluster may not be fully initialized")
 		}
 		return nil, fmt.Errorf("failed to get StatefulSet: %w", err)
 	}
@@ -156,11 +168,16 @@ func (m *Manager) requireHealthyLeaderQuorum(
 
 	quorumRequired := requiredQuorum(cluster.Spec.Replicas)
 	if counts.healthyPods < quorumRequired {
-		return clusterHealthCounts{}, fmt.Errorf("cluster has lost quorum (%d/%d healthy, need %d)",
-			counts.healthyPods, cluster.Spec.Replicas, quorumRequired)
+		return clusterHealthCounts{}, transientClusterStatef(
+			upgrade.ReasonQuorumLost,
+			"cluster has lost quorum (%d/%d healthy, need %d)",
+			counts.healthyPods,
+			cluster.Spec.Replicas,
+			quorumRequired,
+		)
 	}
 	if counts.leaderCount == 0 {
-		return clusterHealthCounts{}, fmt.Errorf("no leader found in cluster")
+		return clusterHealthCounts{}, transientClusterStatef(upgrade.ReasonLeaderUnknown, "no leader found in cluster")
 	}
 	if counts.leaderCount > 1 {
 		return clusterHealthCounts{}, fmt.Errorf("multiple leaders detected (%d); possible split-brain", counts.leaderCount)
@@ -227,6 +244,13 @@ func (m *Manager) verifyNonTargetPodsReadyAndHealthy(
 	}
 
 	return nil
+}
+
+func transientClusterStatef(reason string, format string, args ...any) error {
+	return operatorerrors.WithReason(
+		reason,
+		operatorerrors.WrapTransientClusterState(fmt.Errorf(format, args...)),
+	)
 }
 
 // checkPodHealth queries each pod's health status and returns counts.
