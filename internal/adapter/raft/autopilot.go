@@ -15,6 +15,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/openbaotls"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -23,7 +24,6 @@ const (
 	// rootTokenSecretKey is the key used to store the root token in the Secret data.
 	rootTokenSecretKey = "token"
 	suffixRootToken    = "-root-token"
-	suffixTLSCA        = "-tls-ca"
 	roleNameOperator   = "openbao-operator"
 	portAPI            = 8200
 )
@@ -42,7 +42,7 @@ type ClientFactory interface {
 }
 
 type ClientFactoryProvider interface {
-	FactoryFor(clusterKey string, caCert []byte) ClientFactory
+	FactoryFor(clusterKey string, caCert []byte, tlsServerName string) ClientFactory
 }
 
 // Manager handles Raft Autopilot configuration for OpenBao clusters.
@@ -163,6 +163,11 @@ func (m *Manager) ReconcileAutopilotConfig(ctx context.Context, logger logr.Logg
 	var err error
 
 	if selfInitEnabled {
+		if !portauth.OperatorJWTBootstrapEnabled(cluster) {
+			logger.V(1).Info("Skipping autopilot config reconciliation for self-init cluster without operator JWT bootstrap")
+			return nil
+		}
+
 		// Use ClientManager for JWT authentication (SelfInit)
 		client, err = m.newOpenBaoClient(ctx, logger, cluster)
 		if err != nil {
@@ -474,15 +479,14 @@ func (m *Manager) newOpenBaoClient(ctx context.Context, logger logr.Logger, clus
 
 	baseURL := autopilotBaseURL(cluster)
 
-	// Get TLS CA for validation
-	caCert, err := m.getTLSCACert(ctx, cluster)
+	trust, err := m.getClientTrustBundle(ctx, cluster)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get client factory
 	clusterKey := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
-	factory := m.clientFactory(clusterKey, caCert)
+	factory := m.clientFactory(clusterKey, trust.CACert, trust.TLSServerName)
 	if factory == nil {
 		return nil, fmt.Errorf("client factory provider returned nil factory for cluster %s", clusterKey)
 	}
@@ -530,24 +534,8 @@ func (m *Manager) newScaleDownClient(ctx context.Context, logger logr.Logger, cl
 	return client, nil
 }
 
-// getTLSCACert retrieves the CA certificate from the cluster's TLS CA secret.
-func (m *Manager) getTLSCACert(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) ([]byte, error) {
-	caSecretName := cluster.Name + suffixTLSCA
-	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, caSecretName, metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsForbidden(err) {
-			return nil, operatorerrors.WrapTransientKubernetesAPI(
-				fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err),
-			)
-		}
-		return nil, fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
-	}
-
-	caCert, ok := secret.Data["ca.crt"]
-	if !ok || len(caCert) == 0 {
-		return nil, fmt.Errorf("TLS CA Secret %s/%s missing 'ca.crt' key", cluster.Namespace, caSecretName)
-	}
-	return caCert, nil
+func (m *Manager) getClientTrustBundle(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) (openbaotls.ClientTrustBundle, error) {
+	return openbaotls.ReadClientTrustBundle(ctx, m.clientset, cluster)
 }
 
 // getJWTToken retrieves a JWT token for the operator from the projected volume.
@@ -618,25 +606,14 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 
 	baseURL := autopilotBaseURL(cluster)
 
-	caSecretName := cluster.Name + suffixTLSCA
-	secret, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, caSecretName, metav1.GetOptions{})
+	trust, err := m.getClientTrustBundle(ctx, cluster)
 	if err != nil {
-		if apierrors.IsForbidden(err) {
-			return nil, operatorerrors.WrapTransientKubernetesAPI(
-				fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err),
-			)
-		}
-		return nil, fmt.Errorf("failed to get TLS CA Secret %s/%s: %w", cluster.Namespace, caSecretName, err)
-	}
-
-	caCert, ok := secret.Data["ca.crt"]
-	if !ok || len(caCert) == 0 {
-		return nil, fmt.Errorf("TLS CA Secret %s/%s missing 'ca.crt' key", cluster.Namespace, caSecretName)
+		return nil, err
 	}
 
 	// Create OpenBao client using the ClientManager for proper state isolation.
 	clusterKey := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
-	factory := m.clientFactory(clusterKey, caCert)
+	factory := m.clientFactory(clusterKey, trust.CACert, trust.TLSServerName)
 	if factory == nil {
 		return nil, fmt.Errorf("client factory provider returned nil factory for cluster %s", clusterKey)
 	}
@@ -649,11 +626,11 @@ func (m *Manager) newOpenBaoClientWithToken(ctx context.Context, cluster *openba
 	return client, nil
 }
 
-func (m *Manager) clientFactory(clusterKey string, caCert []byte) ClientFactory {
+func (m *Manager) clientFactory(clusterKey string, caCert []byte, tlsServerName string) ClientFactory {
 	if m == nil || m.clientFactoryProvider == nil {
 		return nil
 	}
-	return m.clientFactoryProvider.FactoryFor(clusterKey, caCert)
+	return m.clientFactoryProvider.FactoryFor(clusterKey, caCert, tlsServerName)
 }
 
 func findRaftServerForPod(config *portopenbao.RaftConfigurationResponse, podName string) (portopenbao.RaftServer, bool) {

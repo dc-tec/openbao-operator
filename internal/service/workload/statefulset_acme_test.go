@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"slices"
 	"testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -79,6 +80,70 @@ func TestStatefulSet_ACMEMode_WithSharedCacheMount(t *testing.T) {
 	}
 	if !hasVolumeMountWithPath(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts, acmeCacheVolumeName, "/bao/acme-cache") {
 		t.Fatal("expected OpenBao container to mount ACME shared cache volume at /bao/acme-cache")
+	}
+}
+
+func TestStatefulSet_ProbeDefaults(t *testing.T) {
+	cluster := newMinimalCluster("probe-cluster", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
+
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
+	if err != nil {
+		t.Fatalf("buildStatefulSet() error = %v", err)
+	}
+
+	openBaoContainer := statefulSet.Spec.Template.Spec.Containers[0]
+	if openBaoContainer.StartupProbe == nil || openBaoContainer.StartupProbe.Exec == nil {
+		t.Fatal("expected startup probe exec action")
+	}
+	if !slices.Contains(openBaoContainer.StartupProbe.Exec.Command, "-mode=startup") {
+		t.Fatalf("startup probe command=%v, want -mode=startup", openBaoContainer.StartupProbe.Exec.Command)
+	}
+	if !slices.Contains(openBaoContainer.StartupProbe.Exec.Command, "-ca-file="+constants.PathTLSCACert) {
+		t.Fatalf("startup probe command=%v, want TLS CA file", openBaoContainer.StartupProbe.Exec.Command)
+	}
+	if openBaoContainer.StartupProbe.InitialDelaySeconds != 10 {
+		t.Fatalf("startup initial delay=%d, want 10", openBaoContainer.StartupProbe.InitialDelaySeconds)
+	}
+	if openBaoContainer.ReadinessProbe == nil {
+		t.Fatal("expected readiness probe")
+	}
+	if openBaoContainer.ReadinessProbe.InitialDelaySeconds != 20 {
+		t.Fatalf("readiness initial delay=%d, want 20", openBaoContainer.ReadinessProbe.InitialDelaySeconds)
+	}
+}
+
+func TestStatefulSet_ACMEMode_ProbeTrustUsesACMEPKICA(t *testing.T) {
+	cluster := newMinimalCluster("acme-cluster", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
+		Domain:       "example.com",
+	}
+	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+		ACMECARoot: "/etc/bao/seal-creds/ca.crt",
+	}
+
+	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
+	if err != nil {
+		t.Fatalf("buildStatefulSet() error = %v", err)
+	}
+
+	openBaoContainer := statefulSet.Spec.Template.Spec.Containers[0]
+	startupCommand := openBaoContainer.StartupProbe.Exec.Command
+	if !slices.Contains(startupCommand, "-servername=example.com") {
+		t.Fatalf("startup probe command=%v, want ACME server name", startupCommand)
+	}
+	if !slices.Contains(startupCommand, "-ca-file=/etc/bao/seal-creds/pki-ca.crt") {
+		t.Fatalf("startup probe command=%v, want ACME PKI CA file", startupCommand)
+	}
+
+	readinessCommand := openBaoContainer.ReadinessProbe.Exec.Command
+	if !slices.Contains(readinessCommand, "-servername=example.com") {
+		t.Fatalf("readiness probe command=%v, want ACME server name", readinessCommand)
+	}
+	if !slices.Contains(readinessCommand, "-ca-file=/etc/bao/seal-creds/pki-ca.crt") {
+		t.Fatalf("readiness probe command=%v, want ACME PKI CA file", readinessCommand)
 	}
 }
 

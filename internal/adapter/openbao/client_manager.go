@@ -29,8 +29,9 @@ func NewClientManager(defaults portopenbao.ClientConfig) *ClientManager {
 //
 // The clusterKey should be a stable identifier for the cluster, typically
 // in the format "namespace/name". The caCert is the PEM-encoded CA certificate
-// for TLS verification.
-func (m *ClientManager) FactoryFor(clusterKey string, caCert []byte) *ClientFactory {
+// for TLS verification. tlsServerName optionally overrides the hostname used
+// for TLS verification when clients connect through a different Service name.
+func (m *ClientManager) FactoryFor(clusterKey string, caCert []byte, tlsServerName ...string) *ClientFactory {
 	if m == nil {
 		return nil
 	}
@@ -40,6 +41,9 @@ func (m *ClientManager) FactoryFor(clusterKey string, caCert []byte) *ClientFact
 	template := m.defaults
 	template.ClusterKey = clusterKey
 	template.CACert = caCert
+	if len(tlsServerName) > 0 {
+		template.TLSServerName = tlsServerName[0]
+	}
 
 	return newClientFactoryWithState(template, state)
 }

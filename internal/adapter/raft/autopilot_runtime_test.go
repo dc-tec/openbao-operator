@@ -118,31 +118,73 @@ func TestHandleJWTAuthError(t *testing.T) {
 	}
 }
 
-func TestGetTLSCACert(t *testing.T) {
+func TestGetClientTrustBundle(t *testing.T) {
 	t.Parallel()
 
-	cluster := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "tenant-ns"}}
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster-a", Namespace: "tenant-ns"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{Enabled: true},
+		},
+	}
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("operator managed tls reads cluster ca secret", func(t *testing.T) {
 		clientset := k8sfake.NewClientset(&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster-a-tls-ca", Namespace: "tenant-ns"},
 			Data:       map[string][]byte{"ca.crt": []byte("pem-data")},
 		})
 		mgr := NewManager(clientset, nil)
 
-		ca, err := mgr.getTLSCACert(context.Background(), cluster)
+		trust, err := mgr.getClientTrustBundle(context.Background(), cluster)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if string(ca) != "pem-data" {
-			t.Fatalf("ca=%q, want pem-data", string(ca))
+		if string(trust.CACert) != "pem-data" {
+			t.Fatalf("ca=%q, want pem-data", string(trust.CACert))
+		}
+		if trust.TLSServerName != "openbao-cluster-cluster-a.local" {
+			t.Fatalf("tlsServerName=%q, want openbao-cluster-cluster-a.local", trust.TLSServerName)
+		}
+	})
+
+	t.Run("private acme reads pki ca from unseal credentials secret", func(t *testing.T) {
+		acmeCluster := cluster.DeepCopy()
+		acmeCluster.Spec.TLS = openbaov1alpha1.TLSConfig{
+			Enabled: true,
+			Mode:    openbaov1alpha1.TLSModeACME,
+			ACME: &openbaov1alpha1.ACMEConfig{
+				Domains: []string{"cluster-a-acme.tenant-ns.svc"},
+			},
+		}
+		acmeCluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+			ACMECARoot: "/etc/bao/seal-creds/ca.crt",
+		}
+		acmeCluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			CredentialsSecretRef: &corev1.LocalObjectReference{Name: "seal-creds"},
+		}
+
+		clientset := k8sfake.NewClientset(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "seal-creds", Namespace: "tenant-ns"},
+			Data:       map[string][]byte{"pki-ca.crt": []byte("pki-ca-data")},
+		})
+		mgr := NewManager(clientset, nil)
+
+		trust, err := mgr.getClientTrustBundle(context.Background(), acmeCluster)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if string(trust.CACert) != "pki-ca-data" {
+			t.Fatalf("ca=%q, want pki-ca-data", string(trust.CACert))
+		}
+		if trust.TLSServerName != "cluster-a-acme.tenant-ns.svc" {
+			t.Fatalf("tlsServerName=%q, want ACME service name", trust.TLSServerName)
 		}
 	})
 
 	t.Run("missing secret", func(t *testing.T) {
 		mgr := NewManager(k8sfake.NewClientset(), nil)
-		_, err := mgr.getTLSCACert(context.Background(), cluster)
-		if err == nil || !strings.Contains(err.Error(), "failed to get TLS CA Secret") {
+		_, err := mgr.getClientTrustBundle(context.Background(), cluster)
+		if err == nil || !strings.Contains(err.Error(), "failed to get OpenBao trust Secret") {
 			t.Fatalf("expected missing secret error, got %v", err)
 		}
 	})
@@ -152,8 +194,8 @@ func TestGetTLSCACert(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster-a-tls-ca", Namespace: "tenant-ns"},
 		})
 		mgr := NewManager(clientset, nil)
-		_, err := mgr.getTLSCACert(context.Background(), cluster)
-		if err == nil || !strings.Contains(err.Error(), "missing 'ca.crt' key") {
+		_, err := mgr.getClientTrustBundle(context.Background(), cluster)
+		if err == nil || !strings.Contains(err.Error(), `missing "ca.crt" key`) {
 			t.Fatalf("expected missing key error, got %v", err)
 		}
 	})
@@ -164,7 +206,7 @@ func TestGetTLSCACert(t *testing.T) {
 			return true, nil, apierrors.NewForbidden(schema.GroupResource{Group: "", Resource: "secrets"}, "cluster-a-tls-ca", errors.New("forbidden"))
 		})
 		mgr := NewManager(clientset, nil)
-		_, err := mgr.getTLSCACert(context.Background(), cluster)
+		_, err := mgr.getClientTrustBundle(context.Background(), cluster)
 		if err == nil {
 			t.Fatalf("expected forbidden error")
 		}
@@ -207,8 +249,11 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 		mgr := NewManager(k8sfake.NewClientset(), nil)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
-			Spec:       openbaov1alpha1.OpenBaoClusterSpec{Replicas: 3},
-			Status:     openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
+			Spec: openbaov1alpha1.OpenBaoClusterSpec{
+				Replicas: 3,
+				TLS:      openbaov1alpha1.TLSConfig{Enabled: true},
+			},
+			Status: openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
 		}
 		if err := mgr.ReconcileAutopilotConfig(context.Background(), logr.Discard(), cluster); err != nil {
 			t.Fatalf("expected nil error for missing root token secret, got %v", err)
@@ -225,6 +270,23 @@ func TestReconcileAutopilotConfig_EarlyBranches(t *testing.T) {
 		}
 		if err := mgr.ReconcileAutopilotConfig(context.Background(), logr.Discard(), cluster); err != nil {
 			t.Fatalf("expected nil error when root token is empty, got %v", err)
+		}
+	})
+
+	t.Run("self-init without operator jwt bootstrap is skipped", func(t *testing.T) {
+		mgr := NewManager(k8sfake.NewClientset(), nil)
+		cluster := &openbaov1alpha1.OpenBaoCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+			Spec: openbaov1alpha1.OpenBaoClusterSpec{
+				Replicas: 3,
+				SelfInit: &openbaov1alpha1.SelfInitConfig{
+					Enabled: true,
+				},
+			},
+			Status: openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
+		}
+		if err := mgr.ReconcileAutopilotConfig(context.Background(), logr.Discard(), cluster); err != nil {
+			t.Fatalf("expected nil error when operator JWT bootstrap is disabled, got %v", err)
 		}
 	})
 
@@ -302,14 +364,16 @@ func (f *fakeScaleDownFactory) NewWithToken(string, string) (Client, error) {
 }
 
 type fakeScaleDownFactoryProvider struct {
-	factory    ClientFactory
-	clusterKey string
-	caCert     []byte
+	factory       ClientFactory
+	clusterKey    string
+	caCert        []byte
+	tlsServerName string
 }
 
-func (p *fakeScaleDownFactoryProvider) FactoryFor(clusterKey string, caCert []byte) ClientFactory {
+func (p *fakeScaleDownFactoryProvider) FactoryFor(clusterKey string, caCert []byte, tlsServerName string) ClientFactory {
 	p.clusterKey = clusterKey
 	p.caCert = append([]byte(nil), caCert...)
+	p.tlsServerName = tlsServerName
 	return p.factory
 }
 
@@ -321,6 +385,7 @@ func TestPrepareScaleDown_RemovesFollowerAndUpdatesAutopilot(t *testing.T) {
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile:  openbaov1alpha1.ProfileDevelopment,
 			Replicas: 3,
+			TLS:      openbaov1alpha1.TLSConfig{Enabled: true},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{Initialized: true},
 	}
@@ -379,6 +444,9 @@ func TestPrepareScaleDown_RemovesFollowerAndUpdatesAutopilot(t *testing.T) {
 	}
 	if string(provider.caCert) != "pem-data" {
 		t.Fatalf("caCert = %q, want pem-data", string(provider.caCert))
+	}
+	if provider.tlsServerName != "openbao-cluster-cluster.local" {
+		t.Fatalf("tlsServerName = %q, want openbao-cluster-cluster.local", provider.tlsServerName)
 	}
 }
 

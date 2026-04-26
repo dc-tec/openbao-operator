@@ -19,8 +19,9 @@ const (
 	portAPI          = 8200
 	pathTLSCACert    = "/etc/bao/tls/ca.crt"
 
-	livenessPath  = apiPathSysHealth + "?standbyok=true&sealedcode=204&uninitcode=204"
-	readinessPath = apiPathSysHealth + "?standbyok=true"
+	startupPath   = apiPathSysHealth + "?standbyok=true&perfstandbyok=true&sealedcode=204&uninitcode=204"
+	livenessPath  = apiPathSysHealth + "?standbyok=true&perfstandbyok=true&sealedcode=204&uninitcode=204"
+	readinessPath = apiPathSysHealth + "?standbyok=true&perfstandbyok=true"
 
 	loopbackHost = "localhost"
 
@@ -53,12 +54,11 @@ func run(ctx context.Context) error {
 			mode, modeStartup, modeLiveness, modeReadiness)
 	}
 
-	// Determine if we should allow insecure fallback for ACME mode
-	// For readiness probes in ACME mode, allow insecure loopback fallback during initial
-	// certificate acquisition. This handles the case where OpenBao is still obtaining the
-	// ACME certificate and using a temporary self-signed certificate.
+	// Determine if we should allow insecure fallback for ACME mode.
+	// ACME probes may run while OpenBao is still acquiring its serving certificate.
+	// The fallback is restricted to loopback by the prober implementation.
 	isACMEMode := serverName != "" && serverName != loopbackHost
-	allowInsecureFallback := mode == modeLiveness || (mode == modeReadiness && isACMEMode)
+	allowInsecureFallback := mode == modeLiveness || (isACMEMode && (mode == modeStartup || mode == modeReadiness))
 
 	prober, err := probe.NewProber(probe.ProberConfig{
 		Addr:                  addr,
@@ -66,7 +66,7 @@ func run(ctx context.Context) error {
 		ServerName:            serverName,
 		Timeout:               timeout,
 		AllowInsecureFallback: allowInsecureFallback,
-		StartupPath:           "",
+		StartupPath:           startupPath,
 		LivenessPath:          livenessPath,
 		ReadinessPath:         readinessPath,
 	})

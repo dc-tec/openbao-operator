@@ -193,6 +193,9 @@ func TestReconcileOperatorInitFailure_EmitsInitFailedEvent(t *testing.T) {
 			Name:      "cluster",
 			Namespace: "default",
 		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{Enabled: true},
+		},
 	}
 
 	started := true
