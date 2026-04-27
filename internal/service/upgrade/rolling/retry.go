@@ -46,7 +46,7 @@ func (m *Manager) prepareFailedUpgradeRetry(ctx context.Context, logger logr.Log
 	if err := m.cleanupStepDownJobForRetry(ctx, logger, cluster); err != nil {
 		return false, err
 	}
-	if err := m.resetTargetPodForRetry(ctx, logger, cluster); err != nil {
+	if err := m.resetRolloutPodsForRetry(ctx, logger, cluster); err != nil {
 		return false, err
 	}
 
@@ -125,17 +125,13 @@ func (m *Manager) cleanupStepDownJobForRetry(ctx context.Context, logger logr.Lo
 	return nil
 }
 
-func (m *Manager) resetTargetPodForRetry(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func (m *Manager) resetRolloutPodsForRetry(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if cluster == nil || cluster.Status.Upgrade == nil {
 		return nil
 	}
 	if cluster.Status.Upgrade.CurrentPartition <= 0 {
 		return nil
 	}
-
-	targetOrdinal := cluster.Status.Upgrade.CurrentPartition - 1
-	targetPod := fmt.Sprintf("%s-%d", cluster.Name, targetOrdinal)
-	podKey := types.NamespacedName{Namespace: cluster.Namespace, Name: targetPod}
 
 	sts := &appsv1.StatefulSet{}
 	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, sts); err != nil {
@@ -145,12 +141,44 @@ func (m *Manager) resetTargetPodForRetry(ctx context.Context, logger logr.Logger
 		return fmt.Errorf("failed to get StatefulSet %s/%s for retry pod reset: %w", cluster.Namespace, cluster.Name, err)
 	}
 
+	desiredImage := strings.TrimSpace(baoContainerImage(sts.Spec.Template.Spec.Containers))
+	specImage := strings.TrimSpace(cluster.Spec.Image)
+	if specImage != "" && desiredImage != specImage {
+		logger.Info("Waiting for StatefulSet template to reflect retry target image before resetting failed pods",
+			"statefulSetImage", desiredImage,
+			"specImage", specImage)
+		return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf(
+			"StatefulSet template still references %q while retry target image is %q",
+			desiredImage,
+			specImage,
+		))
+	}
+
+	for _, ordinal := range retryResetOrdinals(cluster) {
+		if err := m.resetRolloutPodForRetry(ctx, logger, cluster, sts, ordinal); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Manager) resetRolloutPodForRetry(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	sts *appsv1.StatefulSet,
+	ordinal int32,
+) error {
+	targetPod := fmt.Sprintf("%s-%d", cluster.Name, ordinal)
+	podKey := types.NamespacedName{Namespace: cluster.Namespace, Name: targetPod}
+
 	pod := &corev1.Pod{}
 	if err := m.client.Get(ctx, podKey, pod); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to get target pod %s/%s for retry reset: %w", cluster.Namespace, targetPod, err)
+		return fmt.Errorf("failed to get rollout pod %s/%s for retry reset: %w", cluster.Namespace, targetPod, err)
 	}
 
 	podRevision := ""
@@ -160,19 +188,6 @@ func (m *Manager) resetTargetPodForRetry(ctx context.Context, logger logr.Logger
 	desiredRevision := strings.TrimSpace(sts.Status.UpdateRevision)
 	podImage := strings.TrimSpace(baoContainerImage(pod.Spec.Containers))
 	desiredImage := strings.TrimSpace(baoContainerImage(sts.Spec.Template.Spec.Containers))
-	specImage := strings.TrimSpace(cluster.Spec.Image)
-
-	if specImage != "" && desiredImage != specImage {
-		logger.Info("Waiting for StatefulSet template to reflect retry target image before resetting failed pod",
-			"pod", targetPod,
-			"statefulSetImage", desiredImage,
-			"specImage", specImage)
-		return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf(
-			"StatefulSet template still references %q while retry target image is %q",
-			desiredImage,
-			specImage,
-		))
-	}
 
 	needsDelete := !isPodReady(pod)
 	if desiredRevision != "" && podRevision != desiredRevision {
@@ -186,16 +201,46 @@ func (m *Manager) resetTargetPodForRetry(ctx context.Context, logger logr.Logger
 	}
 
 	if err := m.client.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("failed to delete target pod %s/%s for retry reset: %w", cluster.Namespace, targetPod, err)
+		return fmt.Errorf("failed to delete rollout pod %s/%s for retry reset: %w", cluster.Namespace, targetPod, err)
 	}
 
-	logger.Info("Deleted target pod before retry to force a fresh rollout attempt",
+	logger.Info("Deleted rollout pod before retry to force a fresh rollout attempt",
 		"pod", targetPod,
+		"ordinal", ordinal,
 		"podRevision", podRevision,
 		"targetRevision", desiredRevision,
 		"podImage", podImage,
 		"desiredImage", desiredImage)
 	return nil
+}
+
+func retryResetOrdinals(cluster *openbaov1alpha1.OpenBaoCluster) []int32 {
+	if cluster == nil || cluster.Status.Upgrade == nil || cluster.Status.Upgrade.CurrentPartition <= 0 {
+		return nil
+	}
+
+	seen := make(map[int32]struct{})
+	ordinals := make([]int32, 0, 1+len(cluster.Status.Upgrade.CompletedPods))
+	add := func(ordinal int32) {
+		if ordinal < 0 {
+			return
+		}
+		if cluster.Spec.Replicas > 0 && ordinal >= cluster.Spec.Replicas {
+			return
+		}
+		if _, ok := seen[ordinal]; ok {
+			return
+		}
+		seen[ordinal] = struct{}{}
+		ordinals = append(ordinals, ordinal)
+	}
+
+	add(cluster.Status.Upgrade.CurrentPartition - 1)
+	for _, ordinal := range cluster.Status.Upgrade.CompletedPods {
+		add(ordinal)
+	}
+
+	return ordinals
 }
 
 func baoContainerImage(containers []corev1.Container) string {

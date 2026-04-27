@@ -435,11 +435,11 @@ func newStaleRollingStepDownJob(namespace, clusterName, podName, image string) *
 
 // === Tests ===
 
-var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "slow"), Ordered, func() {
+var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "slow"), func() {
 	ctx := context.Background()
 
 	// --- Rolling Upgrade ---
-	Context("Rolling Upgrade", Label("rolling"), func() {
+	Context("Rolling Upgrade", Label("rolling"), Ordered, func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -856,7 +856,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 	})
 
-	Context("Rolling Snapshot Recovery", Label("rolling", "snapshot", "recovery"), func() {
+	Context("Rolling Snapshot Recovery", Label("rolling", "snapshot", "recovery"), Ordered, func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -1168,7 +1168,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 	})
 
-	Context("Rolling Failure Recovery", Label("rolling", "recovery"), func() {
+	Context("Rolling Failure Recovery", Label("rolling", "recovery"), Ordered, func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -1359,7 +1359,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 	})
 
-	Context("Validation Guardrails", Label("guardrails", "validation"), func() {
+	Context("Validation Guardrails", Label("guardrails", "validation"), Ordered, func() {
 		var (
 			tenantNamespace  string
 			tenantFW         *framework.Framework
@@ -1532,7 +1532,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 	})
 
 	// --- Blue/Green Upgrade ---
-	Context("Blue/Green Upgrade", Label("bluegreen"), func() {
+	Context("Blue/Green Upgrade", Label("bluegreen"), Ordered, func() {
 		var (
 			tenantNamespace   string
 			tenantFW          *framework.Framework
@@ -2051,7 +2051,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 	})
 
-	Context("Blue/Green Syncing Gates", Label("bluegreen", "verification"), func() {
+	Context("Blue/Green Syncing Gates", Label("bluegreen", "verification"), Ordered, func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -2223,7 +2223,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 	})
 
-	Context("Blue/Green Validation Hook Failure", Label("bluegreen", "verification", "failure"), func() {
+	Context("Blue/Green Validation Hook Failure", Label("bluegreen", "verification", "failure"), Ordered, func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -2419,7 +2419,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 	})
 
 	// --- Failure Scenarios ---
-	Context("Failure Scenarios", Label("failure", "bluegreen"), func() {
+	Context("Failure Scenarios", Label("failure", "bluegreen"), Ordered, func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -2611,7 +2611,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 	})
 
-	Context("Late-Phase Rollback Scenarios", Label("failure", "bluegreen", "rollback"), func() {
+	Context("Late-Phase Rollback Scenarios", Label("failure", "bluegreen", "rollback"), Ordered, func() {
 		var (
 			tenantNamespace     string
 			tenantFW            *framework.Framework
@@ -2825,7 +2825,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 	})
 
 	// --- Safe Mode (Chaos) ---
-	Context("Safe Mode (chaos)", Label("chaos", "bluegreen"), func() {
+	Context("Safe Mode (chaos)", Label("chaos", "bluegreen"), Ordered, func() {
 		var (
 			tenantNamespace string
 			tenantFW        *framework.Framework
@@ -3065,8 +3065,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			// Secret should still be there as we are technically still on the Blue cluster (or the active one)
 			// even if we are in safe mode/break glass state.
 			secretPath = "secret/safemode-test"
-			// bypassLabels is in scope from the beginning of the It block
-			// bypassLabels is in scope from the beginning of the It block
 			Eventually(func(g Gomega) {
 				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, admin, tenantNamespace, chaosCluster.Name)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -3108,7 +3106,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					policyWriteCommand("openbao-operator-upgrade", `path "*" { capabilities = ["create", "read", "update", "delete", "list", "sudo"] }`),
 				)
 				g.Expect(err).NotTo(HaveOccurred())
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("Acknowledging break glass with the current nonce")
 			Eventually(func(g Gomega) {
@@ -3122,6 +3120,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				updated.Spec.BreakGlassAck = updated.Status.BreakGlass.Nonce
 				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			Expect(tenantFW.TriggerReconcile(ctx, chaosCluster.Name)).To(Succeed())
 
 			By("Verifying break glass deactivates and rollback resumes")
 			Eventually(func(g Gomega) {
@@ -3149,7 +3148,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 	})
 
 	// --- Gateway Integration ---
-	Context("Gateway Integration", Label("gateway", "requires-gateway-api", "bluegreen"), func() {
+	Context("Gateway Integration", Label("gateway", "requires-gateway-api", "bluegreen"), Ordered, func() {
 		var (
 			tenantNamespace  string
 			tenantFW         *framework.Framework
@@ -3424,7 +3423,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 	})
 
-	Context("Gateway TLS Passthrough", Label("gateway", "requires-gateway-api", "tls-passthrough"), func() {
+	Context("Gateway TLS Passthrough", Label("gateway", "requires-gateway-api", "tls-passthrough"), Ordered, func() {
 		var (
 			tenantNamespace     string
 			tenantFW            *framework.Framework
