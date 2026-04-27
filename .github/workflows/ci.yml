@@ -258,7 +258,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           trivyignores: .trivyignore
-          skip-files: config/rbac/provisioner_minimal_role.yaml,charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml,config/rbac/single_tenant_clusterrole.yaml,config/overlays/single-tenant/single_tenant_clusterrole.yaml,config/overlays/single-tenant-custom-identity/single_tenant_clusterrole.yaml,dist/install.yaml
+          skip-files: config/rbac/controller_openbaocluster_clusterrole.yaml,charts/openbao-operator/templates/rbac/controller-clusterroles.yaml,config/rbac/provisioner_minimal_role.yaml,charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml,config/rbac/single_tenant_clusterrole.yaml,config/overlays/single-tenant/single_tenant_clusterrole.yaml,config/overlays/single-tenant-custom-identity/single_tenant_clusterrole.yaml,dist/install.yaml
           skip-dirs: test/manifests,vendor,website/node_modules,.github/tools/node_modules,bin
           trivy-config: .trivy.yaml
 

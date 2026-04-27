@@ -925,6 +925,8 @@ security-scan-fs: ## Run the Trivy filesystem scan used by CI.
 		--ignorefile .trivyignore \
 		--skip-version-check \
 		--helm-kube-version 1.34.0 \
+		--skip-files config/rbac/controller_openbaocluster_clusterrole.yaml \
+		--skip-files charts/openbao-operator/templates/rbac/controller-clusterroles.yaml \
 		--skip-files config/rbac/provisioner_minimal_role.yaml \
 		--skip-files charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml \
 		--skip-files config/rbac/single_tenant_clusterrole.yaml \
