@@ -303,8 +303,13 @@ func RunBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 		}
 
 		logger.Info("Promoting Blue peer to voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
-		if err := client.PromoteRaftPeer(ctx, server.NodeID); err != nil {
+		alreadyVoter, err := promoteRaftPeerAndVerify(ctx, client, server.NodeID)
+		if err != nil {
 			return fmt.Errorf("failed to promote Blue peer %q to voter during consensus repair: %w", server.NodeID, err)
+		}
+		if alreadyVoter {
+			logger.V(1).Info("Blue peer already voter during consensus repair", "node_id", server.NodeID, "address", server.Address)
+			continue
 		}
 	}
 
@@ -387,8 +392,13 @@ func RunBlueGreenPromoteGreenVoters(ctx context.Context, logger logr.Logger, cfg
 		}
 
 		logger.V(1).Info("Promoting Green pod to voter", "pod_name", greenPodName)
-		if err := client.PromoteRaftPeer(ctx, greenPodName); err != nil {
+		alreadyVoter, err := promoteRaftPeerAndVerify(ctx, client, greenPodName)
+		if err != nil {
 			return fmt.Errorf("failed to promote Green pod %q to voter: %w", greenPodName, err)
+		}
+		if alreadyVoter {
+			logger.V(1).Info("Green pod is already a voter, skipping", "pod_name", greenPodName)
+			continue
 		}
 	}
 

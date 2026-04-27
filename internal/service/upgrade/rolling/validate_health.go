@@ -222,28 +222,44 @@ func (m *Manager) verifyNonTargetPodsReadyAndHealthy(
 
 		pod := podsByName[podName]
 		if pod == nil {
-			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is missing; current target is %s", podName, targetPodName)
+			return resumePodReadyBlocker(cluster, podName, "rolling upgrade cannot continue while non-target pod %s is missing; current target is %s", podName, targetPodName)
 		}
 		if !isPodReady(pod) {
-			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is not ready; current target is %s", podName, targetPodName)
+			return resumePodReadyBlocker(cluster, podName, "rolling upgrade cannot continue while non-target pod %s is not ready; current target is %s", podName, targetPodName)
 		}
 
 		apiClient, err := raftops.NewClusterPodClient(cluster, podName, caCert, m.clientFactory, raftops.ClusterPodClientOptions{})
 		if err != nil {
-			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is unavailable: %w", podName, err)
+			return resumePodReadyBlocker(cluster, podName, "rolling upgrade cannot continue while non-target pod %s is unavailable: %w", podName, err)
 		}
 
 		healthy, err := apiClient.IsHealthy(ctx)
 		if err != nil {
 			logger.V(1).Info("Non-target pod health check failed during rolling resume validation", "pod", podName, "error", err)
-			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is unhealthy: %w", podName, err)
+			return resumePodHealthBlocker(cluster, podName, "rolling upgrade cannot continue while non-target pod %s is unhealthy: %w", podName, err)
 		}
 		if !healthy {
-			return fmt.Errorf("rolling upgrade cannot continue while non-target pod %s is unhealthy; current target is %s", podName, targetPodName)
+			return resumePodHealthBlocker(cluster, podName, "rolling upgrade cannot continue while non-target pod %s is unhealthy; current target is %s", podName, targetPodName)
 		}
 	}
 
 	return nil
+}
+
+func resumePodReadyBlocker(cluster *openbaov1alpha1.OpenBaoCluster, podName string, format string, args ...any) error {
+	err := fmt.Errorf(format, args...)
+	if timeoutErr := markResumeUpgradeTimeout(cluster, podName); timeoutErr != nil {
+		return fmt.Errorf("%v: %w", err, timeoutErr)
+	}
+	return err
+}
+
+func resumePodHealthBlocker(cluster *openbaov1alpha1.OpenBaoCluster, podName string, format string, args ...any) error {
+	err := fmt.Errorf(format, args...)
+	if timeoutErr := failUpgradeIfStartedTimeout(cluster, podHealthTimeout(podName)); timeoutErr != nil {
+		return fmt.Errorf("%v: %w", err, timeoutErr)
+	}
+	return err
 }
 
 func transientClusterStatef(reason string, format string, args ...any) error {
