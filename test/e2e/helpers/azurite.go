@@ -212,7 +212,7 @@ func CreateAzuriteContainer(
 	}
 
 	// Generate unique pod name
-	suffix, err := randomHexSuffix(4)
+	suffix, err := randomHexSuffix()
 	if err != nil {
 		return fmt.Errorf("failed to generate pod suffix: %w", err)
 	}

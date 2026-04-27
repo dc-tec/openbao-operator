@@ -369,7 +369,12 @@ func waitForRustFSDeploymentReady(ctx context.Context, c client.Client, namespac
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("context canceled while waiting for RustFS Deployment %s/%s to be ready: %w", namespace, name, ctx.Err())
+			return fmt.Errorf(
+				"context canceled while waiting for RustFS Deployment %s/%s to be ready: %w",
+				namespace,
+				name,
+				ctx.Err(),
+			)
 		case <-deploymentReadyDeadline.C:
 			return fmt.Errorf(
 				"timed out waiting for RustFS Deployment %s/%s to be ready (ready=%d/%d)\n%s",
@@ -495,7 +500,7 @@ func waitForRustFSRemoteS3Readiness(
 	}
 	verifyCommand += " && exit 0; sleep 2; done; exit 1"
 
-	suffix, err := randomHexSuffix(4)
+	suffix, err := randomHexSuffix()
 	if err != nil {
 		return fmt.Errorf("failed to generate cross-node probe pod suffix: %w", err)
 	}
@@ -649,7 +654,7 @@ func createRustFSBuckets(
 
 	command := strings.Join(bucketCommands, " && ")
 
-	suffix, err := randomHexSuffix(4)
+	suffix, err := randomHexSuffix()
 	if err != nil {
 		return fmt.Errorf("failed to generate bucket creation pod suffix: %w", err)
 	}
@@ -720,12 +725,8 @@ func createRustFSBuckets(
 	return nil
 }
 
-func randomHexSuffix(bytes int) (string, error) {
-	if bytes <= 0 {
-		return "", fmt.Errorf("bytes must be positive")
-	}
-
-	raw := make([]byte, bytes)
+func randomHexSuffix() (string, error) {
+	raw := make([]byte, 4)
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("failed to read random bytes: %w", err)
 	}
