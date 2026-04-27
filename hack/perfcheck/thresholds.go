@@ -23,26 +23,104 @@ func buildThresholds(baseline baselineDocument) thresholdDocument {
 	}
 
 	for scenarioName, scenario := range baseline.Scenarios {
-		thresholds := make(map[string]float64, len(metricKeys))
-		for _, key := range metricKeys {
+		policies := scenario.MetricPolicies
+		if len(policies) == 0 {
+			policies = defaultMetricPoliciesForKeys(metricKeys)
+		}
+
+		thresholds := make(map[string]float64, len(policies))
+		normalizedPolicies := make(map[string]metricPolicySpec, len(policies))
+		for key, policy := range policies {
+			normalized := normalizeMetricPolicy(key, policy)
+			normalizedPolicies[key] = normalized
+			if normalized.Policy == metricPolicyIgnore {
+				continue
+			}
+			if normalized.Policy == metricPolicyMustBeZero {
+				thresholds[key] = 0
+				if normalized.Threshold != nil {
+					thresholds[key] = *normalized.Threshold
+				}
+				continue
+			}
+			if normalized.Threshold != nil {
+				thresholds[key] = *normalized.Threshold
+				continue
+			}
+
 			maxVal := scenario.MaxMetrics[key]
 			multiplier := baseline.Multipliers.Max
-			if _, ok := p95MetricSet[key]; ok {
+			if normalized.Multiplier == metricMultiplierP95 {
 				multiplier = baseline.Multipliers.P95
 			}
-			thresholds[key] = math.Ceil(maxVal * multiplier)
+			threshold := math.Ceil(maxVal * multiplier)
+			if normalized.Floor != nil && threshold < *normalized.Floor {
+				threshold = *normalized.Floor
+			}
+			thresholds[key] = threshold
 		}
 		out.Scenarios[scenarioName] = scenarioThresholds{
-			LabelFilter: scenario.LabelFilter,
-			Metrics:     thresholds,
+			LabelFilter:    scenario.LabelFilter,
+			MetricPolicies: normalizedPolicies,
+			Metrics:        thresholds,
 		}
 	}
 
 	return out
 }
 
+type comparisonResult struct {
+	Findings []string
+	Warnings []string
+}
+
 func compareScenarioMetrics(scenarioName string, measured map[string]float64, thresholds scenarioThresholds) []string {
-	findings := make([]string, 0)
+	return compareScenarioMetricsDetailed(scenarioName, measured, thresholds).Findings
+}
+
+func applyScenarioPolicy(thresholds scenarioThresholds, scenario scenarioSpec) scenarioThresholds {
+	thresholds.LabelFilter = scenario.LabelFilter
+	if len(scenario.MetricPolicies) == 0 {
+		return thresholds
+	}
+
+	filteredMetrics := make(map[string]float64, len(scenario.MetricPolicies))
+	for metric, policy := range scenario.MetricPolicies {
+		normalized := normalizeMetricPolicy(metric, policy)
+		if normalized.Policy == metricPolicyIgnore {
+			continue
+		}
+		if threshold, ok := thresholds.Metrics[metric]; ok {
+			filteredMetrics[metric] = threshold
+		}
+	}
+	thresholds.Metrics = filteredMetrics
+	thresholds.MetricPolicies = scenario.MetricPolicies
+	return thresholds
+}
+
+func validateScenarioThresholds(thresholds scenarioThresholds, scenario scenarioSpec) error {
+	for metric, policy := range scenario.MetricPolicies {
+		normalized := normalizeMetricPolicy(metric, policy)
+		if normalized.Policy == metricPolicyIgnore {
+			continue
+		}
+		if _, ok := thresholds.Metrics[metric]; !ok {
+			return fmt.Errorf("thresholds missing metric %q for scenario %q", metric, scenario.Name)
+		}
+	}
+	return nil
+}
+
+func compareScenarioMetricsDetailed(
+	scenarioName string,
+	measured map[string]float64,
+	thresholds scenarioThresholds,
+) comparisonResult {
+	result := comparisonResult{
+		Findings: make([]string, 0),
+		Warnings: make([]string, 0),
+	}
 	keys := make([]string, 0, len(thresholds.Metrics))
 	for key := range thresholds.Metrics {
 		keys = append(keys, key)
@@ -51,22 +129,43 @@ func compareScenarioMetrics(scenarioName string, measured map[string]float64, th
 
 	for _, key := range keys {
 		threshold := thresholds.Metrics[key]
+		policy := normalizeMetricPolicy(key, thresholds.MetricPolicies[key])
+		if policy.Policy == metricPolicyIgnore {
+			continue
+		}
+
 		value, ok := measured[key]
 		if !ok {
-			findings = append(findings, fmt.Sprintf("%s: missing measured metric %q", scenarioName, key))
+			msg := fmt.Sprintf("%s: missing measured metric %q", scenarioName, key)
+			result = appendComparisonMessage(result, policy, msg)
 			continue
 		}
 		if value > threshold {
-			findings = append(findings, fmt.Sprintf(
-				"%s: metric %s exceeded threshold (value=%.3f threshold=%.3f)",
+			verb := "exceeded threshold"
+			if policy.Policy == metricPolicyMustBeZero {
+				verb = "must remain zero"
+			}
+			msg := fmt.Sprintf(
+				"%s: metric %s %s (value=%.3f threshold=%.3f)",
 				scenarioName,
 				key,
+				verb,
 				value,
 				threshold,
-			))
+			)
+			result = appendComparisonMessage(result, policy, msg)
 		}
 	}
-	return findings
+	return result
+}
+
+func appendComparisonMessage(result comparisonResult, policy metricPolicySpec, msg string) comparisonResult {
+	if policy.Severity == metricSeverityWarn {
+		result.Warnings = append(result.Warnings, msg)
+		return result
+	}
+	result.Findings = append(result.Findings, msg)
+	return result
 }
 
 func writeBaseline(path string, baseline baselineDocument) error {

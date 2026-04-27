@@ -37,9 +37,10 @@ func runCapture(opts options) error {
 
 	for _, scenario := range scenarios {
 		base := scenarioBaseline{
-			LabelFilter: scenario.LabelFilter,
-			Runs:        make([]runResult, 0, opts.Runs),
-			MaxMetrics:  make(map[string]float64, len(metricKeys)),
+			LabelFilter:    scenario.LabelFilter,
+			MetricPolicies: scenario.MetricPolicies,
+			Runs:           make([]runResult, 0, opts.Runs),
+			MaxMetrics:     make(map[string]float64, len(metricKeys)),
 		}
 		for _, key := range metricKeys {
 			base.MaxMetrics[key] = 0
@@ -86,19 +87,33 @@ func runVerify(opts options) error {
 	}
 
 	var findings []string
+	var warnings []string
 	for _, scenario := range scenarios {
 		th, ok := thresholds.Scenarios[scenario.Name]
 		if !ok {
 			return fmt.Errorf("thresholds missing scenario %q", scenario.Name)
 		}
+		if err := validateScenarioThresholds(th, scenario); err != nil {
+			return err
+		}
+		th = applyScenarioPolicy(th, scenario)
 		res, runErr := executeScenarioRun(opts, scenario, 1)
 		if runErr != nil {
 			return runErr
 		}
-		scenarioFindings := compareScenarioMetrics(scenario.Name, res.Metrics, th)
-		findings = append(findings, scenarioFindings...)
+		scenarioResult := compareScenarioMetricsDetailed(scenario.Name, res.Metrics, th)
+		findings = append(findings, scenarioResult.Findings...)
+		warnings = append(warnings, scenarioResult.Warnings...)
 
 		fmt.Printf("scenario=%s metrics=%s\n", scenario.Name, formatMetrics(res.Metrics))
+	}
+
+	if len(warnings) > 0 {
+		sort.Strings(warnings)
+		fmt.Println("performance diagnostic warnings:")
+		for _, w := range warnings {
+			fmt.Printf("- %s\n", w)
+		}
 	}
 
 	if len(findings) > 0 {
@@ -115,15 +130,21 @@ func runVerify(opts options) error {
 }
 
 func selectedScenarios(opts options) ([]scenarioSpec, error) {
+	manifest, err := loadScenarioManifest(opts.ScenarioPath)
+	if err != nil {
+		return nil, err
+	}
 	if len(opts.ScenarioNames) == 0 {
-		return append([]scenarioSpec(nil), defaultScenarios...), nil
+		return append([]scenarioSpec(nil), manifest.Scenarios...), nil
 	}
 
+	byName := scenarioMap(manifest.Scenarios)
 	out := make([]scenarioSpec, 0, len(opts.ScenarioNames))
 	for _, name := range opts.ScenarioNames {
-		spec, ok := scenarioByName[name]
+		spec, ok := byName[name]
 		if !ok {
-			return nil, fmt.Errorf("unknown scenario %q", name)
+			available := strings.Join(sortedScenarioNames(manifest.Scenarios), ", ")
+			return nil, fmt.Errorf("unknown scenario %q (available: %s)", name, available)
 		}
 		out = append(out, spec)
 	}

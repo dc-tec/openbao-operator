@@ -15,31 +15,71 @@ metricSchema:
 scenarios:
     backup-restore:
         labelFilter: dr && backup && restore && !failure-injection
+        metricPolicies:
+            backup_last_duration_seconds_max:
+                policy: upper_bound
+                multiplier: max
+            reconcile_error_ratio:
+                policy: upper_bound
+                multiplier: max
+            reconcile_p95_seconds:
+                policy: upper_bound
+                multiplier: p95
+            restore_p95_seconds:
+                policy: upper_bound
+                multiplier: p95
+            workqueue_retries_delta:
+                policy: upper_bound
+                severity: warn
+                multiplier: max
+                floor: 500
         metrics:
             backup_last_duration_seconds_max: 6
             reconcile_error_ratio: 0.05
             reconcile_p95_seconds: 1
             restore_p95_seconds: 38
-            upgrade_p95_seconds: 0
-            upgrade_pod_p95_seconds: 0
-            workqueue_retries_delta: 426
+            workqueue_retries_delta: 500
     lifecycle:
         labelFilter: lifecycle && critical && tenant && !slow && !openshift && !pentest
+        metricPolicies:
+            reconcile_error_ratio:
+                policy: upper_bound
+                multiplier: max
+            reconcile_p95_seconds:
+                policy: upper_bound
+                multiplier: p95
+            workqueue_retries_delta:
+                policy: upper_bound
+                severity: warn
+                multiplier: max
+                floor: 100
         metrics:
-            backup_last_duration_seconds_max: 0
             reconcile_error_ratio: 0.46
             reconcile_p95_seconds: 1
-            restore_p95_seconds: 0
-            upgrade_p95_seconds: 0
-            upgrade_pod_p95_seconds: 0
-            workqueue_retries_delta: 75
+            workqueue_retries_delta: 100
     rolling-upgrade:
-        labelFilter: upgrade && rolling && !failure && !bluegreen
+        labelFilter: upgrade && rolling && !failure && !bluegreen && !snapshot && !recovery
+        metricPolicies:
+            reconcile_error_ratio:
+                policy: upper_bound
+                multiplier: max
+            reconcile_p95_seconds:
+                policy: upper_bound
+                multiplier: p95
+            upgrade_p95_seconds:
+                policy: upper_bound
+                multiplier: p95
+            upgrade_pod_p95_seconds:
+                policy: upper_bound
+                multiplier: p95
+            workqueue_retries_delta:
+                policy: upper_bound
+                severity: warn
+                multiplier: max
+                floor: 200
         metrics:
-            backup_last_duration_seconds_max: 0
             reconcile_error_ratio: 0.42
             reconcile_p95_seconds: 1
-            restore_p95_seconds: 0
             upgrade_p95_seconds: 75
             upgrade_pod_p95_seconds: 13
-            workqueue_retries_delta: 159
+            workqueue_retries_delta: 200

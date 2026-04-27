@@ -131,6 +131,8 @@ make test-e2e-existing E2E_LABEL_FILTER='openshift'`}
   ]}
 />
 
+Performance scenarios are declared in `hack/perf/scenarios.yaml`. Each scenario owns its Ginkgo label filter and the metric policies that are meaningful for that workflow. Keep those policies narrow: add a metric only when the scenario is expected to exercise that behavior, and use warning severity for broad diagnostic counters such as aggregate workqueue retries.
+
 <NextActions
   title="After test selection"
   items={[

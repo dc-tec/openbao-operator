@@ -59,11 +59,12 @@ func parseCaptureFlags(args []string) (options, error) {
 		scenarios = fs.String(
 			"scenarios",
 			"all",
-			"comma-separated scenarios (all|lifecycle|backup-restore|rolling-upgrade)",
+			"comma-separated scenarios from the scenario manifest, or all",
 		)
 		nodeImage       = fs.String("node-image", "kindest/node:v1.34.3", "kind node image")
 		kindBin         = fs.String("kind", "kind", "path to kind binary")
 		makeBin         = fs.String("make", "make", "path to make binary")
+		scenarioPath    = fs.String("scenario-manifest", defaultScenarioPath, "scenario manifest YAML path")
 		baselinePath    = fs.String("baseline-out", defaultBaselinePath, "output path for baseline JSON")
 		thresholdsPath  = fs.String("thresholds-out", defaultThresholdsPath, "output path for thresholds YAML")
 		scenarioTimeout = fs.Duration("scenario-timeout", 90*time.Minute, "per-scenario timeout")
@@ -92,6 +93,7 @@ func parseCaptureFlags(args []string) (options, error) {
 		*nodeImage,
 		*kindBin,
 		*makeBin,
+		*scenarioPath,
 		*scenarioTimeout,
 		*clusterTimeout,
 		*cleanupTimeout,
@@ -110,11 +112,12 @@ func parseVerifyFlags(args []string) (options, error) {
 		scenarios = fs.String(
 			"scenarios",
 			"all",
-			"comma-separated scenarios (all|lifecycle|backup-restore|rolling-upgrade)",
+			"comma-separated scenarios from the scenario manifest, or all",
 		)
 		nodeImage       = fs.String("node-image", "kindest/node:v1.34.3", "kind node image")
 		kindBin         = fs.String("kind", "kind", "path to kind binary")
 		makeBin         = fs.String("make", "make", "path to make binary")
+		scenarioPath    = fs.String("scenario-manifest", defaultScenarioPath, "scenario manifest YAML path")
 		thresholdsInput = fs.String("thresholds", defaultThresholdsPath, "input thresholds YAML path")
 		scenarioTimeout = fs.Duration("scenario-timeout", 90*time.Minute, "per-scenario timeout")
 		clusterTimeout  = fs.Duration("cluster-timeout", 20*time.Minute, "kind setup timeout")
@@ -134,6 +137,7 @@ func parseVerifyFlags(args []string) (options, error) {
 		*nodeImage,
 		*kindBin,
 		*makeBin,
+		*scenarioPath,
 		*scenarioTimeout,
 		*clusterTimeout,
 		*cleanupTimeout,
@@ -146,7 +150,7 @@ func parseVerifyFlags(args []string) (options, error) {
 }
 
 func baseOptions(
-	nodeImage, kindBin, makeBin string,
+	nodeImage, kindBin, makeBin, scenarioPath string,
 	scenarioTimeout, clusterTimeout, cleanupTimeout time.Duration,
 	keepOnFailure bool,
 ) options {
@@ -155,6 +159,7 @@ func baseOptions(
 		NodeImage:       nodeImage,
 		KindBin:         kindBin,
 		MakeBin:         makeBin,
+		ScenarioPath:    scenarioPath,
 		ScenarioTimeout: scenarioTimeout,
 		ClusterTimeout:  clusterTimeout,
 		CleanupTimeout:  cleanupTimeout,
@@ -198,9 +203,6 @@ func parseScenarioSelection(input string) ([]string, error) {
 		}
 		if name == "all" {
 			return nil, nil
-		}
-		if _, ok := scenarioByName[name]; !ok {
-			return nil, fmt.Errorf("unknown scenario %q", name)
 		}
 		if _, exists := seen[name]; exists {
 			continue
