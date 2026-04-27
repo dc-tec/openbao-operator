@@ -62,6 +62,45 @@ tenancy:
   namespacePodSecurityLabels:
     mode: enforce
 
+# -- Service-claim runtime configuration.
+# -- The chart always installs the CRDs, RBAC, webhook, and admission-policy
+# -- surface for OpenBaoClusterClaim. Set serviceClaims.enabled=true only when
+# -- this operator installation should reconcile the bounded same-cluster claim
+# -- workflow.
+serviceClaims:
+  # -- Enable OpenBaoClusterClaim and claim workflow reconciliation.
+  enabled: false
+
+  # -- Network defaults used when claim catalog network profiles omit these
+  # -- fields. Prefer explicit OpenBaoNetworkProfile values for production
+  # -- offerings when environments differ.
+  network:
+    # -- API server CIDR to allow in generated NetworkPolicies, for example "10.43.0.1/32".
+    apiServerCIDR: ""
+    # -- API server endpoint IPs to allow directly in generated NetworkPolicies.
+    apiServerEndpointIPs: []
+    # -- DNS resolver endpoint IPs to allow directly in generated NetworkPolicies.
+    dnsEndpointIPs: []
+
+  # -- Same-cluster transit unseal defaults used when a Hardened claim service
+  # -- profile omits an explicit OpenBaoUnsealProfile. Prefer catalog
+  # -- OpenBaoUnsealProfile objects for production offerings.
+  transitUnseal:
+    # -- Transit OpenBao address.
+    address: ""
+    # -- Transit key name.
+    keyName: ""
+    # -- Transit mount path.
+    mountPath: ""
+    # -- Transit namespace, if the mount is namespaced.
+    namespace: ""
+    # -- Path to the CA certificate file mounted from the transit credentials Secret.
+    tlsCACert: ""
+    # -- TLS server name to use when connecting to the transit OpenBao endpoint.
+    tlsServerName: ""
+    # -- Name of the credentials Secret in tenant namespaces.
+    credentialsSecretName: ""
+
 # -- Controller deployment configuration
 controller:
   # -- Number of controller replicas

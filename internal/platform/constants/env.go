@@ -101,6 +101,7 @@ const (
 	EnvOperatorServiceClaimsTransitUnsealKeyName               = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_KEY_NAME"
 	EnvOperatorServiceClaimsTransitUnsealMountPath             = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_MOUNT_PATH"
 	EnvOperatorServiceClaimsTransitUnsealNamespace             = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_NAMESPACE"
+	EnvOperatorServiceClaimsTransitUnsealTLSCACert             = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_TLS_CA_CERT"
 	EnvOperatorServiceClaimsTransitUnsealTLSServerName         = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_TLS_SERVER_NAME"
 	EnvOperatorServiceClaimsTransitUnsealCredentialsSecretName = "OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_CREDENTIALS_SECRET_NAME"
 

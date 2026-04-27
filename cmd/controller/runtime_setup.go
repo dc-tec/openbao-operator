@@ -33,6 +33,7 @@ type controllerProcessRuntime struct {
 	serviceClaimsTransitUnsealKeyName               string
 	serviceClaimsTransitUnsealMountPath             string
 	serviceClaimsTransitUnsealNamespace             string
+	serviceClaimsTransitUnsealTLSCACert             string
 	serviceClaimsTransitUnsealTLSServerName         string
 	serviceClaimsTransitUnsealCredentialsSecretName string
 	admissionTracker                                *admission.Tracker
@@ -103,6 +104,7 @@ func buildControllerProcessRuntime(
 		serviceClaimsTransitUnsealKeyName:               cfg.serviceClaimsTransitUnsealKeyName,
 		serviceClaimsTransitUnsealMountPath:             cfg.serviceClaimsTransitUnsealMountPath,
 		serviceClaimsTransitUnsealNamespace:             cfg.serviceClaimsTransitUnsealNamespace,
+		serviceClaimsTransitUnsealTLSCACert:             cfg.serviceClaimsTransitUnsealTLSCACert,
 		serviceClaimsTransitUnsealTLSServerName:         cfg.serviceClaimsTransitUnsealTLSServerName,
 		serviceClaimsTransitUnsealCredentialsSecretName: cfg.serviceClaimsTransitUnsealCredentialsSecretName,
 		admissionTracker:                                admissionTracker,

@@ -41,24 +41,41 @@ tenancy:
 
 ### Service claims (bounded same-cluster)
 
-The chart includes the CRDs, RBAC, webhook, and admission-policy surface needed for `OpenBaoClusterClaim`. The runtime is feature-gated and should be enabled explicitly only when you intend to offer the bounded same-cluster claim workflow.
+The chart includes the CRDs, RBAC, webhook, and admission-policy surface needed
+for `OpenBaoClusterClaim`. The runtime is feature-gated and should be enabled
+explicitly only when you intend to offer the bounded same-cluster claim workflow.
 
 ```yaml
 tenancy:
   mode: multi
 
-controller:
-  extraEnv:
-    - name: OPERATOR_ENABLE_SERVICE_CLAIMS
-      value: "true"
-
-provisioner:
-  extraEnv:
-    - name: OPERATOR_ENABLE_SERVICE_CLAIMS
-      value: "true"
+serviceClaims:
+  enabled: true
 ```
 
-Current claim scope is same-cluster provisioning with explicit request objects for compatible in-place upgrades, manual backups, and restore from the latest successful or selected completed claim backup request. Adoption, migration, arbitrary restore-source selection, and broader multi-cluster claim convergence are not part of this claim release.
+Use install-level defaults only when they are shared by the whole operator
+installation. Prefer catalog objects such as `OpenBaoNetworkProfile` and
+`OpenBaoUnsealProfile` when different offerings need different settings.
+
+```yaml
+serviceClaims:
+  enabled: true
+  network:
+    apiServerCIDR: 10.43.0.1/32
+    dnsEndpointIPs:
+      - 169.254.20.10
+  transitUnseal:
+    address: https://transit-bao.openbao-infra.svc:8200
+    keyName: openbao-unseal
+    mountPath: transit
+    credentialsSecretName: transit-unseal-token
+```
+
+Current claim scope is same-cluster provisioning with explicit request objects
+for compatible in-place upgrades, manual backups, and restore from the latest
+successful or selected completed claim backup request. Adoption, migration,
+arbitrary restore-source selection, and broader multi-cluster claim convergence
+are not part of this claim release.
 
 ### Single-tenant mode
 

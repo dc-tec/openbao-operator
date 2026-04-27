@@ -96,6 +96,56 @@ Provisioner service account name
 {{- end -}}
 
 {{/*
+Service-claim environment variables shared by controller and provisioner.
+*/}}
+{{- define "openbao-operator.serviceClaimsEnv" -}}
+{{- if .Values.serviceClaims.enabled }}
+- name: OPERATOR_ENABLE_SERVICE_CLAIMS
+  value: "true"
+{{- with .Values.serviceClaims.network.apiServerCIDR }}
+- name: OPERATOR_SERVICE_CLAIMS_API_SERVER_CIDR
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.network.apiServerEndpointIPs }}
+- name: OPERATOR_SERVICE_CLAIMS_API_SERVER_ENDPOINT_IPS
+  value: {{ join "," . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.network.dnsEndpointIPs }}
+- name: OPERATOR_SERVICE_CLAIMS_DNS_ENDPOINT_IPS
+  value: {{ join "," . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.transitUnseal.address }}
+- name: OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_ADDRESS
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.transitUnseal.keyName }}
+- name: OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_KEY_NAME
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.transitUnseal.mountPath }}
+- name: OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_MOUNT_PATH
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.transitUnseal.namespace }}
+- name: OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_NAMESPACE
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.transitUnseal.tlsCACert }}
+- name: OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_TLS_CA_CERT
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.transitUnseal.tlsServerName }}
+- name: OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_TLS_SERVER_NAME
+  value: {{ . | quote }}
+{{- end }}
+{{- with .Values.serviceClaims.transitUnseal.credentialsSecretName }}
+- name: OPERATOR_SERVICE_CLAIMS_TRANSIT_UNSEAL_CREDENTIALS_SECRET_NAME
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Provisioner RBAC ValidatingAdmissionPolicy: deny system namespaces.
 
 Returns a CEL boolean expression snippet like:

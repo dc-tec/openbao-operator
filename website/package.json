@@ -7,7 +7,7 @@
     "prepare:releases": "node ./scripts/generate-releases.mjs",
     "prepare:site": "npm run prepare:contribute && npm run prepare:releases",
     "docusaurus": "docusaurus",
-    "start": "npm run prepare:site && docusaurus start --host 0.0.0.0 --port 8000 --no-open",
+    "start": "npm run prepare:site && docusaurus start --host 0.0.0.0 --no-open",
     "build": "npm run prepare:site && docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "npm run prepare:site && docusaurus deploy",

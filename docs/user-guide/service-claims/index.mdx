@@ -14,7 +14,7 @@ description: Catalog-driven OpenBao service provisioning for same-cluster claims
   lede="Use the catalog-driven claim path when platform teams want to publish bounded service shapes and tenant users should request service through a stable offering instead of assembling an OpenBaoCluster directly."
   actions={[
     {label: 'Choose claims or direct clusters', docId: 'user-guide/service-claims/overview', variant: 'primary'},
-    {label: 'Apply a first claim', docId: 'user-guide/service-claims/getting-started', variant: 'secondary'},
+    {label: 'Publish a catalog', docId: 'user-guide/service-claims/publish-service-catalog', variant: 'secondary'},
   ]}
 >
   <Checklist
@@ -22,6 +22,7 @@ description: Catalog-driven OpenBao service provisioning for same-cluster claims
     items={[
       'decide whether service claims fit the environment better than direct OpenBaoCluster management',
       'understand the platform-owned catalog objects that shape the service boundary',
+      'publish a first service catalog and offering before handing the path to tenants',
       'apply and verify a first same-cluster OpenBaoClusterClaim',
       'operate bounded claim day-2 workflows such as explicit upgrades, backups, and restores',
       'troubleshoot claim readiness, edge publication, and bootstrap dependency issues',
@@ -40,30 +41,42 @@ description: Catalog-driven OpenBao service provisioning for same-cluster claims
     },
     {
       eyebrow: '02',
+      title: 'Publish the service catalog',
+      description: 'Create the platform-owned offering, immutable service profile, and referenced profiles that tenant claims consume.',
+      docId: 'user-guide/service-claims/publish-service-catalog',
+    },
+    {
+      eyebrow: '03',
       title: 'Apply the first claim',
       description: 'Use the same-cluster quickstart after operator installation, tenant onboarding, and catalog setup are complete.',
       docId: 'user-guide/service-claims/getting-started',
     },
     {
-      eyebrow: '03',
+      eyebrow: '04',
       title: 'Run day-2 workflows',
       description: 'Use explicit request objects for in-place upgrades, manual backups, and restore from the latest successful or selected completed claim backup.',
       docId: 'user-guide/service-claims/day-2-workflows',
     },
     {
-      eyebrow: '04',
+      eyebrow: '05',
       title: 'Understand the catalog',
       description: 'Review the platform-owned service profile, offering, exposure, ingress, bootstrap, and backup objects behind the claim path.',
       docId: 'user-guide/service-claims/service-catalog',
     },
     {
-      eyebrow: '05',
+      eyebrow: '06',
+      title: 'Check catalog support',
+      description: 'Map direct OpenBaoCluster configuration areas to supported catalog fields, request APIs, and intentional exclusions.',
+      docId: 'user-guide/service-claims/support-matrix',
+    },
+    {
+      eyebrow: '07',
       title: 'Plan exposure and bootstrap',
       description: 'See how internal, gateway, and ingress publication work and how secret-backed bootstrap data is projected safely into the tenant namespace.',
       docId: 'user-guide/service-claims/exposure',
     },
     {
-      eyebrow: '06',
+      eyebrow: '08',
       title: 'Troubleshoot and stay within scope',
       description: 'Route common claim failures quickly and keep unsupported workflows explicit.',
       docId: 'user-guide/service-claims/troubleshooting',

@@ -90,6 +90,11 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'doc',
+          id: 'user-guide/service-claims/publish-service-catalog',
+          label: 'Publish a service catalog',
+        },
+        {
+          type: 'doc',
           id: 'user-guide/service-claims/getting-started',
           label: 'Apply the first claim',
         },
@@ -102,6 +107,11 @@ const sidebars: SidebarsConfig = {
           type: 'doc',
           id: 'user-guide/service-claims/service-catalog',
           label: 'Understand the service catalog',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/support-matrix',
+          label: 'Service catalog support matrix',
         },
         {
           type: 'doc',
@@ -619,6 +629,16 @@ const sidebars: SidebarsConfig = {
               type: 'doc',
               id: 'architecture/service-claims',
               label: 'Service claims',
+            },
+            {
+              type: 'doc',
+              id: 'architecture/service-claims-contract-pipeline',
+              label: 'Service-claim contract pipeline',
+            },
+            {
+              type: 'doc',
+              id: 'architecture/service-claims-boundaries',
+              label: 'Service-claim boundaries',
             },
             {
               type: 'doc',

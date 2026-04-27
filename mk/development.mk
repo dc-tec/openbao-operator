@@ -361,6 +361,7 @@ verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
 
 DOCS_DIR ?= website
 DOCS_NPM ?= $(NPM)
+DOCS_PORT ?= 8001
 DOCS_VERSION ?=
 TEST_ARTIFACT_DIR ?= dist/test
 GOTESTSUM_FORMAT ?= pkgname
@@ -377,8 +378,8 @@ docs-build: docs-deps ## Build the Docusaurus docs site locally. Writes ./websit
 	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run build
 
 .PHONY: docs-serve
-docs-serve: docs-deps ## Serve docs locally. http://localhost:8000
-	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run start
+docs-serve: docs-deps ## Serve docs locally. http://localhost:$(DOCS_PORT)
+	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run start -- --port "$(DOCS_PORT)"
 
 .PHONY: docs-preview
 docs-preview: docs-build ## Preview the built docs locally with production behavior, including search. http://localhost:3000

@@ -1,0 +1,3 @@
+{{- if and .Values.serviceClaims.enabled (ne .Values.tenancy.mode "multi") -}}
+{{- fail "serviceClaims.enabled=true requires tenancy.mode=multi because the claim runtime depends on the provisioner and tenant onboarding surface" -}}
+{{- end -}}

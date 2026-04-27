@@ -114,6 +114,16 @@ Deferred intentionally:
   title="Related routes"
   items={[
     {
+      label: 'Follow the contract pipeline',
+      description: 'Trace catalog resolution, approved contracts, rendered contracts, materialization, and connection publication.',
+      docId: 'architecture/service-claims-contract-pipeline',
+    },
+    {
+      label: 'Review claim boundaries',
+      description: 'Use the maintainer boundary rules before extending catalog, materialization, or day-2 workflow behavior.',
+      docId: 'architecture/service-claims-boundaries',
+    },
+    {
       label: 'Open component design',
       description: 'Return to the broader controller, app, and manager boundaries for the rest of the operator.',
       docId: 'architecture/components',

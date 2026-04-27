@@ -40,6 +40,7 @@ func setupClaimControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) e
 			KeyName:               runtime.serviceClaimsTransitUnsealKeyName,
 			MountPath:             runtime.serviceClaimsTransitUnsealMountPath,
 			Namespace:             runtime.serviceClaimsTransitUnsealNamespace,
+			TLSCACert:             runtime.serviceClaimsTransitUnsealTLSCACert,
 			TLSServerName:         runtime.serviceClaimsTransitUnsealTLSServerName,
 			CredentialsSecretName: runtime.serviceClaimsTransitUnsealCredentialsSecretName,
 		},

@@ -77,6 +77,7 @@ type SameClusterTransitUnsealConfig struct {
 	KeyName               string
 	MountPath             string
 	Namespace             string
+	TLSCACert             string
 	TLSServerName         string
 	CredentialsSecretName string
 }

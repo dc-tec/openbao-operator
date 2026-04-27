@@ -156,6 +156,9 @@ func assertProjectedHardenedLocalCluster(
 	if cluster.Spec.Unseal.Transit == nil || cluster.Spec.Unseal.Transit.Address != "https://transit.example.internal:8200" {
 		t.Fatalf("cluster spec transit = %#v, want rendered transit config", cluster.Spec.Unseal.Transit)
 	}
+	if cluster.Spec.Unseal.Transit.TLSCACert != "/etc/bao/seal-creds/ca.crt" {
+		t.Fatalf("cluster spec transit tlsCACert = %q, want mounted transit CA path", cluster.Spec.Unseal.Transit.TLSCACert)
+	}
 	if cluster.Spec.Unseal.CredentialsSecretRef == nil || cluster.Spec.Unseal.CredentialsSecretRef.Name != "transit-unseal-creds" {
 		t.Fatalf("cluster spec credentialsSecretRef = %#v, want transit-unseal-creds", cluster.Spec.Unseal.CredentialsSecretRef)
 	}

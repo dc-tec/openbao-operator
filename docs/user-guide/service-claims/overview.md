@@ -113,9 +113,49 @@ Do not use the claim surface yet for:
 3. treating free-form post-materialization claim edits as rollout automation
 4. bootstrap modes other than `SelfInit`
 
+## Follow the role-specific path
+
+Platform admins publish catalog objects first. Tenant users then submit claims
+against stable offerings. Operators use request APIs for day-2 actions after the
+claim has reached `Ready`.
+
+<DecisionTable
+  title="Who does what"
+  columns={['Role', 'First page', 'Main output']}
+  rows={[
+    {
+      cells: [
+        'Platform admin',
+        'Publish a service catalog',
+        'A stable `OpenBaoServiceOffering` backed by immutable service-profile and implementation-profile revisions.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Tenant user',
+        'Apply the first claim',
+        'An `OpenBaoClusterClaim` that selects an offering and receives a connection contract.',
+      ],
+    },
+    {
+      cells: [
+        'Operator',
+        'Run claim day-2 workflows',
+        'Immutable request objects for upgrade, backup, and restore workflows.',
+      ],
+    },
+  ]}
+/>
+
 <NextActions
   title="Continue the claim path"
   items={[
+    {
+      label: 'Publish a catalog',
+      description: 'Create the platform-owned offering and profile revisions before tenants submit claims.',
+      docId: 'user-guide/service-claims/publish-service-catalog',
+    },
     {
       label: 'Apply the first claim',
       description: 'Use the same-cluster quickstart once the operator install, target namespace, and service catalog are ready.',

@@ -149,10 +149,44 @@ func (r *TenantSecretsRBACReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				}}
 			}),
 		).
+		Watches(
+			&openbaov1alpha1.OpenBaoClusterClaim{},
+			handler.EnqueueRequestsFromMapFunc(r.mapClaimToTenantSecretRBAC),
+		).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 3,
 			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
 		}).
 		Named(controllerNameTenantSecretsRBAC).
 		Complete(r)
+}
+
+func (r *TenantSecretsRBACReconciler) mapClaimToTenantSecretRBAC(ctx context.Context, obj client.Object) []ctrl.Request {
+	claim, ok := obj.(*openbaov1alpha1.OpenBaoClusterClaim)
+	if !ok || claim == nil || claim.Spec.TenantRef.Name == "" {
+		return nil
+	}
+
+	reader := r.APIReader
+	if reader == nil {
+		reader = r.Client
+	}
+	if reader == nil {
+		return nil
+	}
+
+	tenant := &openbaov1alpha1.OpenBaoTenant{}
+	if err := reader.Get(ctx, client.ObjectKey{Namespace: claim.Namespace, Name: claim.Spec.TenantRef.Name}, tenant); err != nil {
+		return nil
+	}
+	if tenant.Spec.TargetNamespace == "" {
+		return nil
+	}
+
+	return []ctrl.Request{{
+		NamespacedName: client.ObjectKey{
+			Namespace: tenant.Spec.TargetNamespace,
+			Name:      claim.Name,
+		},
+	}}
 }

@@ -334,6 +334,7 @@ func validSameClusterHardenedAppliedStatus() *openbaov1alpha1.OpenBaoClusterClai
 			KeyName:               "openbao-unseal",
 			MountPath:             "transit",
 			Namespace:             "platform",
+			TLSCACert:             "/etc/bao/seal-creds/ca.crt",
 			TLSServerName:         "transit.example.internal",
 			CredentialsSecretName: "transit-unseal-creds",
 		},
@@ -403,6 +404,7 @@ func validSameClusterHardenedBackupAppliedStatus() *openbaov1alpha1.OpenBaoClust
 			KeyName:               "openbao-unseal",
 			MountPath:             "transit",
 			Namespace:             "platform",
+			TLSCACert:             "/etc/bao/seal-creds/ca.crt",
 			TLSServerName:         "transit.example.internal",
 			CredentialsSecretName: "transit-unseal-creds",
 		},
@@ -532,6 +534,7 @@ func validSameClusterTransitUnsealConfig() SameClusterTransitUnsealConfig {
 		KeyName:               "openbao-unseal",
 		MountPath:             "transit",
 		Namespace:             "platform",
+		TLSCACert:             "/etc/bao/seal-creds/ca.crt",
 		TLSServerName:         "transit.example.internal",
 		CredentialsSecretName: "transit-unseal-creds",
 	}

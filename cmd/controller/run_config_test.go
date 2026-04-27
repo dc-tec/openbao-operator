@@ -60,6 +60,7 @@ func TestServiceClaimsTransitUnsealConfigFromEnv(t *testing.T) {
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealKeyName, "")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealMountPath, "")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealNamespace, "")
+		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSCACert, "")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSServerName, "")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealCredentialsSecretName, "")
 
@@ -77,6 +78,7 @@ func TestServiceClaimsTransitUnsealConfigFromEnv(t *testing.T) {
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealKeyName, "openbao-unseal")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealMountPath, "transit")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealNamespace, "platform")
+		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSCACert, "/etc/bao/seal-creds/ca.crt")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSServerName, "transit.example.internal")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealCredentialsSecretName, "transit-unseal-creds")
 
@@ -88,6 +90,7 @@ func TestServiceClaimsTransitUnsealConfigFromEnv(t *testing.T) {
 			got.keyName != "openbao-unseal" ||
 			got.mountPath != "transit" ||
 			got.namespace != "platform" ||
+			got.tlsCACert != "/etc/bao/seal-creds/ca.crt" ||
 			got.tlsServerName != "transit.example.internal" ||
 			got.credentialsSecretName != "transit-unseal-creds" {
 			t.Fatalf("serviceClaimsTransitUnsealConfigFromEnv() = %#v, want parsed values", got)
@@ -99,6 +102,7 @@ func TestServiceClaimsTransitUnsealConfigFromEnv(t *testing.T) {
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealKeyName, "")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealMountPath, "transit")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealNamespace, "")
+		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSCACert, "")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSServerName, "")
 		t.Setenv(constants.EnvOperatorServiceClaimsTransitUnsealCredentialsSecretName, "transit-unseal-creds")
 

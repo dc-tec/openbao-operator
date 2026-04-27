@@ -104,6 +104,52 @@ spec:
   New claims bind through `dev-internal`. Existing claims keep the immutable revision they already applied, even if the offering later advances to another revision.
 </CommandBlock>
 
+## Know the required profile graph
+
+`OpenBaoServiceProfile` is the main immutable service revision. It always
+defines cluster shape, storage capacity, bootstrap posture, exposure class,
+backup profile, and lifecycle defaults. Optional implementation profiles add
+environment-specific detail without exposing raw workload fields to tenants.
+
+<DecisionTable
+  kind="reference"
+  title="Service-profile references"
+  columns={['Service-profile field', 'Required?', 'Referenced object']}
+  rows={[
+    {
+      cells: ['`spec.cluster`', 'Yes', 'Inline service shape: version, voters, read replicas, security profile.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['`spec.storage.primarySize`', 'Yes', 'Inline capacity. `spec.storage.profileRef` optionally selects `OpenBaoStorageProfile`.'],
+    },
+    {
+      cells: ['`spec.bootstrap`', 'Yes', '`OpenBaoBootstrapProfile` when the service needs bootstrap policy. Current claim runtime supports `SelfInit`.'],
+    },
+    {
+      cells: ['`spec.exposure.classRef`', 'Yes', '`OpenBaoExposureClass`. Ingress and Gateway shapes can also reference entrypoint or ingress policy objects.'],
+    },
+    {
+      cells: ['`spec.backup.profileRef`', 'Yes', '`OpenBaoBackupProfile`. Use an empty backup profile when the offering intentionally disables backups.'],
+    },
+    {
+      cells: ['`spec.lifecycle`', 'Yes', 'Inline lifecycle defaults and optional `OpenBaoUpgradePolicy`.'],
+    },
+    {
+      cells: ['`spec.unseal.profileRef`', 'Optional', '`OpenBaoUnsealProfile`. Hardened profiles need a non-static unseal posture.'],
+    },
+    {
+      cells: ['`spec.runtime.profileRef`', 'Optional', '`OpenBaoRuntimeProfile` for service accounts, pod metadata, helper images, hardening, and image verification.'],
+    },
+    {
+      cells: ['`spec.observability.profileRef`', 'Optional', '`OpenBaoObservabilityProfile` for metrics, ServiceMonitor, and telemetry.'],
+    },
+    {
+      cells: ['`spec.network.profileRef`', 'Optional', '`OpenBaoNetworkProfile` for API server, DNS, ingress, and egress dependencies.'],
+    },
+  ]}
+/>
+
 ## Keep tenant and platform surfaces separate
 
 Use the claim model when the platform wants to keep these decisions centrally shaped:
@@ -135,6 +181,16 @@ Catalog objects are part of the platform policy surface. Tenant users should not
 <NextActions
   title="Continue catalog-driven provisioning"
   items={[
+    {
+      label: 'Publish a catalog',
+      description: 'Create a minimum catalog or production catalog with concrete examples.',
+      docId: 'user-guide/service-claims/publish-service-catalog',
+    },
+    {
+      label: 'Check catalog support',
+      description: 'See which direct OpenBaoCluster fields are represented in the catalog.',
+      docId: 'user-guide/service-claims/support-matrix',
+    },
     {
       label: 'Apply the first claim',
       description: 'Use the same-cluster quickstart once the offering and its backing catalog objects exist.',

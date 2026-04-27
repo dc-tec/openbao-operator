@@ -80,6 +80,7 @@ func (r runtimeReconciler) resolveRenderedExecutionContract(
 				KeyName:               r.sameClusterTransitUnseal.KeyName,
 				MountPath:             r.sameClusterTransitUnseal.MountPath,
 				Namespace:             r.sameClusterTransitUnseal.Namespace,
+				TLSCACert:             r.sameClusterTransitUnseal.TLSCACert,
 				TLSServerName:         r.sameClusterTransitUnseal.TLSServerName,
 				CredentialsSecretName: r.sameClusterTransitUnseal.CredentialsSecretName,
 			},

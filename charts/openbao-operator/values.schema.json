@@ -121,6 +121,82 @@
         "mode"
       ]
     },
+    "serviceClaims": {
+      "type": "object",
+      "description": "Service-claim runtime configuration",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable OpenBaoClusterClaim and claim workflow reconciliation",
+          "default": false
+        },
+        "network": {
+          "type": "object",
+          "description": "Install-level network defaults for claim-managed same-cluster workloads",
+          "additionalProperties": false,
+          "properties": {
+            "apiServerCIDR": {
+              "type": "string",
+              "description": "API server CIDR to allow in generated NetworkPolicies"
+            },
+            "apiServerEndpointIPs": {
+              "type": "array",
+              "description": "API server endpoint IPs to allow directly in generated NetworkPolicies",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "default": []
+            },
+            "dnsEndpointIPs": {
+              "type": "array",
+              "description": "DNS resolver endpoint IPs to allow directly in generated NetworkPolicies",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "default": []
+            }
+          }
+        },
+        "transitUnseal": {
+          "type": "object",
+          "description": "Install-level same-cluster transit unseal defaults for claim-managed Hardened services",
+          "additionalProperties": false,
+          "properties": {
+            "address": {
+              "type": "string",
+              "description": "Transit OpenBao address"
+            },
+            "keyName": {
+              "type": "string",
+              "description": "Transit key name"
+            },
+            "mountPath": {
+              "type": "string",
+              "description": "Transit mount path"
+            },
+            "namespace": {
+              "type": "string",
+              "description": "Transit namespace"
+            },
+            "tlsCACert": {
+              "type": "string",
+              "description": "Path to the CA certificate file mounted from the transit credentials Secret"
+            },
+            "tlsServerName": {
+              "type": "string",
+              "description": "TLS server name for the transit endpoint"
+            },
+            "credentialsSecretName": {
+              "type": "string",
+              "description": "Name of the credentials Secret in tenant namespaces"
+            }
+          }
+        }
+      }
+    },
     "controller": {
       "type": "object",
       "description": "Controller deployment configuration",

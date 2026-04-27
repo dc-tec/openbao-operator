@@ -46,6 +46,7 @@ type runConfig struct {
 	serviceClaimsTransitUnsealKeyName               string
 	serviceClaimsTransitUnsealMountPath             string
 	serviceClaimsTransitUnsealNamespace             string
+	serviceClaimsTransitUnsealTLSCACert             string
 	serviceClaimsTransitUnsealTLSServerName         string
 	serviceClaimsTransitUnsealCredentialsSecretName string
 }
@@ -125,6 +126,7 @@ func parseRunConfig() (runConfig, error) {
 	cfg.serviceClaimsTransitUnsealKeyName = transitUnsealConfig.keyName
 	cfg.serviceClaimsTransitUnsealMountPath = transitUnsealConfig.mountPath
 	cfg.serviceClaimsTransitUnsealNamespace = transitUnsealConfig.namespace
+	cfg.serviceClaimsTransitUnsealTLSCACert = transitUnsealConfig.tlsCACert
 	cfg.serviceClaimsTransitUnsealTLSServerName = transitUnsealConfig.tlsServerName
 	cfg.serviceClaimsTransitUnsealCredentialsSecretName = transitUnsealConfig.credentialsSecretName
 
@@ -154,6 +156,7 @@ type serviceClaimsTransitUnsealEnvConfig struct {
 	keyName               string
 	mountPath             string
 	namespace             string
+	tlsCACert             string
 	tlsServerName         string
 	credentialsSecretName string
 }
@@ -164,6 +167,7 @@ func serviceClaimsTransitUnsealConfigFromEnv() (serviceClaimsTransitUnsealEnvCon
 		keyName:       strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealKeyName)),
 		mountPath:     strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealMountPath)),
 		namespace:     strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealNamespace)),
+		tlsCACert:     strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSCACert)),
 		tlsServerName: strings.TrimSpace(os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealTLSServerName)),
 		credentialsSecretName: strings.TrimSpace(
 			os.Getenv(constants.EnvOperatorServiceClaimsTransitUnsealCredentialsSecretName),

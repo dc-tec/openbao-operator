@@ -185,6 +185,69 @@ Use `image.tag` only when you intentionally need a non-default operator image fo
 
 </Callout>
 
+### Enable service claims
+
+Enable the claim runtime only for multi-tenant installs where platform admins
+will publish a service catalog and tenant users should request OpenBao through
+`OpenBaoClusterClaim`.
+
+<CommandBlock
+  language="bash"
+  label="configure"
+  title="Install with the service-claim runtime enabled"
+  code={`helm upgrade --install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  --version <chart-version> \\
+  --namespace openbao-operator-system \\
+  --create-namespace \\
+  --set tenancy.mode=multi \\
+  --set serviceClaims.enabled=true`}
+/>
+
+The chart renders the controller and provisioner environment variables required
+by the claim runtime. Avoid setting `OPERATOR_ENABLE_SERVICE_CLAIMS` manually
+through `controller.extraEnv` or `provisioner.extraEnv` unless you are testing a
+chart change. The chart rejects `serviceClaims.enabled=true` when
+`tenancy.mode` is not `multi`.
+
+Use install-level defaults for shared network or same-cluster transit unseal
+settings only when those values are true for every claim offering in the
+installation. Prefer catalog objects for offering-specific policy.
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Service-claim values with install-level defaults"
+  code={`tenancy:
+  mode: multi
+
+serviceClaims:
+  enabled: true
+  network:
+    apiServerCIDR: 10.43.0.1/32
+    dnsEndpointIPs:
+      - 169.254.20.10
+  transitUnseal:
+    address: https://transit-bao.openbao-infra.svc:8200
+    keyName: openbao-unseal
+    mountPath: transit
+    tlsServerName: transit-bao.openbao-infra.svc
+    credentialsSecretName: transit-unseal-token`}
+>
+  `OpenBaoNetworkProfile` and `OpenBaoUnsealProfile` values take precedence for cataloged offerings that define their own network or unseal posture.
+</CommandBlock>
+
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Verify the rendered claim runtime"
+  code={`helm template openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \\
+  --version <chart-version> \\
+  --namespace openbao-operator-system \\
+  --set tenancy.mode=multi \\
+  --set serviceClaims.enabled=true \\
+  | grep -E 'OPERATOR_ENABLE_SERVICE_CLAIMS|OPERATOR_SERVICE_CLAIMS_'`}
+/>
+
 ### Single-tenant with custom Helm identity
 
 Helm already supports the equivalent of the raw-manifest custom-identity overlays through the release name and `fullnameOverride`.
@@ -238,6 +301,11 @@ Artifact Hub indexing can lag shortly after a release is published.
 | `platform` | Target platform (`auto`, `kubernetes`, `openshift`) | `auto` |
 | `tenancy.mode` | `multi` or `single` | `multi` |
 | `tenancy.targetNamespace` | Target namespace (single-tenant only) | `""` |
+| `serviceClaims.enabled` | Enable `OpenBaoClusterClaim` and claim workflow reconciliation | `false` |
+| `serviceClaims.network.apiServerCIDR` | Install-level API server CIDR default for claim-managed NetworkPolicies | `""` |
+| `serviceClaims.network.apiServerEndpointIPs` | Install-level API server endpoint IP defaults for claim-managed NetworkPolicies | `[]` |
+| `serviceClaims.network.dnsEndpointIPs` | Install-level DNS endpoint IP defaults for claim-managed NetworkPolicies | `[]` |
+| `serviceClaims.transitUnseal.*` | Install-level same-cluster transit unseal defaults for claim-managed Hardened services | `""` |
 | `controller.replicas` | Controller replica count | `1` |
 | `controller.resources` | Controller resource requests/limits | See values.yaml |
 | `provisioner.replicas` | Provisioner replica count | `1` |

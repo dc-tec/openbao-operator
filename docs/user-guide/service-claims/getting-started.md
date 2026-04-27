@@ -28,6 +28,13 @@ The supported public path today is same-cluster materialization. The claim binds
 
 </Callout>
 
+<Callout type="tip" title="Platform admins start with the catalog">
+
+If the service offering does not exist yet, publish the platform catalog before
+using this tenant claim workflow.
+
+</Callout>
+
 ## Apply the claim
 
 <CommandBlock
@@ -106,6 +113,11 @@ After the claim is materially bound, the spec is no longer a free-form edit surf
 <NextActions
   title="Continue the claim workflow"
   items={[
+    {
+      label: 'Publish a catalog',
+      description: 'Create the platform-owned offering and profile revisions this claim selects.',
+      docId: 'user-guide/service-claims/publish-service-catalog',
+    },
     {
       label: 'Run day-2 workflows',
       description: 'Use explicit request objects for in-place upgrades, manual backups, and restores.',
