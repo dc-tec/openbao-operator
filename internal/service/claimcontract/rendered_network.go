@@ -44,6 +44,7 @@ func applySameClusterTransitUnseal(
 		KeyName:               defaults.KeyName,
 		MountPath:             defaults.MountPath,
 		Namespace:             defaults.Namespace,
+		TLSCACert:             defaults.TLSCACert,
 		TLSServerName:         defaults.TLSServerName,
 		CredentialsSecretName: defaults.CredentialsSecretName,
 	}

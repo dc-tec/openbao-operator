@@ -642,6 +642,9 @@ func TestDesiredSameClusterClusterProjectsHardenedTransitUnseal(t *testing.T) {
 	if cluster.Spec.Unseal.Transit == nil || cluster.Spec.Unseal.Transit.Address != "https://transit.example.internal:8200" {
 		t.Fatalf("transit = %#v, want rendered transit config", cluster.Spec.Unseal.Transit)
 	}
+	if cluster.Spec.Unseal.Transit.TLSCACert != "/etc/bao/seal-creds/ca.crt" {
+		t.Fatalf("transit tlsCACert = %q, want mounted transit CA path", cluster.Spec.Unseal.Transit.TLSCACert)
+	}
 	if cluster.Spec.Unseal.CredentialsSecretRef == nil || cluster.Spec.Unseal.CredentialsSecretRef.Name != "transit-unseal-creds" {
 		t.Fatalf("credentialsSecretRef = %#v, want transit-unseal-creds", cluster.Spec.Unseal.CredentialsSecretRef)
 	}

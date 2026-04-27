@@ -45,6 +45,7 @@ func TestRenderSameClusterExecutionContract(t *testing.T) {
 			KeyName:               "openbao-unseal",
 			MountPath:             "transit",
 			Namespace:             "platform",
+			TLSCACert:             "/etc/bao/seal-creds/ca.crt",
 			TLSServerName:         "transit.example.internal",
 			CredentialsSecretName: "transit-unseal-creds",
 		},
@@ -132,6 +133,7 @@ func TestRenderSameClusterExecutionContractUsesAllowedClaimHostname(t *testing.T
 			Address:               "https://transit.example.internal:8200",
 			KeyName:               "openbao-unseal",
 			MountPath:             "transit",
+			TLSCACert:             "/etc/bao/seal-creds/ca.crt",
 			CredentialsSecretName: "transit-unseal-creds",
 		},
 	)
