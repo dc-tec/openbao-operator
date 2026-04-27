@@ -6,9 +6,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaocluster/deletionops"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
-func TestDefaultRetentionSecrets(t *testing.T) {
+func TestDefaultRetentionSecretsReturnsGeneratedCandidates(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -17,17 +19,20 @@ func TestDefaultRetentionSecrets(t *testing.T) {
 		want    []string
 	}{
 		{
-			name: "managed init static unseal retains root token and unseal key",
+			name: "managed init static unseal includes root token and unseal key candidates",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "managed-static",
 					Namespace: "default",
 				},
 			},
-			want: []string{"managed-static-unseal-key", "managed-static-root-token"},
+			want: []string{
+				"managed-static" + constants.SuffixUnsealKey,
+				"managed-static" + constants.SuffixRootToken,
+			},
 		},
 		{
-			name: "self init static unseal retains only unseal key",
+			name: "self init static unseal still includes generated candidates",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "selfinit-static",
@@ -37,10 +42,13 @@ func TestDefaultRetentionSecrets(t *testing.T) {
 					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true},
 				},
 			},
-			want: []string{"selfinit-static-unseal-key"},
+			want: []string{
+				"selfinit-static" + constants.SuffixUnsealKey,
+				"selfinit-static" + constants.SuffixRootToken,
+			},
 		},
 		{
-			name: "managed transit unseal retains only root token",
+			name: "managed transit unseal still includes generated candidates",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "managed-transit",
@@ -50,10 +58,13 @@ func TestDefaultRetentionSecrets(t *testing.T) {
 					Unseal: &openbaov1alpha1.UnsealConfig{Type: "transit"},
 				},
 			},
-			want: []string{"managed-transit-root-token"},
+			want: []string{
+				"managed-transit" + constants.SuffixUnsealKey,
+				"managed-transit" + constants.SuffixRootToken,
+			},
 		},
 		{
-			name: "self init transit unseal retains no secrets",
+			name: "self init transit unseal still includes generated candidates",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "selfinit-transit",
@@ -64,20 +75,23 @@ func TestDefaultRetentionSecrets(t *testing.T) {
 					Unseal:   &openbaov1alpha1.UnsealConfig{Type: "transit"},
 				},
 			},
-			want: nil,
+			want: []string{
+				"selfinit-transit" + constants.SuffixUnsealKey,
+				"selfinit-transit" + constants.SuffixRootToken,
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got := defaultRetentionSecrets(tt.cluster)
+			got := deletionops.DefaultRetentionSecrets(tt.cluster)
 			if len(got) != len(tt.want) {
-				t.Fatalf("defaultRetentionSecrets() len = %d, want %d (%v)", len(got), len(tt.want), got)
+				t.Fatalf("DefaultRetentionSecrets() len = %d, want %d (%v)", len(got), len(tt.want), got)
 			}
 			for i := range got {
 				if got[i] != tt.want[i] {
-					t.Fatalf("defaultRetentionSecrets()[%d] = %q, want %q", i, got[i], tt.want[i])
+					t.Fatalf("DefaultRetentionSecrets()[%d] = %q, want %q", i, got[i], tt.want[i])
 				}
 			}
 		})
