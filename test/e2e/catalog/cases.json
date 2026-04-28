@@ -2427,18 +2427,23 @@
       "upgrades",
       "cluster",
       "slow",
-      "rolling"
+      "rolling",
+      "read-replicas",
+      "read-replicas-rolling"
     ],
     "domainLabels": [
       "upgrade",
       "upgrades",
       "cluster",
       "slow",
-      "rolling"
+      "rolling",
+      "read-replicas",
+      "read-replicas-rolling"
     ],
     "steps": [
       "Writing a secret before upgrade",
       "Triggering upgrade",
+      "Verifying the steady read pool converges before voter rollout starts",
       "Monitoring rolling invariants during upgrade",
       "Verifying rolling step-down jobs are deterministic and successful",
       "Verifying secret persists after upgrade",
@@ -2992,7 +2997,9 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "domainLabels": [
       "dr",
@@ -3000,7 +3007,9 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "steps": [
       "waiting for the S3 backup job to complete successfully",
@@ -3072,7 +3081,9 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "domainLabels": [
       "dr",
@@ -3080,10 +3091,13 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "steps": [
       "verifying restore configuration is accepted before execution",
+      "waiting for restore to drain steady read replicas before execution continues",
       "Verifying secret persists after restore",
       "Verifying restore metrics are emitted"
     ],
@@ -3109,7 +3123,9 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "domainLabels": [
       "dr",
@@ -3117,7 +3133,9 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "steps": [
       "Writing a secret before backup"

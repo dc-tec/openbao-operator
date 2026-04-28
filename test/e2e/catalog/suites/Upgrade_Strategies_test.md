@@ -17,7 +17,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935` | triggers late-phase rollback after promotion failures and recovers when auth is restored | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `rollback` |
 | `upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87` | recovers a failed rolling upgrade after a retry request clears stale state | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `recovery` |
 | `upgrade-strategies-retries-a-failed-rolling-pre-upgrade-fade7ad8` | retries a failed rolling pre-upgrade snapshot before starting rollout | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `snapshot`, `recovery` |
-| `upgrade-strategies-performs-rolling-upgrade-2302a23d` | performs rolling upgrade | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling` |
+| `upgrade-strategies-performs-rolling-upgrade-2302a23d` | performs rolling upgrade | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `read-replicas`, `read-replicas-rolling` |
 | `upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa` | acknowledges break glass and resumes rollback after the upgrade policy is repaired | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 | `upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327` | enters safe mode when rollback consensus repair job fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 | `upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b` | rejects downgrade requests at admission before any rollout begins | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation` |
@@ -209,11 +209,12 @@ State: `active`
 
 Covers: _none_
 
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `read-replicas`, `read-replicas-rolling`
 
 Recorded checkpoints:
 - Writing a secret before upgrade
 - Triggering upgrade
+- Verifying the steady read pool converges before voter rollout starts
 - Monitoring rolling invariants during upgrade
 - Verifying rolling step-down jobs are deterministic and successful
 - Verifying secret persists after upgrade

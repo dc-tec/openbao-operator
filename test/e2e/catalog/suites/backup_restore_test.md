@@ -15,10 +15,10 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5` | restores from GCS backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
 | `backup-restore-triggers-manual-backup-to-gcs-a36e4959` | triggers manual backup to GCS | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
 | `backup-restore-completes-restore-deterministically-after-controller-restart-d873984e` | completes restore deterministically after controller restart while running | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `failure-injection` |
-| `backup-restore-executes-backup-job-successfully-to-s3-6646d680` | executes backup job successfully to S3 | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
+| `backup-restore-executes-backup-job-successfully-to-s3-6646d680` | executes backup job successfully to S3 | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore` |
 | `backup-restore-handles-transient-s3-auth-failure-with-10300347` | handles transient S3 auth failure with backup retry after controller restart | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `failure-injection` |
-| `backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175` | restores from S3 backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
-| `backup-restore-triggers-manual-backup-to-s3-701eaf8b` | triggers manual backup to S3 | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
+| `backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175` | restores from S3 backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore` |
+| `backup-restore-triggers-manual-backup-to-s3-701eaf8b` | triggers manual backup to S3 | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore` |
 
 ## `backup-restore-executes-backup-job-successfully-to-azure-395a20b1`
 
@@ -132,7 +132,7 @@ State: `active`
 
 Covers: _none_
 
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore`
 
 Recorded checkpoints:
 - waiting for the S3 backup job to complete successfully
@@ -168,10 +168,11 @@ State: `active`
 
 Covers: _none_
 
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore`
 
 Recorded checkpoints:
 - verifying restore configuration is accepted before execution
+- waiting for restore to drain steady read replicas before execution continues
 - Verifying secret persists after restore
 - Verifying restore metrics are emitted
 
@@ -184,7 +185,7 @@ State: `active`
 
 Covers: _none_
 
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore`
 
 Recorded checkpoints:
 - Writing a secret before backup
