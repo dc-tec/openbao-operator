@@ -262,7 +262,8 @@ func TestCRD_OpenBaoCluster_RejectsOCIKMSCredentialsSecretWithoutAPIKeyMode(t *t
 
 	err := k8sClient.Create(ctx, cluster)
 	requireInvalidRequest(t, err)
-	if !strings.Contains(err.Error(), "spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true") {
+	wantMessage := "spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true"
+	if !strings.Contains(err.Error(), wantMessage) {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
@@ -375,7 +376,8 @@ func TestVAP_OpenBaoCluster_RejectsTransitClientCertWithoutKey(t *testing.T) {
 
 	err := k8sClient.Create(ctx, cluster)
 	requireAdmissionDenied(t, err)
-	if !strings.Contains(err.Error(), "spec.unseal.transit.tlsClientCert and spec.unseal.transit.tlsClientKey must be set together") {
+	wantMessage := "spec.unseal.transit.tlsClientCert and spec.unseal.transit.tlsClientKey must be set together"
+	if !strings.Contains(err.Error(), wantMessage) {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
@@ -414,7 +416,10 @@ func TestVAP_OpenBaoCluster_AllowsHardenedOfficialImageVerificationDefaults(t *t
 	}
 
 	if err := k8sClient.Create(ctx, cluster); err != nil {
-		t.Fatalf("expected Hardened OpenBaoCluster with enabled official image verification defaults to succeed, got: %v", err)
+		t.Fatalf(
+			"expected Hardened OpenBaoCluster with enabled official image verification defaults to succeed, got: %v",
+			err,
+		)
 	}
 }
 
@@ -432,8 +437,8 @@ func TestVAP_OpenBaoCluster_RejectsDisabledInitContainerOverride(t *testing.T) {
 					"namespace": namespace,
 				},
 				"spec": map[string]any{
-					"version":  "2.4.4",
-					"image":    "openbao/openbao:2.4.4",
+					"version":  testOpenBaoVersion244,
+					"image":    testOpenBaoImage244,
 					"replicas": int64(3),
 					"profile":  "Development",
 					"tls": map[string]any{
@@ -458,7 +463,8 @@ func TestVAP_OpenBaoCluster_RejectsDisabledInitContainerOverride(t *testing.T) {
 		}
 
 		requireAdmissionDenied(t, err)
-		if !strings.Contains(err.Error(), "spec.initContainer is optional; when set, spec.initContainer.enabled must be true.") {
+		wantMessage := "spec.initContainer is optional; when set, spec.initContainer.enabled must be true."
+		if !strings.Contains(err.Error(), wantMessage) {
 			t.Fatalf("unexpected error message: %v", err)
 		}
 		return
@@ -472,15 +478,15 @@ func TestVAP_OpenBaoCluster_RejectsDowngradeBelowCurrentVersion(t *testing.T) {
 	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
 
 	cluster := newMinimalClusterObj(namespace, "cluster-downgrade-current-version")
-	cluster.Spec.Version = "2.5.0"
-	cluster.Spec.Image = "openbao/openbao:2.5.0"
+	cluster.Spec.Version = testOpenBaoVersion250
+	cluster.Spec.Image = testOpenBaoImage250
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("create OpenBaoCluster: %v", err)
 	}
 
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.Initialized = true
-		status.CurrentVersion = "2.5.0"
+		status.CurrentVersion = testOpenBaoVersion250
 	})
 
 	var latest openbaov1alpha1.OpenBaoCluster
@@ -490,8 +496,8 @@ func TestVAP_OpenBaoCluster_RejectsDowngradeBelowCurrentVersion(t *testing.T) {
 	}
 
 	original := latest.DeepCopy()
-	latest.Spec.Version = "2.4.4"
-	latest.Spec.Image = "openbao/openbao:2.4.4"
+	latest.Spec.Version = testOpenBaoVersion244
+	latest.Spec.Image = testOpenBaoImage244
 
 	err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original))
 	requireAdmissionDenied(t, err)
@@ -513,9 +519,9 @@ func TestVAP_OpenBaoCluster_RejectsRollingTargetRegressionAfterRolloutStarts(t *
 
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.Initialized = true
-		status.CurrentVersion = "2.4.4"
+		status.CurrentVersion = testOpenBaoVersion244
 		status.Upgrade = &openbaov1alpha1.UpgradeProgress{
-			FromVersion:      "2.4.4",
+			FromVersion:      testOpenBaoVersion244,
 			TargetVersion:    "2.6.0",
 			CurrentPartition: 2,
 			CompletedPods:    []int32{2},
@@ -529,13 +535,106 @@ func TestVAP_OpenBaoCluster_RejectsRollingTargetRegressionAfterRolloutStarts(t *
 	}
 
 	original := latest.DeepCopy()
-	latest.Spec.Version = "2.5.0"
-	latest.Spec.Image = "openbao/openbao:2.5.0"
+	latest.Spec.Version = testOpenBaoVersion250
+	latest.Spec.Image = testOpenBaoImage250
 
 	err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original))
 	requireAdmissionDenied(t, err)
-	if !strings.Contains(err.Error(), "spec.version cannot be reduced below status.upgrade.targetVersion after rolling progress has started.") {
+	wantMessage := "spec.version cannot be reduced below status.upgrade.targetVersion after rolling progress has started."
+	if !strings.Contains(err.Error(), wantMessage) {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_RejectsNumericBackupEndpoint(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-backup-numeric-endpoint")
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		Schedule:    "0 0 * * *",
+		Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+		JWTAuthRole: "backup-role",
+		Target: openbaov1alpha1.BackupTarget{
+			Endpoint: "http://2130706433:9000",
+			Bucket:   testBackupBucket,
+			CredentialsSecretRef: &corev1.LocalObjectReference{
+				Name: "backup-creds",
+			},
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "numeric IP encoding") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoRestore_RejectsUnsafeEndpoints(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+	namespace := newTestNamespace(t)
+
+	tests := []struct {
+		name        string
+		endpoint    string
+		wantMessage string
+	}{
+		{
+			name:        "link-local",
+			endpoint:    "http://169.254.169.254/latest/meta-data",
+			wantMessage: "Restore endpoint cannot point to link-local addresses",
+		},
+		{
+			name:        "plain-http-external",
+			endpoint:    "http://example.com",
+			wantMessage: "Restore endpoint must use HTTPS or S3 scheme",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for attempt := 0; attempt < 25; attempt++ {
+				restore := &openbaov1alpha1.OpenBaoRestore{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("restore-%s-%d", tt.name, attempt),
+						Namespace: namespace,
+					},
+					Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+						Cluster: "does-not-matter-for-admission",
+						Source: openbaov1alpha1.RestoreSource{
+							Target: openbaov1alpha1.BackupTarget{
+								Provider: "s3",
+								Endpoint: tt.endpoint,
+								Bucket:   testBackupBucket,
+								CredentialsSecretRef: &corev1.LocalObjectReference{
+									Name: "restore-creds",
+								},
+							},
+							Key: "clusters/prod/snapshot.snap",
+						},
+						JWTAuthRole: "restore",
+						Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+						Force:       true,
+					},
+				}
+
+				err := k8sClient.Create(ctx, restore)
+				if err == nil {
+					_ = k8sClient.Delete(ctx, restore)
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+
+				requireAdmissionDenied(t, err)
+				if !strings.Contains(err.Error(), tt.wantMessage) {
+					t.Fatalf("unexpected error message: %v", err)
+				}
+				return
+			}
+
+			t.Fatalf("expected VAP to deny OpenBaoRestore endpoint %q after retries", tt.endpoint)
+		})
 	}
 }
 
@@ -552,9 +651,9 @@ func TestVAP_OpenBaoCluster_AllowsRollingTargetCorrectionBeforeRolloutStarts(t *
 
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.Initialized = true
-		status.CurrentVersion = "2.4.4"
+		status.CurrentVersion = testOpenBaoVersion244
 		status.Upgrade = &openbaov1alpha1.UpgradeProgress{
-			FromVersion:      "2.4.4",
+			FromVersion:      testOpenBaoVersion244,
 			TargetVersion:    "2.6.0",
 			CurrentPartition: cluster.Spec.Replicas,
 		}
@@ -567,8 +666,8 @@ func TestVAP_OpenBaoCluster_AllowsRollingTargetCorrectionBeforeRolloutStarts(t *
 	}
 
 	original := latest.DeepCopy()
-	latest.Spec.Version = "2.5.0"
-	latest.Spec.Image = "openbao/openbao:2.5.0"
+	latest.Spec.Version = testOpenBaoVersion250
+	latest.Spec.Image = testOpenBaoImage250
 
 	if err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
 		t.Fatalf("expected retarget before rollout progress to succeed, got: %v", err)
@@ -711,7 +810,8 @@ func TestVAP_OpenBaoTenant_RejectsTargetNamespaceMutation(t *testing.T) {
 		}
 
 		var latest openbaov1alpha1.OpenBaoTenant
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: tenant.Namespace, Name: tenant.Name}, &latest); err != nil {
+		tenantKey := types.NamespacedName{Namespace: tenant.Namespace, Name: tenant.Name}
+		if err := k8sClient.Get(ctx, tenantKey, &latest); err != nil {
 			t.Fatalf("get OpenBaoTenant: %v", err)
 		}
 		original := latest.DeepCopy()

@@ -45,7 +45,11 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 
 	controllerRef := metav1.GetControllerOf(sts)
 	if controllerRef == nil || controllerRef.UID != cluster.UID {
-		t.Fatalf("expected StatefulSet to have controller owner reference to OpenBaoCluster %s/%s", cluster.Namespace, cluster.Name)
+		t.Fatalf(
+			"expected StatefulSet to have controller owner reference to OpenBaoCluster %s/%s",
+			cluster.Namespace,
+			cluster.Name,
+		)
 	}
 
 	if !hasManagedFieldManager(sts, "openbao-operator") {
@@ -62,8 +66,8 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 	if drifted.Annotations == nil {
 		drifted.Annotations = map[string]string{}
 	}
-	drifted.Annotations["openbao.org/maintenance"] = "true"
-	drifted.Annotations["example.com/external-annotation"] = "true"
+	drifted.Annotations["openbao.org/maintenance"] = testTrueString
+	drifted.Annotations["example.com/external-annotation"] = testTrueString
 	drifted.Spec.UpdateStrategy.Type = appsv1.RollingUpdateStatefulSetStrategyType
 	drifted.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
 		Partition: ptr.To(int32(1)),
@@ -96,11 +100,12 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 		t.Fatalf("get StatefulSet after reconcile: %v", err)
 	}
 
-	if updated.Annotations["example.com/external-annotation"] != "true" {
+	if updated.Annotations["example.com/external-annotation"] != testTrueString {
 		t.Fatalf("expected external annotation to be preserved, got %#v", updated.Annotations)
 	}
 
-	if updated.Spec.UpdateStrategy.RollingUpdate == nil || updated.Spec.UpdateStrategy.RollingUpdate.Partition == nil || *updated.Spec.UpdateStrategy.RollingUpdate.Partition != 1 {
+	rollingUpdate := updated.Spec.UpdateStrategy.RollingUpdate
+	if rollingUpdate == nil || rollingUpdate.Partition == nil || *rollingUpdate.Partition != 1 {
 		t.Fatalf("expected RollingUpdate partition to be preserved, got %#v", updated.Spec.UpdateStrategy.RollingUpdate)
 	}
 
@@ -108,7 +113,11 @@ func TestInfraFullReconcile_StatefulSet_SSAAndIdempotency(t *testing.T) {
 	for i := range updated.Spec.Template.Spec.Containers {
 		if updated.Spec.Template.Spec.Containers[i].Name == constants.ContainerBao {
 			if updated.Spec.Template.Spec.Containers[i].Image != cluster.Spec.Image {
-				t.Fatalf("expected main container image %q, got %q", cluster.Spec.Image, updated.Spec.Template.Spec.Containers[i].Image)
+				t.Fatalf(
+					"expected main container image %q, got %q",
+					cluster.Spec.Image,
+					updated.Spec.Template.Spec.Containers[i].Image,
+				)
 			}
 			foundMain = true
 			break

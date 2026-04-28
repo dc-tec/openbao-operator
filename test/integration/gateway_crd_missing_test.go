@@ -184,7 +184,12 @@ func startIsolatedEnv(t *testing.T, opts isolatedEnvOptions) (client.Client, *ru
 	return k8sClient, scheme, cfg
 }
 
-func newPrivilegedImpersonatedClientForConfig(t *testing.T, baseCfg *rest.Config, scheme *runtime.Scheme, username string) client.Client {
+func newPrivilegedImpersonatedClientForConfig(
+	t *testing.T,
+	baseCfg *rest.Config,
+	scheme *runtime.Scheme,
+	username string,
+) client.Client {
 	t.Helper()
 
 	impersonated := rest.CopyConfig(baseCfg)
@@ -254,7 +259,14 @@ func createTLSSecretForClient(t *testing.T, ctx context.Context, c client.Client
 	}
 }
 
-func createCASecretForClient(t *testing.T, ctx context.Context, c client.Client, namespace, clusterName string, caPEM []byte) {
+func createCASecretForClient(
+	t *testing.T,
+	ctx context.Context,
+	c client.Client,
+	namespace string,
+	clusterName string,
+	caPEM []byte,
+) {
 	t.Helper()
 
 	secretName := clusterName + constants.SuffixTLSCA

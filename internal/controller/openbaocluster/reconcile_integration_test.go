@@ -9,6 +9,7 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -193,7 +194,7 @@ var _ = Describe("OpenBaoCluster Reconcile", func() {
 			Expect(tlsReady.Reason).To(Equal("Paused"))
 		})
 
-		It("does not create TLS Secrets when cluster is paused", func() {
+		It("does not create workload resources when cluster is paused", func() {
 			cluster := createMinimalCluster("test-paused-no-tls", true)
 
 			req := reconcile.Request{
@@ -221,6 +222,27 @@ var _ = Describe("OpenBaoCluster Reconcile", func() {
 				Name:      cluster.Name + constants.SuffixTLSServer,
 				Namespace: cluster.Namespace,
 			}, serverSecret)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			statefulSet := &appsv1.StatefulSet{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+			}, statefulSet)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			headlessService := &corev1.Service{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+			}, headlessService)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			configMap := &corev1.ConfigMap{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name + constants.SuffixConfigMap,
+				Namespace: cluster.Namespace,
+			}, configMap)
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 

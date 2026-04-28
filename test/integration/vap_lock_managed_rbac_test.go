@@ -205,7 +205,7 @@ func createManagedMaintenancePod(t *testing.T, c client.Client, namespace, clust
 			Name:      podName,
 			Namespace: namespace,
 			Annotations: map[string]string{
-				"openbao.org/maintenance": "true",
+				"openbao.org/maintenance": testTrueString,
 			},
 			Labels: map[string]string{
 				"app.kubernetes.io/name":       "openbao",
@@ -338,7 +338,8 @@ func TestVAP_LockManagedRBAC_AllowsMaintenanceMutationWithClusterMaintenanceVerb
 	grantClusterMaintenanceAccess(t, namespace, clusterName, editorUsername)
 
 	editorClient := newImpersonatedClient(t, editorUsername)
-	if err := editorClient.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: namespace}}); err != nil {
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName, Namespace: namespace}}
+	if err := editorClient.Delete(ctx, pod); err != nil {
 		t.Fatalf("expected maintenance-authorized pod delete to succeed, got: %v", err)
 	}
 
@@ -369,7 +370,8 @@ func TestVAP_LockManagedRBAC_DeniesDirectMutationOfProvisionerManagedRoleBinding
 
 	for attempt := 0; attempt < 25; attempt++ {
 		var latest rbacv1.RoleBinding
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: roleBinding.Name}, &latest); err != nil {
+		roleBindingKey := types.NamespacedName{Namespace: namespace, Name: roleBinding.Name}
+		if err := k8sClient.Get(ctx, roleBindingKey, &latest); err != nil {
 			t.Fatalf("get managed RoleBinding: %v", err)
 		}
 

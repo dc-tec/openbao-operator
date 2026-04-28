@@ -253,6 +253,45 @@ func TestRenderHCLWithAuditPluginsTelemetry(t *testing.T) {
 	compareGolden(t, "render_hcl_audit_plugins_telemetry", got)
 }
 
+func TestRenderHCLWithObservabilityMetricsTelemetry(t *testing.T) {
+	cluster := newMinimalCluster("telemetry-cluster", "default")
+	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+		Metrics: &openbaov1alpha1.MetricsConfig{
+			Enabled: true,
+		},
+	}
+	cluster.Spec.Telemetry = &openbaov1alpha1.TelemetryConfig{
+		MetricsPrefix:           "openbao.e2e",
+		PrometheusRetentionTime: "45s",
+		EnableHostnameLabel:     true,
+	}
+
+	infraDetails := InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	}
+
+	got, err := RenderHCL(cluster, infraDetails)
+	if err != nil {
+		t.Fatalf("RenderHCL() error = %v", err)
+	}
+
+	gotText := string(got)
+	for _, want := range []string{
+		"telemetry {",
+		`metrics_prefix            = "openbao.e2e"`,
+		`prometheus_retention_time = "45s"`,
+		"disable_hostname          = true",
+		"enable_hostname_label     = true",
+	} {
+		if !strings.Contains(gotText, want) {
+			t.Fatalf("RenderHCL() output missing %q:\n%s", want, gotText)
+		}
+	}
+}
+
 func TestRenderHCLWithSelfInitRequests(t *testing.T) {
 	cluster := newMinimalCluster("selfinit-cluster", "default")
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{

@@ -69,7 +69,7 @@ func TestInfraNetwork_ExternalService_CreatesAndDeletes(t *testing.T) {
 	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{
 		Type: corev1.ServiceTypeLoadBalancer,
 		Annotations: map[string]string{
-			"service-annotation": "true",
+			"service-annotation": testTrueString,
 		},
 	}
 	if err := k8sClient.Create(ctx, cluster); err != nil {
@@ -91,7 +91,7 @@ func TestInfraNetwork_ExternalService_CreatesAndDeletes(t *testing.T) {
 	if external.Spec.Type != corev1.ServiceTypeLoadBalancer {
 		t.Fatalf("expected ServiceType LoadBalancer, got %q", external.Spec.Type)
 	}
-	if external.Annotations["service-annotation"] != "true" {
+	if external.Annotations["service-annotation"] != testTrueString {
 		t.Fatalf("expected annotation service-annotation=true, got %#v", external.Annotations)
 	}
 
@@ -339,8 +339,9 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
+	mainSvcName := cluster.Name + infraPublicServiceSuffix
 	mainSvc := &corev1.Service{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraPublicServiceSuffix}, mainSvc); err != nil {
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: mainSvcName}, mainSvc); err != nil {
 		t.Fatalf("expected main external Service to exist: %v", err)
 	}
 	if mainSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "blue123" {
@@ -352,7 +353,8 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	} else if !apierrors.IsNotFound(err) {
 		t.Fatalf("get stale blue Service: %v", err)
 	}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: staleGreen.Name}, staleGreen); err == nil {
+	staleGreenKey := types.NamespacedName{Namespace: namespace, Name: staleGreen.Name}
+	if err := k8sClient.Get(ctx, staleGreenKey, staleGreen); err == nil {
 		t.Fatalf("expected stale green Service to be deleted")
 	} else if !apierrors.IsNotFound(err) {
 		t.Fatalf("get stale green Service: %v", err)
@@ -360,14 +362,15 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 
 	// Ensure HTTPRoute exists and references the main Service.
 	route := &gatewayv1.HTTPRoute{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraHTTPRouteSuffix}, route); err != nil {
+	httpRouteName := cluster.Name + infraHTTPRouteSuffix
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: httpRouteName}, route); err != nil {
 		t.Fatalf("expected HTTPRoute to exist: %v", err)
 	}
 	if len(route.Spec.Rules) == 0 || len(route.Spec.Rules[0].BackendRefs) != 1 {
 		t.Fatalf("expected HTTPRoute to have 1 backend, got %#v", route.Spec.Rules)
 	}
-	if string(route.Spec.Rules[0].BackendRefs[0].Name) != cluster.Name+infraPublicServiceSuffix {
-		t.Fatalf("expected HTTPRoute backend %q got %q", cluster.Name+infraPublicServiceSuffix, route.Spec.Rules[0].BackendRefs[0].Name)
+	if string(route.Spec.Rules[0].BackendRefs[0].Name) != mainSvcName {
+		t.Fatalf("expected HTTPRoute backend %q got %q", mainSvcName, route.Spec.Rules[0].BackendRefs[0].Name)
 	}
 
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
@@ -377,7 +380,7 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("Reconcile() during demoting blue error = %v", err)
 	}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraPublicServiceSuffix}, mainSvc); err != nil {
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: mainSvcName}, mainSvc); err != nil {
 		t.Fatalf("get main Service during demoting blue: %v", err)
 	}
 	if mainSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "blue123" {
@@ -391,7 +394,7 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("Reconcile() during cleanup error = %v", err)
 	}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name + infraPublicServiceSuffix}, mainSvc); err != nil {
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: mainSvcName}, mainSvc); err != nil {
 		t.Fatalf("get main Service during cleanup: %v", err)
 	}
 	if mainSvc.Spec.Selector[constants.LabelOpenBaoRevision] != "green456" {
@@ -410,7 +413,7 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 		},
 		Hostname:       "bao.example.local",
 		TLSPassthrough: true,
-		Annotations:    map[string]string{"route-annotation": "true"},
+		Annotations:    map[string]string{"route-annotation": testTrueString},
 	}
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("create OpenBaoCluster: %v", err)
@@ -424,6 +427,7 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
+	mainSvcName := cluster.Name + infraPublicServiceSuffix
 	// TLSRoute is created for passthrough mode.
 	tlsRoute := &gatewayv1alpha2.TLSRoute{}
 	tlsRouteName := cluster.Name + infraTLSRouteSuffix
@@ -436,10 +440,14 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 	if len(tlsRoute.Spec.Rules) != 1 || len(tlsRoute.Spec.Rules[0].BackendRefs) != 1 {
 		t.Fatalf("expected TLSRoute to have 1 backend, got %#v", tlsRoute.Spec.Rules)
 	}
-	if string(tlsRoute.Spec.Rules[0].BackendRefs[0].Name) != cluster.Name+infraPublicServiceSuffix {
-		t.Fatalf("expected TLSRoute backend Service %q, got %q", cluster.Name+infraPublicServiceSuffix, tlsRoute.Spec.Rules[0].BackendRefs[0].Name)
+	if string(tlsRoute.Spec.Rules[0].BackendRefs[0].Name) != mainSvcName {
+		t.Fatalf(
+			"expected TLSRoute backend Service %q, got %q",
+			mainSvcName,
+			tlsRoute.Spec.Rules[0].BackendRefs[0].Name,
+		)
 	}
-	if tlsRoute.Annotations["route-annotation"] != "true" {
+	if tlsRoute.Annotations["route-annotation"] != testTrueString {
 		t.Fatalf("expected TLSRoute annotation route-annotation=true, got %#v", tlsRoute.Annotations)
 	}
 
@@ -455,7 +463,8 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 	// BackendTLSPolicy is not needed for passthrough mode.
 	backendTLS := &gatewayv1.BackendTLSPolicy{}
 	backendTLSName := cluster.Name + infraBackendTLSPolicySuffix
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backendTLSName}, backendTLS); err == nil {
+	backendTLSKey := types.NamespacedName{Namespace: namespace, Name: backendTLSName}
+	if err := k8sClient.Get(ctx, backendTLSKey, backendTLS); err == nil {
 		t.Fatalf("expected BackendTLSPolicy to not exist when TLS passthrough is enabled")
 	} else if !apierrors.IsNotFound(err) {
 		t.Fatalf("get BackendTLSPolicy: %v", err)
@@ -503,20 +512,32 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
 
+	mainSvcName := cluster.Name + infraPublicServiceSuffix
 	backendTLS := &gatewayv1.BackendTLSPolicy{}
 	backendTLSName := cluster.Name + infraBackendTLSPolicySuffix
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backendTLSName}, backendTLS); err != nil {
+	backendTLSKey := types.NamespacedName{Namespace: namespace, Name: backendTLSName}
+	if err := k8sClient.Get(ctx, backendTLSKey, backendTLS); err != nil {
 		t.Fatalf("expected BackendTLSPolicy to exist: %v", err)
 	}
-	if len(backendTLS.Spec.TargetRefs) != 1 || string(backendTLS.Spec.TargetRefs[0].Name) != cluster.Name+infraPublicServiceSuffix {
-		t.Fatalf("expected BackendTLSPolicy target Service %q, got %#v", cluster.Name+infraPublicServiceSuffix, backendTLS.Spec.TargetRefs)
+	if len(backendTLS.Spec.TargetRefs) != 1 || string(backendTLS.Spec.TargetRefs[0].Name) != mainSvcName {
+		t.Fatalf("expected BackendTLSPolicy target Service %q, got %#v", mainSvcName, backendTLS.Spec.TargetRefs)
 	}
-	expectedHostname := fmt.Sprintf("%s.%s.svc", cluster.Name+infraPublicServiceSuffix, namespace)
+	expectedHostname := fmt.Sprintf("%s.%s.svc", mainSvcName, namespace)
 	if string(backendTLS.Spec.Validation.Hostname) != expectedHostname {
-		t.Fatalf("expected BackendTLSPolicy validation hostname %q, got %q", expectedHostname, backendTLS.Spec.Validation.Hostname)
+		t.Fatalf(
+			"expected BackendTLSPolicy validation hostname %q, got %q",
+			expectedHostname,
+			backendTLS.Spec.Validation.Hostname,
+		)
 	}
-	if len(backendTLS.Spec.Validation.CACertificateRefs) != 1 || string(backendTLS.Spec.Validation.CACertificateRefs[0].Name) != cluster.Name+constants.SuffixTLSCA {
-		t.Fatalf("expected BackendTLSPolicy CA ConfigMap ref %q, got %#v", cluster.Name+constants.SuffixTLSCA, backendTLS.Spec.Validation.CACertificateRefs)
+	caName := cluster.Name + constants.SuffixTLSCA
+	if len(backendTLS.Spec.Validation.CACertificateRefs) != 1 ||
+		string(backendTLS.Spec.Validation.CACertificateRefs[0].Name) != caName {
+		t.Fatalf(
+			"expected BackendTLSPolicy CA ConfigMap ref %q, got %#v",
+			caName,
+			backendTLS.Spec.Validation.CACertificateRefs,
+		)
 	}
 
 	// Disable BackendTLS; BackendTLSPolicy should be deleted.
@@ -529,7 +550,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after disabling BackendTLS error = %v", err)
 	}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backendTLSName}, backendTLS); err == nil {
+	if err := k8sClient.Get(ctx, backendTLSKey, backendTLS); err == nil {
 		t.Fatalf("expected BackendTLSPolicy to be deleted after disabling BackendTLS")
 	} else if !apierrors.IsNotFound(err) {
 		t.Fatalf("get BackendTLSPolicy: %v", err)
@@ -545,7 +566,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after enabling BackendTLS error = %v", err)
 	}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backendTLSName}, backendTLS); err != nil {
+	if err := k8sClient.Get(ctx, backendTLSKey, backendTLS); err != nil {
 		t.Fatalf("expected BackendTLSPolicy to exist after re-enabling: %v", err)
 	}
 
@@ -558,7 +579,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 		t.Fatalf("Reconcile() after enabling TLS passthrough error = %v", err)
 	}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: backendTLSName}, backendTLS); err == nil {
+	if err := k8sClient.Get(ctx, backendTLSKey, backendTLS); err == nil {
 		t.Fatalf("expected BackendTLSPolicy to be deleted after enabling TLS passthrough")
 	} else if !apierrors.IsNotFound(err) {
 		t.Fatalf("get BackendTLSPolicy: %v", err)

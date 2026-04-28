@@ -41,51 +41,103 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 	yamlBytes := kustomizeBuild(t, tmpDir)
 	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
 
-	controller := mustFindObject(t, objs, "apps/v1", "Deployment", "demo-openbao-operator-controller")
-	provisioner := mustFindObject(t, objs, "apps/v1", "Deployment", "demo-openbao-operator-provisioner")
-	controllerPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-controller-rbac")
-	controllerServiceAccountPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-controller-serviceaccounts")
-	controllerSecretPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-controller-secret-writes")
-	provisionerPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-provisioner-rbac")
-	tenantGovernancePolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-provisioner-tenant-governance")
-	tenantPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-validate-openbao-tenant")
+	controller := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedControllerSA)
+	provisioner := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedProvisionerSA)
+	controllerPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-restrict-controller-rbac")
+	controllerServiceAccountPolicy := mustFindPolicy(
+		t,
+		objs,
+		"demo-openbao-operator-openbao-restrict-controller-serviceaccounts",
+	)
+	controllerSecretPolicy := mustFindPolicy(
+		t,
+		objs,
+		"demo-openbao-operator-openbao-restrict-controller-secret-writes",
+	)
+	provisionerPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-restrict-provisioner-rbac")
+	tenantGovernancePolicy := mustFindPolicy(
+		t,
+		objs,
+		"demo-openbao-operator-openbao-restrict-provisioner-tenant-governance",
+	)
+	tenantPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-validate-openbao-tenant")
 
-	if got := envVarValue(t, controller, "OPERATOR_SERVICE_ACCOUNT_NAME"); got != "demo-openbao-operator-controller" {
-		t.Fatalf("controller OPERATOR_SERVICE_ACCOUNT_NAME=%q, want %q", got, "demo-openbao-operator-controller")
+	if got := envVarValue(t, controller, "OPERATOR_SERVICE_ACCOUNT_NAME"); got != testPrefixedControllerSA {
+		t.Fatalf("controller OPERATOR_SERVICE_ACCOUNT_NAME=%q, want %q", got, testPrefixedControllerSA)
 	}
-	if got := envVarValue(t, provisioner, "OPERATOR_SERVICE_ACCOUNT_NAME"); got != "demo-openbao-operator-controller" {
-		t.Fatalf("provisioner OPERATOR_SERVICE_ACCOUNT_NAME=%q, want %q", got, "demo-openbao-operator-controller")
+	if got := envVarValue(t, provisioner, "OPERATOR_SERVICE_ACCOUNT_NAME"); got != testPrefixedControllerSA {
+		t.Fatalf("provisioner OPERATOR_SERVICE_ACCOUNT_NAME=%q, want %q", got, testPrefixedControllerSA)
 	}
 
-	if got := policyVariableExpression(t, controllerPolicy, "operator_namespace"); got != "'custom-operator'" {
-		t.Fatalf("controller policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	if got := policyVariableExpression(t, controllerPolicy, "operator_namespace"); got != testQuotedCustomOperatorNS {
+		t.Fatalf("controller policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
 	}
-	if got := policyVariableExpression(t, controllerPolicy, "controller_serviceaccount_name"); got != "'demo-openbao-operator-controller'" {
-		t.Fatalf("controller policy controller_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-controller'")
+	if got := policyVariableExpression(
+		t,
+		controllerPolicy,
+		"controller_serviceaccount_name",
+	); got != testQuotedPrefixedCtrlSA {
+		t.Fatalf("controller policy controller_serviceaccount_name=%q, want %q", got, testQuotedPrefixedCtrlSA)
 	}
-	if got := policyVariableExpression(t, controllerServiceAccountPolicy, "operator_namespace"); got != "'custom-operator'" {
-		t.Fatalf("controller serviceaccount policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	if got := policyVariableExpression(
+		t,
+		controllerServiceAccountPolicy,
+		"operator_namespace",
+	); got != testQuotedCustomOperatorNS {
+		t.Fatalf("controller serviceaccount policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
 	}
-	if got := policyVariableExpression(t, controllerServiceAccountPolicy, "controller_serviceaccount_name"); got != "'demo-openbao-operator-controller'" {
-		t.Fatalf("controller serviceaccount policy controller_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-controller'")
+	if got := policyVariableExpression(
+		t,
+		controllerServiceAccountPolicy,
+		"controller_serviceaccount_name",
+	); got != testQuotedPrefixedCtrlSA {
+		t.Fatalf(
+			"controller serviceaccount policy controller_serviceaccount_name=%q, want %q",
+			got,
+			testQuotedPrefixedCtrlSA,
+		)
 	}
-	if got := policyVariableExpression(t, controllerSecretPolicy, "operator_namespace"); got != "'custom-operator'" {
-		t.Fatalf("controller secret policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	if got := policyVariableExpression(
+		t,
+		controllerSecretPolicy,
+		"operator_namespace",
+	); got != testQuotedCustomOperatorNS {
+		t.Fatalf("controller secret policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
 	}
-	if got := policyVariableExpression(t, controllerSecretPolicy, "controller_serviceaccount_name"); got != "'demo-openbao-operator-controller'" {
-		t.Fatalf("controller secret policy controller_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-controller'")
+	if got := policyVariableExpression(
+		t,
+		controllerSecretPolicy,
+		"controller_serviceaccount_name",
+	); got != testQuotedPrefixedCtrlSA {
+		t.Fatalf("controller secret policy controller_serviceaccount_name=%q, want %q", got, testQuotedPrefixedCtrlSA)
 	}
-	if got := policyVariableExpression(t, provisionerPolicy, "provisioner_serviceaccount_name"); got != "'demo-openbao-operator-provisioner'" {
-		t.Fatalf("provisioner policy provisioner_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-provisioner'")
+	if got := policyVariableExpression(
+		t,
+		provisionerPolicy,
+		"provisioner_serviceaccount_name",
+	); got != testQuotedPrefixedProvSA {
+		t.Fatalf("provisioner policy provisioner_serviceaccount_name=%q, want %q", got, testQuotedPrefixedProvSA)
 	}
-	if got := policyVariableExpression(t, tenantGovernancePolicy, "operator_namespace"); got != "'custom-operator'" {
-		t.Fatalf("tenant governance policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	if got := policyVariableExpression(
+		t,
+		tenantGovernancePolicy,
+		"operator_namespace",
+	); got != testQuotedCustomOperatorNS {
+		t.Fatalf("tenant governance policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
 	}
-	if got := policyVariableExpression(t, tenantGovernancePolicy, "provisioner_serviceaccount_name"); got != "'demo-openbao-operator-provisioner'" {
-		t.Fatalf("tenant governance policy provisioner_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-provisioner'")
+	if got := policyVariableExpression(
+		t,
+		tenantGovernancePolicy,
+		"provisioner_serviceaccount_name",
+	); got != testQuotedPrefixedProvSA {
+		t.Fatalf(
+			"tenant governance policy provisioner_serviceaccount_name=%q, want %q",
+			got,
+			testQuotedPrefixedProvSA,
+		)
 	}
-	if got := policyVariableExpression(t, tenantPolicy, "operator_namespace"); got != "'custom-operator'" {
-		t.Fatalf("tenant policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	if got := policyVariableExpression(t, tenantPolicy, "operator_namespace"); got != testQuotedCustomOperatorNS {
+		t.Fatalf("tenant policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
 	}
 }
 
@@ -114,9 +166,19 @@ func TestKustomizeSingleTenantOverlay_CustomOperatorAndTargetNamespace(t *testin
 		}
 		switch name {
 		case "kustomization.yaml":
-			content = []byte(strings.Replace(string(content), "namespace: openbao-operator-system", "namespace: custom-operator\nnamePrefix: demo-", 1))
+			content = []byte(strings.Replace(
+				string(content),
+				"namespace: openbao-operator-system",
+				"namespace: custom-operator\nnamePrefix: demo-",
+				1,
+			))
 		case "target_namespace_config.yaml":
-			content = []byte(strings.Replace(string(content), "WATCH_NAMESPACE: openbao", "WATCH_NAMESPACE: tenant-openbao", 1))
+			content = []byte(strings.Replace(
+				string(content),
+				"WATCH_NAMESPACE: openbao",
+				"WATCH_NAMESPACE: tenant-openbao",
+				1,
+			))
 		}
 		if err := os.WriteFile(filepath.Join(tmpDir, name), content, 0o600); err != nil {
 			t.Fatalf("write %s: %v", name, err)
@@ -126,21 +188,21 @@ func TestKustomizeSingleTenantOverlay_CustomOperatorAndTargetNamespace(t *testin
 	yamlBytes := kustomizeBuild(t, tmpDir)
 	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
 
-	controller := mustFindObject(t, objs, "apps/v1", "Deployment", "demo-openbao-operator-controller")
-	roleBinding := mustFindObject(t, objs, "rbac.authorization.k8s.io/v1", "RoleBinding", "demo-openbao-operator-single-tenant")
-	operatorNS := mustFindObject(t, objs, "v1", "Namespace", "custom-operator")
+	controller := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedControllerSA)
+	roleBinding := mustFindRoleBinding(t, objs, "demo-openbao-operator-single-tenant")
+	operatorNS := mustFindObject(t, objs, "v1", "Namespace", testCustomOperatorNS)
 
 	if operatorNS == nil {
 		t.Fatal("custom operator namespace was not rendered")
 	}
-	if controller.GetNamespace() != "custom-operator" {
-		t.Fatalf("controller namespace=%q, want %q", controller.GetNamespace(), "custom-operator")
+	if controller.GetNamespace() != testCustomOperatorNS {
+		t.Fatalf("controller namespace=%q, want %q", controller.GetNamespace(), testCustomOperatorNS)
 	}
-	if got := envVarValue(t, controller, "WATCH_NAMESPACE"); got != "tenant-openbao" {
-		t.Fatalf("WATCH_NAMESPACE=%q, want %q", got, "tenant-openbao")
+	if got := envVarValue(t, controller, "WATCH_NAMESPACE"); got != testCustomTenantTargetNS {
+		t.Fatalf("WATCH_NAMESPACE=%q, want %q", got, testCustomTenantTargetNS)
 	}
-	if roleBinding.GetNamespace() != "tenant-openbao" {
-		t.Fatalf("rolebinding namespace=%q, want %q", roleBinding.GetNamespace(), "tenant-openbao")
+	if roleBinding.GetNamespace() != testCustomTenantTargetNS {
+		t.Fatalf("rolebinding namespace=%q, want %q", roleBinding.GetNamespace(), testCustomTenantTargetNS)
 	}
 
 	subjects, found, err := unstructured.NestedSlice(roleBinding.Object, "subjects")
@@ -151,18 +213,21 @@ func TestKustomizeSingleTenantOverlay_CustomOperatorAndTargetNamespace(t *testin
 	if !ok {
 		t.Fatalf("rolebinding subject has unexpected type %T", subjects[0])
 	}
-	if got, _ := subject["name"].(string); got != "demo-openbao-operator-controller" {
-		t.Fatalf("rolebinding subject name=%q, want %q", got, "demo-openbao-operator-controller")
+	if got, _ := subject["name"].(string); got != testPrefixedControllerSA {
+		t.Fatalf("rolebinding subject name=%q, want %q", got, testPrefixedControllerSA)
 	}
-	if got, _ := subject["namespace"].(string); got != "custom-operator" {
-		t.Fatalf("rolebinding subject namespace=%q, want %q", got, "custom-operator")
+	if got, _ := subject["namespace"].(string); got != testCustomOperatorNS {
+		t.Fatalf("rolebinding subject namespace=%q, want %q", got, testCustomOperatorNS)
 	}
 }
 
 func TestKustomizeSingleTenantCustomIdentityOverlay_RewritesControllerIdentityAndTargetNamespace(t *testing.T) {
 	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp(filepath.Join("..", "..", "config", "overlays"), ".tmp-kustomize-single-tenant-custom-identity-")
+	tmpDir, err := os.MkdirTemp(
+		filepath.Join("..", "..", "config", "overlays"),
+		".tmp-kustomize-single-tenant-custom-identity-",
+	)
 	if err != nil {
 		t.Fatalf("create temp overlay dir: %v", err)
 	}
@@ -184,9 +249,19 @@ func TestKustomizeSingleTenantCustomIdentityOverlay_RewritesControllerIdentityAn
 		}
 		switch name {
 		case "kustomization.yaml":
-			content = []byte(strings.Replace(string(content), "namespace: openbao-operator-system", "namespace: custom-operator\nnamePrefix: demo-", 1))
+			content = []byte(strings.Replace(
+				string(content),
+				"namespace: openbao-operator-system",
+				"namespace: custom-operator\nnamePrefix: demo-",
+				1,
+			))
 		case "target_namespace_config.yaml":
-			content = []byte(strings.Replace(string(content), "WATCH_NAMESPACE: openbao", "WATCH_NAMESPACE: tenant-openbao", 1))
+			content = []byte(strings.Replace(
+				string(content),
+				"WATCH_NAMESPACE: openbao",
+				"WATCH_NAMESPACE: tenant-openbao",
+				1,
+			))
 		}
 		if err := os.WriteFile(filepath.Join(tmpDir, name), content, 0o600); err != nil {
 			t.Fatalf("write %s: %v", name, err)
@@ -196,35 +271,55 @@ func TestKustomizeSingleTenantCustomIdentityOverlay_RewritesControllerIdentityAn
 	yamlBytes := kustomizeBuild(t, tmpDir)
 	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
 
-	controller := mustFindObject(t, objs, "apps/v1", "Deployment", "demo-openbao-operator-controller")
-	roleBinding := mustFindObject(t, objs, "rbac.authorization.k8s.io/v1", "RoleBinding", "demo-openbao-operator-single-tenant")
-	controllerPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-controller-rbac")
-	controllerServiceAccountPolicy := mustFindObject(t, objs, "admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "demo-openbao-operator-openbao-restrict-controller-serviceaccounts")
-	operatorNS := mustFindObject(t, objs, "v1", "Namespace", "custom-operator")
+	controller := mustFindObject(t, objs, "apps/v1", "Deployment", testPrefixedControllerSA)
+	roleBinding := mustFindRoleBinding(t, objs, "demo-openbao-operator-single-tenant")
+	controllerPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-restrict-controller-rbac")
+	controllerServiceAccountPolicy := mustFindPolicy(
+		t,
+		objs,
+		"demo-openbao-operator-openbao-restrict-controller-serviceaccounts",
+	)
+	operatorNS := mustFindObject(t, objs, "v1", "Namespace", testCustomOperatorNS)
 
 	if operatorNS == nil {
 		t.Fatal("custom operator namespace was not rendered")
 	}
-	if controller.GetNamespace() != "custom-operator" {
-		t.Fatalf("controller namespace=%q, want %q", controller.GetNamespace(), "custom-operator")
+	if controller.GetNamespace() != testCustomOperatorNS {
+		t.Fatalf("controller namespace=%q, want %q", controller.GetNamespace(), testCustomOperatorNS)
 	}
-	if got := envVarValue(t, controller, "WATCH_NAMESPACE"); got != "tenant-openbao" {
-		t.Fatalf("WATCH_NAMESPACE=%q, want %q", got, "tenant-openbao")
+	if got := envVarValue(t, controller, "WATCH_NAMESPACE"); got != testCustomTenantTargetNS {
+		t.Fatalf("WATCH_NAMESPACE=%q, want %q", got, testCustomTenantTargetNS)
 	}
-	if roleBinding.GetNamespace() != "tenant-openbao" {
-		t.Fatalf("rolebinding namespace=%q, want %q", roleBinding.GetNamespace(), "tenant-openbao")
+	if roleBinding.GetNamespace() != testCustomTenantTargetNS {
+		t.Fatalf("rolebinding namespace=%q, want %q", roleBinding.GetNamespace(), testCustomTenantTargetNS)
 	}
-	if got := policyVariableExpression(t, controllerPolicy, "operator_namespace"); got != "'custom-operator'" {
-		t.Fatalf("controller policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	if got := policyVariableExpression(t, controllerPolicy, "operator_namespace"); got != testQuotedCustomOperatorNS {
+		t.Fatalf("controller policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
 	}
-	if got := policyVariableExpression(t, controllerPolicy, "controller_serviceaccount_name"); got != "'demo-openbao-operator-controller'" {
-		t.Fatalf("controller policy controller_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-controller'")
+	if got := policyVariableExpression(
+		t,
+		controllerPolicy,
+		"controller_serviceaccount_name",
+	); got != testQuotedPrefixedCtrlSA {
+		t.Fatalf("controller policy controller_serviceaccount_name=%q, want %q", got, testQuotedPrefixedCtrlSA)
 	}
-	if got := policyVariableExpression(t, controllerServiceAccountPolicy, "operator_namespace"); got != "'custom-operator'" {
-		t.Fatalf("controller serviceaccount policy operator_namespace=%q, want %q", got, "'custom-operator'")
+	if got := policyVariableExpression(
+		t,
+		controllerServiceAccountPolicy,
+		"operator_namespace",
+	); got != testQuotedCustomOperatorNS {
+		t.Fatalf("controller serviceaccount policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
 	}
-	if got := policyVariableExpression(t, controllerServiceAccountPolicy, "controller_serviceaccount_name"); got != "'demo-openbao-operator-controller'" {
-		t.Fatalf("controller serviceaccount policy controller_serviceaccount_name=%q, want %q", got, "'demo-openbao-operator-controller'")
+	if got := policyVariableExpression(
+		t,
+		controllerServiceAccountPolicy,
+		"controller_serviceaccount_name",
+	); got != testQuotedPrefixedCtrlSA {
+		t.Fatalf(
+			"controller serviceaccount policy controller_serviceaccount_name=%q, want %q",
+			got,
+			testQuotedPrefixedCtrlSA,
+		)
 	}
 
 	subjects, found, err := unstructured.NestedSlice(roleBinding.Object, "subjects")
@@ -235,15 +330,33 @@ func TestKustomizeSingleTenantCustomIdentityOverlay_RewritesControllerIdentityAn
 	if !ok {
 		t.Fatalf("rolebinding subject has unexpected type %T", subjects[0])
 	}
-	if got, _ := subject["name"].(string); got != "demo-openbao-operator-controller" {
-		t.Fatalf("rolebinding subject name=%q, want %q", got, "demo-openbao-operator-controller")
+	if got, _ := subject["name"].(string); got != testPrefixedControllerSA {
+		t.Fatalf("rolebinding subject name=%q, want %q", got, testPrefixedControllerSA)
 	}
-	if got, _ := subject["namespace"].(string); got != "custom-operator" {
-		t.Fatalf("rolebinding subject namespace=%q, want %q", got, "custom-operator")
+	if got, _ := subject["namespace"].(string); got != testCustomOperatorNS {
+		t.Fatalf("rolebinding subject namespace=%q, want %q", got, testCustomOperatorNS)
 	}
 }
 
-func mustFindObject(t *testing.T, objs []*unstructured.Unstructured, apiVersion, kind, name string) *unstructured.Unstructured {
+func mustFindPolicy(t *testing.T, objs []*unstructured.Unstructured, name string) *unstructured.Unstructured {
+	t.Helper()
+
+	return mustFindObject(t, objs, testAdmissionRegistrationV1, testKindVAP, name)
+}
+
+func mustFindRoleBinding(t *testing.T, objs []*unstructured.Unstructured, name string) *unstructured.Unstructured {
+	t.Helper()
+
+	return mustFindObject(t, objs, testRBACV1, testKindRoleBinding, name)
+}
+
+func mustFindObject(
+	t *testing.T,
+	objs []*unstructured.Unstructured,
+	apiVersion string,
+	kind string,
+	name string,
+) *unstructured.Unstructured {
 	t.Helper()
 
 	for _, obj := range objs {

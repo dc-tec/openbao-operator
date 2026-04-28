@@ -181,7 +181,8 @@ func newTenantOnboardingTestContext(t *testing.T, singleTenant bool, objects ...
 		},
 	}
 
-	clientObjects := []client.Object{cluster.DeepCopy()}
+	clientObjects := make([]client.Object, 0, 1+len(objects))
+	clientObjects = append(clientObjects, cluster.DeepCopy())
 	clientObjects = append(clientObjects, objects...)
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
