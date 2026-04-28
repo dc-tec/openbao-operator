@@ -910,7 +910,7 @@ jobs:
           GOFLAGS: -mod=vendor
           OPENBAO_REQUEUE_STANDARD: 10s
           # E2E_LABEL_FILTER is set by previous step
-          E2E_PARALLEL_NODES: "1"
+          E2E_PARALLEL_NODES: ${{ matrix.parallel_nodes }}
           E2E_TIMEOUT: ${{ matrix.e2e_timeout }}
           E2E_FAIL_ON_EMPTY: "true"
           E2E_POLL_PROGRESS_AFTER: "10m"

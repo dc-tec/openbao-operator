@@ -27,11 +27,12 @@ type options struct {
 }
 
 type manifest struct {
-	Version  int               `yaml:"version"`
-	Versions versionPolicy     `yaml:"versions"`
-	CILanes  []ciLaneConfig    `yaml:"ciLanes"`
-	Nightly  nightlyPlanConfig `yaml:"nightly"`
-	Suites   []manifestSuite   `yaml:"suites"`
+	Version     int               `yaml:"version"`
+	Versions    versionPolicy     `yaml:"versions"`
+	Parallelism parallelismPolicy `yaml:"parallelism"`
+	CILanes     []ciLaneConfig    `yaml:"ciLanes"`
+	Nightly     nightlyPlanConfig `yaml:"nightly"`
+	Suites      []manifestSuite   `yaml:"suites"`
 }
 
 type versionPolicy struct {
@@ -50,6 +51,11 @@ type kubernetesVersionPolicy struct {
 	NextCandidate string   `yaml:"nextCandidate"`
 }
 
+type parallelismPolicy struct {
+	DefaultNodes int `yaml:"defaultNodes"`
+	MaxNodes     int `yaml:"maxNodes"`
+}
+
 type ciLaneConfig struct {
 	ID                       string `yaml:"id"`
 	Name                     string `yaml:"name"`
@@ -57,6 +63,7 @@ type ciLaneConfig struct {
 	PRScope                  string `yaml:"prScope"`
 	TimeoutMinutes           int    `yaml:"timeoutMinutes"`
 	E2ETimeout               string `yaml:"e2eTimeout"`
+	ParallelNodes            int    `yaml:"parallelNodes"`
 	IncludeInPRMatrix        *bool  `yaml:"includeInPRMatrix"`
 	ExcludePentestOnDefault  bool   `yaml:"excludePentestOnDefaultPR"`
 	HardenedSigned           bool   `yaml:"hardenedSigned"`
@@ -277,17 +284,19 @@ func validateManifest(m manifest, facts map[string]suiteFacts, opts options) err
 		errs = append(errs, "suites must not be empty")
 	}
 
-	ciLaneIDs, laneErrs := validateCILanes(m.CILanes)
+	ciLanes, laneErrs := validateCILanes(m.CILanes, m.Parallelism)
 	errs = append(errs, laneErrs...)
 	errs = append(errs, validateVersionPolicy(m.Versions)...)
-	errs = append(errs, validateNightlyPlan(m.Nightly, m.Versions.Kubernetes, ciLaneIDs)...)
+	errs = append(errs, validateParallelismPolicy(m.Parallelism)...)
+	errs = append(errs, validateNightlyPlan(m.Nightly, m.Versions.Kubernetes, ciLanes)...)
 
 	seenIDs := map[string]string{}
 	seenFiles := map[string]string{}
 	for idx, suite := range m.Suites {
 		prefix := fmt.Sprintf("suites[%d]", idx)
-		errs = append(errs, validateSuite(prefix, suite, facts, ciLaneIDs, seenIDs, seenFiles)...)
+		errs = append(errs, validateSuite(prefix, suite, facts, ciLanes, seenIDs, seenFiles)...)
 	}
+	errs = append(errs, validateParallelLaneIsolation(m.Suites, ciLanes, m.Parallelism)...)
 
 	for file := range facts {
 		if seenFiles[file] == "" {
@@ -313,7 +322,7 @@ func validateSuite(
 	prefix string,
 	suite manifestSuite,
 	facts map[string]suiteFacts,
-	ciLaneIDs map[string]bool,
+	ciLanes map[string]ciLaneConfig,
 	seenIDs map[string]string,
 	seenFiles map[string]string,
 ) []string {
@@ -352,7 +361,7 @@ func validateSuite(
 		errs = append(errs, fmt.Sprintf("%s.ci.lanes must not be empty", prefix))
 	}
 	for _, lane := range suite.CI.Lanes {
-		if !ciLaneIDs[lane] {
+		if _, ok := ciLanes[lane]; !ok {
 			errs = append(errs, fmt.Sprintf("%s.ci.lanes contains undefined lane %q", prefix, lane))
 		}
 	}
@@ -413,13 +422,14 @@ func validateSuite(
 	return errs
 }
 
-func validateCILanes(lanes []ciLaneConfig) (map[string]bool, []string) {
+func validateCILanes(lanes []ciLaneConfig, parallelism parallelismPolicy) (map[string]ciLaneConfig, []string) {
 	var errs []string
 	if len(lanes) == 0 {
 		return nil, []string{"ciLanes must not be empty"}
 	}
 
 	seen := map[string]bool{}
+	lanesByID := map[string]ciLaneConfig{}
 	for idx, lane := range lanes {
 		prefix := fmt.Sprintf("ciLanes[%d]", idx)
 		if lane.ID == "" {
@@ -430,6 +440,9 @@ func validateCILanes(lanes []ciLaneConfig) (map[string]bool, []string) {
 			}
 			if seen[lane.ID] {
 				errs = append(errs, fmt.Sprintf("%s.id %q is duplicated", prefix, lane.ID))
+			}
+			if !seen[lane.ID] {
+				lanesByID[lane.ID] = lane
 			}
 			seen[lane.ID] = true
 		}
@@ -448,8 +461,9 @@ func validateCILanes(lanes []ciLaneConfig) (map[string]bool, []string) {
 		if strings.TrimSpace(lane.E2ETimeout) == "" {
 			errs = append(errs, fmt.Sprintf("%s.e2eTimeout is required", prefix))
 		}
+		errs = append(errs, validateLaneParallelism(prefix, lane, parallelism)...)
 	}
-	return seen, errs
+	return lanesByID, errs
 }
 
 func validateVersionPolicy(policy versionPolicy) []string {
@@ -471,6 +485,72 @@ func validateVersionPolicy(policy versionPolicy) []string {
 	return errs
 }
 
+func validateParallelismPolicy(policy parallelismPolicy) []string {
+	var errs []string
+	if policy.DefaultNodes <= 0 {
+		errs = append(errs, "parallelism.defaultNodes must be > 0")
+	}
+	if policy.MaxNodes <= 0 {
+		errs = append(errs, "parallelism.maxNodes must be > 0")
+	}
+	if policy.DefaultNodes > 0 && policy.MaxNodes > 0 && policy.DefaultNodes > policy.MaxNodes {
+		errs = append(errs, "parallelism.defaultNodes must be <= parallelism.maxNodes")
+	}
+	return errs
+}
+
+func validateLaneParallelism(prefix string, lane ciLaneConfig, policy parallelismPolicy) []string {
+	var errs []string
+	if lane.ParallelNodes < 0 {
+		errs = append(errs, fmt.Sprintf("%s.parallelNodes must be >= 0", prefix))
+	}
+	if lane.ParallelNodes > 0 && policy.MaxNodes > 0 && lane.ParallelNodes > policy.MaxNodes {
+		errs = append(errs, fmt.Sprintf("%s.parallelNodes must be <= parallelism.maxNodes (%d)", prefix, policy.MaxNodes))
+	}
+	return errs
+}
+
+func validateParallelLaneIsolation(
+	suites []manifestSuite,
+	ciLanes map[string]ciLaneConfig,
+	parallelism parallelismPolicy,
+) []string {
+	var errs []string
+	for _, suite := range suites {
+		for _, laneID := range suite.CI.Lanes {
+			lane, ok := ciLanes[laneID]
+			if !ok {
+				continue
+			}
+			nodes := effectiveParallelNodes(parallelism, lane)
+			if nodes <= 1 || allowedParallelIsolation[suite.Isolation] {
+				continue
+			}
+			errs = append(
+				errs,
+				fmt.Sprintf(
+					"ciLanes[%s].parallelNodes=%d requires suite %s isolation to be parallel-safe or serial; got %s",
+					laneID,
+					nodes,
+					suite.ID,
+					suite.Isolation,
+				),
+			)
+		}
+	}
+	return errs
+}
+
+func effectiveParallelNodes(policy parallelismPolicy, lane ciLaneConfig) int {
+	if lane.ParallelNodes > 0 {
+		return lane.ParallelNodes
+	}
+	if policy.DefaultNodes > 0 {
+		return policy.DefaultNodes
+	}
+	return 1
+}
+
 func validateVersionList(prefix string, versions []string) []string {
 	var errs []string
 	for idx, version := range versions {
@@ -481,7 +561,11 @@ func validateVersionList(prefix string, versions []string) []string {
 	return errs
 }
 
-func validateNightlyPlan(plan nightlyPlanConfig, versions kubernetesVersionPolicy, ciLaneIDs map[string]bool) []string {
+func validateNightlyPlan(
+	plan nightlyPlanConfig,
+	versions kubernetesVersionPolicy,
+	ciLanes map[string]ciLaneConfig,
+) []string {
 	var errs []string
 	if len(plan.Profiles) == 0 {
 		errs = append(errs, "nightly.profiles must not be empty")
@@ -515,7 +599,7 @@ func validateNightlyPlan(plan nightlyPlanConfig, versions kubernetesVersionPolic
 				errs = append(errs, fmt.Sprintf("%s.lanes must not be empty", setPrefix))
 			}
 			for _, lane := range set.Lanes {
-				if !ciLaneIDs[lane] {
+				if _, ok := ciLanes[lane]; !ok {
 					errs = append(errs, fmt.Sprintf("%s.lanes contains undefined lane %q", setPrefix, lane))
 				}
 			}
@@ -526,7 +610,7 @@ func validateNightlyPlan(plan nightlyPlanConfig, versions kubernetesVersionPolic
 		for rowIdx, row := range profile.Rows {
 			rowPrefix := fmt.Sprintf("%s.rows[%d]", prefix, rowIdx)
 			errs = append(errs, validateNightlyCoverage(rowPrefix, row.Coverage)...)
-			if !ciLaneIDs[row.Lane] {
+			if _, ok := ciLanes[row.Lane]; !ok {
 				errs = append(errs, fmt.Sprintf("%s.lane %q is undefined", rowPrefix, row.Lane))
 			}
 			errs = append(errs, validateKubernetesRefs(rowPrefix+".kubernetes", versions, []string{row.Kubernetes})...)
@@ -614,6 +698,11 @@ var allowedIsolation = map[string]bool{
 	"serial":           true,
 	"external-cluster": true,
 	"multi-cluster":    true,
+}
+
+var allowedParallelIsolation = map[string]bool{
+	"parallel-safe": true,
+	"serial":        true,
 }
 
 var allowedPRScopes = map[string]bool{

@@ -248,7 +248,7 @@ jobs:
           GOFLAGS: -mod=vendor
           OPENBAO_REQUEUE_STANDARD: 10s
           E2E_TIMEOUT: 90m
-          E2E_PARALLEL_NODES: "2"
+          E2E_PARALLEL_NODES: "1"
           E2E_SKIP_IMAGE_BUILD: "true"
 
           OPERATOR_VERSION: ${{ needs.prepare.outputs.build_tag }}

@@ -42,6 +42,13 @@ func testVersionPolicy() versionPolicy {
 	}
 }
 
+func testParallelismPolicy() parallelismPolicy {
+	return parallelismPolicy{
+		DefaultNodes: 1,
+		MaxNodes:     4,
+	}
+}
+
 func testNightlyPlan(lane string) nightlyPlanConfig {
 	return nightlyPlanConfig{
 		Profiles: []nightlyProfile{
@@ -75,8 +82,9 @@ func TestValidateManifestAcceptsCatalogMatchedSuite(t *testing.T) {
 	})
 
 	err := validateManifest(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			testCILane("core"),
 		},
@@ -120,8 +128,9 @@ func TestValidateManifestRejectsLabelDrift(t *testing.T) {
 	})
 
 	err := validateManifest(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			testCILane("security"),
 		},
@@ -187,8 +196,9 @@ func TestValidateManifestRejectsDuplicateFileOwnership(t *testing.T) {
 	second.ID = "operator-manager-copy"
 
 	err := validateManifest(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			testCILane("core"),
 		},
@@ -217,8 +227,9 @@ func TestValidateManifestCanRequireExplicitCaseIDs(t *testing.T) {
 	})
 
 	err := validateManifest(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			testCILane("backup-restore"),
 		},
@@ -263,8 +274,9 @@ func TestValidateManifestRejectsInvalidNightlyLane(t *testing.T) {
 	})
 
 	err := validateManifest(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			testCILane("core"),
 		},
@@ -293,6 +305,59 @@ func TestValidateManifestRejectsInvalidNightlyLane(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "undefined lane") {
 		t.Fatalf("error = %q, want undefined lane message", err)
+	}
+}
+
+func TestValidateManifestRequiresSafeIsolationForParallelLane(t *testing.T) {
+	t.Parallel()
+
+	file := writeTempE2EFile(t, "Cluster_Lifecycle_test.go")
+	facts := buildSuiteFacts([]catalogCase{
+		{
+			File:         file,
+			Path:         []string{"Cluster Lifecycle", "creates a cluster"},
+			DomainLabels: []string{"cluster", "lifecycle"},
+		},
+	})
+
+	lane := testCILane("core")
+	lane.ParallelNodes = 2
+	suite := manifestSuite{
+		ID:        "cluster-lifecycle",
+		Title:     "Cluster Lifecycle",
+		Owner:     "core",
+		RiskTier:  "critical",
+		Isolation: "shared-cluster",
+		Files:     []string{file},
+		Labels:    []string{"cluster", "lifecycle"},
+		CI: suiteCI{
+			Lanes:       []string{"core"},
+			PullRequest: "changed-paths",
+		},
+		Nightly: suiteNightly{
+			Policy: "primary-version-full",
+		},
+	}
+	base := manifest{
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
+		CILanes:     []ciLaneConfig{lane},
+		Nightly:     testNightlyPlan("core"),
+		Suites:      []manifestSuite{suite},
+	}
+
+	err := validateManifest(base, facts, options{})
+	if err == nil {
+		t.Fatalf("validateManifest() error = nil, want parallel isolation failure")
+	}
+	if !strings.Contains(err.Error(), "requires suite cluster-lifecycle isolation to be parallel-safe or serial") {
+		t.Fatalf("error = %q, want parallel isolation message", err)
+	}
+
+	base.Suites[0].Isolation = "parallel-safe"
+	if err := validateManifest(base, facts, options{}); err != nil {
+		t.Fatalf("validateManifest() with parallel-safe isolation error = %v", err)
 	}
 }
 

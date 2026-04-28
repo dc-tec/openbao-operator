@@ -12,6 +12,10 @@ versions:
     # Kubernetes 1.36.0 is upstream-supported, but kindest/node:v1.36.0 is not published yet.
     nextCandidate: "1.36.0"
 
+parallelism:
+  defaultNodes: 1
+  maxNodes: 4
+
 ciLanes:
   - id: core
     name: "Core Lifecycle & Manager"
@@ -19,6 +23,7 @@ ciLanes:
     prScope: always
     timeoutMinutes: 45
     e2eTimeout: 40m
+    parallelNodes: 2
     excludePentestOnDefaultPR: false
     hardenedSigned: false
     hardenedInitImage: ""
@@ -181,7 +186,7 @@ suites:
     title: "Cluster Lifecycle: Deletion Policy"
     owner: core
     riskTier: high
-    isolation: shared-cluster
+    isolation: parallel-safe
     files:
       - test/e2e/Cluster_DeletionPolicy_test.go
     labels:
@@ -206,7 +211,7 @@ suites:
     title: "Cluster Lifecycle"
     owner: core
     riskTier: critical
-    isolation: shared-cluster
+    isolation: parallel-safe
     files:
       - test/e2e/Cluster_Lifecycle_test.go
     labels:
@@ -253,7 +258,7 @@ suites:
     title: "Cluster Runtime Controls"
     owner: core
     riskTier: high
-    isolation: shared-cluster
+    isolation: parallel-safe
     files:
       - test/e2e/Cluster_Runtime_Controls_test.go
     labels:
@@ -370,7 +375,7 @@ suites:
     title: "Manager"
     owner: manager
     riskTier: critical
-    isolation: shared-cluster
+    isolation: parallel-safe
     files:
       - test/e2e/Operator_Manager_test.go
     labels:

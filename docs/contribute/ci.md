@@ -136,7 +136,7 @@ Inline `nosemgrep` suppressions are reserved for bounded intentional exceptions.
   code={`make test-e2e-ci \\
   KIND_NODE_IMAGE=kindest/node:v1.35.1 \\
   E2E_LABEL_FILTER='(((lifecycle && !tls) || manager) && !openshift)' \\
-  E2E_PARALLEL_NODES=1
+  E2E_PARALLEL_NODES=2
 
 make helm-e2e-smoke
 
@@ -162,6 +162,8 @@ CI E2E shards write both JUnit and Ginkgo JSON reports under the uploaded E2E ar
 </CommandBlock>
 
 The E2E suite manifest is validated in `ci-core` through `make verify-e2e-manifest`. That check regenerates the catalog from `ginkgo outline`, validates `test/e2e/suites.yaml`, generates the GitHub Actions PR and nightly E2E matrices, and fails if suite ownership, labels, coverage tags, risk tier, isolation class, or routing metadata drift.
+
+The same manifest owns E2E parallelism. Matrix rows include `parallel_nodes`, and CI passes that value to `E2E_PARALLEL_NODES`. Lanes may use more than one Ginkgo process only when every assigned suite is declared `parallel-safe` or `serial`; shared-cluster, global-mutator, external-cluster, and multi-cluster suites stay single-process until their isolation model changes.
 
 Nightly E2E routing is manifest-driven. The daily profile runs full coverage on the primary Kubernetes version and compatibility smoke rows on adjacent supported versions. The weekly profile runs full compatibility coverage across supported Kubernetes versions. Maintainers can manually dispatch the release-gate profile, optionally filtered to one lane or one Kubernetes version while preserving the same manifest validation.
 

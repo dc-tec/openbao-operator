@@ -20,12 +20,20 @@ func testVersionPolicy() versionPolicy {
 	}
 }
 
+func testParallelismPolicy() parallelismPolicy {
+	return parallelismPolicy{
+		DefaultNodes: 1,
+		MaxNodes:     4,
+	}
+}
+
 func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 	t.Parallel()
 
 	matrix, err := buildGithubMatrix(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			{
 				ID:                       "backup-restore",
@@ -65,14 +73,18 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 	if row.TimeoutMinutes != 45 {
 		t.Fatalf("timeout minutes = %d, want 45", row.TimeoutMinutes)
 	}
+	if row.ParallelNodes != 1 {
+		t.Fatalf("parallel nodes = %d, want default 1", row.ParallelNodes)
+	}
 }
 
 func TestBuildGithubMatrixRejectsInvalidLane(t *testing.T) {
 	t.Parallel()
 
 	_, err := buildGithubMatrix(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			{
 				ID:             "bad lane",
@@ -97,8 +109,9 @@ func TestBuildGithubMatrixSkipsNonPRMatrixLane(t *testing.T) {
 
 	include := false
 	matrix, err := buildGithubMatrix(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			{
 				ID:                "platform-openshift",
@@ -123,8 +136,9 @@ func TestBuildGithubNightlyMatrixExpandsLaneSetsAndRows(t *testing.T) {
 	t.Parallel()
 
 	matrix, err := buildGithubNightlyMatrix(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			{
 				ID:             "core",
@@ -133,6 +147,7 @@ func TestBuildGithubNightlyMatrixExpandsLaneSetsAndRows(t *testing.T) {
 				PRScope:        "always",
 				TimeoutMinutes: 45,
 				E2ETimeout:     "40m",
+				ParallelNodes:  2,
 			},
 			{
 				ID:             "security",
@@ -175,6 +190,12 @@ func TestBuildGithubNightlyMatrixExpandsLaneSetsAndRows(t *testing.T) {
 	if matrix.Include[0].KindNodeImage != "kindest/node:v1.35.1" {
 		t.Fatalf("kind node image = %q, want primary image", matrix.Include[0].KindNodeImage)
 	}
+	if matrix.Include[0].ParallelNodes != 2 {
+		t.Fatalf("core parallel nodes = %d, want lane override 2", matrix.Include[0].ParallelNodes)
+	}
+	if matrix.Include[1].ParallelNodes != 1 {
+		t.Fatalf("security parallel nodes = %d, want default 1", matrix.Include[1].ParallelNodes)
+	}
 	if matrix.Include[2].LabelFilter != "lifecycle && smoke" {
 		t.Fatalf("smoke label filter = %q, want override", matrix.Include[2].LabelFilter)
 	}
@@ -190,8 +211,9 @@ func TestBuildGithubNightlyMatrixFiltersRows(t *testing.T) {
 	t.Parallel()
 
 	m := manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			{
 				ID:             "core",
@@ -254,8 +276,9 @@ func TestBuildGithubNightlyMatrixRejectsUnknownProfile(t *testing.T) {
 	t.Parallel()
 
 	_, err := buildGithubNightlyMatrix(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			{
 				ID:             "core",
@@ -284,8 +307,9 @@ func TestGithubMatrixJSONShape(t *testing.T) {
 	t.Parallel()
 
 	matrix, err := buildGithubMatrix(manifest{
-		Version:  1,
-		Versions: testVersionPolicy(),
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
 		CILanes: []ciLaneConfig{
 			{
 				ID:             "core",
@@ -311,5 +335,8 @@ func TestGithubMatrixJSONShape(t *testing.T) {
 	}
 	if !strings.Contains(out, `"label_filter":"lifecycle"`) {
 		t.Fatalf("matrix json missing label filter: %s", out)
+	}
+	if !strings.Contains(out, `"parallel_nodes":1`) {
+		t.Fatalf("matrix json missing parallel nodes: %s", out)
 	}
 }

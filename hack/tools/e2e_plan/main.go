@@ -30,10 +30,11 @@ type nightlyFilters struct {
 }
 
 type manifest struct {
-	Version  int            `yaml:"version"`
-	Versions versionPolicy  `yaml:"versions"`
-	CILanes  []ciLaneConfig `yaml:"ciLanes"`
-	Nightly  nightlyConfig  `yaml:"nightly"`
+	Version     int               `yaml:"version"`
+	Versions    versionPolicy     `yaml:"versions"`
+	Parallelism parallelismPolicy `yaml:"parallelism"`
+	CILanes     []ciLaneConfig    `yaml:"ciLanes"`
+	Nightly     nightlyConfig     `yaml:"nightly"`
 }
 
 type versionPolicy struct {
@@ -50,6 +51,11 @@ type kubernetesVersionPolicy struct {
 	Compatibility []string `yaml:"compatibility"`
 	ReleaseGate   []string `yaml:"releaseGate"`
 	NextCandidate string   `yaml:"nextCandidate"`
+}
+
+type parallelismPolicy struct {
+	DefaultNodes int `yaml:"defaultNodes"`
+	MaxNodes     int `yaml:"maxNodes"`
 }
 
 type nightlyConfig struct {
@@ -88,6 +94,7 @@ type ciLaneConfig struct {
 	PRScope                  string `yaml:"prScope"`
 	TimeoutMinutes           int    `yaml:"timeoutMinutes"`
 	E2ETimeout               string `yaml:"e2eTimeout"`
+	ParallelNodes            int    `yaml:"parallelNodes"`
 	IncludeInPRMatrix        *bool  `yaml:"includeInPRMatrix"`
 	ExcludePentestOnDefault  bool   `yaml:"excludePentestOnDefaultPR"`
 	HardenedSigned           bool   `yaml:"hardenedSigned"`
@@ -111,6 +118,7 @@ type matrixRow struct {
 	PRScope                  string `json:"pr_scope"`
 	TimeoutMinutes           int    `json:"timeout_minutes"`
 	E2ETimeout               string `json:"e2e_timeout"`
+	ParallelNodes            int    `json:"parallel_nodes"`
 	Kubernetes               string `json:"k8s,omitempty"`
 	KindNodeImage            string `json:"kind_node_image,omitempty"`
 	Coverage                 string `json:"coverage,omitempty"`
@@ -206,6 +214,7 @@ func buildGithubMatrix(m manifest) (githubMatrix, error) {
 		errs = append(errs, fmt.Sprintf("version = %d, want 1", m.Version))
 	}
 	errs = append(errs, validateVersionPolicy(m.Versions)...)
+	errs = append(errs, validateParallelismPolicy(m.Parallelism)...)
 	if len(m.CILanes) == 0 {
 		errs = append(errs, "ciLanes must not be empty")
 	}
@@ -214,9 +223,9 @@ func buildGithubMatrix(m manifest) (githubMatrix, error) {
 	matrix := githubMatrix{Include: make([]matrixRow, 0, len(m.CILanes))}
 	for idx, lane := range m.CILanes {
 		prefix := fmt.Sprintf("ciLanes[%d]", idx)
-		errs = append(errs, validateLane(prefix, lane, seen)...)
+		errs = append(errs, validateLane(prefix, lane, seen, m.Parallelism)...)
 		if includeInPRMatrix(lane) {
-			matrix.Include = append(matrix.Include, matrixRowFromLane(m.Versions, lane))
+			matrix.Include = append(matrix.Include, matrixRowFromLane(m.Versions, m.Parallelism, lane))
 		}
 	}
 
@@ -268,7 +277,7 @@ func buildGithubNightlyMatrix(m manifest, profileID string, filters nightlyFilte
 					Coverage:       set.Coverage,
 					TimeoutMinutes: set.TimeoutMinutes,
 					E2ETimeout:     set.E2ETimeout,
-				}, m.Versions)
+				}, m.Versions, m.Parallelism)
 				rows = append(rows, row)
 			}
 		}
@@ -292,7 +301,7 @@ func buildGithubNightlyMatrix(m manifest, profileID string, filters nightlyFilte
 				continue
 			}
 			config.Kubernetes = version
-			rows = append(rows, matrixRowFromNightlyLane(profile.ID, lane, config, m.Versions))
+			rows = append(rows, matrixRowFromNightlyLane(profile.ID, lane, config, m.Versions, m.Parallelism))
 		}
 	}
 	if len(errs) > 0 {
@@ -322,7 +331,7 @@ func includeInPRMatrix(lane ciLaneConfig) bool {
 	return lane.IncludeInPRMatrix == nil || *lane.IncludeInPRMatrix
 }
 
-func validateLane(prefix string, lane ciLaneConfig, seen map[string]bool) []string {
+func validateLane(prefix string, lane ciLaneConfig, seen map[string]bool, parallelism parallelismPolicy) []string {
 	var errs []string
 	if lane.ID == "" {
 		errs = append(errs, fmt.Sprintf("%s.id is required", prefix))
@@ -350,6 +359,7 @@ func validateLane(prefix string, lane ciLaneConfig, seen map[string]bool) []stri
 	if strings.TrimSpace(lane.E2ETimeout) == "" {
 		errs = append(errs, fmt.Sprintf("%s.e2eTimeout is required", prefix))
 	}
+	errs = append(errs, validateLaneParallelism(prefix, lane, parallelism)...)
 	return errs
 }
 
@@ -361,12 +371,13 @@ func validateLanes(m manifest) (map[string]ciLaneConfig, []string) {
 	if len(m.CILanes) == 0 {
 		errs = append(errs, "ciLanes must not be empty")
 	}
+	errs = append(errs, validateParallelismPolicy(m.Parallelism)...)
 
 	seen := map[string]bool{}
 	lanes := map[string]ciLaneConfig{}
 	for idx, lane := range m.CILanes {
 		prefix := fmt.Sprintf("ciLanes[%d]", idx)
-		errs = append(errs, validateLane(prefix, lane, seen)...)
+		errs = append(errs, validateLane(prefix, lane, seen, m.Parallelism)...)
 		if lane.ID != "" {
 			lanes[lane.ID] = lane
 		}
@@ -390,6 +401,31 @@ func validateVersionPolicy(policy versionPolicy) []string {
 	}
 	errs = append(errs, validateVersionList("versions.kubernetes.compatibility", policy.Kubernetes.Compatibility)...)
 	errs = append(errs, validateVersionList("versions.kubernetes.releaseGate", policy.Kubernetes.ReleaseGate)...)
+	return errs
+}
+
+func validateParallelismPolicy(policy parallelismPolicy) []string {
+	var errs []string
+	if policy.DefaultNodes <= 0 {
+		errs = append(errs, "parallelism.defaultNodes must be > 0")
+	}
+	if policy.MaxNodes <= 0 {
+		errs = append(errs, "parallelism.maxNodes must be > 0")
+	}
+	if policy.DefaultNodes > 0 && policy.MaxNodes > 0 && policy.DefaultNodes > policy.MaxNodes {
+		errs = append(errs, "parallelism.defaultNodes must be <= parallelism.maxNodes")
+	}
+	return errs
+}
+
+func validateLaneParallelism(prefix string, lane ciLaneConfig, policy parallelismPolicy) []string {
+	var errs []string
+	if lane.ParallelNodes < 0 {
+		errs = append(errs, fmt.Sprintf("%s.parallelNodes must be >= 0", prefix))
+	}
+	if lane.ParallelNodes > 0 && policy.MaxNodes > 0 && lane.ParallelNodes > policy.MaxNodes {
+		errs = append(errs, fmt.Sprintf("%s.parallelNodes must be <= parallelism.maxNodes (%d)", prefix, policy.MaxNodes))
+	}
 	return errs
 }
 
@@ -451,7 +487,7 @@ func normalizeVersions(versions []string) []string {
 	return out
 }
 
-func matrixRowFromLane(policy versionPolicy, lane ciLaneConfig) matrixRow {
+func matrixRowFromLane(policy versionPolicy, parallelism parallelismPolicy, lane ciLaneConfig) matrixRow {
 	openBaoImage := strings.TrimSpace(lane.OpenBaoImage)
 	if openBaoImage == "" || openBaoImage == "@default" {
 		openBaoImage = policy.OpenBao.DefaultImage
@@ -463,6 +499,7 @@ func matrixRowFromLane(policy versionPolicy, lane ciLaneConfig) matrixRow {
 		PRScope:                  lane.PRScope,
 		TimeoutMinutes:           lane.TimeoutMinutes,
 		E2ETimeout:               lane.E2ETimeout,
+		ParallelNodes:            effectiveParallelNodes(parallelism, lane),
 		Kubernetes:               policy.Kubernetes.Primary,
 		KindNodeImage:            "kindest/node:v" + policy.Kubernetes.Primary,
 		ExcludePentestOnDefault:  strconv.FormatBool(lane.ExcludePentestOnDefault),
@@ -477,13 +514,24 @@ func matrixRowFromLane(policy versionPolicy, lane ciLaneConfig) matrixRow {
 	}
 }
 
+func effectiveParallelNodes(policy parallelismPolicy, lane ciLaneConfig) int {
+	if lane.ParallelNodes > 0 {
+		return lane.ParallelNodes
+	}
+	if policy.DefaultNodes > 0 {
+		return policy.DefaultNodes
+	}
+	return 1
+}
+
 func matrixRowFromNightlyLane(
 	profile string,
 	lane ciLaneConfig,
 	config nightlyRowConfig,
 	policy versionPolicy,
+	parallelism parallelismPolicy,
 ) matrixRow {
-	row := matrixRowFromLane(policy, lane)
+	row := matrixRowFromLane(policy, parallelism, lane)
 	row.Kubernetes = config.Kubernetes
 	row.KindNodeImage = "kindest/node:v" + config.Kubernetes
 	row.Coverage = config.Coverage
