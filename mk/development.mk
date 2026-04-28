@@ -378,6 +378,10 @@ KIND_NODE_IMAGE ?=
 E2E_PARALLEL_NODES ?= 1
 E2E_TIMEOUT ?= 1h
 E2E_JUNIT_REPORT ?=
+E2E_JSON_REPORT ?=
+E2E_GOJSON_REPORT ?=
+E2E_POLL_PROGRESS_AFTER ?=
+E2E_FAIL_ON_EMPTY ?= false
 E2E_KEEP_GOING ?= false
 E2E_TRACE ?= false
 E2E_NO_COLOR ?= false
@@ -423,7 +427,12 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests. Expected an isolated environment using Kind. Use E2E_PARALLEL_NODES=N to run tests in parallel (default: 1). Use E2E_FOCUS="Backup" to run only specific tests. See Makefile for additional E2E_* variables.
-	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
+	@for report in "$(E2E_JUNIT_REPORT)" "$(E2E_JSON_REPORT)" "$(E2E_GOJSON_REPORT)"; do \
+		if [ -n "$$report" ]; then \
+			mkdir -p "$$(dirname "$$report")"; \
+		fi; \
+	done; \
+	GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=\"$(E2E_FOCUS)\""; \
 	fi; \
@@ -438,6 +447,18 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 	fi; \
 	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --junit-report=$(E2E_JUNIT_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_JSON_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --json-report=$(E2E_JSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_GOJSON_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --gojson-report=$(E2E_GOJSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_POLL_PROGRESS_AFTER)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --poll-progress-after=$(E2E_POLL_PROGRESS_AFTER)"; \
+	fi; \
+	if [ "$(E2E_FAIL_ON_EMPTY)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --fail-on-empty"; \
 	fi; \
 	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
@@ -451,7 +472,12 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 
 .PHONY: test-e2e-existing
 test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests against an existing cluster (e.g. OpenShift Local/CRC). Requires KUBECONFIG set and E2E_OPERATOR_IMAGE pointing to a pullable image. Use E2E_LABEL_FILTER to run a subset (e.g. 'openshift').
-	@GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
+	@for report in "$(E2E_JUNIT_REPORT)" "$(E2E_JSON_REPORT)" "$(E2E_GOJSON_REPORT)"; do \
+		if [ -n "$$report" ]; then \
+			mkdir -p "$$(dirname "$$report")"; \
+		fi; \
+	done; \
+	GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=\"$(E2E_FOCUS)\""; \
 	fi; \
@@ -464,11 +490,28 @@ test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests agains
 	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
 	fi; \
+	if [ -n "$(E2E_JSON_REPORT)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.json-report=$(E2E_JSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_GOJSON_REPORT)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.gojson-report=$(E2E_GOJSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_POLL_PROGRESS_AFTER)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.poll-progress-after=$(E2E_POLL_PROGRESS_AFTER)"; \
+	fi; \
+	if [ "$(E2E_FAIL_ON_EMPTY)" = "true" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.fail-on-empty"; \
+	fi; \
 	eval E2E_USE_EXISTING_CLUSTER=true go test ./test/e2e/ $$GO_TEST_FLAGS
 
 .PHONY: test-e2e-ci
 test-e2e-ci: ginkgo ## Run the e2e tests in CI mode (does not modify files).
-	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
+	@for report in "$(E2E_JUNIT_REPORT)" "$(E2E_JSON_REPORT)" "$(E2E_GOJSON_REPORT)"; do \
+		if [ -n "$$report" ]; then \
+			mkdir -p "$$(dirname "$$report")"; \
+		fi; \
+	done; \
+	GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=\"$(E2E_FOCUS)\""; \
 	fi; \
@@ -483,6 +526,18 @@ test-e2e-ci: ginkgo ## Run the e2e tests in CI mode (does not modify files).
 	fi; \
 	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --junit-report=$(E2E_JUNIT_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_JSON_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --json-report=$(E2E_JSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_GOJSON_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --gojson-report=$(E2E_GOJSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_POLL_PROGRESS_AFTER)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --poll-progress-after=$(E2E_POLL_PROGRESS_AFTER)"; \
+	fi; \
+	if [ "$(E2E_FAIL_ON_EMPTY)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --fail-on-empty"; \
 	fi; \
 	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \

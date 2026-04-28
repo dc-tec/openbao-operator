@@ -941,6 +941,22 @@ jobs:
             kind create cluster --name kind --image "${KIND_NODE_IMAGE}"
           fi
 
+      - name: Prepare E2E report paths
+        if: env.SHOULD_RUN == 'true'
+        run: |
+          set -euo pipefail
+          sanitized_name="$(printf '%s' '${{ matrix.name }}' | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+          report_dir="artifacts/e2e-reports/${sanitized_name}"
+          mkdir -p "${report_dir}"
+          {
+            echo "E2E_ARTIFACT_NAME=e2e-artifacts-${sanitized_name}"
+            echo "E2E_REPORT_DIR=${report_dir}"
+            echo "E2E_JUNIT_REPORT=${report_dir}/junit.xml"
+            echo "E2E_JSON_REPORT=${report_dir}/ginkgo.json"
+            echo "E2E_SUMMARY_REPORT=${report_dir}/summary.md"
+            echo "E2E_SUMMARY_JSON=${report_dir}/summary.json"
+          } >> "${GITHUB_ENV}"
+
       - name: Run E2E Tests
         if: env.SHOULD_RUN == 'true'
         env:
@@ -949,6 +965,8 @@ jobs:
           # E2E_LABEL_FILTER is set by previous step
           E2E_PARALLEL_NODES: "1"
           E2E_TIMEOUT: ${{ matrix.e2e_timeout }}
+          E2E_FAIL_ON_EMPTY: "true"
+          E2E_POLL_PROGRESS_AFTER: "10m"
           E2E_SKIP_IMAGE_BUILD: "true"
           E2E_ENABLE_HARDENED_SIGNED_SUITE: ${{ matrix.hardened_signed }}
           E2E_OPERATOR_IMAGE: ${{ needs.build-e2e-images.outputs.manager_ref }}
@@ -965,19 +983,40 @@ jobs:
           KIND_CLUSTER: kind
         run: make test-e2e-ci
 
+      - name: Summarize E2E report
+        if: always() && env.SHOULD_RUN == 'true'
+        env:
+          GOFLAGS: -mod=vendor
+        run: |
+          set -euo pipefail
+          if [[ -z "${E2E_JSON_REPORT:-}" ]] || [[ ! -s "${E2E_JSON_REPORT}" ]]; then
+            {
+              echo "## E2E Report Summary"
+              echo
+              echo "No Ginkgo JSON report was produced for ${{ matrix.name }}."
+            } > "${E2E_SUMMARY_REPORT:-e2e-summary.md}"
+          else
+            openbao_version='${{ matrix.openbao_image }}'
+            if [[ -z "${openbao_version}" ]]; then
+              openbao_version="default"
+            fi
+            go run ./hack/tools/e2e_report \
+              --json-report "${E2E_JSON_REPORT}" \
+              --markdown-out "${E2E_SUMMARY_REPORT}" \
+              --json-out "${E2E_SUMMARY_JSON}" \
+              --lane "${{ matrix.name }}" \
+              --selector "${E2E_LABEL_FILTER}" \
+              --kubernetes-version "${KIND_NODE_IMAGE}" \
+              --openbao-version "${openbao_version}"
+          fi
+          cat "${E2E_SUMMARY_REPORT}" >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Collect E2E artifacts (failure)
         if: failure()
         run: bash hack/ci/collect-e2e-artifacts.sh
 
-      - name: Prepare E2E artifact name (failure)
-        if: failure()
-        run: |
-          set -euo pipefail
-          sanitized_name="$(printf '%s' '${{ matrix.name }}' | tr '/\\:*?\"<>|' '-')"
-          echo "E2E_ARTIFACT_NAME=e2e-artifacts-${sanitized_name}" >> "${GITHUB_ENV}"
-
-      - name: Upload E2E artifacts (failure)
-        if: failure()
+      - name: Upload E2E artifacts
+        if: always() && env.SHOULD_RUN == 'true' && env.E2E_ARTIFACT_NAME != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.E2E_ARTIFACT_NAME }}

@@ -146,6 +146,21 @@ FUZZ_TARGET_FILTER='FuzzDiscoverConfig|internal/service/upgrade' make fuzz`}
   Choose the smallest reproduction that still matches the CI lane under investigation.
 </CommandBlock>
 
+CI E2E shards write both JUnit and Ginkgo JSON reports under the uploaded E2E artifact. The workflow summary includes the selected label filter, spec counts, failures, and the slowest specs. Local reproductions can use the same report path variables:
+
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Local E2E report output"
+  code={`make test-e2e-ci \\
+  E2E_LABEL_FILTER='lifecycle && !openshift' \\
+  E2E_JUNIT_REPORT=artifacts/e2e-reports/local/junit.xml \\
+  E2E_JSON_REPORT=artifacts/e2e-reports/local/ginkgo.json \\
+  E2E_FAIL_ON_EMPTY=true`}
+>
+  Use `go run ./hack/tools/e2e_report --json-report artifacts/e2e-reports/local/ginkgo.json` to render the same Markdown summary locally.
+</CommandBlock>
+
 <NextActions
   title="After CI parity"
   items={[

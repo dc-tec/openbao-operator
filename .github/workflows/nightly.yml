@@ -300,6 +300,20 @@ jobs:
             kind create cluster --name kind --image "${KIND_NODE_IMAGE}"
           fi
 
+      - name: Prepare E2E report paths
+        run: |
+          set -euo pipefail
+          report_dir="artifacts/e2e-reports/kind-${{ matrix.k8s }}"
+          mkdir -p "${report_dir}"
+          {
+            echo "E2E_ARTIFACT_NAME=e2e-artifacts-kind-${{ matrix.k8s }}"
+            echo "E2E_REPORT_DIR=${report_dir}"
+            echo "E2E_JUNIT_REPORT=${report_dir}/junit.xml"
+            echo "E2E_JSON_REPORT=${report_dir}/ginkgo.json"
+            echo "E2E_SUMMARY_REPORT=${report_dir}/summary.md"
+            echo "E2E_SUMMARY_JSON=${report_dir}/summary.json"
+          } >> "${GITHUB_ENV}"
+
       - name: Run full E2E
         env:
           GOFLAGS: -mod=vendor
@@ -307,6 +321,8 @@ jobs:
           KIND_CLUSTER: kind
           E2E_PARALLEL_NODES: "1"
           E2E_TIMEOUT: 90m
+          E2E_FAIL_ON_EMPTY: "true"
+          E2E_POLL_PROGRESS_AFTER: "10m"
           E2E_SKIP_IMAGE_BUILD: "true"
           E2E_ENABLE_HARDENED_SIGNED_SUITE: "true"
           E2E_OPERATOR_IMAGE: ${{ needs.build-e2e-images.outputs.manager_ref }}
@@ -318,15 +334,39 @@ jobs:
           E2E_UPGRADE_EXECUTOR_IMAGE: ${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}
         run: make test-e2e-ci
 
+      - name: Summarize E2E report
+        if: always()
+        env:
+          GOFLAGS: -mod=vendor
+        run: |
+          set -euo pipefail
+          if [[ -z "${E2E_JSON_REPORT:-}" ]] || [[ ! -s "${E2E_JSON_REPORT}" ]]; then
+            {
+              echo "## E2E Report Summary"
+              echo
+              echo "No Ginkgo JSON report was produced for kind ${{ matrix.k8s }}."
+            } > "${E2E_SUMMARY_REPORT:-e2e-summary.md}"
+          else
+            go run ./hack/tools/e2e_report \
+              --json-report "${E2E_JSON_REPORT}" \
+              --markdown-out "${E2E_SUMMARY_REPORT}" \
+              --json-out "${E2E_SUMMARY_JSON}" \
+              --lane "Nightly full E2E" \
+              --selector "(full suite)" \
+              --kubernetes-version "${KIND_NODE_IMAGE}" \
+              --openbao-version "ghcr.io/openbao/openbao:2.5.0"
+          fi
+          cat "${E2E_SUMMARY_REPORT}" >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Collect E2E artifacts (failure)
         if: failure()
         run: bash hack/ci/collect-e2e-artifacts.sh
 
-      - name: Upload E2E artifacts (failure)
-        if: failure()
+      - name: Upload E2E artifacts
+        if: always() && env.E2E_ARTIFACT_NAME != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-artifacts-kind-${{ matrix.k8s }}
+          name: ${{ env.E2E_ARTIFACT_NAME }}
           path: artifacts/
           retention-days: 7
 
