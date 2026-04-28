@@ -540,7 +540,11 @@ suites:
       - tls-passthrough
       - rollback
       - chaos
-    coverage: []
+      - lower-layer-covered
+    coverage:
+      - downgrade-guardrail
+      - image-version-mismatch
+      - pod-mutation-guardrail
     ci:
       lanes:
         - upgrade-rolling

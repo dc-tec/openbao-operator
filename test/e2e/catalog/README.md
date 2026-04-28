@@ -13,8 +13,8 @@ Notes:
 
 - Files: `18`
 - Specs: `89`
-- Explicit case IDs: `24`
-- Coverage tags: `53`
+- Explicit case IDs: `26`
+- Coverage tags: `56`
 
 ## Suites
 
@@ -34,7 +34,7 @@ Notes:
 | [Tenant Data Isolation](suites/Tenant_Data_Isolation_test.md) | 1 | 1 | 0 | `security`, `tenant`, `tenancy` | `test/e2e/Tenant_Data_Isolation_test.go` |
 | [Tenant Isolation](suites/Tenant_Isolation_test.md) | 6 | 0 | 0 | `security`, `tenant`, `tenancy`, `critical`, `single-tenant` | `test/e2e/Tenant_Isolation_test.go` |
 | [Upgrade Strategies: Operation Lock Contention](suites/Upgrade_Operation_Lock_test.md) | 1 | 1 | 0 | `upgrade`, `backup`, `operation-lock`, `slow` | `test/e2e/Upgrade_Operation_Lock_test.go` |
-| [Upgrade Strategies](suites/Upgrade_Strategies_test.md) | 14 | 0 | 0 | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `failure`, `gateway`, `requires-gateway-api`, `tls-passthrough`, `rollback`, `rolling`, `recovery`, `snapshot`, `read-replicas`, `read-replicas-rolling`, `chaos`, `guardrails`, `validation` | `test/e2e/Upgrade_Strategies_test.go` |
+| [Upgrade Strategies](suites/Upgrade_Strategies_test.md) | 14 | 2 | 0 | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `failure`, `gateway`, `requires-gateway-api`, `tls-passthrough`, `rollback`, `rolling`, `recovery`, `snapshot`, `read-replicas`, `read-replicas-rolling`, `chaos`, `guardrails`, `validation`, `lower-layer-covered` | `test/e2e/Upgrade_Strategies_test.go` |
 | [Upgrade Strategies: Blue/Green Drift](suites/Upgrade_Target_Drift_test.md) | 1 | 1 | 0 | `upgrade`, `bluegreen`, `slow` | `test/e2e/Upgrade_Target_Drift_test.go` |
 | [Security: Anti-Tamper Policy](suites/anti_tamper_policy_test.md) | 2 | 2 | 0 | `security`, `tamper`, `cluster`, `slow` | `test/e2e/anti_tamper_policy_test.go` |
 | [DR: Storage Providers Backup & Restore](suites/backup_restore_test.md) | 11 | 0 | 0 | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `failure-injection`, `read-replicas`, `read-replicas-restore` | `test/e2e/backup_restore_test.go` |
@@ -59,10 +59,12 @@ Notes:
 | `controller-outage` | 1 |
 | `controller-restart` | 1 |
 | `data-plane-isolation` | 1 |
+| `downgrade-guardrail` | 1 |
 | `existing-cluster-adoption` | 1 |
 | `external-service` | 1 |
 | `gitops-drift` | 1 |
 | `idempotent-reconcile` | 1 |
+| `image-version-mismatch` | 1 |
 | `ingress` | 1 |
 | `leader-election` | 1 |
 | `managed-resource-pause-on-policy-loss` | 1 |
@@ -73,6 +75,7 @@ Notes:
 | `operation-lock` | 1 |
 | `paused-reconcile` | 1 |
 | `paused-status` | 1 |
+| `pod-mutation-guardrail` | 1 |
 | `pod-rollout` | 1 |
 | `pod-stability` | 1 |
 | `post-failover-reconcile` | 1 |

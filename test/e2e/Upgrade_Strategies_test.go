@@ -1458,7 +1458,11 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("rejects downgrade requests at admission before any rollout begins", func() {
+		It("rejects downgrade requests at admission before any rollout begins", Label(
+			"case:upgrade-validation-downgrade-rejected",
+			"covers:downgrade-guardrail",
+			"lower-layer-covered",
+		), func() {
 			By("Attempting to patch the cluster to a lower semantic version")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
@@ -1484,7 +1488,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}, time.Minute, 10*time.Second).Should(Succeed())
 		})
 
-		It("surfaces image version mismatches as degraded without mutating running pods", func() {
+		It("surfaces image version mismatches as degraded without mutating running pods", Label(
+			"case:upgrade-validation-image-version-mismatch",
+			"covers:image-version-mismatch",
+			"covers:pod-mutation-guardrail",
+			"lower-layer-covered",
+		), func() {
 			By("Patching a semver-tagged image that conflicts with spec.version")
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}

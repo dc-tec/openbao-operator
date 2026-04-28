@@ -2605,8 +2605,12 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b",
+    "id": "upgrade-validation-downgrade-rejected",
     "generatedId": "upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b",
+    "caseLabel": "upgrade-validation-downgrade-rejected",
+    "coverage": [
+      "downgrade-guardrail"
+    ],
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "rejects downgrade requests at admission before any rollout begins",
@@ -2621,7 +2625,10 @@
       "cluster",
       "slow",
       "guardrails",
-      "validation"
+      "validation",
+      "case:upgrade-validation-downgrade-rejected",
+      "covers:downgrade-guardrail",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "upgrade",
@@ -2629,7 +2636,8 @@
       "cluster",
       "slow",
       "guardrails",
-      "validation"
+      "validation",
+      "lower-layer-covered"
     ],
     "steps": [
       "Attempting to patch the cluster to a lower semantic version",
@@ -2641,8 +2649,13 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb",
+    "id": "upgrade-validation-image-version-mismatch",
     "generatedId": "upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb",
+    "caseLabel": "upgrade-validation-image-version-mismatch",
+    "coverage": [
+      "image-version-mismatch",
+      "pod-mutation-guardrail"
+    ],
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "surfaces image version mismatches as degraded without mutating running pods",
@@ -2657,7 +2670,11 @@
       "cluster",
       "slow",
       "guardrails",
-      "validation"
+      "validation",
+      "case:upgrade-validation-image-version-mismatch",
+      "covers:image-version-mismatch",
+      "covers:pod-mutation-guardrail",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "upgrade",
@@ -2665,7 +2682,8 @@
       "cluster",
       "slow",
       "guardrails",
-      "validation"
+      "validation",
+      "lower-layer-covered"
     ],
     "steps": [
       "Patching a semver-tagged image that conflicts with spec.version",

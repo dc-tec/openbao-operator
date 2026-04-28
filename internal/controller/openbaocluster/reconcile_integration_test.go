@@ -246,6 +246,108 @@ var _ = Describe("OpenBaoCluster Reconcile", func() {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
+		It("reports image version mismatches without mutating existing StatefulSet pods", func() {
+			const (
+				clusterName     = "test-image-version-mismatch"
+				stableImage     = "openbao/openbao:2.4.4"
+				mismatchedImage = "openbao/openbao:2.5.0"
+				stableVersion   = "2.4.4"
+				targetVersion   = "2.6.0"
+			)
+
+			cluster := createMinimalCluster(clusterName, false)
+			cluster.Spec.Version = targetVersion
+			cluster.Spec.Image = mismatchedImage
+			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+			cluster.Status.Initialized = true
+			cluster.Status.CurrentVersion = stableVersion
+			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+
+			labels := map[string]string{
+				constants.LabelOpenBaoCluster:      cluster.Name,
+				constants.LabelOpenBaoComponent:    constants.ComponentOpenBaoCluster,
+				constants.LabelOpenBaoWorkloadPool: constants.LabelValueOpenBaoWorkloadPoolVoter,
+			}
+			replicas := int32(3)
+			sts := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				},
+				Spec: appsv1.StatefulSetSpec{
+					ServiceName: cluster.Name,
+					Replicas:    &replicas,
+					Selector: &metav1.LabelSelector{
+						MatchLabels: labels,
+					},
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: labels,
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  constants.ContainerBao,
+									Image: stableImage,
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, sts)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, sts)
+			})
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				},
+			}
+			parent := &OpenBaoClusterReconciler{
+				Client: k8sClient,
+				ControllerRuntime: ControllerRuntime{
+					APIReader: k8sClient,
+					Scheme:    k8sClient.Scheme(),
+				},
+				ImageVerificationRuntime: ImageVerificationRuntime{
+					ImageVerifier: security.NewImageVerifier(logr.Discard(), k8sClient, nil),
+				},
+			}
+
+			result, err := (&openBaoClusterWorkloadReconciler{parent: parent}).Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			currentSTS := &appsv1.StatefulSet{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, currentSTS)).To(Succeed())
+			Expect(currentSTS.Spec.Template.Spec.Containers).NotTo(BeEmpty())
+			Expect(currentSTS.Spec.Template.Spec.Containers[0].Image).To(Equal(stableImage))
+
+			updated := &openbaov1alpha1.OpenBaoCluster{}
+			Expect(k8sClient.Get(ctx, req.NamespacedName, updated)).To(Succeed())
+			Expect(updated.Status.Workload).NotTo(BeNil())
+			Expect(updated.Status.Workload.LastError).NotTo(BeNil())
+			Expect(updated.Status.Workload.LastError.Reason).To(Equal(ReasonImageVersionMismatch))
+			Expect(updated.Status.CurrentVersion).To(Equal(stableVersion))
+
+			statusReconciler := &openBaoClusterStatusReconciler{parent: parent}
+			_, err = statusReconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = statusReconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(k8sClient.Get(ctx, req.NamespacedName, updated)).To(Succeed())
+			degraded := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
+			Expect(degraded).NotTo(BeNil())
+			Expect(degraded.Status).To(Equal(metav1.ConditionTrue))
+			Expect(degraded.Reason).To(Equal(ReasonImageVersionMismatch))
+			Expect(updated.Status.CurrentVersion).To(Equal(stableVersion))
+		})
+
 		It("creates CA and server TLS Secrets for a new cluster", func() {
 			cluster := createMinimalCluster("test-tls-secrets", false)
 
