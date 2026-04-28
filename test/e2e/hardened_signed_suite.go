@@ -24,7 +24,7 @@ const (
 func requireHardenedSignedSuite() {
 	if !strings.EqualFold(strings.TrimSpace(os.Getenv(envEnableHardenedSignedSuite)), "true") {
 		Skip(fmt.Sprintf(
-			"requires signed hardened suite; set %s=true and provide %s and %s (for example ghcr.io/openbao/openbao:2.5.0 and ghcr.io/dc-tec/openbao-init:edge)",
+			"requires signed hardened suite; set %s=true and provide %s and %s (for example ghcr.io/openbao/openbao:2.5.3 and ghcr.io/dc-tec/openbao-init:edge)",
 			envEnableHardenedSignedSuite,
 			envOpenBaoImage,
 			envHardenedConfigInitImage,

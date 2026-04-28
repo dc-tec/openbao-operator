@@ -5,7 +5,7 @@ inputs:
   versions:
     description: Space-delimited OpenBao versions to validate.
     required: false
-    default: 2.4.4 2.5.0
+    default: 2.4.4 2.5.3
   report-schema-drift:
     description: Whether to report upstream OpenBao schema drift across the version range.
     required: false

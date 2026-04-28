@@ -105,8 +105,8 @@ func TestBuildSummaryCountsAndSlowestSpecs(t *testing.T) {
 		TopSpecs:          2,
 		Lane:              "Backup & Restore",
 		Selector:          "restore",
-		KubernetesVersion: "kindest/node:v1.34.3",
-		OpenBAOVersion:    "ghcr.io/openbao/openbao:2.5.0",
+		KubernetesVersion: "kindest/node:v1.35.1",
+		OpenBAOVersion:    "ghcr.io/openbao/openbao:2.5.3",
 	})
 
 	if !s.SuiteSucceeded {
