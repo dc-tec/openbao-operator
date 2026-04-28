@@ -607,12 +607,14 @@
       "runtime",
       "case:cluster-paused-resume",
       "covers:paused-reconcile",
-      "covers:paused-status"
+      "covers:paused-status",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "lifecycle",
       "cluster",
-      "runtime"
+      "runtime",
+      "lower-layer-covered"
     ],
     "steps": [
       "waiting for paused status conditions to be reported",
@@ -645,12 +647,14 @@
       "runtime",
       "case:cluster-telemetry-rendering",
       "covers:telemetry",
-      "covers:observability-metrics"
+      "covers:observability-metrics",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "lifecycle",
       "cluster",
-      "runtime"
+      "runtime",
+      "lower-layer-covered"
     ],
     "steps": [
       "verifying the rendered config includes the telemetry stanza"
@@ -820,8 +824,13 @@
     "suiteTitle": ""
   },
   {
-    "id": "gitops-contract-repeatedly-applies-the-same-manifest-without-43cd8392",
+    "id": "gitops-ssa-drift-contract",
     "generatedId": "gitops-contract-repeatedly-applies-the-same-manifest-without-43cd8392",
+    "caseLabel": "gitops-ssa-drift-contract",
+    "coverage": [
+      "gitops-drift",
+      "server-side-apply"
+    ],
     "file": "test/e2e/GitOps_Contract_test.go",
     "type": "It",
     "name": "repeatedly applies the same manifest without spec/metadata drift",
@@ -831,11 +840,16 @@
     ],
     "labels": [
       "gitops",
-      "contract"
+      "contract",
+      "case:gitops-ssa-drift-contract",
+      "covers:gitops-drift",
+      "covers:server-side-apply",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "gitops",
-      "contract"
+      "contract",
+      "lower-layer-covered"
     ],
     "steps": null,
     "focused": false,
@@ -963,8 +977,12 @@
     "suiteTitle": ""
   },
   {
-    "id": "operator-manager-should-ensure-the-metrics-endpoint-is-71a02c09",
+    "id": "operator-manager-metrics-endpoint",
     "generatedId": "operator-manager-should-ensure-the-metrics-endpoint-is-71a02c09",
+    "caseLabel": "operator-manager-metrics-endpoint",
+    "coverage": [
+      "manager-metrics-endpoint"
+    ],
     "file": "test/e2e/Operator_Manager_test.go",
     "type": "It",
     "name": "should ensure the metrics endpoint is serving metrics",
@@ -976,7 +994,9 @@
     "labels": [
       "manager",
       "critical",
-      "smoke"
+      "smoke",
+      "case:operator-manager-metrics-endpoint",
+      "covers:manager-metrics-endpoint"
     ],
     "domainLabels": [
       "manager",
@@ -995,8 +1015,12 @@
     "suiteTitle": ""
   },
   {
-    "id": "operator-manager-should-run-successfully-620495ad",
+    "id": "operator-manager-pod-running",
     "generatedId": "operator-manager-should-run-successfully-620495ad",
+    "caseLabel": "operator-manager-pod-running",
+    "coverage": [
+      "manager-pod-running"
+    ],
     "file": "test/e2e/Operator_Manager_test.go",
     "type": "It",
     "name": "should run successfully",
@@ -1008,12 +1032,16 @@
     "labels": [
       "manager",
       "critical",
-      "smoke"
+      "smoke",
+      "case:operator-manager-pod-running",
+      "covers:manager-pod-running",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "manager",
       "critical",
-      "smoke"
+      "smoke",
+      "lower-layer-covered"
     ],
     "steps": [
       "validating that the controller-manager pod is running as expected"
@@ -1172,8 +1200,13 @@
     "suiteTitle": ""
   },
   {
-    "id": "security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d",
+    "id": "security-backup-endpoint-decimal-ip-blocked",
     "generatedId": "security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d",
+    "caseLabel": "security-backup-endpoint-decimal-ip-blocked",
+    "coverage": [
+      "backup-endpoint-validation",
+      "ssrf-protection"
+    ],
     "file": "test/e2e/Security_Guardrails_test.go",
     "type": "It",
     "name": "blocks decimal IP encoding in backup endpoint (SSRF protection)",
@@ -1185,12 +1218,17 @@
     "labels": [
       "security",
       "critical",
-      "admission"
+      "admission",
+      "case:security-backup-endpoint-decimal-ip-blocked",
+      "covers:backup-endpoint-validation",
+      "covers:ssrf-protection",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "security",
       "critical",
-      "admission"
+      "admission",
+      "lower-layer-covered"
     ],
     "steps": null,
     "focused": false,
@@ -1199,8 +1237,13 @@
     "suiteTitle": ""
   },
   {
-    "id": "security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74",
+    "id": "security-restore-endpoint-link-local-blocked",
     "generatedId": "security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74",
+    "caseLabel": "security-restore-endpoint-link-local-blocked",
+    "coverage": [
+      "restore-endpoint-validation",
+      "ssrf-protection"
+    ],
     "file": "test/e2e/Security_Guardrails_test.go",
     "type": "It",
     "name": "blocks link-local endpoints in restore source (SSRF protection)",
@@ -1212,12 +1255,17 @@
     "labels": [
       "security",
       "critical",
-      "admission"
+      "admission",
+      "case:security-restore-endpoint-link-local-blocked",
+      "covers:restore-endpoint-validation",
+      "covers:ssrf-protection",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "security",
       "critical",
-      "admission"
+      "admission",
+      "lower-layer-covered"
     ],
     "steps": null,
     "focused": false,
@@ -1226,8 +1274,13 @@
     "suiteTitle": ""
   },
   {
-    "id": "security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326",
+    "id": "security-restore-http-external-blocked",
     "generatedId": "security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326",
+    "caseLabel": "security-restore-http-external-blocked",
+    "coverage": [
+      "restore-endpoint-validation",
+      "ssrf-protection"
+    ],
     "file": "test/e2e/Security_Guardrails_test.go",
     "type": "It",
     "name": "blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)",
@@ -1239,12 +1292,17 @@
     "labels": [
       "security",
       "critical",
-      "admission"
+      "admission",
+      "case:security-restore-http-external-blocked",
+      "covers:restore-endpoint-validation",
+      "covers:ssrf-protection",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "security",
       "critical",
-      "admission"
+      "admission",
+      "lower-layer-covered"
     ],
     "steps": null,
     "focused": false,
@@ -1593,8 +1651,13 @@
     "suiteTitle": ""
   },
   {
-    "id": "security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9",
+    "id": "security-tenant-secret-rbac-allowlist",
     "generatedId": "security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9",
+    "caseLabel": "security-tenant-secret-rbac-allowlist",
+    "coverage": [
+      "secret-access-allowlist",
+      "tenant-secret-rbac"
+    ],
     "file": "test/e2e/Security_Guardrails_test.go",
     "type": "It",
     "name": "scopes Secret access via allowlist Roles",
@@ -1606,12 +1669,17 @@
     "labels": [
       "security",
       "critical",
-      "rbac"
+      "rbac",
+      "case:security-tenant-secret-rbac-allowlist",
+      "covers:secret-access-allowlist",
+      "covers:tenant-secret-rbac",
+      "lower-layer-covered"
     ],
     "domainLabels": [
       "security",
       "critical",
-      "rbac"
+      "rbac",
+      "lower-layer-covered"
     ],
     "steps": [
       "creating a cluster to trigger tenant RBAC provisioning",

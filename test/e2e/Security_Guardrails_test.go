@@ -712,7 +712,12 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(createManagedDryRunAsController(digestJob)).To(Succeed())
 		})
 
-		It("blocks decimal IP encoding in backup endpoint (SSRF protection)", func() {
+		It("blocks decimal IP encoding in backup endpoint (SSRF protection)", Label(
+			"case:security-backup-endpoint-decimal-ip-blocked",
+			"covers:backup-endpoint-validation",
+			"covers:ssrf-protection",
+			"lower-layer-covered",
+		), func() {
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "ssrf-decimal-ip",
@@ -759,7 +764,12 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(err.Error()).To(ContainSubstring("numeric IP encoding"))
 		})
 
-		It("blocks link-local endpoints in restore source (SSRF protection)", func() {
+		It("blocks link-local endpoints in restore source (SSRF protection)", Label(
+			"case:security-restore-endpoint-link-local-blocked",
+			"covers:restore-endpoint-validation",
+			"covers:ssrf-protection",
+			"lower-layer-covered",
+		), func() {
 			Eventually(func() string {
 				restore := &openbaov1alpha1.OpenBaoRestore{
 					ObjectMeta: metav1.ObjectMeta{
@@ -796,7 +806,12 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			}, 2*time.Minute, 2*time.Second).Should(ContainSubstring("Restore endpoint cannot point to link-local addresses"))
 		})
 
-		It("blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)", func() {
+		It("blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)", Label(
+			"case:security-restore-http-external-blocked",
+			"covers:restore-endpoint-validation",
+			"covers:ssrf-protection",
+			"lower-layer-covered",
+		), func() {
 			Eventually(func() string {
 				restore := &openbaov1alpha1.OpenBaoRestore{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1337,7 +1352,12 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			}
 		})
 
-		It("scopes Secret access via allowlist Roles", func() {
+		It("scopes Secret access via allowlist Roles", Label(
+			"case:security-tenant-secret-rbac-allowlist",
+			"covers:secret-access-allowlist",
+			"covers:tenant-secret-rbac",
+			"lower-layer-covered",
+		), func() {
 			clusterName := "rbac-cluster"
 			By("creating a cluster to trigger tenant RBAC provisioning")
 			cluster := &openbaov1alpha1.OpenBaoCluster{

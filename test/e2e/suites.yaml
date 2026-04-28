@@ -265,6 +265,7 @@ suites:
       - lifecycle
       - cluster
       - runtime
+      - lower-layer-covered
     coverage:
       - external-service
       - ingress
@@ -336,7 +337,10 @@ suites:
     labels:
       - gitops
       - contract
-    coverage: []
+      - lower-layer-covered
+    coverage:
+      - gitops-drift
+      - server-side-apply
     ci:
       lanes:
         - hardened
@@ -382,7 +386,10 @@ suites:
       - manager
       - critical
       - smoke
-    coverage: []
+      - lower-layer-covered
+    coverage:
+      - manager-metrics-endpoint
+      - manager-pod-running
     ci:
       lanes:
         - core
@@ -424,9 +431,15 @@ suites:
       - tokens
       - rbac
       - tamper
+      - lower-layer-covered
     coverage:
       - admission-runtime-recheck
+      - backup-endpoint-validation
       - managed-resource-pause-on-policy-loss
+      - restore-endpoint-validation
+      - secret-access-allowlist
+      - ssrf-protection
+      - tenant-secret-rbac
     ci:
       lanes:
         - security

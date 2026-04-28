@@ -136,6 +136,7 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		"case:cluster-paused-resume",
 		"covers:paused-reconcile",
 		"covers:paused-status",
+		"lower-layer-covered",
 	), func() {
 		const clusterName = "paused-cluster"
 
@@ -282,6 +283,7 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		"case:cluster-telemetry-rendering",
 		"covers:telemetry",
 		"covers:observability-metrics",
+		"lower-layer-covered",
 	), func() {
 		const clusterName = "telemetry-cluster"
 

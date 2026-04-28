@@ -13,8 +13,8 @@ Notes:
 
 - Files: `18`
 - Specs: `89`
-- Explicit case IDs: `17`
-- Coverage tags: `44`
+- Explicit case IDs: `24`
+- Coverage tags: `53`
 
 ## Suites
 
@@ -23,14 +23,14 @@ Notes:
 | [Cluster Lifecycle: Deletion Policy](suites/Cluster_DeletionPolicy_test.md) | 3 | 3 | 0 | `lifecycle`, `cluster`, `deletion` | `test/e2e/Cluster_DeletionPolicy_test.go` |
 | [Cluster Lifecycle](suites/Cluster_Lifecycle_test.md) | 7 | 0 | 0 | `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke`, `critical`, `tenant` | `test/e2e/Cluster_Lifecycle_test.go` |
 | [Hardened profile (External TLS + Transit auto-unseal + SelfInit)](suites/Cluster_Profile_Hardened_test.md) | 5 | 0 | 0 | `profile-hardened`, `security`, `cluster`, `upgrade`, `bluegreen`, `hardened`, `rolling` | `test/e2e/Cluster_Profile_Hardened_test.go` |
-| [Cluster Runtime Controls](suites/Cluster_Runtime_Controls_test.md) | 4 | 4 | 0 | `lifecycle`, `cluster`, `runtime` | `test/e2e/Cluster_Runtime_Controls_test.go` |
+| [Cluster Runtime Controls](suites/Cluster_Runtime_Controls_test.md) | 4 | 4 | 0 | `lifecycle`, `cluster`, `runtime`, `lower-layer-covered` | `test/e2e/Cluster_Runtime_Controls_test.go` |
 | [ACME TLS (OpenBao native ACME client)](suites/Cluster_TLS_ACME_test.md) | 2 | 0 | 0 | `tls`, `security`, `slow` | `test/e2e/Cluster_TLS_ACME_test.go` |
 | [Cluster TLS Lifecycle](suites/Cluster_TLS_Lifecycle_test.md) | 1 | 1 | 0 | `tls`, `cluster`, `lifecycle` | `test/e2e/Cluster_TLS_Lifecycle_test.go` |
-| [GitOps contract (Argo-like apply)](suites/GitOps_Contract_test.md) | 1 | 0 | 0 | `gitops`, `contract` | `test/e2e/GitOps_Contract_test.go` |
+| [GitOps contract (Argo-like apply)](suites/GitOps_Contract_test.md) | 1 | 1 | 0 | `gitops`, `contract`, `lower-layer-covered` | `test/e2e/GitOps_Contract_test.go` |
 | [Manager Resilience](suites/Manager_Resilience_test.md) | 3 | 3 | 0 | `manager`, `cluster` | `test/e2e/Manager_Resilience_test.go` |
-| [Manager](suites/Operator_Manager_test.md) | 2 | 0 | 0 | `manager`, `critical`, `smoke` | `test/e2e/Operator_Manager_test.go` |
+| [Manager](suites/Operator_Manager_test.md) | 2 | 2 | 0 | `manager`, `critical`, `smoke`, `lower-layer-covered` | `test/e2e/Operator_Manager_test.go` |
 | [OpenShift Platform](suites/Platform_OpenShift_test.md) | 2 | 0 | 0 | `openshift`, `platform` | `test/e2e/Platform_OpenShift_test.go` |
-| [Security Guardrails](suites/Security_Guardrails_test.md) | 23 | 1 | 0 | `security`, `critical`, `admission`, `pentest`, `config`, `tokens`, `rbac`, `tamper` | `test/e2e/Security_Guardrails_test.go` |
+| [Security Guardrails](suites/Security_Guardrails_test.md) | 23 | 5 | 0 | `security`, `critical`, `admission`, `pentest`, `lower-layer-covered`, `config`, `tokens`, `rbac`, `tamper` | `test/e2e/Security_Guardrails_test.go` |
 | [Tenant Data Isolation](suites/Tenant_Data_Isolation_test.md) | 1 | 1 | 0 | `security`, `tenant`, `tenancy` | `test/e2e/Tenant_Data_Isolation_test.go` |
 | [Tenant Isolation](suites/Tenant_Isolation_test.md) | 6 | 0 | 0 | `security`, `tenant`, `tenancy`, `critical`, `single-tenant` | `test/e2e/Tenant_Isolation_test.go` |
 | [Upgrade Strategies: Operation Lock Contention](suites/Upgrade_Operation_Lock_test.md) | 1 | 1 | 0 | `upgrade`, `backup`, `operation-lock`, `slow` | `test/e2e/Upgrade_Operation_Lock_test.go` |
@@ -44,10 +44,13 @@ Notes:
 | Coverage | Cases |
 | --- | ---: |
 | `deletion-policy` | 3 |
+| `ssrf-protection` | 3 |
 | `anti-tamper` | 2 |
 | `pvc-cleanup` | 2 |
 | `recoverability-secret-cleanup` | 2 |
+| `restore-endpoint-validation` | 2 |
 | `admission-runtime-recheck` | 1 |
+| `backup-endpoint-validation` | 1 |
 | `backup-queueing` | 1 |
 | `bluegreen-drift` | 1 |
 | `cert-replacement` | 1 |
@@ -58,10 +61,13 @@ Notes:
 | `data-plane-isolation` | 1 |
 | `existing-cluster-adoption` | 1 |
 | `external-service` | 1 |
+| `gitops-drift` | 1 |
 | `idempotent-reconcile` | 1 |
 | `ingress` | 1 |
 | `leader-election` | 1 |
 | `managed-resource-pause-on-policy-loss` | 1 |
+| `manager-metrics-endpoint` | 1 |
+| `manager-pod-running` | 1 |
 | `network-isolation` | 1 |
 | `observability-metrics` | 1 |
 | `operation-lock` | 1 |
@@ -76,12 +82,15 @@ Notes:
 | `restart-at` | 1 |
 | `rolling-upgrade` | 1 |
 | `scale-reconcile` | 1 |
+| `secret-access-allowlist` | 1 |
 | `secret-regeneration` | 1 |
+| `server-side-apply` | 1 |
 | `stale-green-cleanup` | 1 |
 | `statefulset-protection` | 1 |
 | `target-revision-drift` | 1 |
 | `telemetry` | 1 |
 | `tenant-isolation` | 1 |
+| `tenant-secret-rbac` | 1 |
 | `tls-hot-reload` | 1 |
 | `tls-lifecycle` | 1 |
 | `tls-san` | 1 |

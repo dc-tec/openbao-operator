@@ -72,7 +72,11 @@ var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func
 	SetDefaultEventuallyPollingInterval(time.Second)
 
 	Context("Manager", func() {
-		It("should run successfully", func() {
+		It("should run successfully", Label(
+			"case:operator-manager-pod-running",
+			"covers:manager-pod-running",
+			"lower-layer-covered",
+		), func() {
 			By("validating that the controller-manager pod is running as expected")
 			verifyControllerUp := func(g Gomega) {
 				// Get the name of the controller pod using the actual deployment labels
@@ -104,7 +108,10 @@ var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func
 			Eventually(verifyControllerUp).Should(Succeed())
 		})
 
-		It("should ensure the metrics endpoint is serving metrics", func() {
+		It("should ensure the metrics endpoint is serving metrics", Label(
+			"case:operator-manager-metrics-endpoint",
+			"covers:manager-metrics-endpoint",
+		), func() {
 			By("validating that the metrics service is available")
 			cmd := exec.Command("kubectl", "get", "service", "openbao-operator-controller-metrics-service", "-n", operatorNamespace)
 			_, err := utils.Run(cmd)

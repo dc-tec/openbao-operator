@@ -11,9 +11,9 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `admission-runtime-binding-loss` | pauses managed-resource reconciliation when a required admission binding disappears, then recovers when restored | active | `admission-runtime-recheck`, `managed-resource-pause-on-policy-loss` | `security`, `critical`, `admission`, `pentest` |
 | `security-guardrails-accepts-structured-configuration-protected-stanzas-cannot-2a18b9bd` | accepts structured configuration (protected stanzas cannot be overridden) | active | _none_ | `security`, `critical`, `admission` |
 | `security-guardrails-blocks-cross-namespace-tenant-targeting-self-6a21b1fd` | blocks cross-namespace tenant targeting (self-service mode) | active | _none_ | `security`, `critical`, `admission` |
-| `security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d` | blocks decimal IP encoding in backup endpoint (SSRF protection) | active | _none_ | `security`, `critical`, `admission` |
-| `security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74` | blocks link-local endpoints in restore source (SSRF protection) | active | _none_ | `security`, `critical`, `admission` |
-| `security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326` | blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc) | active | _none_ | `security`, `critical`, `admission` |
+| `security-backup-endpoint-decimal-ip-blocked` | blocks decimal IP encoding in backup endpoint (SSRF protection) | active | `backup-endpoint-validation`, `ssrf-protection` | `security`, `critical`, `admission`, `lower-layer-covered` |
+| `security-restore-endpoint-link-local-blocked` | blocks link-local endpoints in restore source (SSRF protection) | active | `restore-endpoint-validation`, `ssrf-protection` | `security`, `critical`, `admission`, `lower-layer-covered` |
+| `security-restore-http-external-blocked` | blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc) | active | `restore-endpoint-validation`, `ssrf-protection` | `security`, `critical`, `admission`, `lower-layer-covered` |
 | `security-guardrails-enforces-hardened-profile-invariants-446324b0` | enforces Hardened profile invariants | active | _none_ | `security`, `critical`, `admission` |
 | `security-guardrails-enforces-digest-pinned-images-for-managed-a108b1a3` | enforces digest-pinned images for managed workloads when digest enforcement is required | active | _none_ | `security`, `critical`, `admission` |
 | `security-guardrails-reports-degraded-when-gateway-api-crds-d5cb95ff` | reports Degraded when Gateway API CRDs are missing | active | _none_ | `security`, `critical`, `config` |
@@ -25,7 +25,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `security-guardrails-uses-projected-kubernetes-api-token-with-51dbf1f2` | uses projected Kubernetes API token with explicit audience and TTL | active | _none_ | `security`, `critical`, `pentest`, `tokens` |
 | `security-guardrails-has-required-validatingadmissionpolicy-dependencies-installed-and-87ec7cda` | has required ValidatingAdmissionPolicy dependencies installed and correctly bound | active | _none_ | `security`, `critical`, `rbac` |
 | `security-guardrails-restricts-openbao-pod-serviceaccount-pod-patching-abbf5716` | restricts OpenBao pod ServiceAccount pod patching to cluster pods | active | _none_ | `security`, `critical`, `rbac`, `pentest` |
-| `security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9` | scopes Secret access via allowlist Roles | active | _none_ | `security`, `critical`, `rbac` |
+| `security-tenant-secret-rbac-allowlist` | scopes Secret access via allowlist Roles | active | `secret-access-allowlist`, `tenant-secret-rbac` | `security`, `critical`, `rbac`, `lower-layer-covered` |
 | `security-guardrails-allows-managed-pod-deletion-during-maintenance-80b5ee0d` | allows managed Pod deletion during maintenance with cluster maintenance permission | active | _none_ | `security`, `critical`, `tamper` |
 | `security-guardrails-prevents-managed-pod-deletion-during-maintenance-238e18f8` | prevents managed Pod deletion during maintenance without cluster maintenance permission | active | _none_ | `security`, `critical`, `tamper` |
 | `security-guardrails-prevents-sidecar-injection-via-statefulset-updates-145c71ee` | prevents sidecar injection via StatefulSet updates | active | _none_ | `security`, `critical`, `tamper` |
@@ -74,37 +74,43 @@ Covers: _none_
 Labels: `security`, `critical`, `admission`
 
 
-## `security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d`
+## `security-backup-endpoint-decimal-ip-blocked`
 
 Path: `Security Guardrails > Admission Policy Enforcement > blocks decimal IP encoding in backup endpoint (SSRF protection)`
 
 State: `active`
 
-Covers: _none_
+Generated fallback ID: `security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d`
 
-Labels: `security`, `critical`, `admission`
+Covers: `backup-endpoint-validation`, `ssrf-protection`
+
+Labels: `security`, `critical`, `admission`, `lower-layer-covered`
 
 
-## `security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74`
+## `security-restore-endpoint-link-local-blocked`
 
 Path: `Security Guardrails > Admission Policy Enforcement > blocks link-local endpoints in restore source (SSRF protection)`
 
 State: `active`
 
-Covers: _none_
+Generated fallback ID: `security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74`
 
-Labels: `security`, `critical`, `admission`
+Covers: `restore-endpoint-validation`, `ssrf-protection`
+
+Labels: `security`, `critical`, `admission`, `lower-layer-covered`
 
 
-## `security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326`
+## `security-restore-http-external-blocked`
 
 Path: `Security Guardrails > Admission Policy Enforcement > blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)`
 
 State: `active`
 
-Covers: _none_
+Generated fallback ID: `security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326`
 
-Labels: `security`, `critical`, `admission`
+Covers: `restore-endpoint-validation`, `ssrf-protection`
+
+Labels: `security`, `critical`, `admission`, `lower-layer-covered`
 
 
 ## `security-guardrails-enforces-hardened-profile-invariants-446324b0`
@@ -255,15 +261,17 @@ Recorded checkpoints:
 - waiting for an OpenBao pod to exist
 
 
-## `security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9`
+## `security-tenant-secret-rbac-allowlist`
 
 Path: `Security Guardrails > RBAC & Dependencies > scopes Secret access via allowlist Roles`
 
 State: `active`
 
-Covers: _none_
+Generated fallback ID: `security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9`
 
-Labels: `security`, `critical`, `rbac`
+Covers: `secret-access-allowlist`, `tenant-secret-rbac`
+
+Labels: `security`, `critical`, `rbac`, `lower-layer-covered`
 
 Recorded checkpoints:
 - creating a cluster to trigger tenant RBAC provisioning

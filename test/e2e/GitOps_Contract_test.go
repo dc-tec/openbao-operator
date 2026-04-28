@@ -102,7 +102,12 @@ var _ = Describe("GitOps contract (Argo-like apply)", Label("gitops", "contract"
 		)).To(Succeed())
 	})
 
-	It("repeatedly applies the same manifest without spec/metadata drift", func() {
+	It("repeatedly applies the same manifest without spec/metadata drift", Label(
+		"case:gitops-ssa-drift-contract",
+		"covers:gitops-drift",
+		"covers:server-side-apply",
+		"lower-layer-covered",
+	), func() {
 		desired := func() *openbaov1alpha1.OpenBaoCluster {
 			return &openbaov1alpha1.OpenBaoCluster{
 				TypeMeta: metav1.TypeMeta{

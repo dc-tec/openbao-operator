@@ -9,8 +9,8 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
 | `cluster-ingress-host-san` | creates ingress resources and includes the ingress host in the server certificate | active | `ingress`, `external-service`, `tls-san` | `lifecycle`, `cluster`, `runtime` |
-| `cluster-paused-resume` | pauses reconciliation until spec.paused is cleared | active | `paused-reconcile`, `paused-status` | `lifecycle`, `cluster`, `runtime` |
-| `cluster-telemetry-rendering` | renders telemetry configuration when observability metrics are enabled | active | `telemetry`, `observability-metrics` | `lifecycle`, `cluster`, `runtime` |
+| `cluster-paused-resume` | pauses reconciliation until spec.paused is cleared | active | `paused-reconcile`, `paused-status` | `lifecycle`, `cluster`, `runtime`, `lower-layer-covered` |
+| `cluster-telemetry-rendering` | renders telemetry configuration when observability metrics are enabled | active | `telemetry`, `observability-metrics` | `lifecycle`, `cluster`, `runtime`, `lower-layer-covered` |
 | `cluster-restart-at-rolls-pod` | rolls the OpenBao pod when runtime.restartAt changes | active | `restart-at`, `pod-rollout` | `lifecycle`, `cluster`, `runtime` |
 
 ## `cluster-ingress-host-san`
@@ -40,7 +40,7 @@ Generated fallback ID: `cluster-runtime-controls-pauses-reconciliation-until-spe
 
 Covers: `paused-reconcile`, `paused-status`
 
-Labels: `lifecycle`, `cluster`, `runtime`
+Labels: `lifecycle`, `cluster`, `runtime`, `lower-layer-covered`
 
 Recorded checkpoints:
 - waiting for paused status conditions to be reported
@@ -58,7 +58,7 @@ Generated fallback ID: `cluster-runtime-controls-renders-telemetry-configuration
 
 Covers: `telemetry`, `observability-metrics`
 
-Labels: `lifecycle`, `cluster`, `runtime`
+Labels: `lifecycle`, `cluster`, `runtime`, `lower-layer-covered`
 
 Recorded checkpoints:
 - verifying the rendered config includes the telemetry stanza

@@ -836,6 +836,10 @@ jobs:
               ;;
           esac
 
+          if [[ "${FULL_E2E}" != "true" ]]; then
+            FILTER="(${FILTER}) && !lower-layer-covered"
+          fi
+
           if [[ "${FULL_E2E}" != "true" ]] && [[ "${EXCLUDE_PENTEST_ON_DEFAULT_PR}" == "true" ]] && [[ "${PR_HARDENED}" != "true" ]]; then
             FILTER="(${FILTER}) && !pentest"
           fi
