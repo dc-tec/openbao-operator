@@ -508,7 +508,7 @@ jobs:
       - name: Run OpenBao config compatibility
         uses: ./.github/actions/run-openbao-config-compat
         with:
-          versions: 2.4.4 2.5.0
+          versions: 2.4.4 2.5.3
 
   docs:
     name: Docs Build
@@ -738,8 +738,40 @@ jobs:
             echo "upgrade_executor_ref=${{ steps.image-repos.outputs.upgrade_executor_repo }}:${{ steps.tag.outputs.value }}"
           } >> "${GITHUB_OUTPUT}"
 
+  e2e-matrix:
+    name: Plan E2E Matrix
+    runs-on: *runner
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
+        with:
+          cache-tools: false
+
+      - name: Generate E2E matrix
+        id: plan
+        env:
+          GOFLAGS: -mod=vendor
+        run: |
+          set -euo pipefail
+          matrix="$(go run ./hack/tools/e2e_plan --manifest test/e2e/suites.yaml --format github-matrix)"
+          printf 'matrix=%s\n' "${matrix}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "## E2E Matrix"
+            echo
+            echo '```json'
+            echo "${matrix}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
   e2e:
-    needs: [changes, build-e2e-images]
+    needs: [changes, e2e-matrix, build-e2e-images]
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     name: E2E (${{ matrix.name }})
     runs-on: *runner
@@ -749,94 +781,9 @@ jobs:
     timeout-minutes: ${{ matrix.timeout_minutes }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - name: "Core Lifecycle & Manager"
-            label_filter: "(((lifecycle && !tls) || manager) && !openshift)"
-            pr_scope: "always"
-            timeout_minutes: 45
-            e2e_timeout: "40m"
-            exclude_pentest_on_default_pr: "false"
-            hardened_signed: "false"
-            openbao_image: ""
-            hardened_init_image: ""
-            hardened_upgrade_executor_image: ""
-            load_backup_executor_image: "false"
-            load_upgrade_executor_image: "false"
-            preload_upgrade_images: "false"
-            preload_hardened_assets: "false"
-          - name: "Security & Tenants"
-            label_filter: "(((security || tenant || tenancy || tls) && !profile-hardened && !gitops && !(tls && slow)) && !openshift)"
-            pr_scope: "always"
-            timeout_minutes: 45
-            e2e_timeout: "40m"
-            exclude_pentest_on_default_pr: "true"
-            hardened_signed: "false"
-            openbao_image: ""
-            hardened_init_image: ""
-            hardened_upgrade_executor_image: ""
-            load_backup_executor_image: "false"
-            load_upgrade_executor_image: "false"
-            preload_upgrade_images: "false"
-            preload_hardened_assets: "false"
-          - name: "Backup & Restore"
-            label_filter: "((dr || restore) && !openshift)"
-            pr_scope: "backup"
-            timeout_minutes: 45
-            e2e_timeout: "40m"
-            exclude_pentest_on_default_pr: "false"
-            hardened_signed: "false"
-            openbao_image: ""
-            hardened_init_image: ""
-            hardened_upgrade_executor_image: ""
-            load_backup_executor_image: "true"
-            load_upgrade_executor_image: "false"
-            preload_upgrade_images: "false"
-            preload_hardened_assets: "false"
-          - name: "Upgrade Rolling"
-            label_filter: "((upgrade && (rolling || validation || guardrails || snapshot || recovery || operation-lock) && !hardened) && !openshift)"
-            pr_scope: "upgrade"
-            timeout_minutes: 45
-            e2e_timeout: "40m"
-            exclude_pentest_on_default_pr: "false"
-            hardened_signed: "false"
-            openbao_image: ""
-            hardened_init_image: ""
-            hardened_upgrade_executor_image: ""
-            load_backup_executor_image: "true"
-            load_upgrade_executor_image: "true"
-            preload_upgrade_images: "true"
-            preload_hardened_assets: "false"
-          - name: "Upgrade Blue/Green"
-            label_filter: "((upgrade && (bluegreen || gateway || verification || rollback || chaos || failure) && !hardened) && !openshift)"
-            pr_scope: "upgrade"
-            timeout_minutes: 60
-            e2e_timeout: "55m"
-            exclude_pentest_on_default_pr: "false"
-            hardened_signed: "false"
-            openbao_image: ""
-            hardened_init_image: ""
-            hardened_upgrade_executor_image: ""
-            load_backup_executor_image: "true"
-            load_upgrade_executor_image: "true"
-            preload_upgrade_images: "true"
-            preload_hardened_assets: "false"
-          - name: "Hardened (Signed)"
-            label_filter: "((profile-hardened || gitops || (tls && slow)) && !openshift)"
-            pr_scope: "hardened"
-            timeout_minutes: 45
-            e2e_timeout: "40m"
-            exclude_pentest_on_default_pr: "false"
-            hardened_signed: "true"
-            openbao_image: "ghcr.io/openbao/openbao:2.5.0"
-            hardened_init_image: "ghcr.io/dc-tec/openbao-init:edge"
-            hardened_upgrade_executor_image: "ghcr.io/dc-tec/openbao-upgrade:edge"
-            load_backup_executor_image: "true"
-            load_upgrade_executor_image: "true"
-            preload_upgrade_images: "true"
-            preload_hardened_assets: "true"
+      matrix: ${{ fromJSON(needs.e2e-matrix.outputs.matrix) }}
     env:
-      KIND_NODE_IMAGE: kindest/node:v1.34.3
+      KIND_NODE_IMAGE: ${{ matrix.kind_node_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -1047,6 +994,7 @@ jobs:
       - helm-e2e-smoke
       - build-artifacts
       - build-e2e-images
+      - e2e-matrix
       - e2e
     steps:
       - name: Validate required CI graph
@@ -1070,6 +1018,7 @@ jobs:
           HELM_E2E_SMOKE: ${{ needs.helm-e2e-smoke.result }}
           BUILD_ARTIFACTS: ${{ needs.build-artifacts.result }}
           BUILD_E2E_IMAGES: ${{ needs.build-e2e-images.result }}
+          E2E_MATRIX: ${{ needs.e2e-matrix.result }}
           E2E: ${{ needs.e2e.result }}
         run: |
           set -euo pipefail
@@ -1103,6 +1052,7 @@ jobs:
           helm-e2e-smoke=${HELM_E2E_SMOKE}
           build-artifacts=${BUILD_ARTIFACTS}
           build-e2e-images=${BUILD_E2E_IMAGES}
+          e2e-matrix=${E2E_MATRIX}
           e2e=${E2E}
           EOF
 

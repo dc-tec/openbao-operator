@@ -134,7 +134,7 @@ Inline `nosemgrep` suppressions are reserved for bounded intentional exceptions.
   label="inspect"
   title="Typical focused E2E reproductions"
   code={`make test-e2e-ci \\
-  KIND_NODE_IMAGE=kindest/node:v1.34.3 \\
+  KIND_NODE_IMAGE=kindest/node:v1.35.1 \\
   E2E_LABEL_FILTER='(((lifecycle && !tls) || manager) && !openshift)' \\
   E2E_PARALLEL_NODES=1
 
@@ -161,7 +161,26 @@ CI E2E shards write both JUnit and Ginkgo JSON reports under the uploaded E2E ar
   Use `go run ./hack/tools/e2e_report --json-report artifacts/e2e-reports/local/ginkgo.json` to render the same Markdown summary locally.
 </CommandBlock>
 
-The E2E suite manifest is validated in `ci-core` through `make verify-e2e-manifest`. That check regenerates the catalog from `ginkgo outline`, validates `test/e2e/suites.yaml`, and fails if suite ownership, labels, coverage tags, risk tier, isolation class, or routing metadata drift.
+The E2E suite manifest is validated in `ci-core` through `make verify-e2e-manifest`. That check regenerates the catalog from `ginkgo outline`, validates `test/e2e/suites.yaml`, generates the GitHub Actions PR and nightly E2E matrices, and fails if suite ownership, labels, coverage tags, risk tier, isolation class, or routing metadata drift.
+
+Nightly E2E routing is manifest-driven. The daily profile runs full coverage on the primary Kubernetes version and compatibility smoke rows on adjacent supported versions. The weekly profile runs full compatibility coverage across supported Kubernetes versions. Maintainers can manually dispatch the release-gate profile, optionally filtered to one lane or one Kubernetes version while preserving the same manifest validation.
+
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect generated E2E matrices"
+  code={`make e2e-ci-matrix
+make e2e-nightly-matrix E2E_NIGHTLY_PROFILE=daily
+make e2e-nightly-matrix E2E_NIGHTLY_PROFILE=weekly-full
+make e2e-nightly-matrix \\
+  E2E_NIGHTLY_PROFILE=release-gate \\
+  E2E_NIGHTLY_LANE=core \\
+  E2E_NIGHTLY_KUBERNETES=1.35.1`}
+>
+  Use these before changing `test/e2e/suites.yaml` or workflow routing.
+</CommandBlock>
+
+`test/e2e/suites.yaml` owns the E2E version policy. Keep the OpenBao default image and the active Kind Kubernetes versions under `versions` instead of repeating concrete versions in each profile. The nightly profiles should reference `@primary`, `@compatibility`, and `@releaseGate`; update those central sets when Kind publishes a new runnable node image.
 
 <NextActions
   title="After CI parity"
