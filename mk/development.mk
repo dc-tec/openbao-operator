@@ -556,6 +556,22 @@ e2e-catalog: ginkgo ## Generate a catalog of E2E suites, specs, labels, and By-s
 		--input-dir test/e2e \
 		--output-dir test/e2e/catalog
 
+.PHONY: e2e-manifest-validate
+e2e-manifest-validate: ## Validate test/e2e/suites.yaml against the generated E2E catalog.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_manifest \
+		--manifest test/e2e/suites.yaml \
+		--catalog test/e2e/catalog/cases.json
+
+.PHONY: verify-e2e-manifest
+verify-e2e-manifest: e2e-catalog e2e-manifest-validate ## Verify the E2E catalog and suite manifest are up-to-date.
+	@{ \
+		git diff --exit-code -- test/e2e/catalog test/e2e/suites.yaml; \
+	} || { \
+		echo "E2E catalog or suite manifest is out of date. Run 'make e2e-catalog e2e-manifest-validate' and commit the result."; \
+		git --no-pager diff -- test/e2e/catalog test/e2e/suites.yaml; \
+		exit 1; \
+	}
+
 .PHONY: perf-baseline
 perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and regenerate thresholds.
 	go run ./hack/perfcheck capture \

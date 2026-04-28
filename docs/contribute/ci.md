@@ -161,6 +161,8 @@ CI E2E shards write both JUnit and Ginkgo JSON reports under the uploaded E2E ar
   Use `go run ./hack/tools/e2e_report --json-report artifacts/e2e-reports/local/ginkgo.json` to render the same Markdown summary locally.
 </CommandBlock>
 
+The E2E suite manifest is validated in `ci-core` through `make verify-e2e-manifest`. That check regenerates the catalog from `ginkgo outline`, validates `test/e2e/suites.yaml`, and fails if suite ownership, labels, coverage tags, risk tier, isolation class, or routing metadata drift.
+
 <NextActions
   title="After CI parity"
   items={[

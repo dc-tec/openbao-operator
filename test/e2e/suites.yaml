@@ -1,0 +1,425 @@
+version: 1
+suites:
+  - id: cluster-deletion-policy
+    title: "Cluster Lifecycle: Deletion Policy"
+    owner: core
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/Cluster_DeletionPolicy_test.go
+    labels:
+      - lifecycle
+      - cluster
+      - deletion
+    coverage:
+      - deletion-policy
+      - pvc-cleanup
+      - pvc-retention
+      - recoverability-secret-cleanup
+      - recoverability-secret-retention
+      - tls-secret-cleanup
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-lifecycle
+    title: "Cluster Lifecycle"
+    owner: core
+    riskTier: critical
+    isolation: shared-cluster
+    files:
+      - test/e2e/Cluster_Lifecycle_test.go
+    labels:
+      - lifecycle
+      - cluster
+      - profile-development
+      - scaling
+      - autopilot
+      - smoke
+      - critical
+      - tenant
+    coverage: []
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-profile-hardened
+    title: "Hardened profile (External TLS + Transit auto-unseal + SelfInit)"
+    owner: hardening
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Cluster_Profile_Hardened_test.go
+    labels:
+      - profile-hardened
+      - security
+      - cluster
+      - upgrade
+      - bluegreen
+      - hardened
+      - rolling
+    coverage: []
+    ci:
+      lanes:
+        - hardened
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-runtime-controls
+    title: "Cluster Runtime Controls"
+    owner: core
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/Cluster_Runtime_Controls_test.go
+    labels:
+      - lifecycle
+      - cluster
+      - runtime
+    coverage:
+      - external-service
+      - ingress
+      - observability-metrics
+      - paused-reconcile
+      - paused-status
+      - pod-rollout
+      - restart-at
+      - telemetry
+      - tls-san
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-tls-acme
+    title: "ACME TLS (OpenBao native ACME client)"
+    owner: security
+    riskTier: medium
+    isolation: shared-cluster
+    files:
+      - test/e2e/Cluster_TLS_ACME_test.go
+    labels:
+      - tls
+      - security
+      - slow
+    coverage: []
+    ci:
+      lanes:
+        - hardened
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-tls-lifecycle
+    title: "Cluster TLS Lifecycle"
+    owner: security
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/Cluster_TLS_Lifecycle_test.go
+    labels:
+      - tls
+      - cluster
+      - lifecycle
+    coverage:
+      - cert-replacement
+      - pod-stability
+      - secret-regeneration
+      - tls-hot-reload
+      - tls-lifecycle
+      - tls-verification
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: gitops-contract
+    title: "GitOps contract (Argo-like apply)"
+    owner: gitops
+    riskTier: medium
+    isolation: shared-cluster
+    files:
+      - test/e2e/GitOps_Contract_test.go
+    labels:
+      - gitops
+      - contract
+    coverage: []
+    ci:
+      lanes:
+        - hardened
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: manager-resilience
+    title: "Manager Resilience"
+    owner: manager
+    riskTier: high
+    isolation: serial
+    files:
+      - test/e2e/Manager_Resilience_test.go
+    labels:
+      - manager
+      - cluster
+    coverage:
+      - controller-failover
+      - controller-outage
+      - controller-restart
+      - existing-cluster-adoption
+      - idempotent-reconcile
+      - leader-election
+      - post-failover-reconcile
+      - post-outage-reconcile
+      - scale-reconcile
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: operator-manager
+    title: "Manager"
+    owner: manager
+    riskTier: critical
+    isolation: shared-cluster
+    files:
+      - test/e2e/Operator_Manager_test.go
+    labels:
+      - manager
+      - critical
+      - smoke
+    coverage: []
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: platform-openshift
+    title: "OpenShift Platform"
+    owner: platform
+    riskTier: high
+    isolation: external-cluster
+    files:
+      - test/e2e/Platform_OpenShift_test.go
+    labels:
+      - openshift
+      - platform
+    coverage: []
+    ci:
+      lanes:
+        - platform-openshift
+      pullRequest: manual
+    nightly:
+      policy: external-cluster-scheduled
+
+  - id: security-guardrails
+    title: "Security Guardrails"
+    owner: security
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Security_Guardrails_test.go
+    labels:
+      - security
+      - critical
+      - admission
+      - pentest
+      - config
+      - tokens
+      - rbac
+      - tamper
+    coverage:
+      - admission-runtime-recheck
+      - managed-resource-pause-on-policy-loss
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: tenant-data-isolation
+    title: "Tenant Data Isolation"
+    owner: security
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/Tenant_Data_Isolation_test.go
+    labels:
+      - security
+      - tenant
+      - tenancy
+    coverage:
+      - data-plane-isolation
+      - network-isolation
+      - tenant-isolation
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: tenant-isolation
+    title: "Tenant Isolation"
+    owner: security
+    riskTier: critical
+    isolation: shared-cluster
+    files:
+      - test/e2e/Tenant_Isolation_test.go
+    labels:
+      - security
+      - tenant
+      - tenancy
+      - critical
+      - single-tenant
+    coverage: []
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: upgrade-operation-lock
+    title: "Upgrade Strategies: Operation Lock Contention"
+    owner: upgrade
+    riskTier: high
+    isolation: global-mutator
+    files:
+      - test/e2e/Upgrade_Operation_Lock_test.go
+    labels:
+      - upgrade
+      - backup
+      - operation-lock
+      - slow
+    coverage:
+      - backup-queueing
+      - operation-lock
+      - rolling-upgrade
+    ci:
+      lanes:
+        - upgrade-rolling
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: upgrade-strategies
+    title: "Upgrade Strategies"
+    owner: upgrade
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Upgrade_Strategies_test.go
+    labels:
+      - upgrade
+      - upgrades
+      - cluster
+      - slow
+      - read-replicas
+      - read-replicas-rolling
+      - rolling
+      - snapshot
+      - recovery
+      - guardrails
+      - validation
+      - bluegreen
+      - verification
+      - failure
+      - gateway
+      - requires-gateway-api
+      - tls-passthrough
+      - rollback
+      - chaos
+    coverage: []
+    ci:
+      lanes:
+        - upgrade-rolling
+        - upgrade-bluegreen
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: upgrade-target-drift
+    title: "Upgrade Strategies: Blue/Green Drift"
+    owner: upgrade
+    riskTier: high
+    isolation: global-mutator
+    files:
+      - test/e2e/Upgrade_Target_Drift_test.go
+    labels:
+      - upgrade
+      - bluegreen
+      - slow
+    coverage:
+      - bluegreen-drift
+      - stale-green-cleanup
+      - target-revision-drift
+    ci:
+      lanes:
+        - upgrade-bluegreen
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: anti-tamper-policy
+    title: "Security: Anti-Tamper Policy"
+    owner: security
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/anti_tamper_policy_test.go
+    labels:
+      - security
+      - tamper
+      - cluster
+      - slow
+    coverage:
+      - anti-tamper
+      - configmap-protection
+      - statefulset-protection
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: backup-restore
+    title: "DR: Storage Providers Backup & Restore"
+    owner: backup-restore
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/backup_restore_test.go
+    labels:
+      - dr
+      - backup
+      - restore
+      - storage-providers
+      - nightly
+      - slow
+      - read-replicas
+      - read-replicas-restore
+      - failure-injection
+    coverage: []
+    ci:
+      lanes:
+        - backup-restore
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
