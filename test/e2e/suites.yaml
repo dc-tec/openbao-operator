@@ -35,7 +35,7 @@ ciLanes:
 
   - id: security
     name: "Security & Tenants"
-    labelFilter: "(((security || tenant || tenancy || tls) && !profile-hardened && !gitops && !(tls && slow)) && !openshift)"
+    labelFilter: "(((security || tenant || tenancy || tls) && !profile-hardened && !(tls && slow)) && !openshift)"
     prScope: always
     timeoutMinutes: 45
     e2eTimeout: 40m
@@ -65,7 +65,7 @@ ciLanes:
 
   - id: upgrade-rolling
     name: "Upgrade Rolling"
-    labelFilter: "((upgrade && (rolling || validation || guardrails || snapshot || recovery || operation-lock) && !hardened) && !openshift)"
+    labelFilter: "((upgrade && (rolling || snapshot || recovery || operation-lock) && !hardened) && !openshift)"
     prScope: upgrade
     timeoutMinutes: 45
     e2eTimeout: 40m
@@ -95,7 +95,7 @@ ciLanes:
 
   - id: hardened
     name: "Hardened (Signed)"
-    labelFilter: "((profile-hardened || gitops || (tls && slow)) && !openshift)"
+    labelFilter: "((profile-hardened || (tls && slow)) && !openshift)"
     prScope: hardened
     timeoutMinutes: 45
     e2eTimeout: 40m
@@ -265,16 +265,11 @@ suites:
       - lifecycle
       - cluster
       - runtime
-      - lower-layer-covered
     coverage:
       - external-service
       - ingress
-      - observability-metrics
-      - paused-reconcile
-      - paused-status
       - pod-rollout
       - restart-at
-      - telemetry
       - tls-san
     ci:
       lanes:
@@ -327,27 +322,6 @@ suites:
     nightly:
       policy: primary-version-full
 
-  - id: gitops-contract
-    title: "GitOps contract (Argo-like apply)"
-    owner: gitops
-    riskTier: medium
-    isolation: shared-cluster
-    files:
-      - test/e2e/GitOps_Contract_test.go
-    labels:
-      - gitops
-      - contract
-      - lower-layer-covered
-    coverage:
-      - gitops-drift
-      - server-side-apply
-    ci:
-      lanes:
-        - hardened
-      pullRequest: changed-paths
-    nightly:
-      policy: primary-version-full
-
   - id: manager-resilience
     title: "Manager Resilience"
     owner: manager
@@ -386,10 +360,8 @@ suites:
       - manager
       - critical
       - smoke
-      - lower-layer-covered
     coverage:
       - manager-metrics-endpoint
-      - manager-pod-running
     ci:
       lanes:
         - core
@@ -431,15 +403,9 @@ suites:
       - tokens
       - rbac
       - tamper
-      - lower-layer-covered
     coverage:
       - admission-runtime-recheck
-      - backup-endpoint-validation
       - managed-resource-pause-on-policy-loss
-      - restore-endpoint-validation
-      - secret-access-allowlist
-      - ssrf-protection
-      - tenant-secret-rbac
     ci:
       lanes:
         - security
@@ -530,8 +496,6 @@ suites:
       - rolling
       - snapshot
       - recovery
-      - guardrails
-      - validation
       - bluegreen
       - verification
       - failure
@@ -540,11 +504,7 @@ suites:
       - tls-passthrough
       - rollback
       - chaos
-      - lower-layer-covered
-    coverage:
-      - downgrade-guardrail
-      - image-version-mismatch
-      - pod-mutation-guardrail
+    coverage: []
     ci:
       lanes:
         - upgrade-rolling

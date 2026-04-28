@@ -20,8 +20,6 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `upgrade-strategies-performs-rolling-upgrade-2302a23d` | performs rolling upgrade | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `read-replicas`, `read-replicas-rolling` |
 | `upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa` | acknowledges break glass and resumes rollback after the upgrade policy is repaired | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 | `upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327` | enters safe mode when rollback consensus repair job fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
-| `upgrade-validation-downgrade-rejected` | rejects downgrade requests at admission before any rollout begins | active | `downgrade-guardrail` | `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation`, `lower-layer-covered` |
-| `upgrade-validation-image-version-mismatch` | surfaces image version mismatches as degraded without mutating running pods | active | `image-version-mismatch`, `pod-mutation-guardrail` | `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation`, `lower-layer-covered` |
 
 ## `upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17`
 
@@ -259,40 +257,5 @@ Recorded checkpoints:
 - Waiting for the rollback consensus repair job to fail
 - Verifying secret persists in safe mode
 - Asserting safe mode is set on the cluster
-
-
-## `upgrade-validation-downgrade-rejected`
-
-Path: `Upgrade Strategies > Validation Guardrails > rejects downgrade requests at admission before any rollout begins`
-
-State: `active`
-
-Generated fallback ID: `upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b`
-
-Covers: `downgrade-guardrail`
-
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation`, `lower-layer-covered`
-
-Recorded checkpoints:
-- Attempting to patch the cluster to a lower semantic version
-- Verifying the persisted spec remains unchanged after the rejected patch
-
-
-## `upgrade-validation-image-version-mismatch`
-
-Path: `Upgrade Strategies > Validation Guardrails > surfaces image version mismatches as degraded without mutating running pods`
-
-State: `active`
-
-Generated fallback ID: `upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb`
-
-Covers: `image-version-mismatch`, `pod-mutation-guardrail`
-
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation`, `lower-layer-covered`
-
-Recorded checkpoints:
-- Patching a semver-tagged image that conflicts with spec.version
-- Waiting for the workload controller to report a permanent configuration error
-- Verifying existing OpenBao pods keep the original stable image
 
 

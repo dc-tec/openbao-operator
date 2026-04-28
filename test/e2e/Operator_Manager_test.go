@@ -72,14 +72,12 @@ var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func
 	SetDefaultEventuallyPollingInterval(time.Second)
 
 	Context("Manager", func() {
-		It("should run successfully", Label(
-			"case:operator-manager-pod-running",
-			"covers:manager-pod-running",
-			"lower-layer-covered",
+		It("should ensure the metrics endpoint is serving metrics", Label(
+			"case:operator-manager-metrics-endpoint",
+			"covers:manager-metrics-endpoint",
 		), func() {
-			By("validating that the controller-manager pod is running as expected")
-			verifyControllerUp := func(g Gomega) {
-				// Get the name of the controller pod using the actual deployment labels
+			By("locating the controller pod")
+			Eventually(func(g Gomega) {
 				cmd := exec.Command("kubectl", "get",
 					"pods", "-l", "app.kubernetes.io/name=openbao-operator,app.kubernetes.io/component=controller",
 					"-o", "go-template={{ range .items }}"+
@@ -92,26 +90,11 @@ var _ = Describe("Manager", Label("manager", "critical", "smoke"), Ordered, func
 				podOutput, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred(), "Failed to retrieve controller pod information")
 				podNames := utils.GetNonEmptyLines(podOutput)
-				g.Expect(podNames).To(HaveLen(1), "expected 1 controller pod running")
+				g.Expect(podNames).To(HaveLen(1), "expected 1 controller pod")
 				controllerPodName = podNames[0]
 				g.Expect(controllerPodName).To(ContainSubstring("openbao-operator-controller"))
+			}, 2*time.Minute, time.Second).Should(Succeed())
 
-				// Validate the pod's status
-				cmd = exec.Command("kubectl", "get",
-					"pods", controllerPodName, "-o", "jsonpath={.status.phase}",
-					"-n", operatorNamespace,
-				)
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("Running"), "Incorrect controller-manager pod status")
-			}
-			Eventually(verifyControllerUp).Should(Succeed())
-		})
-
-		It("should ensure the metrics endpoint is serving metrics", Label(
-			"case:operator-manager-metrics-endpoint",
-			"covers:manager-metrics-endpoint",
-		), func() {
 			By("validating that the metrics service is available")
 			cmd := exec.Command("kubectl", "get", "service", "openbao-operator-controller-metrics-service", "-n", operatorNamespace)
 			_, err := utils.Run(cmd)

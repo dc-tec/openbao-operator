@@ -587,84 +587,6 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-paused-resume",
-    "generatedId": "cluster-runtime-controls-pauses-reconciliation-until-spec-paused-is-7e97d27d",
-    "caseLabel": "cluster-paused-resume",
-    "coverage": [
-      "paused-reconcile",
-      "paused-status"
-    ],
-    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
-    "type": "It",
-    "name": "pauses reconciliation until spec.paused is cleared",
-    "path": [
-      "Cluster Runtime Controls",
-      "pauses reconciliation until spec.paused is cleared"
-    ],
-    "labels": [
-      "lifecycle",
-      "cluster",
-      "runtime",
-      "case:cluster-paused-resume",
-      "covers:paused-reconcile",
-      "covers:paused-status",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "lifecycle",
-      "cluster",
-      "runtime",
-      "lower-layer-covered"
-    ],
-    "steps": [
-      "waiting for paused status conditions to be reported",
-      "verifying workload resources are not created while reconciliation is paused",
-      "clearing spec.paused so normal reconciliation resumes"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "cluster-telemetry-rendering",
-    "generatedId": "cluster-runtime-controls-renders-telemetry-configuration-when-observability-metrics-b6a0c999",
-    "caseLabel": "cluster-telemetry-rendering",
-    "coverage": [
-      "telemetry",
-      "observability-metrics"
-    ],
-    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
-    "type": "It",
-    "name": "renders telemetry configuration when observability metrics are enabled",
-    "path": [
-      "Cluster Runtime Controls",
-      "renders telemetry configuration when observability metrics are enabled"
-    ],
-    "labels": [
-      "lifecycle",
-      "cluster",
-      "runtime",
-      "case:cluster-telemetry-rendering",
-      "covers:telemetry",
-      "covers:observability-metrics",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "lifecycle",
-      "cluster",
-      "runtime",
-      "lower-layer-covered"
-    ],
-    "steps": [
-      "verifying the rendered config includes the telemetry stanza"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
     "id": "cluster-restart-at-rolls-pod",
     "generatedId": "cluster-runtime-controls-rolls-the-openbao-pod-when-runtime-c0619ab5",
     "caseLabel": "cluster-restart-at-rolls-pod",
@@ -824,40 +746,6 @@
     "suiteTitle": ""
   },
   {
-    "id": "gitops-ssa-drift-contract",
-    "generatedId": "gitops-contract-repeatedly-applies-the-same-manifest-without-43cd8392",
-    "caseLabel": "gitops-ssa-drift-contract",
-    "coverage": [
-      "gitops-drift",
-      "server-side-apply"
-    ],
-    "file": "test/e2e/GitOps_Contract_test.go",
-    "type": "It",
-    "name": "repeatedly applies the same manifest without spec/metadata drift",
-    "path": [
-      "GitOps contract (Argo-like apply)",
-      "repeatedly applies the same manifest without spec/metadata drift"
-    ],
-    "labels": [
-      "gitops",
-      "contract",
-      "case:gitops-ssa-drift-contract",
-      "covers:gitops-drift",
-      "covers:server-side-apply",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "gitops",
-      "contract",
-      "lower-layer-covered"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
     "id": "manager-leader-failover",
     "generatedId": "manager-resilience-fails-over-leader-election-and-continues-2baefc75",
     "caseLabel": "manager-leader-failover",
@@ -1004,47 +892,11 @@
       "smoke"
     ],
     "steps": [
+      "locating the controller pod",
       "validating that the metrics service is available",
       "ensuring the controller pod is ready",
       "verifying that the controller manager is serving the metrics server",
       "verifying that the controller metrics endpoint returns data"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "operator-manager-pod-running",
-    "generatedId": "operator-manager-should-run-successfully-620495ad",
-    "caseLabel": "operator-manager-pod-running",
-    "coverage": [
-      "manager-pod-running"
-    ],
-    "file": "test/e2e/Operator_Manager_test.go",
-    "type": "It",
-    "name": "should run successfully",
-    "path": [
-      "Manager",
-      "Manager",
-      "should run successfully"
-    ],
-    "labels": [
-      "manager",
-      "critical",
-      "smoke",
-      "case:operator-manager-pod-running",
-      "covers:manager-pod-running",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "manager",
-      "critical",
-      "smoke",
-      "lower-layer-covered"
-    ],
-    "steps": [
-      "validating that the controller-manager pod is running as expected"
     ],
     "focused": false,
     "pending": false,
@@ -1192,117 +1044,6 @@
       "security",
       "critical",
       "admission"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "security-backup-endpoint-decimal-ip-blocked",
-    "generatedId": "security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d",
-    "caseLabel": "security-backup-endpoint-decimal-ip-blocked",
-    "coverage": [
-      "backup-endpoint-validation",
-      "ssrf-protection"
-    ],
-    "file": "test/e2e/Security_Guardrails_test.go",
-    "type": "It",
-    "name": "blocks decimal IP encoding in backup endpoint (SSRF protection)",
-    "path": [
-      "Security Guardrails",
-      "Admission Policy Enforcement",
-      "blocks decimal IP encoding in backup endpoint (SSRF protection)"
-    ],
-    "labels": [
-      "security",
-      "critical",
-      "admission",
-      "case:security-backup-endpoint-decimal-ip-blocked",
-      "covers:backup-endpoint-validation",
-      "covers:ssrf-protection",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "security",
-      "critical",
-      "admission",
-      "lower-layer-covered"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "security-restore-endpoint-link-local-blocked",
-    "generatedId": "security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74",
-    "caseLabel": "security-restore-endpoint-link-local-blocked",
-    "coverage": [
-      "restore-endpoint-validation",
-      "ssrf-protection"
-    ],
-    "file": "test/e2e/Security_Guardrails_test.go",
-    "type": "It",
-    "name": "blocks link-local endpoints in restore source (SSRF protection)",
-    "path": [
-      "Security Guardrails",
-      "Admission Policy Enforcement",
-      "blocks link-local endpoints in restore source (SSRF protection)"
-    ],
-    "labels": [
-      "security",
-      "critical",
-      "admission",
-      "case:security-restore-endpoint-link-local-blocked",
-      "covers:restore-endpoint-validation",
-      "covers:ssrf-protection",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "security",
-      "critical",
-      "admission",
-      "lower-layer-covered"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "security-restore-http-external-blocked",
-    "generatedId": "security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326",
-    "caseLabel": "security-restore-http-external-blocked",
-    "coverage": [
-      "restore-endpoint-validation",
-      "ssrf-protection"
-    ],
-    "file": "test/e2e/Security_Guardrails_test.go",
-    "type": "It",
-    "name": "blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)",
-    "path": [
-      "Security Guardrails",
-      "Admission Policy Enforcement",
-      "blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)"
-    ],
-    "labels": [
-      "security",
-      "critical",
-      "admission",
-      "case:security-restore-http-external-blocked",
-      "covers:restore-endpoint-validation",
-      "covers:ssrf-protection",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "security",
-      "critical",
-      "admission",
-      "lower-layer-covered"
     ],
     "steps": null,
     "focused": false,
@@ -1644,48 +1385,6 @@
       "waiting for the cluster StatefulSet to exist and expose the Pod service account",
       "creating a non-OpenBao pod in the tenant namespace",
       "waiting for an OpenBao pod to exist"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "security-tenant-secret-rbac-allowlist",
-    "generatedId": "security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9",
-    "caseLabel": "security-tenant-secret-rbac-allowlist",
-    "coverage": [
-      "secret-access-allowlist",
-      "tenant-secret-rbac"
-    ],
-    "file": "test/e2e/Security_Guardrails_test.go",
-    "type": "It",
-    "name": "scopes Secret access via allowlist Roles",
-    "path": [
-      "Security Guardrails",
-      "RBAC \u0026 Dependencies",
-      "scopes Secret access via allowlist Roles"
-    ],
-    "labels": [
-      "security",
-      "critical",
-      "rbac",
-      "case:security-tenant-secret-rbac-allowlist",
-      "covers:secret-access-allowlist",
-      "covers:tenant-secret-rbac",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "security",
-      "critical",
-      "rbac",
-      "lower-layer-covered"
-    ],
-    "steps": [
-      "creating a cluster to trigger tenant RBAC provisioning",
-      "verifying the tenant role does not grant broad Secret access",
-      "verifying the dedicated Secrets writer role only grants the expected allowlisted access",
-      "verifying the Secrets writer RoleBinding points at the allowlist role"
     ],
     "focused": false,
     "pending": false,
@@ -2598,97 +2297,6 @@
       "Waiting for the rollback consensus repair job to fail",
       "Verifying secret persists in safe mode",
       "Asserting safe mode is set on the cluster"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "upgrade-validation-downgrade-rejected",
-    "generatedId": "upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b",
-    "caseLabel": "upgrade-validation-downgrade-rejected",
-    "coverage": [
-      "downgrade-guardrail"
-    ],
-    "file": "test/e2e/Upgrade_Strategies_test.go",
-    "type": "It",
-    "name": "rejects downgrade requests at admission before any rollout begins",
-    "path": [
-      "Upgrade Strategies",
-      "Validation Guardrails",
-      "rejects downgrade requests at admission before any rollout begins"
-    ],
-    "labels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "guardrails",
-      "validation",
-      "case:upgrade-validation-downgrade-rejected",
-      "covers:downgrade-guardrail",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "guardrails",
-      "validation",
-      "lower-layer-covered"
-    ],
-    "steps": [
-      "Attempting to patch the cluster to a lower semantic version",
-      "Verifying the persisted spec remains unchanged after the rejected patch"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "upgrade-validation-image-version-mismatch",
-    "generatedId": "upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb",
-    "caseLabel": "upgrade-validation-image-version-mismatch",
-    "coverage": [
-      "image-version-mismatch",
-      "pod-mutation-guardrail"
-    ],
-    "file": "test/e2e/Upgrade_Strategies_test.go",
-    "type": "It",
-    "name": "surfaces image version mismatches as degraded without mutating running pods",
-    "path": [
-      "Upgrade Strategies",
-      "Validation Guardrails",
-      "surfaces image version mismatches as degraded without mutating running pods"
-    ],
-    "labels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "guardrails",
-      "validation",
-      "case:upgrade-validation-image-version-mismatch",
-      "covers:image-version-mismatch",
-      "covers:pod-mutation-guardrail",
-      "lower-layer-covered"
-    ],
-    "domainLabels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "guardrails",
-      "validation",
-      "lower-layer-covered"
-    ],
-    "steps": [
-      "Patching a semver-tagged image that conflicts with spec.version",
-      "Waiting for the workload controller to report a permanent configuration error",
-      "Verifying existing OpenBao pods keep the original stable image"
     ],
     "focused": false,
     "pending": false,
