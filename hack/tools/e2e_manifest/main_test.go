@@ -17,6 +17,48 @@ func writeTempE2EFile(t *testing.T, name string) string {
 	return filepath.ToSlash(path)
 }
 
+func testCILane(id string) ciLaneConfig {
+	return ciLaneConfig{
+		ID:             id,
+		Name:           id,
+		LabelFilter:    id,
+		PRScope:        "always",
+		TimeoutMinutes: 45,
+		E2ETimeout:     "40m",
+	}
+}
+
+func testVersionPolicy() versionPolicy {
+	return versionPolicy{
+		OpenBao: openBaoVersionPolicy{
+			DefaultImage: "ghcr.io/openbao/openbao:2.5.3",
+		},
+		Kubernetes: kubernetesVersionPolicy{
+			Primary:       "1.35.1",
+			Compatibility: []string{"1.34.3"},
+			ReleaseGate:   []string{"1.34.3", "1.35.1"},
+			NextCandidate: "1.36.0",
+		},
+	}
+}
+
+func testNightlyPlan(lane string) nightlyPlanConfig {
+	return nightlyPlanConfig{
+		Profiles: []nightlyProfile{
+			{
+				ID: "daily",
+				LaneSets: []nightlyLaneSet{
+					{
+						Coverage:   "full",
+						Kubernetes: []string{"@primary"},
+						Lanes:      []string{lane},
+					},
+				},
+			},
+		},
+	}
+}
+
 func TestValidateManifestAcceptsCatalogMatchedSuite(t *testing.T) {
 	t.Parallel()
 
@@ -33,7 +75,12 @@ func TestValidateManifestAcceptsCatalogMatchedSuite(t *testing.T) {
 	})
 
 	err := validateManifest(manifest{
-		Version: 1,
+		Version:  1,
+		Versions: testVersionPolicy(),
+		CILanes: []ciLaneConfig{
+			testCILane("core"),
+		},
+		Nightly: testNightlyPlan("core"),
 		Suites: []manifestSuite{
 			{
 				ID:        "cluster-lifecycle",
@@ -73,7 +120,12 @@ func TestValidateManifestRejectsLabelDrift(t *testing.T) {
 	})
 
 	err := validateManifest(manifest{
-		Version: 1,
+		Version:  1,
+		Versions: testVersionPolicy(),
+		CILanes: []ciLaneConfig{
+			testCILane("security"),
+		},
+		Nightly: testNightlyPlan("security"),
 		Suites: []manifestSuite{
 			{
 				ID:        "security-guardrails",
@@ -135,7 +187,12 @@ func TestValidateManifestRejectsDuplicateFileOwnership(t *testing.T) {
 	second.ID = "operator-manager-copy"
 
 	err := validateManifest(manifest{
-		Version: 1,
+		Version:  1,
+		Versions: testVersionPolicy(),
+		CILanes: []ciLaneConfig{
+			testCILane("core"),
+		},
+		Nightly: testNightlyPlan("core"),
 		Suites:  []manifestSuite{first, second},
 	}, facts, options{})
 	if err == nil {
@@ -160,7 +217,12 @@ func TestValidateManifestCanRequireExplicitCaseIDs(t *testing.T) {
 	})
 
 	err := validateManifest(manifest{
-		Version: 1,
+		Version:  1,
+		Versions: testVersionPolicy(),
+		CILanes: []ciLaneConfig{
+			testCILane("backup-restore"),
+		},
+		Nightly: testNightlyPlan("backup-restore"),
 		Suites: []manifestSuite{
 			{
 				ID:        "backup-restore",
@@ -185,6 +247,52 @@ func TestValidateManifestCanRequireExplicitCaseIDs(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "explicit case IDs") {
 		t.Fatalf("error = %q, want explicit case IDs message", err)
+	}
+}
+
+func TestValidateManifestRejectsInvalidNightlyLane(t *testing.T) {
+	t.Parallel()
+
+	file := writeTempE2EFile(t, "Operator_Manager_test.go")
+	facts := buildSuiteFacts([]catalogCase{
+		{
+			File:         file,
+			Path:         []string{"Manager", "starts"},
+			DomainLabels: []string{"manager"},
+		},
+	})
+
+	err := validateManifest(manifest{
+		Version:  1,
+		Versions: testVersionPolicy(),
+		CILanes: []ciLaneConfig{
+			testCILane("core"),
+		},
+		Nightly: testNightlyPlan("missing-lane"),
+		Suites: []manifestSuite{
+			{
+				ID:        "operator-manager",
+				Title:     "Manager",
+				Owner:     "manager",
+				RiskTier:  "critical",
+				Isolation: "shared-cluster",
+				Files:     []string{file},
+				Labels:    []string{"manager"},
+				CI: suiteCI{
+					Lanes:       []string{"core"},
+					PullRequest: "changed-paths",
+				},
+				Nightly: suiteNightly{
+					Policy: "primary-version-full",
+				},
+			},
+		},
+	}, facts, options{})
+	if err == nil {
+		t.Fatalf("validateManifest() error = nil, want nightly lane failure")
+	}
+	if !strings.Contains(err.Error(), "undefined lane") {
+		t.Fatalf("error = %q, want undefined lane message", err)
 	}
 }
 

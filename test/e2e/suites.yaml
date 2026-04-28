@@ -1,4 +1,181 @@
 version: 1
+versions:
+  openbao:
+    defaultImage: "ghcr.io/openbao/openbao:2.5.3"
+  kubernetes:
+    primary: "1.35.1"
+    compatibility:
+      - "1.34.3"
+    releaseGate:
+      - "1.34.3"
+      - "1.35.1"
+    # Kubernetes 1.36.0 is upstream-supported, but kindest/node:v1.36.0 is not published yet.
+    nextCandidate: "1.36.0"
+
+ciLanes:
+  - id: core
+    name: "Core Lifecycle & Manager"
+    labelFilter: "(((lifecycle && !tls) || manager) && !openshift)"
+    prScope: always
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+
+  - id: security
+    name: "Security & Tenants"
+    labelFilter: "(((security || tenant || tenancy || tls) && !profile-hardened && !gitops && !(tls && slow)) && !openshift)"
+    prScope: always
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: true
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+
+  - id: backup-restore
+    name: "Backup & Restore"
+    labelFilter: "((dr || restore) && !openshift)"
+    prScope: backup
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+
+  - id: upgrade-rolling
+    name: "Upgrade Rolling"
+    labelFilter: "((upgrade && (rolling || validation || guardrails || snapshot || recovery || operation-lock) && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+
+  - id: upgrade-bluegreen
+    name: "Upgrade Blue/Green"
+    labelFilter: "((upgrade && (bluegreen || gateway || verification || rollback || chaos || failure) && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 60
+    e2eTimeout: 55m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+
+  - id: hardened
+    name: "Hardened (Signed)"
+    labelFilter: "((profile-hardened || gitops || (tls && slow)) && !openshift)"
+    prScope: hardened
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: true
+    hardenedInitImage: "ghcr.io/dc-tec/openbao-init:edge"
+    hardenedUpgradeExecutorImage: "ghcr.io/dc-tec/openbao-upgrade:edge"
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: true
+
+  - id: platform-openshift
+    name: "OpenShift Platform"
+    labelFilter: "(openshift && platform)"
+    prScope: manual
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    includeInPRMatrix: false
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+
+nightly:
+  profiles:
+    - id: daily
+      description: "Full primary-version coverage plus compatibility smoke coverage."
+      laneSets:
+        - coverage: full
+          kubernetes:
+            - "@primary"
+          lanes:
+            - core
+            - security
+            - backup-restore
+            - upgrade-rolling
+            - upgrade-bluegreen
+            - hardened
+      rows:
+        - lane: core
+          kubernetes: "@compatibility"
+          coverage: compatibility-smoke
+          labelFilter: "(((lifecycle && smoke) || (manager && smoke)) && !openshift)"
+          timeoutMinutes: 45
+          e2eTimeout: 40m
+        - lane: security
+          kubernetes: "@compatibility"
+          coverage: compatibility-smoke
+          labelFilter: "(((security || tenant || tenancy) && critical && !pentest) && !openshift)"
+          timeoutMinutes: 45
+          e2eTimeout: 40m
+
+    - id: weekly-full
+      description: "Full compatibility coverage across supported Kubernetes versions."
+      laneSets:
+        - coverage: full
+          kubernetes:
+            - "@releaseGate"
+          lanes:
+            - core
+            - security
+            - backup-restore
+            - upgrade-rolling
+            - upgrade-bluegreen
+            - hardened
+
+    - id: release-gate
+      description: "Manual full compatibility gate before release promotion."
+      laneSets:
+        - coverage: release-gate
+          kubernetes:
+            - "@releaseGate"
+          lanes:
+            - core
+            - security
+            - backup-restore
+            - upgrade-rolling
+            - upgrade-bluegreen
+            - hardened
+
 suites:
   - id: cluster-deletion-policy
     title: "Cluster Lifecycle: Deletion Policy"

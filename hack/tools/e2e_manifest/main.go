@@ -27,8 +27,75 @@ type options struct {
 }
 
 type manifest struct {
-	Version int             `yaml:"version"`
-	Suites  []manifestSuite `yaml:"suites"`
+	Version  int               `yaml:"version"`
+	Versions versionPolicy     `yaml:"versions"`
+	CILanes  []ciLaneConfig    `yaml:"ciLanes"`
+	Nightly  nightlyPlanConfig `yaml:"nightly"`
+	Suites   []manifestSuite   `yaml:"suites"`
+}
+
+type versionPolicy struct {
+	OpenBao    openBaoVersionPolicy    `yaml:"openbao"`
+	Kubernetes kubernetesVersionPolicy `yaml:"kubernetes"`
+}
+
+type openBaoVersionPolicy struct {
+	DefaultImage string `yaml:"defaultImage"`
+}
+
+type kubernetesVersionPolicy struct {
+	Primary       string   `yaml:"primary"`
+	Compatibility []string `yaml:"compatibility"`
+	ReleaseGate   []string `yaml:"releaseGate"`
+	NextCandidate string   `yaml:"nextCandidate"`
+}
+
+type ciLaneConfig struct {
+	ID                       string `yaml:"id"`
+	Name                     string `yaml:"name"`
+	LabelFilter              string `yaml:"labelFilter"`
+	PRScope                  string `yaml:"prScope"`
+	TimeoutMinutes           int    `yaml:"timeoutMinutes"`
+	E2ETimeout               string `yaml:"e2eTimeout"`
+	IncludeInPRMatrix        *bool  `yaml:"includeInPRMatrix"`
+	ExcludePentestOnDefault  bool   `yaml:"excludePentestOnDefaultPR"`
+	HardenedSigned           bool   `yaml:"hardenedSigned"`
+	OpenBaoImage             string `yaml:"openbaoImage"`
+	HardenedInitImage        string `yaml:"hardenedInitImage"`
+	HardenedUpgradeImage     string `yaml:"hardenedUpgradeExecutorImage"`
+	LoadBackupExecutorImage  bool   `yaml:"loadBackupExecutorImage"`
+	LoadUpgradeExecutorImage bool   `yaml:"loadUpgradeExecutorImage"`
+	PreloadUpgradeImages     bool   `yaml:"preloadUpgradeImages"`
+	PreloadHardenedAssets    bool   `yaml:"preloadHardenedAssets"`
+}
+
+type nightlyPlanConfig struct {
+	Profiles []nightlyProfile `yaml:"profiles"`
+}
+
+type nightlyProfile struct {
+	ID          string             `yaml:"id"`
+	Description string             `yaml:"description"`
+	LaneSets    []nightlyLaneSet   `yaml:"laneSets"`
+	Rows        []nightlyRowConfig `yaml:"rows"`
+}
+
+type nightlyLaneSet struct {
+	Coverage       string   `yaml:"coverage"`
+	Kubernetes     []string `yaml:"kubernetes"`
+	Lanes          []string `yaml:"lanes"`
+	TimeoutMinutes int      `yaml:"timeoutMinutes"`
+	E2ETimeout     string   `yaml:"e2eTimeout"`
+}
+
+type nightlyRowConfig struct {
+	Lane           string `yaml:"lane"`
+	Kubernetes     string `yaml:"kubernetes"`
+	Coverage       string `yaml:"coverage"`
+	LabelFilter    string `yaml:"labelFilter"`
+	TimeoutMinutes int    `yaml:"timeoutMinutes"`
+	E2ETimeout     string `yaml:"e2eTimeout"`
+	OpenBaoImage   string `yaml:"openbaoImage"`
 }
 
 type manifestSuite struct {
@@ -210,11 +277,16 @@ func validateManifest(m manifest, facts map[string]suiteFacts, opts options) err
 		errs = append(errs, "suites must not be empty")
 	}
 
+	ciLaneIDs, laneErrs := validateCILanes(m.CILanes)
+	errs = append(errs, laneErrs...)
+	errs = append(errs, validateVersionPolicy(m.Versions)...)
+	errs = append(errs, validateNightlyPlan(m.Nightly, m.Versions.Kubernetes, ciLaneIDs)...)
+
 	seenIDs := map[string]string{}
 	seenFiles := map[string]string{}
 	for idx, suite := range m.Suites {
 		prefix := fmt.Sprintf("suites[%d]", idx)
-		errs = append(errs, validateSuite(prefix, suite, facts, seenIDs, seenFiles)...)
+		errs = append(errs, validateSuite(prefix, suite, facts, ciLaneIDs, seenIDs, seenFiles)...)
 	}
 
 	for file := range facts {
@@ -241,6 +313,7 @@ func validateSuite(
 	prefix string,
 	suite manifestSuite,
 	facts map[string]suiteFacts,
+	ciLaneIDs map[string]bool,
 	seenIDs map[string]string,
 	seenFiles map[string]string,
 ) []string {
@@ -279,8 +352,8 @@ func validateSuite(
 		errs = append(errs, fmt.Sprintf("%s.ci.lanes must not be empty", prefix))
 	}
 	for _, lane := range suite.CI.Lanes {
-		if !allowedCILanes[lane] {
-			errs = append(errs, fmt.Sprintf("%s.ci.lanes contains unknown lane %q", prefix, lane))
+		if !ciLaneIDs[lane] {
+			errs = append(errs, fmt.Sprintf("%s.ci.lanes contains undefined lane %q", prefix, lane))
 		}
 	}
 	if !allowedPullRequestPolicies[suite.CI.PullRequest] {
@@ -340,6 +413,181 @@ func validateSuite(
 	return errs
 }
 
+func validateCILanes(lanes []ciLaneConfig) (map[string]bool, []string) {
+	var errs []string
+	if len(lanes) == 0 {
+		return nil, []string{"ciLanes must not be empty"}
+	}
+
+	seen := map[string]bool{}
+	for idx, lane := range lanes {
+		prefix := fmt.Sprintf("ciLanes[%d]", idx)
+		if lane.ID == "" {
+			errs = append(errs, fmt.Sprintf("%s.id is required", prefix))
+		} else {
+			if !idPattern.MatchString(lane.ID) {
+				errs = append(errs, fmt.Sprintf("%s.id %q must be a lowercase slug", prefix, lane.ID))
+			}
+			if seen[lane.ID] {
+				errs = append(errs, fmt.Sprintf("%s.id %q is duplicated", prefix, lane.ID))
+			}
+			seen[lane.ID] = true
+		}
+		if strings.TrimSpace(lane.Name) == "" {
+			errs = append(errs, fmt.Sprintf("%s.name is required", prefix))
+		}
+		if strings.TrimSpace(lane.LabelFilter) == "" {
+			errs = append(errs, fmt.Sprintf("%s.labelFilter is required", prefix))
+		}
+		if !allowedPRScopes[lane.PRScope] {
+			errs = append(errs, fmt.Sprintf("%s.prScope %q is not recognized", prefix, lane.PRScope))
+		}
+		if lane.TimeoutMinutes <= 0 {
+			errs = append(errs, fmt.Sprintf("%s.timeoutMinutes must be > 0", prefix))
+		}
+		if strings.TrimSpace(lane.E2ETimeout) == "" {
+			errs = append(errs, fmt.Sprintf("%s.e2eTimeout is required", prefix))
+		}
+	}
+	return seen, errs
+}
+
+func validateVersionPolicy(policy versionPolicy) []string {
+	var errs []string
+	if strings.TrimSpace(policy.OpenBao.DefaultImage) == "" {
+		errs = append(errs, "versions.openbao.defaultImage is required")
+	}
+	if strings.TrimSpace(policy.Kubernetes.Primary) == "" {
+		errs = append(errs, "versions.kubernetes.primary is required")
+	}
+	if len(policy.Kubernetes.Compatibility) == 0 {
+		errs = append(errs, "versions.kubernetes.compatibility must not be empty")
+	}
+	if len(policy.Kubernetes.ReleaseGate) == 0 {
+		errs = append(errs, "versions.kubernetes.releaseGate must not be empty")
+	}
+	errs = append(errs, validateVersionList("versions.kubernetes.compatibility", policy.Kubernetes.Compatibility)...)
+	errs = append(errs, validateVersionList("versions.kubernetes.releaseGate", policy.Kubernetes.ReleaseGate)...)
+	return errs
+}
+
+func validateVersionList(prefix string, versions []string) []string {
+	var errs []string
+	for idx, version := range versions {
+		if strings.TrimSpace(version) == "" {
+			errs = append(errs, fmt.Sprintf("%s[%d] must not be empty", prefix, idx))
+		}
+	}
+	return errs
+}
+
+func validateNightlyPlan(plan nightlyPlanConfig, versions kubernetesVersionPolicy, ciLaneIDs map[string]bool) []string {
+	var errs []string
+	if len(plan.Profiles) == 0 {
+		errs = append(errs, "nightly.profiles must not be empty")
+	}
+
+	seenProfiles := map[string]bool{}
+	for idx, profile := range plan.Profiles {
+		prefix := fmt.Sprintf("nightly.profiles[%d]", idx)
+		if profile.ID == "" {
+			errs = append(errs, fmt.Sprintf("%s.id is required", prefix))
+		} else {
+			if !idPattern.MatchString(profile.ID) {
+				errs = append(errs, fmt.Sprintf("%s.id %q must be a lowercase slug", prefix, profile.ID))
+			}
+			if seenProfiles[profile.ID] {
+				errs = append(errs, fmt.Sprintf("%s.id %q is duplicated", prefix, profile.ID))
+			}
+			seenProfiles[profile.ID] = true
+		}
+		if len(profile.LaneSets) == 0 && len(profile.Rows) == 0 {
+			errs = append(errs, fmt.Sprintf("%s must declare laneSets or rows", prefix))
+		}
+		for setIdx, set := range profile.LaneSets {
+			setPrefix := fmt.Sprintf("%s.laneSets[%d]", prefix, setIdx)
+			errs = append(errs, validateNightlyCoverage(setPrefix, set.Coverage)...)
+			if len(set.Kubernetes) == 0 {
+				errs = append(errs, fmt.Sprintf("%s.kubernetes must not be empty", setPrefix))
+			}
+			errs = append(errs, validateKubernetesRefs(setPrefix+".kubernetes", versions, set.Kubernetes)...)
+			if len(set.Lanes) == 0 {
+				errs = append(errs, fmt.Sprintf("%s.lanes must not be empty", setPrefix))
+			}
+			for _, lane := range set.Lanes {
+				if !ciLaneIDs[lane] {
+					errs = append(errs, fmt.Sprintf("%s.lanes contains undefined lane %q", setPrefix, lane))
+				}
+			}
+			if set.TimeoutMinutes < 0 {
+				errs = append(errs, fmt.Sprintf("%s.timeoutMinutes must be >= 0", setPrefix))
+			}
+		}
+		for rowIdx, row := range profile.Rows {
+			rowPrefix := fmt.Sprintf("%s.rows[%d]", prefix, rowIdx)
+			errs = append(errs, validateNightlyCoverage(rowPrefix, row.Coverage)...)
+			if !ciLaneIDs[row.Lane] {
+				errs = append(errs, fmt.Sprintf("%s.lane %q is undefined", rowPrefix, row.Lane))
+			}
+			errs = append(errs, validateKubernetesRefs(rowPrefix+".kubernetes", versions, []string{row.Kubernetes})...)
+			if row.TimeoutMinutes < 0 {
+				errs = append(errs, fmt.Sprintf("%s.timeoutMinutes must be >= 0", rowPrefix))
+			}
+		}
+	}
+	return errs
+}
+
+func validateKubernetesRefs(prefix string, policy kubernetesVersionPolicy, refs []string) []string {
+	var errs []string
+	for idx, ref := range refs {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			errs = append(errs, fmt.Sprintf("%s[%d] must not be empty", prefix, idx))
+			continue
+		}
+		switch ref {
+		case "@primary":
+			if strings.TrimSpace(policy.Primary) == "" {
+				errs = append(errs, fmt.Sprintf("%s[%d] references empty versions.kubernetes.primary", prefix, idx))
+			}
+		case "@compatibility":
+			if len(normalizeVersions(policy.Compatibility)) == 0 {
+				errs = append(errs, fmt.Sprintf("%s[%d] references empty versions.kubernetes.compatibility", prefix, idx))
+			}
+		case "@releaseGate":
+			if len(normalizeVersions(policy.ReleaseGate)) == 0 {
+				errs = append(errs, fmt.Sprintf("%s[%d] references empty versions.kubernetes.releaseGate", prefix, idx))
+			}
+		default:
+			if strings.HasPrefix(ref, "@") {
+				errs = append(errs, fmt.Sprintf("%s[%d] references unknown Kubernetes version set %q", prefix, idx, ref))
+			}
+		}
+	}
+	return errs
+}
+
+func normalizeVersions(versions []string) []string {
+	out := make([]string, 0, len(versions))
+	for _, version := range versions {
+		if version = strings.TrimSpace(version); version != "" {
+			out = append(out, version)
+		}
+	}
+	return out
+}
+
+func validateNightlyCoverage(prefix, coverage string) []string {
+	if strings.TrimSpace(coverage) == "" {
+		return []string{fmt.Sprintf("%s.coverage is required", prefix)}
+	}
+	if !allowedNightlyCoverage[coverage] {
+		return []string{fmt.Sprintf("%s.coverage %q is not recognized", prefix, coverage)}
+	}
+	return nil
+}
+
 var allowedOwners = map[string]bool{
 	"backup-restore": true,
 	"core":           true,
@@ -368,14 +616,12 @@ var allowedIsolation = map[string]bool{
 	"multi-cluster":    true,
 }
 
-var allowedCILanes = map[string]bool{
-	"backup-restore":     true,
-	"core":               true,
-	"hardened":           true,
-	"platform-openshift": true,
-	"security":           true,
-	"upgrade-bluegreen":  true,
-	"upgrade-rolling":    true,
+var allowedPRScopes = map[string]bool{
+	"always":   true,
+	"backup":   true,
+	"hardened": true,
+	"manual":   true,
+	"upgrade":  true,
 }
 
 var allowedPullRequestPolicies = map[string]bool{
@@ -387,6 +633,12 @@ var allowedPullRequestPolicies = map[string]bool{
 var allowedNightlyPolicies = map[string]bool{
 	"external-cluster-scheduled": true,
 	"primary-version-full":       true,
+}
+
+var allowedNightlyCoverage = map[string]bool{
+	"compatibility-smoke": true,
+	"full":                true,
+	"release-gate":        true,
 }
 
 func suiteTitle(cases []catalogCase) string {

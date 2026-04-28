@@ -562,8 +562,52 @@ e2e-manifest-validate: ## Validate test/e2e/suites.yaml against the generated E2
 		--manifest test/e2e/suites.yaml \
 		--catalog test/e2e/catalog/cases.json
 
+.PHONY: e2e-ci-matrix
+e2e-ci-matrix: ## Generate the GitHub Actions E2E matrix from test/e2e/suites.yaml.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-matrix
+
+.PHONY: e2e-nightly-matrix
+e2e-nightly-matrix: ## Generate the GitHub Actions nightly E2E matrix. Set E2E_NIGHTLY_PROFILE, E2E_NIGHTLY_LANE, or E2E_NIGHTLY_KUBERNETES.
+	@args=""; \
+	if [ -n "$(E2E_NIGHTLY_LANE)" ] && [ "$(E2E_NIGHTLY_LANE)" != "all" ]; then args="$${args} --lane $(E2E_NIGHTLY_LANE)"; fi; \
+	if [ -n "$(E2E_NIGHTLY_KUBERNETES)" ] && [ "$(E2E_NIGHTLY_KUBERNETES)" != "all" ]; then args="$${args} --kubernetes $(E2E_NIGHTLY_KUBERNETES)"; fi; \
+	GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile "$(or $(E2E_NIGHTLY_PROFILE),daily)" \
+		$${args}
+
+.PHONY: e2e-ci-matrix-validate
+e2e-ci-matrix-validate: ## Validate that the GitHub Actions E2E matrix can be generated.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-matrix >/dev/null
+
+.PHONY: e2e-nightly-matrix-validate
+e2e-nightly-matrix-validate: ## Validate that the nightly E2E matrices can be generated.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile daily >/dev/null
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile weekly-full >/dev/null
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile release-gate >/dev/null
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile release-gate \
+		--lane core \
+		--kubernetes 1.35.1 >/dev/null
+
 .PHONY: verify-e2e-manifest
-verify-e2e-manifest: e2e-catalog e2e-manifest-validate ## Verify the E2E catalog and suite manifest are up-to-date.
+verify-e2e-manifest: e2e-catalog e2e-manifest-validate e2e-ci-matrix-validate e2e-nightly-matrix-validate ## Verify the E2E catalog and suite manifest are up-to-date.
 	@{ \
 		git diff --exit-code -- test/e2e/catalog test/e2e/suites.yaml; \
 	} || { \
