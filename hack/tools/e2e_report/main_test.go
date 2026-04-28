@@ -126,6 +126,67 @@ func TestBuildSummaryCountsAndSlowestSpecs(t *testing.T) {
 	}
 }
 
+func TestBuildSummarySeparatesLeafSpecsFromSuiteNodes(t *testing.T) {
+	reports := []types.Report{
+		{
+			SuiteSucceeded: false,
+			PreRunStats: types.PreRunStats{
+				TotalSpecs:       1,
+				SpecsThatWillRun: 1,
+			},
+			RunTime: 7 * time.Second,
+			SpecReports: types.SpecReports{
+				{
+					LeafNodeType: types.NodeTypeSynchronizedBeforeSuite,
+					State:        types.SpecStatePassed,
+					RunTime:      2 * time.Second,
+				},
+				{
+					ContainerHierarchyTexts: []string{"lifecycle"},
+					LeafNodeType:            types.NodeTypeIt,
+					LeafNodeText:            "creates a cluster",
+					State:                   types.SpecStatePassed,
+					RunTime:                 3 * time.Second,
+				},
+				{
+					LeafNodeType: types.NodeTypeSynchronizedAfterSuite,
+					State:        types.SpecStateFailed,
+					RunTime:      time.Second,
+					Failure: types.Failure{
+						Message: "cleanup failed",
+					},
+				},
+			},
+		},
+	}
+
+	s := buildSummary(reports, options{TopSpecs: 10})
+
+	if s.Passed != 1 || s.Failed != 0 || s.Skipped != 0 {
+		t.Fatalf("leaf counts = passed %d failed %d skipped %d, want 1/0/0", s.Passed, s.Failed, s.Skipped)
+	}
+	if s.SuiteNodes != 2 || s.SuiteNodePassed != 1 || s.SuiteNodeFailed != 1 {
+		t.Fatalf(
+			"suite node counts = nodes %d passed %d failed %d, want 2/1/1",
+			s.SuiteNodes,
+			s.SuiteNodePassed,
+			s.SuiteNodeFailed,
+		)
+	}
+	if got := len(s.SlowestSpecs); got != 1 {
+		t.Fatalf("slowest specs = %d, want only leaf specs", got)
+	}
+	if got := s.SlowestSpecs[0].Name; got != "lifecycle creates a cluster" {
+		t.Fatalf("slowest leaf spec = %q, want lifecycle spec", got)
+	}
+	if got := len(s.Failures); got != 1 {
+		t.Fatalf("failures = %d, want suite node failure", got)
+	}
+	if got := s.Failures[0].Name; got != "(SynchronizedAfterSuite)" {
+		t.Fatalf("failure name = %q, want suite node type", got)
+	}
+}
+
 func TestFormatMarkdown(t *testing.T) {
 	out := formatMarkdown(summary{
 		Lane:             "Core",
@@ -144,5 +205,25 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(out, "lifecycle creates \\| updates") {
 		t.Fatalf("markdown did not escape table pipe: %q", out)
+	}
+}
+
+func TestFormatDurationRoundsToMilliseconds(t *testing.T) {
+	tests := []struct {
+		name    string
+		seconds float64
+		want    string
+	}{
+		{name: "negative", seconds: -1, want: "0s"},
+		{name: "subsecond", seconds: 0.1234, want: "123ms"},
+		{name: "multi minute", seconds: 713.39133725, want: "11m53.391s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatDuration(tt.seconds); got != tt.want {
+				t.Fatalf("formatDuration(%v) = %q, want %q", tt.seconds, got, tt.want)
+			}
+		})
 	}
 }

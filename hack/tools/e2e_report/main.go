@@ -48,11 +48,18 @@ type summary struct {
 	SuiteSucceeded             bool          `json:"suiteSucceeded"`
 	TotalSpecs                 int           `json:"totalSpecs"`
 	SpecsThatWillRun           int           `json:"specsThatWillRun"`
+	SpecReports                int           `json:"specReports"`
 	Passed                     int           `json:"passed"`
 	Failed                     int           `json:"failed"`
 	Skipped                    int           `json:"skipped"`
 	Pending                    int           `json:"pending"`
 	Other                      int           `json:"other"`
+	SuiteNodes                 int           `json:"suiteNodes"`
+	SuiteNodePassed            int           `json:"suiteNodePassed"`
+	SuiteNodeFailed            int           `json:"suiteNodeFailed"`
+	SuiteNodeSkipped           int           `json:"suiteNodeSkipped"`
+	SuiteNodePending           int           `json:"suiteNodePending"`
+	SuiteNodeOther             int           `json:"suiteNodeOther"`
 	RunTime                    string        `json:"runTime"`
 	RunTimeSeconds             float64       `json:"runTimeSeconds"`
 	SpecialSuiteFailureReasons []string      `json:"specialSuiteFailureReasons,omitempty"`
@@ -163,7 +170,17 @@ func buildSummary(reports []types.Report, opts options) summary {
 		out.RunTimeSeconds += report.RunTime.Seconds()
 
 		for _, spec := range report.SpecReports {
+			out.SpecReports++
 			specOut := summarizeSpec(spec)
+
+			if isSuiteNode(spec) {
+				countSuiteNodeState(&out, spec.State)
+				if spec.State.Is(types.SpecStateFailureStates) {
+					out.Failures = append(out.Failures, specOut)
+				}
+				continue
+			}
+
 			specs = append(specs, specOut)
 
 			switch {
@@ -201,6 +218,26 @@ func buildSummary(reports []types.Report, opts options) summary {
 	return out
 }
 
+func isSuiteNode(spec types.SpecReport) bool {
+	return spec.LeafNodeType.Is(types.NodeTypesForSuiteLevelNodes) || strings.TrimSpace(spec.LeafNodeText) == ""
+}
+
+func countSuiteNodeState(out *summary, state types.SpecState) {
+	out.SuiteNodes++
+	switch {
+	case state.Is(types.SpecStatePassed):
+		out.SuiteNodePassed++
+	case state.Is(types.SpecStateFailureStates):
+		out.SuiteNodeFailed++
+	case state.Is(types.SpecStateSkipped):
+		out.SuiteNodeSkipped++
+	case state.Is(types.SpecStatePending):
+		out.SuiteNodePending++
+	default:
+		out.SuiteNodeOther++
+	}
+}
+
 func summarizeSpec(spec types.SpecReport) specSummary {
 	return specSummary{
 		Name:           specName(spec),
@@ -226,6 +263,9 @@ func specName(spec types.SpecReport) string {
 		}
 	}
 	if len(filtered) == 0 {
+		if spec.LeafNodeType.Is(types.NodeTypesForSuiteLevelNodes) {
+			return fmt.Sprintf("(%s)", spec.LeafNodeType.String())
+		}
 		return "(suite node)"
 	}
 	return strings.Join(filtered, " ")
@@ -267,12 +307,25 @@ func formatMarkdown(s summary) string {
 	writeRow(&b, "Reports", fmt.Sprintf("%d", s.ReportCount))
 	writeRow(&b, "Total specs", fmt.Sprintf("%d", s.TotalSpecs))
 	writeRow(&b, "Specs selected", fmt.Sprintf("%d", s.SpecsThatWillRun))
-	writeRow(&b, "Passed", fmt.Sprintf("%d", s.Passed))
-	writeRow(&b, "Failed", fmt.Sprintf("%d", s.Failed))
-	writeRow(&b, "Skipped", fmt.Sprintf("%d", s.Skipped))
-	writeRow(&b, "Pending", fmt.Sprintf("%d", s.Pending))
+	writeRow(&b, "Spec reports", fmt.Sprintf("%d", s.SpecReports))
+	writeRow(&b, "Leaf specs passed", fmt.Sprintf("%d", s.Passed))
+	writeRow(&b, "Leaf specs failed", fmt.Sprintf("%d", s.Failed))
+	writeRow(&b, "Leaf specs skipped", fmt.Sprintf("%d", s.Skipped))
+	writeRow(&b, "Leaf specs pending", fmt.Sprintf("%d", s.Pending))
 	if s.Other > 0 {
-		writeRow(&b, "Other", fmt.Sprintf("%d", s.Other))
+		writeRow(&b, "Leaf specs other", fmt.Sprintf("%d", s.Other))
+	}
+	writeRow(&b, "Suite nodes", fmt.Sprintf("%d", s.SuiteNodes))
+	writeRow(&b, "Suite nodes passed", fmt.Sprintf("%d", s.SuiteNodePassed))
+	writeRow(&b, "Suite nodes failed", fmt.Sprintf("%d", s.SuiteNodeFailed))
+	if s.SuiteNodeSkipped > 0 {
+		writeRow(&b, "Suite nodes skipped", fmt.Sprintf("%d", s.SuiteNodeSkipped))
+	}
+	if s.SuiteNodePending > 0 {
+		writeRow(&b, "Suite nodes pending", fmt.Sprintf("%d", s.SuiteNodePending))
+	}
+	if s.SuiteNodeOther > 0 {
+		writeRow(&b, "Suite nodes other", fmt.Sprintf("%d", s.SuiteNodeOther))
 	}
 	b.WriteString("\n")
 
@@ -348,7 +401,7 @@ func formatDuration(seconds float64) string {
 	if seconds < 0 {
 		seconds = 0
 	}
-	return (time.Duration(seconds*float64(time.Second)) / time.Millisecond).String()
+	return time.Duration(seconds * float64(time.Second)).Round(time.Millisecond).String()
 }
 
 func roundSeconds(value float64) float64 {
