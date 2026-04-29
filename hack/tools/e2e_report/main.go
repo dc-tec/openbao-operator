@@ -30,16 +30,17 @@ func (s *stringList) Set(value string) error {
 }
 
 type options struct {
-	Reports           stringList
-	MarkdownOut       string
-	JSONOut           string
-	TopSpecs          int
-	Lane              string
-	Selector          string
-	KubernetesVersion string
-	OpenBAOVersion    string
-	ManifestPath      string
-	SuiteBudgets      map[string]runtimeBudget
+	Reports             stringList
+	MarkdownOut         string
+	JSONOut             string
+	TopSpecs            int
+	Lane                string
+	Selector            string
+	KubernetesVersion   string
+	OpenBAOVersion      string
+	ManifestPath        string
+	SuiteBudgets        map[string]runtimeBudget
+	FailOnSelectedSkips bool
 }
 
 type summary struct {
@@ -68,6 +69,7 @@ type summary struct {
 	SpecialSuiteFailureReasons []string        `json:"specialSuiteFailureReasons,omitempty"`
 	SlowestSpecs               []specSummary   `json:"slowestSpecs,omitempty"`
 	Failures                   []specSummary   `json:"failures,omitempty"`
+	SelectedSkips              []specSummary   `json:"selectedSkips,omitempty"`
 	Aggregates                 aggregates      `json:"aggregates,omitempty"`
 	BudgetWarnings             []budgetWarning `json:"budgetWarnings,omitempty"`
 }
@@ -163,6 +165,10 @@ func main() {
 	}
 
 	fmt.Print(markdown)
+	if opts.FailOnSelectedSkips && len(s.SelectedSkips) > 0 {
+		fmt.Fprintf(os.Stderr, "e2e_report: %d selected specs were skipped\n", len(s.SelectedSkips))
+		os.Exit(1)
+	}
 }
 
 func parseOptions() (options, error) {
@@ -176,6 +182,12 @@ func parseOptions() (options, error) {
 	flag.StringVar(&opts.KubernetesVersion, "kubernetes-version", "", "Kubernetes node image or version")
 	flag.StringVar(&opts.OpenBAOVersion, "openbao-version", "", "OpenBao image or version")
 	flag.StringVar(&opts.ManifestPath, "manifest", "", "optional E2E suite manifest for runtime budget warnings")
+	flag.BoolVar(
+		&opts.FailOnSelectedSkips,
+		"fail-on-selected-skips",
+		false,
+		"exit non-zero when selected specs are skipped",
+	)
 	flag.Parse()
 
 	if len(opts.Reports) == 0 {
@@ -324,6 +336,9 @@ func buildSummary(reports []types.Report, opts options) summary {
 				out.Failures = append(out.Failures, specOut)
 			case spec.State.Is(types.SpecStateSkipped):
 				out.Skipped++
+				if isSelectedSkip(spec) {
+					out.SelectedSkips = append(out.SelectedSkips, specOut)
+				}
 			case spec.State.Is(types.SpecStatePending):
 				out.Pending++
 			default:
@@ -345,6 +360,9 @@ func buildSummary(reports []types.Report, opts options) summary {
 
 	sort.SliceStable(out.Failures, func(i, j int) bool {
 		return out.Failures[i].Name < out.Failures[j].Name
+	})
+	sort.SliceStable(out.SelectedSkips, func(i, j int) bool {
+		return out.SelectedSkips[i].Name < out.SelectedSkips[j].Name
 	})
 
 	out.SpecialSuiteFailureReasons = uniqueStrings(out.SpecialSuiteFailureReasons)
@@ -451,6 +469,13 @@ func includeInRuntimeAggregates(spec types.SpecReport) bool {
 	return spec.RunTime > 0
 }
 
+func isSelectedSkip(spec types.SpecReport) bool {
+	if !spec.State.Is(types.SpecStateSkipped) {
+		return false
+	}
+	return spec.RunTime > 0 || strings.TrimSpace(spec.Failure.Message) != ""
+}
+
 func countSuiteNodeState(out *summary, state types.SpecState) {
 	out.SuiteNodes++
 	switch {
@@ -555,6 +580,9 @@ func formatMarkdown(s summary) string {
 	writeRow(&b, "Leaf specs passed", fmt.Sprintf("%d", s.Passed))
 	writeRow(&b, "Leaf specs failed", fmt.Sprintf("%d", s.Failed))
 	writeRow(&b, "Leaf specs skipped", fmt.Sprintf("%d", s.Skipped))
+	if len(s.SelectedSkips) > 0 {
+		writeRow(&b, "Leaf specs selected-skipped", fmt.Sprintf("%d", len(s.SelectedSkips)))
+	}
 	writeRow(&b, "Leaf specs pending", fmt.Sprintf("%d", s.Pending))
 	if s.Other > 0 {
 		writeRow(&b, "Leaf specs other", fmt.Sprintf("%d", s.Other))
@@ -626,6 +654,22 @@ func formatMarkdown(s summary) string {
 				escapeMarkdown(spec.State),
 				escapeMarkdown(spec.Name),
 				escapeMarkdown(valueOrUnset(spec.FailureMessage)),
+			)
+		}
+		b.WriteString("\n")
+	}
+
+	if len(s.SelectedSkips) > 0 {
+		b.WriteString("### Selected Skips\n\n")
+		b.WriteString("| Runtime | Spec | Message |\n")
+		b.WriteString("| --- | --- | --- |\n")
+		for _, spec := range s.SelectedSkips {
+			fmt.Fprintf(
+				&b,
+				"| %s | %s | %s |\n",
+				spec.RunTime,
+				escapeMarkdown(spec.Name),
+				escapeMarkdown(spec.FailureMessage),
 			)
 		}
 		b.WriteString("\n")

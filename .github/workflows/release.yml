@@ -337,17 +337,20 @@ jobs:
               echo "No Ginkgo JSON report was produced for ${{ matrix.name }} on kind ${{ matrix.k8s }}."
             } > "${E2E_SUMMARY_REPORT:-e2e-summary.md}"
           else
+            report_status=0
             go run ./hack/tools/e2e_report \
               --json-report "${E2E_JSON_REPORT}" \
               --manifest test/e2e/suites.yaml \
+              --fail-on-selected-skips \
               --markdown-out "${E2E_SUMMARY_REPORT}" \
               --json-out "${E2E_SUMMARY_JSON}" \
               --lane "${{ matrix.name }} (${{ matrix.profile }} / ${{ matrix.coverage }})" \
               --selector "${E2E_LABEL_FILTER}" \
               --kubernetes-version "${KIND_NODE_IMAGE}" \
-              --openbao-version "${{ matrix.openbao_image }}"
+              --openbao-version "${{ matrix.openbao_image }}" || report_status=$?
           fi
           cat "${E2E_SUMMARY_REPORT}" >> "${GITHUB_STEP_SUMMARY}"
+          exit "${report_status:-0}"
 
       - name: Collect E2E artifacts (failure)
         if: failure()

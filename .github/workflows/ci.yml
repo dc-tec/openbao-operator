@@ -956,17 +956,20 @@ jobs:
             if [[ -z "${openbao_version}" ]]; then
               openbao_version="default"
             fi
+            report_status=0
             go run ./hack/tools/e2e_report \
               --json-report "${E2E_JSON_REPORT}" \
               --manifest test/e2e/suites.yaml \
+              --fail-on-selected-skips \
               --markdown-out "${E2E_SUMMARY_REPORT}" \
               --json-out "${E2E_SUMMARY_JSON}" \
               --lane "${{ matrix.name }}" \
               --selector "${E2E_LABEL_FILTER}" \
               --kubernetes-version "${KIND_NODE_IMAGE}" \
-              --openbao-version "${openbao_version}"
+              --openbao-version "${openbao_version}" || report_status=$?
           fi
           cat "${E2E_SUMMARY_REPORT}" >> "${GITHUB_STEP_SUMMARY}"
+          exit "${report_status:-0}"
 
       - name: Collect E2E artifacts (failure)
         if: failure()

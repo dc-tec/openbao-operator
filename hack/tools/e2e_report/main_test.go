@@ -232,6 +232,55 @@ func TestBuildSummaryExcludesSkippedSpecsFromSlowestSpecs(t *testing.T) {
 	}
 }
 
+func TestBuildSummaryDetectsSelectedSkips(t *testing.T) {
+	reports := []types.Report{
+		{
+			SuiteSucceeded: true,
+			PreRunStats: types.PreRunStats{
+				TotalSpecs:       2,
+				SpecsThatWillRun: 1,
+			},
+			RunTime: 5 * time.Minute,
+			SpecReports: types.SpecReports{
+				{
+					ContainerHierarchyTexts: []string{"backup"},
+					LeafNodeType:            types.NodeTypeIt,
+					LeafNodeText:            "creates a restorable S3 backup",
+					State:                   types.SpecStateSkipped,
+					RunTime:                 5 * time.Minute,
+					Failure: types.Failure{
+						Message: "RustFS deployment failed",
+					},
+				},
+				{
+					ContainerHierarchyTexts: []string{"openshift"},
+					LeafNodeType:            types.NodeTypeIt,
+					LeafNodeText:            "runs on openshift",
+					State:                   types.SpecStateSkipped,
+					RunTime:                 0,
+				},
+			},
+		},
+	}
+
+	s := buildSummary(reports, options{TopSpecs: 10})
+
+	if got := len(s.SelectedSkips); got != 1 {
+		t.Fatalf("selected skips = %d, want 1", got)
+	}
+	if got := s.SelectedSkips[0].FailureMessage; got != "RustFS deployment failed" {
+		t.Fatalf("selected skip message = %q, want RustFS failure", got)
+	}
+
+	markdown := formatMarkdown(s)
+	if !strings.Contains(markdown, "Leaf specs selected-skipped") {
+		t.Fatalf("markdown missing selected skip metric: %q", markdown)
+	}
+	if !strings.Contains(markdown, "### Selected Skips") {
+		t.Fatalf("markdown missing selected skips section: %q", markdown)
+	}
+}
+
 func TestBuildSummaryAggregatesRuntimeAndWarnsOnBudget(t *testing.T) {
 	reports := []types.Report{
 		{
