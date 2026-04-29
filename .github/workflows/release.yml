@@ -40,9 +40,11 @@ jobs:
 
       - name: Compute release variables
         id: vars
+        env:
+          RELEASE_REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          version="${{ github.ref_name }}"
+          version="${RELEASE_REF_NAME}"
           if ! [[ "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
             echo "version must be a semver tag (e.g., 0.1.0 or 0.1.0-rc.1)" >&2
             exit 1
