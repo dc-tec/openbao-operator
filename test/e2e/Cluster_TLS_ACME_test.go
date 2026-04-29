@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	platformconstants "github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
@@ -225,7 +227,9 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		acmeCacheClaimName := clusterName + "-acme-cache"
 		acmeCacheStorageClassName, cleanupACMECacheStorage, err := ensureACMEE2ECacheStorage(
 			ctx,
+			cfg,
 			c,
+			openBaoImage,
 			f.Namespace,
 			acmeCacheClaimName,
 		)
@@ -463,6 +467,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 			}
 			_, _ = fmt.Fprintf(GinkgoWriter, "Pod %q phase=%s ready=%t restarts=%d\n",
 				pod.Name, pod.Status.Phase, isPodReady(pod), restartCount)
+			logACMEPodContainerStates(pod)
 			g.Expect(isPodReady(pod)).To(BeTrue())
 		}, 5*time.Minute, 5*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Pod %q completed ACME self-init and became Ready\n", clusterName+"-0")
@@ -618,7 +623,9 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 
 func ensureACMEE2ECacheStorage(
 	ctx context.Context,
+	cfg *rest.Config,
 	c client.Client,
+	image string,
 	namespace string,
 	claimName string,
 ) (string, func(context.Context), error) {
@@ -632,6 +639,7 @@ func ensureACMEE2ECacheStorage(
 	storageClassName := namespace + "-acme-rwx"
 	pvName := namespace + "-" + claimName
 	hostPathType := corev1.HostPathDirectoryOrCreate
+	hostPath := fmt.Sprintf("/tmp/openbao-operator-e2e/acme-cache/%s/%s", namespace, claimName)
 
 	storageClass := &storagev1.StorageClass{
 		ObjectMeta: metav1.ObjectMeta{
@@ -642,6 +650,9 @@ func ensureACMEE2ECacheStorage(
 	}
 	if err := c.Create(ctx, storageClass); err != nil && !apierrors.IsAlreadyExists(err) {
 		return "", nil, fmt.Errorf("create ACME cache StorageClass %s: %w", storageClassName, err)
+	}
+	if err := ensureACMECacheHostPathPermissions(ctx, cfg, c, image, namespace, hostPath); err != nil {
+		return "", nil, err
 	}
 
 	pv := &corev1.PersistentVolume{
@@ -665,7 +676,7 @@ func ensureACMEE2ECacheStorage(
 			},
 			PersistentVolumeSource: corev1.PersistentVolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
-					Path: fmt.Sprintf("/tmp/openbao-operator-e2e/acme-cache/%s/%s", namespace, claimName),
+					Path: hostPath,
 					Type: &hostPathType,
 				},
 			},
@@ -684,4 +695,143 @@ func ensureACMEE2ECacheStorage(
 		})
 	}
 	return storageClassName, cleanup, nil
+}
+
+func ensureACMECacheHostPathPermissions(
+	ctx context.Context,
+	cfg *rest.Config,
+	c client.Client,
+	image string,
+	namespace string,
+	hostPath string,
+) error {
+	if cfg == nil {
+		return errors.New("rest config is required")
+	}
+	if image == "" {
+		return errors.New("image is required")
+	}
+
+	podName := acmeCachePermissionPodName(namespace)
+	hostPathType := corev1.HostPathDirectoryOrCreate
+	prepPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsUser:  ptr.To(int64(0)),
+				RunAsGroup: ptr.To(int64(0)),
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "cache",
+					VolumeSource: corev1.VolumeSource{
+						HostPath: &corev1.HostPathVolumeSource{
+							Path: hostPath,
+							Type: &hostPathType,
+						},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "permissions",
+					Image: image,
+					Command: []string{
+						"/bin/sh",
+						"-ec",
+					},
+					Args: []string{
+						fmt.Sprintf(
+							"mkdir -p /cache && chown -R %d:%d /cache && chmod -R u+rwX,g+rwX /cache",
+							platformconstants.UserOpenBao,
+							platformconstants.GroupOpenBao,
+						),
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "cache",
+							MountPath: "/cache",
+						},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: ptr.To(false),
+						RunAsUser:                ptr.To(int64(0)),
+						RunAsGroup:               ptr.To(int64(0)),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, prepPod, time.Minute)
+	defer func() {
+		_ = e2ehelpers.DeletePodBestEffort(context.Background(), c, prepPod.Namespace, prepPod.Name)
+	}()
+	if err != nil {
+		return fmt.Errorf("prepare ACME cache hostPath permissions: %w", err)
+	}
+	if result.Phase != corev1.PodSucceeded {
+		return fmt.Errorf("prepare ACME cache hostPath permissions failed, phase=%s logs:\n%s", result.Phase, result.Logs)
+	}
+	return nil
+}
+
+func acmeCachePermissionPodName(namespace string) string {
+	name := namespace + "-acme-cache-perms"
+	if len(name) <= 63 {
+		return name
+	}
+	return strings.TrimRight(name[:63], "-")
+}
+
+func logACMEPodContainerStates(pod *corev1.Pod) {
+	for _, status := range pod.Status.InitContainerStatuses {
+		logACMEContainerState("init", status)
+	}
+	for _, status := range pod.Status.ContainerStatuses {
+		logACMEContainerState("container", status)
+	}
+}
+
+func logACMEContainerState(prefix string, status corev1.ContainerStatus) {
+	_, _ = fmt.Fprintf(
+		GinkgoWriter,
+		"%s %q ready=%t restartCount=%d state=%s lastState=%s\n",
+		prefix,
+		status.Name,
+		status.Ready,
+		status.RestartCount,
+		formatACMEContainerState(status.State),
+		formatACMEContainerState(status.LastTerminationState),
+	)
+}
+
+func formatACMEContainerState(state corev1.ContainerState) string {
+	switch {
+	case state.Waiting != nil:
+		message := strings.TrimSpace(state.Waiting.Message)
+		if message != "" {
+			return fmt.Sprintf("Waiting(reason=%s,message=%q)", state.Waiting.Reason, message)
+		}
+		return fmt.Sprintf("Waiting(reason=%s)", state.Waiting.Reason)
+	case state.Running != nil:
+		return "Running"
+	case state.Terminated != nil:
+		message := strings.TrimSpace(state.Terminated.Message)
+		if message != "" {
+			return fmt.Sprintf(
+				"Terminated(reason=%s,exitCode=%d,message=%q)",
+				state.Terminated.Reason,
+				state.Terminated.ExitCode,
+				message,
+			)
+		}
+		return fmt.Sprintf("Terminated(reason=%s,exitCode=%d)", state.Terminated.Reason, state.Terminated.ExitCode)
+	default:
+		return "Unknown"
+	}
 }
