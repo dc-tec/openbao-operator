@@ -843,51 +843,62 @@ jobs:
 
       - name: Determine E2E Filter
         id: filter
+        env:
+          HAS_E2E_CHANGES: ${{ needs.changes.outputs.e2e == 'true' }}
+          FULL_E2E: >-
+            ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}
+          PR_BACKUP: >-
+            ${{ needs.changes.outputs.manual_backup_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'backup')) }}
+          PR_UPGRADE: >-
+            ${{ needs.changes.outputs.manual_upgrade_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades')) }}
+          PR_HARDENED: >-
+            ${{ needs.changes.outputs.manual_hardened_e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))) }}
+          E2E_BACKUP_CHANGED: ${{ needs.changes.outputs.e2e_backup }}
+          E2E_UPGRADE_CHANGED: ${{ needs.changes.outputs.e2e_upgrade }}
+          E2E_HARDENED_CHANGED: ${{ needs.changes.outputs.e2e_hardened }}
+          EXCLUDE_PENTEST_ON_DEFAULT_PR: ${{ matrix.exclude_pentest_on_default_pr }}
+          LABEL_FILTER: ${{ matrix.label_filter }}
+          PR_SCOPE: ${{ matrix.pr_scope }}
+          SHARD_NAME: ${{ matrix.name }}
         run: |
           set -euo pipefail
 
-          HAS_E2E_CHANGES="${{ needs.changes.outputs.e2e == 'true' }}"
-          FULL_E2E="${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}"
-          PR_BACKUP="${{ needs.changes.outputs.manual_backup_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'backup')) }}"
-          PR_UPGRADE="${{ needs.changes.outputs.manual_upgrade_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades')) }}"
-          PR_HARDENED="${{ needs.changes.outputs.manual_hardened_e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))) }}"
-
-          FILTER='${{ matrix.label_filter }}'
+          FILTER="${LABEL_FILTER}"
           SHOULD_RUN="false"
 
-          case "${{ matrix.pr_scope }}" in
+          case "${PR_SCOPE}" in
             always)
               if [[ "${FULL_E2E}" == "true" ]] || [[ "${HAS_E2E_CHANGES}" == "true" ]]; then
                 SHOULD_RUN="true"
               fi
               ;;
             backup)
-              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_BACKUP}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_backup }}" == "true" ]]; then
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_BACKUP}" == "true" ]] || [[ "${E2E_BACKUP_CHANGED}" == "true" ]]; then
                 SHOULD_RUN="true"
               fi
               ;;
             upgrade)
-              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_UPGRADE}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_upgrade }}" == "true" ]]; then
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_UPGRADE}" == "true" ]] || [[ "${E2E_UPGRADE_CHANGED}" == "true" ]]; then
                 SHOULD_RUN="true"
               fi
               ;;
             hardened)
-              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_HARDENED}" == "true" ]] || [[ "${{ needs.changes.outputs.e2e_hardened }}" == "true" ]]; then
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_HARDENED}" == "true" ]] || [[ "${E2E_HARDENED_CHANGED}" == "true" ]]; then
                 SHOULD_RUN="true"
               fi
               ;;
           esac
 
-          if [[ "${FULL_E2E}" != "true" ]] && [[ "${{ matrix.exclude_pentest_on_default_pr }}" == "true" ]] && [[ "${PR_HARDENED}" != "true" ]]; then
+          if [[ "${FULL_E2E}" != "true" ]] && [[ "${EXCLUDE_PENTEST_ON_DEFAULT_PR}" == "true" ]] && [[ "${PR_HARDENED}" != "true" ]]; then
             FILTER="(${FILTER}) && !pentest"
           fi
 
           echo "E2E_LABEL_FILTER=$FILTER" >> "${GITHUB_ENV}"
           echo "SHOULD_RUN=$SHOULD_RUN" >> "${GITHUB_ENV}"
           if [[ "$SHOULD_RUN" == "false" ]]; then
-            echo "::notice::Skipping ${{ matrix.name }} shard (routing optimization)"
+            echo "::notice::Skipping ${SHARD_NAME} shard (routing optimization)"
           else
-            echo "::notice::Running ${{ matrix.name }} with filter: $FILTER"
+            echo "::notice::Running ${SHARD_NAME} with filter: $FILTER"
           fi
 
       - name: Setup repo tools
