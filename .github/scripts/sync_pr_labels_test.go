@@ -20,7 +20,6 @@ func TestPathMatches(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := pathMatches(tc.pattern, tc.path); got != tc.want {
@@ -59,6 +58,85 @@ func TestMatchingContentLabels(t *testing.T) {
 			t.Fatalf("matchingContentLabels[%d] = %q, want %q (%v)", i, got[i], want[i], got)
 		}
 	}
+}
+
+func TestLabelerConfigMatchesCIRoutingLabels(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := loadLabelConfig("../labeler.yml")
+	if err != nil {
+		t.Fatalf("loadLabelConfig() error = %v", err)
+	}
+	syncer := &labelSyncer{labelConfig: cfg}
+
+	cases := []struct {
+		name       string
+		path       string
+		wantLabels []string
+	}{
+		{
+			name:       "e2e manifest routes all semantic e2e lanes",
+			path:       "test/e2e/suites.yaml",
+			wantLabels: []string{"backup", "security", "tests", "upgrades"},
+		},
+		{
+			name:       "shared e2e helpers route all semantic e2e lanes",
+			path:       "test/e2e/helpers/images.go",
+			wantLabels: []string{"backup", "security", "tests", "upgrades"},
+		},
+		{
+			name:       "backup restore e2e routes backup lane",
+			path:       "test/e2e/backup_restore_test.go",
+			wantLabels: []string{"backup", "restore", "tests"},
+		},
+		{
+			name:       "upgrade e2e routes upgrade lane",
+			path:       "test/e2e/Upgrade_Strategies_test.go",
+			wantLabels: []string{"tests", "upgrades"},
+		},
+		{
+			name:       "restore service routes backup lane",
+			path:       "internal/service/restore/manager.go",
+			wantLabels: []string{"backup", "restore"},
+		},
+		{
+			name:       "provisioner app routes provisioner lane",
+			path:       "internal/app/provisioner/provisioner.go",
+			wantLabels: []string{"provisioner"},
+		},
+		{
+			name:       "cert service routes hardened security lane",
+			path:       "internal/service/certs/manager.go",
+			wantLabels: []string{"certs", "security"},
+		},
+		{
+			name:       "labeler changes are devops changes",
+			path:       ".github/labeler.yml",
+			wantLabels: []string{"devops"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := syncer.matchingContentLabels([]pullRequestFile{{Filename: tc.path}})
+			for _, want := range tc.wantLabels {
+				if !containsLabel(got, want) {
+					t.Fatalf("labels for %q = %v, want %q", tc.path, got, want)
+				}
+			}
+		})
+	}
+}
+
+func containsLabel(labels []string, want string) bool {
+	for _, label := range labels {
+		if label == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCalculateSizeLabel(t *testing.T) {

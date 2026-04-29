@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -184,7 +183,8 @@ func (s *labelSyncer) sync() error {
 
 func (s *labelSyncer) pullRequestFiles() ([]pullRequestFile, error) {
 	var files []pullRequestFile
-	if err := s.client.getJSONPaginated(fmt.Sprintf("/repos/%s/pulls/%s/files", s.client.repo, s.prNumber), &files); err != nil {
+	path := fmt.Sprintf("/repos/%s/pulls/%s/files", s.client.repo, s.prNumber)
+	if err := s.client.getJSONPaginated(path, &files); err != nil {
 		return nil, fmt.Errorf("list pull request files: %w", err)
 	}
 	return files, nil
@@ -192,7 +192,8 @@ func (s *labelSyncer) pullRequestFiles() ([]pullRequestFile, error) {
 
 func (s *labelSyncer) issueLabels() ([]string, error) {
 	var labels []issueLabel
-	if err := s.client.getJSONPaginated(fmt.Sprintf("/repos/%s/issues/%s/labels", s.client.repo, s.prNumber), &labels); err != nil {
+	path := fmt.Sprintf("/repos/%s/issues/%s/labels", s.client.repo, s.prNumber)
+	if err := s.client.getJSONPaginated(path, &labels); err != nil {
 		return nil, fmt.Errorf("list issue labels: %w", err)
 	}
 
@@ -205,7 +206,8 @@ func (s *labelSyncer) issueLabels() ([]string, error) {
 
 func (s *labelSyncer) issueComments() ([]issueComment, error) {
 	var comments []issueComment
-	if err := s.client.getJSONPaginated(fmt.Sprintf("/repos/%s/issues/%s/comments", s.client.repo, s.prNumber), &comments); err != nil {
+	path := fmt.Sprintf("/repos/%s/issues/%s/comments", s.client.repo, s.prNumber)
+	if err := s.client.getJSONPaginated(path, &comments); err != nil {
 		return nil, fmt.Errorf("list issue comments: %w", err)
 	}
 	return comments, nil
@@ -385,7 +387,13 @@ func (s *labelSyncer) syncManagedLabels(currentLabels, desiredLabels, managedLab
 	}
 
 	for _, label := range labelsToRemove {
-		if err := s.client.delete(fmt.Sprintf("/repos/%s/issues/%s/labels/%s", s.client.repo, s.prNumber, escapePathSegment(label))); err != nil {
+		path := fmt.Sprintf(
+			"/repos/%s/issues/%s/labels/%s",
+			s.client.repo,
+			s.prNumber,
+			escapePathSegment(label),
+		)
+		if err := s.client.delete(path); err != nil {
 			return fmt.Errorf("remove issue label %q: %w", label, err)
 		}
 	}
@@ -517,17 +525,17 @@ func (c *githubClient) runAPI(path, method string, payload any, paginate bool) (
 		}
 		encoded, err := json.Marshal(payload)
 		if err != nil {
-			file.Close()
-			os.Remove(file.Name())
+			_ = file.Close()
+			_ = os.Remove(file.Name())
 			return nil, err
 		}
 		if _, err := file.Write(encoded); err != nil {
-			file.Close()
-			os.Remove(file.Name())
+			_ = file.Close()
+			_ = os.Remove(file.Name())
 			return nil, err
 		}
 		if err := file.Close(); err != nil {
-			os.Remove(file.Name())
+			_ = os.Remove(file.Name())
 			return nil, err
 		}
 		inputFile = file
@@ -625,43 +633,4 @@ func escapePathSegment(value string) string {
 		}
 	}
 	return builder.String()
-}
-
-func fetchRepoFile(repo, ref, path, destination string) error {
-	path = strings.TrimPrefix(path, "/")
-	stdout, stderr, err := runGHCommand(
-		"api",
-		"-H", "Accept: application/vnd.github+json",
-		fmt.Sprintf("/repos/%s/contents/%s?ref=%s", repo, path, ref),
-	)
-	if err != nil {
-		return fmt.Errorf("fetch %s: %w: %s", path, err, strings.TrimSpace(stderr))
-	}
-
-	var payload struct {
-		Content string `json:"content"`
-	}
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		return fmt.Errorf("decode %s payload: %w", path, err)
-	}
-
-	content, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(payload.Content, "\n", ""))
-	if err != nil {
-		return fmt.Errorf("decode %s content: %w", path, err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
-		return err
-	}
-
-	return os.WriteFile(destination, content, 0o644)
-}
-
-func runGHCommand(args ...string) (string, string, error) {
-	cmd := exec.Command("gh", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
 }
