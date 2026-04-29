@@ -15,8 +15,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,6 +33,8 @@ import (
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
+
+const acmeCacheStorageClassEnv = "E2E_ACME_CACHE_STORAGE_CLASS"
 
 var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security", "slow"), Ordered, func() {
 	ctx := context.Background()
@@ -217,11 +221,24 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified transit token can encrypt with transit key %q\n", infraBaoKeyName)
 		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyTokenPod.Name)
 
+		By("preparing ACME shared cache storage")
+		acmeCacheClaimName := clusterName + "-acme-cache"
+		acmeCacheStorageClassName, cleanupACMECacheStorage, err := ensureACMEE2ECacheStorage(
+			ctx,
+			c,
+			f.Namespace,
+			acmeCacheClaimName,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			cleanupACMECacheStorage(cleanupCtx)
+		})
+		_, _ = fmt.Fprintf(GinkgoWriter, "ACME cache StorageClass: %q\n", acmeCacheStorageClassName)
+
 		By(fmt.Sprintf("creating OpenBaoCluster %q with ACME TLS mode", clusterName))
-		var acmeCacheStorageClass *string
-		if sc := strings.TrimSpace(os.Getenv("E2E_STORAGE_CLASS")); sc != "" {
-			acmeCacheStorageClass = &sc
-		}
+		acmeCacheStorageClass := ptr.To(acmeCacheStorageClassName)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterName,
@@ -466,7 +483,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		Eventually(func(g Gomega) {
 			pvc := &corev1.PersistentVolumeClaim{}
 			g.Expect(c.Get(ctx, types.NamespacedName{
-				Name:      clusterName + "-acme-cache",
+				Name:      acmeCacheClaimName,
 				Namespace: f.Namespace,
 			}, pvc)).To(Succeed())
 			_, _ = fmt.Fprintf(
@@ -598,3 +615,73 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified ACME certificate trust via bao status against %q\n", acmeDomain)
 	})
 })
+
+func ensureACMEE2ECacheStorage(
+	ctx context.Context,
+	c client.Client,
+	namespace string,
+	claimName string,
+) (string, func(context.Context), error) {
+	if sc := strings.TrimSpace(os.Getenv(acmeCacheStorageClassEnv)); sc != "" {
+		return sc, func(context.Context) {}, nil
+	}
+	if sc := strings.TrimSpace(os.Getenv("E2E_STORAGE_CLASS")); sc != "" {
+		return sc, func(context.Context) {}, nil
+	}
+
+	storageClassName := namespace + "-acme-rwx"
+	pvName := namespace + "-" + claimName
+	hostPathType := corev1.HostPathDirectoryOrCreate
+
+	storageClass := &storagev1.StorageClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: storageClassName,
+		},
+		Provisioner:       "kubernetes.io/no-provisioner",
+		VolumeBindingMode: ptr.To(storagev1.VolumeBindingImmediate),
+	}
+	if err := c.Create(ctx, storageClass); err != nil && !apierrors.IsAlreadyExists(err) {
+		return "", nil, fmt.Errorf("create ACME cache StorageClass %s: %w", storageClassName, err)
+	}
+
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: pvName,
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse("1Gi"),
+			},
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteMany,
+			},
+			PersistentVolumeReclaimPolicy: corev1.PersistentVolumeReclaimDelete,
+			StorageClassName:              storageClassName,
+			ClaimRef: &corev1.ObjectReference{
+				APIVersion: "v1",
+				Kind:       "PersistentVolumeClaim",
+				Namespace:  namespace,
+				Name:       claimName,
+			},
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: fmt.Sprintf("/tmp/openbao-operator-e2e/acme-cache/%s/%s", namespace, claimName),
+					Type: &hostPathType,
+				},
+			},
+		},
+	}
+	if err := c.Create(ctx, pv); err != nil && !apierrors.IsAlreadyExists(err) {
+		return "", nil, fmt.Errorf("create ACME cache PersistentVolume %s: %w", pvName, err)
+	}
+
+	cleanup := func(cleanupCtx context.Context) {
+		_ = c.Delete(cleanupCtx, &corev1.PersistentVolume{
+			ObjectMeta: metav1.ObjectMeta{Name: pvName},
+		})
+		_ = c.Delete(cleanupCtx, &storagev1.StorageClass{
+			ObjectMeta: metav1.ObjectMeta{Name: storageClassName},
+		})
+	}
+	return storageClassName, cleanup, nil
+}
