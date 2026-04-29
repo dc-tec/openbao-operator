@@ -77,7 +77,7 @@ func probeOpenBaoServiceHealthViaAPIProxy(ctx context.Context, cfg *rest.Config,
 		return 0, fmt.Errorf("failed to create API transport: %w", err)
 	}
 
-	client := &http.Client{
+	httpClient := &http.Client{
 		Transport: transport,
 		Timeout:   10 * time.Second,
 	}
@@ -95,11 +95,13 @@ func probeOpenBaoServiceHealthViaAPIProxy(ctx context.Context, cfg *rest.Config,
 		return 0, fmt.Errorf("failed to build health probe request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("health probe request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	return resp.StatusCode, nil
 }
@@ -255,6 +257,41 @@ func hasSucceededUpgradeAction(jobs []batchv1.Job, action bluegreen.ExecutorActi
 
 func ptrTo[T any](v T) *T {
 	return &v
+}
+
+type blueGreenRevisionSelector func(*openbaov1alpha1.BlueGreenStatus) string
+
+func expectBlueGreenServiceSelectorDuringPhase(
+	g Gomega,
+	ctx context.Context,
+	c client.Client,
+	namespace string,
+	clusterName string,
+	phase openbaov1alpha1.BlueGreenPhase,
+	revision blueGreenRevisionSelector,
+	revisionMessage string,
+) {
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespace}, updated)).To(Succeed())
+	g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
+
+	if updated.Status.BlueGreen.Phase != phase {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Current phase: %s\n", updated.Status.BlueGreen.Phase)
+		g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
+		return
+	}
+
+	g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty(), revisionMessage)
+
+	svc := &corev1.Service{}
+	g.Expect(c.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      fmt.Sprintf("%s-public", clusterName),
+	}, svc)).To(Succeed())
+	g.Expect(svc.Spec.Selector).To(HaveKeyWithValue(
+		constants.LabelOpenBaoRevision,
+		revision(updated.Status.BlueGreen),
+	))
 }
 
 func dumpKubectlOutput(args ...string) {
@@ -485,7 +522,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(available).NotTo(BeNil())
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-			tenantFW.WaitForStatefulSetReady(ctx, upgradeCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err = tenantFW.WaitForStatefulSetReady(
+				ctx,
+				upgradeCluster.Name,
+				3,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
@@ -676,7 +720,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				seenUpgradeInProgress = true
 				progress := updated.Status.Upgrade
 				if progress.StartedAt != nil {
-					startedAtUnix := progress.StartedAt.Time.UnixNano()
+					startedAtUnix := progress.StartedAt.UnixNano()
 					if lastUpgradeStartedAt == 0 || startedAtUnix != lastUpgradeStartedAt {
 						lastUpgradeStartedAt = startedAtUnix
 						lastPartition = updated.Spec.Replicas
@@ -850,8 +894,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				Skip(fmt.Sprintf("Rolling snapshot recovery test skipped: versions identical (%s)", initialVersion))
 			}
 
-			rustfsNamespace := "rustfs"
-			err = ensureRustFS(ctx, admin, cfg, rustfsNamespace)
+			err = ensureRustFS(ctx, admin, cfg)
 			if err != nil {
 				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping rolling snapshot recovery test.", err))
 			}
@@ -1047,7 +1090,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 				g.Expect(updated.Status.Upgrade).To(BeNil())
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-			tenantFW.WaitForStatefulSetReady(ctx, recoveryCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err = tenantFW.WaitForStatefulSetReady(
+				ctx,
+				recoveryCluster.Name,
+				3,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterAll(func() {
@@ -1207,7 +1257,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 				g.Expect(updated.Status.Upgrade).To(BeNil())
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-			tenantFW.WaitForStatefulSetReady(ctx, recoveryCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err = tenantFW.WaitForStatefulSetReady(
+				ctx,
+				recoveryCluster.Name,
+				3,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterAll(func() {
@@ -1352,7 +1409,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 
 			// Deploy RustFS for pre-upgrade snapshot testing
-			rustfsNamespace := "rustfs"
 			// Ensure cfg is available or get it again
 			var rCfg *rest.Config
 			if cfg != nil {
@@ -1364,7 +1420,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				cfg = rCfg
 			}
 
-			err = ensureRustFS(ctx, admin, rCfg, rustfsNamespace)
+			err = ensureRustFS(ctx, admin, rCfg)
 			if err != nil {
 				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping pre-upgrade snapshot tests.", err))
 			}
@@ -3085,46 +3141,34 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 
 			By("Verifying external Service remains on Blue while DemotingBlue is in progress")
 			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
-
-				if updated.Status.BlueGreen.Phase != openbaov1alpha1.PhaseDemotingBlue {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Current phase: %s\n", updated.Status.BlueGreen.Phase)
-					g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
-					return
-				}
-
-				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty(), "GreenRevision should be set at cutover")
-
-				svc := &corev1.Service{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Namespace: tenantNamespace,
-					Name:      fmt.Sprintf("%s-public", upgradeCluster.Name),
-				}, svc)).To(Succeed())
-				g.Expect(svc.Spec.Selector).To(HaveKeyWithValue(constants.LabelOpenBaoRevision, updated.Status.BlueGreen.BlueRevision))
+				expectBlueGreenServiceSelectorDuringPhase(
+					g,
+					ctx,
+					admin,
+					tenantNamespace,
+					upgradeCluster.Name,
+					openbaov1alpha1.PhaseDemotingBlue,
+					func(status *openbaov1alpha1.BlueGreenStatus) string {
+						return status.BlueRevision
+					},
+					"GreenRevision should be set at cutover",
+				)
 			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
 			By("Waiting for Cleanup phase and verifying the external Service selector switches to Green")
 			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
-
-				if updated.Status.BlueGreen.Phase != openbaov1alpha1.PhaseCleanup {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Current phase before cutover: %s\n", updated.Status.BlueGreen.Phase)
-					g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
-					return
-				}
-
-				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty(), "GreenRevision should be set during cleanup")
-
-				svc := &corev1.Service{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Namespace: tenantNamespace,
-					Name:      fmt.Sprintf("%s-public", upgradeCluster.Name),
-				}, svc)).To(Succeed())
-				g.Expect(svc.Spec.Selector).To(HaveKeyWithValue(constants.LabelOpenBaoRevision, updated.Status.BlueGreen.GreenRevision))
+				expectBlueGreenServiceSelectorDuringPhase(
+					g,
+					ctx,
+					admin,
+					tenantNamespace,
+					upgradeCluster.Name,
+					openbaov1alpha1.PhaseCleanup,
+					func(status *openbaov1alpha1.BlueGreenStatus) string {
+						return status.GreenRevision
+					},
+					"GreenRevision should be set during cleanup",
+				)
 			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
 			By("Waiting for Blue/Green upgrade to complete")
@@ -3146,7 +3190,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				})
 				podList := &corev1.PodList{}
 				g.Expect(admin.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabelsSelector{Selector: labelSelector})).To(Succeed())
-				g.Expect(len(podList.Items)).To(Equal(3))
+				g.Expect(podList.Items).To(HaveLen(3))
 
 				for _, pod := range podList.Items {
 					g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning))
@@ -3194,13 +3238,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					"HTTPRoute ParentRefs should remain unchanged")
 				g.Expect(httpRouteAfterUpgrade.Spec.Hostnames).To(Equal(httpRouteBeforeUpgrade.Spec.Hostnames),
 					"HTTPRoute Hostnames should remain unchanged")
-				g.Expect(len(httpRouteAfterUpgrade.Spec.Rules)).To(Equal(len(httpRouteBeforeUpgrade.Spec.Rules)),
+				g.Expect(httpRouteAfterUpgrade.Spec.Rules).To(HaveLen(len(httpRouteBeforeUpgrade.Spec.Rules)),
 					"HTTPRoute Rules count should remain unchanged")
 				if len(httpRouteAfterUpgrade.Spec.Rules) > 0 && len(httpRouteBeforeUpgrade.Spec.Rules) > 0 {
 					g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].Matches).To(Equal(httpRouteBeforeUpgrade.Spec.Rules[0].Matches),
 						"HTTPRoute Rules Matches should remain unchanged")
 					// BackendRefs should point to the same Service (only Service selector changes, not the Service name)
-					g.Expect(len(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs)).To(Equal(len(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs)),
+					g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs).To(
+						HaveLen(len(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs)),
 						"HTTPRoute BackendRefs count should remain unchanged")
 					if len(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs) > 0 && len(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs) > 0 {
 						g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs[0].Name).To(Equal(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs[0].Name),

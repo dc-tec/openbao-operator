@@ -71,7 +71,7 @@ var (
 	// - CERT_MANAGER_INSTALL_SKIP=true: Skips CertManager installation during test setup.
 	// These variables are useful if these components are already installed, avoiding
 	// re-installation and conflicts.
-	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true"
+	skipCertManagerInstall = os.Getenv("CERT_MANAGER_INSTALL_SKIP") == e2eStringTrue
 	// suiteBootstrapState stores cross-cluster bootstrap state for cleanup (node 1 only).
 	suiteBootstrapState *suiteBootstrap
 	// Note: Gateway API CRDs are NOT installed by default in BeforeSuite.
@@ -109,12 +109,12 @@ var (
 
 	// skipCleanup controls whether to clean up resources after the suite finishes.
 	// Set E2E_SKIP_CLEANUP=true environment variable to preserve the cluster state for debugging.
-	skipCleanup = os.Getenv("E2E_SKIP_CLEANUP") == "true"
+	skipCleanup = os.Getenv("E2E_SKIP_CLEANUP") == e2eStringTrue
 
 	// skipImageBuild controls whether to skip building local images during suite setup.
 	// This is useful for release workflows that build images once (externally) and only need
 	// to load pre-built images into kind.
-	skipImageBuild = os.Getenv("E2E_SKIP_IMAGE_BUILD") == "true"
+	skipImageBuild = os.Getenv("E2E_SKIP_IMAGE_BUILD") == e2eStringTrue
 
 	// loadBackupExecutorImage controls whether the backup executor image is loaded into Kind.
 	// Fast shards that never create backup jobs can disable this to reduce bootstrap time.
@@ -137,14 +137,14 @@ var (
 	// - does NOT create kind clusters
 	// - does NOT build/load local images into kind
 	// - uses the current kubectl context (or KUBECONFIG) to install CRDs and deploy the operator
-	useExistingCluster = os.Getenv("E2E_USE_EXISTING_CLUSTER") == "true"
+	useExistingCluster = os.Getenv("E2E_USE_EXISTING_CLUSTER") == e2eStringTrue
 
 	// existingClusterName is used only when E2E_USE_EXISTING_CLUSTER=true.
 	existingClusterName = envOrDefault("E2E_CLUSTER_NAME", "existing")
 
 	// existingClusterFullCleanup controls whether we uninstall CRDs and cert-manager in existing-cluster mode.
 	// Default is false to reduce blast radius on shared clusters.
-	existingClusterFullCleanup = os.Getenv("E2E_EXISTING_CLUSTER_FULL_CLEANUP") == "true"
+	existingClusterFullCleanup = os.Getenv("E2E_EXISTING_CLUSTER_FULL_CLEANUP") == e2eStringTrue
 )
 
 func patchOperatorKubeAPITokenAudience(ctx context.Context, namespace string) error {
@@ -221,13 +221,6 @@ func patchOperatorKubeAPITokenAudience(ctx context.Context, namespace string) er
 	}
 
 	return nil
-}
-
-func kindClusterName(base string, index int) string {
-	if index < 1 {
-		index = 1
-	}
-	return fmt.Sprintf("%s-%d", base, index)
 }
 
 func withEnv(key string, value string, fn func()) {
@@ -355,12 +348,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 		cmd *exec.Cmd
 		err error
 	)
-
-	suiteConfig, _ := GinkgoConfiguration()
-	parallelTotal := suiteConfig.ParallelTotal
-	if parallelTotal < 1 {
-		parallelTotal = 1
-	}
 
 	if useExistingCluster {
 		kubeconfigPath := strings.TrimSpace(os.Getenv("KUBECONFIG"))
@@ -695,8 +682,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	// THIS BLOCK RUNS ON ALL NODES (after node 1 finishes)
 	bootstrap := &suiteBootstrap{}
 	ExpectWithOffset(1, json.Unmarshal(data, bootstrap)).To(Succeed(), "Failed to unmarshal suite bootstrap state")
-	ExpectWithOffset(1, len(bootstrap.Clusters)).To(Equal(1))
-	ExpectWithOffset(1, len(bootstrap.Kubeconfigs)).To(Equal(1))
+	ExpectWithOffset(1, bootstrap.Clusters).To(HaveLen(1))
+	ExpectWithOffset(1, bootstrap.Kubeconfigs).To(HaveLen(1))
 
 	// All processes share the same cluster
 	clusterName := bootstrap.Clusters[0]

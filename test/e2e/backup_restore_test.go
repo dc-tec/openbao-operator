@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -42,13 +43,15 @@ const (
 	rustfsSecretKey = "rustfsadmin"
 
 	// fake-gcs-server constants
-	fakeGCSName     = "fake-gcs-server"
-	fakeGCSEndpoint = "http://fake-gcs-server.gcs.svc.cluster.local:4443"
-	fakeGCSBucket   = "openbao-backups"
-	fakeGCSProject  = "test-project"
+	fakeGCSName      = "fake-gcs-server"
+	fakeGCSNamespace = "gcs"
+	fakeGCSEndpoint  = "http://fake-gcs-server.gcs.svc.cluster.local:4443"
+	fakeGCSBucket    = "openbao-backups"
+	fakeGCSProject   = "test-project"
 
 	// Azurite constants
 	azuriteName      = "azurite"
+	azuriteNamespace = "azure"
 	azuriteEndpoint  = "http://azurite.azure.svc.cluster.local:10000"
 	azuriteAccount   = "devstoreaccount1"
 	azuriteKey       = "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="
@@ -107,11 +110,11 @@ func createAzureCredentialsSecret(ctx context.Context, c client.Client, namespac
 
 // ensureRustFS ensures RustFS is deployed in the cluster.
 // It creates the namespace if needed and deploys RustFS using the helper.
-func ensureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, namespace string) error {
+func ensureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config) error {
 	// Ensure namespace exists
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
+			Name: rustfsName,
 		},
 	}
 	if err := c.Create(ctx, ns); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -120,35 +123,19 @@ func ensureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, na
 
 	// Deploy RustFS using the helper
 	cfg := e2ehelpers.DefaultRustFSConfig()
-	cfg.Namespace = namespace
+	cfg.Namespace = rustfsName
 	cfg.Name = rustfsName
 	cfg.AccessKey = rustfsAccessKey
 	cfg.SecretKey = rustfsSecretKey
 	cfg.Buckets = []string{rustfsBucket} // Create the backup bucket
 
-	_, _ = fmt.Fprintf(GinkgoWriter, "Deploying RustFS in namespace %q...\n", namespace)
+	_, _ = fmt.Fprintf(GinkgoWriter, "Deploying RustFS in namespace %q...\n", rustfsName)
 	if err := e2ehelpers.EnsureRustFS(ctx, c, restCfg, cfg); err != nil {
 		return fmt.Errorf("failed to deploy RustFS: %w", err)
 	}
 
 	_, _ = fmt.Fprintf(GinkgoWriter, "RustFS deployed successfully\n")
 	return nil
-}
-
-// createBackupSelfInitRequests creates SelfInit requests for backup operations.
-func createBackupSelfInitRequests(ctx context.Context, clusterNamespace, clusterName string, restCfg *rest.Config) ([]openbaov1alpha1.SelfInitRequest, error) {
-	return createSelfInitRequests(ctx, clusterNamespace, clusterName, restCfg, true, false)
-}
-
-// createRestoreSelfInitRequests creates SelfInit requests for restore operations (includes both backup and restore roles).
-func createRestoreSelfInitRequests(ctx context.Context, clusterNamespace, clusterName string, restCfg *rest.Config) ([]openbaov1alpha1.SelfInitRequest, error) {
-	return createSelfInitRequests(ctx, clusterNamespace, clusterName, restCfg, true, true)
-}
-
-// createSelfInitRequests creates SelfInit requests for backup and optionally restore operations.
-func createSelfInitRequests(ctx context.Context, clusterNamespace, clusterName string, restCfg *rest.Config, includeBackup, includeRestore bool) ([]openbaov1alpha1.SelfInitRequest, error) {
-	// BootstrapJWTAuth handles this
-	return []openbaov1alpha1.SelfInitRequest{}, nil
 }
 
 func triggerManualBackup(ctx context.Context, c client.Client, namespace, clusterName string) error {
@@ -168,6 +155,133 @@ func triggerManualBackup(ctx context.Context, c client.Client, namespace, cluste
 	}
 
 	return nil
+}
+
+func waitForBackupJobCreated(ctx context.Context, c client.Client, namespace, clusterName string) {
+	Eventually(func(g Gomega) {
+		var jobs batchv1.JobList
+		err := c.List(ctx, &jobs, client.InNamespace(namespace), client.MatchingLabels{
+			constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+			constants.LabelOpenBaoComponent: "backup",
+			constants.LabelOpenBaoCluster:   clusterName,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(jobs.Items).ToNot(BeEmpty())
+	}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+}
+
+func waitForSuccessfulBackupJob(ctx context.Context, c client.Client, namespace, clusterName string) {
+	Eventually(func(g Gomega) {
+		var jobs batchv1.JobList
+		err := c.List(ctx, &jobs, client.InNamespace(namespace), client.MatchingLabels{
+			constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+			constants.LabelOpenBaoComponent: "backup",
+			constants.LabelOpenBaoCluster:   clusterName,
+		})
+		g.Expect(err).NotTo(HaveOccurred())
+
+		foundSuccess := false
+		for i := range jobs.Items {
+			if jobs.Items[i].Status.Succeeded > 0 {
+				foundSuccess = true
+				break
+			}
+		}
+		g.Expect(foundSuccess).To(BeTrue())
+	}, 15*time.Minute, 30*time.Second).Should(Succeed())
+}
+
+func recordLatestBackupKey(
+	ctx context.Context,
+	f *framework.Framework,
+	c client.Client,
+	namespace string,
+	clusterName string,
+	backupKey *string,
+) {
+	Eventually(func(g Gomega) {
+		_ = f.TriggerReconcile(ctx, clusterName)
+		updated := &openbaov1alpha1.OpenBaoCluster{}
+		err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespace}, updated)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(updated.Status.Backup).NotTo(BeNil())
+		g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
+		*backupKey = updated.Status.Backup.LastBackupName
+	}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed())
+}
+
+func newBackupNetworkPolicy(
+	namespace string,
+	clusterName string,
+	storageNamespace string,
+	storagePort int,
+	components ...string,
+) *nativev1.NetworkPolicy {
+	return &nativev1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-dr-network-policy", clusterName),
+			Namespace: namespace,
+		},
+		Spec: nativev1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					constants.LabelOpenBaoCluster: clusterName,
+				},
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      constants.LabelOpenBaoComponent,
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   components,
+					},
+				},
+			},
+			PolicyTypes: []nativev1.PolicyType{
+				nativev1.PolicyTypeEgress,
+			},
+			Egress: []nativev1.NetworkPolicyEgressRule{
+				namespaceEgressRule("kube-system", corev1.ProtocolUDP, 53),
+				namespaceEgressRule(storageNamespace, corev1.ProtocolTCP, storagePort),
+				clusterEgressRule(clusterName, corev1.ProtocolTCP, 8200),
+			},
+		},
+	}
+}
+
+func namespaceEgressRule(namespace string, protocol corev1.Protocol, port int) nativev1.NetworkPolicyEgressRule {
+	return nativev1.NetworkPolicyEgressRule{
+		To: []nativev1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": namespace,
+					},
+				},
+			},
+		},
+		Ports: []nativev1.NetworkPolicyPort{networkPolicyPort(protocol, port)},
+	}
+}
+
+func clusterEgressRule(clusterName string, protocol corev1.Protocol, port int) nativev1.NetworkPolicyEgressRule {
+	return nativev1.NetworkPolicyEgressRule{
+		To: []nativev1.NetworkPolicyPeer{
+			{
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						constants.LabelOpenBaoCluster: clusterName,
+					},
+				},
+			},
+		},
+		Ports: []nativev1.NetworkPolicyPort{networkPolicyPort(protocol, port)},
+	}
+}
+
+func networkPolicyPort(protocol corev1.Protocol, port int) nativev1.NetworkPolicyPort {
+	return nativev1.NetworkPolicyPort{
+		Protocol: ptr.To(protocol),
+		Port:     ptr.To(intstr.FromInt(port)),
+	}
 }
 
 func restartControllerDeployment(ctx context.Context, c client.Client, namespace string) error {
@@ -221,20 +335,17 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		Expect(err).NotTo(HaveOccurred())
 
 		// Deploy storage emulators
-		rustfsNamespace := "rustfs"
-		err = ensureRustFS(ctx, admin, cfg, rustfsNamespace)
+		err = ensureRustFS(ctx, admin, cfg)
 		if err != nil {
 			Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping S3 tests.", err))
 		}
 
-		gcsNamespace := "gcs"
-		err = ensureFakeGCS(ctx, admin, gcsNamespace)
+		err = ensureFakeGCS(ctx, admin, fakeGCSNamespace)
 		if err != nil {
 			Skip(fmt.Sprintf("fake-gcs-server deployment failed: %v. Skipping GCS tests.", err))
 		}
 
-		azureNamespace := "azure"
-		err = ensureAzurite(ctx, admin, azureNamespace)
+		err = ensureAzurite(ctx, admin, azuriteNamespace)
 		if err != nil {
 			Skip(fmt.Sprintf("Azurite deployment failed: %v. Skipping Azure tests.", err))
 		}
@@ -332,101 +443,14 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}
 			Expect(admin.Create(ctx, drCluster)).To(Succeed())
 
-			// Create NetworkPolicy for backup/restore pods
-			backupNetworkPolicy := &nativev1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("%s-dr-network-policy", drCluster.Name),
-					Namespace: tenantNamespace,
-				},
-				Spec: nativev1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"openbao.org/cluster": drCluster.Name,
-						},
-						MatchExpressions: []metav1.LabelSelectorRequirement{
-							{
-								Key:      "openbao.org/component",
-								Operator: metav1.LabelSelectorOpIn,
-								Values:   []string{"backup", "restore"},
-							},
-						},
-					},
-					PolicyTypes: []nativev1.PolicyType{
-						nativev1.PolicyTypeEgress,
-					},
-					Egress: []nativev1.NetworkPolicyEgressRule{
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": "kube-system",
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolUDP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(53)
-										return &p
-									}(),
-								},
-							},
-						},
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": "rustfs",
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolTCP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(9000)
-										return &p
-									}(),
-								},
-							},
-						},
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"openbao.org/cluster": drCluster.Name,
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolTCP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(8200)
-										return &p
-									}(),
-								},
-							},
-						},
-					},
-				},
-			}
+			backupNetworkPolicy := newBackupNetworkPolicy(
+				tenantNamespace,
+				drCluster.Name,
+				rustfsName,
+				9000,
+				"backup",
+				"restore",
+			)
 			Expect(admin.Create(ctx, backupNetworkPolicy)).To(Succeed())
 
 			// Wait for cluster to be ready
@@ -502,66 +526,20 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 				g.Expect(err).NotTo(HaveOccurred())
 			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed(), "Failed to write pre-backup secret")
 
-			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-
-				original := updated.DeepCopy()
-				if updated.Annotations == nil {
-					updated.Annotations = make(map[string]string)
-				}
-				updated.Annotations[constants.AnnotationTriggerBackup] = triggerTimestamp
-				err = admin.Patch(ctx, updated, client.MergeFrom(original))
-				g.Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
-
-			Eventually(func(g Gomega) {
-				var jobs batchv1.JobList
-				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
-					"app.kubernetes.io/managed-by": "openbao-operator",
-					"openbao.org/component":        "backup",
-					constants.LabelOpenBaoCluster:  drCluster.Name,
-				})
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(len(jobs.Items)).To(BeNumerically(">", 0))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			waitForBackupJobCreated(ctx, admin, tenantNamespace, drCluster.Name)
 		})
 
 		It("executes backup job successfully to S3", Label("read-replicas", "read-replicas-restore"), func() {
 			By("waiting for the S3 backup job to complete successfully")
-			Eventually(func(g Gomega) {
-				var jobs batchv1.JobList
-				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
-					"app.kubernetes.io/managed-by": "openbao-operator",
-					"openbao.org/component":        "backup",
-					constants.LabelOpenBaoCluster:  drCluster.Name,
-				})
-				g.Expect(err).NotTo(HaveOccurred())
-
-				foundSuccess := false
-				for i := range jobs.Items {
-					if jobs.Items[i].Status.Succeeded > 0 {
-						foundSuccess = true
-						break
-					}
-				}
-				g.Expect(foundSuccess).To(BeTrue())
-			}, 15*time.Minute, 30*time.Second).Should(Succeed())
+			waitForSuccessfulBackupJob(ctx, admin, tenantNamespace, drCluster.Name)
 
 			By("recording the latest S3 backup key from cluster status")
-			Eventually(func(g Gomega) {
-				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Backup).NotTo(BeNil())
-				g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
-				backupKey = updated.Status.Backup.LastBackupName
-			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed())
+			recordLatestBackupKey(ctx, tenantFW, admin, tenantNamespace, drCluster.Name, &backupKey)
 		})
 
 		It("restores from S3 backup using OpenBaoRestore CR", Label("read-replicas", "read-replicas-restore"), func() {
@@ -957,101 +935,13 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}
 			Expect(admin.Create(ctx, drCluster)).To(Succeed())
 
-			// Create NetworkPolicy for backup pods
-			backupNetworkPolicy := &nativev1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("%s-dr-network-policy", drCluster.Name),
-					Namespace: tenantNamespace,
-				},
-				Spec: nativev1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"openbao.org/cluster": drCluster.Name,
-						},
-						MatchExpressions: []metav1.LabelSelectorRequirement{
-							{
-								Key:      "openbao.org/component",
-								Operator: metav1.LabelSelectorOpIn,
-								Values:   []string{"backup"},
-							},
-						},
-					},
-					PolicyTypes: []nativev1.PolicyType{
-						nativev1.PolicyTypeEgress,
-					},
-					Egress: []nativev1.NetworkPolicyEgressRule{
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": "kube-system",
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolUDP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(53)
-										return &p
-									}(),
-								},
-							},
-						},
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": "gcs",
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolTCP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(4443)
-										return &p
-									}(),
-								},
-							},
-						},
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"openbao.org/cluster": drCluster.Name,
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolTCP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(8200)
-										return &p
-									}(),
-								},
-							},
-						},
-					},
-				},
-			}
+			backupNetworkPolicy := newBackupNetworkPolicy(
+				tenantNamespace,
+				drCluster.Name,
+				fakeGCSNamespace,
+				4443,
+				"backup",
+			)
 			Expect(admin.Create(ctx, backupNetworkPolicy)).To(Succeed())
 
 			// Wait for cluster to be ready
@@ -1083,58 +973,21 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		})
 
 		It("triggers manual backup to GCS", func() {
-			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
 			By("annotating the cluster to trigger a manual GCS backup")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-
-				original := updated.DeepCopy()
-				if updated.Annotations == nil {
-					updated.Annotations = make(map[string]string)
-				}
-				updated.Annotations[constants.AnnotationTriggerBackup] = triggerTimestamp
-				err = admin.Patch(ctx, updated, client.MergeFrom(original))
-				g.Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("forcing a reconcile after the manual GCS backup trigger")
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 
 			By("waiting for a GCS backup job to be created")
-			Eventually(func(g Gomega) {
-				var jobs batchv1.JobList
-				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
-					"app.kubernetes.io/managed-by": "openbao-operator",
-					"openbao.org/component":        "backup",
-					constants.LabelOpenBaoCluster:  drCluster.Name,
-				})
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(len(jobs.Items)).To(BeNumerically(">", 0))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			waitForBackupJobCreated(ctx, admin, tenantNamespace, drCluster.Name)
 		})
 
 		It("executes backup job successfully to GCS", func() {
 			By("waiting for the GCS backup job to complete successfully")
-			Eventually(func(g Gomega) {
-				var jobs batchv1.JobList
-				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
-					"app.kubernetes.io/managed-by": "openbao-operator",
-					"openbao.org/component":        "backup",
-					constants.LabelOpenBaoCluster:  drCluster.Name,
-				})
-				g.Expect(err).NotTo(HaveOccurred())
-
-				foundSuccess := false
-				for i := range jobs.Items {
-					if jobs.Items[i].Status.Succeeded > 0 {
-						foundSuccess = true
-						break
-					}
-				}
-				g.Expect(foundSuccess).To(BeTrue())
-			}, 15*time.Minute, 30*time.Second).Should(Succeed())
+			waitForSuccessfulBackupJob(ctx, admin, tenantNamespace, drCluster.Name)
 		})
 
 		It("restores from GCS backup using OpenBaoRestore CR", func() {
@@ -1230,101 +1083,14 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}
 			Expect(admin.Create(ctx, drCluster)).To(Succeed())
 
-			// Create NetworkPolicy for backup/restore pods
-			backupNetworkPolicy := &nativev1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("%s-dr-network-policy", drCluster.Name),
-					Namespace: tenantNamespace,
-				},
-				Spec: nativev1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"openbao.org/cluster": drCluster.Name,
-						},
-						MatchExpressions: []metav1.LabelSelectorRequirement{
-							{
-								Key:      "openbao.org/component",
-								Operator: metav1.LabelSelectorOpIn,
-								Values:   []string{"backup", "restore"},
-							},
-						},
-					},
-					PolicyTypes: []nativev1.PolicyType{
-						nativev1.PolicyTypeEgress,
-					},
-					Egress: []nativev1.NetworkPolicyEgressRule{
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": "kube-system",
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolUDP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(53)
-										return &p
-									}(),
-								},
-							},
-						},
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									NamespaceSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"kubernetes.io/metadata.name": "azure",
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolTCP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(10000)
-										return &p
-									}(),
-								},
-							},
-						},
-						{
-							To: []nativev1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"openbao.org/cluster": drCluster.Name,
-										},
-									},
-								},
-							},
-							Ports: []nativev1.NetworkPolicyPort{
-								{
-									Protocol: func() *corev1.Protocol {
-										p := corev1.ProtocolTCP
-										return &p
-									}(),
-									Port: func() *intstr.IntOrString {
-										p := intstr.FromInt(8200)
-										return &p
-									}(),
-								},
-							},
-						},
-					},
-				},
-			}
+			backupNetworkPolicy := newBackupNetworkPolicy(
+				tenantNamespace,
+				drCluster.Name,
+				azuriteNamespace,
+				10000,
+				"backup",
+				"restore",
+			)
 			Expect(admin.Create(ctx, backupNetworkPolicy)).To(Succeed())
 
 			// Wait for cluster to be ready
@@ -1356,69 +1122,24 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		})
 
 		It("triggers manual backup to Azure", func() {
-			triggerTimestamp := time.Now().Format(time.RFC3339Nano)
 			By("annotating the cluster to trigger a manual Azure backup")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-
-				original := updated.DeepCopy()
-				if updated.Annotations == nil {
-					updated.Annotations = make(map[string]string)
-				}
-				updated.Annotations[constants.AnnotationTriggerBackup] = triggerTimestamp
-				err = admin.Patch(ctx, updated, client.MergeFrom(original))
-				g.Expect(err).NotTo(HaveOccurred())
+			Eventually(func() error {
+				return triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			By("forcing a reconcile after the manual Azure backup trigger")
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 
 			By("waiting for an Azure backup job to be created")
-			Eventually(func(g Gomega) {
-				var jobs batchv1.JobList
-				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
-					"app.kubernetes.io/managed-by": "openbao-operator",
-					"openbao.org/component":        "backup",
-					constants.LabelOpenBaoCluster:  drCluster.Name,
-				})
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(len(jobs.Items)).To(BeNumerically(">", 0))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			waitForBackupJobCreated(ctx, admin, tenantNamespace, drCluster.Name)
 		})
 
 		It("executes backup job successfully to Azure", func() {
 			By("waiting for the Azure backup job to complete successfully")
-			Eventually(func(g Gomega) {
-				var jobs batchv1.JobList
-				err := admin.List(ctx, &jobs, client.InNamespace(tenantNamespace), client.MatchingLabels{
-					"app.kubernetes.io/managed-by": "openbao-operator",
-					"openbao.org/component":        "backup",
-					constants.LabelOpenBaoCluster:  drCluster.Name,
-				})
-				g.Expect(err).NotTo(HaveOccurred())
-
-				foundSuccess := false
-				for i := range jobs.Items {
-					if jobs.Items[i].Status.Succeeded > 0 {
-						foundSuccess = true
-						break
-					}
-				}
-				g.Expect(foundSuccess).To(BeTrue())
-			}, 15*time.Minute, 30*time.Second).Should(Succeed())
+			waitForSuccessfulBackupJob(ctx, admin, tenantNamespace, drCluster.Name)
 
 			By("recording the latest Azure backup key from cluster status")
-			Eventually(func(g Gomega) {
-				_ = tenantFW.TriggerReconcile(ctx, drCluster.Name)
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				err := admin.Get(ctx, types.NamespacedName{Name: drCluster.Name, Namespace: tenantNamespace}, updated)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.Backup).NotTo(BeNil())
-				g.Expect(updated.Status.Backup.LastBackupName).NotTo(BeEmpty())
-				backupKey = updated.Status.Backup.LastBackupName
-			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed())
+			recordLatestBackupKey(ctx, tenantFW, admin, tenantNamespace, drCluster.Name, &backupKey)
 		})
 
 		It("restores from Azure backup using OpenBaoRestore CR", func() {

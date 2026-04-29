@@ -40,8 +40,10 @@ import (
 )
 
 const (
-	impersonatedUser  = "jane-developer"
-	impersonatedGroup = "e2e-developers"
+	impersonatedUser        = "jane-developer"
+	impersonatedGroup       = "e2e-developers"
+	kubeAPIAccessVolumeName = "kube-api-access"
+	e2eStringTrue           = "true"
 )
 
 // === Shared Helpers ===
@@ -55,13 +57,21 @@ func createRoleBindingForGroup(ctx context.Context, c client.Client, namespace s
 	})).To(Succeed(), "Failed to ensure RoleBinding for %q in namespace %q", role.Name, namespace)
 }
 
-func containsString(values []string, needle string) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
-	}
-	return false
+func runAsE2EGroupMember(
+	ctx context.Context,
+	cfg *rest.Config,
+	scheme *runtime.Scheme,
+	user string,
+	fn func(client.Client) error,
+) error {
+	return e2ehelpers.RunWithImpersonation(
+		ctx,
+		cfg,
+		scheme,
+		user,
+		[]string{"system:authenticated", impersonatedGroup},
+		fn,
+	)
 }
 
 func findAdmissionPolicyBinding(
@@ -166,7 +176,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			for i := range ctrl.Spec.Template.Spec.Volumes {
 				vol := &ctrl.Spec.Template.Spec.Volumes[i]
 				switch vol.Name {
-				case "kube-api-access":
+				case kubeAPIAccessVolumeName:
 					kubeAPIVol = vol
 				case "openbao-token":
 					openBaoVol = vol
@@ -201,7 +211,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			var provKubeAPIVol *corev1.Volume
 			for i := range prov.Spec.Template.Spec.Volumes {
 				vol := &prov.Spec.Template.Spec.Volumes[i]
-				if vol.Name == "kube-api-access" {
+				if vol.Name == kubeAPIAccessVolumeName {
 					provKubeAPIVol = vol
 					break
 				}
@@ -239,18 +249,25 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			}
 
 			By("denying creation of non-allowlisted Roles")
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
-				return c.Create(ctx, &rbacv1.Role{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "evil-role",
-						Namespace: tenantFW.Namespace,
-					},
-					// Intentionally empty rules: if we request permissions the Provisioner does not already hold,
-					// Kubernetes RBAC escalation checks can deny the request before admission policies run.
-					// This test is meant to validate the ValidatingAdmissionPolicy name restriction.
-					Rules: []rbacv1.PolicyRule{},
-				})
-			})
+			err = e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				scheme,
+				provisionerUser,
+				provisionerGroups,
+				func(c client.Client) error {
+					return c.Create(ctx, &rbacv1.Role{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "evil-role",
+							Namespace: tenantFW.Namespace,
+						},
+						// Intentionally empty rules: if we request permissions the Provisioner does not already hold,
+						// Kubernetes RBAC escalation checks can deny the request before admission policies run.
+						// This test is meant to validate the ValidatingAdmissionPolicy name restriction.
+						Rules: []rbacv1.PolicyRule{},
+					})
+				},
+			)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(SatisfyAny(
 				ContainSubstring("The Provisioner can only create Roles"),
@@ -262,18 +279,25 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			original := &rbacv1.Role{}
 			Expect(admin.Get(ctx, roleKey, original)).To(Succeed(), "expected tenant Role to exist")
 
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
-				current := &rbacv1.Role{}
-				if err := c.Get(ctx, roleKey, current); err != nil {
-					return err
-				}
-				current.Rules = append(current.Rules, rbacv1.PolicyRule{
-					APIGroups: []string{"*"},
-					Resources: []string{"*"},
-					Verbs:     []string{"*"},
-				})
-				return c.Patch(ctx, current, client.MergeFrom(original))
-			})
+			err = e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				scheme,
+				provisionerUser,
+				provisionerGroups,
+				func(c client.Client) error {
+					current := &rbacv1.Role{}
+					if err := c.Get(ctx, roleKey, current); err != nil {
+						return err
+					}
+					current.Rules = append(current.Rules, rbacv1.PolicyRule{
+						APIGroups: []string{"*"},
+						Resources: []string{"*"},
+						Verbs:     []string{"*"},
+					})
+					return c.Patch(ctx, current, client.MergeFrom(original))
+				},
+			)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(SatisfyAny(
 				ContainSubstring("wildcard permissions"),
@@ -282,18 +306,25 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			))
 
 			By("denying updates that attempt to grant pods/exec on the tenant Role")
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
-				current := &rbacv1.Role{}
-				if err := c.Get(ctx, roleKey, current); err != nil {
-					return err
-				}
-				current.Rules = append(current.Rules, rbacv1.PolicyRule{
-					APIGroups: []string{""},
-					Resources: []string{"pods/exec"},
-					Verbs:     []string{"create"},
-				})
-				return c.Patch(ctx, current, client.MergeFrom(original))
-			})
+			err = e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				scheme,
+				provisionerUser,
+				provisionerGroups,
+				func(c client.Client) error {
+					current := &rbacv1.Role{}
+					if err := c.Get(ctx, roleKey, current); err != nil {
+						return err
+					}
+					current.Rules = append(current.Rules, rbacv1.PolicyRule{
+						APIGroups: []string{""},
+						Resources: []string{"pods/exec"},
+						Verbs:     []string{"create"},
+					})
+					return c.Patch(ctx, current, client.MergeFrom(original))
+				},
+			)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(SatisfyAny(
 				ContainSubstring("allowlisted set of API groups, resources, and verbs"),
@@ -301,14 +332,21 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			))
 
 			By("denying RBAC writes in system namespaces")
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
-				return c.Create(ctx, &rbacv1.Role{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      provisioner.TenantRoleName,
-						Namespace: "kube-system",
-					},
-				})
-			})
+			err = e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				scheme,
+				provisionerUser,
+				provisionerGroups,
+				func(c client.Client) error {
+					return c.Create(ctx, &rbacv1.Role{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      provisioner.TenantRoleName,
+							Namespace: "kube-system",
+						},
+					})
+				},
+			)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("may not manage tenant RBAC in system namespaces"))
 		})
@@ -338,17 +376,24 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			original := &corev1.Namespace{}
 			Expect(admin.Get(ctx, nsKey, original)).To(Succeed())
 
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
-				current := &corev1.Namespace{}
-				if err := c.Get(ctx, nsKey, current); err != nil {
-					return err
-				}
-				if current.Labels == nil {
-					current.Labels = map[string]string{}
-				}
-				current.Labels["e2e.openbao.org/evil"] = "true"
-				return c.Patch(ctx, current, client.MergeFrom(original))
-			})
+			err = e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				scheme,
+				provisionerUser,
+				provisionerGroups,
+				func(c client.Client) error {
+					current := &corev1.Namespace{}
+					if err := c.Get(ctx, nsKey, current); err != nil {
+						return err
+					}
+					if current.Labels == nil {
+						current.Labels = map[string]string{}
+					}
+					current.Labels["e2e.openbao.org/evil"] = e2eStringTrue
+					return c.Patch(ctx, current, client.MergeFrom(original))
+				},
+			)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(SatisfyAny(
 				ContainSubstring("may only enforce Pod Security Standards labels"),
@@ -358,17 +403,24 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			By("allowing Pod Security Standards enforce=restricted label enforcement")
 			original = &corev1.Namespace{}
 			Expect(admin.Get(ctx, nsKey, original)).To(Succeed())
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, provisionerUser, provisionerGroups, func(c client.Client) error {
-				current := &corev1.Namespace{}
-				if err := c.Get(ctx, nsKey, current); err != nil {
-					return err
-				}
-				if current.Labels == nil {
-					current.Labels = map[string]string{}
-				}
-				current.Labels["pod-security.kubernetes.io/enforce"] = "restricted"
-				return c.Patch(ctx, current, client.MergeFrom(original))
-			})
+			err = e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				scheme,
+				provisionerUser,
+				provisionerGroups,
+				func(c client.Client) error {
+					current := &corev1.Namespace{}
+					if err := c.Get(ctx, nsKey, current); err != nil {
+						return err
+					}
+					if current.Labels == nil {
+						current.Labels = map[string]string{}
+					}
+					current.Labels["pod-security.kubernetes.io/enforce"] = "restricted"
+					return c.Patch(ctx, current, client.MergeFrom(original))
+				},
+			)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -390,16 +442,23 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			}
 
 			By("denying controller creation of arbitrary Roles")
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, controllerUser, controllerGroups, func(c client.Client) error {
-				return c.Create(ctx, &rbacv1.Role{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "evil-controller-role",
-						Namespace: tenantFW.Namespace,
-					},
-					// Empty rules avoids RBAC escalation checks and ensures the denial is from the VAP.
-					Rules: []rbacv1.PolicyRule{},
-				})
-			})
+			err = e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				scheme,
+				controllerUser,
+				controllerGroups,
+				func(c client.Client) error {
+					return c.Create(ctx, &rbacv1.Role{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "evil-controller-role",
+							Namespace: tenantFW.Namespace,
+						},
+						// Empty rules avoids RBAC escalation checks and ensures the denial is from the VAP.
+						Rules: []rbacv1.PolicyRule{},
+					})
+				},
+			)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(SatisfyAny(
 				ContainSubstring("controller can only create/update Roles"),
@@ -420,26 +479,33 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, controllerUser, controllerGroups, func(c client.Client) error {
-				return c.Create(ctx, &rbacv1.RoleBinding{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "evil-controller-binding",
-						Namespace: tenantFW.Namespace,
-					},
-					RoleRef: rbacv1.RoleRef{
-						APIGroup: rbacv1.GroupName,
-						Kind:     "Role",
-						Name:     dummyRole.Name,
-					},
-					Subjects: []rbacv1.Subject{
-						{
-							Kind:      "ServiceAccount",
-							Name:      "some-other-sa",
+			err = e2ehelpers.RunWithImpersonation(
+				ctx,
+				cfg,
+				scheme,
+				controllerUser,
+				controllerGroups,
+				func(c client.Client) error {
+					return c.Create(ctx, &rbacv1.RoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "evil-controller-binding",
 							Namespace: tenantFW.Namespace,
 						},
-					},
-				})
-			})
+						RoleRef: rbacv1.RoleRef{
+							APIGroup: rbacv1.GroupName,
+							Kind:     "Role",
+							Name:     dummyRole.Name,
+						},
+						Subjects: []rbacv1.Subject{
+							{
+								Kind:      "ServiceAccount",
+								Name:      "some-other-sa",
+								Namespace: tenantFW.Namespace,
+							},
+						},
+					})
+				},
+			)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(SatisfyAny(
 				ContainSubstring("can only create/update RoleBindings"),
@@ -477,11 +543,15 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				}
 				clientset, err := kubernetes.NewForConfig(impCfg)
 				Expect(err).NotTo(HaveOccurred())
-				resp, err := clientset.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &authorizationv1.SelfSubjectAccessReview{
-					Spec: authorizationv1.SelfSubjectAccessReviewSpec{
-						ResourceAttributes: &ra,
+				resp, err := clientset.AuthorizationV1().SelfSubjectAccessReviews().Create(
+					ctx,
+					&authorizationv1.SelfSubjectAccessReview{
+						Spec: authorizationv1.SelfSubjectAccessReviewSpec{
+							ResourceAttributes: &ra,
+						},
 					},
-				}, metav1.CreateOptions{})
+					metav1.CreateOptions{},
+				)
 				Expect(err).NotTo(HaveOccurred())
 				return resp.Status.Allowed
 			}
@@ -535,8 +605,14 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			}
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoTenant{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailsNamespace, Namespace: operatorNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.Provisioned).To(BeTrue(), "expected tenant to be provisioned before creating OpenBaoClusters")
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      guardrailsNamespace,
+					Namespace: operatorNamespace,
+				}, updated)).To(Succeed())
+				g.Expect(updated.Status.Provisioned).To(
+					BeTrue(),
+					"expected tenant to be provisioned before creating OpenBaoClusters",
+				)
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			role := &rbacv1.Role{
@@ -601,7 +677,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				},
 			}
 
-			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+			err := runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
 				return c.Create(ctx, cluster)
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -643,7 +719,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				},
 			}
 
-			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+			err := runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
 				return c.Create(ctx, cluster)
 			})
 			Expect(err).To(HaveOccurred())
@@ -657,7 +733,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 						Name:      name,
 						Namespace: guardrailsNamespace,
 						Annotations: map[string]string{
-							constants.AnnotationMaintenance: "true",
+							constants.AnnotationMaintenance: e2eStringTrue,
 						},
 						Labels: map[string]string{
 							constants.LabelAppManagedBy:             constants.LabelValueAppManagedByOpenBaoOperator,
@@ -833,7 +909,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			err := admin.Get(ctx, types.NamespacedName{Name: unsealName, Namespace: tenantNamespace}, secret)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
 				return c.Delete(ctx, secret)
 			})
 			Expect(err).To(HaveOccurred())
@@ -847,7 +923,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(secret.Labels).To(HaveKeyWithValue("openbao.org/cluster", victim.Name))
 
-			err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
 				return c.Delete(ctx, secret)
 			})
 			Expect(err).To(HaveOccurred())
@@ -855,7 +931,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 		})
 
 		It("prevents sidecar injection via StatefulSet updates", func() {
-			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, "hacker", []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
+			err := runAsE2EGroupMember(ctx, cfg, scheme, "hacker", func(c client.Client) error {
 				return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 					sts := &appsv1.StatefulSet{}
 					if err := c.Get(ctx, types.NamespacedName{Name: statefulSet, Namespace: tenantNamespace}, sts); err != nil {
@@ -883,11 +959,16 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				)).To(Succeed())
 				g.Expect(pods.Items).NotTo(BeEmpty())
 				targetPod = pods.Items[0]
-				g.Expect(targetPod.Annotations).To(HaveKeyWithValue(constants.AnnotationMaintenance, "true"))
+				g.Expect(targetPod.Annotations).To(HaveKeyWithValue(constants.AnnotationMaintenance, e2eStringTrue))
 			}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
-			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
-				return c.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: targetPod.Name, Namespace: targetPod.Namespace}})
+			err := runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Delete(ctx, &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      targetPod.Name,
+						Namespace: targetPod.Namespace,
+					},
+				})
 			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("Direct modification of OpenBao-managed resources is prohibited"))
@@ -928,12 +1009,17 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				)).To(Succeed())
 				g.Expect(pods.Items).NotTo(BeEmpty())
 				targetPod = pods.Items[0]
-				g.Expect(targetPod.Annotations).To(HaveKeyWithValue(constants.AnnotationMaintenance, "true"))
+				g.Expect(targetPod.Annotations).To(HaveKeyWithValue(constants.AnnotationMaintenance, e2eStringTrue))
 			}, 2*time.Minute, 2*time.Second).Should(Succeed())
 			originalUID := targetPod.UID
 
-			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, impersonatedUser, []string{"system:authenticated", impersonatedGroup}, func(c client.Client) error {
-				return c.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: targetPod.Name, Namespace: targetPod.Namespace}})
+			err := runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Delete(ctx, &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      targetPod.Name,
+						Namespace: targetPod.Namespace,
+					},
+				})
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1096,10 +1182,19 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(admin.Create(ctx, cluster)).To(Succeed())
 
 			Eventually(func() error {
-				return admin.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: tenantNamespace}, &openbaov1alpha1.OpenBaoCluster{})
+				return admin.Get(ctx, types.NamespacedName{
+					Name:      clusterName,
+					Namespace: tenantNamespace,
+				}, &openbaov1alpha1.OpenBaoCluster{})
 			}, 30*time.Second, time.Second).Should(Succeed())
 
-			_, err = tenantFW.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultWaitTimeout, framework.DefaultPollInterval)
+			_, err = tenantFW.WaitForStatefulSetReady(
+				ctx,
+				clusterName,
+				1,
+				framework.DefaultWaitTimeout,
+				framework.DefaultPollInterval,
+			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tenantFW.TriggerReconcile(ctx, clusterName)).To(Succeed())
 			tenantFW.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
@@ -1143,7 +1238,12 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
 
-				status, err := admission.CheckDependencies(checkCtx, admin, admission.DefaultDependencies(), admission.DefaultNamePrefixes())
+				status, err := admission.CheckDependencies(
+					checkCtx,
+					admin,
+					admission.DefaultDependencies(),
+					admission.DefaultNamePrefixes(),
+				)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(status.OverallReady).To(BeFalse())
 				g.Expect(status.SummaryMessage()).To(ContainSubstring(bindingSuffix))
@@ -1184,13 +1284,24 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
 
-				status, err := admission.CheckDependencies(checkCtx, admin, admission.DefaultDependencies(), admission.DefaultNamePrefixes())
+				status, err := admission.CheckDependencies(
+					checkCtx,
+					admin,
+					admission.DefaultDependencies(),
+					admission.DefaultNamePrefixes(),
+				)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(status.OverallReady).To(BeTrue(), status.SummaryMessage())
 			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 			Expect(tenantFW.TriggerReconcile(ctx, clusterName)).To(Succeed())
-			_, err = tenantFW.WaitForStatefulSetReady(ctx, clusterName, 2, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err = tenantFW.WaitForStatefulSetReady(
+				ctx,
+				clusterName,
+				2,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
 			Expect(err).NotTo(HaveOccurred())
 			tenantFW.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
 		})
@@ -1352,7 +1463,10 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				patch,
 				metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}},
 			)
-			Expect(err).NotTo(HaveOccurred(), "expected OpenBao pod ServiceAccount to be able to patch the OpenBao pod labels (dry-run)")
+			Expect(err).NotTo(
+				HaveOccurred(),
+				"expected OpenBao pod ServiceAccount to be able to patch the OpenBao pod labels (dry-run)",
+			)
 
 			_, err = clientset.CoreV1().Pods(tenantNamespace).Patch(
 				ctx,
@@ -1362,14 +1476,22 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				metav1.PatchOptions{DryRun: []string{metav1.DryRunAll}},
 			)
 			Expect(err).To(HaveOccurred())
-			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected OpenBao pod ServiceAccount pod patch to be restricted by resourceNames")
+			Expect(apierrors.IsForbidden(err)).To(
+				BeTrue(),
+				"expected OpenBao pod ServiceAccount pod patch to be restricted by resourceNames",
+			)
 		})
 
 		It("has required ValidatingAdmissionPolicy dependencies installed and correctly bound", func() {
 			checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 
-			status, err := admission.CheckDependencies(checkCtx, admin, admission.DefaultDependencies(), []string{"openbao-operator-", ""})
+			status, err := admission.CheckDependencies(
+				checkCtx,
+				admin,
+				admission.DefaultDependencies(),
+				[]string{"openbao-operator-", ""},
+			)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(status.OverallReady).To(BeTrue(), status.SummaryMessage())
 

@@ -199,7 +199,10 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		By("verifying the ingress and public service are created for external access")
 		Eventually(func(g Gomega) {
 			service := &corev1.Service{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-public", Namespace: f.Namespace}, service)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      clusterName + "-public",
+				Namespace: f.Namespace,
+			}, service)).To(Succeed())
 
 			ingress := &networkingv1.Ingress{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, ingress)).To(Succeed())
@@ -216,7 +219,10 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		By("verifying the operator-managed server certificate includes the ingress host")
 		Eventually(func(g Gomega) {
 			secret := &corev1.Secret{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-server", Namespace: f.Namespace}, secret)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      clusterName + "-tls-server",
+				Namespace: f.Namespace,
+			}, secret)).To(Succeed())
 			cert := parseServerCertificate(secret)
 			g.Expect(cert.DNSNames).To(ContainElement(host))
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())

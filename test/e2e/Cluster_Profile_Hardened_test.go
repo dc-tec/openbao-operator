@@ -34,7 +34,11 @@ import (
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
 
-var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfInit)", Label("profile-hardened", "security", "cluster"), Ordered, func() {
+var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfInit)", Label(
+	"profile-hardened",
+	"security",
+	"cluster",
+), Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -57,8 +61,16 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 	waitForTenantProvisioned := func() {
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoTenant{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: f.TenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
-			_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoTenant status: Provisioned=%v, LastError=%q\n", updated.Status.Provisioned, updated.Status.LastError)
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      f.TenantName,
+				Namespace: operatorNamespace,
+			}, updated)).To(Succeed())
+			_, _ = fmt.Fprintf(
+				GinkgoWriter,
+				"OpenBaoTenant status: Provisioned=%v, LastError=%q\n",
+				updated.Status.Provisioned,
+				updated.Status.LastError,
+			)
 			g.Expect(updated.Status.Provisioned).To(BeTrue())
 			g.Expect(updated.Status.LastError).To(BeEmpty())
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
@@ -81,7 +93,10 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 
 		Eventually(func(g Gomega) {
 			created := &corev1.Secret{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: infraBaoTokenSecretName, Namespace: f.Namespace}, created)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      infraBaoTokenSecretName,
+				Namespace: f.Namespace,
+			}, created)).To(Succeed())
 			g.Expect(strings.TrimSpace(string(created.Data["token"]))).To(Equal(strings.TrimSpace(infraBaoRootToken)))
 			g.Expect(created.Data["ca.crt"]).To(Equal(infraBaoCACert))
 		}, 10*time.Second, 1*time.Second).Should(Succeed())
@@ -124,7 +139,16 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		By("configuring transit secrets engine on infra-bao")
 		// Infra-bao always runs with TLS in production mode
 		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
-		result, err := e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, infraBaoName, openBaoImage, infraAddr, infraBaoKeyName)
+		result, err := e2ehelpers.ConfigureInfraBaoTransit(
+			ctx,
+			cfg,
+			c,
+			f.Namespace,
+			infraBaoName,
+			openBaoImage,
+			infraAddr,
+			infraBaoKeyName,
+		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao transit setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Transit secrets engine configured with key %q\n", infraBaoKeyName)
@@ -142,50 +166,21 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			}
 		}
 
-		verifyPod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "verify-transit-token",
-				Namespace: f.Namespace,
-			},
-			Spec: corev1.PodSpec{
-				RestartPolicy: corev1.RestartPolicyNever,
-				SecurityContext: &corev1.PodSecurityContext{
-					RunAsNonRoot: ptr.To(true),
-					RunAsUser:    ptr.To(int64(100)),
-					RunAsGroup:   ptr.To(int64(1000)),
-					FSGroup:      ptr.To(int64(1000)),
-					SeccompProfile: &corev1.SeccompProfile{
-						Type: corev1.SeccompProfileTypeRuntimeDefault,
-					},
-				},
-				Containers: []corev1.Container{
-					{
-						Name:  "bao",
-						Image: openBaoImage,
-						Env: []corev1.EnvVar{
-							{Name: "BAO_ADDR", Value: infraAddr},
-							{Name: "BAO_TOKEN", Value: verifyToken},
-							// Skip TLS verification for self-signed certificates in test environment
-							{Name: "BAO_SKIP_VERIFY", Value: "true"},
-						},
-						Command: []string{"/bin/sh", "-ec"},
-						Args: []string{
-							fmt.Sprintf("bao write -format=json transit/encrypt/%s plaintext=$(echo -n 'test' | base64) >/dev/null && echo 'ok'", infraBaoKeyName),
-						},
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: ptr.To(false),
-							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{"ALL"},
-							},
-							RunAsNonRoot: ptr.To(true),
-						},
-					},
-				},
-			},
-		}
+		verifyPod := newTransitEncryptVerifyPod(
+			"verify-transit-token",
+			f.Namespace,
+			openBaoImage,
+			infraAddr,
+			verifyToken,
+			infraBaoKeyName,
+		)
 		verifyResult, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, verifyPod, 30*time.Second)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(verifyResult.Phase).To(Equal(corev1.PodSucceeded), "Root token verification failed, logs:\n%s", verifyResult.Logs)
+		Expect(verifyResult.Phase).To(
+			Equal(corev1.PodSucceeded),
+			"Root token verification failed, logs:\n%s",
+			verifyResult.Logs,
+		)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified root token can encrypt with transit key %q\n", infraBaoKeyName)
 		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyPod.Name)
 	})
@@ -256,7 +251,11 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 							fi
 							echo "DEBUG: Trimmed token: $TOKEN"
 							export BAO_TOKEN="$TOKEN"
-							bao write -format=json transit/encrypt/` + infraBaoKeyName + ` plaintext=$(echo -n 'test' | base64) >/dev/null && echo 'ok'`,
+							` + fmt.Sprintf(
+								"bao write -format=json transit/encrypt/%s "+
+									"plaintext=$(echo -n 'test' | base64) >/dev/null && echo 'ok'",
+								infraBaoKeyName,
+							),
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
@@ -288,8 +287,16 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		}
 		verifyResult, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, verifyTokenPod, 30*time.Second)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(verifyResult.Phase).To(Equal(corev1.PodSucceeded), "Token file verification failed, logs:\n%s", verifyResult.Logs)
-		_, _ = fmt.Fprintf(GinkgoWriter, "Verified transit token file can be read and used to encrypt with transit key %q\n", infraBaoKeyName)
+		Expect(verifyResult.Phase).To(
+			Equal(corev1.PodSucceeded),
+			"Token file verification failed, logs:\n%s",
+			verifyResult.Logs,
+		)
+		_, _ = fmt.Fprintf(
+			GinkgoWriter,
+			"Verified transit token file can be read and used to encrypt with transit key %q\n",
+			infraBaoKeyName,
+		)
 		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyTokenPod.Name)
 
 		By(fmt.Sprintf("creating Hardened OpenBaoCluster %q with External TLS and Transit auto-unseal", clusterName))
@@ -525,7 +532,12 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		_, _ = fmt.Fprintf(GinkgoWriter, "Cluster %q is initialized via self-init\n", clusterName)
 
 		By("verifying the documented hardened production readiness condition")
-		f.WaitForConditionReason(clusterName, openbaov1alpha1.ConditionProductionReady, metav1.ConditionTrue, "ProductionReady")
+		f.WaitForConditionReason(
+			clusterName,
+			openbaov1alpha1.ConditionProductionReady,
+			metav1.ConditionTrue,
+			"ProductionReady",
+		)
 
 		By("asserting root token and static unseal secrets do NOT exist")
 		Consistently(func() bool {
@@ -599,9 +611,18 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		for _, pod := range podList.Items {
 			_, _ = fmt.Fprintf(GinkgoWriter, "Deleting pod %q to test auto-unseal after restart\n", pod.Name)
 
-			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, "e2e-hardened-maintainer", []string{"system:authenticated", maintenanceGroup}, func(ic client.Client) error {
-				return ic.Delete(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: pod.Name, Namespace: pod.Namespace}})
-			})
+			err := e2ehelpers.RunWithImpersonation(ctx, cfg, scheme,
+				"e2e-hardened-maintainer",
+				[]string{"system:authenticated", maintenanceGroup},
+				func(ic client.Client) error {
+					return ic.Delete(ctx, &corev1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      pod.Name,
+							Namespace: pod.Namespace,
+						},
+					})
+				},
+			)
 			Expect(err).NotTo(HaveOccurred())
 		}
 
@@ -763,7 +784,14 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 				g.Expect(available).NotTo(BeNil())
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, 12*time.Minute, framework.DefaultPollInterval).Should(Succeed())
-			f.WaitForStatefulSetReady(ctx, upgradeCluster.Name, 3, 12*time.Minute, framework.DefaultPollInterval)
+			_, err := f.WaitForStatefulSetReady(
+				ctx,
+				upgradeCluster.Name,
+				3,
+				12*time.Minute,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("writing a secret before the hardened upgrade")
 			secretPath := "secret/hardened-rolling-upgrade-test"

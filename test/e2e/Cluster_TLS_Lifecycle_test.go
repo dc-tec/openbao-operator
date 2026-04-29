@@ -241,7 +241,10 @@ var _ = Describe("Cluster TLS Lifecycle", Label("tls", "cluster", "lifecycle"), 
 		previousUID := serverSecret.UID
 
 		controllerDeployment := &appsv1.Deployment{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: "openbao-operator-controller", Namespace: operatorNamespace}, controllerDeployment)).To(Succeed())
+		Expect(c.Get(ctx, types.NamespacedName{
+			Name:      "openbao-operator-controller",
+			Namespace: operatorNamespace,
+		}, controllerDeployment)).To(Succeed())
 		controllerSA := controllerDeployment.Spec.Template.Spec.ServiceAccountName
 		Expect(controllerSA).NotTo(BeEmpty())
 		controllerUser := fmt.Sprintf("system:serviceaccount:%s:%s", operatorNamespace, controllerSA)
@@ -252,20 +255,30 @@ var _ = Describe("Cluster TLS Lifecycle", Label("tls", "cluster", "lifecycle"), 
 		}
 
 		By("deleting the managed tls-server Secret as the operator controller")
-		err = e2ehelpers.RunWithImpersonation(ctx, cfg, scheme, controllerUser, controllerGroups, func(ic client.Client) error {
-			return ic.Delete(ctx, &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      tlsServerKey.Name,
-					Namespace: tlsServerKey.Namespace,
-				},
-			})
-		})
+		err = e2ehelpers.RunWithImpersonation(
+			ctx,
+			cfg,
+			scheme,
+			controllerUser,
+			controllerGroups,
+			func(ic client.Client) error {
+				return ic.Delete(ctx, &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      tlsServerKey.Name,
+						Namespace: tlsServerKey.Namespace,
+					},
+				})
+			},
+		)
 		Expect(err).NotTo(HaveOccurred())
 
 		Eventually(func() bool {
 			err := c.Get(ctx, tlsServerKey, &corev1.Secret{})
 			return apierrors.IsNotFound(err)
-		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(BeTrue(), "expected tls-server Secret to be deleted before regeneration")
+		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(
+			BeTrue(),
+			"expected tls-server Secret to be deleted before regeneration",
+		)
 
 		By("verifying the OpenBao pod stays ready without being recreated while the secret is reissued")
 		Consistently(func(g Gomega) {
@@ -310,7 +323,13 @@ var _ = Describe("Cluster TLS Lifecycle", Label("tls", "cluster", "lifecycle"), 
 		Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
 		f.WaitForCondition(clusterName, openbaov1alpha1.ConditionTLSReady, metav1.ConditionTrue)
 		f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
-		Expect(f.WaitForClusterPhase(ctx, clusterName, openbaov1alpha1.ClusterPhaseRunning, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)).To(Succeed())
+		Expect(f.WaitForClusterPhase(
+			ctx,
+			clusterName,
+			openbaov1alpha1.ClusterPhaseRunning,
+			framework.DefaultLongWaitTimeout,
+			framework.DefaultPollInterval,
+		)).To(Succeed())
 
 		Consistently(func(g Gomega) {
 			cluster := &openbaov1alpha1.OpenBaoCluster{}

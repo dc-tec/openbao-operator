@@ -63,7 +63,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 			Skip(fmt.Sprintf("Operation lock contention test skipped: versions identical (%s)", initialVersion))
 		}
 
-		err = ensureRustFS(ctx, admin, cfg, "rustfs")
+		err = ensureRustFS(ctx, admin, cfg)
 		if err != nil {
 			Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping operation lock contention test.", err))
 		}
@@ -144,7 +144,14 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 			g.Expect(available).NotTo(BeNil())
 			g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-		tenantFW.WaitForStatefulSetReady(ctx, lockCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+		_, err = tenantFW.WaitForStatefulSetReady(
+			ctx,
+			lockCluster.Name,
+			3,
+			framework.DefaultLongWaitTimeout,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterAll(func() {
