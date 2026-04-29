@@ -33,6 +33,7 @@ ciLanes:
     hardenedSigned: false
     hardenedInitImage: ""
     hardenedUpgradeExecutorImage: ""
+    installCSIHostPath: true
     loadBackupExecutorImage: false
     loadUpgradeExecutorImage: false
     preloadUpgradeImages: false

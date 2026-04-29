@@ -72,6 +72,7 @@ type ciLaneConfig struct {
 	OpenBaoImage             string `yaml:"openbaoImage"`
 	HardenedInitImage        string `yaml:"hardenedInitImage"`
 	HardenedUpgradeImage     string `yaml:"hardenedUpgradeExecutorImage"`
+	InstallCSIHostPath       bool   `yaml:"installCSIHostPath"`
 	LoadBackupExecutorImage  bool   `yaml:"loadBackupExecutorImage"`
 	LoadUpgradeExecutorImage bool   `yaml:"loadUpgradeExecutorImage"`
 	PreloadUpgradeImages     bool   `yaml:"preloadUpgradeImages"`

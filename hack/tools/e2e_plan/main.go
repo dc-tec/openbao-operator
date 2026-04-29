@@ -109,6 +109,7 @@ type ciLaneConfig struct {
 	OpenBaoImage             string   `yaml:"openbaoImage"`
 	HardenedInitImage        string   `yaml:"hardenedInitImage"`
 	HardenedUpgradeImage     string   `yaml:"hardenedUpgradeExecutorImage"`
+	InstallCSIHostPath       bool     `yaml:"installCSIHostPath"`
 	LoadBackupExecutorImage  bool     `yaml:"loadBackupExecutorImage"`
 	LoadUpgradeExecutorImage bool     `yaml:"loadUpgradeExecutorImage"`
 	PreloadUpgradeImages     bool     `yaml:"preloadUpgradeImages"`
@@ -138,6 +139,7 @@ type matrixRow struct {
 	OpenBaoImage             string `json:"openbao_image"`
 	HardenedInitImage        string `json:"hardened_init_image"`
 	HardenedUpgradeImage     string `json:"hardened_upgrade_executor_image"`
+	InstallCSIHostPath       string `json:"install_csi_hostpath"`
 	LoadBackupExecutorImage  string `json:"load_backup_executor_image"`
 	LoadUpgradeExecutorImage string `json:"load_upgrade_executor_image"`
 	PreloadUpgradeImages     string `json:"preload_upgrade_images"`
@@ -557,6 +559,7 @@ func matrixRowFromLane(policy versionPolicy, parallelism parallelismPolicy, lane
 		OpenBaoImage:             openBaoImage,
 		HardenedInitImage:        lane.HardenedInitImage,
 		HardenedUpgradeImage:     lane.HardenedUpgradeImage,
+		InstallCSIHostPath:       strconv.FormatBool(lane.InstallCSIHostPath),
 		LoadBackupExecutorImage:  strconv.FormatBool(lane.LoadBackupExecutorImage),
 		LoadUpgradeExecutorImage: strconv.FormatBool(lane.LoadUpgradeExecutorImage),
 		PreloadUpgradeImages:     strconv.FormatBool(lane.PreloadUpgradeImages),

@@ -53,6 +53,7 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 				PRScope:                  "backup",
 				TimeoutMinutes:           45,
 				E2ETimeout:               "40m",
+				InstallCSIHostPath:       true,
 				LoadBackupExecutorImage:  true,
 				LoadUpgradeExecutorImage: false,
 				PreloadStorageEmulators:  []string{"rustfs", "fake-gcs", "azurite"},
@@ -84,6 +85,9 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 	}
 	if row.LoadUpgradeExecutorImage != matrixBoolFalse {
 		t.Fatalf("load upgrade image = %q, want false", row.LoadUpgradeExecutorImage)
+	}
+	if row.InstallCSIHostPath != matrixBoolTrue {
+		t.Fatalf("install csi hostpath = %q, want true", row.InstallCSIHostPath)
 	}
 	if row.PreloadStorageEmulators != matrixBoolTrue {
 		t.Fatalf("preload storage emulators = %q, want true", row.PreloadStorageEmulators)
@@ -375,6 +379,9 @@ func TestGithubMatrixJSONShape(t *testing.T) {
 	}
 	if !strings.Contains(out, `"parallel_nodes":1`) {
 		t.Fatalf("matrix json missing parallel nodes: %s", out)
+	}
+	if !strings.Contains(out, `"install_csi_hostpath":"false"`) {
+		t.Fatalf("matrix json missing csi hostpath install flag: %s", out)
 	}
 	if !strings.Contains(out, `"preload_storage_emulators":"false"`) {
 		t.Fatalf("matrix json missing storage emulator preload flag: %s", out)

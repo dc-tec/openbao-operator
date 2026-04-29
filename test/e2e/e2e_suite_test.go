@@ -132,6 +132,11 @@ var (
 	// This should stay enabled for the hardened signed shard and can be disabled elsewhere.
 	preloadHardenedAssets = envBoolDefaultTrue("E2E_PRELOAD_HARDENED_ASSETS")
 
+	// installCSIHostPath controls whether the Kind suite installs the CSI hostpath driver.
+	// Only storage-expansion coverage needs it; other lanes should keep it disabled to avoid
+	// unrelated bootstrap flakes and startup cost.
+	installCSIHostPath = envBoolDefaultTrue("E2E_INSTALL_CSI_HOSTPATH")
+
 	// useExistingCluster runs the e2e suite against an already-running cluster (e.g. OpenShift Local / CRC).
 	// When enabled, the suite:
 	// - does NOT create kind clusters
@@ -513,24 +518,28 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			By(fmt.Sprintf("waiting for CoreDNS to become Available (cluster=%s)", clusterName))
 			ExpectWithOffset(1, waitForCoreDNSAvailable(2*time.Minute)).To(Succeed(), "CoreDNS did not become Available in time")
 
-			By(fmt.Sprintf("installing CSI hostpath driver for storage expansion tests (cluster=%s)", clusterName))
-			ExpectWithOffset(1, utils.InstallCSIHostPathDriver()).To(Succeed(), "Failed to install CSI hostpath driver")
-			By("installing the expandable E2E StorageClass (openbao-e2e-hostpath)")
-			cmd = exec.Command("kubectl", "apply", "-f", "test/manifests/csi-hostpath/v1.9.0/storageclass-openbao-e2e-hostpath.yaml") // #nosec G204 -- test harness
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to apply E2E StorageClass")
-			bootstrap.StorageClass = "openbao-e2e-hostpath"
-			ExpectWithOffset(1, os.Setenv("E2E_STORAGE_CLASS", bootstrap.StorageClass)).To(Succeed())
-			By("setting openbao-e2e-hostpath as the default StorageClass (best effort)")
-			// Prefer the hostpath CSI driver for all PVCs in Kind E2E to cover volume expansion.
-			cmd = exec.Command("kubectl", "patch", "storageclass", bootstrap.StorageClass, "--type=merge",
-				`-p={"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true","storageclass.beta.kubernetes.io/is-default-class":"true"}}}`) // #nosec G204 -- test harness
-			_, err = utils.Run(cmd)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to set default StorageClass for E2E")
-			// Kind typically ships a "standard" default StorageClass. Best-effort flip it off to avoid ambiguity.
-			cmd = exec.Command("kubectl", "patch", "storageclass", "standard", "--type=merge",
-				`-p={"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false","storageclass.beta.kubernetes.io/is-default-class":"false"}}}`) // #nosec G204 -- test harness
-			_, _ = utils.Run(cmd)
+			if installCSIHostPath {
+				By(fmt.Sprintf("installing CSI hostpath driver for storage expansion tests (cluster=%s)", clusterName))
+				ExpectWithOffset(1, utils.InstallCSIHostPathDriver()).To(Succeed(), "Failed to install CSI hostpath driver")
+				By("installing the expandable E2E StorageClass (openbao-e2e-hostpath)")
+				cmd = exec.Command("kubectl", "apply", "-f", "test/manifests/csi-hostpath/v1.9.0/storageclass-openbao-e2e-hostpath.yaml") // #nosec G204 -- test harness
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to apply E2E StorageClass")
+				bootstrap.StorageClass = "openbao-e2e-hostpath"
+				ExpectWithOffset(1, os.Setenv("E2E_STORAGE_CLASS", bootstrap.StorageClass)).To(Succeed())
+				By("setting openbao-e2e-hostpath as the default StorageClass (best effort)")
+				// Prefer the hostpath CSI driver for storage-expansion coverage.
+				cmd = exec.Command("kubectl", "patch", "storageclass", bootstrap.StorageClass, "--type=merge",
+					`-p={"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true","storageclass.beta.kubernetes.io/is-default-class":"true"}}}`) // #nosec G204 -- test harness
+				_, err = utils.Run(cmd)
+				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to set default StorageClass for E2E")
+				// Kind typically ships a "standard" default StorageClass. Best-effort flip it off to avoid ambiguity.
+				cmd = exec.Command("kubectl", "patch", "storageclass", "standard", "--type=merge",
+					`-p={"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false","storageclass.beta.kubernetes.io/is-default-class":"false"}}}`) // #nosec G204 -- test harness
+				_, _ = utils.Run(cmd)
+			} else {
+				By(fmt.Sprintf("skipping CSI hostpath driver install (cluster=%s)", clusterName))
+			}
 
 			By(fmt.Sprintf("loading the manager(Operator) image on Kind (cluster=%s)", clusterName))
 			err = utils.LoadImageToKindClusterWithName(projectImage)
@@ -712,7 +721,10 @@ var _ = SynchronizedAfterSuite(func() {
 		return
 	}
 
-	ExpectWithOffset(1, suiteBootstrapState).NotTo(BeNil(), "suite bootstrap state not initialized")
+	if suiteBootstrapState == nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "suite bootstrap state not initialized; skipping shared cleanup\n")
+		return
+	}
 
 	// Single cluster cleanup
 	if len(suiteBootstrapState.Clusters) > 0 {

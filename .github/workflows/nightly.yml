@@ -417,6 +417,7 @@ jobs:
           E2E_POLL_PROGRESS_AFTER: "10m"
           E2E_LABEL_FILTER: ${{ matrix.label_filter }}
           E2E_SKIP_IMAGE_BUILD: "true"
+          E2E_INSTALL_CSI_HOSTPATH: ${{ matrix.install_csi_hostpath }}
           E2E_ENABLE_HARDENED_SIGNED_SUITE: ${{ matrix.hardened_signed }}
           E2E_OPERATOR_IMAGE: ${{ needs.build-e2e-images.outputs.manager_ref }}
           E2E_OPENBAO_IMAGE: ${{ matrix.openbao_image }}
