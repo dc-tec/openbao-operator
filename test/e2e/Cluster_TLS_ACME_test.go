@@ -247,7 +247,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 								Config: map[string]string{
 									"default_lease_ttl":  "0",
 									"max_lease_ttl":      "0",
-									"listing_visibility": "unauthenticated",
+									"listing_visibility": "unauth",
 								},
 							},
 						},
@@ -360,6 +360,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 			},
 		}
+		desiredReplicas := cluster.Spec.Replicas
 		Expect(c.Create(ctx, cluster)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoCluster %q with ACME TLS\n", clusterName)
 		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })
@@ -433,13 +434,29 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q created successfully\n", clusterName)
 
-		By("waiting for StatefulSet pods to become Ready")
+		By("waiting for the first ACME pod to become Ready after self-init")
+		Eventually(func(g Gomega) {
+			pod := &corev1.Pod{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-0", Namespace: f.Namespace}, pod)).To(Succeed())
+			var restartCount int32
+			for _, status := range pod.Status.ContainerStatuses {
+				restartCount += status.RestartCount
+			}
+			_, _ = fmt.Fprintf(GinkgoWriter, "Pod %q phase=%s ready=%t restarts=%d\n",
+				pod.Name, pod.Status.Phase, isPodReady(pod), restartCount)
+			g.Expect(isPodReady(pod)).To(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(Succeed())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Pod %q completed ACME self-init and became Ready\n", clusterName+"-0")
+
+		By("waiting for StatefulSet pods to reach the desired replica count")
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)).To(Succeed())
-			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status: replicas=%d ready=%d updated=%d\n",
-				sts.Status.Replicas, sts.Status.ReadyReplicas, sts.Status.UpdatedReplicas)
-			g.Expect(sts.Status.ReadyReplicas).To(Equal(int32(3)))
+			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status: spec=%d replicas=%d ready=%d updated=%d desired=%d\n",
+				ptr.Deref(sts.Spec.Replicas, 0), sts.Status.Replicas, sts.Status.ReadyReplicas, sts.Status.UpdatedReplicas, desiredReplicas)
+			g.Expect(sts.Status.Replicas).To(Equal(desiredReplicas))
+			g.Expect(sts.Status.UpdatedReplicas).To(Equal(desiredReplicas))
+			g.Expect(sts.Status.ReadyReplicas).To(Equal(desiredReplicas))
 		}, 10*time.Minute, 5*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q pods are Ready\n", clusterName)
 
