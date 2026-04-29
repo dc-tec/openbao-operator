@@ -28,7 +28,7 @@ type AzuriteConfig struct {
 func DefaultAzuriteConfig() AzuriteConfig {
 	return AzuriteConfig{
 		Name:     "azurite",
-		Image:    "mcr.microsoft.com/azure-storage/azurite:latest",
+		Image:    envOrDefault(EnvAzuriteImage, DefaultAzuriteImage),
 		BlobPort: 10000,
 	}
 }

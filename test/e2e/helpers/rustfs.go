@@ -36,7 +36,7 @@ type RustFSConfig struct {
 func DefaultRustFSConfig() RustFSConfig {
 	return RustFSConfig{
 		Name:        "rustfs",
-		Image:       "rustfs/rustfs:latest",
+		Image:       envOrDefault(EnvRustFSImage, DefaultRustFSImage),
 		AccessKey:   "rustfsadmin",
 		SecretKey:   "rustfsadmin",
 		Replicas:    1, // Use 1 replica for e2e tests (distributed mode requires more setup)

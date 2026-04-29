@@ -6,10 +6,20 @@ import (
 	"testing"
 )
 
+const (
+	matrixBoolTrue  = "true"
+	matrixBoolFalse = "false"
+)
+
 func testVersionPolicy() versionPolicy {
 	return versionPolicy{
 		OpenBao: openBaoVersionPolicy{
 			DefaultImage: "ghcr.io/openbao/openbao:2.5.3",
+		},
+		StorageEmulators: storageEmulatorVersionPolicy{
+			RustFSImage:  "docker.io/rustfs/rustfs@sha256:test-rustfs",
+			FakeGCSImage: "docker.io/fsouza/fake-gcs-server@sha256:test-gcs",
+			AzuriteImage: "mcr.microsoft.com/azure-storage/azurite@sha256:test-azurite",
 		},
 		Kubernetes: kubernetesVersionPolicy{
 			Primary:       "1.35.1",
@@ -45,6 +55,7 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 				E2ETimeout:               "40m",
 				LoadBackupExecutorImage:  true,
 				LoadUpgradeExecutorImage: false,
+				PreloadStorageEmulators:  []string{"rustfs", "fake-gcs", "azurite"},
 			},
 		},
 	})
@@ -68,11 +79,33 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 	if row.PRLabelFilter != "((dr && e2e-anchor) && !openshift)" {
 		t.Fatalf("pr label filter = %q, want PR-optimized filter", row.PRLabelFilter)
 	}
-	if row.LoadBackupExecutorImage != "true" {
+	if row.LoadBackupExecutorImage != matrixBoolTrue {
 		t.Fatalf("load backup image = %q, want true", row.LoadBackupExecutorImage)
 	}
-	if row.LoadUpgradeExecutorImage != "false" {
+	if row.LoadUpgradeExecutorImage != matrixBoolFalse {
 		t.Fatalf("load upgrade image = %q, want false", row.LoadUpgradeExecutorImage)
+	}
+	if row.PreloadStorageEmulators != matrixBoolTrue {
+		t.Fatalf("preload storage emulators = %q, want true", row.PreloadStorageEmulators)
+	}
+	if row.PreloadRustFSImage != matrixBoolTrue ||
+		row.PreloadFakeGCSImage != matrixBoolTrue ||
+		row.PreloadAzuriteImage != matrixBoolTrue {
+		t.Fatalf(
+			"storage emulator image preload flags = %q/%q/%q, want all true",
+			row.PreloadRustFSImage,
+			row.PreloadFakeGCSImage,
+			row.PreloadAzuriteImage,
+		)
+	}
+	if row.RustFSImage != "docker.io/rustfs/rustfs@sha256:test-rustfs" {
+		t.Fatalf("rustfs image = %q, want central storage emulator image", row.RustFSImage)
+	}
+	if row.FakeGCSImage != "docker.io/fsouza/fake-gcs-server@sha256:test-gcs" {
+		t.Fatalf("fake gcs image = %q, want central storage emulator image", row.FakeGCSImage)
+	}
+	if row.AzuriteImage != "mcr.microsoft.com/azure-storage/azurite@sha256:test-azurite" {
+		t.Fatalf("azurite image = %q, want central storage emulator image", row.AzuriteImage)
 	}
 	if row.TimeoutMinutes != 45 {
 		t.Fatalf("timeout minutes = %d, want 45", row.TimeoutMinutes)
@@ -342,5 +375,14 @@ func TestGithubMatrixJSONShape(t *testing.T) {
 	}
 	if !strings.Contains(out, `"parallel_nodes":1`) {
 		t.Fatalf("matrix json missing parallel nodes: %s", out)
+	}
+	if !strings.Contains(out, `"preload_storage_emulators":"false"`) {
+		t.Fatalf("matrix json missing storage emulator preload flag: %s", out)
+	}
+	if !strings.Contains(out, `"preload_rustfs_image":"false"`) {
+		t.Fatalf("matrix json missing rustfs preload flag: %s", out)
+	}
+	if !strings.Contains(out, `"rustfs_image":"docker.io/rustfs/rustfs@sha256:test-rustfs"`) {
+		t.Fatalf("matrix json missing rustfs image: %s", out)
 	}
 }

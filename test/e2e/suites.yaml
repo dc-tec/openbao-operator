@@ -2,6 +2,10 @@ version: 1
 versions:
   openbao:
     defaultImage: "ghcr.io/openbao/openbao:2.5.3"
+  storageEmulators:
+    rustfsImage: "docker.io/rustfs/rustfs@sha256:3c2d55977829620284ece8593901bf776bcfc0fc9972784352de4dcffdb92416"
+    fakeGCSImage: "docker.io/fsouza/fake-gcs-server@sha256:3730da0e31f7e5186a90ec4899dc2c336104e7599df400411392ef17e684c31f"
+    azuriteImage: "mcr.microsoft.com/azure-storage/azurite@sha256:647c63a91102a9d8e8000aab803436e1fc85fbb285e7ce830a82ee5d6661cf37"
   kubernetes:
     primary: "1.35.1"
     compatibility:
@@ -33,6 +37,7 @@ ciLanes:
     loadUpgradeExecutorImage: false
     preloadUpgradeImages: false
     preloadHardenedAssets: false
+    preloadStorageEmulators: []
 
   - id: security
     name: "Security & Tenants"
@@ -48,6 +53,7 @@ ciLanes:
     loadUpgradeExecutorImage: false
     preloadUpgradeImages: false
     preloadHardenedAssets: false
+    preloadStorageEmulators: []
 
   - id: backup-restore
     name: "Backup & Restore"
@@ -64,6 +70,10 @@ ciLanes:
     loadUpgradeExecutorImage: false
     preloadUpgradeImages: false
     preloadHardenedAssets: false
+    preloadStorageEmulators:
+      - rustfs
+      - fake-gcs
+      - azurite
 
   - id: upgrade-rolling
     name: "Upgrade Rolling"
@@ -80,14 +90,16 @@ ciLanes:
     loadUpgradeExecutorImage: true
     preloadUpgradeImages: true
     preloadHardenedAssets: false
+    preloadStorageEmulators:
+      - rustfs
 
-  - id: upgrade-bluegreen
-    name: "Upgrade Blue/Green"
-    labelFilter: "((upgrade && (bluegreen || gateway || verification || rollback || chaos || failure) && !hardened) && !openshift)"
-    prLabelFilter: "((upgrade && e2e-anchor && bluegreen && !hardened) && !openshift)"
+  - id: upgrade-bluegreen-core
+    name: "Upgrade Blue/Green Core"
+    labelFilter: "((upgrade && bluegreen && !verification && !failure && !rollback && !chaos && !gateway && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && bluegreen && !verification && !failure && !rollback && !chaos && !gateway && !hardened) && !openshift)"
     prScope: upgrade
-    timeoutMinutes: 60
-    e2eTimeout: 55m
+    timeoutMinutes: 30
+    e2eTimeout: 25m
     excludePentestOnDefaultPR: false
     hardenedSigned: false
     hardenedInitImage: ""
@@ -96,6 +108,58 @@ ciLanes:
     loadUpgradeExecutorImage: true
     preloadUpgradeImages: true
     preloadHardenedAssets: false
+    preloadStorageEmulators:
+      - rustfs
+
+  - id: upgrade-bluegreen-verification
+    name: "Upgrade Blue/Green Verification"
+    labelFilter: "((upgrade && bluegreen && verification && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 30
+    e2eTimeout: 25m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
+  - id: upgrade-bluegreen-recovery
+    name: "Upgrade Blue/Green Recovery"
+    labelFilter: "((upgrade && bluegreen && (failure || rollback || chaos) && !verification && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && bluegreen && failure && !verification && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 30
+    e2eTimeout: 25m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
+  - id: upgrade-gateway
+    name: "Upgrade Gateway"
+    labelFilter: "((upgrade && gateway && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && gateway && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 25
+    e2eTimeout: 20m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
 
   - id: hardened
     name: "Hardened (Signed)"
@@ -111,6 +175,7 @@ ciLanes:
     loadUpgradeExecutorImage: true
     preloadUpgradeImages: true
     preloadHardenedAssets: true
+    preloadStorageEmulators: []
 
   - id: platform-openshift
     name: "OpenShift Platform"
@@ -127,6 +192,7 @@ ciLanes:
     loadUpgradeExecutorImage: false
     preloadUpgradeImages: false
     preloadHardenedAssets: false
+    preloadStorageEmulators: []
 
 nightly:
   profiles:
@@ -141,7 +207,10 @@ nightly:
             - security
             - backup-restore
             - upgrade-rolling
-            - upgrade-bluegreen
+            - upgrade-bluegreen-core
+            - upgrade-bluegreen-verification
+            - upgrade-bluegreen-recovery
+            - upgrade-gateway
             - hardened
       rows:
         - lane: core
@@ -168,7 +237,10 @@ nightly:
             - security
             - backup-restore
             - upgrade-rolling
-            - upgrade-bluegreen
+            - upgrade-bluegreen-core
+            - upgrade-bluegreen-verification
+            - upgrade-bluegreen-recovery
+            - upgrade-gateway
             - hardened
 
     - id: release-gate
@@ -182,7 +254,10 @@ nightly:
             - security
             - backup-restore
             - upgrade-rolling
-            - upgrade-bluegreen
+            - upgrade-bluegreen-core
+            - upgrade-bluegreen-verification
+            - upgrade-bluegreen-recovery
+            - upgrade-gateway
             - hardened
 
 suites:
@@ -554,7 +629,10 @@ suites:
     ci:
       lanes:
         - upgrade-rolling
-        - upgrade-bluegreen
+        - upgrade-bluegreen-core
+        - upgrade-bluegreen-verification
+        - upgrade-bluegreen-recovery
+        - upgrade-gateway
       pullRequest: changed-paths
     nightly:
       policy: primary-version-full
@@ -579,7 +657,7 @@ suites:
       budget: 12m
     ci:
       lanes:
-        - upgrade-bluegreen
+        - upgrade-bluegreen-core
       pullRequest: changed-paths
     nightly:
       policy: primary-version-full

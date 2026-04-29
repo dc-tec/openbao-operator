@@ -38,8 +38,9 @@ type manifest struct {
 }
 
 type versionPolicy struct {
-	OpenBao    openBaoVersionPolicy    `yaml:"openbao"`
-	Kubernetes kubernetesVersionPolicy `yaml:"kubernetes"`
+	OpenBao          openBaoVersionPolicy         `yaml:"openbao"`
+	Kubernetes       kubernetesVersionPolicy      `yaml:"kubernetes"`
+	StorageEmulators storageEmulatorVersionPolicy `yaml:"storageEmulators"`
 }
 
 type openBaoVersionPolicy struct {
@@ -51,6 +52,12 @@ type kubernetesVersionPolicy struct {
 	Compatibility []string `yaml:"compatibility"`
 	ReleaseGate   []string `yaml:"releaseGate"`
 	NextCandidate string   `yaml:"nextCandidate"`
+}
+
+type storageEmulatorVersionPolicy struct {
+	RustFSImage  string `yaml:"rustfsImage"`
+	FakeGCSImage string `yaml:"fakeGCSImage"`
+	AzuriteImage string `yaml:"azuriteImage"`
 }
 
 type parallelismPolicy struct {
@@ -88,24 +95,25 @@ type nightlyRowConfig struct {
 }
 
 type ciLaneConfig struct {
-	ID                       string `yaml:"id"`
-	Name                     string `yaml:"name"`
-	LabelFilter              string `yaml:"labelFilter"`
-	PRLabelFilter            string `yaml:"prLabelFilter"`
-	PRScope                  string `yaml:"prScope"`
-	TimeoutMinutes           int    `yaml:"timeoutMinutes"`
-	E2ETimeout               string `yaml:"e2eTimeout"`
-	ParallelNodes            int    `yaml:"parallelNodes"`
-	IncludeInPRMatrix        *bool  `yaml:"includeInPRMatrix"`
-	ExcludePentestOnDefault  bool   `yaml:"excludePentestOnDefaultPR"`
-	HardenedSigned           bool   `yaml:"hardenedSigned"`
-	OpenBaoImage             string `yaml:"openbaoImage"`
-	HardenedInitImage        string `yaml:"hardenedInitImage"`
-	HardenedUpgradeImage     string `yaml:"hardenedUpgradeExecutorImage"`
-	LoadBackupExecutorImage  bool   `yaml:"loadBackupExecutorImage"`
-	LoadUpgradeExecutorImage bool   `yaml:"loadUpgradeExecutorImage"`
-	PreloadUpgradeImages     bool   `yaml:"preloadUpgradeImages"`
-	PreloadHardenedAssets    bool   `yaml:"preloadHardenedAssets"`
+	ID                       string   `yaml:"id"`
+	Name                     string   `yaml:"name"`
+	LabelFilter              string   `yaml:"labelFilter"`
+	PRLabelFilter            string   `yaml:"prLabelFilter"`
+	PRScope                  string   `yaml:"prScope"`
+	TimeoutMinutes           int      `yaml:"timeoutMinutes"`
+	E2ETimeout               string   `yaml:"e2eTimeout"`
+	ParallelNodes            int      `yaml:"parallelNodes"`
+	IncludeInPRMatrix        *bool    `yaml:"includeInPRMatrix"`
+	ExcludePentestOnDefault  bool     `yaml:"excludePentestOnDefaultPR"`
+	HardenedSigned           bool     `yaml:"hardenedSigned"`
+	OpenBaoImage             string   `yaml:"openbaoImage"`
+	HardenedInitImage        string   `yaml:"hardenedInitImage"`
+	HardenedUpgradeImage     string   `yaml:"hardenedUpgradeExecutorImage"`
+	LoadBackupExecutorImage  bool     `yaml:"loadBackupExecutorImage"`
+	LoadUpgradeExecutorImage bool     `yaml:"loadUpgradeExecutorImage"`
+	PreloadUpgradeImages     bool     `yaml:"preloadUpgradeImages"`
+	PreloadHardenedAssets    bool     `yaml:"preloadHardenedAssets"`
+	PreloadStorageEmulators  []string `yaml:"preloadStorageEmulators"`
 }
 
 type githubMatrix struct {
@@ -134,6 +142,13 @@ type matrixRow struct {
 	LoadUpgradeExecutorImage string `json:"load_upgrade_executor_image"`
 	PreloadUpgradeImages     string `json:"preload_upgrade_images"`
 	PreloadHardenedAssets    string `json:"preload_hardened_assets"`
+	PreloadStorageEmulators  string `json:"preload_storage_emulators"`
+	PreloadRustFSImage       string `json:"preload_rustfs_image"`
+	PreloadFakeGCSImage      string `json:"preload_fake_gcs_image"`
+	PreloadAzuriteImage      string `json:"preload_azurite_image"`
+	RustFSImage              string `json:"rustfs_image"`
+	FakeGCSImage             string `json:"fake_gcs_image"`
+	AzuriteImage             string `json:"azurite_image"`
 }
 
 func main() {
@@ -362,6 +377,7 @@ func validateLane(prefix string, lane ciLaneConfig, seen map[string]bool, parall
 		errs = append(errs, fmt.Sprintf("%s.e2eTimeout is required", prefix))
 	}
 	errs = append(errs, validateLaneParallelism(prefix, lane, parallelism)...)
+	errs = append(errs, validateStorageEmulatorPreloads(prefix, lane.PreloadStorageEmulators)...)
 	return errs
 }
 
@@ -391,6 +407,15 @@ func validateVersionPolicy(policy versionPolicy) []string {
 	var errs []string
 	if strings.TrimSpace(policy.OpenBao.DefaultImage) == "" {
 		errs = append(errs, "versions.openbao.defaultImage is required")
+	}
+	if strings.TrimSpace(policy.StorageEmulators.RustFSImage) == "" {
+		errs = append(errs, "versions.storageEmulators.rustfsImage is required")
+	}
+	if strings.TrimSpace(policy.StorageEmulators.FakeGCSImage) == "" {
+		errs = append(errs, "versions.storageEmulators.fakeGCSImage is required")
+	}
+	if strings.TrimSpace(policy.StorageEmulators.AzuriteImage) == "" {
+		errs = append(errs, "versions.storageEmulators.azuriteImage is required")
 	}
 	if strings.TrimSpace(policy.Kubernetes.Primary) == "" {
 		errs = append(errs, "versions.kubernetes.primary is required")
@@ -427,6 +452,27 @@ func validateLaneParallelism(prefix string, lane ciLaneConfig, policy parallelis
 	}
 	if lane.ParallelNodes > 0 && policy.MaxNodes > 0 && lane.ParallelNodes > policy.MaxNodes {
 		errs = append(errs, fmt.Sprintf("%s.parallelNodes must be <= parallelism.maxNodes (%d)", prefix, policy.MaxNodes))
+	}
+	return errs
+}
+
+func validateStorageEmulatorPreloads(prefix string, values []string) []string {
+	var errs []string
+	seen := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			errs = append(errs, fmt.Sprintf("%s.preloadStorageEmulators must not contain empty entries", prefix))
+			continue
+		}
+		if !allowedStorageEmulatorPreloads[value] {
+			errs = append(errs, fmt.Sprintf("%s.preloadStorageEmulators contains unsupported emulator %q", prefix, value))
+			continue
+		}
+		if seen[value] {
+			errs = append(errs, fmt.Sprintf("%s.preloadStorageEmulators contains duplicate emulator %q", prefix, value))
+		}
+		seen[value] = true
 	}
 	return errs
 }
@@ -494,6 +540,7 @@ func matrixRowFromLane(policy versionPolicy, parallelism parallelismPolicy, lane
 	if openBaoImage == "" || openBaoImage == "@default" {
 		openBaoImage = policy.OpenBao.DefaultImage
 	}
+	storageEmulators := storageEmulatorPreloadSet(lane.PreloadStorageEmulators)
 	return matrixRow{
 		ID:                       lane.ID,
 		Name:                     lane.Name,
@@ -514,7 +561,25 @@ func matrixRowFromLane(policy versionPolicy, parallelism parallelismPolicy, lane
 		LoadUpgradeExecutorImage: strconv.FormatBool(lane.LoadUpgradeExecutorImage),
 		PreloadUpgradeImages:     strconv.FormatBool(lane.PreloadUpgradeImages),
 		PreloadHardenedAssets:    strconv.FormatBool(lane.PreloadHardenedAssets),
+		PreloadStorageEmulators:  strconv.FormatBool(len(storageEmulators) > 0),
+		PreloadRustFSImage:       strconv.FormatBool(storageEmulators["rustfs"]),
+		PreloadFakeGCSImage:      strconv.FormatBool(storageEmulators["fake-gcs"]),
+		PreloadAzuriteImage:      strconv.FormatBool(storageEmulators["azurite"]),
+		RustFSImage:              policy.StorageEmulators.RustFSImage,
+		FakeGCSImage:             policy.StorageEmulators.FakeGCSImage,
+		AzuriteImage:             policy.StorageEmulators.AzuriteImage,
 	}
+}
+
+func storageEmulatorPreloadSet(values []string) map[string]bool {
+	selected := map[string]bool{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			selected[value] = true
+		}
+	}
+	return selected
 }
 
 func effectiveParallelNodes(policy parallelismPolicy, lane ciLaneConfig) int {
@@ -560,6 +625,12 @@ var allowedPRScopes = map[string]bool{
 	"hardened": true,
 	"manual":   true,
 	"upgrade":  true,
+}
+
+var allowedStorageEmulatorPreloads = map[string]bool{
+	"azurite":  true,
+	"fake-gcs": true,
+	"rustfs":   true,
 }
 
 func writeJSON(value any) error {

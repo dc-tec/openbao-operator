@@ -35,7 +35,7 @@ type GCSConfig struct {
 func DefaultGCSConfig() GCSConfig {
 	return GCSConfig{
 		Name:    "fake-gcs-server",
-		Image:   "fsouza/fake-gcs-server:latest",
+		Image:   envOrDefault(EnvFakeGCSImage, DefaultFakeGCSImage),
 		Port:    4443,
 		Project: "test-project",
 	}
