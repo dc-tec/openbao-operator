@@ -8,29 +8,28 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `backup-restore-executes-backup-job-successfully-to-azure-395a20b1` | executes backup job successfully to Azure | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
+| `backup-restore-executes-a-manual-backup-to-azure-e51c2b76` | executes a manual backup to Azure | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke` |
 | `backup-restore-restores-from-azure-backup-using-openbaorestore-b3ea354a` | restores from Azure backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
-| `backup-restore-triggers-manual-backup-to-azure-d31b1484` | triggers manual backup to Azure | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
-| `backup-restore-executes-backup-job-successfully-to-gcs-5e8a1d74` | executes backup job successfully to GCS | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
-| `backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5` | restores from GCS backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
-| `backup-restore-triggers-manual-backup-to-gcs-a36e4959` | triggers manual backup to GCS | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
-| `backup-restore-completes-restore-deterministically-after-controller-restart-d873984e` | completes restore deterministically after controller restart while running | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `failure-injection` |
-| `backup-restore-executes-backup-job-successfully-to-s3-6646d680` | executes backup job successfully to S3 | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore` |
+| `backup-restore-executes-a-manual-backup-to-gcs-32e6203f` | executes a manual backup to GCS | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke` |
+| `backup-restore-completes-restore-deterministically-after-controller-restart-d873984e` | completes restore deterministically after controller restart while running | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `failure-injection` |
+| `backup-restore-creates-a-restorable-s3-backup-44a8d036` | creates a restorable S3 backup | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore` |
 | `backup-restore-handles-transient-s3-auth-failure-with-10300347` | handles transient S3 auth failure with backup retry after controller restart | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `failure-injection` |
-| `backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175` | restores from S3 backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore` |
-| `backup-restore-triggers-manual-backup-to-s3-701eaf8b` | triggers manual backup to S3 | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore` |
+| `backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175` | restores from S3 backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore` |
 
-## `backup-restore-executes-backup-job-successfully-to-azure-395a20b1`
+## `backup-restore-executes-a-manual-backup-to-azure-e51c2b76`
 
-Path: `DR: Storage Providers Backup & Restore > Azure Backup & Restore with Azurite > executes backup job successfully to Azure`
+Path: `DR: Storage Providers Backup & Restore > Azure Backup & Restore with Azurite > executes a manual backup to Azure`
 
 State: `active`
 
 Covers: _none_
 
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke`
 
 Recorded checkpoints:
+- annotating the cluster to trigger a manual Azure backup
+- forcing a reconcile after the manual Azure backup trigger
+- waiting for an Azure backup job to be created
 - waiting for the Azure backup job to complete successfully
 - recording the latest Azure backup key from cluster status
 
@@ -50,61 +49,21 @@ Recorded checkpoints:
 - waiting for the Azure restore to complete
 
 
-## `backup-restore-triggers-manual-backup-to-azure-d31b1484`
+## `backup-restore-executes-a-manual-backup-to-gcs-32e6203f`
 
-Path: `DR: Storage Providers Backup & Restore > Azure Backup & Restore with Azurite > triggers manual backup to Azure`
-
-State: `active`
-
-Covers: _none_
-
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
-
-Recorded checkpoints:
-- annotating the cluster to trigger a manual Azure backup
-- forcing a reconcile after the manual Azure backup trigger
-- waiting for an Azure backup job to be created
-
-
-## `backup-restore-executes-backup-job-successfully-to-gcs-5e8a1d74`
-
-Path: `DR: Storage Providers Backup & Restore > GCS Backup with fake-gcs-server > executes backup job successfully to GCS`
+Path: `DR: Storage Providers Backup & Restore > GCS Backup with fake-gcs-server > executes a manual backup to GCS`
 
 State: `active`
 
 Covers: _none_
 
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
-
-Recorded checkpoints:
-- waiting for the GCS backup job to complete successfully
-
-
-## `backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5`
-
-Path: `DR: Storage Providers Backup & Restore > GCS Backup with fake-gcs-server > restores from GCS backup using OpenBaoRestore CR`
-
-State: `active`
-
-Covers: _none_
-
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
-
-
-## `backup-restore-triggers-manual-backup-to-gcs-a36e4959`
-
-Path: `DR: Storage Providers Backup & Restore > GCS Backup with fake-gcs-server > triggers manual backup to GCS`
-
-State: `active`
-
-Covers: _none_
-
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke`
 
 Recorded checkpoints:
 - annotating the cluster to trigger a manual GCS backup
 - forcing a reconcile after the manual GCS backup trigger
 - waiting for a GCS backup job to be created
+- waiting for the GCS backup job to complete successfully
 
 
 ## `backup-restore-completes-restore-deterministically-after-controller-restart-d873984e`
@@ -115,7 +74,7 @@ State: `active`
 
 Covers: _none_
 
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `failure-injection`
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `failure-injection`
 
 Recorded checkpoints:
 - waiting for restore to enter Running phase
@@ -124,17 +83,18 @@ Recorded checkpoints:
 - ensuring restore remains terminally completed
 
 
-## `backup-restore-executes-backup-job-successfully-to-s3-6646d680`
+## `backup-restore-creates-a-restorable-s3-backup-44a8d036`
 
-Path: `DR: Storage Providers Backup & Restore > S3 Backup & Restore with RustFS > executes backup job successfully to S3`
+Path: `DR: Storage Providers Backup & Restore > S3 Backup & Restore with RustFS > creates a restorable S3 backup`
 
 State: `active`
 
 Covers: _none_
 
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore`
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore`
 
 Recorded checkpoints:
+- Writing a secret before backup
 - waiting for the S3 backup job to complete successfully
 - recording the latest S3 backup key from cluster status
 
@@ -168,26 +128,12 @@ State: `active`
 
 Covers: _none_
 
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore`
+Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore`
 
 Recorded checkpoints:
 - verifying restore configuration is accepted before execution
 - waiting for restore to drain steady read replicas before execution continues
 - Verifying secret persists after restore
 - Verifying restore metrics are emitted
-
-
-## `backup-restore-triggers-manual-backup-to-s3-701eaf8b`
-
-Path: `DR: Storage Providers Backup & Restore > S3 Backup & Restore with RustFS > triggers manual backup to S3`
-
-State: `active`
-
-Covers: _none_
-
-Labels: `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `read-replicas`, `read-replicas-restore`
-
-Recorded checkpoints:
-- Writing a secret before backup
 
 

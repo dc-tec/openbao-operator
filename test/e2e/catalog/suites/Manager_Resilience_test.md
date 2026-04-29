@@ -8,9 +8,9 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `manager-leader-failover` | fails over leader election and continues reconciling with a second controller replica | active | `leader-election`, `controller-failover`, `post-failover-reconcile` | `manager`, `cluster` |
+| `manager-leader-failover` | fails over leader election and continues reconciling with a second controller replica | active | `leader-election`, `controller-failover`, `post-failover-reconcile` | `manager`, `cluster`, `e2e-anchor` |
 | `manager-outage-adopts-existing-cluster` | reconciles an existing cluster after the controller is scaled down and back up | active | `controller-outage`, `existing-cluster-adoption`, `post-outage-reconcile` | `manager`, `cluster` |
-| `manager-restart-idempotent-reconcile` | recovers idempotently when the controller restarts during initial and scale reconciliation | active | `controller-restart`, `idempotent-reconcile`, `scale-reconcile` | `manager`, `cluster` |
+| `manager-restart-idempotent-reconcile` | recovers idempotently when the controller restarts during initial and scale reconciliation | active | `controller-restart`, `idempotent-reconcile`, `scale-reconcile` | `manager`, `cluster`, `e2e-anchor` |
 
 ## `manager-leader-failover`
 
@@ -22,7 +22,7 @@ Generated fallback ID: `manager-resilience-fails-over-leader-election-and-contin
 
 Covers: `leader-election`, `controller-failover`, `post-failover-reconcile`
 
-Labels: `manager`, `cluster`
+Labels: `manager`, `cluster`, `e2e-anchor`
 
 Recorded checkpoints:
 - scaling the controller deployment to two replicas
@@ -61,7 +61,7 @@ Generated fallback ID: `manager-resilience-recovers-idempotently-when-the-contro
 
 Covers: `controller-restart`, `idempotent-reconcile`, `scale-reconcile`
 
-Labels: `manager`, `cluster`
+Labels: `manager`, `cluster`, `e2e-anchor`
 
 Recorded checkpoints:
 - restarting the controller while the initial reconcile is still in progress

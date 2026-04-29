@@ -91,6 +91,7 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 	})
 
 	It("recovers idempotently when the controller restarts during initial and scale reconciliation", Label(
+		"e2e-anchor",
 		"case:manager-restart-idempotent-reconcile",
 		"covers:controller-restart",
 		"covers:idempotent-reconcile",
@@ -204,6 +205,7 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 	})
 
 	It("fails over leader election and continues reconciling with a second controller replica", Label(
+		"e2e-anchor",
 		"case:manager-leader-failover",
 		"covers:leader-election",
 		"covers:controller-failover",

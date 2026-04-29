@@ -334,21 +334,6 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		admin, err = client.New(cfg, client.Options{Scheme: scheme})
 		Expect(err).NotTo(HaveOccurred())
 
-		// Deploy storage emulators
-		err = ensureRustFS(ctx, admin, cfg)
-		if err != nil {
-			Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping S3 tests.", err))
-		}
-
-		err = ensureFakeGCS(ctx, admin, fakeGCSNamespace)
-		if err != nil {
-			Skip(fmt.Sprintf("fake-gcs-server deployment failed: %v. Skipping GCS tests.", err))
-		}
-
-		err = ensureAzurite(ctx, admin, azuriteNamespace)
-		if err != nil {
-			Skip(fmt.Sprintf("Azurite deployment failed: %v. Skipping Azure tests.", err))
-		}
 	})
 
 	Context("S3 Backup & Restore with RustFS", func() {
@@ -362,6 +347,11 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 		BeforeAll(func() {
 			var err error
+
+			err = ensureRustFS(ctx, admin, cfg)
+			if err != nil {
+				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping S3 tests.", err))
+			}
 
 			tenantFW, err = framework.New(ctx, admin, "tenant-s3-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
@@ -509,7 +499,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
-		It("triggers manual backup to S3", Label("read-replicas", "read-replicas-restore"), func() {
+		It("creates a restorable S3 backup", Label("e2e-anchor", "read-replicas", "read-replicas-restore"), func() {
 			By("Writing a secret before backup")
 			secretPath := "secret/backup-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
@@ -532,9 +522,6 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 			Expect(tenantFW.TriggerReconcile(ctx, drCluster.Name)).To(Succeed())
 			waitForBackupJobCreated(ctx, admin, tenantNamespace, drCluster.Name)
-		})
-
-		It("executes backup job successfully to S3", Label("read-replicas", "read-replicas-restore"), func() {
 			By("waiting for the S3 backup job to complete successfully")
 			waitForSuccessfulBackupJob(ctx, admin, tenantNamespace, drCluster.Name)
 
@@ -542,7 +529,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			recordLatestBackupKey(ctx, tenantFW, admin, tenantNamespace, drCluster.Name, &backupKey)
 		})
 
-		It("restores from S3 backup using OpenBaoRestore CR", Label("read-replicas", "read-replicas-restore"), func() {
+		It("restores from S3 backup using OpenBaoRestore CR", Label("e2e-anchor", "read-replicas", "read-replicas-restore"), func() {
 			Expect(backupKey).NotTo(BeEmpty(), "backup key should have been set by previous test")
 
 			restore := &openbaov1alpha1.OpenBaoRestore{
@@ -791,7 +778,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
-		It("completes restore deterministically after controller restart while running", Label("failure-injection"), func() {
+		It("completes restore deterministically after controller restart while running", Label("e2e-anchor", "failure-injection"), func() {
 			Expect(backupKey).NotTo(BeEmpty(), "backup key should be available before restore restart test")
 
 			restoreName := "s3-restore-restart"
@@ -862,6 +849,11 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 		BeforeAll(func() {
 			var err error
 
+			err = ensureFakeGCS(ctx, admin, fakeGCSNamespace)
+			if err != nil {
+				Skip(fmt.Sprintf("fake-gcs-server deployment failed: %v. Skipping GCS tests.", err))
+			}
+
 			tenantFW, err = framework.New(ctx, admin, "tenant-gcs-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			tenantNamespace = tenantFW.Namespace
@@ -876,8 +868,8 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			err = e2ehelpers.CreateFakeGCSBucket(ctx, cfg, admin, "gcs", fakeGCSEndpoint, fakeGCSBucket)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create bucket in fake-gcs-server")
 
-			// Create cluster with GCS backup configuration
-			// Using BootstrapJWTAuth to auto-create backup role (restore skipped due to fake-gcs-server limitations)
+			// Create cluster with GCS backup configuration.
+			// fake-gcs-server is used as a provider compatibility smoke for backup writes only.
 			drCluster = &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "gcs-dr-cluster",
@@ -972,7 +964,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
-		It("triggers manual backup to GCS", func() {
+		It("executes a manual backup to GCS", Label("e2e-anchor", "provider-smoke"), func() {
 			By("annotating the cluster to trigger a manual GCS backup")
 			Eventually(func() error {
 				return triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)
@@ -983,15 +975,9 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 			By("waiting for a GCS backup job to be created")
 			waitForBackupJobCreated(ctx, admin, tenantNamespace, drCluster.Name)
-		})
 
-		It("executes backup job successfully to GCS", func() {
 			By("waiting for the GCS backup job to complete successfully")
 			waitForSuccessfulBackupJob(ctx, admin, tenantNamespace, drCluster.Name)
-		})
-
-		It("restores from GCS backup using OpenBaoRestore CR", func() {
-			Skip("GCS restore test skipped due to limitations with fake-gcs-server")
 		})
 	})
 
@@ -1006,6 +992,11 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 		BeforeAll(func() {
 			var err error
+
+			err = ensureAzurite(ctx, admin, azuriteNamespace)
+			if err != nil {
+				Skip(fmt.Sprintf("Azurite deployment failed: %v. Skipping Azure tests.", err))
+			}
 
 			tenantFW, err = framework.New(ctx, admin, "tenant-azure-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
@@ -1121,7 +1112,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
-		It("triggers manual backup to Azure", func() {
+		It("executes a manual backup to Azure", Label("e2e-anchor", "provider-smoke"), func() {
 			By("annotating the cluster to trigger a manual Azure backup")
 			Eventually(func() error {
 				return triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)
@@ -1132,9 +1123,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 
 			By("waiting for an Azure backup job to be created")
 			waitForBackupJobCreated(ctx, admin, tenantNamespace, drCluster.Name)
-		})
 
-		It("executes backup job successfully to Azure", func() {
 			By("waiting for the Azure backup job to complete successfully")
 			waitForSuccessfulBackupJob(ctx, admin, tenantNamespace, drCluster.Name)
 

@@ -765,6 +765,7 @@
     "labels": [
       "manager",
       "cluster",
+      "e2e-anchor",
       "case:manager-leader-failover",
       "covers:leader-election",
       "covers:controller-failover",
@@ -772,7 +773,8 @@
     ],
     "domainLabels": [
       "manager",
-      "cluster"
+      "cluster",
+      "e2e-anchor"
     ],
     "steps": [
       "scaling the controller deployment to two replicas",
@@ -844,6 +846,7 @@
     "labels": [
       "manager",
       "cluster",
+      "e2e-anchor",
       "case:manager-restart-idempotent-reconcile",
       "covers:controller-restart",
       "covers:idempotent-reconcile",
@@ -851,7 +854,8 @@
     ],
     "domainLabels": [
       "manager",
-      "cluster"
+      "cluster",
+      "e2e-anchor"
     ],
     "steps": [
       "restarting the controller while the initial reconcile is still in progress",
@@ -1974,57 +1978,14 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e",
-    "generatedId": "upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e",
-    "file": "test/e2e/Upgrade_Strategies_test.go",
-    "type": "It",
-    "name": "keeps HTTPRoute stable and switches external Service selector at cutover",
-    "path": [
-      "Upgrade Strategies",
-      "Gateway Integration",
-      "keeps HTTPRoute stable and switches external Service selector at cutover"
-    ],
-    "labels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "gateway",
-      "requires-gateway-api",
-      "bluegreen"
-    ],
-    "domainLabels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "gateway",
-      "requires-gateway-api",
-      "bluegreen"
-    ],
-    "steps": [
-      "Capturing HTTPRoute before upgrade to verify stability",
-      "Triggering upgrade",
-      "Waiting for upgrade to progress to cutover phase",
-      "Verifying external Service remains on Blue while DemotingBlue is in progress",
-      "Waiting for Cleanup phase and verifying the external Service selector switches to Green",
-      "Waiting for Blue/Green upgrade to complete",
-      "Verifying legacy blue/green Services do not exist",
-      "Verifying HTTPRoute remains stable throughout upgrade"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d",
-    "generatedId": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d",
+    "id": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-79be45e7",
+    "generatedId": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-79be45e7",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "creates a TLSRoute and reports healthy passthrough integration",
     "path": [
       "Upgrade Strategies",
+      "Gateway API",
       "Gateway TLS Passthrough",
       "creates a TLSRoute and reports healthy passthrough integration"
     ],
@@ -2050,6 +2011,53 @@
       "waiting for passthrough Gateway integration status",
       "verifying a TLSRoute is created for passthrough access",
       "verifying BackendTLSPolicy is not created for passthrough mode"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-strategies-keeps-httproute-stable-and-switches-external-7a9e6dd5",
+    "generatedId": "upgrade-strategies-keeps-httproute-stable-and-switches-external-7a9e6dd5",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "keeps HTTPRoute stable and switches external Service selector at cutover",
+    "path": [
+      "Upgrade Strategies",
+      "Gateway API",
+      "HTTPRoute Blue/Green Cutover",
+      "keeps HTTPRoute stable and switches external Service selector at cutover"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "gateway",
+      "requires-gateway-api",
+      "bluegreen",
+      "e2e-anchor"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "gateway",
+      "requires-gateway-api",
+      "bluegreen",
+      "e2e-anchor"
+    ],
+    "steps": [
+      "Capturing HTTPRoute before upgrade to verify stability",
+      "Triggering upgrade",
+      "Waiting for upgrade to progress to cutover phase",
+      "Verifying external Service remains on Blue while DemotingBlue is in progress",
+      "Waiting for Cleanup phase and verifying the external Service selector switches to Green",
+      "Waiting for Blue/Green upgrade to complete",
+      "Verifying legacy blue/green Services do not exist",
+      "Verifying HTTPRoute remains stable throughout upgrade"
     ],
     "focused": false,
     "pending": false,
@@ -2430,15 +2438,15 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-executes-backup-job-successfully-to-azure-395a20b1",
-    "generatedId": "backup-restore-executes-backup-job-successfully-to-azure-395a20b1",
+    "id": "backup-restore-executes-a-manual-backup-to-azure-e51c2b76",
+    "generatedId": "backup-restore-executes-a-manual-backup-to-azure-e51c2b76",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
-    "name": "executes backup job successfully to Azure",
+    "name": "executes a manual backup to Azure",
     "path": [
       "DR: Storage Providers Backup \u0026 Restore",
       "Azure Backup \u0026 Restore with Azurite",
-      "executes backup job successfully to Azure"
+      "executes a manual backup to Azure"
     ],
     "labels": [
       "dr",
@@ -2446,7 +2454,9 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "provider-smoke"
     ],
     "domainLabels": [
       "dr",
@@ -2454,9 +2464,14 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "provider-smoke"
     ],
     "steps": [
+      "annotating the cluster to trigger a manual Azure backup",
+      "forcing a reconcile after the manual Azure backup trigger",
+      "waiting for an Azure backup job to be created",
       "waiting for the Azure backup job to complete successfully",
       "recording the latest Azure backup key from cluster status"
     ],
@@ -2502,52 +2517,15 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-triggers-manual-backup-to-azure-d31b1484",
-    "generatedId": "backup-restore-triggers-manual-backup-to-azure-d31b1484",
+    "id": "backup-restore-executes-a-manual-backup-to-gcs-32e6203f",
+    "generatedId": "backup-restore-executes-a-manual-backup-to-gcs-32e6203f",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
-    "name": "triggers manual backup to Azure",
-    "path": [
-      "DR: Storage Providers Backup \u0026 Restore",
-      "Azure Backup \u0026 Restore with Azurite",
-      "triggers manual backup to Azure"
-    ],
-    "labels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "domainLabels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "steps": [
-      "annotating the cluster to trigger a manual Azure backup",
-      "forcing a reconcile after the manual Azure backup trigger",
-      "waiting for an Azure backup job to be created"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "backup-restore-executes-backup-job-successfully-to-gcs-5e8a1d74",
-    "generatedId": "backup-restore-executes-backup-job-successfully-to-gcs-5e8a1d74",
-    "file": "test/e2e/backup_restore_test.go",
-    "type": "It",
-    "name": "executes backup job successfully to GCS",
+    "name": "executes a manual backup to GCS",
     "path": [
       "DR: Storage Providers Backup \u0026 Restore",
       "GCS Backup with fake-gcs-server",
-      "executes backup job successfully to GCS"
+      "executes a manual backup to GCS"
     ],
     "labels": [
       "dr",
@@ -2555,7 +2533,9 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "provider-smoke"
     ],
     "domainLabels": [
       "dr",
@@ -2563,80 +2543,15 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
-    ],
-    "steps": [
-      "waiting for the GCS backup job to complete successfully"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5",
-    "generatedId": "backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5",
-    "file": "test/e2e/backup_restore_test.go",
-    "type": "It",
-    "name": "restores from GCS backup using OpenBaoRestore CR",
-    "path": [
-      "DR: Storage Providers Backup \u0026 Restore",
-      "GCS Backup with fake-gcs-server",
-      "restores from GCS backup using OpenBaoRestore CR"
-    ],
-    "labels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "domainLabels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "backup-restore-triggers-manual-backup-to-gcs-a36e4959",
-    "generatedId": "backup-restore-triggers-manual-backup-to-gcs-a36e4959",
-    "file": "test/e2e/backup_restore_test.go",
-    "type": "It",
-    "name": "triggers manual backup to GCS",
-    "path": [
-      "DR: Storage Providers Backup \u0026 Restore",
-      "GCS Backup with fake-gcs-server",
-      "triggers manual backup to GCS"
-    ],
-    "labels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "domainLabels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "provider-smoke"
     ],
     "steps": [
       "annotating the cluster to trigger a manual GCS backup",
       "forcing a reconcile after the manual GCS backup trigger",
-      "waiting for a GCS backup job to be created"
+      "waiting for a GCS backup job to be created",
+      "waiting for the GCS backup job to complete successfully"
     ],
     "focused": false,
     "pending": false,
@@ -2661,6 +2576,7 @@
       "storage-providers",
       "nightly",
       "slow",
+      "e2e-anchor",
       "failure-injection"
     ],
     "domainLabels": [
@@ -2670,6 +2586,7 @@
       "storage-providers",
       "nightly",
       "slow",
+      "e2e-anchor",
       "failure-injection"
     ],
     "steps": [
@@ -2684,15 +2601,15 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-executes-backup-job-successfully-to-s3-6646d680",
-    "generatedId": "backup-restore-executes-backup-job-successfully-to-s3-6646d680",
+    "id": "backup-restore-creates-a-restorable-s3-backup-44a8d036",
+    "generatedId": "backup-restore-creates-a-restorable-s3-backup-44a8d036",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
-    "name": "executes backup job successfully to S3",
+    "name": "creates a restorable S3 backup",
     "path": [
       "DR: Storage Providers Backup \u0026 Restore",
       "S3 Backup \u0026 Restore with RustFS",
-      "executes backup job successfully to S3"
+      "creates a restorable S3 backup"
     ],
     "labels": [
       "dr",
@@ -2701,6 +2618,7 @@
       "storage-providers",
       "nightly",
       "slow",
+      "e2e-anchor",
       "read-replicas",
       "read-replicas-restore"
     ],
@@ -2711,10 +2629,12 @@
       "storage-providers",
       "nightly",
       "slow",
+      "e2e-anchor",
       "read-replicas",
       "read-replicas-restore"
     ],
     "steps": [
+      "Writing a secret before backup",
       "waiting for the S3 backup job to complete successfully",
       "recording the latest S3 backup key from cluster status"
     ],
@@ -2785,6 +2705,7 @@
       "storage-providers",
       "nightly",
       "slow",
+      "e2e-anchor",
       "read-replicas",
       "read-replicas-restore"
     ],
@@ -2795,6 +2716,7 @@
       "storage-providers",
       "nightly",
       "slow",
+      "e2e-anchor",
       "read-replicas",
       "read-replicas-restore"
     ],
@@ -2803,45 +2725,6 @@
       "waiting for restore to drain steady read replicas before execution continues",
       "Verifying secret persists after restore",
       "Verifying restore metrics are emitted"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "backup-restore-triggers-manual-backup-to-s3-701eaf8b",
-    "generatedId": "backup-restore-triggers-manual-backup-to-s3-701eaf8b",
-    "file": "test/e2e/backup_restore_test.go",
-    "type": "It",
-    "name": "triggers manual backup to S3",
-    "path": [
-      "DR: Storage Providers Backup \u0026 Restore",
-      "S3 Backup \u0026 Restore with RustFS",
-      "triggers manual backup to S3"
-    ],
-    "labels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow",
-      "read-replicas",
-      "read-replicas-restore"
-    ],
-    "domainLabels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow",
-      "read-replicas",
-      "read-replicas-restore"
-    ],
-    "steps": [
-      "Writing a secret before backup"
     ],
     "focused": false,
     "pending": false,
