@@ -887,6 +887,7 @@ jobs:
           echo "artifact_name=e2e-artifacts-${sanitized_name}" >> "${GITHUB_OUTPUT}"
 
       - name: Prepare E2E lane
+        id: prepare-e2e-lane
         if: env.SHOULD_RUN == 'true'
         uses: ./.github/actions/prepare-e2e-lane
         with:
@@ -924,9 +925,9 @@ jobs:
           E2E_ENABLE_HARDENED_SIGNED_SUITE: ${{ matrix.hardened_signed }}
           E2E_OPERATOR_IMAGE: ${{ needs.build-e2e-images.outputs.manager_ref }}
           E2E_OPENBAO_IMAGE: ${{ matrix.openbao_image }}
-          E2E_RUSTFS_IMAGE: ${{ matrix.rustfs_image }}
-          E2E_FAKE_GCS_IMAGE: ${{ matrix.fake_gcs_image }}
-          E2E_AZURITE_IMAGE: ${{ matrix.azurite_image }}
+          E2E_RUSTFS_IMAGE: ${{ steps.prepare-e2e-lane.outputs['rustfs-image'] }}
+          E2E_FAKE_GCS_IMAGE: ${{ steps.prepare-e2e-lane.outputs['fake-gcs-image'] }}
+          E2E_AZURITE_IMAGE: ${{ steps.prepare-e2e-lane.outputs['azurite-image'] }}
           E2E_CONFIG_INIT_IMAGE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
           E2E_HARDENED_CONFIG_INIT_IMAGE: ${{ matrix.hardened_init_image }}
           E2E_HARDENED_UPGRADE_EXECUTOR_IMAGE: ${{ matrix.hardened_upgrade_executor_image }}

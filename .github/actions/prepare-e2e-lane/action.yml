@@ -68,6 +68,17 @@ inputs:
     description: Artifact name for uploaded lane reports.
     required: true
 
+outputs:
+  rustfs-image:
+    description: RustFS image reference to pass to the E2E suite.
+    value: ${{ steps.storage-emulator-images.outputs.rustfs_image }}
+  fake-gcs-image:
+    description: fake-gcs-server image reference to pass to the E2E suite.
+    value: ${{ steps.storage-emulator-images.outputs.fake_gcs_image }}
+  azurite-image:
+    description: Azurite image reference to pass to the E2E suite.
+    value: ${{ steps.storage-emulator-images.outputs.azurite_image }}
+
 runs:
   using: composite
   steps:
@@ -109,11 +120,12 @@ runs:
           kind create cluster --name "${KIND_CLUSTER}" --image "${KIND_NODE_IMAGE}"
         fi
 
-    - name: Preload storage emulator images
-      if: inputs.preload-storage-emulators == 'true'
+    - name: Resolve storage emulator images
+      id: storage-emulator-images
       shell: bash
       env:
         KIND_CLUSTER: ${{ inputs.kind-cluster }}
+        PRELOAD_STORAGE_EMULATORS: ${{ inputs.preload-storage-emulators }}
         PRELOAD_RUSTFS_IMAGE: ${{ inputs.preload-rustfs-image }}
         PRELOAD_FAKE_GCS_IMAGE: ${{ inputs.preload-fake-gcs-image }}
         PRELOAD_AZURITE_IMAGE: ${{ inputs.preload-azurite-image }}
@@ -123,18 +135,33 @@ runs:
       run: |
         set -euo pipefail
 
-        for entry in \
-          "${PRELOAD_RUSTFS_IMAGE}|${RUSTFS_IMAGE}" \
-          "${PRELOAD_FAKE_GCS_IMAGE}|${FAKE_GCS_IMAGE}" \
-          "${PRELOAD_AZURITE_IMAGE}|${AZURITE_IMAGE}"; do
-          preload="${entry%%|*}"
-          image="${entry#*|}"
-          if [[ "${preload}" != "true" ]]; then
-            continue
+        resolve_image() {
+          local output_name="$1"
+          local preload="$2"
+          local source_image="$3"
+          local loaded_image="$4"
+
+          if [[ -z "${source_image}" ]]; then
+            echo "${output_name}=" >> "${GITHUB_OUTPUT}"
+            return
           fi
-          docker pull "${image}"
-          kind load docker-image "${image}" --name "${KIND_CLUSTER}"
-        done
+
+          if [[ "${PRELOAD_STORAGE_EMULATORS}" == "true" ]] && [[ "${preload}" == "true" ]]; then
+            docker pull "${source_image}"
+            docker tag "${source_image}" "${loaded_image}"
+            kind load docker-image "${loaded_image}" --name "${KIND_CLUSTER}"
+            echo "${output_name}=${loaded_image}" >> "${GITHUB_OUTPUT}"
+            return
+          fi
+
+          echo "${output_name}=${source_image}" >> "${GITHUB_OUTPUT}"
+        }
+
+        # kind load imports digest-only images under synthetic import-* names. Tag aliases keep
+        # the image references resolvable by containerd when the suite creates emulator Pods.
+        resolve_image "rustfs_image" "${PRELOAD_RUSTFS_IMAGE}" "${RUSTFS_IMAGE}" "docker.io/rustfs/rustfs:openbao-e2e"
+        resolve_image "fake_gcs_image" "${PRELOAD_FAKE_GCS_IMAGE}" "${FAKE_GCS_IMAGE}" "docker.io/fsouza/fake-gcs-server:openbao-e2e"
+        resolve_image "azurite_image" "${PRELOAD_AZURITE_IMAGE}" "${AZURITE_IMAGE}" "mcr.microsoft.com/azure-storage/azurite:openbao-e2e"
 
     - name: Prepare E2E report paths
       shell: bash
