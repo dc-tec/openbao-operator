@@ -54,3 +54,4 @@ dist/test/
 dist/mutation/
 tmp/air/
 __debug*
+artifacts/

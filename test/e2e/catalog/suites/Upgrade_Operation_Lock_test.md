@@ -8,7 +8,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `upgrade-backup-lock-contention` | holds a manual backup request until the rolling upgrade lock is released | active | `operation-lock`, `rolling-upgrade`, `backup-queueing` | `upgrade`, `backup`, `operation-lock`, `slow` |
+| `upgrade-backup-lock-contention` | holds a manual backup request until the rolling upgrade lock is released | active | `operation-lock`, `rolling-upgrade`, `backup-queueing` | `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor` |
 
 ## `upgrade-backup-lock-contention`
 
@@ -20,7 +20,7 @@ Generated fallback ID: `upgrade-operation-lock-holds-a-manual-backup-request-unt
 
 Covers: `operation-lock`, `rolling-upgrade`, `backup-queueing`
 
-Labels: `upgrade`, `backup`, `operation-lock`, `slow`
+Labels: `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor`
 
 Recorded checkpoints:
 - starting a rolling upgrade

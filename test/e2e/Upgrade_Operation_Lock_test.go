@@ -63,10 +63,8 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 			Skip(fmt.Sprintf("Operation lock contention test skipped: versions identical (%s)", initialVersion))
 		}
 
-		err = ensureRustFS(ctx, admin, cfg, "rustfs")
-		if err != nil {
-			Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping operation lock contention test.", err))
-		}
+		err = ensureRustFS(ctx, admin, cfg)
+		Expect(err).NotTo(HaveOccurred(), "RustFS deployment failed")
 
 		credentialsSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -144,7 +142,14 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 			g.Expect(available).NotTo(BeNil())
 			g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-		tenantFW.WaitForStatefulSetReady(ctx, lockCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+		_, err = tenantFW.WaitForStatefulSetReady(
+			ctx,
+			lockCluster.Name,
+			3,
+			framework.DefaultLongWaitTimeout,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterAll(func() {
@@ -154,6 +159,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 	})
 
 	It("holds a manual backup request until the rolling upgrade lock is released", Label(
+		"e2e-anchor",
 		"case:upgrade-backup-lock-contention",
 		"covers:operation-lock",
 		"covers:rolling-upgrade",

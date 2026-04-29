@@ -9,7 +9,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -17,52 +16,13 @@ import (
 func ensureControllerServiceAccountRBAC(t *testing.T, namespace string) {
 	t.Helper()
 
-	role := &rbacv1.Role{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "rbac.authorization.k8s.io/v1",
-			Kind:       "Role",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "controller-serviceaccount-manager",
-			Namespace: namespace,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"serviceaccounts"},
-				Verbs:     []string{"create", "delete", "get", "patch", "update"},
-			},
-		},
-	}
-	if err := k8sClient.Create(ctx, role); err != nil {
-		t.Fatalf("create controller serviceaccount role: %v", err)
-	}
-
-	binding := &rbacv1.RoleBinding{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "rbac.authorization.k8s.io/v1",
-			Kind:       "RoleBinding",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "controller-serviceaccount-manager-binding",
-			Namespace: namespace,
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "Role",
-			Name:     role.Name,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      "openbao-operator-controller",
-				Namespace: "openbao-operator-system",
-			},
-		},
-	}
-	if err := k8sClient.Create(ctx, binding); err != nil {
-		t.Fatalf("create controller serviceaccount rolebinding: %v", err)
-	}
+	ensureControllerResourceRBAC(
+		t,
+		namespace,
+		"controller-serviceaccount-manager",
+		"controller-serviceaccount-manager-binding",
+		"serviceaccounts",
+	)
 }
 
 func TestVAP_ControllerServiceAccounts_DeniesUnexpectedServiceAccount(t *testing.T) {

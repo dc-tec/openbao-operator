@@ -73,9 +73,7 @@ func TestVAP_ProvisionerRBAC_RestrictsRoleBindingSubjects(t *testing.T) {
 
 	// Some API servers validate RoleBinding.roleRef existence; create the Role first.
 	tenantRole := provisionerpkg.GenerateTenantRole(namespace)
-	if err := provisionerClient.Patch(ctx, tenantRole, client.Apply, client.ForceOwnership, client.FieldOwner(integrationFieldOwner)); err != nil {
-		t.Fatalf("create tenant Role: %v", err)
-	}
+	applyClientObject(t, provisionerClient, tenantRole)
 
 	tenantRB := &rbacv1.RoleBinding{
 		TypeMeta: metav1.TypeMeta{
@@ -100,13 +98,12 @@ func TestVAP_ProvisionerRBAC_RestrictsRoleBindingSubjects(t *testing.T) {
 		},
 	}
 
-	if err := provisionerClient.Patch(ctx, tenantRB, client.Apply, client.ForceOwnership, client.FieldOwner(integrationFieldOwner)); err != nil {
-		t.Fatalf("expected tenant RoleBinding creation to succeed, got: %v", err)
-	}
+	applyClientObject(t, provisionerClient, tenantRB)
 
 	// Attempt to broaden subject namespace; should be denied by the VAP.
 	var latest rbacv1.RoleBinding
-	if err := provisionerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: tenantRB.Name}, &latest); err != nil {
+	roleBindingKey := types.NamespacedName{Namespace: namespace, Name: tenantRB.Name}
+	if err := provisionerClient.Get(ctx, roleBindingKey, &latest); err != nil {
 		t.Fatalf("get RoleBinding: %v", err)
 	}
 	original := latest.DeepCopy()

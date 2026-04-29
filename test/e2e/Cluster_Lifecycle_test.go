@@ -118,11 +118,21 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 
 			By("waiting for OpenBaoCluster to be observed by the API server")
 			Eventually(func() error {
-				return c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, &openbaov1alpha1.OpenBaoCluster{})
+				return c.Get(ctx, types.NamespacedName{
+					Name:      clusterName,
+					Namespace: f.Namespace,
+				}, &openbaov1alpha1.OpenBaoCluster{})
 			}, 30*time.Second, 1*time.Second).Should(Succeed())
 
 			By("waiting for StatefulSet to be created")
-			f.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultWaitTimeout, framework.DefaultPollInterval)
+			_, err := f.WaitForStatefulSetReady(
+				ctx,
+				clusterName,
+				1,
+				framework.DefaultWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("triggering a reconcile and waiting for Available condition")
 			Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
@@ -298,12 +308,20 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 
 			By("waiting for root token Secret (self-init disabled)")
 			Eventually(func(g Gomega) {
-				g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-root-token", Namespace: f.Namespace}, &corev1.Secret{})).To(Succeed())
+				g.Expect(c.Get(ctx, types.NamespacedName{
+					Name:      clusterName + "-root-token",
+					Namespace: f.Namespace,
+				}, &corev1.Secret{})).To(Succeed())
 			}, 10*time.Minute, 3*time.Second).Should(Succeed(), "Root Token Secret missing")
 		})
 	})
 
-	Context("Development Profile: Scaling with Autopilot Reconciliation", Label("profile-development", "scaling", "autopilot", "smoke"), func() {
+	Context("Development Profile: Scaling with Autopilot Reconciliation", Label(
+		"profile-development",
+		"scaling",
+		"autopilot",
+		"smoke",
+	), func() {
 		var (
 			f   *framework.Framework
 			c   client.Client
@@ -441,7 +459,14 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			Expect(c.Create(ctx, cluster)).To(Succeed())
 
 			By("waiting for StatefulSet to be ready with 1 replica")
-			f.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err := f.WaitForStatefulSetReady(
+				ctx,
+				clusterName,
+				1,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("waiting for Available condition")
 			f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
@@ -486,7 +511,10 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					map[string]string{"role": "test-verifier"},
 					1, // Expected min_quorum for Development profile with 1 replica
 				)
-			}, 2*time.Minute, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be 1 for Development profile with 1 replica")
+			}, 2*time.Minute, 5*time.Second).Should(
+				Succeed(),
+				"Autopilot min_quorum should be 1 for Development profile with 1 replica",
+			)
 			_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot min_quorum=1 verified\n")
 		})
 
@@ -503,7 +531,14 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			})).To(Succeed())
 
 			By("waiting for StatefulSet to scale to 3 replicas")
-			f.WaitForStatefulSetReady(ctx, clusterName, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err := f.WaitForStatefulSetReady(
+				ctx,
+				clusterName,
+				3,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("waiting for all pods to be ready")
 			Eventually(func(g Gomega) {
@@ -536,7 +571,10 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					map[string]string{"role": "test-verifier"},
 					3, // Expected min_quorum for Development profile with 3 replicas
 				)
-			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be updated to 3 after scaling")
+			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(
+				Succeed(),
+				"Autopilot min_quorum should be updated to 3 after scaling",
+			)
 			_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot min_quorum=3 verified after scale up\n")
 		})
 
@@ -553,7 +591,14 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			})).To(Succeed())
 
 			By("waiting for StatefulSet to scale down to 1 replica")
-			f.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err := f.WaitForStatefulSetReady(
+				ctx,
+				clusterName,
+				1,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 
 			By("waiting for the remaining pod to be ready")
 			Eventually(func(g Gomega) {
@@ -589,7 +634,10 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					map[string]string{"role": "test-verifier"},
 					1, // Expected min_quorum for Development profile with 1 replica
 				)
-			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(Succeed(), "Autopilot min_quorum should be updated to 1 after scale down")
+			}, framework.DefaultLongWaitTimeout, 5*time.Second).Should(
+				Succeed(),
+				"Autopilot min_quorum should be updated to 1 after scale down",
+			)
 			_, _ = fmt.Fprintf(GinkgoWriter, "✓ Raft Autopilot min_quorum=1 verified after scale down\n")
 
 			By("verifying the remaining cluster still serves JWT-authenticated KV traffic")

@@ -36,7 +36,7 @@ type RustFSConfig struct {
 func DefaultRustFSConfig() RustFSConfig {
 	return RustFSConfig{
 		Name:        "rustfs",
-		Image:       "rustfs/rustfs:latest",
+		Image:       envOrDefault(EnvRustFSImage, DefaultRustFSImage),
 		AccessKey:   "rustfsadmin",
 		SecretKey:   "rustfsadmin",
 		Replicas:    1, // Use 1 replica for e2e tests (distributed mode requires more setup)
@@ -177,8 +177,9 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 					},
 					Containers: []corev1.Container{
 						{
-							Name:  "rustfs",
-							Image: cfg.Image,
+							Name:            "rustfs",
+							Image:           cfg.Image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: 9000, Name: "api"},
 								{ContainerPort: 9001, Name: "console"},
@@ -326,12 +327,13 @@ func EnsureRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, cf
 			)
 		case <-deploymentReadyDeadline.C:
 			return fmt.Errorf(
-				"timed out waiting for RustFS Deployment %s/%s to be ready (ready=%d/%d, replicas=%d)",
+				"timed out waiting for RustFS Deployment %s/%s to be ready (ready=%d/%d, replicas=%d)\n%s",
 				cfg.Namespace,
 				cfg.Name,
 				current.Status.ReadyReplicas,
 				cfg.Replicas,
 				current.Status.Replicas,
+				formatDeploymentPodDiagnostics(ctx, c, cfg.Namespace, cfg.Name),
 			)
 		case <-deploymentReadyTicker.C:
 		}

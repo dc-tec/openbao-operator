@@ -1,0 +1,720 @@
+version: 1
+versions:
+  openbao:
+    defaultImage: "ghcr.io/openbao/openbao:2.5.3"
+  storageEmulators:
+    rustfsImage: "docker.io/rustfs/rustfs@sha256:3c2d55977829620284ece8593901bf776bcfc0fc9972784352de4dcffdb92416"
+    fakeGCSImage: "docker.io/fsouza/fake-gcs-server@sha256:3730da0e31f7e5186a90ec4899dc2c336104e7599df400411392ef17e684c31f"
+    azuriteImage: "mcr.microsoft.com/azure-storage/azurite@sha256:647c63a91102a9d8e8000aab803436e1fc85fbb285e7ce830a82ee5d6661cf37"
+  kubernetes:
+    primary: "1.35.1"
+    compatibility:
+      - "1.34.3"
+    releaseGate:
+      - "1.34.3"
+      - "1.35.1"
+    # Kubernetes 1.36.0 is upstream-supported, but kindest/node:v1.36.0 is not published yet.
+    nextCandidate: "1.36.0"
+
+parallelism:
+  defaultNodes: 1
+  maxNodes: 4
+
+ciLanes:
+  - id: core
+    name: "Core Lifecycle & Manager"
+    labelFilter: "(((lifecycle && !tls) || manager) && !openshift)"
+    prLabelFilter: "(((lifecycle && !tls) || (manager && (smoke || e2e-anchor))) && !openshift)"
+    prScope: always
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    parallelNodes: 2
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    installCSIHostPath: true
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
+  - id: security
+    name: "Security & Tenants"
+    labelFilter: "(((security || tenancy || tls || (tenant && !lifecycle)) && !profile-hardened && !(tls && slow)) && !openshift)"
+    prScope: always
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: true
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
+  - id: backup-restore
+    name: "Backup & Restore"
+    labelFilter: "((dr || restore) && !openshift)"
+    prLabelFilter: "((dr && e2e-anchor) && !openshift)"
+    prScope: backup
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+    preloadStorageEmulators:
+      - rustfs
+      - fake-gcs
+      - azurite
+
+  - id: upgrade-rolling
+    name: "Upgrade Rolling"
+    labelFilter: "((upgrade && (rolling || snapshot || recovery || operation-lock) && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && (rolling || operation-lock) && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators:
+      - rustfs
+
+  - id: upgrade-bluegreen-core
+    name: "Upgrade Blue/Green Core"
+    labelFilter: "((upgrade && bluegreen && !verification && !failure && !rollback && !chaos && !gateway && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && bluegreen && !verification && !failure && !rollback && !chaos && !gateway && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 30
+    e2eTimeout: 25m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators:
+      - rustfs
+
+  - id: upgrade-bluegreen-verification
+    name: "Upgrade Blue/Green Verification"
+    labelFilter: "((upgrade && bluegreen && verification && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 30
+    e2eTimeout: 25m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
+  - id: upgrade-bluegreen-recovery
+    name: "Upgrade Blue/Green Recovery"
+    labelFilter: "((upgrade && bluegreen && (failure || rollback || chaos) && !verification && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && bluegreen && failure && !verification && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 30
+    e2eTimeout: 25m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
+  - id: upgrade-gateway
+    name: "Upgrade Gateway"
+    labelFilter: "((upgrade && gateway && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && gateway && !hardened) && !openshift)"
+    prScope: upgrade
+    timeoutMinutes: 25
+    e2eTimeout: 20m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
+  - id: hardened
+    name: "Hardened (Signed)"
+    labelFilter: "((profile-hardened || (tls && slow)) && !openshift)"
+    prScope: hardened
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    excludePentestOnDefaultPR: false
+    hardenedSigned: true
+    hardenedInitImage: "ghcr.io/dc-tec/openbao-init:edge"
+    hardenedUpgradeExecutorImage: "ghcr.io/dc-tec/openbao-upgrade:edge"
+    loadBackupExecutorImage: true
+    loadUpgradeExecutorImage: true
+    preloadUpgradeImages: true
+    preloadHardenedAssets: true
+    preloadStorageEmulators: []
+
+  - id: platform-openshift
+    name: "OpenShift Platform"
+    labelFilter: "(openshift && platform)"
+    prScope: manual
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    includeInPRMatrix: false
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
+nightly:
+  profiles:
+    - id: daily
+      description: "Full primary-version coverage plus compatibility smoke coverage."
+      laneSets:
+        - coverage: full
+          kubernetes:
+            - "@primary"
+          lanes:
+            - core
+            - security
+            - backup-restore
+            - upgrade-rolling
+            - upgrade-bluegreen-core
+            - upgrade-bluegreen-verification
+            - upgrade-bluegreen-recovery
+            - upgrade-gateway
+            - hardened
+      rows:
+        - lane: core
+          kubernetes: "@compatibility"
+          coverage: compatibility-smoke
+          labelFilter: "(((lifecycle && smoke) || (manager && smoke)) && !openshift)"
+          timeoutMinutes: 45
+          e2eTimeout: 40m
+        - lane: security
+          kubernetes: "@compatibility"
+          coverage: compatibility-smoke
+          labelFilter: "(((security || tenant || tenancy) && critical && !pentest) && !openshift)"
+          timeoutMinutes: 45
+          e2eTimeout: 40m
+
+    - id: weekly-full
+      description: "Full compatibility coverage across supported Kubernetes versions."
+      laneSets:
+        - coverage: full
+          kubernetes:
+            - "@releaseGate"
+          lanes:
+            - core
+            - security
+            - backup-restore
+            - upgrade-rolling
+            - upgrade-bluegreen-core
+            - upgrade-bluegreen-verification
+            - upgrade-bluegreen-recovery
+            - upgrade-gateway
+            - hardened
+
+    - id: release-gate
+      description: "Manual full compatibility gate before release promotion."
+      laneSets:
+        - coverage: release-gate
+          kubernetes:
+            - "@releaseGate"
+          lanes:
+            - core
+            - security
+            - backup-restore
+            - upgrade-rolling
+            - upgrade-bluegreen-core
+            - upgrade-bluegreen-verification
+            - upgrade-bluegreen-recovery
+            - upgrade-gateway
+            - hardened
+
+suites:
+  - id: cluster-deletion-policy
+    title: "Cluster Lifecycle: Deletion Policy"
+    owner: core
+    riskTier: high
+    isolation: parallel-safe
+    files:
+      - test/e2e/Cluster_DeletionPolicy_test.go
+    labels:
+      - lifecycle
+      - cluster
+      - deletion
+    coverage:
+      - deletion-policy
+      - pvc-cleanup
+      - pvc-retention
+      - recoverability-secret-cleanup
+      - recoverability-secret-retention
+      - tls-secret-cleanup
+    runtime:
+      observed: 1m52.372s
+      budget: 3m
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-lifecycle
+    title: "Cluster Lifecycle"
+    owner: core
+    riskTier: critical
+    isolation: parallel-safe
+    files:
+      - test/e2e/Cluster_Lifecycle_test.go
+    labels:
+      - lifecycle
+      - cluster
+      - profile-development
+      - scaling
+      - autopilot
+      - smoke
+      - critical
+      - tenant
+    coverage: []
+    runtime:
+      observed: 4m40.082s
+      budget: 7m
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-profile-hardened
+    title: "Hardened profile (External TLS + Transit auto-unseal + SelfInit)"
+    owner: hardening
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Cluster_Profile_Hardened_test.go
+    labels:
+      - profile-hardened
+      - security
+      - cluster
+      - upgrade
+      - bluegreen
+      - hardened
+      - rolling
+    coverage: []
+    runtime:
+      observed: 12m3.894s
+      budget: 18m
+    ci:
+      lanes:
+        - hardened
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-runtime-controls
+    title: "Cluster Runtime Controls"
+    owner: core
+    riskTier: high
+    isolation: parallel-safe
+    files:
+      - test/e2e/Cluster_Runtime_Controls_test.go
+    labels:
+      - lifecycle
+      - cluster
+      - runtime
+    coverage:
+      - external-service
+      - ingress
+      - pod-rollout
+      - restart-at
+      - tls-san
+    runtime:
+      observed: 1m58.271s
+      budget: 3m
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-tls-acme
+    title: "ACME TLS (OpenBao native ACME client)"
+    owner: security
+    riskTier: medium
+    isolation: shared-cluster
+    files:
+      - test/e2e/Cluster_TLS_ACME_test.go
+    labels:
+      - tls
+      - security
+      - slow
+    coverage: []
+    runtime:
+      observed: 2m16.688s
+      budget: 4m
+    ci:
+      lanes:
+        - hardened
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-tls-lifecycle
+    title: "Cluster TLS Lifecycle"
+    owner: security
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/Cluster_TLS_Lifecycle_test.go
+    labels:
+      - tls
+      - cluster
+      - lifecycle
+    coverage:
+      - cert-replacement
+      - pod-stability
+      - secret-regeneration
+      - tls-hot-reload
+      - tls-lifecycle
+      - tls-verification
+    runtime:
+      observed: 1m31.439s
+      budget: 2m20s
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: manager-resilience
+    title: "Manager Resilience"
+    owner: manager
+    riskTier: high
+    isolation: serial
+    files:
+      - test/e2e/Manager_Resilience_test.go
+    labels:
+      - manager
+      - cluster
+      - e2e-anchor
+    coverage:
+      - controller-failover
+      - controller-outage
+      - controller-restart
+      - existing-cluster-adoption
+      - idempotent-reconcile
+      - leader-election
+      - post-failover-reconcile
+      - post-outage-reconcile
+      - scale-reconcile
+    runtime:
+      observed: 5m3.107s
+      budget: 8m
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: operator-manager
+    title: "Manager"
+    owner: manager
+    riskTier: critical
+    isolation: parallel-safe
+    files:
+      - test/e2e/Operator_Manager_test.go
+    labels:
+      - manager
+      - critical
+      - smoke
+    coverage:
+      - manager-metrics-endpoint
+    runtime:
+      observed: 0.595s
+      budget: 15s
+    ci:
+      lanes:
+        - core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: platform-openshift
+    title: "OpenShift Platform"
+    owner: platform
+    riskTier: high
+    isolation: external-cluster
+    files:
+      - test/e2e/Platform_OpenShift_test.go
+    labels:
+      - openshift
+      - platform
+    coverage: []
+    ci:
+      lanes:
+        - platform-openshift
+      pullRequest: manual
+    nightly:
+      policy: external-cluster-scheduled
+
+  - id: security-guardrails
+    title: "Security Guardrails"
+    owner: security
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Security_Guardrails_test.go
+    labels:
+      - security
+      - critical
+      - admission
+      - pentest
+      - config
+      - tokens
+      - rbac
+      - tamper
+    coverage:
+      - admission-runtime-recheck
+      - managed-resource-pause-on-policy-loss
+    runtime:
+      observed: 2m17.926s
+      budget: 4m
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: tenant-data-isolation
+    title: "Tenant Data Isolation"
+    owner: security
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/Tenant_Data_Isolation_test.go
+    labels:
+      - security
+      - tenant
+      - tenancy
+    coverage:
+      - data-plane-isolation
+      - network-isolation
+      - tenant-isolation
+    runtime:
+      observed: 1m6.434s
+      budget: 2m
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: tenant-isolation
+    title: "Tenant Isolation"
+    owner: security
+    riskTier: critical
+    isolation: shared-cluster
+    files:
+      - test/e2e/Tenant_Isolation_test.go
+    labels:
+      - security
+      - tenant
+      - tenancy
+      - critical
+      - single-tenant
+    coverage: []
+    runtime:
+      observed: 1m41.442s
+      budget: 3m
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: upgrade-operation-lock
+    title: "Upgrade Strategies: Operation Lock Contention"
+    owner: upgrade
+    riskTier: high
+    isolation: global-mutator
+    files:
+      - test/e2e/Upgrade_Operation_Lock_test.go
+    labels:
+      - upgrade
+      - backup
+      - e2e-anchor
+      - operation-lock
+      - slow
+    coverage:
+      - backup-queueing
+      - operation-lock
+      - rolling-upgrade
+    runtime:
+      observed: 3m32.524s
+      budget: 5m30s
+    ci:
+      lanes:
+        - upgrade-rolling
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: upgrade-strategies
+    title: "Upgrade Strategies"
+    owner: upgrade
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Upgrade_Strategies_test.go
+    labels:
+      - upgrade
+      - upgrades
+      - cluster
+      - e2e-anchor
+      - slow
+      - read-replicas
+      - read-replicas-rolling
+      - rolling
+      - snapshot
+      - recovery
+      - bluegreen
+      - verification
+      - failure
+      - gateway
+      - requires-gateway-api
+      - tls-passthrough
+      - rollback
+      - chaos
+    coverage: []
+    runtime:
+      observed: 36m39.240s
+      budget: 55m
+    ci:
+      lanes:
+        - upgrade-rolling
+        - upgrade-bluegreen-core
+        - upgrade-bluegreen-verification
+        - upgrade-bluegreen-recovery
+        - upgrade-gateway
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: upgrade-target-drift
+    title: "Upgrade Strategies: Blue/Green Drift"
+    owner: upgrade
+    riskTier: high
+    isolation: global-mutator
+    files:
+      - test/e2e/Upgrade_Target_Drift_test.go
+    labels:
+      - upgrade
+      - bluegreen
+      - slow
+    coverage:
+      - bluegreen-drift
+      - stale-green-cleanup
+      - target-revision-drift
+    runtime:
+      observed: 8m6.824s
+      budget: 12m
+    ci:
+      lanes:
+        - upgrade-bluegreen-core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: anti-tamper-policy
+    title: "Security: Anti-Tamper Policy"
+    owner: security
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/anti_tamper_policy_test.go
+    labels:
+      - security
+      - tamper
+      - cluster
+      - slow
+    coverage:
+      - anti-tamper
+      - configmap-protection
+      - statefulset-protection
+    runtime:
+      observed: 6.090s
+      budget: 30s
+    ci:
+      lanes:
+        - security
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: backup-restore
+    title: "DR: Storage Providers Backup & Restore"
+    owner: backup-restore
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/backup_restore_test.go
+    labels:
+      - dr
+      - backup
+      - restore
+      - storage-providers
+      - e2e-anchor
+      - nightly
+      - provider-smoke
+      - slow
+      - read-replicas
+      - read-replicas-restore
+      - failure-injection
+    coverage: []
+    runtime:
+      observed: 9m32.724s
+      budget: 15m
+    ci:
+      lanes:
+        - backup-restore
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full

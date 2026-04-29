@@ -55,7 +55,11 @@ var _ = Describe("Cluster Lifecycle: Deletion Policy", Label("lifecycle", "clust
 		Eventually(func(g Gomega) {
 			secret := &corev1.Secret{}
 			g.Expect(c.Get(ctx, key, secret)).To(Succeed())
-			g.Expect(hasOwnerReferenceWithUID(secret, clusterUID)).To(BeTrue(), "expected Secret %q to be owned by the cluster before deletion", key.Name)
+			g.Expect(hasOwnerReferenceWithUID(secret, clusterUID)).To(
+				BeTrue(),
+				"expected Secret %q to be owned by the cluster before deletion",
+				key.Name,
+			)
 		}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 	}
 
@@ -63,15 +67,27 @@ var _ = Describe("Cluster Lifecycle: Deletion Policy", Label("lifecycle", "clust
 		Eventually(func() bool {
 			err := c.Get(ctx, key, &corev1.Secret{})
 			return apierrors.IsNotFound(err)
-		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(BeTrue(), "expected Secret %q to be deleted", key.Name)
+		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(
+			BeTrue(),
+			"expected Secret %q to be deleted",
+			key.Name,
+		)
 	}
 
 	assertSecretRetainedAndOrphaned := func(key types.NamespacedName, clusterUID types.UID) {
 		Eventually(func(g Gomega) {
 			secret := &corev1.Secret{}
 			g.Expect(c.Get(ctx, key, secret)).To(Succeed())
-			g.Expect(secret.OwnerReferences).To(BeEmpty(), "expected retained Secret %q to be orphaned during finalization", key.Name)
-			g.Expect(hasOwnerReferenceWithUID(secret, clusterUID)).To(BeFalse(), "expected retained Secret %q to no longer reference the deleted cluster", key.Name)
+			g.Expect(secret.OwnerReferences).To(
+				BeEmpty(),
+				"expected retained Secret %q to be orphaned during finalization",
+				key.Name,
+			)
+			g.Expect(hasOwnerReferenceWithUID(secret, clusterUID)).To(
+				BeFalse(),
+				"expected retained Secret %q to no longer reference the deleted cluster",
+				key.Name,
+			)
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 	}
 
@@ -79,28 +95,44 @@ var _ = Describe("Cluster Lifecycle: Deletion Policy", Label("lifecycle", "clust
 		if wantRetained {
 			Eventually(func(g Gomega) {
 				g.Expect(c.Get(ctx, key, &corev1.PersistentVolumeClaim{})).To(Succeed())
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed(), "expected PVC %q to be retained", key.Name)
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(
+				Succeed(),
+				"expected PVC %q to be retained",
+				key.Name,
+			)
 			return
 		}
 
 		Eventually(func() bool {
 			err := c.Get(ctx, key, &corev1.PersistentVolumeClaim{})
 			return apierrors.IsNotFound(err)
-		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(BeTrue(), "expected PVC %q to be deleted", key.Name)
+		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(
+			BeTrue(),
+			"expected PVC %q to be deleted",
+			key.Name,
+		)
 	}
 
 	assertStatefulSetDeleted := func(key types.NamespacedName) {
 		Eventually(func() bool {
 			err := c.Get(ctx, key, &appsv1.StatefulSet{})
 			return apierrors.IsNotFound(err)
-		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(BeTrue(), "expected StatefulSet %q to be deleted", key.Name)
+		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(
+			BeTrue(),
+			"expected StatefulSet %q to be deleted",
+			key.Name,
+		)
 	}
 
 	assertClusterDeleted := func(key types.NamespacedName) {
 		Eventually(func() bool {
 			err := c.Get(ctx, key, &openbaov1alpha1.OpenBaoCluster{})
 			return apierrors.IsNotFound(err)
-		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(BeTrue(), "expected OpenBaoCluster %q to be fully deleted", key.Name)
+		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(
+			BeTrue(),
+			"expected OpenBaoCluster %q to be fully deleted",
+			key.Name,
+		)
 	}
 
 	assertDeletionPolicy := func(clusterName string, policy openbaov1alpha1.DeletionPolicy, want deletionExpectations) {

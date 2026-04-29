@@ -35,7 +35,7 @@ type GCSConfig struct {
 func DefaultGCSConfig() GCSConfig {
 	return GCSConfig{
 		Name:    "fake-gcs-server",
-		Image:   "fsouza/fake-gcs-server:latest",
+		Image:   envOrDefault(EnvFakeGCSImage, DefaultFakeGCSImage),
 		Port:    4443,
 		Project: "test-project",
 	}
@@ -119,8 +119,9 @@ func EnsureFakeGCS(ctx context.Context, c client.Client, cfg GCSConfig) error {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  cfg.Name,
-							Image: cfg.Image,
+							Name:            cfg.Name,
+							Image:           cfg.Image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: cfg.Port,

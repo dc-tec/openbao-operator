@@ -116,7 +116,6 @@ func waitForReadyControllerPods(
 	namespace string,
 	count int,
 	timeout time.Duration,
-	pollInterval time.Duration,
 ) ([]corev1.Pod, error) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -138,7 +137,7 @@ func waitForReadyControllerPods(
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("context canceled while waiting for %d ready controller pods: %w", count, ctx.Err())
-		case <-time.After(pollInterval):
+		case <-time.After(framework.DefaultPollInterval):
 		}
 	}
 

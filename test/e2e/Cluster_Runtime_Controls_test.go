@@ -15,7 +15,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -132,61 +131,6 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		_ = f.Cleanup(cleanupCtx)
 	})
 
-	It("pauses reconciliation until spec.paused is cleared", Label(
-		"case:cluster-paused-resume",
-		"covers:paused-reconcile",
-		"covers:paused-status",
-	), func() {
-		const clusterName = "paused-cluster"
-
-		cluster := newDevelopmentCluster(clusterName)
-		cluster.Spec.Paused = true
-		Expect(c.Create(ctx, cluster)).To(Succeed())
-		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })
-
-		By("waiting for paused status conditions to be reported")
-		Eventually(func(g Gomega) {
-			updated := &openbaov1alpha1.OpenBaoCluster{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
-
-			available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
-			g.Expect(available).NotTo(BeNil())
-			g.Expect(available.Reason).To(Equal("Paused"))
-
-			degraded := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-			g.Expect(degraded).NotTo(BeNil())
-			g.Expect(degraded.Reason).To(Equal("Paused"))
-
-			tlsReady := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionTLSReady))
-			g.Expect(tlsReady).NotTo(BeNil())
-			g.Expect(tlsReady.Reason).To(Equal("Paused"))
-		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
-		By("verifying workload resources are not created while reconciliation is paused")
-		Consistently(func(g Gomega) {
-			sts := &appsv1.StatefulSet{}
-			err := c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)
-			g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
-
-			serverSecret := &corev1.Secret{}
-			err = c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-server", Namespace: f.Namespace}, serverSecret)
-			g.Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		}, 20*time.Second, framework.DefaultPollInterval).Should(Succeed())
-
-		By("clearing spec.paused so normal reconciliation resumes")
-		Eventually(func(g Gomega) {
-			updated := &openbaov1alpha1.OpenBaoCluster{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
-			original := updated.DeepCopy()
-			updated.Spec.Paused = false
-			g.Expect(c.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
-		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
-		_, err := f.WaitForStatefulSetReady(ctx, clusterName, 1, 10*time.Minute, framework.DefaultPollInterval)
-		Expect(err).NotTo(HaveOccurred())
-		waitForClusterAvailable(clusterName)
-	})
-
 	It("rolls the OpenBao pod when runtime.restartAt changes", Label(
 		"case:cluster-restart-at-rolls-pod",
 		"covers:restart-at",
@@ -255,7 +199,10 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		By("verifying the ingress and public service are created for external access")
 		Eventually(func(g Gomega) {
 			service := &corev1.Service{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-public", Namespace: f.Namespace}, service)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      clusterName + "-public",
+				Namespace: f.Namespace,
+			}, service)).To(Succeed())
 
 			ingress := &networkingv1.Ingress{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, ingress)).To(Succeed())
@@ -272,49 +219,13 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		By("verifying the operator-managed server certificate includes the ingress host")
 		Eventually(func(g Gomega) {
 			secret := &corev1.Secret{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-tls-server", Namespace: f.Namespace}, secret)).To(Succeed())
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      clusterName + "-tls-server",
+				Namespace: f.Namespace,
+			}, secret)).To(Succeed())
 			cert := parseServerCertificate(secret)
 			g.Expect(cert.DNSNames).To(ContainElement(host))
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 	})
 
-	It("renders telemetry configuration when observability metrics are enabled", Label(
-		"case:cluster-telemetry-rendering",
-		"covers:telemetry",
-		"covers:observability-metrics",
-	), func() {
-		const clusterName = "telemetry-cluster"
-
-		cluster := newDevelopmentCluster(clusterName)
-		cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
-			Metrics: &openbaov1alpha1.MetricsConfig{
-				Enabled: true,
-			},
-		}
-		cluster.Spec.Telemetry = &openbaov1alpha1.TelemetryConfig{
-			MetricsPrefix:           "openbao.e2e",
-			PrometheusRetentionTime: "45s",
-			EnableHostnameLabel:     true,
-		}
-		Expect(c.Create(ctx, cluster)).To(Succeed())
-		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })
-
-		_, err := f.WaitForStatefulSetReady(ctx, clusterName, 1, 10*time.Minute, framework.DefaultPollInterval)
-		Expect(err).NotTo(HaveOccurred())
-		waitForClusterAvailable(clusterName)
-
-		By("verifying the rendered config includes the telemetry stanza")
-		Eventually(func(g Gomega) {
-			configMap := &corev1.ConfigMap{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-config", Namespace: f.Namespace}, configMap)).To(Succeed())
-			cfgText := configMap.Data["config.hcl"]
-			g.Expect(cfgText).To(ContainSubstring("telemetry {"))
-			g.Expect(cfgText).To(ContainSubstring("metrics_prefix"))
-			g.Expect(cfgText).To(ContainSubstring("openbao.e2e"))
-			g.Expect(cfgText).To(ContainSubstring("prometheus_retention_time"))
-			g.Expect(cfgText).To(ContainSubstring("45s"))
-			g.Expect(cfgText).To(ContainSubstring("disable_hostname"))
-			g.Expect(cfgText).To(ContainSubstring("enable_hostname_label"))
-		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-	})
 })

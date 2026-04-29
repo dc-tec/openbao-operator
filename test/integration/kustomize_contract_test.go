@@ -36,7 +36,6 @@ func TestKustomizeClusterScopedResourcesHaveNoNamespace(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			yamlBytes := kustomizeBuild(t, tc.dir)
 			decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlBytes), 4096)
@@ -76,8 +75,8 @@ func TestKustomizeClusterScopedResourcesHaveNoNamespace(t *testing.T) {
 }
 
 func allowsClusterScopedNamespaceInSingleTenantOverlay(gvk schema.GroupVersionKind) bool {
-	return gvk.Group == "admissionregistration.k8s.io" &&
-		(gvk.Kind == "ValidatingAdmissionPolicy" || gvk.Kind == "ValidatingAdmissionPolicyBinding")
+	return gvk.Group == testAdmissionRegistrationGroup &&
+		(gvk.Kind == testKindVAP || gvk.Kind == testKindVAPBinding)
 }
 
 func TestKustomizePolicy_BindingsReferenceExistingPolicies(t *testing.T) {
@@ -96,22 +95,21 @@ func TestKustomizePolicy_BindingsReferenceExistingPolicies(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			yamlBytes := kustomizeBuild(t, tc.dir)
 			objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
 				gvk := u.GroupVersionKind()
-				return gvk.Group == "admissionregistration.k8s.io" &&
-					(gvk.Kind == "ValidatingAdmissionPolicy" || gvk.Kind == "ValidatingAdmissionPolicyBinding")
+				return gvk.Group == testAdmissionRegistrationGroup &&
+					(gvk.Kind == testKindVAP || gvk.Kind == testKindVAPBinding)
 			})
 
 			policies := make(map[string]struct{})
 			bindings := make(map[string]string)
 			for _, obj := range objs {
 				switch obj.GetKind() {
-				case "ValidatingAdmissionPolicy":
+				case testKindVAP:
 					policies[obj.GetName()] = struct{}{}
-				case "ValidatingAdmissionPolicyBinding":
+				case testKindVAPBinding:
 					policyName, found, err := unstructured.NestedString(obj.Object, "spec", "policyName")
 					if err != nil {
 						t.Fatalf("read spec.policyName for binding %s: %v", obj.GetName(), err)
@@ -140,8 +138,8 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
 		gvk := u.GroupVersionKind()
-		return gvk.Group == "admissionregistration.k8s.io" &&
-			gvk.Kind == "ValidatingAdmissionPolicy" &&
+		return gvk.Group == testAdmissionRegistrationGroup &&
+			gvk.Kind == testKindVAP &&
 			strings.HasSuffix(u.GetName(), "openbao-lock-managed-resource-mutations")
 	})
 
@@ -181,22 +179,34 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	}
 
 	if !strings.Contains(hasOpenBaoLabelExpression, `k.startsWith("openbao.org/")`) {
-		t.Fatalf("has_openbao_specific_label expression does not enforce openbao.org/* label gate: %q", hasOpenBaoLabelExpression)
+		t.Fatalf(
+			"has_openbao_specific_label expression does not enforce openbao.org/* label gate: %q",
+			hasOpenBaoLabelExpression,
+		)
 	}
 	if !strings.Contains(isManagedExpression, "variables.has_openbao_specific_label") {
 		t.Fatalf("is_managed expression does not require has_openbao_specific_label: %q", isManagedExpression)
 	}
 	if !strings.Contains(maintenanceClusterNameExpression, `"openbao.org/cluster"`) {
-		t.Fatalf("maintenance_cluster_name expression does not prefer openbao.org/cluster: %q", maintenanceClusterNameExpression)
+		t.Fatalf(
+			"maintenance_cluster_name expression does not prefer openbao.org/cluster: %q",
+			maintenanceClusterNameExpression,
+		)
 	}
 	if !strings.Contains(maintenanceClusterNameExpression, `"app.kubernetes.io/instance"`) {
-		t.Fatalf("maintenance_cluster_name expression does not fall back to app.kubernetes.io/instance: %q", maintenanceClusterNameExpression)
+		t.Fatalf(
+			"maintenance_cluster_name expression does not fall back to app.kubernetes.io/instance: %q",
+			maintenanceClusterNameExpression,
+		)
 	}
 	if !strings.Contains(maintenanceAuthorizedExpression, `authorizer.group("openbao.org")`) {
 		t.Fatalf("maintenance_authorized expression does not use the CEL authorizer: %q", maintenanceAuthorizedExpression)
 	}
 	if !strings.Contains(maintenanceAuthorizedExpression, `check("maintenance")`) {
-		t.Fatalf("maintenance_authorized expression does not check the custom maintenance verb: %q", maintenanceAuthorizedExpression)
+		t.Fatalf(
+			"maintenance_authorized expression does not check the custom maintenance verb: %q",
+			maintenanceAuthorizedExpression,
+		)
 	}
 }
 
@@ -204,8 +214,8 @@ func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *t
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
 		gvk := u.GroupVersionKind()
-		return gvk.Group == "admissionregistration.k8s.io" &&
-			gvk.Kind == "ValidatingAdmissionPolicy" &&
+		return gvk.Group == testAdmissionRegistrationGroup &&
+			gvk.Kind == testKindVAP &&
 			strings.HasSuffix(u.GetName(), "openbao-validate-openbaocluster")
 	})
 
@@ -235,7 +245,11 @@ func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *t
 	}
 
 	if !hasRequestedStrategy || !hasPreviousStrategy {
-		t.Fatalf("expected strategy transition variables in openbao-validate-openbaocluster policy, got requested=%v previous=%v", hasRequestedStrategy, hasPreviousStrategy)
+		t.Fatalf(
+			"expected strategy transition variables in openbao-validate-openbaocluster policy, got requested=%v previous=%v",
+			hasRequestedStrategy,
+			hasPreviousStrategy,
+		)
 	}
 
 	validations, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "validations")
@@ -243,7 +257,8 @@ func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *t
 		t.Fatalf("read policy validations: found=%v err=%v", found, err)
 	}
 
-	const wantMessage = "spec.upgrade.strategy is immutable after creation; switching between RollingUpdate and BlueGreen is not supported."
+	const wantMessage = "spec.upgrade.strategy is immutable after creation; " +
+		"switching between RollingUpdate and BlueGreen is not supported."
 	var foundRule bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
@@ -282,7 +297,8 @@ func TestKustomizeDefault_OpenBaoClusterCRDRejectsUpgradeStrategySwitches(t *tes
 		t.Fatalf("read CRD versions: found=%v err=%v", found, err)
 	}
 
-	const wantMessage = "spec.upgrade.strategy is immutable after creation; switching between RollingUpdate and BlueGreen is not supported."
+	const wantMessage = "spec.upgrade.strategy is immutable after creation; " +
+		"switching between RollingUpdate and BlueGreen is not supported."
 	for _, version := range versions {
 		versionMap, ok := version.(map[string]any)
 		if !ok {
@@ -337,7 +353,7 @@ func TestKustomizeDefault_ControllerOpenBaoAudienceMatchesProjection(t *testing.
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
 		return u.GetAPIVersion() == "apps/v1" &&
 			u.GetKind() == "Deployment" &&
-			u.GetName() == "openbao-operator-controller"
+			u.GetName() == testControllerSAName
 	})
 
 	if len(objs) != 1 {
@@ -350,6 +366,41 @@ func TestKustomizeDefault_ControllerOpenBaoAudienceMatchesProjection(t *testing.
 
 	if envAudience != projectedAudience {
 		t.Fatalf("controller OPENBAO_JWT_AUDIENCE=%q, projected openbao-token audience=%q", envAudience, projectedAudience)
+	}
+}
+
+func TestKustomizeDefault_ManagerMetricsResourcesExposeControllerAndProvisioner(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
+
+	testCases := []struct {
+		name           string
+		deploymentName string
+		serviceName    string
+		component      string
+	}{
+		{
+			name:           "controller",
+			deploymentName: testControllerSAName,
+			serviceName:    "openbao-operator-controller-metrics-service",
+			component:      "controller",
+		},
+		{
+			name:           "provisioner",
+			deploymentName: "openbao-operator-provisioner",
+			serviceName:    "openbao-operator-provisioner-metrics-service",
+			component:      testComponentProvisioner,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			deployment := mustFindObject(t, objs, "apps/v1", "Deployment", tc.deploymentName)
+			assertManagerDeploymentMetricsPort(t, deployment)
+
+			service := mustFindObject(t, objs, "v1", "Service", tc.serviceName)
+			assertManagerMetricsService(t, service, tc.component)
+		})
 	}
 }
 
@@ -449,38 +500,18 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 	var hasOperatorNamespace bool
 
 	for _, obj := range objs {
+		failIfProvisionerObject(t, obj)
+
 		switch obj.GetKind() {
 		case "Namespace":
-			if obj.GetName() == "openbao-operator-system" {
+			if obj.GetName() == testDefaultOperatorNS {
 				hasOperatorNamespace = true
 			}
 		case "Deployment":
-			if obj.GetName() == "openbao-operator-controller" {
+			if obj.GetName() == testControllerSAName {
 				controller = obj
 			}
-			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
-				t.Fatalf("unexpected provisioner deployment in single-tenant overlay: %s", obj.GetName())
-			}
-		case "Service":
-			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
-				t.Fatalf("unexpected provisioner service in single-tenant overlay: %s", obj.GetName())
-			}
-		case "ServiceAccount":
-			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
-				t.Fatalf("unexpected provisioner serviceaccount in single-tenant overlay: %s", obj.GetName())
-			}
-		case "ClusterRole":
-			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
-				t.Fatalf("unexpected provisioner clusterrole in single-tenant overlay: %s", obj.GetName())
-			}
-		case "ClusterRoleBinding":
-			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
-				t.Fatalf("unexpected provisioner clusterrolebinding in single-tenant overlay: %s", obj.GetName())
-			}
 		case "RoleBinding":
-			if labels := obj.GetLabels(); labels["app.kubernetes.io/component"] == "provisioner" {
-				t.Fatalf("unexpected provisioner rolebinding in single-tenant overlay: %s", obj.GetName())
-			}
 			if obj.GetName() == "openbao-operator-single-tenant" {
 				singleTenantBinding = obj
 			}
@@ -496,35 +527,16 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 	if singleTenantBinding == nil {
 		t.Fatal("single-tenant overlay missing target namespace rolebinding")
 	}
-	if singleTenantBinding.GetNamespace() != "openbao" {
-		t.Fatalf("single-tenant rolebinding namespace = %q, want %q", singleTenantBinding.GetNamespace(), "openbao")
+	if singleTenantBinding.GetNamespace() != testSingleTenantTargetNS {
+		t.Fatalf(
+			"single-tenant rolebinding namespace = %q, want %q",
+			singleTenantBinding.GetNamespace(),
+			testSingleTenantTargetNS,
+		)
 	}
 
-	envs, found, err := unstructured.NestedSlice(controller.Object, "spec", "template", "spec", "containers")
-	if err != nil || !found || len(envs) == 0 {
-		t.Fatalf("read controller containers: found=%v err=%v", found, err)
-	}
-	container, ok := envs[0].(map[string]any)
-	if !ok {
-		t.Fatalf("controller container has unexpected type %T", envs[0])
-	}
-	envList, found, err := unstructured.NestedSlice(container, "env")
-	if err != nil || !found {
-		t.Fatalf("read controller env: found=%v err=%v", found, err)
-	}
-	var watchNamespace string
-	for _, item := range envList {
-		envMap, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		if name, _ := envMap["name"].(string); name == "WATCH_NAMESPACE" {
-			watchNamespace, _ = envMap["value"].(string)
-			break
-		}
-	}
-	if watchNamespace != "openbao" {
-		t.Fatalf("WATCH_NAMESPACE = %q, want %q", watchNamespace, "openbao")
+	if got := kustomizeEnvVarValue(t, controller, "WATCH_NAMESPACE"); got != testSingleTenantTargetNS {
+		t.Fatalf("WATCH_NAMESPACE = %q, want %q", got, testSingleTenantTargetNS)
 	}
 
 	subjects, found, err := unstructured.NestedSlice(singleTenantBinding.Object, "subjects")
@@ -535,12 +547,21 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 	if !ok {
 		t.Fatalf("rolebinding subject has unexpected type %T", subjects[0])
 	}
-	if got, _ := subject["name"].(string); got != "openbao-operator-controller" {
-		t.Fatalf("rolebinding subject name = %q, want %q", got, "openbao-operator-controller")
+	if got, _ := subject["name"].(string); got != testControllerSAName {
+		t.Fatalf("rolebinding subject name = %q, want %q", got, testControllerSAName)
 	}
-	if got, _ := subject["namespace"].(string); got != "openbao-operator-system" {
-		t.Fatalf("rolebinding subject namespace = %q, want %q", got, "openbao-operator-system")
+	if got, _ := subject["namespace"].(string); got != testDefaultOperatorNS {
+		t.Fatalf("rolebinding subject namespace = %q, want %q", got, testDefaultOperatorNS)
 	}
+}
+
+func failIfProvisionerObject(t *testing.T, obj *unstructured.Unstructured) {
+	t.Helper()
+
+	if obj.GetLabels()["app.kubernetes.io/component"] != testComponentProvisioner {
+		return
+	}
+	t.Fatalf("unexpected provisioner %s in single-tenant overlay: %s", strings.ToLower(obj.GetKind()), obj.GetName())
 }
 
 func kustomizeEnvVarValue(t *testing.T, obj *unstructured.Unstructured, name string) string {
@@ -577,6 +598,86 @@ func kustomizeEnvVarValue(t *testing.T, obj *unstructured.Unstructured, name str
 
 	t.Fatalf("env %s not found", name)
 	return ""
+}
+
+func assertManagerDeploymentMetricsPort(t *testing.T, obj *unstructured.Unstructured) {
+	t.Helper()
+
+	containers, found, err := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
+	if err != nil || !found || len(containers) == 0 {
+		t.Fatalf("deployment %s containers not found: found=%v err=%v", obj.GetName(), found, err)
+	}
+
+	manager, ok := containers[0].(map[string]any)
+	if !ok {
+		t.Fatalf("deployment %s container has unexpected type %T", obj.GetName(), containers[0])
+	}
+	args, _ := manager["args"].([]any)
+	if !containsAny(args, "--metrics-bind-address=:8443") {
+		t.Fatalf("deployment %s missing metrics bind-address arg: %#v", obj.GetName(), args)
+	}
+
+	ports, _ := manager["ports"].([]any)
+	for _, port := range ports {
+		portMap, ok := port.(map[string]any)
+		if !ok {
+			continue
+		}
+		if portMap["name"] == "https" && numericYAMLValue(portMap["containerPort"]) == 8443 {
+			return
+		}
+	}
+	t.Fatalf("deployment %s missing https container port 8443: %#v", obj.GetName(), ports)
+}
+
+func assertManagerMetricsService(t *testing.T, obj *unstructured.Unstructured, component string) {
+	t.Helper()
+
+	selector, found, err := unstructured.NestedStringMap(obj.Object, "spec", "selector")
+	if err != nil || !found {
+		t.Fatalf("service %s selector not found: found=%v err=%v", obj.GetName(), found, err)
+	}
+	if selector["app.kubernetes.io/component"] != component {
+		t.Fatalf("service %s component selector = %#v, want %q", obj.GetName(), selector, component)
+	}
+
+	ports, found, err := unstructured.NestedSlice(obj.Object, "spec", "ports")
+	if err != nil || !found || len(ports) != 1 {
+		t.Fatalf("service %s ports = %#v found=%v err=%v", obj.GetName(), ports, found, err)
+	}
+	port, ok := ports[0].(map[string]any)
+	if !ok {
+		t.Fatalf("service %s port has unexpected type %T", obj.GetName(), ports[0])
+	}
+	if port["name"] != "https" ||
+		numericYAMLValue(port["port"]) != 8443 ||
+		numericYAMLValue(port["targetPort"]) != 8443 {
+		t.Fatalf("service %s metrics port = %#v, want https:8443", obj.GetName(), port)
+	}
+}
+
+func numericYAMLValue(value any) int64 {
+	switch v := value.(type) {
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case int32:
+		return int64(v)
+	case float64:
+		return int64(v)
+	default:
+		return 0
+	}
+}
+
+func containsAny(values []any, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func kustomizeProjectedTokenAudience(t *testing.T, obj *unstructured.Unstructured, volumeName string) string {
@@ -620,10 +721,11 @@ func kustomizeProjectedTokenAudience(t *testing.T, obj *unstructured.Unstructure
 }
 
 func isClusterScopedManifestObject(gvk schema.GroupVersionKind) bool {
-	if gvk.Group == "rbac.authorization.k8s.io" && (gvk.Kind == "ClusterRole" || gvk.Kind == "ClusterRoleBinding") {
+	if gvk.Group == testRBACGroup && (gvk.Kind == testKindClusterRole || gvk.Kind == testKindClusterRoleBinding) {
 		return true
 	}
-	if gvk.Group == "admissionregistration.k8s.io" && (gvk.Kind == "ValidatingAdmissionPolicy" || gvk.Kind == "ValidatingAdmissionPolicyBinding") {
+	if gvk.Group == testAdmissionRegistrationGroup &&
+		(gvk.Kind == testKindVAP || gvk.Kind == testKindVAPBinding) {
 		return true
 	}
 	if gvk.Group == "apiextensions.k8s.io" && gvk.Kind == "CustomResourceDefinition" {

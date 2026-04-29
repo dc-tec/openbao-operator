@@ -55,7 +55,7 @@ func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 		Schedule: "0 0 * * *",
 		Target: openbaov1alpha1.BackupTarget{
 			Endpoint:   "https://minio.example",
-			Bucket:     "backups",
+			Bucket:     testBackupBucket,
 			RoleARN:    "arn:aws:iam::123456789012:role/openbao-backup",
 			Region:     "us-east-1",
 			PathPrefix: "openbao",
@@ -81,7 +81,7 @@ func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 	if latest.Annotations == nil {
 		latest.Annotations = map[string]string{}
 	}
-	latest.Annotations[constants.AnnotationTriggerBackup] = "true"
+	latest.Annotations[constants.AnnotationTriggerBackup] = testTrueString
 	if err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
 		t.Fatalf("set trigger annotation: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestBackupManager_RestoreInProgress_ReleasesStaleBackupLock(t *testing.T) {
 		Schedule: "0 0 * * *",
 		Target: openbaov1alpha1.BackupTarget{
 			Endpoint: "https://minio.example",
-			Bucket:   "backups",
+			Bucket:   testBackupBucket,
 		},
 		JWTAuthRole: "backup",
 		Image:       "openbao-backup:dev",
@@ -191,7 +191,7 @@ func TestBackupManager_RestoreInProgress_ReleasesStaleBackupLock(t *testing.T) {
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "https://minio.example",
-					Bucket:   "backups",
+					Bucket:   testBackupBucket,
 				},
 			},
 			JWTAuthRole: "restore-role",
@@ -250,7 +250,7 @@ func TestBackupManager_ManualTrigger_BlockedByOperationLock(t *testing.T) {
 		Schedule: "0 0 * * *",
 		Target: openbaov1alpha1.BackupTarget{
 			Endpoint: "https://minio.example",
-			Bucket:   "backups",
+			Bucket:   testBackupBucket,
 		},
 		JWTAuthRole: "backup",
 		Image:       "openbao-backup:dev",
@@ -278,7 +278,7 @@ func TestBackupManager_ManualTrigger_BlockedByOperationLock(t *testing.T) {
 	if latest.Annotations == nil {
 		latest.Annotations = map[string]string{}
 	}
-	latest.Annotations[constants.AnnotationTriggerBackup] = "true"
+	latest.Annotations[constants.AnnotationTriggerBackup] = testTrueString
 	if err := k8sClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
 		t.Fatalf("set trigger annotation: %v", err)
 	}
@@ -293,7 +293,11 @@ func TestBackupManager_ManualTrigger_BlockedByOperationLock(t *testing.T) {
 		t.Fatalf("reconcile: %v", err)
 	}
 	if result.RequeueAfter != constants.RequeueStandard {
-		t.Fatalf("expected requeue=%v when backup lock acquisition is blocked, got %v", constants.RequeueStandard, result.RequeueAfter)
+		t.Fatalf(
+			"expected requeue=%v when backup lock acquisition is blocked, got %v",
+			constants.RequeueStandard,
+			result.RequeueAfter,
+		)
 	}
 
 	var jobs batchv1.JobList
@@ -319,7 +323,7 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 		Schedule: "0 0 * * *",
 		Target: openbaov1alpha1.BackupTarget{
 			Endpoint: "https://minio.example",
-			Bucket:   "backups",
+			Bucket:   testBackupBucket,
 		},
 		JWTAuthRole: "backup",
 		Image:       "openbao-backup:dev",
@@ -351,7 +355,11 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 		t.Fatalf("first reconcile: %v", err)
 	}
 	if firstResult.RequeueAfter != constants.RequeueShort {
-		t.Fatalf("expected first reconcile requeue=%v after processing failed job, got %v", constants.RequeueShort, firstResult.RequeueAfter)
+		t.Fatalf(
+			"expected first reconcile requeue=%v after processing failed job, got %v",
+			constants.RequeueShort,
+			firstResult.RequeueAfter,
+		)
 	}
 
 	var afterFailure openbaov1alpha1.OpenBaoCluster
@@ -365,7 +373,11 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 		t.Fatalf("expected consecutiveFailures=1 after failed job, got %d", afterFailure.Status.Backup.ConsecutiveFailures)
 	}
 	if afterFailure.Status.Backup.LastFailureReason != backup.ReasonBackupFailed {
-		t.Fatalf("expected lastFailureReason=%q after failed job, got %q", backup.ReasonBackupFailed, afterFailure.Status.Backup.LastFailureReason)
+		t.Fatalf(
+			"expected lastFailureReason=%q after failed job, got %q",
+			backup.ReasonBackupFailed,
+			afterFailure.Status.Backup.LastFailureReason,
+		)
 	}
 	if afterFailure.Status.Backup.LastFailureMessage == "" {
 		t.Fatalf("expected lastFailureMessage to be set after failed job")
@@ -386,7 +398,11 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 		t.Fatalf("second reconcile: %v", err)
 	}
 	if secondResult.RequeueAfter != constants.RequeueShort {
-		t.Fatalf("expected second reconcile requeue=%v after processing successful job, got %v", constants.RequeueShort, secondResult.RequeueAfter)
+		t.Fatalf(
+			"expected second reconcile requeue=%v after processing successful job, got %v",
+			constants.RequeueShort,
+			secondResult.RequeueAfter,
+		)
 	}
 
 	var afterRecovery openbaov1alpha1.OpenBaoCluster
@@ -397,13 +413,22 @@ func TestBackupManager_CompletedFailureThenSuccess_ClearsStaleFailureStatus(t *t
 		t.Fatalf("expected backup status to be initialized")
 	}
 	if afterRecovery.Status.Backup.ConsecutiveFailures != 0 {
-		t.Fatalf("expected consecutiveFailures reset to 0 after recovery, got %d", afterRecovery.Status.Backup.ConsecutiveFailures)
+		t.Fatalf(
+			"expected consecutiveFailures reset to 0 after recovery, got %d",
+			afterRecovery.Status.Backup.ConsecutiveFailures,
+		)
 	}
 	if afterRecovery.Status.Backup.LastFailureReason != "" {
-		t.Fatalf("expected lastFailureReason to be cleared after recovery, got %q", afterRecovery.Status.Backup.LastFailureReason)
+		t.Fatalf(
+			"expected lastFailureReason to be cleared after recovery, got %q",
+			afterRecovery.Status.Backup.LastFailureReason,
+		)
 	}
 	if afterRecovery.Status.Backup.LastFailureMessage != "" {
-		t.Fatalf("expected lastFailureMessage to be cleared after recovery, got %q", afterRecovery.Status.Backup.LastFailureMessage)
+		t.Fatalf(
+			"expected lastFailureMessage to be cleared after recovery, got %q",
+			afterRecovery.Status.Backup.LastFailureMessage,
+		)
 	}
 	if afterRecovery.Status.Backup.LastBackupName != "recovery-key" {
 		t.Fatalf("expected lastBackupName to be updated to recovery-key, got %q", afterRecovery.Status.Backup.LastBackupName)
@@ -437,7 +462,7 @@ func createCompletedBackupJobForCluster(
 						{
 							Name:    "test",
 							Image:   "busybox:1.36",
-							Command: []string{"sh", "-c", "true"},
+							Command: []string{"sh", "-c", testTrueString},
 						},
 					},
 				},

@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -15,8 +16,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,9 +31,12 @@ import (
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	platformconstants "github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
+
+const acmeCacheStorageClassEnv = "E2E_ACME_CACHE_STORAGE_CLASS"
 
 var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security", "slow"), Ordered, func() {
 	ctx := context.Background()
@@ -76,7 +82,11 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		Expect(err).NotTo(HaveOccurred())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created namespace %q\n", f.Namespace)
 
-		By(fmt.Sprintf("setting up infra-bao instance %q in namespace %q (production mode with TLS)", infraBaoName, f.Namespace))
+		By(fmt.Sprintf(
+			"setting up infra-bao instance %q in namespace %q (production mode with TLS)",
+			infraBaoName,
+			f.Namespace,
+		))
 		infraCfg := e2ehelpers.InfraBaoConfig{
 			Namespace: f.Namespace,
 			Name:      infraBaoName,
@@ -98,13 +108,31 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		infraAddr := fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
 		clusterPath := infraAddr + "/v1/pki"
 
-		result, err := e2ehelpers.ConfigureInfraBaoPKIACME(ctx, cfg, c, f.Namespace, infraBaoName, openBaoImage, infraAddr, clusterPath)
+		result, err := e2ehelpers.ConfigureInfraBaoPKIACME(
+			ctx,
+			cfg,
+			c,
+			f.Namespace,
+			infraBaoName,
+			openBaoImage,
+			infraAddr,
+			clusterPath,
+		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao pki/acme setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "PKI secrets engine configured with ACME support at path %q\n", clusterPath)
 
 		By("configuring transit secrets engine on infra-bao")
-		result, err = e2ehelpers.ConfigureInfraBaoTransit(ctx, cfg, c, f.Namespace, infraBaoName, openBaoImage, infraAddr, infraBaoKeyName)
+		result, err = e2ehelpers.ConfigureInfraBaoTransit(
+			ctx,
+			cfg,
+			c,
+			f.Namespace,
+			infraBaoName,
+			openBaoImage,
+			infraAddr,
+			infraBaoKeyName,
+		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Phase).To(Equal(corev1.PodSucceeded), "infra-bao transit setup failed, logs:\n%s", result.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Transit secrets engine configured with key %q\n", infraBaoKeyName)
@@ -130,14 +158,24 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		By("verifying OpenBaoTenant is provisioned")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoTenant{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: f.TenantName, Namespace: operatorNamespace}, updated)).To(Succeed())
-			_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoTenant status: Provisioned=%v, LastError=%q\n", updated.Status.Provisioned, updated.Status.LastError)
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      f.TenantName,
+				Namespace: operatorNamespace,
+			}, updated)).To(Succeed())
+			_, _ = fmt.Fprintf(
+				GinkgoWriter,
+				"OpenBaoTenant status: Provisioned=%v, LastError=%q\n",
+				updated.Status.Provisioned,
+				updated.Status.LastError,
+			)
 			g.Expect(updated.Status.Provisioned).To(BeTrue())
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", f.TenantName)
 	})
 
-	It("creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)", func() {
+	It("creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)", Label(
+		"case:tls-acme-self-init-ready",
+	), func() {
 		var err error
 
 		By("setting up ACME service and domain")
@@ -171,58 +209,40 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		By("verifying transit token secret can access infra-bao transit key")
 		// Use HTTPS and skip TLS verification for test environment
 		infraAddr = fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
-		verifyTokenPod := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "verify-transit-token-acme",
-				Namespace: f.Namespace,
-			},
-			Spec: corev1.PodSpec{
-				RestartPolicy: corev1.RestartPolicyNever,
-				SecurityContext: &corev1.PodSecurityContext{
-					RunAsNonRoot: ptr.To(true),
-					RunAsUser:    ptr.To(int64(100)),
-					RunAsGroup:   ptr.To(int64(1000)),
-					FSGroup:      ptr.To(int64(1000)),
-					SeccompProfile: &corev1.SeccompProfile{
-						Type: corev1.SeccompProfileTypeRuntimeDefault,
-					},
-				},
-				Containers: []corev1.Container{
-					{
-						Name:  "bao",
-						Image: openBaoImage,
-						Env: []corev1.EnvVar{
-							{Name: "BAO_ADDR", Value: infraAddr},
-							{Name: "BAO_TOKEN", Value: infraBaoRootToken},
-							// Skip TLS verification for self-signed certificates in test environment
-							{Name: "BAO_SKIP_VERIFY", Value: "true"},
-						},
-						Command: []string{"/bin/sh", "-ec"},
-						Args: []string{
-							fmt.Sprintf("bao write -format=json transit/encrypt/%s plaintext=$(echo -n 'test' | base64) >/dev/null && echo 'ok'", infraBaoKeyName),
-						},
-						SecurityContext: &corev1.SecurityContext{
-							AllowPrivilegeEscalation: ptr.To(false),
-							Capabilities: &corev1.Capabilities{
-								Drop: []corev1.Capability{"ALL"},
-							},
-							RunAsNonRoot: ptr.To(true),
-						},
-					},
-				},
-			},
-		}
+		verifyTokenPod := newTransitEncryptVerifyPod(
+			"verify-transit-token-acme",
+			f.Namespace,
+			openBaoImage,
+			infraAddr,
+			infraBaoRootToken,
+			infraBaoKeyName,
+		)
 		verifyResult, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, verifyTokenPod, 30*time.Second)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(verifyResult.Phase).To(Equal(corev1.PodSucceeded), "Token verification failed, logs:\n%s", verifyResult.Logs)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified transit token can encrypt with transit key %q\n", infraBaoKeyName)
 		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyTokenPod.Name)
 
+		By("preparing ACME shared cache storage")
+		acmeCacheClaimName := clusterName + "-acme-cache"
+		acmeCacheStorageClassName, cleanupACMECacheStorage, err := ensureACMEE2ECacheStorage(
+			ctx,
+			cfg,
+			c,
+			openBaoImage,
+			f.Namespace,
+			acmeCacheClaimName,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			cleanupACMECacheStorage(cleanupCtx)
+		})
+		_, _ = fmt.Fprintf(GinkgoWriter, "ACME cache StorageClass: %q\n", acmeCacheStorageClassName)
+
 		By(fmt.Sprintf("creating OpenBaoCluster %q with ACME TLS mode", clusterName))
-		var acmeCacheStorageClass *string
-		if sc := strings.TrimSpace(os.Getenv("E2E_STORAGE_CLASS")); sc != "" {
-			acmeCacheStorageClass = &sc
-		}
+		acmeCacheStorageClass := ptr.To(acmeCacheStorageClassName)
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterName,
@@ -250,7 +270,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 								Config: map[string]string{
 									"default_lease_ttl":  "0",
 									"max_lease_ttl":      "0",
-									"listing_visibility": "unauthenticated",
+									"listing_visibility": "unauth",
 								},
 							},
 						},
@@ -363,6 +383,7 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 				DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 			},
 		}
+		desiredReplicas := cluster.Spec.Replicas
 		Expect(c.Create(ctx, cluster)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created OpenBaoCluster %q with ACME TLS\n", clusterName)
 		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })
@@ -436,21 +457,47 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q created successfully\n", clusterName)
 
-		By("waiting for StatefulSet pods to become Ready")
+		By("waiting for the first ACME pod to become Ready after self-init")
+		Eventually(func(g Gomega) {
+			pod := &corev1.Pod{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-0", Namespace: f.Namespace}, pod)).To(Succeed())
+			var restartCount int32
+			for _, status := range pod.Status.ContainerStatuses {
+				restartCount += status.RestartCount
+			}
+			_, _ = fmt.Fprintf(GinkgoWriter, "Pod %q phase=%s ready=%t restarts=%d\n",
+				pod.Name, pod.Status.Phase, isPodReady(pod), restartCount)
+			logACMEPodContainerStates(pod)
+			g.Expect(isPodReady(pod)).To(BeTrue())
+		}, 5*time.Minute, 5*time.Second).Should(Succeed())
+		_, _ = fmt.Fprintf(GinkgoWriter, "Pod %q completed ACME self-init and became Ready\n", clusterName+"-0")
+
+		By("waiting for StatefulSet pods to reach the desired replica count")
 		Eventually(func(g Gomega) {
 			sts := &appsv1.StatefulSet{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, sts)).To(Succeed())
-			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status: replicas=%d ready=%d updated=%d\n",
-				sts.Status.Replicas, sts.Status.ReadyReplicas, sts.Status.UpdatedReplicas)
-			g.Expect(sts.Status.ReadyReplicas).To(Equal(int32(3)))
+			_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet status: spec=%d replicas=%d ready=%d updated=%d desired=%d\n",
+				ptr.Deref(sts.Spec.Replicas, 0), sts.Status.Replicas, sts.Status.ReadyReplicas, sts.Status.UpdatedReplicas, desiredReplicas)
+			g.Expect(sts.Status.Replicas).To(Equal(desiredReplicas))
+			g.Expect(sts.Status.UpdatedReplicas).To(Equal(desiredReplicas))
+			g.Expect(sts.Status.ReadyReplicas).To(Equal(desiredReplicas))
 		}, 10*time.Minute, 5*time.Second).Should(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "StatefulSet %q pods are Ready\n", clusterName)
 
 		By("waiting for the ACME shared cache PVC to become Bound")
 		Eventually(func(g Gomega) {
 			pvc := &corev1.PersistentVolumeClaim{}
-			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-acme-cache", Namespace: f.Namespace}, pvc)).To(Succeed())
-			_, _ = fmt.Fprintf(GinkgoWriter, "ACME cache PVC %q phase=%s accessModes=%v\n", pvc.Name, pvc.Status.Phase, pvc.Spec.AccessModes)
+			g.Expect(c.Get(ctx, types.NamespacedName{
+				Name:      acmeCacheClaimName,
+				Namespace: f.Namespace,
+			}, pvc)).To(Succeed())
+			_, _ = fmt.Fprintf(
+				GinkgoWriter,
+				"ACME cache PVC %q phase=%s accessModes=%v\n",
+				pvc.Name,
+				pvc.Status.Phase,
+				pvc.Spec.AccessModes,
+			)
 			g.Expect(pvc.Spec.AccessModes).To(ContainElement(corev1.ReadWriteMany))
 			g.Expect(pvc.Status.Phase).To(Equal(corev1.ClaimBound))
 		}, 5*time.Minute, 5*time.Second).Should(Succeed())
@@ -458,9 +505,19 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 
 		By("verifying documented ACME readiness conditions")
 		f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
-		f.WaitForConditionReason(clusterName, openbaov1alpha1.ConditionACMEIntegrationReady, metav1.ConditionTrue, "ACMEIntegrationReady")
+		f.WaitForConditionReason(
+			clusterName,
+			openbaov1alpha1.ConditionACMEIntegrationReady,
+			metav1.ConditionTrue,
+			"ACMEIntegrationReady",
+		)
 		f.WaitForConditionReason(clusterName, openbaov1alpha1.ConditionACMECacheReady, metav1.ConditionTrue, "ACMECacheReady")
-		f.WaitForConditionReason(clusterName, openbaov1alpha1.ConditionProductionReady, metav1.ConditionTrue, "ProductionReady")
+		f.WaitForConditionReason(
+			clusterName,
+			openbaov1alpha1.ConditionProductionReady,
+			metav1.ConditionTrue,
+			"ProductionReady",
+		)
 
 		By("validating that the config contains ACME parameters")
 		// Validate that the config rendered by the operator contains the ACME parameters.
@@ -479,7 +536,11 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 			g.Expect(cfgText).To(ContainSubstring("tls_acme_cache_path"))
 			g.Expect(cfgText).To(ContainSubstring("/bao/acme-cache/certmagic"))
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-		_, _ = fmt.Fprintf(GinkgoWriter, "ConfigMap contains ACME parameters (tls_acme_ca_directory, tls_acme_domains, tls_acme_cache_path)\n")
+		_, _ = fmt.Fprintf(
+			GinkgoWriter,
+			"ConfigMap contains ACME parameters "+
+				"(tls_acme_ca_directory, tls_acme_domains, tls_acme_cache_path)\n",
+		)
 
 		By("verifying the ACME-issued certificate is trusted by the PKI CA")
 		verifyACMECertPod := &corev1.Pod{
@@ -550,8 +611,227 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		}
 		verifyACMECertResult, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, verifyACMECertPod, 45*time.Second)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(verifyACMECertResult.Phase).To(Equal(corev1.PodSucceeded), "ACME certificate verification failed, logs:\n%s", verifyACMECertResult.Logs)
+		Expect(verifyACMECertResult.Phase).To(
+			Equal(corev1.PodSucceeded),
+			"ACME certificate verification failed, logs:\n%s",
+			verifyACMECertResult.Logs,
+		)
 		_ = e2ehelpers.DeletePodBestEffort(ctx, c, f.Namespace, verifyACMECertPod.Name)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Verified ACME certificate trust via bao status against %q\n", acmeDomain)
 	})
 })
+
+func ensureACMEE2ECacheStorage(
+	ctx context.Context,
+	cfg *rest.Config,
+	c client.Client,
+	image string,
+	namespace string,
+	claimName string,
+) (string, func(context.Context), error) {
+	if sc := strings.TrimSpace(os.Getenv(acmeCacheStorageClassEnv)); sc != "" {
+		return sc, func(context.Context) {}, nil
+	}
+	if sc := strings.TrimSpace(os.Getenv("E2E_STORAGE_CLASS")); sc != "" {
+		return sc, func(context.Context) {}, nil
+	}
+
+	storageClassName := namespace + "-acme-rwx"
+	pvName := namespace + "-" + claimName
+	hostPathType := corev1.HostPathDirectoryOrCreate
+	hostPath := fmt.Sprintf("/tmp/openbao-operator-e2e/acme-cache/%s/%s", namespace, claimName)
+
+	storageClass := &storagev1.StorageClass{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: storageClassName,
+		},
+		Provisioner:       "kubernetes.io/no-provisioner",
+		VolumeBindingMode: ptr.To(storagev1.VolumeBindingImmediate),
+	}
+	if err := c.Create(ctx, storageClass); err != nil && !apierrors.IsAlreadyExists(err) {
+		return "", nil, fmt.Errorf("create ACME cache StorageClass %s: %w", storageClassName, err)
+	}
+	if err := ensureACMECacheHostPathPermissions(ctx, cfg, c, image, namespace, hostPath); err != nil {
+		return "", nil, err
+	}
+
+	pv := &corev1.PersistentVolume{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: pvName,
+		},
+		Spec: corev1.PersistentVolumeSpec{
+			Capacity: corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse("1Gi"),
+			},
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteMany,
+			},
+			PersistentVolumeReclaimPolicy: corev1.PersistentVolumeReclaimDelete,
+			StorageClassName:              storageClassName,
+			ClaimRef: &corev1.ObjectReference{
+				APIVersion: "v1",
+				Kind:       "PersistentVolumeClaim",
+				Namespace:  namespace,
+				Name:       claimName,
+			},
+			PersistentVolumeSource: corev1.PersistentVolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: hostPath,
+					Type: &hostPathType,
+				},
+			},
+		},
+	}
+	if err := c.Create(ctx, pv); err != nil && !apierrors.IsAlreadyExists(err) {
+		return "", nil, fmt.Errorf("create ACME cache PersistentVolume %s: %w", pvName, err)
+	}
+
+	cleanup := func(cleanupCtx context.Context) {
+		_ = c.Delete(cleanupCtx, &corev1.PersistentVolume{
+			ObjectMeta: metav1.ObjectMeta{Name: pvName},
+		})
+		_ = c.Delete(cleanupCtx, &storagev1.StorageClass{
+			ObjectMeta: metav1.ObjectMeta{Name: storageClassName},
+		})
+	}
+	return storageClassName, cleanup, nil
+}
+
+func ensureACMECacheHostPathPermissions(
+	ctx context.Context,
+	cfg *rest.Config,
+	c client.Client,
+	image string,
+	namespace string,
+	hostPath string,
+) error {
+	if cfg == nil {
+		return errors.New("rest config is required")
+	}
+	if image == "" {
+		return errors.New("image is required")
+	}
+
+	podName := acmeCachePermissionPodName(namespace)
+	hostPathType := corev1.HostPathDirectoryOrCreate
+	prepPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: "default",
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsUser:  ptr.To(int64(0)),
+				RunAsGroup: ptr.To(int64(0)),
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "cache",
+					VolumeSource: corev1.VolumeSource{
+						HostPath: &corev1.HostPathVolumeSource{
+							Path: hostPath,
+							Type: &hostPathType,
+						},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "permissions",
+					Image: image,
+					Command: []string{
+						"/bin/sh",
+						"-ec",
+					},
+					Args: []string{
+						fmt.Sprintf(
+							"mkdir -p /cache && chown -R %d:%d /cache && chmod -R u+rwX,g+rwX /cache",
+							platformconstants.UserOpenBao,
+							platformconstants.GroupOpenBao,
+						),
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "cache",
+							MountPath: "/cache",
+						},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: ptr.To(false),
+						RunAsUser:                ptr.To(int64(0)),
+						RunAsGroup:               ptr.To(int64(0)),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, prepPod, time.Minute)
+	defer func() {
+		_ = e2ehelpers.DeletePodBestEffort(context.Background(), c, prepPod.Namespace, prepPod.Name)
+	}()
+	if err != nil {
+		return fmt.Errorf("prepare ACME cache hostPath permissions: %w", err)
+	}
+	if result.Phase != corev1.PodSucceeded {
+		return fmt.Errorf("prepare ACME cache hostPath permissions failed, phase=%s logs:\n%s", result.Phase, result.Logs)
+	}
+	return nil
+}
+
+func acmeCachePermissionPodName(namespace string) string {
+	name := namespace + "-acme-cache-perms"
+	if len(name) <= 63 {
+		return name
+	}
+	return strings.TrimRight(name[:63], "-")
+}
+
+func logACMEPodContainerStates(pod *corev1.Pod) {
+	for _, status := range pod.Status.InitContainerStatuses {
+		logACMEContainerState("init", status)
+	}
+	for _, status := range pod.Status.ContainerStatuses {
+		logACMEContainerState("container", status)
+	}
+}
+
+func logACMEContainerState(prefix string, status corev1.ContainerStatus) {
+	_, _ = fmt.Fprintf(
+		GinkgoWriter,
+		"%s %q ready=%t restartCount=%d state=%s lastState=%s\n",
+		prefix,
+		status.Name,
+		status.Ready,
+		status.RestartCount,
+		formatACMEContainerState(status.State),
+		formatACMEContainerState(status.LastTerminationState),
+	)
+}
+
+func formatACMEContainerState(state corev1.ContainerState) string {
+	switch {
+	case state.Waiting != nil:
+		message := strings.TrimSpace(state.Waiting.Message)
+		if message != "" {
+			return fmt.Sprintf("Waiting(reason=%s,message=%q)", state.Waiting.Reason, message)
+		}
+		return fmt.Sprintf("Waiting(reason=%s)", state.Waiting.Reason)
+	case state.Running != nil:
+		return "Running"
+	case state.Terminated != nil:
+		message := strings.TrimSpace(state.Terminated.Message)
+		if message != "" {
+			return fmt.Sprintf(
+				"Terminated(reason=%s,exitCode=%d,message=%q)",
+				state.Terminated.Reason,
+				state.Terminated.ExitCode,
+				message,
+			)
+		}
+		return fmt.Sprintf("Terminated(reason=%s,exitCode=%d)", state.Terminated.Reason, state.Terminated.ExitCode)
+	default:
+		return "Unknown"
+	}
+}

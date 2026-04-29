@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2"
 )
 
 const (
@@ -23,16 +23,18 @@ const (
 
 func requireHardenedSignedSuite() {
 	if !strings.EqualFold(strings.TrimSpace(os.Getenv(envEnableHardenedSignedSuite)), "true") {
-		Skip(fmt.Sprintf(
-			"requires signed hardened suite; set %s=true and provide %s and %s (for example ghcr.io/openbao/openbao:2.5.0 and ghcr.io/dc-tec/openbao-init:edge)",
+		ginkgo.Skip(fmt.Sprintf(
+			"requires signed hardened suite; set %s=true and provide %s and %s "+
+				"(for example ghcr.io/openbao/openbao:2.5.3 and ghcr.io/dc-tec/openbao-init:edge)",
 			envEnableHardenedSignedSuite,
 			envOpenBaoImage,
 			envHardenedConfigInitImage,
 		))
 	}
 
-	if strings.TrimSpace(os.Getenv(envOpenBaoImage)) == "" || strings.TrimSpace(os.Getenv(envHardenedConfigInitImage)) == "" {
-		Fail(fmt.Sprintf(
+	if strings.TrimSpace(os.Getenv(envOpenBaoImage)) == "" ||
+		strings.TrimSpace(os.Getenv(envHardenedConfigInitImage)) == "" {
+		ginkgo.Fail(fmt.Sprintf(
 			"%s=true requires both %s and %s to be set",
 			envEnableHardenedSignedSuite,
 			envOpenBaoImage,

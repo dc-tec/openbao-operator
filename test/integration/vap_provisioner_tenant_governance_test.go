@@ -48,7 +48,8 @@ func TestVAP_ProvisionerTenantGovernance_DeniesWrongQuotaName(t *testing.T) {
 		}
 
 		requireAdmissionDenied(t, err)
-		if !strings.Contains(err.Error(), "can only manage the operator tenant ResourceQuota and LimitRange guardrail objects") {
+		wantMessage := "can only manage the operator tenant ResourceQuota and LimitRange guardrail objects"
+		if !strings.Contains(err.Error(), wantMessage) {
 			t.Fatalf("unexpected error message: %v", err)
 		}
 		return
@@ -141,7 +142,9 @@ func TestVAP_ProvisionerTenantGovernance_DeniesDirectGuardrailMutation(t *testin
 		}
 
 		requireAdmissionDenied(t, err)
-		if !strings.Contains(err.Error(), "Direct modification of the operator-managed tenant ResourceQuota and LimitRange guardrails is prohibited") {
+		wantMessage := "Direct modification of the operator-managed tenant ResourceQuota " +
+			"and LimitRange guardrails is prohibited"
+		if !strings.Contains(err.Error(), wantMessage) {
 			t.Fatalf("unexpected error message: %v", err)
 		}
 		return

@@ -270,7 +270,7 @@ var _ = Describe("Tenant Isolation", Label("security", "tenant", "tenancy"), Ord
 		})
 
 		AfterAll(func() {
-			if os.Getenv("E2E_SKIP_CLEANUP") == "true" {
+			if os.Getenv("E2E_SKIP_CLEANUP") == e2eStringTrue {
 				By("E2E_SKIP_CLEANUP=true: keeping single-tenant namespace and controller configuration for debugging")
 				return
 			}

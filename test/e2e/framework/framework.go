@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -184,10 +184,10 @@ func NewSetup(ctx context.Context, baseName string, operatorNamespace string) (*
 	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add openbao scheme: %w", err)
 	}
-	if err := gatewayv1.AddToScheme(scheme); err != nil {
+	if err := gatewayv1.Install(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add gateway scheme: %w", err)
 	}
-	if err := gatewayv1alpha2.AddToScheme(scheme); err != nil {
+	if err := gatewayv1alpha2.Install(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add gateway alpha2 scheme: %w", err)
 	}
 
@@ -247,25 +247,25 @@ func (f *Framework) UninstallGatewayAPI() error {
 
 // WaitForPhase waits for the cluster to reach the specified phase.
 func (f *Framework) WaitForPhase(clusterName string, phase openbaov1alpha1.ClusterPhase) {
-	Eventually(func(g Gomega) {
+	gomega.Eventually(func(g gomega.Gomega) {
 		cluster := &openbaov1alpha1.OpenBaoCluster{}
 		err := f.Client.Get(f.Ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(cluster.Status.Phase).To(Equal(phase))
-	}, DefaultWaitTimeout, DefaultPollInterval).Should(Succeed(), "Cluster failed to reach phase %s", phase)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Expect(cluster.Status.Phase).To(gomega.Equal(phase))
+	}, DefaultWaitTimeout, DefaultPollInterval).Should(gomega.Succeed(), "Cluster failed to reach phase %s", phase)
 }
 
 // WaitForCondition waits for the specified condition to have the expected status.
 func (f *Framework) WaitForCondition(clusterName string, conditionType openbaov1alpha1.ConditionType, status metav1.ConditionStatus) {
-	Eventually(func(g Gomega) {
+	gomega.Eventually(func(g gomega.Gomega) {
 		cluster := &openbaov1alpha1.OpenBaoCluster{}
 		err := f.Client.Get(f.Ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)
-		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(err).NotTo(gomega.HaveOccurred())
 
 		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(conditionType))
-		g.Expect(cond).NotTo(BeNil())
-		g.Expect(cond.Status).To(Equal(status))
-	}, DefaultWaitTimeout, DefaultPollInterval).Should(Succeed(), "Cluster failed to reach condition %s=%s", conditionType, status)
+		g.Expect(cond).NotTo(gomega.BeNil())
+		g.Expect(cond.Status).To(gomega.Equal(status))
+	}, DefaultWaitTimeout, DefaultPollInterval).Should(gomega.Succeed(), "Cluster failed to reach condition %s=%s", conditionType, status)
 }
 
 // WaitForConditionReason waits for the specified condition to have the expected status and reason.
@@ -275,17 +275,17 @@ func (f *Framework) WaitForConditionReason(
 	status metav1.ConditionStatus,
 	reason string,
 ) {
-	Eventually(func(g Gomega) {
+	gomega.Eventually(func(g gomega.Gomega) {
 		cluster := &openbaov1alpha1.OpenBaoCluster{}
 		err := f.Client.Get(f.Ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, cluster)
-		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(err).NotTo(gomega.HaveOccurred())
 
 		cond := meta.FindStatusCondition(cluster.Status.Conditions, string(conditionType))
-		g.Expect(cond).NotTo(BeNil())
-		g.Expect(cond.Status).To(Equal(status))
-		g.Expect(cond.Reason).To(Equal(reason))
+		g.Expect(cond).NotTo(gomega.BeNil())
+		g.Expect(cond.Status).To(gomega.Equal(status))
+		g.Expect(cond.Reason).To(gomega.Equal(reason))
 	}, DefaultWaitTimeout, DefaultPollInterval).Should(
-		Succeed(),
+		gomega.Succeed(),
 		"Cluster failed to reach condition %s=%s reason=%s",
 		conditionType,
 		status,

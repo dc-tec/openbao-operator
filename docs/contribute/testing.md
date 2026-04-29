@@ -103,6 +103,10 @@ make test-e2e-existing E2E_LABEL_FILTER='openshift'`}
   These commands cover parser, auth, renderer, and platform-specific validation that does not fit the default local gate.
 </CommandBlock>
 
+For E2E debugging, prefer structured reports over log-only inspection. Set `E2E_JSON_REPORT` for the native Ginkgo report, `E2E_JUNIT_REPORT` for CI-compatible test output, and `E2E_FAIL_ON_EMPTY=true` when using a label filter so an accidental empty selection fails immediately.
+
+E2E suites are declared in `test/e2e/suites.yaml`. When adding or changing an E2E file, update the manifest with the suite owner, risk tier, isolation class, labels, coverage tags, CI lane, and nightly policy, then run `make verify-e2e-manifest`.
+
 <DecisionTable
   title="Special validation lanes"
   columns={["Lane", "When to use it", "Primary entry point"]}

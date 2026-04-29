@@ -96,8 +96,8 @@ func waitForOpenBaoClusterAdmissionPolicies(t *testing.T, namespace string) {
 					"namespace": namespace,
 				},
 				"spec": map[string]any{
-					"version":  "2.4.4",
-					"image":    "openbao/openbao:2.4.4",
+					"version":  testOpenBaoVersion244,
+					"image":    testOpenBaoImage244,
 					"replicas": int64(3),
 					"profile":  "Development",
 					"tls": map[string]any{
@@ -203,8 +203,8 @@ func newMinimalClusterObj(namespace, name string) *openbaov1alpha1.OpenBaoCluste
 			Namespace: namespace,
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Version:  "2.4.4",
-			Image:    "openbao/openbao:2.4.4",
+			Version:  testOpenBaoVersion244,
+			Image:    testOpenBaoImage244,
 			Replicas: 3,
 			Profile:  openbaov1alpha1.ProfileDevelopment,
 			TLS: openbaov1alpha1.TLSConfig{
@@ -221,11 +221,16 @@ func newMinimalClusterObj(namespace, name string) *openbaov1alpha1.OpenBaoCluste
 	}
 }
 
-func updateClusterStatus(t *testing.T, cluster *openbaov1alpha1.OpenBaoCluster, mutate func(*openbaov1alpha1.OpenBaoClusterStatus)) {
+func updateClusterStatus(
+	t *testing.T,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	mutate func(*openbaov1alpha1.OpenBaoClusterStatus),
+) {
 	t.Helper()
 
 	var latest openbaov1alpha1.OpenBaoCluster
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, &latest); err != nil {
+	key := types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}
+	if err := k8sClient.Get(ctx, key, &latest); err != nil {
 		t.Fatalf("get OpenBaoCluster for status update: %v", err)
 	}
 	mutate(&latest.Status)

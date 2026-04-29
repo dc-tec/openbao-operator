@@ -77,7 +77,6 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 			operatorNamespace,
 			int(originalControllerReplicas),
 			2*time.Minute,
-			framework.DefaultPollInterval,
 		)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -92,6 +91,7 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 	})
 
 	It("recovers idempotently when the controller restarts during initial and scale reconciliation", Label(
+		"e2e-anchor",
 		"case:manager-restart-idempotent-reconcile",
 		"covers:controller-restart",
 		"covers:idempotent-reconcile",
@@ -148,7 +148,14 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 			g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			g.Expect(updated.Status.CurrentVersion).To(Equal(openBaoVersion))
 		}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
-		f.WaitForStatefulSetReady(ctx, clusterName, 1, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+		_, err := f.WaitForStatefulSetReady(
+			ctx,
+			clusterName,
+			1,
+			framework.DefaultLongWaitTimeout,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(countClusterStatefulSets(clusterName)).To(Equal(1))
 		Expect(countDataPVCs(clusterName)).To(Equal(1))
 
@@ -167,11 +174,21 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 		Expect(restartControllerDeployment(ctx, c, operatorNamespace)).To(Succeed())
 
 		By("verifying the scale reconcile finishes without duplicating managed resources")
-		f.WaitForStatefulSetReady(ctx, clusterName, 2, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+		_, err = f.WaitForStatefulSetReady(
+			ctx,
+			clusterName,
+			2,
+			framework.DefaultLongWaitTimeout,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
 		Eventually(func(g Gomega) {
 			current := &appsv1.StatefulSet{}
 			g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, current)).To(Succeed())
-			g.Expect(current.UID).To(Equal(originalUID), "controller restart should resume the same StatefulSet instead of recreating it")
+			g.Expect(current.UID).To(
+				Equal(originalUID),
+				"controller restart should resume the same StatefulSet instead of recreating it",
+			)
 			g.Expect(current.Status.ReadyReplicas).To(Equal(int32(2)))
 			g.Expect(countClusterStatefulSets(clusterName)).To(Equal(1))
 			g.Expect(countDataPVCs(clusterName)).To(Equal(2))
@@ -188,6 +205,7 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 	})
 
 	It("fails over leader election and continues reconciling with a second controller replica", Label(
+		"e2e-anchor",
 		"case:manager-leader-failover",
 		"covers:leader-election",
 		"covers:controller-failover",
@@ -206,7 +224,8 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 		Expect(err).NotTo(HaveOccurred())
 		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })
 
-		f.WaitForStatefulSetReady(ctx, clusterName, 1, 10*time.Minute, framework.DefaultPollInterval)
+		_, err = f.WaitForStatefulSetReady(ctx, clusterName, 1, 10*time.Minute, framework.DefaultPollInterval)
+		Expect(err).NotTo(HaveOccurred())
 		f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
 
 		By("scaling the controller deployment to two replicas")
@@ -217,7 +236,6 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 			operatorNamespace,
 			2,
 			2*time.Minute,
-			framework.DefaultPollInterval,
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -249,7 +267,6 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 				operatorNamespace,
 				2,
 				30*time.Second,
-				framework.DefaultPollInterval,
 			)
 			g.Expect(err).NotTo(HaveOccurred())
 			matchesReadyPod := false
@@ -271,7 +288,14 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 			g.Expect(c.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-		f.WaitForStatefulSetReady(ctx, clusterName, 2, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+		_, err = f.WaitForStatefulSetReady(
+			ctx,
+			clusterName,
+			2,
+			framework.DefaultLongWaitTimeout,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
 		f.WaitForCondition(clusterName, openbaov1alpha1.ConditionAvailable, metav1.ConditionTrue)
 		Expect(countClusterStatefulSets(clusterName)).To(Equal(1))
 		Expect(countDataPVCs(clusterName)).To(Equal(2))
@@ -327,7 +351,6 @@ var _ = Describe("Manager Resilience", Label("manager", "cluster"), Serial, Orde
 			operatorNamespace,
 			1,
 			2*time.Minute,
-			framework.DefaultPollInterval,
 		)
 		Expect(err).NotTo(HaveOccurred())
 

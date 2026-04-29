@@ -35,6 +35,9 @@ linters:
       - linters:
           - lll
         path: internal/*
+      - linters:
+          - lll
+        path: test/e2e/*
     paths:
       - third_party$
       - builtin$

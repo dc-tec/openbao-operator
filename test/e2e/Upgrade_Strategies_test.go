@@ -77,7 +77,7 @@ func probeOpenBaoServiceHealthViaAPIProxy(ctx context.Context, cfg *rest.Config,
 		return 0, fmt.Errorf("failed to create API transport: %w", err)
 	}
 
-	client := &http.Client{
+	httpClient := &http.Client{
 		Transport: transport,
 		Timeout:   10 * time.Second,
 	}
@@ -95,11 +95,13 @@ func probeOpenBaoServiceHealthViaAPIProxy(ctx context.Context, cfg *rest.Config,
 		return 0, fmt.Errorf("failed to build health probe request: %w", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("health probe request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	return resp.StatusCode, nil
 }
@@ -257,42 +259,39 @@ func ptrTo[T any](v T) *T {
 	return &v
 }
 
-func previousVersion(version string) (string, error) {
-	parsed, err := upgrade.ParseVersion(version)
-	if err != nil {
-		return "", err
+type blueGreenRevisionSelector func(*openbaov1alpha1.BlueGreenStatus) string
+
+func expectBlueGreenServiceSelectorDuringPhase(
+	g Gomega,
+	ctx context.Context,
+	c client.Client,
+	namespace string,
+	clusterName string,
+	phase openbaov1alpha1.BlueGreenPhase,
+	revision blueGreenRevisionSelector,
+	revisionMessage string,
+) {
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespace}, updated)).To(Succeed())
+	g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
+
+	if updated.Status.BlueGreen.Phase != phase {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Current phase: %s\n", updated.Status.BlueGreen.Phase)
+		g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
+		return
 	}
 
-	parsed.Prerelease = ""
-	parsed.Build = ""
+	g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty(), revisionMessage)
 
-	switch {
-	case parsed.Patch > 0:
-		parsed.Patch--
-	case parsed.Minor > 0:
-		parsed.Minor--
-		parsed.Patch = 0
-	case parsed.Major > 0:
-		parsed.Major--
-		parsed.Minor = 0
-		parsed.Patch = 0
-	default:
-		return "", fmt.Errorf("no lower semantic version exists for %q", version)
-	}
-
-	return parsed.String(), nil
-}
-
-func nextVersion(version string) (string, error) {
-	parsed, err := upgrade.ParseVersion(version)
-	if err != nil {
-		return "", err
-	}
-
-	parsed.Prerelease = ""
-	parsed.Build = ""
-	parsed.Patch++
-	return parsed.String(), nil
+	svc := &corev1.Service{}
+	g.Expect(c.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      fmt.Sprintf("%s-public", clusterName),
+	}, svc)).To(Succeed())
+	g.Expect(svc.Spec.Selector).To(HaveKeyWithValue(
+		constants.LabelOpenBaoRevision,
+		revision(updated.Status.BlueGreen),
+	))
 }
 
 func dumpKubectlOutput(args ...string) {
@@ -523,7 +522,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(available).NotTo(BeNil())
 				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-			tenantFW.WaitForStatefulSetReady(ctx, upgradeCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err = tenantFW.WaitForStatefulSetReady(
+				ctx,
+				upgradeCluster.Name,
+				3,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 			Eventually(func(g Gomega) {
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
@@ -576,7 +582,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			dumpRollingUpgradeDiagnostics(ctx, admin, tenantNamespace, upgradeCluster.Name)
 		})
 
-		It("performs rolling upgrade", Label("read-replicas", "read-replicas-rolling"), func() {
+		It("performs rolling upgrade", Label(
+			"e2e-anchor",
+			"case:upgrade-rolling-happy-path",
+			"read-replicas",
+			"read-replicas-rolling",
+		), func() {
 			cfg, err := ctrlconfig.GetConfig()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -714,7 +725,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				seenUpgradeInProgress = true
 				progress := updated.Status.Upgrade
 				if progress.StartedAt != nil {
-					startedAtUnix := progress.StartedAt.Time.UnixNano()
+					startedAtUnix := progress.StartedAt.UnixNano()
 					if lastUpgradeStartedAt == 0 || startedAtUnix != lastUpgradeStartedAt {
 						lastUpgradeStartedAt = startedAtUnix
 						lastPartition = updated.Spec.Replicas
@@ -888,11 +899,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				Skip(fmt.Sprintf("Rolling snapshot recovery test skipped: versions identical (%s)", initialVersion))
 			}
 
-			rustfsNamespace := "rustfs"
-			err = ensureRustFS(ctx, admin, cfg, rustfsNamespace)
-			if err != nil {
-				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping rolling snapshot recovery test.", err))
-			}
+			err = ensureRustFS(ctx, admin, cfg)
+			Expect(err).NotTo(HaveOccurred(), "RustFS deployment failed")
 
 			credentialsSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1085,7 +1093,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 				g.Expect(updated.Status.Upgrade).To(BeNil())
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-			tenantFW.WaitForStatefulSetReady(ctx, recoveryCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err = tenantFW.WaitForStatefulSetReady(
+				ctx,
+				recoveryCluster.Name,
+				3,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterAll(func() {
@@ -1245,7 +1260,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
 				g.Expect(updated.Status.Upgrade).To(BeNil())
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-			tenantFW.WaitForStatefulSetReady(ctx, recoveryCluster.Name, 3, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval)
+			_, err = tenantFW.WaitForStatefulSetReady(
+				ctx,
+				recoveryCluster.Name,
+				3,
+				framework.DefaultLongWaitTimeout,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterAll(func() {
@@ -1359,178 +1381,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 		})
 	})
 
-	Context("Validation Guardrails", Label("guardrails", "validation"), Ordered, func() {
-		var (
-			tenantNamespace  string
-			tenantFW         *framework.Framework
-			guardrailCluster *openbaov1alpha1.OpenBaoCluster
-			initialVersion   string
-			initialImage     string
-			downgradeVersion string
-			downgradeImage   string
-			mismatchedImage  string
-			admin            client.Client
-		)
-
-		BeforeAll(func() {
-			var err error
-			tenantFW, err = framework.NewSetup(ctx, "tenant-upgrade-guardrails", operatorNamespace)
-			Expect(err).NotTo(HaveOccurred())
-			tenantNamespace = tenantFW.Namespace
-			admin = tenantFW.Client
-
-			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			initialImage = fmt.Sprintf("openbao/openbao:%s", initialVersion)
-
-			downgradeVersion, err = previousVersion(initialVersion)
-			if err != nil {
-				Skip(fmt.Sprintf("Validation guardrail tests skipped: cannot derive downgrade version from %s: %v", initialVersion, err))
-			}
-			downgradeImage = fmt.Sprintf("openbao/openbao:%s", downgradeVersion)
-
-			mismatchedVersion, err := nextVersion(initialVersion)
-			if err != nil {
-				Skip(fmt.Sprintf("Validation guardrail tests skipped: cannot derive mismatched version from %s: %v", initialVersion, err))
-			}
-			mismatchedImage = fmt.Sprintf("openbao/openbao:%s", mismatchedVersion)
-
-			guardrailCluster = &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "guardrail-cluster",
-					Namespace: tenantNamespace,
-				},
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Profile:  openbaov1alpha1.ProfileDevelopment,
-					Version:  initialVersion,
-					Image:    initialImage,
-					Replicas: 3,
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
-						Image:    upgradeExecutorImage,
-						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
-							AutoPromote: true,
-						},
-					},
-					InitContainer: &openbaov1alpha1.InitContainerConfig{
-						Enabled: true,
-						Image:   configInitImage,
-					},
-					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled: true,
-						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
-							Enabled: true,
-						},
-						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
-					},
-					TLS: openbaov1alpha1.TLSConfig{
-						Enabled:        true,
-						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
-						RotationPeriod: "720h",
-					},
-					Storage: openbaov1alpha1.StorageConfig{
-						Size: "1Gi",
-					},
-					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
-					},
-					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
-				},
-			}
-			Expect(admin.Create(ctx, guardrailCluster)).To(Succeed())
-
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.Initialized).To(BeTrue())
-				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
-				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
-
-				available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
-				g.Expect(available).NotTo(BeNil())
-				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-		})
-
-		AfterAll(func() {
-			if tenantFW != nil {
-				_ = tenantFW.Cleanup(ctx)
-			}
-		})
-
-		It("rejects downgrade requests at admission before any rollout begins", func() {
-			By("Attempting to patch the cluster to a lower semantic version")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				original := updated.DeepCopy()
-				updated.Spec.Version = downgradeVersion
-				updated.Spec.Image = downgradeImage
-
-				err := admin.Patch(ctx, updated, client.MergeFrom(original))
-				g.Expect(err).To(HaveOccurred())
-				g.Expect(err.Error()).To(ContainSubstring("spec.version cannot be downgraded below status.currentVersion"))
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
-			By("Verifying the persisted spec remains unchanged after the rejected patch")
-			Consistently(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Spec.Version).To(Equal(initialVersion))
-				g.Expect(updated.Spec.Image).To(Equal(initialImage))
-				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
-				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
-			}, time.Minute, 10*time.Second).Should(Succeed())
-		})
-
-		It("surfaces image version mismatches as degraded without mutating running pods", func() {
-			By("Patching a semver-tagged image that conflicts with spec.version")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				original := updated.DeepCopy()
-				updated.Spec.Image = mismatchedImage
-				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
-			By("Waiting for the workload controller to report a permanent configuration error")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: guardrailCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.Workload).NotTo(BeNil())
-				g.Expect(updated.Status.Workload.LastError).NotTo(BeNil())
-				g.Expect(updated.Status.Workload.LastError.Reason).To(Equal(upgrade.ReasonImageVersionMismatch))
-
-				degraded := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionDegraded))
-				g.Expect(degraded).NotTo(BeNil())
-				g.Expect(degraded.Status).To(Equal(metav1.ConditionTrue))
-				g.Expect(degraded.Reason).To(Equal(upgrade.ReasonImageVersionMismatch))
-
-				g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
-				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
-			By("Verifying existing OpenBao pods keep the original stable image")
-			Consistently(func(g Gomega) {
-				pods := &corev1.PodList{}
-				g.Expect(admin.List(ctx, pods,
-					client.InNamespace(tenantNamespace),
-					client.MatchingLabels{
-						constants.LabelOpenBaoCluster:   guardrailCluster.Name,
-						constants.LabelOpenBaoComponent: constants.ComponentOpenBaoCluster,
-					},
-				)).To(Succeed())
-				g.Expect(pods.Items).NotTo(BeEmpty())
-
-				for _, pod := range pods.Items {
-					e2ehelpers.ExpectOpenBaoPodVersion(g, pod, initialVersion)
-				}
-			}, time.Minute, 10*time.Second).Should(Succeed())
-		})
-	})
-
 	// --- Blue/Green Upgrade ---
 	Context("Blue/Green Upgrade", Label("bluegreen"), Ordered, func() {
 		var (
@@ -1562,7 +1412,6 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 
 			// Deploy RustFS for pre-upgrade snapshot testing
-			rustfsNamespace := "rustfs"
 			// Ensure cfg is available or get it again
 			var rCfg *rest.Config
 			if cfg != nil {
@@ -1574,10 +1423,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				cfg = rCfg
 			}
 
-			err = ensureRustFS(ctx, admin, rCfg, rustfsNamespace)
-			if err != nil {
-				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping pre-upgrade snapshot tests.", err))
-			}
+			err = ensureRustFS(ctx, admin, rCfg)
+			Expect(err).NotTo(HaveOccurred(), "RustFS deployment failed")
 
 			// Create S3 credentials Secret for RustFS
 			credentialsSecret = &corev1.Secret{
@@ -1798,7 +1645,10 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("executes Blue/Green upgrade cycle with pre-upgrade snapshot", func() {
+		It("executes Blue/Green upgrade cycle with pre-upgrade snapshot", Label(
+			"e2e-anchor",
+			"case:upgrade-bluegreen-snapshot-promotion",
+		), func() {
 			By("Writing a secret before upgrade")
 			secretPath := "secret/bluegreen-upgrade-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
@@ -2520,7 +2370,10 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("induces executor failure and validates retry plus auto-abort behavior", func() {
+		It("induces executor failure and validates retry plus auto-abort behavior", Label(
+			"e2e-anchor",
+			"case:upgrade-bluegreen-executor-failure-auto-abort",
+		), func() {
 			var failedEarlyAction bluegreen.ExecutorAction
 
 			By("Triggering a Blue/Green upgrade")
@@ -2942,7 +2795,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("enters safe mode when rollback consensus repair job fails", func() {
+		It("enters safe mode when rollback consensus repair job fails", Label(
+			"case:upgrade-bluegreen-safe-mode-consensus-repair-failure",
+		), func() {
 			By("Writing a secret before upgrade")
 			secretPath := "secret/safemode-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
@@ -3084,7 +2939,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
-		It("acknowledges break glass and resumes rollback after the upgrade policy is repaired", func() {
+		It("acknowledges break glass and resumes rollback after the upgrade policy is repaired", Label(
+			"case:upgrade-bluegreen-safe-mode-break-glass-recovery",
+		), func() {
 			By("Repairing the broken upgrade policy inside OpenBao")
 			bypassLabels := map[string]string{
 				constants.LabelOpenBaoCluster:   chaosCluster.Name,
@@ -3148,431 +3005,436 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 	})
 
 	// --- Gateway Integration ---
-	Context("Gateway Integration", Label("gateway", "requires-gateway-api", "bluegreen"), Ordered, func() {
+	Context("Gateway API", Label("gateway", "requires-gateway-api"), Ordered, func() {
 		var (
-			tenantNamespace  string
-			tenantFW         *framework.Framework
-			upgradeCluster   *openbaov1alpha1.OpenBaoCluster
-			admin            client.Client
-			gatewayClassName = "e2e-traefik-http"
-			// ... vars
+			gatewayAPIFW      *framework.Framework
+			gatewayAPICleanup func()
 		)
 
 		BeforeAll(func() {
 			var err error
-			// Use standard NewSetup, then install Gateway API
-			tenantFW, err = framework.NewSetup(ctx, "tenant-gateway", operatorNamespace)
+			gatewayAPIFW, err = framework.NewSetup(ctx, "tenant-gateway-api", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
-			tenantNamespace = tenantFW.Namespace
-			admin = tenantFW.Client
 
-			// Install Gateway API using Framework helper
-			cleanup, err := tenantFW.RequireGatewayAPI()
+			gatewayAPICleanup, err = gatewayAPIFW.RequireGatewayAPI()
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanup)
-
-			// Setup logic ...
-			gw := &gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "tenant-gateway",
-					Namespace: tenantNamespace,
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(gatewayClassName),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     "https",
-							Port:     443,
-							Protocol: gatewayv1.HTTPSProtocolType,
-							Hostname: ptrTo(gatewayv1.Hostname("bao.example.local")),
-						},
-					},
-				},
-			}
-			Expect(admin.Create(ctx, gw)).To(Succeed())
-			ensureGatewayClassReady(ctx, admin, gatewayClassName, gatewayv1.FeatureName("HTTPRoute"))
-			markGatewayProgrammed(ctx, admin, tenantNamespace, gw.Name)
-
-			initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			upgradeCluster = &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gateway-cluster",
-					Namespace: tenantNamespace,
-				},
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Profile:  openbaov1alpha1.ProfileDevelopment,
-					Version:  initialVersion,
-					Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
-					Replicas: 3,
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
-						Image:    upgradeExecutorImage,
-						BlueGreen: &openbaov1alpha1.BlueGreenConfig{
-							AutoPromote: true,
-							Verification: &openbaov1alpha1.VerificationConfig{
-								MinSyncDuration: "10s",
-							},
-						},
-					},
-					InitContainer: &openbaov1alpha1.InitContainerConfig{
-						Enabled: true,
-						Image:   configInitImage,
-					},
-					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled: true,
-						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
-							Enabled: true,
-						},
-						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
-					},
-					TLS: openbaov1alpha1.TLSConfig{
-						Enabled:        true,
-						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
-						RotationPeriod: "720h",
-					},
-					Storage: openbaov1alpha1.StorageConfig{
-						Size: "1Gi",
-					},
-					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
-					},
-					Gateway: &openbaov1alpha1.GatewayConfig{
-						Enabled: true,
-						GatewayRef: openbaov1alpha1.GatewayReference{
-							Name: "tenant-gateway",
-						},
-						Hostname: "bao.example.local",
-					},
-					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
-				},
-			}
-			Expect(admin.Create(ctx, upgradeCluster)).To(Succeed())
-
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.Initialized).To(BeTrue())
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
 		AfterAll(func() {
-			if tenantFW != nil {
-				_ = tenantFW.Cleanup(ctx)
+			if gatewayAPICleanup != nil {
+				gatewayAPICleanup()
+			}
+			if gatewayAPIFW != nil {
+				_ = gatewayAPIFW.Cleanup(ctx)
 			}
 		})
 
-		It("keeps HTTPRoute stable and switches external Service selector at cutover", func() {
-			targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+		Context("HTTPRoute Blue/Green Cutover", Label("bluegreen"), Ordered, func() {
+			var (
+				tenantNamespace  string
+				tenantFW         *framework.Framework
+				upgradeCluster   *openbaov1alpha1.OpenBaoCluster
+				admin            client.Client
+				gatewayClassName = "e2e-traefik-http"
+			)
 
-			By("Capturing HTTPRoute before upgrade to verify stability")
-			var httpRouteBeforeUpgrade *gatewayv1.HTTPRoute
-			Eventually(func(g Gomega) {
-				httpRoute := &gatewayv1.HTTPRoute{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Name:      fmt.Sprintf("%s-httproute", upgradeCluster.Name),
-					Namespace: tenantNamespace,
-				}, httpRoute)).To(Succeed())
-				httpRouteBeforeUpgrade = httpRoute.DeepCopy()
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			BeforeAll(func() {
+				var err error
+				tenantFW, err = framework.NewSetup(ctx, "tenant-gateway", operatorNamespace)
+				Expect(err).NotTo(HaveOccurred())
+				tenantNamespace = tenantFW.Namespace
+				admin = tenantFW.Client
 
-			By("Triggering upgrade")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				original := updated.DeepCopy()
-				updated.Spec.Version = targetVersion
-				updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
-				g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+				gw := &gatewayv1.Gateway{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "tenant-gateway",
+						Namespace: tenantNamespace,
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gatewayClassName),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     "https",
+								Port:     443,
+								Protocol: gatewayv1.HTTPSProtocolType,
+								Hostname: ptrTo(gatewayv1.Hostname("bao.example.local")),
+							},
+						},
+					},
+				}
+				Expect(admin.Create(ctx, gw)).To(Succeed())
+				ensureGatewayClassReady(ctx, admin, gatewayClassName, gatewayv1.FeatureName("HTTPRoute"))
+				markGatewayProgrammed(ctx, admin, tenantNamespace, gw.Name)
 
-			By("Waiting for upgrade to progress to cutover phase")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
-				g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
-			}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+				initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+				upgradeCluster = &openbaov1alpha1.OpenBaoCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gateway-cluster",
+						Namespace: tenantNamespace,
+					},
+					Spec: openbaov1alpha1.OpenBaoClusterSpec{
+						Profile:  openbaov1alpha1.ProfileDevelopment,
+						Version:  initialVersion,
+						Image:    fmt.Sprintf("openbao/openbao:%s", initialVersion),
+						Replicas: 3,
+						Upgrade: &openbaov1alpha1.UpgradeConfig{
+							Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+							Image:    upgradeExecutorImage,
+							BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+								AutoPromote: true,
+								Verification: &openbaov1alpha1.VerificationConfig{
+									MinSyncDuration: "10s",
+								},
+							},
+						},
+						InitContainer: &openbaov1alpha1.InitContainerConfig{
+							Enabled: true,
+							Image:   configInitImage,
+						},
+						SelfInit: &openbaov1alpha1.SelfInitConfig{
+							Enabled: true,
+							OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+								Enabled: true,
+							},
+							Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
+						},
+						TLS: openbaov1alpha1.TLSConfig{
+							Enabled:        true,
+							Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+							RotationPeriod: "720h",
+						},
+						Storage: openbaov1alpha1.StorageConfig{
+							Size: "1Gi",
+						},
+						Network: &openbaov1alpha1.NetworkConfig{
+							APIServerCIDR: apiServerCIDR,
+						},
+						Gateway: &openbaov1alpha1.GatewayConfig{
+							Enabled: true,
+							GatewayRef: openbaov1alpha1.GatewayReference{
+								Name: "tenant-gateway",
+							},
+							Hostname: "bao.example.local",
+						},
+						DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+					},
+				}
+				Expect(admin.Create(ctx, upgradeCluster)).To(Succeed())
 
-			By("Verifying external Service remains on Blue while DemotingBlue is in progress")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
+				Eventually(func(g Gomega) {
+					updated := &openbaov1alpha1.OpenBaoCluster{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+					g.Expect(updated.Status.Initialized).To(BeTrue())
+				}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			})
 
-				if updated.Status.BlueGreen.Phase != openbaov1alpha1.PhaseDemotingBlue {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Current phase: %s\n", updated.Status.BlueGreen.Phase)
+			AfterAll(func() {
+				if tenantFW != nil {
+					_ = tenantFW.Cleanup(ctx)
+				}
+			})
+
+			It("keeps HTTPRoute stable and switches external Service selector at cutover", Label(
+				"e2e-anchor",
+				"case:upgrade-gateway-httproute-cutover",
+			), func() {
+				targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+
+				By("Capturing HTTPRoute before upgrade to verify stability")
+				var httpRouteBeforeUpgrade *gatewayv1.HTTPRoute
+				Eventually(func(g Gomega) {
+					httpRoute := &gatewayv1.HTTPRoute{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-httproute", upgradeCluster.Name),
+						Namespace: tenantNamespace,
+					}, httpRoute)).To(Succeed())
+					httpRouteBeforeUpgrade = httpRoute.DeepCopy()
+				}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+				By("Triggering upgrade")
+				Eventually(func(g Gomega) {
+					updated := &openbaov1alpha1.OpenBaoCluster{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+					original := updated.DeepCopy()
+					updated.Spec.Version = targetVersion
+					updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", targetVersion)
+					g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+				}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+				By("Waiting for upgrade to progress to cutover phase")
+				Eventually(func(g Gomega) {
+					updated := &openbaov1alpha1.OpenBaoCluster{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+					g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
 					g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
-					return
-				}
+				}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
-				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty(), "GreenRevision should be set at cutover")
+				By("Verifying external Service remains on Blue while DemotingBlue is in progress")
+				Eventually(func(g Gomega) {
+					expectBlueGreenServiceSelectorDuringPhase(
+						g,
+						ctx,
+						admin,
+						tenantNamespace,
+						upgradeCluster.Name,
+						openbaov1alpha1.PhaseDemotingBlue,
+						func(status *openbaov1alpha1.BlueGreenStatus) string {
+							return status.BlueRevision
+						},
+						"GreenRevision should be set at cutover",
+					)
+				}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
-				svc := &corev1.Service{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Namespace: tenantNamespace,
-					Name:      fmt.Sprintf("%s-public", upgradeCluster.Name),
-				}, svc)).To(Succeed())
-				g.Expect(svc.Spec.Selector).To(HaveKeyWithValue(constants.LabelOpenBaoRevision, updated.Status.BlueGreen.BlueRevision))
-			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+				By("Waiting for Cleanup phase and verifying the external Service selector switches to Green")
+				Eventually(func(g Gomega) {
+					expectBlueGreenServiceSelectorDuringPhase(
+						g,
+						ctx,
+						admin,
+						tenantNamespace,
+						upgradeCluster.Name,
+						openbaov1alpha1.PhaseCleanup,
+						func(status *openbaov1alpha1.BlueGreenStatus) string {
+							return status.GreenRevision
+						},
+						"GreenRevision should be set during cleanup",
+					)
+				}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
-			By("Waiting for Cleanup phase and verifying the external Service selector switches to Green")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
+				By("Waiting for Blue/Green upgrade to complete")
+				Eventually(func(g Gomega) {
+					updated := &openbaov1alpha1.OpenBaoCluster{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+					g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
 
-				if updated.Status.BlueGreen.Phase != openbaov1alpha1.PhaseCleanup {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Current phase before cutover: %s\n", updated.Status.BlueGreen.Phase)
-					g.Expect(updated.Status.BlueGreen.Phase).ToNot(BeEmpty())
-					return
-				}
+					// Explicitly require PhaseIdle - this will retry until phase is Idle
+					g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle), "upgrade should complete and return to Idle")
+					g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
+					g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
 
-				g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty(), "GreenRevision should be set during cleanup")
+					// Verify pods with the final Blue revision are healthy
+					labelSelector := labels.SelectorFromSet(map[string]string{
+						constants.LabelAppInstance:     upgradeCluster.Name,
+						constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
+						constants.LabelOpenBaoRevision: updated.Status.BlueGreen.BlueRevision,
+					})
+					podList := &corev1.PodList{}
+					g.Expect(admin.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabelsSelector{Selector: labelSelector})).To(Succeed())
+					g.Expect(podList.Items).To(HaveLen(3))
 
-				svc := &corev1.Service{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Namespace: tenantNamespace,
-					Name:      fmt.Sprintf("%s-public", upgradeCluster.Name),
-				}, svc)).To(Succeed())
-				g.Expect(svc.Spec.Selector).To(HaveKeyWithValue(constants.LabelOpenBaoRevision, updated.Status.BlueGreen.GreenRevision))
-			}, 20*time.Minute, framework.DefaultPollInterval).Should(Succeed())
-
-			By("Waiting for Blue/Green upgrade to complete")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: upgradeCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.BlueGreen).NotTo(BeNil(), "BlueGreen status should be initialized")
-
-				// Explicitly require PhaseIdle - this will retry until phase is Idle
-				g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle), "upgrade should complete and return to Idle")
-				g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
-				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
-
-				// Verify pods with the final Blue revision are healthy
-				labelSelector := labels.SelectorFromSet(map[string]string{
-					constants.LabelAppInstance:     upgradeCluster.Name,
-					constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
-					constants.LabelOpenBaoRevision: updated.Status.BlueGreen.BlueRevision,
-				})
-				podList := &corev1.PodList{}
-				g.Expect(admin.List(ctx, podList, client.InNamespace(tenantNamespace), client.MatchingLabelsSelector{Selector: labelSelector})).To(Succeed())
-				g.Expect(len(podList.Items)).To(Equal(3))
-
-				for _, pod := range podList.Items {
-					g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning))
-				}
-			}, 30*time.Minute, 30*time.Second).Should(Succeed())
-
-			By("Verifying legacy blue/green Services do not exist")
-			Eventually(func(g Gomega) {
-				// Blue service should not exist
-				blueSvc := &corev1.Service{}
-				err := admin.Get(ctx, types.NamespacedName{
-					Namespace: tenantNamespace,
-					Name:      fmt.Sprintf("%s-public-blue", upgradeCluster.Name),
-				}, blueSvc)
-				g.Expect(err).To(HaveOccurred())
-				g.Expect(client.IgnoreNotFound(err)).To(Succeed(), "blue service should be deleted")
-
-				// Green service should not exist
-				greenSvc := &corev1.Service{}
-				err = admin.Get(ctx, types.NamespacedName{
-					Namespace: tenantNamespace,
-					Name:      fmt.Sprintf("%s-public-green", upgradeCluster.Name),
-				}, greenSvc)
-				g.Expect(err).To(HaveOccurred())
-				g.Expect(client.IgnoreNotFound(err)).To(Succeed(), "green service should be deleted")
-
-				// Main public service should still exist
-				mainSvc := &corev1.Service{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Namespace: tenantNamespace,
-					Name:      fmt.Sprintf("%s-public", upgradeCluster.Name),
-				}, mainSvc)).To(Succeed())
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-
-			By("Verifying HTTPRoute remains stable throughout upgrade")
-			Eventually(func(g Gomega) {
-				httpRouteAfterUpgrade := &gatewayv1.HTTPRoute{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Name:      fmt.Sprintf("%s-httproute", upgradeCluster.Name),
-					Namespace: tenantNamespace,
-				}, httpRouteAfterUpgrade)).To(Succeed())
-
-				// Verify HTTPRoute spec remains unchanged
-				g.Expect(httpRouteAfterUpgrade.Spec.ParentRefs).To(Equal(httpRouteBeforeUpgrade.Spec.ParentRefs),
-					"HTTPRoute ParentRefs should remain unchanged")
-				g.Expect(httpRouteAfterUpgrade.Spec.Hostnames).To(Equal(httpRouteBeforeUpgrade.Spec.Hostnames),
-					"HTTPRoute Hostnames should remain unchanged")
-				g.Expect(len(httpRouteAfterUpgrade.Spec.Rules)).To(Equal(len(httpRouteBeforeUpgrade.Spec.Rules)),
-					"HTTPRoute Rules count should remain unchanged")
-				if len(httpRouteAfterUpgrade.Spec.Rules) > 0 && len(httpRouteBeforeUpgrade.Spec.Rules) > 0 {
-					g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].Matches).To(Equal(httpRouteBeforeUpgrade.Spec.Rules[0].Matches),
-						"HTTPRoute Rules Matches should remain unchanged")
-					// BackendRefs should point to the same Service (only Service selector changes, not the Service name)
-					g.Expect(len(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs)).To(Equal(len(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs)),
-						"HTTPRoute BackendRefs count should remain unchanged")
-					if len(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs) > 0 && len(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs) > 0 {
-						g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs[0].Name).To(Equal(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs[0].Name),
-							"HTTPRoute BackendRef Service name should remain unchanged")
-						g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs[0].Port).To(Equal(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs[0].Port),
-							"HTTPRoute BackendRef Port should remain unchanged")
+					for _, pod := range podList.Items {
+						g.Expect(pod.Status.Phase).To(Equal(corev1.PodRunning))
 					}
-				}
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+				}, 30*time.Minute, 30*time.Second).Should(Succeed())
+
+				By("Verifying legacy blue/green Services do not exist")
+				Eventually(func(g Gomega) {
+					// Blue service should not exist
+					blueSvc := &corev1.Service{}
+					err := admin.Get(ctx, types.NamespacedName{
+						Namespace: tenantNamespace,
+						Name:      fmt.Sprintf("%s-public-blue", upgradeCluster.Name),
+					}, blueSvc)
+					g.Expect(err).To(HaveOccurred())
+					g.Expect(client.IgnoreNotFound(err)).To(Succeed(), "blue service should be deleted")
+
+					// Green service should not exist
+					greenSvc := &corev1.Service{}
+					err = admin.Get(ctx, types.NamespacedName{
+						Namespace: tenantNamespace,
+						Name:      fmt.Sprintf("%s-public-green", upgradeCluster.Name),
+					}, greenSvc)
+					g.Expect(err).To(HaveOccurred())
+					g.Expect(client.IgnoreNotFound(err)).To(Succeed(), "green service should be deleted")
+
+					// Main public service should still exist
+					mainSvc := &corev1.Service{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{
+						Namespace: tenantNamespace,
+						Name:      fmt.Sprintf("%s-public", upgradeCluster.Name),
+					}, mainSvc)).To(Succeed())
+				}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+				By("Verifying HTTPRoute remains stable throughout upgrade")
+				Eventually(func(g Gomega) {
+					httpRouteAfterUpgrade := &gatewayv1.HTTPRoute{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-httproute", upgradeCluster.Name),
+						Namespace: tenantNamespace,
+					}, httpRouteAfterUpgrade)).To(Succeed())
+
+					// Verify HTTPRoute spec remains unchanged
+					g.Expect(httpRouteAfterUpgrade.Spec.ParentRefs).To(Equal(httpRouteBeforeUpgrade.Spec.ParentRefs),
+						"HTTPRoute ParentRefs should remain unchanged")
+					g.Expect(httpRouteAfterUpgrade.Spec.Hostnames).To(Equal(httpRouteBeforeUpgrade.Spec.Hostnames),
+						"HTTPRoute Hostnames should remain unchanged")
+					g.Expect(httpRouteAfterUpgrade.Spec.Rules).To(HaveLen(len(httpRouteBeforeUpgrade.Spec.Rules)),
+						"HTTPRoute Rules count should remain unchanged")
+					if len(httpRouteAfterUpgrade.Spec.Rules) > 0 && len(httpRouteBeforeUpgrade.Spec.Rules) > 0 {
+						g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].Matches).To(Equal(httpRouteBeforeUpgrade.Spec.Rules[0].Matches),
+							"HTTPRoute Rules Matches should remain unchanged")
+						// BackendRefs should point to the same Service (only Service selector changes, not the Service name)
+						g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs).To(
+							HaveLen(len(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs)),
+							"HTTPRoute BackendRefs count should remain unchanged")
+						if len(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs) > 0 && len(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs) > 0 {
+							g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs[0].Name).To(Equal(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs[0].Name),
+								"HTTPRoute BackendRef Service name should remain unchanged")
+							g.Expect(httpRouteAfterUpgrade.Spec.Rules[0].BackendRefs[0].Port).To(Equal(httpRouteBeforeUpgrade.Spec.Rules[0].BackendRefs[0].Port),
+								"HTTPRoute BackendRef Port should remain unchanged")
+						}
+					}
+				}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			})
 		})
-	})
 
-	Context("Gateway TLS Passthrough", Label("gateway", "requires-gateway-api", "tls-passthrough"), Ordered, func() {
-		var (
-			tenantNamespace     string
-			tenantFW            *framework.Framework
-			admin               client.Client
-			passthroughCluster  *openbaov1alpha1.OpenBaoCluster
-			passthroughHostname = "bao-passthrough.example.local"
-			passthroughListener = "tls-passthrough"
-			passthroughGateway  = "tenant-gateway-passthrough"
-			gatewayClassName    = "e2e-traefik-tls"
-		)
+		Context("Gateway TLS Passthrough", Label("tls-passthrough"), Ordered, func() {
+			var (
+				tenantNamespace     string
+				tenantFW            *framework.Framework
+				admin               client.Client
+				passthroughCluster  *openbaov1alpha1.OpenBaoCluster
+				passthroughHostname = "bao-passthrough.example.local"
+				passthroughListener = "tls-passthrough"
+				passthroughGateway  = "tenant-gateway-passthrough"
+				gatewayClassName    = "e2e-traefik-tls"
+			)
 
-		BeforeAll(func() {
-			var err error
+			BeforeAll(func() {
+				var err error
 
-			tenantFW, err = framework.NewSetup(ctx, "tenant-gateway-tls", operatorNamespace)
-			Expect(err).NotTo(HaveOccurred())
-			tenantNamespace = tenantFW.Namespace
-			admin = tenantFW.Client
+				tenantFW, err = framework.NewSetup(ctx, "tenant-gateway-tls", operatorNamespace)
+				Expect(err).NotTo(HaveOccurred())
+				tenantNamespace = tenantFW.Namespace
+				admin = tenantFW.Client
 
-			cleanup, err := tenantFW.RequireGatewayAPI()
-			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanup)
-
-			gw := &gatewayv1.Gateway{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      passthroughGateway,
-					Namespace: tenantNamespace,
-				},
-				Spec: gatewayv1.GatewaySpec{
-					GatewayClassName: gatewayv1.ObjectName(gatewayClassName),
-					Listeners: []gatewayv1.Listener{
-						{
-							Name:     gatewayv1.SectionName(passthroughListener),
-							Port:     443,
-							Protocol: gatewayv1.TLSProtocolType,
-							Hostname: ptrTo(gatewayv1.Hostname(passthroughHostname)),
-							TLS: &gatewayv1.ListenerTLSConfig{
-								Mode: ptrTo(gatewayv1.TLSModePassthrough),
+				gw := &gatewayv1.Gateway{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      passthroughGateway,
+						Namespace: tenantNamespace,
+					},
+					Spec: gatewayv1.GatewaySpec{
+						GatewayClassName: gatewayv1.ObjectName(gatewayClassName),
+						Listeners: []gatewayv1.Listener{
+							{
+								Name:     gatewayv1.SectionName(passthroughListener),
+								Port:     443,
+								Protocol: gatewayv1.TLSProtocolType,
+								Hostname: ptrTo(gatewayv1.Hostname(passthroughHostname)),
+								TLS: &gatewayv1.ListenerTLSConfig{
+									Mode: ptrTo(gatewayv1.TLSModePassthrough),
+								},
 							},
 						},
 					},
-				},
-			}
-			Expect(admin.Create(ctx, gw)).To(Succeed())
-			ensureGatewayClassReady(ctx, admin, gatewayClassName, gatewayv1.FeatureName("TLSRoute"))
-			markGatewayProgrammed(ctx, admin, tenantNamespace, gw.Name)
+				}
+				Expect(admin.Create(ctx, gw)).To(Succeed())
+				ensureGatewayClassReady(ctx, admin, gatewayClassName, gatewayv1.FeatureName("TLSRoute"))
+				markGatewayProgrammed(ctx, admin, tenantNamespace, gw.Name)
 
-			passthroughCluster = &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "gateway-passthrough-cluster",
-					Namespace: tenantNamespace,
-				},
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					Profile:  openbaov1alpha1.ProfileDevelopment,
-					Version:  openBaoVersion,
-					Image:    openBaoImage,
-					Replicas: 1,
-					InitContainer: &openbaov1alpha1.InitContainerConfig{
-						Enabled: true,
-						Image:   configInitImage,
+				passthroughCluster = &openbaov1alpha1.OpenBaoCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gateway-passthrough-cluster",
+						Namespace: tenantNamespace,
 					},
-					SelfInit: &openbaov1alpha1.SelfInitConfig{
-						Enabled: true,
-						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+					Spec: openbaov1alpha1.OpenBaoClusterSpec{
+						Profile:  openbaov1alpha1.ProfileDevelopment,
+						Version:  openBaoVersion,
+						Image:    openBaoImage,
+						Replicas: 1,
+						InitContainer: &openbaov1alpha1.InitContainerConfig{
 							Enabled: true,
+							Image:   configInitImage,
 						},
-						Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
-					},
-					TLS: openbaov1alpha1.TLSConfig{
-						Enabled:        true,
-						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
-						RotationPeriod: "720h",
-					},
-					Storage: openbaov1alpha1.StorageConfig{
-						Size: "1Gi",
-					},
-					Network: &openbaov1alpha1.NetworkConfig{
-						APIServerCIDR: apiServerCIDR,
-					},
-					Gateway: &openbaov1alpha1.GatewayConfig{
-						Enabled:        true,
-						TLSPassthrough: true,
-						ListenerName:   passthroughListener,
-						Hostname:       passthroughHostname,
-						GatewayRef: openbaov1alpha1.GatewayReference{
-							Name: passthroughGateway,
+						SelfInit: &openbaov1alpha1.SelfInitConfig{
+							Enabled: true,
+							OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+								Enabled: true,
+							},
+							Requests: e2ehelpers.CreateE2ERequests(tenantNamespace),
 						},
+						TLS: openbaov1alpha1.TLSConfig{
+							Enabled:        true,
+							Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+							RotationPeriod: "720h",
+						},
+						Storage: openbaov1alpha1.StorageConfig{
+							Size: "1Gi",
+						},
+						Network: &openbaov1alpha1.NetworkConfig{
+							APIServerCIDR: apiServerCIDR,
+						},
+						Gateway: &openbaov1alpha1.GatewayConfig{
+							Enabled:        true,
+							TLSPassthrough: true,
+							ListenerName:   passthroughListener,
+							Hostname:       passthroughHostname,
+							GatewayRef: openbaov1alpha1.GatewayReference{
+								Name: passthroughGateway,
+							},
+						},
+						DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 					},
-					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
-				},
-			}
-			Expect(admin.Create(ctx, passthroughCluster)).To(Succeed())
+				}
+				Expect(admin.Create(ctx, passthroughCluster)).To(Succeed())
 
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: passthroughCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
-				g.Expect(updated.Status.Initialized).To(BeTrue())
-				available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
-				g.Expect(available).NotTo(BeNil())
-				g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
-		})
+				Eventually(func(g Gomega) {
+					updated := &openbaov1alpha1.OpenBaoCluster{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Name: passthroughCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+					g.Expect(updated.Status.Initialized).To(BeTrue())
+					available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+					g.Expect(available).NotTo(BeNil())
+					g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
+				}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+			})
 
-		AfterAll(func() {
-			if tenantFW != nil {
-				_ = tenantFW.Cleanup(ctx)
-			}
-		})
+			AfterAll(func() {
+				if tenantFW != nil {
+					_ = tenantFW.Cleanup(ctx)
+				}
+			})
 
-		It("creates a TLSRoute and reports healthy passthrough integration", func() {
-			By("waiting for passthrough Gateway integration status")
-			Eventually(func(g Gomega) {
-				updated := &openbaov1alpha1.OpenBaoCluster{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{Name: passthroughCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
+			It("creates a TLSRoute and reports healthy passthrough integration", func() {
+				By("waiting for passthrough Gateway integration status")
+				Eventually(func(g Gomega) {
+					updated := &openbaov1alpha1.OpenBaoCluster{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{Name: passthroughCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 
-				cond := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
-				g.Expect(cond).NotTo(BeNil())
-				g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-				g.Expect(cond.Reason).To(Equal("GatewayIntegrationReady"))
-			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+					cond := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionGatewayIntegrationReady))
+					g.Expect(cond).NotTo(BeNil())
+					g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+					g.Expect(cond.Reason).To(Equal("GatewayIntegrationReady"))
+				}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			By("verifying a TLSRoute is created for passthrough access")
-			Eventually(func(g Gomega) {
-				tlsRoute := &gatewayv1alpha2.TLSRoute{}
-				g.Expect(admin.Get(ctx, types.NamespacedName{
-					Name:      fmt.Sprintf("%s-tlsroute", passthroughCluster.Name),
-					Namespace: tenantNamespace,
-				}, tlsRoute)).To(Succeed())
+				By("verifying a TLSRoute is created for passthrough access")
+				Eventually(func(g Gomega) {
+					tlsRoute := &gatewayv1alpha2.TLSRoute{}
+					g.Expect(admin.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-tlsroute", passthroughCluster.Name),
+						Namespace: tenantNamespace,
+					}, tlsRoute)).To(Succeed())
 
-				g.Expect(tlsRoute.Spec.ParentRefs).To(HaveLen(1))
-				g.Expect(tlsRoute.Spec.ParentRefs[0].Name).To(Equal(gatewayv1alpha2.ObjectName(passthroughGateway)))
-				g.Expect(tlsRoute.Spec.ParentRefs[0].SectionName).NotTo(BeNil())
-				g.Expect(*tlsRoute.Spec.ParentRefs[0].SectionName).To(Equal(gatewayv1alpha2.SectionName(passthroughListener)))
-				g.Expect(tlsRoute.Spec.Hostnames).To(Equal([]gatewayv1alpha2.Hostname{gatewayv1alpha2.Hostname(passthroughHostname)}))
-				g.Expect(tlsRoute.Spec.Rules).To(HaveLen(1))
-				g.Expect(tlsRoute.Spec.Rules[0].BackendRefs).To(HaveLen(1))
-				g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Name).To(Equal(gatewayv1alpha2.ObjectName(fmt.Sprintf("%s-public", passthroughCluster.Name))))
-				g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Port).NotTo(BeNil())
-				g.Expect(*tlsRoute.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gatewayv1alpha2.PortNumber(constants.PortAPI)))
-			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+					g.Expect(tlsRoute.Spec.ParentRefs).To(HaveLen(1))
+					g.Expect(tlsRoute.Spec.ParentRefs[0].Name).To(Equal(gatewayv1alpha2.ObjectName(passthroughGateway)))
+					g.Expect(tlsRoute.Spec.ParentRefs[0].SectionName).NotTo(BeNil())
+					g.Expect(*tlsRoute.Spec.ParentRefs[0].SectionName).To(Equal(gatewayv1alpha2.SectionName(passthroughListener)))
+					g.Expect(tlsRoute.Spec.Hostnames).To(Equal([]gatewayv1alpha2.Hostname{gatewayv1alpha2.Hostname(passthroughHostname)}))
+					g.Expect(tlsRoute.Spec.Rules).To(HaveLen(1))
+					g.Expect(tlsRoute.Spec.Rules[0].BackendRefs).To(HaveLen(1))
+					g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Name).To(Equal(gatewayv1alpha2.ObjectName(fmt.Sprintf("%s-public", passthroughCluster.Name))))
+					g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Port).NotTo(BeNil())
+					g.Expect(*tlsRoute.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gatewayv1alpha2.PortNumber(constants.PortAPI)))
+				}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-			By("verifying BackendTLSPolicy is not created for passthrough mode")
-			Consistently(func() bool {
-				err := admin.Get(ctx, types.NamespacedName{
-					Name:      fmt.Sprintf("%s-backend-tls", passthroughCluster.Name),
-					Namespace: tenantNamespace,
-				}, &gatewayv1.BackendTLSPolicy{})
-				return apierrors.IsNotFound(err)
-			}, 30*time.Second, framework.DefaultPollInterval).Should(BeTrue())
+				By("verifying BackendTLSPolicy is not created for passthrough mode")
+				Consistently(func() bool {
+					err := admin.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-backend-tls", passthroughCluster.Name),
+						Namespace: tenantNamespace,
+					}, &gatewayv1.BackendTLSPolicy{})
+					return apierrors.IsNotFound(err)
+				}, 30*time.Second, framework.DefaultPollInterval).Should(BeTrue())
+			})
 		})
 	})
 })

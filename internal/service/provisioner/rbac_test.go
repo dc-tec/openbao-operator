@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	rbacv1 "k8s.io/api/rbac/v1"
 )
 
 //nolint:gocyclo // Table-driven test with multiple assertions
@@ -215,4 +216,97 @@ func TestGenerateTenantRoleBinding(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGenerateTenantRole_DoesNotGrantSecretsAccess(t *testing.T) {
+	role := GenerateTenantRole("tenant-a")
+
+	for i := range role.Rules {
+		rule := role.Rules[i]
+		if isCoreSecretsRule(rule) {
+			t.Fatalf("tenant Role must not grant Secrets access; got rule %#v", rule)
+		}
+	}
+}
+
+func TestGenerateTenantSecretsWriterRole_RestrictsMutationAccess(t *testing.T) {
+	secretNames := []string{"cluster-a-tls-ca", "cluster-a-tls-server"}
+	role := GenerateTenantSecretsWriterRole("tenant-a", secretNames)
+
+	if role.Name != TenantSecretsWriterRoleName {
+		t.Fatalf("writer Role name = %q, want %q", role.Name, TenantSecretsWriterRoleName)
+	}
+	if len(role.Rules) != 2 {
+		t.Fatalf("writer Role rules = %#v, want create and named mutation rules", role.Rules)
+	}
+
+	createRule := findCoreSecretsRule(role.Rules, func(rule rbacv1.PolicyRule) bool {
+		return contains(rule.Verbs, "create") && len(rule.ResourceNames) == 0
+	})
+	if createRule == nil {
+		t.Fatalf("writer Role missing collection-level Secrets create rule: %#v", role.Rules)
+	}
+	for _, forbiddenVerb := range []string{"get", "list", "watch", "patch", "update", "delete"} {
+		if contains(createRule.Verbs, forbiddenVerb) {
+			t.Fatalf("writer create rule must not grant %q: %#v", forbiddenVerb, *createRule)
+		}
+	}
+
+	mutateRule := findCoreSecretsRule(role.Rules, func(rule rbacv1.PolicyRule) bool {
+		return len(rule.ResourceNames) > 0
+	})
+	if mutateRule == nil {
+		t.Fatalf("writer Role missing resourceNames-scoped Secrets mutation rule: %#v", role.Rules)
+	}
+	for _, wantVerb := range []string{"delete", "get", "patch", "update"} {
+		if !contains(mutateRule.Verbs, wantVerb) {
+			t.Fatalf("writer mutation rule missing verb %q: %#v", wantVerb, *mutateRule)
+		}
+	}
+	for _, forbiddenVerb := range []string{"create", "list", "watch"} {
+		if contains(mutateRule.Verbs, forbiddenVerb) {
+			t.Fatalf("writer mutation rule must not grant %q: %#v", forbiddenVerb, *mutateRule)
+		}
+	}
+	for _, wantName := range secretNames {
+		if !contains(mutateRule.ResourceNames, wantName) {
+			t.Fatalf("writer mutation rule missing resourceName %q: %#v", wantName, *mutateRule)
+		}
+	}
+}
+
+func TestGenerateTenantSecretsReaderRole_IsResourceNameScoped(t *testing.T) {
+	secretNames := []string{"cluster-a-credentials"}
+	role := GenerateTenantSecretsReaderRole("tenant-a", secretNames)
+
+	if role.Name != TenantSecretsReaderRoleName {
+		t.Fatalf("reader Role name = %q, want %q", role.Name, TenantSecretsReaderRoleName)
+	}
+	if len(role.Rules) != 1 {
+		t.Fatalf("reader Role rules = %#v, want one scoped read rule", role.Rules)
+	}
+
+	rule := role.Rules[0]
+	if !isCoreSecretsRule(rule) {
+		t.Fatalf("reader Role rule must target core Secrets: %#v", rule)
+	}
+	if len(rule.ResourceNames) != 1 || rule.ResourceNames[0] != secretNames[0] {
+		t.Fatalf("reader Role resourceNames = %#v, want %#v", rule.ResourceNames, secretNames)
+	}
+	if len(rule.Verbs) != 1 || rule.Verbs[0] != "get" {
+		t.Fatalf("reader Role verbs = %#v, want get only", rule.Verbs)
+	}
+}
+
+func findCoreSecretsRule(rules []rbacv1.PolicyRule, keep func(rbacv1.PolicyRule) bool) *rbacv1.PolicyRule {
+	for i := range rules {
+		if isCoreSecretsRule(rules[i]) && keep(rules[i]) {
+			return &rules[i]
+		}
+	}
+	return nil
+}
+
+func isCoreSecretsRule(rule rbacv1.PolicyRule) bool {
+	return contains(rule.APIGroups, "") && contains(rule.Resources, "secrets")
 }

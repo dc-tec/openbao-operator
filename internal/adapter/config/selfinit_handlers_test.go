@@ -67,6 +67,9 @@ func TestRenderSelfInitStanzas_KnownPrefix_IgnoresRawDataAndUsesStructured(t *te
 			Path:      "sys/auth/jwt",
 			AuthMethod: &openbaov1alpha1.SelfInitAuthMethod{
 				Type: "jwt",
+				Config: map[string]string{
+					"listing_visibility": "unauth",
+				},
 			},
 			Data: &apiextensionsv1.JSON{Raw: []byte(`{"type":"kubernetes"}`)},
 		},
@@ -78,6 +81,9 @@ func TestRenderSelfInitStanzas_KnownPrefix_IgnoresRawDataAndUsesStructured(t *te
 	got := string(file.Bytes())
 	if !strings.Contains(got, `type = "jwt"`) {
 		t.Fatalf("expected output to use structured auth method type, got:\n%s", got)
+	}
+	if !strings.Contains(got, `listing_visibility = "unauth"`) {
+		t.Fatalf("expected output to include structured auth method config, got:\n%s", got)
 	}
 	if strings.Contains(got, "kubernetes") {
 		t.Fatalf("expected raw data to be ignored for structured prefixes, got:\n%s", got)

@@ -39,6 +39,16 @@ security:
           - '.trivy*'
           - '.github/workflows/dependency-review.yml'
           - 'internal/adapter/security/**/*'
+          - 'internal/port/security/**/*'
+          - 'internal/platform/openbaotls/**/*'
+          - 'internal/service/certs/**/*'
+          - 'test/e2e/e2e_suite_test.go'
+          - 'test/e2e/framework/**/*'
+          - 'test/e2e/helpers/**/*'
+          - 'test/e2e/Cluster_Profile_Hardened_test.go'
+          - 'test/e2e/Cluster_TLS_ACME_test.go'
+          - 'test/e2e/hardened_signed_suite.go'
+          - 'test/e2e/suites.yaml'
 
 # RBAC changes
 rbac:
@@ -71,6 +81,7 @@ controller:
   - changed-files:
     - any-glob-to-any-file:
       - 'internal/controller/**/*'
+      - 'internal/app/openbaocluster/**/*'
       - 'cmd/controller/**/*'
       - 'controllers/**/*'
 
@@ -78,6 +89,8 @@ controller:
 provisioner:
   - changed-files:
     - any-glob-to-any-file:
+      - 'internal/app/provisioner/**/*'
+      - 'internal/controller/provisioner/**/*'
       - 'internal/service/provisioner/**/*'
       - 'cmd/provisioner/**/*'
       - '**/provisioner*'
@@ -99,6 +112,8 @@ storage:
 admission:
   - changed-files:
     - any-glob-to-any-file:
+      - 'charts/openbao-operator/templates/admission/**/*'
+      - 'config/policy/**/*'
       - 'internal/platform/admission/**/*'
       - '**/admission*'
 
@@ -149,8 +164,12 @@ devops:
     - any-glob-to-any-file:
       - '.github/workflows/**/*'
       - '.github/actions/**/*'
+      - '.github/scripts/**/*'
+      - '.github/labeler.yml'
+      - '.github/size-labeler.yml'
       - 'Makefile'
       - '**/Makefile'
+      - 'hack/ci/**/*'
       - 'hack/build*'
       - 'hack/release*'
       - '.golangci.yml'
@@ -181,15 +200,31 @@ openbao:
 backup:
   - changed-files:
     - any-glob-to-any-file:
+      - 'api/v1alpha1/openbaorestore_types.go'
+      - 'internal/app/openbaorestore/**/*'
+      - 'internal/controller/openbaorestore/**/*'
+      - 'internal/port/backup/**/*'
       - 'internal/service/backup/**/*'
+      - 'internal/service/restore/**/*'
       - 'cmd/bao-backup/**/*'
       - 'Dockerfile.backup'
+      - 'hack/ci/Dockerfile.fast.backup'
+      - 'test/e2e/e2e_suite_test.go'
+      - 'test/e2e/framework/**/*'
+      - 'test/e2e/helpers/**/*'
+      - 'test/e2e/backup_restore_test.go'
+      - 'test/e2e/suites.yaml'
 
 # Restore changes
 restore:
   - changed-files:
     - any-glob-to-any-file:
+      - 'api/v1alpha1/openbaorestore_types.go'
+      - 'internal/app/openbaorestore/**/*'
+      - 'internal/controller/openbaorestore/**/*'
       - 'internal/service/restore/**/*'
+      - 'cmd/bao-backup/restore_flow.go'
+      - 'test/e2e/backup_restore_test.go'
 
 # VAP (Validating Admission Policy) changes
 vap:
@@ -210,9 +245,19 @@ operations:
 upgrades:
   - changed-files:
       - any-glob-to-any-file:
+          - 'internal/port/backup/preupgrade.go'
+          - 'internal/platform/constants/upgrade*'
           - 'internal/service/upgrade/**/*'
           - 'cmd/bao-upgrade/**/*'
           - 'Dockerfile.upgrade'
+          - 'hack/ci/Dockerfile.fast.upgrade'
+          - 'test/e2e/e2e_suite_test.go'
+          - 'test/e2e/framework/**/*'
+          - 'test/e2e/helpers/**/*'
+          - 'test/e2e/Upgrade_Operation_Lock_test.go'
+          - 'test/e2e/Upgrade_Strategies_test.go'
+          - 'test/e2e/Upgrade_Target_Drift_test.go'
+          - 'test/e2e/suites.yaml'
 
 # Config/init related
 config:

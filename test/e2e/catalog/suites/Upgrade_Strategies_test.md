@@ -9,19 +9,17 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
 | `upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17` | holds in Syncing until manual promotion after the pre-promotion hook succeeds | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification` |
-| `upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7` | executes Blue/Green upgrade cycle with pre-upgrade snapshot | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen` |
+| `upgrade-bluegreen-snapshot-promotion` | executes Blue/Green upgrade cycle with pre-upgrade snapshot | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `e2e-anchor` |
 | `upgrade-strategies-aborts-before-promotion-when-the-pre-230729f6` | aborts before promotion when the pre-promotion hook fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `failure` |
-| `upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124` | induces executor failure and validates retry plus auto-abort behavior | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen` |
-| `upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e` | keeps HTTPRoute stable and switches external Service selector at cutover | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `bluegreen` |
-| `upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d` | creates a TLSRoute and reports healthy passthrough integration | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `tls-passthrough` |
+| `upgrade-bluegreen-executor-failure-auto-abort` | induces executor failure and validates retry plus auto-abort behavior | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `e2e-anchor` |
+| `upgrade-strategies-creates-a-tlsroute-and-reports-healthy-79be45e7` | creates a TLSRoute and reports healthy passthrough integration | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `tls-passthrough` |
+| `upgrade-gateway-httproute-cutover` | keeps HTTPRoute stable and switches external Service selector at cutover | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `bluegreen`, `e2e-anchor` |
 | `upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935` | triggers late-phase rollback after promotion failures and recovers when auth is restored | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `rollback` |
 | `upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87` | recovers a failed rolling upgrade after a retry request clears stale state | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `recovery` |
 | `upgrade-strategies-retries-a-failed-rolling-pre-upgrade-fade7ad8` | retries a failed rolling pre-upgrade snapshot before starting rollout | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `snapshot`, `recovery` |
-| `upgrade-strategies-performs-rolling-upgrade-2302a23d` | performs rolling upgrade | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling` |
-| `upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa` | acknowledges break glass and resumes rollback after the upgrade policy is repaired | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
-| `upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327` | enters safe mode when rollback consensus repair job fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
-| `upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b` | rejects downgrade requests at admission before any rollout begins | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation` |
-| `upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb` | surfaces image version mismatches as degraded without mutating running pods | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation` |
+| `upgrade-rolling-happy-path` | performs rolling upgrade | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `e2e-anchor`, `read-replicas`, `read-replicas-rolling` |
+| `upgrade-bluegreen-safe-mode-break-glass-recovery` | acknowledges break glass and resumes rollback after the upgrade policy is repaired | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
+| `upgrade-bluegreen-safe-mode-consensus-repair-failure` | enters safe mode when rollback consensus repair job fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 
 ## `upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17`
 
@@ -41,15 +39,17 @@ Recorded checkpoints:
 - Verifying the upgrade resumes and completes cleanly
 
 
-## `upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7`
+## `upgrade-bluegreen-snapshot-promotion`
 
 Path: `Upgrade Strategies > Blue/Green Upgrade > executes Blue/Green upgrade cycle with pre-upgrade snapshot`
 
 State: `active`
 
+Generated fallback ID: `upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7`
+
 Covers: _none_
 
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `e2e-anchor`
 
 Recorded checkpoints:
 - Writing a secret before upgrade
@@ -84,15 +84,17 @@ Recorded checkpoints:
 - Verifying the original cluster remains readable after the failed upgrade
 
 
-## `upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124`
+## `upgrade-bluegreen-executor-failure-auto-abort`
 
 Path: `Upgrade Strategies > Failure Scenarios > induces executor failure and validates retry plus auto-abort behavior`
 
 State: `active`
 
+Generated fallback ID: `upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124`
+
 Covers: _none_
 
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `e2e-anchor`
 
 Recorded checkpoints:
 - Triggering a Blue/Green upgrade
@@ -102,30 +104,9 @@ Recorded checkpoints:
 - Verifying threshold triggers early-phase abort and cluster returns to idle on original version
 
 
-## `upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e`
+## `upgrade-strategies-creates-a-tlsroute-and-reports-healthy-79be45e7`
 
-Path: `Upgrade Strategies > Gateway Integration > keeps HTTPRoute stable and switches external Service selector at cutover`
-
-State: `active`
-
-Covers: _none_
-
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `bluegreen`
-
-Recorded checkpoints:
-- Capturing HTTPRoute before upgrade to verify stability
-- Triggering upgrade
-- Waiting for upgrade to progress to cutover phase
-- Verifying external Service remains on Blue while DemotingBlue is in progress
-- Waiting for Cleanup phase and verifying the external Service selector switches to Green
-- Waiting for Blue/Green upgrade to complete
-- Verifying legacy blue/green Services do not exist
-- Verifying HTTPRoute remains stable throughout upgrade
-
-
-## `upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d`
-
-Path: `Upgrade Strategies > Gateway TLS Passthrough > creates a TLSRoute and reports healthy passthrough integration`
+Path: `Upgrade Strategies > Gateway API > Gateway TLS Passthrough > creates a TLSRoute and reports healthy passthrough integration`
 
 State: `active`
 
@@ -137,6 +118,29 @@ Recorded checkpoints:
 - waiting for passthrough Gateway integration status
 - verifying a TLSRoute is created for passthrough access
 - verifying BackendTLSPolicy is not created for passthrough mode
+
+
+## `upgrade-gateway-httproute-cutover`
+
+Path: `Upgrade Strategies > Gateway API > HTTPRoute Blue/Green Cutover > keeps HTTPRoute stable and switches external Service selector at cutover`
+
+State: `active`
+
+Generated fallback ID: `upgrade-strategies-keeps-httproute-stable-and-switches-external-7a9e6dd5`
+
+Covers: _none_
+
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `bluegreen`, `e2e-anchor`
+
+Recorded checkpoints:
+- Capturing HTTPRoute before upgrade to verify stability
+- Triggering upgrade
+- Waiting for upgrade to progress to cutover phase
+- Verifying external Service remains on Blue while DemotingBlue is in progress
+- Waiting for Cleanup phase and verifying the external Service selector switches to Green
+- Waiting for Blue/Green upgrade to complete
+- Verifying legacy blue/green Services do not exist
+- Verifying HTTPRoute remains stable throughout upgrade
 
 
 ## `upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935`
@@ -201,30 +205,35 @@ Recorded checkpoints:
 - Verifying the rolling upgrade proceeds only after the snapshot succeeds
 
 
-## `upgrade-strategies-performs-rolling-upgrade-2302a23d`
+## `upgrade-rolling-happy-path`
 
 Path: `Upgrade Strategies > Rolling Upgrade > performs rolling upgrade`
 
 State: `active`
 
+Generated fallback ID: `upgrade-strategies-performs-rolling-upgrade-2302a23d`
+
 Covers: _none_
 
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `e2e-anchor`, `read-replicas`, `read-replicas-rolling`
 
 Recorded checkpoints:
 - Writing a secret before upgrade
 - Triggering upgrade
+- Verifying the steady read pool converges before voter rollout starts
 - Monitoring rolling invariants during upgrade
 - Verifying rolling step-down jobs are deterministic and successful
 - Verifying secret persists after upgrade
 - Verifying upgrade metrics reflect idle state
 
 
-## `upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa`
+## `upgrade-bluegreen-safe-mode-break-glass-recovery`
 
 Path: `Upgrade Strategies > Safe Mode (chaos) > acknowledges break glass and resumes rollback after the upgrade policy is repaired`
 
 State: `active`
+
+Generated fallback ID: `upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa`
 
 Covers: _none_
 
@@ -237,11 +246,13 @@ Recorded checkpoints:
 - Verifying rollback completes and the cluster returns to the original version
 
 
-## `upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327`
+## `upgrade-bluegreen-safe-mode-consensus-repair-failure`
 
 Path: `Upgrade Strategies > Safe Mode (chaos) > enters safe mode when rollback consensus repair job fails`
 
 State: `active`
+
+Generated fallback ID: `upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327`
 
 Covers: _none_
 
@@ -258,36 +269,5 @@ Recorded checkpoints:
 - Waiting for the rollback consensus repair job to fail
 - Verifying secret persists in safe mode
 - Asserting safe mode is set on the cluster
-
-
-## `upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b`
-
-Path: `Upgrade Strategies > Validation Guardrails > rejects downgrade requests at admission before any rollout begins`
-
-State: `active`
-
-Covers: _none_
-
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation`
-
-Recorded checkpoints:
-- Attempting to patch the cluster to a lower semantic version
-- Verifying the persisted spec remains unchanged after the rejected patch
-
-
-## `upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb`
-
-Path: `Upgrade Strategies > Validation Guardrails > surfaces image version mismatches as degraded without mutating running pods`
-
-State: `active`
-
-Covers: _none_
-
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `guardrails`, `validation`
-
-Recorded checkpoints:
-- Patching a semver-tagged image that conflicts with spec.version
-- Waiting for the workload controller to report a permanent configuration error
-- Verifying existing OpenBao pods keep the original stable image
 
 

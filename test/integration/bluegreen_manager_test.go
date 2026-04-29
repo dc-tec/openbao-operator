@@ -41,7 +41,11 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	createTLSSecret(t, namespace, cluster.Name)
 
 	targetGreenRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
-	currentBlueRevision := revision.OpenBaoClusterRevision("2.4.3", constants.GetOpenBaoImage("2.4.3"), cluster.Spec.Replicas)
+	currentBlueRevision := revision.OpenBaoClusterRevision(
+		testPreviousOpenBaoVersion,
+		constants.GetOpenBaoImage(testPreviousOpenBaoVersion),
+		cluster.Spec.Replicas,
+	)
 
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.Initialized = true
@@ -62,7 +66,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 				constants.LabelAppInstance:     cluster.Name,
 				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
 				constants.LabelOpenBaoRevision: targetGreenRevision,
-				portopenbao.LabelActive:        "true",
+				portopenbao.LabelActive:        testTrueString,
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -70,7 +74,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 				{
 					Name:    "noop",
 					Image:   "busybox:1.36",
-					Command: []string{"sh", "-c", "true"},
+					Command: []string{"sh", "-c", testTrueString},
 				},
 			},
 		},
@@ -94,7 +98,8 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 
 	// Phase: JoiningMesh -> create join job
 	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
+	clusterKey := types.NamespacedName{Namespace: namespace, Name: cluster.Name}
+	if err := k8sClient.Get(ctx, clusterKey, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
 
@@ -109,7 +114,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	markJobSucceeded(t, joinJob)
 
 	// Advance to Syncing
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
+	if err := k8sClient.Get(ctx, clusterKey, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
 	result, err = manager.Reconcile(ctx, logr.Discard(), latestCluster)
@@ -138,7 +143,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	markJobSucceeded(t, syncJob)
 
 	// Advance to Promoting
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
+	if err := k8sClient.Get(ctx, clusterKey, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
 	result, err = manager.Reconcile(ctx, logr.Discard(), latestCluster)
@@ -167,7 +172,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	markJobSucceeded(t, promoteJob)
 
 	// Advance to DemotingBlue (cutover)
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
+	if err := k8sClient.Get(ctx, clusterKey, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
 	result, err = manager.Reconcile(ctx, logr.Discard(), latestCluster)
@@ -198,7 +203,11 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	createTLSSecret(t, namespace, cluster.Name)
 
 	targetGreenRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, cluster.Spec.Image, cluster.Spec.Replicas)
-	currentBlueRevision := revision.OpenBaoClusterRevision("2.4.3", constants.GetOpenBaoImage("2.4.3"), cluster.Spec.Replicas)
+	currentBlueRevision := revision.OpenBaoClusterRevision(
+		testPreviousOpenBaoVersion,
+		constants.GetOpenBaoImage(testPreviousOpenBaoVersion),
+		cluster.Spec.Replicas,
+	)
 
 	updateClusterStatus(t, cluster, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
 		status.Initialized = true
@@ -226,7 +235,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 				{
 					Name:    "noop",
 					Image:   "busybox:1.36",
-					Command: []string{"sh", "-c", "true"},
+					Command: []string{"sh", "-c", testTrueString},
 				},
 			},
 		},
@@ -261,19 +270,27 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 
 	controllerClient := newControllerClient(t)
 	workloadMgr := workloadsvc.NewManager(controllerClient, k8sScheme, "").WithReader(controllerClient)
-	mgr := bluegreen.NewManagerWithClientFactory(k8sClient, k8sScheme, workloadMgr, backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
-		return &openbaotest.MockClusterActions{
-			IsLeaderFunc: func(ctx context.Context) (bool, error) {
-				return true, nil
-			},
-		}, nil
-	}, portopenbao.ClientConfig{},
+	mgr := bluegreen.NewManagerWithClientFactory(
+		k8sClient,
+		k8sScheme,
+		workloadMgr,
+		backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme),
+		func(_ portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+			return &openbaotest.MockClusterActions{
+				IsLeaderFunc: func(ctx context.Context) (bool, error) {
+					return true, nil
+				},
+			}, nil
+		},
+		portopenbao.ClientConfig{},
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-		"")
+		"",
+	)
 
 	latestCluster := &openbaov1alpha1.OpenBaoCluster{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
+	clusterKey := types.NamespacedName{Namespace: namespace, Name: cluster.Name}
+	if err := k8sClient.Get(ctx, clusterKey, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
 
@@ -292,7 +309,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 	}
 
 	// Second reconcile should not stall due to missing leader labels; the API fallback should allow progress.
-	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, latestCluster); err != nil {
+	if err := k8sClient.Get(ctx, clusterKey, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}
 	result, err = mgr.Reconcile(ctx, logr.Discard(), latestCluster)

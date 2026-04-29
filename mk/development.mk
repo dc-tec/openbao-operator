@@ -378,6 +378,10 @@ KIND_NODE_IMAGE ?=
 E2E_PARALLEL_NODES ?= 1
 E2E_TIMEOUT ?= 1h
 E2E_JUNIT_REPORT ?=
+E2E_JSON_REPORT ?=
+E2E_GOJSON_REPORT ?=
+E2E_POLL_PROGRESS_AFTER ?=
+E2E_FAIL_ON_EMPTY ?= false
 E2E_KEEP_GOING ?= false
 E2E_TRACE ?= false
 E2E_NO_COLOR ?= false
@@ -423,7 +427,12 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests. Expected an isolated environment using Kind. Use E2E_PARALLEL_NODES=N to run tests in parallel (default: 1). Use E2E_FOCUS="Backup" to run only specific tests. See Makefile for additional E2E_* variables.
-	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
+	@for report in "$(E2E_JUNIT_REPORT)" "$(E2E_JSON_REPORT)" "$(E2E_GOJSON_REPORT)"; do \
+		if [ -n "$$report" ]; then \
+			mkdir -p "$$(dirname "$$report")"; \
+		fi; \
+	done; \
+	GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=\"$(E2E_FOCUS)\""; \
 	fi; \
@@ -438,6 +447,18 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 	fi; \
 	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --junit-report=$(E2E_JUNIT_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_JSON_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --json-report=$(E2E_JSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_GOJSON_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --gojson-report=$(E2E_GOJSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_POLL_PROGRESS_AFTER)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --poll-progress-after=$(E2E_POLL_PROGRESS_AFTER)"; \
+	fi; \
+	if [ "$(E2E_FAIL_ON_EMPTY)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --fail-on-empty"; \
 	fi; \
 	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
@@ -451,7 +472,12 @@ test-e2e: setup-test-e2e manifests generate fmt vet ginkgo ## Run the e2e tests.
 
 .PHONY: test-e2e-existing
 test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests against an existing cluster (e.g. OpenShift Local/CRC). Requires KUBECONFIG set and E2E_OPERATOR_IMAGE pointing to a pullable image. Use E2E_LABEL_FILTER to run a subset (e.g. 'openshift').
-	@GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
+	@for report in "$(E2E_JUNIT_REPORT)" "$(E2E_JSON_REPORT)" "$(E2E_GOJSON_REPORT)"; do \
+		if [ -n "$$report" ]; then \
+			mkdir -p "$$(dirname "$$report")"; \
+		fi; \
+	done; \
+	GO_TEST_FLAGS="-tags=e2e -v -ginkgo.v -ginkgo.timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.focus=\"$(E2E_FOCUS)\""; \
 	fi; \
@@ -464,11 +490,28 @@ test-e2e-existing: manifests generate fmt vet ginkgo ## Run the e2e tests agains
 	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
 		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.junit-report=$(E2E_JUNIT_REPORT)"; \
 	fi; \
+	if [ -n "$(E2E_JSON_REPORT)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.json-report=$(E2E_JSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_GOJSON_REPORT)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.gojson-report=$(E2E_GOJSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_POLL_PROGRESS_AFTER)" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.poll-progress-after=$(E2E_POLL_PROGRESS_AFTER)"; \
+	fi; \
+	if [ "$(E2E_FAIL_ON_EMPTY)" = "true" ]; then \
+		GO_TEST_FLAGS="$$GO_TEST_FLAGS -ginkgo.fail-on-empty"; \
+	fi; \
 	eval E2E_USE_EXISTING_CLUSTER=true go test ./test/e2e/ $$GO_TEST_FLAGS
 
 .PHONY: test-e2e-ci
 test-e2e-ci: ginkgo ## Run the e2e tests in CI mode (does not modify files).
-	@GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
+	@for report in "$(E2E_JUNIT_REPORT)" "$(E2E_JSON_REPORT)" "$(E2E_GOJSON_REPORT)"; do \
+		if [ -n "$$report" ]; then \
+			mkdir -p "$$(dirname "$$report")"; \
+		fi; \
+	done; \
+	GINKGO_FLAGS="-tags=e2e -v --timeout=$(E2E_TIMEOUT)"; \
 	if [ -n "$(E2E_FOCUS)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --focus=\"$(E2E_FOCUS)\""; \
 	fi; \
@@ -483,6 +526,18 @@ test-e2e-ci: ginkgo ## Run the e2e tests in CI mode (does not modify files).
 	fi; \
 	if [ -n "$(E2E_JUNIT_REPORT)" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --junit-report=$(E2E_JUNIT_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_JSON_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --json-report=$(E2E_JSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_GOJSON_REPORT)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --gojson-report=$(E2E_GOJSON_REPORT)"; \
+	fi; \
+	if [ -n "$(E2E_POLL_PROGRESS_AFTER)" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --poll-progress-after=$(E2E_POLL_PROGRESS_AFTER)"; \
+	fi; \
+	if [ "$(E2E_FAIL_ON_EMPTY)" = "true" ]; then \
+		GINKGO_FLAGS="$$GINKGO_FLAGS --fail-on-empty"; \
 	fi; \
 	if [ "$(E2E_KEEP_GOING)" = "true" ]; then \
 		GINKGO_FLAGS="$$GINKGO_FLAGS --keep-going"; \
@@ -500,6 +555,80 @@ e2e-catalog: ginkgo ## Generate a catalog of E2E suites, specs, labels, and By-s
 		--ginkgo "$(GINKGO)" \
 		--input-dir test/e2e \
 		--output-dir test/e2e/catalog
+
+.PHONY: e2e-manifest-validate
+e2e-manifest-validate: ## Validate test/e2e/suites.yaml against the generated E2E catalog.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_manifest \
+		--manifest test/e2e/suites.yaml \
+		--catalog test/e2e/catalog/cases.json
+
+.PHONY: e2e-ci-matrix
+e2e-ci-matrix: ## Generate the GitHub Actions E2E matrix from test/e2e/suites.yaml.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-matrix
+
+.PHONY: e2e-nightly-matrix
+e2e-nightly-matrix: ## Generate the GitHub Actions nightly E2E matrix. Set E2E_NIGHTLY_PROFILE, E2E_NIGHTLY_LANE, or E2E_NIGHTLY_KUBERNETES.
+	@args=""; \
+	if [ -n "$(E2E_NIGHTLY_LANE)" ] && [ "$(E2E_NIGHTLY_LANE)" != "all" ]; then args="$${args} --lane $(E2E_NIGHTLY_LANE)"; fi; \
+	if [ -n "$(E2E_NIGHTLY_KUBERNETES)" ] && [ "$(E2E_NIGHTLY_KUBERNETES)" != "all" ]; then args="$${args} --kubernetes $(E2E_NIGHTLY_KUBERNETES)"; fi; \
+	GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile "$(or $(E2E_NIGHTLY_PROFILE),daily)" \
+		$${args}
+
+.PHONY: e2e-release-matrix
+e2e-release-matrix: ## Generate the GitHub Actions release-gate E2E matrix. Set E2E_RELEASE_LANE or E2E_RELEASE_KUBERNETES.
+	@args=""; \
+	if [ -n "$(E2E_RELEASE_LANE)" ] && [ "$(E2E_RELEASE_LANE)" != "all" ]; then args="$${args} --lane $(E2E_RELEASE_LANE)"; fi; \
+	if [ -n "$(E2E_RELEASE_KUBERNETES)" ] && [ "$(E2E_RELEASE_KUBERNETES)" != "all" ]; then args="$${args} --kubernetes $(E2E_RELEASE_KUBERNETES)"; fi; \
+	GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile release-gate \
+		$${args}
+
+.PHONY: e2e-ci-matrix-validate
+e2e-ci-matrix-validate: ## Validate that the GitHub Actions E2E matrix can be generated.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-matrix >/dev/null
+
+.PHONY: e2e-nightly-matrix-validate
+e2e-nightly-matrix-validate: ## Validate that the nightly E2E matrices can be generated.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile daily >/dev/null
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile weekly-full >/dev/null
+
+.PHONY: e2e-release-matrix-validate
+e2e-release-matrix-validate: ## Validate that the release-gate E2E matrix can be generated.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile release-gate >/dev/null
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile release-gate \
+		--lane core \
+		--kubernetes 1.35.1 >/dev/null
+
+.PHONY: verify-e2e-manifest
+verify-e2e-manifest: e2e-catalog e2e-manifest-validate e2e-ci-matrix-validate e2e-nightly-matrix-validate e2e-release-matrix-validate ## Verify the E2E catalog and suite manifest are up-to-date.
+	@{ \
+		git diff --exit-code -- test/e2e/catalog test/e2e/suites.yaml; \
+	} || { \
+		echo "E2E catalog or suite manifest is out of date. Run 'make e2e-catalog e2e-manifest-validate' and commit the result."; \
+		git --no-pager diff -- test/e2e/catalog test/e2e/suites.yaml; \
+		exit 1; \
+	}
 
 .PHONY: perf-baseline
 perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and regenerate thresholds.

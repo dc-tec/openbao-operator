@@ -46,9 +46,31 @@ while IFS= read -r pkg_pattern; do
 done < <(
 	for file in "${go_files[@]}"; do
 		dir="$(dirname "$file")"
+		if [[ "$dir" == test/e2e || "$dir" == test/e2e/* ]]; then
+			continue
+		fi
 		printf './%s\n' "$dir"
 	done | sort -u
 )
 
-echo "[pre-commit] Running golangci-lint on affected Go paths"
-"./bin/golangci-lint" run "${pkg_patterns[@]}"
+e2e_pkg_patterns=()
+while IFS= read -r pkg_pattern; do
+	e2e_pkg_patterns+=("$pkg_pattern")
+done < <(
+	for file in "${go_files[@]}"; do
+		dir="$(dirname "$file")"
+		if [[ "$dir" == test/e2e || "$dir" == test/e2e/* ]]; then
+			printf './%s\n' "$dir"
+		fi
+	done | sort -u
+)
+
+if [[ ${#pkg_patterns[@]} -gt 0 ]]; then
+	echo "[pre-commit] Running golangci-lint on affected Go paths"
+	"./bin/golangci-lint" run "${pkg_patterns[@]}"
+fi
+
+if [[ ${#e2e_pkg_patterns[@]} -gt 0 ]]; then
+	echo "[pre-commit] Running golangci-lint on affected E2E Go paths"
+	GOFLAGS="${GOFLAGS:-} -tags=e2e" "./bin/golangci-lint" run "${e2e_pkg_patterns[@]}"
+fi

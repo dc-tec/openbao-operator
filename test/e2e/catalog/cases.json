@@ -364,8 +364,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb",
+    "id": "hardened-bluegreen-upgrade",
     "generatedId": "cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb",
+    "caseLabel": "hardened-bluegreen-upgrade",
     "file": "test/e2e/Cluster_Profile_Hardened_test.go",
     "type": "It",
     "name": "performs a hardened blue/green upgrade",
@@ -380,7 +381,8 @@
       "cluster",
       "upgrade",
       "bluegreen",
-      "hardened"
+      "hardened",
+      "case:hardened-bluegreen-upgrade"
     ],
     "domainLabels": [
       "profile-hardened",
@@ -407,8 +409,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf",
+    "id": "hardened-rolling-upgrade",
     "generatedId": "cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf",
+    "caseLabel": "hardened-rolling-upgrade",
     "file": "test/e2e/Cluster_Profile_Hardened_test.go",
     "type": "It",
     "name": "performs a hardened rolling upgrade",
@@ -423,7 +426,8 @@
       "cluster",
       "upgrade",
       "rolling",
-      "hardened"
+      "hardened",
+      "case:hardened-rolling-upgrade"
     ],
     "domainLabels": [
       "profile-hardened",
@@ -450,8 +454,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d",
+    "id": "hardened-self-init-auto-unseal",
     "generatedId": "cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d",
+    "caseLabel": "hardened-self-init-auto-unseal",
     "file": "test/e2e/Cluster_Profile_Hardened_test.go",
     "type": "It",
     "name": "creates a Hardened cluster that self-initializes and stays unsealed across restarts",
@@ -462,7 +467,8 @@
     "labels": [
       "profile-hardened",
       "security",
-      "cluster"
+      "cluster",
+      "case:hardened-self-init-auto-unseal"
     ],
     "domainLabels": [
       "profile-hardened",
@@ -587,80 +593,6 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-paused-resume",
-    "generatedId": "cluster-runtime-controls-pauses-reconciliation-until-spec-paused-is-7e97d27d",
-    "caseLabel": "cluster-paused-resume",
-    "coverage": [
-      "paused-reconcile",
-      "paused-status"
-    ],
-    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
-    "type": "It",
-    "name": "pauses reconciliation until spec.paused is cleared",
-    "path": [
-      "Cluster Runtime Controls",
-      "pauses reconciliation until spec.paused is cleared"
-    ],
-    "labels": [
-      "lifecycle",
-      "cluster",
-      "runtime",
-      "case:cluster-paused-resume",
-      "covers:paused-reconcile",
-      "covers:paused-status"
-    ],
-    "domainLabels": [
-      "lifecycle",
-      "cluster",
-      "runtime"
-    ],
-    "steps": [
-      "waiting for paused status conditions to be reported",
-      "verifying workload resources are not created while reconciliation is paused",
-      "clearing spec.paused so normal reconciliation resumes"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "cluster-telemetry-rendering",
-    "generatedId": "cluster-runtime-controls-renders-telemetry-configuration-when-observability-metrics-b6a0c999",
-    "caseLabel": "cluster-telemetry-rendering",
-    "coverage": [
-      "telemetry",
-      "observability-metrics"
-    ],
-    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
-    "type": "It",
-    "name": "renders telemetry configuration when observability metrics are enabled",
-    "path": [
-      "Cluster Runtime Controls",
-      "renders telemetry configuration when observability metrics are enabled"
-    ],
-    "labels": [
-      "lifecycle",
-      "cluster",
-      "runtime",
-      "case:cluster-telemetry-rendering",
-      "covers:telemetry",
-      "covers:observability-metrics"
-    ],
-    "domainLabels": [
-      "lifecycle",
-      "cluster",
-      "runtime"
-    ],
-    "steps": [
-      "verifying the rendered config includes the telemetry stanza"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
     "id": "cluster-restart-at-rolls-pod",
     "generatedId": "cluster-runtime-controls-rolls-the-openbao-pod-when-runtime-c0619ab5",
     "caseLabel": "cluster-restart-at-rolls-pod",
@@ -699,8 +631,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8",
+    "id": "tls-acme-self-init-ready",
     "generatedId": "cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8",
+    "caseLabel": "tls-acme-self-init-ready",
     "file": "test/e2e/Cluster_TLS_ACME_test.go",
     "type": "It",
     "name": "creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)",
@@ -711,7 +644,8 @@
     "labels": [
       "tls",
       "security",
-      "slow"
+      "slow",
+      "case:tls-acme-self-init-ready"
     ],
     "domainLabels": [
       "tls",
@@ -726,7 +660,8 @@
       "verifying TLS secrets are NOT created (ACME mode)",
       "checking for prerequisite resources (ConfigMap)",
       "waiting for StatefulSet to be created",
-      "waiting for StatefulSet pods to become Ready",
+      "waiting for the first ACME pod to become Ready after self-init",
+      "waiting for StatefulSet pods to reach the desired replica count",
       "waiting for the ACME shared cache PVC to become Bound",
       "verifying documented ACME readiness conditions",
       "validating that the config contains ACME parameters",
@@ -820,30 +755,6 @@
     "suiteTitle": ""
   },
   {
-    "id": "gitops-contract-repeatedly-applies-the-same-manifest-without-43cd8392",
-    "generatedId": "gitops-contract-repeatedly-applies-the-same-manifest-without-43cd8392",
-    "file": "test/e2e/GitOps_Contract_test.go",
-    "type": "It",
-    "name": "repeatedly applies the same manifest without spec/metadata drift",
-    "path": [
-      "GitOps contract (Argo-like apply)",
-      "repeatedly applies the same manifest without spec/metadata drift"
-    ],
-    "labels": [
-      "gitops",
-      "contract"
-    ],
-    "domainLabels": [
-      "gitops",
-      "contract"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
     "id": "manager-leader-failover",
     "generatedId": "manager-resilience-fails-over-leader-election-and-continues-2baefc75",
     "caseLabel": "manager-leader-failover",
@@ -862,6 +773,7 @@
     "labels": [
       "manager",
       "cluster",
+      "e2e-anchor",
       "case:manager-leader-failover",
       "covers:leader-election",
       "covers:controller-failover",
@@ -869,7 +781,8 @@
     ],
     "domainLabels": [
       "manager",
-      "cluster"
+      "cluster",
+      "e2e-anchor"
     ],
     "steps": [
       "scaling the controller deployment to two replicas",
@@ -941,6 +854,7 @@
     "labels": [
       "manager",
       "cluster",
+      "e2e-anchor",
       "case:manager-restart-idempotent-reconcile",
       "covers:controller-restart",
       "covers:idempotent-reconcile",
@@ -948,7 +862,8 @@
     ],
     "domainLabels": [
       "manager",
-      "cluster"
+      "cluster",
+      "e2e-anchor"
     ],
     "steps": [
       "restarting the controller while the initial reconcile is still in progress",
@@ -963,8 +878,12 @@
     "suiteTitle": ""
   },
   {
-    "id": "operator-manager-should-ensure-the-metrics-endpoint-is-71a02c09",
+    "id": "operator-manager-metrics-endpoint",
     "generatedId": "operator-manager-should-ensure-the-metrics-endpoint-is-71a02c09",
+    "caseLabel": "operator-manager-metrics-endpoint",
+    "coverage": [
+      "manager-metrics-endpoint"
+    ],
     "file": "test/e2e/Operator_Manager_test.go",
     "type": "It",
     "name": "should ensure the metrics endpoint is serving metrics",
@@ -976,7 +895,9 @@
     "labels": [
       "manager",
       "critical",
-      "smoke"
+      "smoke",
+      "case:operator-manager-metrics-endpoint",
+      "covers:manager-metrics-endpoint"
     ],
     "domainLabels": [
       "manager",
@@ -984,39 +905,11 @@
       "smoke"
     ],
     "steps": [
+      "locating the controller pod",
       "validating that the metrics service is available",
       "ensuring the controller pod is ready",
       "verifying that the controller manager is serving the metrics server",
       "verifying that the controller metrics endpoint returns data"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "operator-manager-should-run-successfully-620495ad",
-    "generatedId": "operator-manager-should-run-successfully-620495ad",
-    "file": "test/e2e/Operator_Manager_test.go",
-    "type": "It",
-    "name": "should run successfully",
-    "path": [
-      "Manager",
-      "Manager",
-      "should run successfully"
-    ],
-    "labels": [
-      "manager",
-      "critical",
-      "smoke"
-    ],
-    "domainLabels": [
-      "manager",
-      "critical",
-      "smoke"
-    ],
-    "steps": [
-      "validating that the controller-manager pod is running as expected"
     ],
     "focused": false,
     "pending": false,
@@ -1154,87 +1047,6 @@
       "Security Guardrails",
       "Admission Policy Enforcement",
       "blocks cross-namespace tenant targeting (self-service mode)"
-    ],
-    "labels": [
-      "security",
-      "critical",
-      "admission"
-    ],
-    "domainLabels": [
-      "security",
-      "critical",
-      "admission"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d",
-    "generatedId": "security-guardrails-blocks-decimal-ip-encoding-in-backup-d19bda3d",
-    "file": "test/e2e/Security_Guardrails_test.go",
-    "type": "It",
-    "name": "blocks decimal IP encoding in backup endpoint (SSRF protection)",
-    "path": [
-      "Security Guardrails",
-      "Admission Policy Enforcement",
-      "blocks decimal IP encoding in backup endpoint (SSRF protection)"
-    ],
-    "labels": [
-      "security",
-      "critical",
-      "admission"
-    ],
-    "domainLabels": [
-      "security",
-      "critical",
-      "admission"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74",
-    "generatedId": "security-guardrails-blocks-link-local-endpoints-in-restore-0b6e1c74",
-    "file": "test/e2e/Security_Guardrails_test.go",
-    "type": "It",
-    "name": "blocks link-local endpoints in restore source (SSRF protection)",
-    "path": [
-      "Security Guardrails",
-      "Admission Policy Enforcement",
-      "blocks link-local endpoints in restore source (SSRF protection)"
-    ],
-    "labels": [
-      "security",
-      "critical",
-      "admission"
-    ],
-    "domainLabels": [
-      "security",
-      "critical",
-      "admission"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326",
-    "generatedId": "security-guardrails-blocks-non-cluster-http-restore-endpoints-d2732326",
-    "file": "test/e2e/Security_Guardrails_test.go",
-    "type": "It",
-    "name": "blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)",
-    "path": [
-      "Security Guardrails",
-      "Admission Policy Enforcement",
-      "blocks non-cluster HTTP restore endpoints (require HTTPS except *.svc)"
     ],
     "labels": [
       "security",
@@ -1586,38 +1398,6 @@
       "waiting for the cluster StatefulSet to exist and expose the Pod service account",
       "creating a non-OpenBao pod in the tenant namespace",
       "waiting for an OpenBao pod to exist"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9",
-    "generatedId": "security-guardrails-scopes-secret-access-via-allowlist-roles-7c98a6a9",
-    "file": "test/e2e/Security_Guardrails_test.go",
-    "type": "It",
-    "name": "scopes Secret access via allowlist Roles",
-    "path": [
-      "Security Guardrails",
-      "RBAC \u0026 Dependencies",
-      "scopes Secret access via allowlist Roles"
-    ],
-    "labels": [
-      "security",
-      "critical",
-      "rbac"
-    ],
-    "domainLabels": [
-      "security",
-      "critical",
-      "rbac"
-    ],
-    "steps": [
-      "creating a cluster to trigger tenant RBAC provisioning",
-      "verifying the tenant role does not grant broad Secret access",
-      "verifying the dedicated Secrets writer role only grants the expected allowlisted access",
-      "verifying the Secrets writer RoleBinding points at the allowlist role"
     ],
     "focused": false,
     "pending": false,
@@ -2011,6 +1791,7 @@
       "backup",
       "operation-lock",
       "slow",
+      "e2e-anchor",
       "case:upgrade-backup-lock-contention",
       "covers:operation-lock",
       "covers:rolling-upgrade",
@@ -2020,7 +1801,8 @@
       "upgrade",
       "backup",
       "operation-lock",
-      "slow"
+      "slow",
+      "e2e-anchor"
     ],
     "steps": [
       "starting a rolling upgrade",
@@ -2076,8 +1858,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7",
+    "id": "upgrade-bluegreen-snapshot-promotion",
     "generatedId": "upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7",
+    "caseLabel": "upgrade-bluegreen-snapshot-promotion",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "executes Blue/Green upgrade cycle with pre-upgrade snapshot",
@@ -2091,14 +1874,17 @@
       "upgrades",
       "cluster",
       "slow",
-      "bluegreen"
+      "bluegreen",
+      "e2e-anchor",
+      "case:upgrade-bluegreen-snapshot-promotion"
     ],
     "domainLabels": [
       "upgrade",
       "upgrades",
       "cluster",
       "slow",
-      "bluegreen"
+      "bluegreen",
+      "e2e-anchor"
     ],
     "steps": [
       "Writing a secret before upgrade",
@@ -2161,8 +1947,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124",
+    "id": "upgrade-bluegreen-executor-failure-auto-abort",
     "generatedId": "upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124",
+    "caseLabel": "upgrade-bluegreen-executor-failure-auto-abort",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "induces executor failure and validates retry plus auto-abort behavior",
@@ -2177,7 +1964,9 @@
       "cluster",
       "slow",
       "failure",
-      "bluegreen"
+      "bluegreen",
+      "e2e-anchor",
+      "case:upgrade-bluegreen-executor-failure-auto-abort"
     ],
     "domainLabels": [
       "upgrade",
@@ -2185,7 +1974,8 @@
       "cluster",
       "slow",
       "failure",
-      "bluegreen"
+      "bluegreen",
+      "e2e-anchor"
     ],
     "steps": [
       "Triggering a Blue/Green upgrade",
@@ -2200,57 +1990,14 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e",
-    "generatedId": "upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e",
-    "file": "test/e2e/Upgrade_Strategies_test.go",
-    "type": "It",
-    "name": "keeps HTTPRoute stable and switches external Service selector at cutover",
-    "path": [
-      "Upgrade Strategies",
-      "Gateway Integration",
-      "keeps HTTPRoute stable and switches external Service selector at cutover"
-    ],
-    "labels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "gateway",
-      "requires-gateway-api",
-      "bluegreen"
-    ],
-    "domainLabels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "gateway",
-      "requires-gateway-api",
-      "bluegreen"
-    ],
-    "steps": [
-      "Capturing HTTPRoute before upgrade to verify stability",
-      "Triggering upgrade",
-      "Waiting for upgrade to progress to cutover phase",
-      "Verifying external Service remains on Blue while DemotingBlue is in progress",
-      "Waiting for Cleanup phase and verifying the external Service selector switches to Green",
-      "Waiting for Blue/Green upgrade to complete",
-      "Verifying legacy blue/green Services do not exist",
-      "Verifying HTTPRoute remains stable throughout upgrade"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d",
-    "generatedId": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d",
+    "id": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-79be45e7",
+    "generatedId": "upgrade-strategies-creates-a-tlsroute-and-reports-healthy-79be45e7",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "creates a TLSRoute and reports healthy passthrough integration",
     "path": [
       "Upgrade Strategies",
+      "Gateway API",
       "Gateway TLS Passthrough",
       "creates a TLSRoute and reports healthy passthrough integration"
     ],
@@ -2276,6 +2023,55 @@
       "waiting for passthrough Gateway integration status",
       "verifying a TLSRoute is created for passthrough access",
       "verifying BackendTLSPolicy is not created for passthrough mode"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "upgrade-gateway-httproute-cutover",
+    "generatedId": "upgrade-strategies-keeps-httproute-stable-and-switches-external-7a9e6dd5",
+    "caseLabel": "upgrade-gateway-httproute-cutover",
+    "file": "test/e2e/Upgrade_Strategies_test.go",
+    "type": "It",
+    "name": "keeps HTTPRoute stable and switches external Service selector at cutover",
+    "path": [
+      "Upgrade Strategies",
+      "Gateway API",
+      "HTTPRoute Blue/Green Cutover",
+      "keeps HTTPRoute stable and switches external Service selector at cutover"
+    ],
+    "labels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "gateway",
+      "requires-gateway-api",
+      "bluegreen",
+      "e2e-anchor",
+      "case:upgrade-gateway-httproute-cutover"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "upgrades",
+      "cluster",
+      "slow",
+      "gateway",
+      "requires-gateway-api",
+      "bluegreen",
+      "e2e-anchor"
+    ],
+    "steps": [
+      "Capturing HTTPRoute before upgrade to verify stability",
+      "Triggering upgrade",
+      "Waiting for upgrade to progress to cutover phase",
+      "Verifying external Service remains on Blue while DemotingBlue is in progress",
+      "Waiting for Cleanup phase and verifying the external Service selector switches to Green",
+      "Waiting for Blue/Green upgrade to complete",
+      "Verifying legacy blue/green Services do not exist",
+      "Verifying HTTPRoute remains stable throughout upgrade"
     ],
     "focused": false,
     "pending": false,
@@ -2412,8 +2208,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-performs-rolling-upgrade-2302a23d",
+    "id": "upgrade-rolling-happy-path",
     "generatedId": "upgrade-strategies-performs-rolling-upgrade-2302a23d",
+    "caseLabel": "upgrade-rolling-happy-path",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "performs rolling upgrade",
@@ -2427,18 +2224,26 @@
       "upgrades",
       "cluster",
       "slow",
-      "rolling"
+      "rolling",
+      "e2e-anchor",
+      "case:upgrade-rolling-happy-path",
+      "read-replicas",
+      "read-replicas-rolling"
     ],
     "domainLabels": [
       "upgrade",
       "upgrades",
       "cluster",
       "slow",
-      "rolling"
+      "rolling",
+      "e2e-anchor",
+      "read-replicas",
+      "read-replicas-rolling"
     ],
     "steps": [
       "Writing a secret before upgrade",
       "Triggering upgrade",
+      "Verifying the steady read pool converges before voter rollout starts",
       "Monitoring rolling invariants during upgrade",
       "Verifying rolling step-down jobs are deterministic and successful",
       "Verifying secret persists after upgrade",
@@ -2450,8 +2255,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa",
+    "id": "upgrade-bluegreen-safe-mode-break-glass-recovery",
     "generatedId": "upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa",
+    "caseLabel": "upgrade-bluegreen-safe-mode-break-glass-recovery",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "acknowledges break glass and resumes rollback after the upgrade policy is repaired",
@@ -2466,7 +2272,8 @@
       "cluster",
       "slow",
       "chaos",
-      "bluegreen"
+      "bluegreen",
+      "case:upgrade-bluegreen-safe-mode-break-glass-recovery"
     ],
     "domainLabels": [
       "upgrade",
@@ -2488,8 +2295,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327",
+    "id": "upgrade-bluegreen-safe-mode-consensus-repair-failure",
     "generatedId": "upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327",
+    "caseLabel": "upgrade-bluegreen-safe-mode-consensus-repair-failure",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "enters safe mode when rollback consensus repair job fails",
@@ -2504,7 +2312,8 @@
       "cluster",
       "slow",
       "chaos",
-      "bluegreen"
+      "bluegreen",
+      "case:upgrade-bluegreen-safe-mode-consensus-repair-failure"
     ],
     "domainLabels": [
       "upgrade",
@@ -2532,81 +2341,8 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b",
-    "generatedId": "upgrade-strategies-rejects-downgrade-requests-at-admission-before-ddf6330b",
-    "file": "test/e2e/Upgrade_Strategies_test.go",
-    "type": "It",
-    "name": "rejects downgrade requests at admission before any rollout begins",
-    "path": [
-      "Upgrade Strategies",
-      "Validation Guardrails",
-      "rejects downgrade requests at admission before any rollout begins"
-    ],
-    "labels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "guardrails",
-      "validation"
-    ],
-    "domainLabels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "guardrails",
-      "validation"
-    ],
-    "steps": [
-      "Attempting to patch the cluster to a lower semantic version",
-      "Verifying the persisted spec remains unchanged after the rejected patch"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb",
-    "generatedId": "upgrade-strategies-surfaces-image-version-mismatches-as-degraded-d0696ebb",
-    "file": "test/e2e/Upgrade_Strategies_test.go",
-    "type": "It",
-    "name": "surfaces image version mismatches as degraded without mutating running pods",
-    "path": [
-      "Upgrade Strategies",
-      "Validation Guardrails",
-      "surfaces image version mismatches as degraded without mutating running pods"
-    ],
-    "labels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "guardrails",
-      "validation"
-    ],
-    "domainLabels": [
-      "upgrade",
-      "upgrades",
-      "cluster",
-      "slow",
-      "guardrails",
-      "validation"
-    ],
-    "steps": [
-      "Patching a semver-tagged image that conflicts with spec.version",
-      "Waiting for the workload controller to report a permanent configuration error",
-      "Verifying existing OpenBao pods keep the original stable image"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
     "id": "bluegreen-target-drift-restart",
-    "generatedId": "upgrade-target-drift-abandons-an-outdated-green-revision-and-72046d97",
+    "generatedId": "upgrade-target-drift-abandons-an-outdated-green-revision-without-0a3dcf0d",
     "caseLabel": "bluegreen-target-drift-restart",
     "coverage": [
       "bluegreen-drift",
@@ -2615,10 +2351,10 @@
     ],
     "file": "test/e2e/Upgrade_Target_Drift_test.go",
     "type": "It",
-    "name": "abandons an outdated green revision and converges on the new desired image",
+    "name": "abandons an outdated green revision without rolling back",
     "path": [
       "Upgrade Strategies: Blue/Green Drift",
-      "abandons an outdated green revision and converges on the new desired image"
+      "abandons an outdated green revision without rolling back"
     ],
     "labels": [
       "upgrade",
@@ -2639,8 +2375,8 @@
       "waiting for the first green revision to enter an early phase",
       "changing the desired target image while the first green revision is still in flight",
       "verifying the stale green workload is cleaned up",
-      "verifying the upgrade restarts from the new desired revision and completes",
-      "reconfirming the steady-state workload stays singular after the restart"
+      "verifying the stale target is abandoned before any rollback",
+      "verifying no stale workload remains in the namespace"
     ],
     "focused": false,
     "pending": false,
@@ -2722,15 +2458,16 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-executes-backup-job-successfully-to-azure-395a20b1",
-    "generatedId": "backup-restore-executes-backup-job-successfully-to-azure-395a20b1",
+    "id": "dr-azure-provider-backup-smoke",
+    "generatedId": "backup-restore-executes-a-manual-backup-to-azure-e51c2b76",
+    "caseLabel": "dr-azure-provider-backup-smoke",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
-    "name": "executes backup job successfully to Azure",
+    "name": "executes a manual backup to Azure",
     "path": [
       "DR: Storage Providers Backup \u0026 Restore",
       "Azure Backup \u0026 Restore with Azurite",
-      "executes backup job successfully to Azure"
+      "executes a manual backup to Azure"
     ],
     "labels": [
       "dr",
@@ -2738,7 +2475,10 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "case:dr-azure-provider-backup-smoke",
+      "provider-smoke"
     ],
     "domainLabels": [
       "dr",
@@ -2746,9 +2486,14 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "provider-smoke"
     ],
     "steps": [
+      "annotating the cluster to trigger a manual Azure backup",
+      "forcing a reconcile after the manual Azure backup trigger",
+      "waiting for an Azure backup job to be created",
       "waiting for the Azure backup job to complete successfully",
       "recording the latest Azure backup key from cluster status"
     ],
@@ -2794,52 +2539,16 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-triggers-manual-backup-to-azure-d31b1484",
-    "generatedId": "backup-restore-triggers-manual-backup-to-azure-d31b1484",
+    "id": "dr-gcs-provider-backup-smoke",
+    "generatedId": "backup-restore-executes-a-manual-backup-to-gcs-32e6203f",
+    "caseLabel": "dr-gcs-provider-backup-smoke",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
-    "name": "triggers manual backup to Azure",
-    "path": [
-      "DR: Storage Providers Backup \u0026 Restore",
-      "Azure Backup \u0026 Restore with Azurite",
-      "triggers manual backup to Azure"
-    ],
-    "labels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "domainLabels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "steps": [
-      "annotating the cluster to trigger a manual Azure backup",
-      "forcing a reconcile after the manual Azure backup trigger",
-      "waiting for an Azure backup job to be created"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "backup-restore-executes-backup-job-successfully-to-gcs-5e8a1d74",
-    "generatedId": "backup-restore-executes-backup-job-successfully-to-gcs-5e8a1d74",
-    "file": "test/e2e/backup_restore_test.go",
-    "type": "It",
-    "name": "executes backup job successfully to GCS",
+    "name": "executes a manual backup to GCS",
     "path": [
       "DR: Storage Providers Backup \u0026 Restore",
       "GCS Backup with fake-gcs-server",
-      "executes backup job successfully to GCS"
+      "executes a manual backup to GCS"
     ],
     "labels": [
       "dr",
@@ -2847,7 +2556,10 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "case:dr-gcs-provider-backup-smoke",
+      "provider-smoke"
     ],
     "domainLabels": [
       "dr",
@@ -2855,9 +2567,14 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "provider-smoke"
     ],
     "steps": [
+      "annotating the cluster to trigger a manual GCS backup",
+      "forcing a reconcile after the manual GCS backup trigger",
+      "waiting for a GCS backup job to be created",
       "waiting for the GCS backup job to complete successfully"
     ],
     "focused": false,
@@ -2866,78 +2583,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5",
-    "generatedId": "backup-restore-restores-from-gcs-backup-using-openbaorestore-0707aaa5",
-    "file": "test/e2e/backup_restore_test.go",
-    "type": "It",
-    "name": "restores from GCS backup using OpenBaoRestore CR",
-    "path": [
-      "DR: Storage Providers Backup \u0026 Restore",
-      "GCS Backup with fake-gcs-server",
-      "restores from GCS backup using OpenBaoRestore CR"
-    ],
-    "labels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "domainLabels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "steps": null,
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "backup-restore-triggers-manual-backup-to-gcs-a36e4959",
-    "generatedId": "backup-restore-triggers-manual-backup-to-gcs-a36e4959",
-    "file": "test/e2e/backup_restore_test.go",
-    "type": "It",
-    "name": "triggers manual backup to GCS",
-    "path": [
-      "DR: Storage Providers Backup \u0026 Restore",
-      "GCS Backup with fake-gcs-server",
-      "triggers manual backup to GCS"
-    ],
-    "labels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "domainLabels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "steps": [
-      "annotating the cluster to trigger a manual GCS backup",
-      "forcing a reconcile after the manual GCS backup trigger",
-      "waiting for a GCS backup job to be created"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "backup-restore-completes-restore-deterministically-after-controller-restart-d873984e",
+    "id": "dr-s3-restore-controller-restart",
     "generatedId": "backup-restore-completes-restore-deterministically-after-controller-restart-d873984e",
+    "caseLabel": "dr-s3-restore-controller-restart",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
     "name": "completes restore deterministically after controller restart while running",
@@ -2953,6 +2601,8 @@
       "storage-providers",
       "nightly",
       "slow",
+      "e2e-anchor",
+      "case:dr-s3-restore-controller-restart",
       "failure-injection"
     ],
     "domainLabels": [
@@ -2962,6 +2612,7 @@
       "storage-providers",
       "nightly",
       "slow",
+      "e2e-anchor",
       "failure-injection"
     ],
     "steps": [
@@ -2976,15 +2627,16 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-executes-backup-job-successfully-to-s3-6646d680",
-    "generatedId": "backup-restore-executes-backup-job-successfully-to-s3-6646d680",
+    "id": "dr-s3-restorable-backup",
+    "generatedId": "backup-restore-creates-a-restorable-s3-backup-44a8d036",
+    "caseLabel": "dr-s3-restorable-backup",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
-    "name": "executes backup job successfully to S3",
+    "name": "creates a restorable S3 backup",
     "path": [
       "DR: Storage Providers Backup \u0026 Restore",
       "S3 Backup \u0026 Restore with RustFS",
-      "executes backup job successfully to S3"
+      "creates a restorable S3 backup"
     ],
     "labels": [
       "dr",
@@ -2992,7 +2644,11 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "case:dr-s3-restorable-backup",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "domainLabels": [
       "dr",
@@ -3000,9 +2656,13 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "steps": [
+      "Writing a secret before backup",
       "waiting for the S3 backup job to complete successfully",
       "recording the latest S3 backup key from cluster status"
     ],
@@ -3056,8 +2716,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175",
+    "id": "dr-s3-restore-cr",
     "generatedId": "backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175",
+    "caseLabel": "dr-s3-restore-cr",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
     "name": "restores from S3 backup using OpenBaoRestore CR",
@@ -3072,7 +2733,11 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "case:dr-s3-restore-cr",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "domainLabels": [
       "dr",
@@ -3080,47 +2745,16 @@
       "restore",
       "storage-providers",
       "nightly",
-      "slow"
+      "slow",
+      "e2e-anchor",
+      "read-replicas",
+      "read-replicas-restore"
     ],
     "steps": [
       "verifying restore configuration is accepted before execution",
+      "waiting for restore to drain steady read replicas before execution continues",
       "Verifying secret persists after restore",
       "Verifying restore metrics are emitted"
-    ],
-    "focused": false,
-    "pending": false,
-    "suiteFile": "",
-    "suiteTitle": ""
-  },
-  {
-    "id": "backup-restore-triggers-manual-backup-to-s3-701eaf8b",
-    "generatedId": "backup-restore-triggers-manual-backup-to-s3-701eaf8b",
-    "file": "test/e2e/backup_restore_test.go",
-    "type": "It",
-    "name": "triggers manual backup to S3",
-    "path": [
-      "DR: Storage Providers Backup \u0026 Restore",
-      "S3 Backup \u0026 Restore with RustFS",
-      "triggers manual backup to S3"
-    ],
-    "labels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "domainLabels": [
-      "dr",
-      "backup",
-      "restore",
-      "storage-providers",
-      "nightly",
-      "slow"
-    ],
-    "steps": [
-      "Writing a secret before backup"
     ],
     "focused": false,
     "pending": false,

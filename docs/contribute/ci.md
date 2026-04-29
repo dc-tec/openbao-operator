@@ -134,9 +134,9 @@ Inline `nosemgrep` suppressions are reserved for bounded intentional exceptions.
   label="inspect"
   title="Typical focused E2E reproductions"
   code={`make test-e2e-ci \\
-  KIND_NODE_IMAGE=kindest/node:v1.34.3 \\
+  KIND_NODE_IMAGE=kindest/node:v1.35.1 \\
   E2E_LABEL_FILTER='(((lifecycle && !tls) || manager) && !openshift)' \\
-  E2E_PARALLEL_NODES=1
+  E2E_PARALLEL_NODES=2
 
 make helm-e2e-smoke
 
@@ -145,6 +145,46 @@ FUZZ_TARGET_FILTER='FuzzDiscoverConfig|internal/service/upgrade' make fuzz`}
 >
   Choose the smallest reproduction that still matches the CI lane under investigation.
 </CommandBlock>
+
+CI E2E shards write both JUnit and Ginkgo JSON reports under the uploaded E2E artifact. The workflow summary includes the selected label filter, spec counts, failures, and the slowest specs. Local reproductions can use the same report path variables:
+
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Local E2E report output"
+  code={`make test-e2e-ci \\
+  E2E_LABEL_FILTER='lifecycle && !openshift' \\
+  E2E_JUNIT_REPORT=artifacts/e2e-reports/local/junit.xml \\
+  E2E_JSON_REPORT=artifacts/e2e-reports/local/ginkgo.json \\
+  E2E_FAIL_ON_EMPTY=true`}
+>
+  Use `go run ./hack/tools/e2e_report --json-report artifacts/e2e-reports/local/ginkgo.json` to render the same Markdown summary locally.
+</CommandBlock>
+
+The E2E suite manifest is validated in `ci-core` through `make verify-e2e-manifest`. That check regenerates the catalog from `ginkgo outline`, validates `test/e2e/suites.yaml`, generates the GitHub Actions PR and nightly E2E matrices, and fails if suite ownership, labels, coverage tags, risk tier, isolation class, or routing metadata drift.
+
+The same manifest owns E2E parallelism. Matrix rows include `parallel_nodes`, and CI passes that value to `E2E_PARALLEL_NODES`. Lanes may use more than one Ginkgo process only when every assigned suite is declared `parallel-safe` or `serial`; shared-cluster, global-mutator, external-cluster, and multi-cluster suites stay single-process until their isolation model changes.
+
+Lanes may also declare `prLabelFilter` for pull-request routing. CI uses that optimized filter unless a full E2E run is requested or the run is for `main`; nightly and release-gate profiles continue to use the full lane `labelFilter`.
+
+Nightly E2E routing is manifest-driven. The daily profile runs full coverage on the primary Kubernetes version and compatibility smoke rows on adjacent supported versions. The weekly profile runs full compatibility coverage across supported Kubernetes versions. Maintainers can manually dispatch the release-gate profile, optionally filtered to one lane or one Kubernetes version while preserving the same manifest validation.
+
+<CommandBlock
+  language="bash"
+  label="inspect"
+  title="Inspect generated E2E matrices"
+  code={`make e2e-ci-matrix
+make e2e-nightly-matrix E2E_NIGHTLY_PROFILE=daily
+make e2e-nightly-matrix E2E_NIGHTLY_PROFILE=weekly-full
+make e2e-nightly-matrix \\
+  E2E_NIGHTLY_PROFILE=release-gate \\
+  E2E_NIGHTLY_LANE=core \\
+  E2E_NIGHTLY_KUBERNETES=1.35.1`}
+>
+  Use these before changing `test/e2e/suites.yaml` or workflow routing.
+</CommandBlock>
+
+`test/e2e/suites.yaml` owns the E2E version policy. Keep the OpenBao default image and the active Kind Kubernetes versions under `versions` instead of repeating concrete versions in each profile. The nightly profiles should reference `@primary`, `@compatibility`, and `@releaseGate`; update those central sets when Kind publishes a new runnable node image.
 
 <NextActions
   title="After CI parity"

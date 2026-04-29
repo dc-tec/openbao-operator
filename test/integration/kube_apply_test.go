@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/rest"
@@ -35,13 +36,13 @@ func ensureDefaultAdmissionPoliciesApplied(t *testing.T) {
 
 		objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
 			gvk := u.GroupVersionKind()
-			if gvk.Group != "admissionregistration.k8s.io" {
+			if gvk.Group != testAdmissionRegistrationGroup {
 				return false
 			}
 			switch gvk.Kind {
-			case "ValidatingAdmissionPolicy":
+			case testKindVAP:
 				return isDefaultIntegrationPolicyNameAllowed(u.GetName())
-			case "ValidatingAdmissionPolicyBinding":
+			case testKindVAPBinding:
 				policyName, found, err := unstructured.NestedString(u.Object, "spec", "policyName")
 				if err != nil || !found || policyName == "" {
 					return false
@@ -83,14 +84,14 @@ func ensureProvisionerRBACApplied(t *testing.T) {
 
 		objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
 			gvk := u.GroupVersionKind()
-			if gvk.Group != "rbac.authorization.k8s.io" {
+			if gvk.Group != testRBACGroup {
 				return false
 			}
 
 			switch gvk.Kind {
-			case "ClusterRole":
+			case testKindClusterRole:
 				return strings.Contains(u.GetName(), "provisioner-role")
-			case "ClusterRoleBinding":
+			case testKindClusterRoleBinding:
 				return strings.Contains(u.GetName(), "provisioner-rolebinding")
 			default:
 				return false
@@ -150,7 +151,11 @@ func kustomizeBuild(t *testing.T, dir string) []byte {
 	return out
 }
 
-func parseYAMLToUnstructured(t *testing.T, yamlBytes []byte, keep func(*unstructured.Unstructured) bool) []*unstructured.Unstructured {
+func parseYAMLToUnstructured(
+	t *testing.T,
+	yamlBytes []byte,
+	keep func(*unstructured.Unstructured) bool,
+) []*unstructured.Unstructured {
 	t.Helper()
 
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(yamlBytes), 4096)
@@ -189,10 +194,11 @@ func parseYAMLToUnstructured(t *testing.T, yamlBytes []byte, keep func(*unstruct
 }
 
 func isClusterScoped(gvk schema.GroupVersionKind) bool {
-	if gvk.Group == "rbac.authorization.k8s.io" && (gvk.Kind == "ClusterRole" || gvk.Kind == "ClusterRoleBinding") {
+	if gvk.Group == testRBACGroup && (gvk.Kind == testKindClusterRole || gvk.Kind == testKindClusterRoleBinding) {
 		return true
 	}
-	if gvk.Group == "admissionregistration.k8s.io" && (gvk.Kind == "ValidatingAdmissionPolicy" || gvk.Kind == "ValidatingAdmissionPolicyBinding") {
+	if gvk.Group == testAdmissionRegistrationGroup &&
+		(gvk.Kind == testKindVAP || gvk.Kind == testKindVAPBinding) {
 		return true
 	}
 	return false
@@ -202,10 +208,34 @@ func applyUnstructuredObjects(t *testing.T, objs []*unstructured.Unstructured) {
 	t.Helper()
 
 	for _, obj := range objs {
-		obj := obj
 		obj.SetManagedFields(nil)
-		if err := k8sClient.Patch(ctx, obj, client.Apply, client.ForceOwnership, client.FieldOwner(integrationFieldOwner)); err != nil {
+		if err := k8sClient.Apply(
+			ctx,
+			client.ApplyConfigurationFromUnstructured(obj),
+			client.ForceOwnership,
+			client.FieldOwner(integrationFieldOwner),
+		); err != nil {
 			t.Fatalf("apply %s %s/%s: %v", obj.GetKind(), obj.GetNamespace(), obj.GetName(), err)
 		}
+	}
+}
+
+func applyClientObject(t *testing.T, c client.Client, obj client.Object) {
+	t.Helper()
+
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+	if err != nil {
+		t.Fatalf("convert %s/%s to unstructured: %v", obj.GetNamespace(), obj.GetName(), err)
+	}
+
+	u := &unstructured.Unstructured{Object: unstructuredMap}
+	u.SetManagedFields(nil)
+	if err := c.Apply(
+		ctx,
+		client.ApplyConfigurationFromUnstructured(u),
+		client.ForceOwnership,
+		client.FieldOwner(integrationFieldOwner),
+	); err != nil {
+		t.Fatalf("apply %s %s/%s: %v", u.GetKind(), u.GetNamespace(), u.GetName(), err)
 	}
 }

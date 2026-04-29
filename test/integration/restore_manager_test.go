@@ -44,7 +44,7 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://minio.svc",
-					Bucket:   "backups",
+					Bucket:   testBackupBucket,
 				},
 			},
 			Image:       "openbao-backup:dev",
@@ -56,7 +56,8 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 	}
 
 	controllerClient := newControllerClient(t)
-	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	verifier := security.NewImageVerifier(logr.Discard(), k8sClient, nil)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, verifier, "")
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}
@@ -158,7 +159,7 @@ func TestRestoreManager_GCSProvider(t *testing.T) {
 				Target: openbaov1alpha1.BackupTarget{
 					Provider: "gcs",
 					Endpoint: "https://storage.googleapis.com",
-					Bucket:   "backups",
+					Bucket:   testBackupBucket,
 					GCS: &openbaov1alpha1.GCSTargetConfig{
 						Project: "my-gcp-project",
 					},
@@ -173,7 +174,8 @@ func TestRestoreManager_GCSProvider(t *testing.T) {
 	}
 
 	controllerClient := newControllerClient(t)
-	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	verifier := security.NewImageVerifier(logr.Discard(), k8sClient, nil)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, verifier, "")
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}
@@ -235,8 +237,8 @@ func TestRestoreManager_GCSProvider(t *testing.T) {
 	if envMap[constants.EnvBackupEndpoint] != "https://storage.googleapis.com" {
 		t.Errorf("BACKUP_ENDPOINT = %v, want https://storage.googleapis.com", envMap[constants.EnvBackupEndpoint])
 	}
-	if envMap[constants.EnvBackupBucket] != "backups" {
-		t.Errorf("BACKUP_BUCKET = %v, want backups", envMap[constants.EnvBackupBucket])
+	if envMap[constants.EnvBackupBucket] != testBackupBucket {
+		t.Errorf("BACKUP_BUCKET = %v, want %s", envMap[constants.EnvBackupBucket], testBackupBucket)
 	}
 
 	// Verify S3-specific vars are NOT set
@@ -249,7 +251,10 @@ func TestRestoreManager_GCSProvider(t *testing.T) {
 
 	// Verify Azure-specific vars are NOT set
 	if envMap[constants.EnvBackupAzureStorageAccount] != "" {
-		t.Errorf("BACKUP_AZURE_STORAGE_ACCOUNT should not be set for GCS, got %v", envMap[constants.EnvBackupAzureStorageAccount])
+		t.Errorf(
+			"BACKUP_AZURE_STORAGE_ACCOUNT should not be set for GCS, got %v",
+			envMap[constants.EnvBackupAzureStorageAccount],
+		)
 	}
 }
 
@@ -277,10 +282,10 @@ func TestRestoreManager_AzureProvider(t *testing.T) {
 				Target: openbaov1alpha1.BackupTarget{
 					Provider: "azure",
 					Endpoint: "https://myaccount.blob.core.windows.net",
-					Bucket:   "backups",
+					Bucket:   testBackupBucket,
 					Azure: &openbaov1alpha1.AzureTargetConfig{
 						StorageAccount: "myaccount",
-						Container:      "backups",
+						Container:      testBackupBucket,
 					},
 				},
 			},
@@ -293,7 +298,8 @@ func TestRestoreManager_AzureProvider(t *testing.T) {
 	}
 
 	controllerClient := newControllerClient(t)
-	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	verifier := security.NewImageVerifier(logr.Discard(), k8sClient, nil)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, verifier, "")
 
 	// Pending -> Validating
 	latest := &openbaov1alpha1.OpenBaoRestore{}
@@ -352,14 +358,14 @@ func TestRestoreManager_AzureProvider(t *testing.T) {
 	if envMap[constants.EnvBackupAzureStorageAccount] != "myaccount" {
 		t.Errorf("BACKUP_AZURE_STORAGE_ACCOUNT = %v, want myaccount", envMap[constants.EnvBackupAzureStorageAccount])
 	}
-	if envMap[constants.EnvBackupAzureContainer] != "backups" {
-		t.Errorf("BACKUP_AZURE_CONTAINER = %v, want backups", envMap[constants.EnvBackupAzureContainer])
+	if envMap[constants.EnvBackupAzureContainer] != testBackupBucket {
+		t.Errorf("BACKUP_AZURE_CONTAINER = %v, want %s", envMap[constants.EnvBackupAzureContainer], testBackupBucket)
 	}
 	if envMap[constants.EnvBackupEndpoint] != "https://myaccount.blob.core.windows.net" {
 		t.Errorf("BACKUP_ENDPOINT = %v, want https://myaccount.blob.core.windows.net", envMap[constants.EnvBackupEndpoint])
 	}
-	if envMap[constants.EnvBackupBucket] != "backups" {
-		t.Errorf("BACKUP_BUCKET = %v, want backups", envMap[constants.EnvBackupBucket])
+	if envMap[constants.EnvBackupBucket] != testBackupBucket {
+		t.Errorf("BACKUP_BUCKET = %v, want %s", envMap[constants.EnvBackupBucket], testBackupBucket)
 	}
 
 	// Verify S3-specific vars are NOT set
@@ -399,7 +405,7 @@ func TestRestoreManager_ValidatingLockContention_RequeuesWithWaitingMessage(t *t
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://minio.svc",
-					Bucket:   "backups",
+					Bucket:   testBackupBucket,
 				},
 			},
 			Image:       "openbao-backup:dev",
@@ -411,7 +417,8 @@ func TestRestoreManager_ValidatingLockContention_RequeuesWithWaitingMessage(t *t
 	}
 
 	controllerClient := newControllerClient(t)
-	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	verifier := security.NewImageVerifier(logr.Discard(), k8sClient, nil)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, verifier, "")
 	latest := &openbaov1alpha1.OpenBaoRestore{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
 		t.Fatalf("get restore: %v", err)
@@ -477,7 +484,7 @@ func TestRestoreManager_RunningLockTaken_FailsDeterministically(t *testing.T) {
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://minio.svc",
-					Bucket:   "backups",
+					Bucket:   testBackupBucket,
 				},
 			},
 			Image:       "openbao-backup:dev",
@@ -489,7 +496,8 @@ func TestRestoreManager_RunningLockTaken_FailsDeterministically(t *testing.T) {
 	}
 
 	controllerClient := newControllerClient(t)
-	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	verifier := security.NewImageVerifier(logr.Discard(), k8sClient, nil)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, verifier, "")
 	latest := &openbaov1alpha1.OpenBaoRestore{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
 		t.Fatalf("get restore: %v", err)
@@ -528,7 +536,9 @@ func TestRestoreManager_RunningLockTaken_FailsDeterministically(t *testing.T) {
 	if latest.Status.Phase != openbaov1alpha1.RestorePhaseFailed {
 		t.Fatalf("expected restore to fail when lock is stolen, got phase %s", latest.Status.Phase)
 	}
-	expected := "Restore stopped because another operation took the cluster operation lock while the restore Job was running. Check concurrent backup or upgrade activity, then create a new OpenBaoRestore to retry."
+	expected := "Restore stopped because another operation took the cluster operation lock " +
+		"while the restore Job was running. Check concurrent backup or upgrade activity, " +
+		"then create a new OpenBaoRestore to retry."
 	if latest.Status.Message != expected {
 		t.Fatalf("expected failure message %q, got %q", expected, latest.Status.Message)
 	}
@@ -557,7 +567,7 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://minio.svc",
-					Bucket:   "backups",
+					Bucket:   testBackupBucket,
 				},
 			},
 			Image:       "openbao-backup:dev",
@@ -569,7 +579,8 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 	}
 
 	controllerClient := newControllerClient(t)
-	mgr := restore.NewManager(controllerClient, k8sScheme, nil, security.NewImageVerifier(logr.Discard(), k8sClient, nil), "")
+	verifier := security.NewImageVerifier(logr.Discard(), k8sClient, nil)
+	mgr := restore.NewManager(controllerClient, k8sScheme, nil, verifier, "")
 	latest := &openbaov1alpha1.OpenBaoRestore{}
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: restoreObj.Name}, latest); err != nil {
 		t.Fatalf("get restore: %v", err)
@@ -603,7 +614,8 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 		t.Fatalf("expected restore phase Failed after failed job, got %s", latest.Status.Phase)
 	}
 	jobName := restore.RestoreJobNamePrefix + restoreObj.Name
-	expectedPrefix := "Restore Job " + jobName + " failed. Check kubectl logs job/" + jobName + " -n " + namespace + " and create a new OpenBaoRestore to retry."
+	expectedPrefix := "Restore Job " + jobName + " failed. Check kubectl logs job/" + jobName +
+		" -n " + namespace + " and create a new OpenBaoRestore to retry."
 	if !strings.Contains(latest.Status.Message, expectedPrefix) {
 		t.Fatalf("expected failed-job message to contain %q, got %q", expectedPrefix, latest.Status.Message)
 	}
@@ -646,7 +658,7 @@ func createRestoreJobWithStatus(t *testing.T, namespace, name string, succeeded,
 						{
 							Name:    "test",
 							Image:   "busybox:1.36",
-							Command: []string{"sh", "-c", "true"},
+							Command: []string{"sh", "-c", testTrueString},
 						},
 					},
 				},
