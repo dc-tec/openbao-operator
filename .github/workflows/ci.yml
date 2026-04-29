@@ -876,43 +876,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull prebuilt E2E images
-        if: env.SHOULD_RUN == 'true'
-        run: |
-          set -euo pipefail
-          docker pull "${{ needs.build-e2e-images.outputs.manager_ref }}"
-          docker pull "${{ needs.build-e2e-images.outputs.config_init_ref }}"
-          if [[ "${{ matrix.load_backup_executor_image }}" == "true" ]]; then
-            docker pull "${{ needs.build-e2e-images.outputs.backup_executor_ref }}"
-          fi
-          if [[ "${{ matrix.load_upgrade_executor_image }}" == "true" ]] && [[ -n "${{ matrix.hardened_upgrade_executor_image }}" ]]; then
-            docker pull "${{ matrix.hardened_upgrade_executor_image }}"
-          elif [[ "${{ matrix.load_upgrade_executor_image }}" == "true" ]]; then
-            docker pull "${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}"
-          fi
-
-      - name: Create Kind Cluster
-        if: env.SHOULD_RUN == 'true'
-        run: |
-          if ! kind get clusters | grep -q "kind"; then
-            kind create cluster --name kind --image "${KIND_NODE_IMAGE}"
-          fi
-
-      - name: Prepare E2E report paths
+      - name: Compute E2E report paths
+        id: e2e-report
         if: env.SHOULD_RUN == 'true'
         run: |
           set -euo pipefail
           sanitized_name="$(printf '%s' '${{ matrix.name }}' | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
           report_dir="artifacts/e2e-reports/${sanitized_name}"
-          mkdir -p "${report_dir}"
-          {
-            echo "E2E_ARTIFACT_NAME=e2e-artifacts-${sanitized_name}"
-            echo "E2E_REPORT_DIR=${report_dir}"
-            echo "E2E_JUNIT_REPORT=${report_dir}/junit.xml"
-            echo "E2E_JSON_REPORT=${report_dir}/ginkgo.json"
-            echo "E2E_SUMMARY_REPORT=${report_dir}/summary.md"
-            echo "E2E_SUMMARY_JSON=${report_dir}/summary.json"
-          } >> "${GITHUB_ENV}"
+          echo "report_dir=${report_dir}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=e2e-artifacts-${sanitized_name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare E2E lane
+        if: env.SHOULD_RUN == 'true'
+        uses: ./.github/actions/prepare-e2e-lane
+        with:
+          kind-node-image: ${{ matrix.kind_node_image }}
+          kind-cluster: kind
+          manager-image: ${{ needs.build-e2e-images.outputs.manager_ref }}
+          config-init-image: ${{ needs.build-e2e-images.outputs.config_init_ref }}
+          backup-executor-image: ${{ needs.build-e2e-images.outputs.backup_executor_ref }}
+          upgrade-executor-image: ${{ needs.build-e2e-images.outputs.upgrade_executor_ref }}
+          hardened-upgrade-executor-image: ${{ matrix.hardened_upgrade_executor_image }}
+          load-backup-executor-image: ${{ matrix.load_backup_executor_image }}
+          load-upgrade-executor-image: ${{ matrix.load_upgrade_executor_image }}
+          preload-storage-emulators: ${{ matrix.preload_storage_emulators }}
+          preload-rustfs-image: ${{ matrix.preload_rustfs_image }}
+          preload-fake-gcs-image: ${{ matrix.preload_fake_gcs_image }}
+          preload-azurite-image: ${{ matrix.preload_azurite_image }}
+          rustfs-image: ${{ matrix.rustfs_image }}
+          fake-gcs-image: ${{ matrix.fake_gcs_image }}
+          azurite-image: ${{ matrix.azurite_image }}
+          report-dir: ${{ steps.e2e-report.outputs.report_dir }}
+          artifact-name: ${{ steps.e2e-report.outputs.artifact_name }}
 
       - name: Run E2E Tests
         if: env.SHOULD_RUN == 'true'
@@ -928,6 +923,9 @@ jobs:
           E2E_ENABLE_HARDENED_SIGNED_SUITE: ${{ matrix.hardened_signed }}
           E2E_OPERATOR_IMAGE: ${{ needs.build-e2e-images.outputs.manager_ref }}
           E2E_OPENBAO_IMAGE: ${{ matrix.openbao_image }}
+          E2E_RUSTFS_IMAGE: ${{ matrix.rustfs_image }}
+          E2E_FAKE_GCS_IMAGE: ${{ matrix.fake_gcs_image }}
+          E2E_AZURITE_IMAGE: ${{ matrix.azurite_image }}
           E2E_CONFIG_INIT_IMAGE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
           E2E_HARDENED_CONFIG_INIT_IMAGE: ${{ matrix.hardened_init_image }}
           E2E_HARDENED_UPGRADE_EXECUTOR_IMAGE: ${{ matrix.hardened_upgrade_executor_image }}

@@ -579,6 +579,17 @@ e2e-nightly-matrix: ## Generate the GitHub Actions nightly E2E matrix. Set E2E_N
 		--profile "$(or $(E2E_NIGHTLY_PROFILE),daily)" \
 		$${args}
 
+.PHONY: e2e-release-matrix
+e2e-release-matrix: ## Generate the GitHub Actions release-gate E2E matrix. Set E2E_RELEASE_LANE or E2E_RELEASE_KUBERNETES.
+	@args=""; \
+	if [ -n "$(E2E_RELEASE_LANE)" ] && [ "$(E2E_RELEASE_LANE)" != "all" ]; then args="$${args} --lane $(E2E_RELEASE_LANE)"; fi; \
+	if [ -n "$(E2E_RELEASE_KUBERNETES)" ] && [ "$(E2E_RELEASE_KUBERNETES)" != "all" ]; then args="$${args} --kubernetes $(E2E_RELEASE_KUBERNETES)"; fi; \
+	GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
+		--manifest test/e2e/suites.yaml \
+		--format github-nightly-matrix \
+		--profile release-gate \
+		$${args}
+
 .PHONY: e2e-ci-matrix-validate
 e2e-ci-matrix-validate: ## Validate that the GitHub Actions E2E matrix can be generated.
 	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
@@ -595,6 +606,9 @@ e2e-nightly-matrix-validate: ## Validate that the nightly E2E matrices can be ge
 		--manifest test/e2e/suites.yaml \
 		--format github-nightly-matrix \
 		--profile weekly-full >/dev/null
+
+.PHONY: e2e-release-matrix-validate
+e2e-release-matrix-validate: ## Validate that the release-gate E2E matrix can be generated.
 	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/e2e_plan \
 		--manifest test/e2e/suites.yaml \
 		--format github-nightly-matrix \
@@ -607,7 +621,7 @@ e2e-nightly-matrix-validate: ## Validate that the nightly E2E matrices can be ge
 		--kubernetes 1.35.1 >/dev/null
 
 .PHONY: verify-e2e-manifest
-verify-e2e-manifest: e2e-catalog e2e-manifest-validate e2e-ci-matrix-validate e2e-nightly-matrix-validate ## Verify the E2E catalog and suite manifest are up-to-date.
+verify-e2e-manifest: e2e-catalog e2e-manifest-validate e2e-ci-matrix-validate e2e-nightly-matrix-validate e2e-release-matrix-validate ## Verify the E2E catalog and suite manifest are up-to-date.
 	@{ \
 		git diff --exit-code -- test/e2e/catalog test/e2e/suites.yaml; \
 	} || { \
