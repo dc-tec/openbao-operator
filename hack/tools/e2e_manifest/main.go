@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -114,8 +115,14 @@ type manifestSuite struct {
 	Files     []string     `yaml:"files"`
 	Labels    []string     `yaml:"labels"`
 	Coverage  []string     `yaml:"coverage"`
+	Runtime   suiteRuntime `yaml:"runtime"`
 	CI        suiteCI      `yaml:"ci"`
 	Nightly   suiteNightly `yaml:"nightly"`
+}
+
+type suiteRuntime struct {
+	Observed string `yaml:"observed"`
+	Budget   string `yaml:"budget"`
 }
 
 type suiteCI struct {
@@ -371,6 +378,7 @@ func validateSuite(
 	if !allowedNightlyPolicies[suite.Nightly.Policy] {
 		errs = append(errs, fmt.Sprintf("%s.nightly.policy %q is not recognized", prefix, suite.Nightly.Policy))
 	}
+	errs = append(errs, validateSuiteRuntime(prefix+".runtime", suite.Runtime)...)
 
 	var suiteLabels []string
 	var suiteCoverage []string
@@ -419,6 +427,26 @@ func validateSuite(
 		)
 	}
 
+	return errs
+}
+
+func validateSuiteRuntime(prefix string, runtime suiteRuntime) []string {
+	var errs []string
+	hasRuntime := strings.TrimSpace(runtime.Observed) != "" ||
+		strings.TrimSpace(runtime.Budget) != ""
+	if !hasRuntime {
+		return nil
+	}
+	if strings.TrimSpace(runtime.Observed) == "" {
+		errs = append(errs, fmt.Sprintf("%s.observed is required when runtime metadata is set", prefix))
+	} else if _, err := time.ParseDuration(runtime.Observed); err != nil {
+		errs = append(errs, fmt.Sprintf("%s.observed %q is not a valid Go duration: %v", prefix, runtime.Observed, err))
+	}
+	if strings.TrimSpace(runtime.Budget) == "" {
+		errs = append(errs, fmt.Sprintf("%s.budget is required when runtime metadata is set", prefix))
+	} else if _, err := time.ParseDuration(runtime.Budget); err != nil {
+		errs = append(errs, fmt.Sprintf("%s.budget %q is not a valid Go duration: %v", prefix, runtime.Budget, err))
+	}
 	return errs
 }
 

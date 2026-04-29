@@ -455,6 +455,7 @@ jobs:
           else
             go run ./hack/tools/e2e_report \
               --json-report "${E2E_JSON_REPORT}" \
+              --manifest test/e2e/suites.yaml \
               --markdown-out "${E2E_SUMMARY_REPORT}" \
               --json-out "${E2E_SUMMARY_JSON}" \
               --lane "${{ matrix.name }} (${{ matrix.profile }} / ${{ matrix.coverage }})" \

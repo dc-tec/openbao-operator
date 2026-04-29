@@ -200,6 +200,9 @@ suites:
       - recoverability-secret-cleanup
       - recoverability-secret-retention
       - tls-secret-cleanup
+    runtime:
+      observed: 1m52.372s
+      budget: 3m
     ci:
       lanes:
         - core
@@ -224,6 +227,9 @@ suites:
       - critical
       - tenant
     coverage: []
+    runtime:
+      observed: 4m40.082s
+      budget: 7m
     ci:
       lanes:
         - core
@@ -247,6 +253,9 @@ suites:
       - hardened
       - rolling
     coverage: []
+    runtime:
+      observed: 12m3.894s
+      budget: 18m
     ci:
       lanes:
         - hardened
@@ -271,6 +280,9 @@ suites:
       - pod-rollout
       - restart-at
       - tls-san
+    runtime:
+      observed: 1m58.271s
+      budget: 3m
     ci:
       lanes:
         - core
@@ -290,6 +302,9 @@ suites:
       - security
       - slow
     coverage: []
+    runtime:
+      observed: 2m16.688s
+      budget: 4m
     ci:
       lanes:
         - hardened
@@ -315,6 +330,9 @@ suites:
       - tls-hot-reload
       - tls-lifecycle
       - tls-verification
+    runtime:
+      observed: 1m31.439s
+      budget: 2m20s
     ci:
       lanes:
         - security
@@ -342,6 +360,9 @@ suites:
       - post-failover-reconcile
       - post-outage-reconcile
       - scale-reconcile
+    runtime:
+      observed: 5m3.107s
+      budget: 8m
     ci:
       lanes:
         - core
@@ -362,6 +383,9 @@ suites:
       - smoke
     coverage:
       - manager-metrics-endpoint
+    runtime:
+      observed: 0.595s
+      budget: 15s
     ci:
       lanes:
         - core
@@ -406,6 +430,9 @@ suites:
     coverage:
       - admission-runtime-recheck
       - managed-resource-pause-on-policy-loss
+    runtime:
+      observed: 2m17.926s
+      budget: 4m
     ci:
       lanes:
         - security
@@ -428,6 +455,9 @@ suites:
       - data-plane-isolation
       - network-isolation
       - tenant-isolation
+    runtime:
+      observed: 1m6.434s
+      budget: 2m
     ci:
       lanes:
         - security
@@ -449,6 +479,9 @@ suites:
       - critical
       - single-tenant
     coverage: []
+    runtime:
+      observed: 1m41.442s
+      budget: 3m
     ci:
       lanes:
         - security
@@ -472,6 +505,9 @@ suites:
       - backup-queueing
       - operation-lock
       - rolling-upgrade
+    runtime:
+      observed: 3m32.524s
+      budget: 5m30s
     ci:
       lanes:
         - upgrade-rolling
@@ -505,6 +541,9 @@ suites:
       - rollback
       - chaos
     coverage: []
+    runtime:
+      observed: 36m39.240s
+      budget: 55m
     ci:
       lanes:
         - upgrade-rolling
@@ -528,6 +567,9 @@ suites:
       - bluegreen-drift
       - stale-green-cleanup
       - target-revision-drift
+    runtime:
+      observed: 8m6.824s
+      budget: 12m
     ci:
       lanes:
         - upgrade-bluegreen
@@ -551,6 +593,9 @@ suites:
       - anti-tamper
       - configmap-protection
       - statefulset-protection
+    runtime:
+      observed: 6.090s
+      budget: 30s
     ci:
       lanes:
         - security
@@ -576,6 +621,9 @@ suites:
       - read-replicas-restore
       - failure-injection
     coverage: []
+    runtime:
+      observed: 9m32.724s
+      budget: 15m
     ci:
       lanes:
         - backup-restore

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/onsi/ginkgo/v2/types"
+	"gopkg.in/yaml.v3"
 )
 
 type stringList []string
@@ -37,34 +38,38 @@ type options struct {
 	Selector          string
 	KubernetesVersion string
 	OpenBAOVersion    string
+	ManifestPath      string
+	SuiteBudgets      map[string]runtimeBudget
 }
 
 type summary struct {
-	Lane                       string        `json:"lane,omitempty"`
-	Selector                   string        `json:"selector,omitempty"`
-	KubernetesVersion          string        `json:"kubernetesVersion,omitempty"`
-	OpenBAOVersion             string        `json:"openbaoVersion,omitempty"`
-	ReportCount                int           `json:"reportCount"`
-	SuiteSucceeded             bool          `json:"suiteSucceeded"`
-	TotalSpecs                 int           `json:"totalSpecs"`
-	SpecsThatWillRun           int           `json:"specsThatWillRun"`
-	SpecReports                int           `json:"specReports"`
-	Passed                     int           `json:"passed"`
-	Failed                     int           `json:"failed"`
-	Skipped                    int           `json:"skipped"`
-	Pending                    int           `json:"pending"`
-	Other                      int           `json:"other"`
-	SuiteNodes                 int           `json:"suiteNodes"`
-	SuiteNodePassed            int           `json:"suiteNodePassed"`
-	SuiteNodeFailed            int           `json:"suiteNodeFailed"`
-	SuiteNodeSkipped           int           `json:"suiteNodeSkipped"`
-	SuiteNodePending           int           `json:"suiteNodePending"`
-	SuiteNodeOther             int           `json:"suiteNodeOther"`
-	RunTime                    string        `json:"runTime"`
-	RunTimeSeconds             float64       `json:"runTimeSeconds"`
-	SpecialSuiteFailureReasons []string      `json:"specialSuiteFailureReasons,omitempty"`
-	SlowestSpecs               []specSummary `json:"slowestSpecs,omitempty"`
-	Failures                   []specSummary `json:"failures,omitempty"`
+	Lane                       string          `json:"lane,omitempty"`
+	Selector                   string          `json:"selector,omitempty"`
+	KubernetesVersion          string          `json:"kubernetesVersion,omitempty"`
+	OpenBAOVersion             string          `json:"openbaoVersion,omitempty"`
+	ReportCount                int             `json:"reportCount"`
+	SuiteSucceeded             bool            `json:"suiteSucceeded"`
+	TotalSpecs                 int             `json:"totalSpecs"`
+	SpecsThatWillRun           int             `json:"specsThatWillRun"`
+	SpecReports                int             `json:"specReports"`
+	Passed                     int             `json:"passed"`
+	Failed                     int             `json:"failed"`
+	Skipped                    int             `json:"skipped"`
+	Pending                    int             `json:"pending"`
+	Other                      int             `json:"other"`
+	SuiteNodes                 int             `json:"suiteNodes"`
+	SuiteNodePassed            int             `json:"suiteNodePassed"`
+	SuiteNodeFailed            int             `json:"suiteNodeFailed"`
+	SuiteNodeSkipped           int             `json:"suiteNodeSkipped"`
+	SuiteNodePending           int             `json:"suiteNodePending"`
+	SuiteNodeOther             int             `json:"suiteNodeOther"`
+	RunTime                    string          `json:"runTime"`
+	RunTimeSeconds             float64         `json:"runTimeSeconds"`
+	SpecialSuiteFailureReasons []string        `json:"specialSuiteFailureReasons,omitempty"`
+	SlowestSpecs               []specSummary   `json:"slowestSpecs,omitempty"`
+	Failures                   []specSummary   `json:"failures,omitempty"`
+	Aggregates                 aggregates      `json:"aggregates,omitempty"`
+	BudgetWarnings             []budgetWarning `json:"budgetWarnings,omitempty"`
 }
 
 type specSummary struct {
@@ -75,6 +80,47 @@ type specSummary struct {
 	Location       string   `json:"location,omitempty"`
 	Labels         []string `json:"labels,omitempty"`
 	FailureMessage string   `json:"failureMessage,omitempty"`
+}
+
+type aggregates struct {
+	ByLane  []aggregateSummary `json:"byLane,omitempty"`
+	ByFile  []aggregateSummary `json:"byFile,omitempty"`
+	ByLabel []aggregateSummary `json:"byLabel,omitempty"`
+}
+
+type aggregateSummary struct {
+	Name           string  `json:"name"`
+	Specs          int     `json:"specs"`
+	Passed         int     `json:"passed"`
+	Failed         int     `json:"failed"`
+	Skipped        int     `json:"skipped"`
+	Pending        int     `json:"pending"`
+	Other          int     `json:"other"`
+	RunTime        string  `json:"runTime"`
+	RunTimeSeconds float64 `json:"runTimeSeconds"`
+	Budget         string  `json:"budget,omitempty"`
+	BudgetSeconds  float64 `json:"budgetSeconds,omitempty"`
+	BudgetRatio    float64 `json:"budgetRatio,omitempty"`
+	SuiteID        string  `json:"suiteId,omitempty"`
+}
+
+type budgetWarning struct {
+	Scope          string  `json:"scope"`
+	Name           string  `json:"name"`
+	SuiteID        string  `json:"suiteId,omitempty"`
+	RunTime        string  `json:"runTime"`
+	RunTimeSeconds float64 `json:"runTimeSeconds"`
+	Budget         string  `json:"budget"`
+	BudgetSeconds  float64 `json:"budgetSeconds"`
+	BudgetRatio    float64 `json:"budgetRatio"`
+	Message        string  `json:"message"`
+}
+
+type runtimeBudget struct {
+	SuiteID  string
+	Title    string
+	Observed time.Duration
+	Budget   time.Duration
 }
 
 func main() {
@@ -88,6 +134,15 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "e2e_report: %v\n", err)
 		os.Exit(1)
+	}
+
+	if opts.ManifestPath != "" {
+		budgets, err := loadManifestBudgets(opts.ManifestPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "e2e_report: %v\n", err)
+			os.Exit(1)
+		}
+		opts.SuiteBudgets = budgets
 	}
 
 	s := buildSummary(reports, opts)
@@ -120,6 +175,7 @@ func parseOptions() (options, error) {
 	flag.StringVar(&opts.Selector, "selector", "", "Ginkgo label selector")
 	flag.StringVar(&opts.KubernetesVersion, "kubernetes-version", "", "Kubernetes node image or version")
 	flag.StringVar(&opts.OpenBAOVersion, "openbao-version", "", "OpenBao image or version")
+	flag.StringVar(&opts.ManifestPath, "manifest", "", "optional E2E suite manifest for runtime budget warnings")
 	flag.Parse()
 
 	if len(opts.Reports) == 0 {
@@ -151,6 +207,67 @@ func loadReports(paths []string) ([]types.Report, error) {
 	return reports, nil
 }
 
+func loadManifestBudgets(path string) (map[string]runtimeBudget, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read manifest %s: %w", path, err)
+	}
+
+	var manifest struct {
+		Suites []struct {
+			ID      string   `yaml:"id"`
+			Title   string   `yaml:"title"`
+			Files   []string `yaml:"files"`
+			Runtime struct {
+				Observed string `yaml:"observed"`
+				Budget   string `yaml:"budget"`
+			} `yaml:"runtime"`
+		} `yaml:"suites"`
+	}
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		return nil, fmt.Errorf("parse manifest %s: %w", path, err)
+	}
+
+	budgets := map[string]runtimeBudget{}
+	for _, suite := range manifest.Suites {
+		if strings.TrimSpace(suite.Runtime.Budget) == "" {
+			continue
+		}
+		observed, err := parseOptionalDuration(suite.Runtime.Observed)
+		if err != nil {
+			return nil, fmt.Errorf("suite %s runtime.observed: %w", suite.ID, err)
+		}
+		budget, err := time.ParseDuration(suite.Runtime.Budget)
+		if err != nil {
+			return nil, fmt.Errorf("suite %s runtime.budget: %w", suite.ID, err)
+		}
+		if budget <= 0 {
+			return nil, fmt.Errorf("suite %s runtime.budget must be positive", suite.ID)
+		}
+		for _, file := range suite.Files {
+			file = normalizeReportFile(file)
+			if file == "" || file == "." {
+				continue
+			}
+			budgets[file] = runtimeBudget{
+				SuiteID:  suite.ID,
+				Title:    suite.Title,
+				Observed: observed,
+				Budget:   budget,
+			}
+		}
+	}
+	return budgets, nil
+}
+
+func parseOptionalDuration(value string) (time.Duration, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(value)
+}
+
 func buildSummary(reports []types.Report, opts options) summary {
 	out := summary{
 		Lane:              opts.Lane,
@@ -162,6 +279,9 @@ func buildSummary(reports []types.Report, opts options) summary {
 	}
 
 	var specs []specSummary
+	fileAggregates := map[string]*aggregateSummary{}
+	labelAggregates := map[string]*aggregateSummary{}
+	laneAggregates := map[string]*aggregateSummary{}
 	for _, report := range reports {
 		out.SuiteSucceeded = out.SuiteSucceeded && report.SuiteSucceeded
 		out.TotalSpecs += report.PreRunStats.TotalSpecs
@@ -181,7 +301,20 @@ func buildSummary(reports []types.Report, opts options) summary {
 				continue
 			}
 
-			specs = append(specs, specOut)
+			if includeInSlowestSpecs(spec) {
+				specs = append(specs, specOut)
+			}
+
+			if includeInRuntimeAggregates(spec) {
+				fileAggregate := namedAggregate(fileAggregates, normalizeReportFile(spec.LeafNodeLocation.FileName))
+				updateAggregate(fileAggregate, spec.State, spec.RunTime)
+				for _, label := range specOut.Labels {
+					updateAggregate(namedAggregate(labelAggregates, label), spec.State, spec.RunTime)
+				}
+				if strings.TrimSpace(opts.Lane) != "" {
+					updateAggregate(namedAggregate(laneAggregates, opts.Lane), spec.State, spec.RunTime)
+				}
+			}
 
 			switch {
 			case spec.State.Is(types.SpecStatePassed):
@@ -215,11 +348,107 @@ func buildSummary(reports []types.Report, opts options) summary {
 	})
 
 	out.SpecialSuiteFailureReasons = uniqueStrings(out.SpecialSuiteFailureReasons)
+	out.Aggregates = aggregates{
+		ByLane:  aggregateList(laneAggregates, nil, nil),
+		ByFile:  aggregateList(fileAggregates, opts.SuiteBudgets, &out),
+		ByLabel: aggregateList(labelAggregates, nil, nil),
+	}
+	sort.SliceStable(out.BudgetWarnings, func(i, j int) bool {
+		return out.BudgetWarnings[i].BudgetRatio > out.BudgetWarnings[j].BudgetRatio
+	})
+	return out
+}
+
+func namedAggregate(aggregates map[string]*aggregateSummary, name string) *aggregateSummary {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "(unknown)"
+	}
+	aggregate, ok := aggregates[name]
+	if !ok {
+		aggregate = &aggregateSummary{Name: name}
+		aggregates[name] = aggregate
+	}
+	return aggregate
+}
+
+func updateAggregate(aggregate *aggregateSummary, state types.SpecState, runTime time.Duration) {
+	aggregate.Specs++
+	aggregate.RunTimeSeconds += runTime.Seconds()
+	switch {
+	case state.Is(types.SpecStatePassed):
+		aggregate.Passed++
+	case state.Is(types.SpecStateFailureStates):
+		aggregate.Failed++
+	case state.Is(types.SpecStateSkipped):
+		aggregate.Skipped++
+	case state.Is(types.SpecStatePending):
+		aggregate.Pending++
+	default:
+		aggregate.Other++
+	}
+}
+
+func aggregateList(
+	aggregates map[string]*aggregateSummary,
+	budgets map[string]runtimeBudget,
+	summaryOut *summary,
+) []aggregateSummary {
+	out := make([]aggregateSummary, 0, len(aggregates))
+	for _, aggregate := range aggregates {
+		item := *aggregate
+		item.RunTimeSeconds = roundSeconds(item.RunTimeSeconds)
+		item.RunTime = formatDuration(item.RunTimeSeconds)
+		if budget, ok := budgets[item.Name]; ok {
+			item.SuiteID = budget.SuiteID
+			item.Budget = formatDuration(budget.Budget.Seconds())
+			item.BudgetSeconds = roundSeconds(budget.Budget.Seconds())
+			if item.BudgetSeconds > 0 {
+				item.BudgetRatio = roundSeconds(item.RunTimeSeconds / item.BudgetSeconds)
+			}
+			if summaryOut != nil && item.RunTimeSeconds > item.BudgetSeconds {
+				summaryOut.BudgetWarnings = append(summaryOut.BudgetWarnings, budgetWarning{
+					Scope:          "file",
+					Name:           item.Name,
+					SuiteID:        budget.SuiteID,
+					RunTime:        item.RunTime,
+					RunTimeSeconds: item.RunTimeSeconds,
+					Budget:         item.Budget,
+					BudgetSeconds:  item.BudgetSeconds,
+					BudgetRatio:    item.BudgetRatio,
+					Message: fmt.Sprintf(
+						"%s exceeded runtime budget %s with %s",
+						item.Name,
+						item.Budget,
+						item.RunTime,
+					),
+				})
+			}
+		}
+		out = append(out, item)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].RunTimeSeconds == out[j].RunTimeSeconds {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].RunTimeSeconds > out[j].RunTimeSeconds
+	})
 	return out
 }
 
 func isSuiteNode(spec types.SpecReport) bool {
 	return spec.LeafNodeType.Is(types.NodeTypesForSuiteLevelNodes) || strings.TrimSpace(spec.LeafNodeText) == ""
+}
+
+func includeInSlowestSpecs(spec types.SpecReport) bool {
+	return includeInRuntimeAggregates(spec)
+}
+
+func includeInRuntimeAggregates(spec types.SpecReport) bool {
+	if spec.State.Is(types.SpecStatePassed | types.SpecStateFailureStates) {
+		return true
+	}
+	return spec.RunTime > 0
 }
 
 func countSuiteNodeState(out *summary, state types.SpecState) {
@@ -292,6 +521,21 @@ func specLabels(spec types.SpecReport) []string {
 	return labels
 }
 
+func normalizeReportFile(file string) string {
+	file = strings.TrimSpace(file)
+	if file == "" {
+		return "(unknown)"
+	}
+	if filepath.IsAbs(file) {
+		if cwd, err := os.Getwd(); err == nil {
+			if rel, err := filepath.Rel(cwd, file); err == nil && !strings.HasPrefix(rel, "..") {
+				file = rel
+			}
+		}
+	}
+	return filepath.ToSlash(filepath.Clean(file))
+}
+
 func formatMarkdown(s summary) string {
 	var b strings.Builder
 
@@ -337,6 +581,24 @@ func formatMarkdown(s summary) string {
 		b.WriteString("\n")
 	}
 
+	if len(s.BudgetWarnings) > 0 {
+		b.WriteString("### Runtime Budget Warnings\n\n")
+		b.WriteString("| Scope | Runtime | Budget | Ratio | Name |\n")
+		b.WriteString("| --- | --- | --- | --- | --- |\n")
+		for _, warning := range s.BudgetWarnings {
+			fmt.Fprintf(
+				&b,
+				"| %s | %s | %s | %.2fx | %s |\n",
+				escapeMarkdown(warning.Scope),
+				warning.RunTime,
+				warning.Budget,
+				warning.BudgetRatio,
+				escapeMarkdown(warning.Name),
+			)
+		}
+		b.WriteString("\n")
+	}
+
 	b.WriteString("### Slowest Specs\n\n")
 	if len(s.SlowestSpecs) == 0 {
 		b.WriteString("No specs were reported.\n\n")
@@ -348,6 +610,10 @@ func formatMarkdown(s summary) string {
 		}
 		b.WriteString("\n")
 	}
+
+	writeAggregateTable(&b, "Runtime By Lane", s.Aggregates.ByLane, 0)
+	writeAggregateTable(&b, "Runtime By File", s.Aggregates.ByFile, 10)
+	writeAggregateTable(&b, "Runtime By Label", s.Aggregates.ByLabel, 10)
 
 	if len(s.Failures) > 0 {
 		b.WriteString("### Failures\n\n")
@@ -366,6 +632,34 @@ func formatMarkdown(s summary) string {
 	}
 
 	return b.String()
+}
+
+func writeAggregateTable(b *strings.Builder, title string, aggregates []aggregateSummary, limit int) {
+	if len(aggregates) == 0 {
+		return
+	}
+	if limit > 0 && len(aggregates) > limit {
+		aggregates = aggregates[:limit]
+	}
+
+	fmt.Fprintf(b, "### %s\n\n", title)
+	b.WriteString("| Runtime | Specs | Passed | Failed | Skipped | Budget | Name |\n")
+	b.WriteString("| --- | ---: | ---: | ---: | ---: | --- | --- |\n")
+	for _, aggregate := range aggregates {
+		budget := valueOrUnset(aggregate.Budget)
+		fmt.Fprintf(
+			b,
+			"| %s | %d | %d | %d | %d | %s | %s |\n",
+			aggregate.RunTime,
+			aggregate.Specs,
+			aggregate.Passed,
+			aggregate.Failed,
+			aggregate.Skipped,
+			escapeMarkdown(budget),
+			escapeMarkdown(aggregate.Name),
+		)
+	}
+	b.WriteString("\n")
 }
 
 func writeRow(b *strings.Builder, key, value string) {

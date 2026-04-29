@@ -99,6 +99,10 @@ func TestValidateManifestAcceptsCatalogMatchedSuite(t *testing.T) {
 				Files:     []string{file},
 				Labels:    []string{"cluster", "lifecycle"},
 				Coverage:  []string{"lifecycle"},
+				Runtime: suiteRuntime{
+					Observed: "1m",
+					Budget:   "2m",
+				},
 				CI: suiteCI{
 					Lanes:       []string{"core"},
 					PullRequest: "changed-paths",
@@ -111,6 +115,58 @@ func TestValidateManifestAcceptsCatalogMatchedSuite(t *testing.T) {
 	}, facts, options{})
 	if err != nil {
 		t.Fatalf("validateManifest() error = %v", err)
+	}
+}
+
+func TestValidateManifestRejectsInvalidRuntimeMetadata(t *testing.T) {
+	t.Parallel()
+
+	file := writeTempE2EFile(t, "Cluster_Lifecycle_test.go")
+
+	facts := buildSuiteFacts([]catalogCase{
+		{
+			File:         file,
+			Path:         []string{"Cluster Lifecycle", "creates a cluster"},
+			DomainLabels: []string{"lifecycle", "cluster"},
+		},
+	})
+
+	err := validateManifest(manifest{
+		Version:     1,
+		Versions:    testVersionPolicy(),
+		Parallelism: testParallelismPolicy(),
+		CILanes: []ciLaneConfig{
+			testCILane("core"),
+		},
+		Nightly: testNightlyPlan("core"),
+		Suites: []manifestSuite{
+			{
+				ID:        "cluster-lifecycle",
+				Title:     "Cluster Lifecycle",
+				Owner:     "core",
+				RiskTier:  "critical",
+				Isolation: "shared-cluster",
+				Files:     []string{file},
+				Labels:    []string{"cluster", "lifecycle"},
+				Runtime: suiteRuntime{
+					Observed: "not-a-duration",
+					Budget:   "2m",
+				},
+				CI: suiteCI{
+					Lanes:       []string{"core"},
+					PullRequest: "changed-paths",
+				},
+				Nightly: suiteNightly{
+					Policy: "primary-version-full",
+				},
+			},
+		},
+	}, facts, options{})
+	if err == nil {
+		t.Fatalf("validateManifest() error = nil, want runtime validation failure")
+	}
+	if !strings.Contains(err.Error(), "runtime.observed") {
+		t.Fatalf("error = %q, want runtime observed message", err)
 	}
 }
 

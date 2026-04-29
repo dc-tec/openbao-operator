@@ -187,6 +187,122 @@ func TestBuildSummarySeparatesLeafSpecsFromSuiteNodes(t *testing.T) {
 	}
 }
 
+func TestBuildSummaryExcludesSkippedSpecsFromSlowestSpecs(t *testing.T) {
+	reports := []types.Report{
+		{
+			SuiteSucceeded: true,
+			PreRunStats: types.PreRunStats{
+				TotalSpecs:       3,
+				SpecsThatWillRun: 1,
+			},
+			RunTime: 2 * time.Second,
+			SpecReports: types.SpecReports{
+				{
+					ContainerHierarchyTexts: []string{"acme"},
+					LeafNodeType:            types.NodeTypeIt,
+					LeafNodeText:            "creates a cluster",
+					State:                   types.SpecStatePassed,
+					RunTime:                 2 * time.Second,
+				},
+				{
+					ContainerHierarchyTexts: []string{"openshift"},
+					LeafNodeType:            types.NodeTypeIt,
+					LeafNodeText:            "runs on openshift",
+					State:                   types.SpecStateSkipped,
+					RunTime:                 0,
+				},
+				{
+					ContainerHierarchyTexts: []string{"manual"},
+					LeafNodeType:            types.NodeTypeIt,
+					LeafNodeText:            "waits for a trigger",
+					State:                   types.SpecStatePending,
+					RunTime:                 0,
+				},
+			},
+		},
+	}
+
+	s := buildSummary(reports, options{TopSpecs: 10})
+
+	if got := len(s.SlowestSpecs); got != 1 {
+		t.Fatalf("slowest specs = %d, want only executed spec", got)
+	}
+	if got := s.SlowestSpecs[0].Name; got != "acme creates a cluster" {
+		t.Fatalf("slowest spec = %q, want acme spec", got)
+	}
+}
+
+func TestBuildSummaryAggregatesRuntimeAndWarnsOnBudget(t *testing.T) {
+	reports := []types.Report{
+		{
+			SuiteSucceeded: true,
+			PreRunStats: types.PreRunStats{
+				TotalSpecs:       2,
+				SpecsThatWillRun: 2,
+			},
+			RunTime: 3 * time.Second,
+			SpecReports: types.SpecReports{
+				{
+					ContainerHierarchyTexts:  []string{"acme"},
+					ContainerHierarchyLabels: [][]string{{"tls"}},
+					LeafNodeType:             types.NodeTypeIt,
+					LeafNodeText:             "creates a cluster",
+					LeafNodeLocation: types.CodeLocation{
+						FileName: "test/e2e/Cluster_TLS_ACME_test.go",
+					},
+					LeafNodeLabels: []string{"security"},
+					State:          types.SpecStatePassed,
+					RunTime:        2 * time.Second,
+				},
+				{
+					ContainerHierarchyTexts:  []string{"acme"},
+					ContainerHierarchyLabels: [][]string{{"tls"}},
+					LeafNodeType:             types.NodeTypeIt,
+					LeafNodeText:             "validates auth",
+					LeafNodeLocation: types.CodeLocation{
+						FileName: "test/e2e/Cluster_TLS_ACME_test.go",
+					},
+					State:   types.SpecStatePassed,
+					RunTime: time.Second,
+				},
+			},
+		},
+	}
+
+	s := buildSummary(reports, options{
+		TopSpecs: 10,
+		Lane:     "Hardened",
+		SuiteBudgets: map[string]runtimeBudget{
+			"test/e2e/Cluster_TLS_ACME_test.go": {
+				SuiteID: "cluster-tls-acme",
+				Budget:  2 * time.Second,
+			},
+		},
+	})
+
+	if got := len(s.Aggregates.ByFile); got != 1 {
+		t.Fatalf("file aggregates = %d, want 1", got)
+	}
+	if got := s.Aggregates.ByFile[0].RunTime; got != "3s" {
+		t.Fatalf("file runtime = %q, want 3s", got)
+	}
+	if got := s.Aggregates.ByFile[0].Budget; got != "2s" {
+		t.Fatalf("file budget = %q, want 2s", got)
+	}
+	if got := len(s.Aggregates.ByLabel); got != 2 {
+		t.Fatalf("label aggregates = %d, want tls and security", got)
+	}
+	if got := s.Aggregates.ByLane[0].Name; got != "Hardened" {
+		t.Fatalf("lane aggregate = %q, want Hardened", got)
+	}
+	if got := len(s.BudgetWarnings); got != 1 {
+		t.Fatalf("budget warnings = %d, want 1", got)
+	}
+	if got := s.BudgetWarnings[0].SuiteID; got != "cluster-tls-acme" {
+		t.Fatalf("warning suite id = %q, want cluster-tls-acme", got)
+	}
+}
+
 func TestFormatMarkdown(t *testing.T) {
 	out := formatMarkdown(summary{
 		Lane:             "Core",
