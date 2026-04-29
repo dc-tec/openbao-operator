@@ -165,6 +165,8 @@ The E2E suite manifest is validated in `ci-core` through `make verify-e2e-manife
 
 The same manifest owns E2E parallelism. Matrix rows include `parallel_nodes`, and CI passes that value to `E2E_PARALLEL_NODES`. Lanes may use more than one Ginkgo process only when every assigned suite is declared `parallel-safe` or `serial`; shared-cluster, global-mutator, external-cluster, and multi-cluster suites stay single-process until their isolation model changes.
 
+Lanes may also declare `prLabelFilter` for pull-request routing. CI uses that optimized filter unless a full E2E run is requested or the run is for `main`; nightly and release-gate profiles continue to use the full lane `labelFilter`.
+
 Nightly E2E routing is manifest-driven. The daily profile runs full coverage on the primary Kubernetes version and compatibility smoke rows on adjacent supported versions. The weekly profile runs full compatibility coverage across supported Kubernetes versions. Maintainers can manually dispatch the release-gate profile, optionally filtered to one lane or one Kubernetes version while preserving the same manifest validation.
 
 <CommandBlock

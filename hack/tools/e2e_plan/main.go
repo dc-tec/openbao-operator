@@ -91,6 +91,7 @@ type ciLaneConfig struct {
 	ID                       string `yaml:"id"`
 	Name                     string `yaml:"name"`
 	LabelFilter              string `yaml:"labelFilter"`
+	PRLabelFilter            string `yaml:"prLabelFilter"`
 	PRScope                  string `yaml:"prScope"`
 	TimeoutMinutes           int    `yaml:"timeoutMinutes"`
 	E2ETimeout               string `yaml:"e2eTimeout"`
@@ -115,6 +116,7 @@ type matrixRow struct {
 	ID                       string `json:"id"`
 	Name                     string `json:"name"`
 	LabelFilter              string `json:"label_filter"`
+	PRLabelFilter            string `json:"pr_label_filter"`
 	PRScope                  string `json:"pr_scope"`
 	TimeoutMinutes           int    `json:"timeout_minutes"`
 	E2ETimeout               string `json:"e2e_timeout"`
@@ -496,6 +498,7 @@ func matrixRowFromLane(policy versionPolicy, parallelism parallelismPolicy, lane
 		ID:                       lane.ID,
 		Name:                     lane.Name,
 		LabelFilter:              lane.LabelFilter,
+		PRLabelFilter:            lane.PRLabelFilter,
 		PRScope:                  lane.PRScope,
 		TimeoutMinutes:           lane.TimeoutMinutes,
 		E2ETimeout:               lane.E2ETimeout,

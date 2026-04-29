@@ -61,6 +61,7 @@ type ciLaneConfig struct {
 	ID                       string `yaml:"id"`
 	Name                     string `yaml:"name"`
 	LabelFilter              string `yaml:"labelFilter"`
+	PRLabelFilter            string `yaml:"prLabelFilter"`
 	PRScope                  string `yaml:"prScope"`
 	TimeoutMinutes           int    `yaml:"timeoutMinutes"`
 	E2ETimeout               string `yaml:"e2eTimeout"`

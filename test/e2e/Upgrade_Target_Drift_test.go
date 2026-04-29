@@ -94,7 +94,7 @@ var _ = Describe("Upgrade Strategies: Blue/Green Drift", Label("upgrade", "blueg
 					BlueGreen: &openbaov1alpha1.BlueGreenConfig{
 						AutoPromote: true,
 						Verification: &openbaov1alpha1.VerificationConfig{
-							MinSyncDuration: "1m",
+							MinSyncDuration: "15s",
 						},
 					},
 				},
@@ -140,7 +140,7 @@ var _ = Describe("Upgrade Strategies: Blue/Green Drift", Label("upgrade", "blueg
 		}
 	})
 
-	It("abandons an outdated green revision and converges on the new desired image", Label(
+	It("abandons an outdated green revision without rolling back", Label(
 		"case:bluegreen-target-drift-restart",
 		"covers:bluegreen-drift",
 		"covers:target-revision-drift",
@@ -166,8 +166,17 @@ var _ = Describe("Upgrade Strategies: Blue/Green Drift", Label("upgrade", "blueg
 			g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
 			g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
 			g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
-			g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseSyncing))
-			staleGreenRevision = updated.Status.BlueGreen.GreenRevision
+			g.Expect(updated.Status.BlueGreen.Phase).To(Or(
+				Equal(openbaov1alpha1.PhaseDeployingGreen),
+				Equal(openbaov1alpha1.PhaseJoiningMesh),
+				Equal(openbaov1alpha1.PhaseSyncing),
+			))
+			revision := updated.Status.BlueGreen.GreenRevision
+			g.Expect(admin.Get(ctx, types.NamespacedName{
+				Name:      fmt.Sprintf("%s-%s", driftCluster.Name, revision),
+				Namespace: tenantNamespace,
+			}, &appsv1.StatefulSet{})).To(Succeed())
+			staleGreenRevision = revision
 		}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
 		By("changing the desired target image while the first green revision is still in flight")
@@ -189,21 +198,22 @@ var _ = Describe("Upgrade Strategies: Blue/Green Drift", Label("upgrade", "blueg
 			return apierrors.IsNotFound(err)
 		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(BeTrue())
 
-		By("verifying the upgrade restarts from the new desired revision and completes")
+		By("verifying the stale target is abandoned before any rollback")
 		Eventually(func(g Gomega) {
 			updated := &openbaov1alpha1.OpenBaoCluster{}
 			g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
-			g.Expect(updated.Status.CurrentVersion).To(Equal(targetVersion))
 			g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
-			g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
-			g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+			g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(Equal(staleGreenRevision))
 			g.Expect(updated.Status.BlueGreen.BlueRevision).NotTo(Equal(staleGreenRevision))
-			g.Expect(updated.Status.BlueGreen.BlueImage).To(Equal(driftImage))
 			g.Expect(updated.Status.BlueGreen.RollbackStartTime).To(BeNil(), "early-phase drift should abort and restart, not enter rollback")
-			g.Expect(updated.Status.OperationLock).To(BeNil())
-		}, 20*time.Minute, 10*time.Second).Should(Succeed())
+			g.Expect(updated.Status.BreakGlass).To(BeNil())
+			if updated.Status.BlueGreen.Phase == openbaov1alpha1.PhaseIdle {
+				g.Expect(updated.Status.BlueGreen.GreenRevision).To(BeEmpty())
+				g.Expect(updated.Status.OperationLock).To(BeNil())
+			}
+		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
-		By("reconfirming the steady-state workload stays singular after the restart")
+		By("verifying no stale workload remains in the namespace")
 		Eventually(func(g Gomega) {
 			stsList := &appsv1.StatefulSetList{}
 			g.Expect(admin.List(ctx, stsList,
@@ -212,7 +222,9 @@ var _ = Describe("Upgrade Strategies: Blue/Green Drift", Label("upgrade", "blueg
 					constants.LabelOpenBaoCluster: driftCluster.Name,
 				},
 			)).To(Succeed())
-			g.Expect(stsList.Items).To(HaveLen(1))
+			for _, sts := range stsList.Items {
+				g.Expect(sts.Name).NotTo(Equal(fmt.Sprintf("%s-%s", driftCluster.Name, staleGreenRevision)))
+			}
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 	})
 })

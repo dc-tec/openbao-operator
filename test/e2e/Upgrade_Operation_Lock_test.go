@@ -161,6 +161,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 	})
 
 	It("holds a manual backup request until the rolling upgrade lock is released", Label(
+		"e2e-anchor",
 		"case:upgrade-backup-lock-contention",
 		"covers:operation-lock",
 		"covers:rolling-upgrade",

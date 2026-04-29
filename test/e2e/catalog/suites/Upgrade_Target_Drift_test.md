@@ -8,15 +8,15 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `bluegreen-target-drift-restart` | abandons an outdated green revision and converges on the new desired image | active | `bluegreen-drift`, `target-revision-drift`, `stale-green-cleanup` | `upgrade`, `bluegreen`, `slow` |
+| `bluegreen-target-drift-restart` | abandons an outdated green revision without rolling back | active | `bluegreen-drift`, `target-revision-drift`, `stale-green-cleanup` | `upgrade`, `bluegreen`, `slow` |
 
 ## `bluegreen-target-drift-restart`
 
-Path: `Upgrade Strategies: Blue/Green Drift > abandons an outdated green revision and converges on the new desired image`
+Path: `Upgrade Strategies: Blue/Green Drift > abandons an outdated green revision without rolling back`
 
 State: `active`
 
-Generated fallback ID: `upgrade-target-drift-abandons-an-outdated-green-revision-and-72046d97`
+Generated fallback ID: `upgrade-target-drift-abandons-an-outdated-green-revision-without-0a3dcf0d`
 
 Covers: `bluegreen-drift`, `target-revision-drift`, `stale-green-cleanup`
 
@@ -27,7 +27,7 @@ Recorded checkpoints:
 - waiting for the first green revision to enter an early phase
 - changing the desired target image while the first green revision is still in flight
 - verifying the stale green workload is cleaned up
-- verifying the upgrade restarts from the new desired revision and completes
-- reconfirming the steady-state workload stays singular after the restart
+- verifying the stale target is abandoned before any rollback
+- verifying no stale workload remains in the namespace
 
 

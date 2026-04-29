@@ -10,7 +10,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -505,6 +507,109 @@ func TestHandlePhaseSyncing_Branches(t *testing.T) {
 		}
 		if cluster.Status.UpgradeRequests == nil || cluster.Status.UpgradeRequests.LastHandledPromote != "2026-03-10T12:00:00Z" {
 			t.Fatalf("LastHandledPromote = %+v, want request to be recorded", cluster.Status.UpgradeRequests)
+		}
+	})
+
+	t.Run("aborts before promotion when pre-promotion hook fails in an early phase", func(t *testing.T) {
+		t.Parallel()
+
+		scheme := newBlueGreenTestScheme(t)
+		cluster := newPhaseMachineCluster()
+		cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseSyncing
+		cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+			Operation: openbaov1alpha1.ClusterOperationUpgrade,
+			Holder:    core.UpgradeOperationLockHolder,
+			Message:   "blue/green upgrade phase Syncing",
+		}
+		cluster.Spec.Upgrade.BlueGreen.AutoRollback = &openbaov1alpha1.AutoRollbackConfig{
+			Enabled:             true,
+			OnValidationFailure: true,
+		}
+		cluster.Spec.Upgrade.BlueGreen.Verification = &openbaov1alpha1.VerificationConfig{
+			PrePromotionHook: &openbaov1alpha1.ValidationHookConfig{
+				Image:   "openbao/openbao:2.5.0",
+				Command: []string{"/bin/sh", "-ec"},
+				Args:    []string{"exit 1"},
+			},
+		}
+		blueRevision := cluster.Status.BlueGreen.BlueRevision
+		greenRevision := cluster.Status.BlueGreen.GreenRevision
+		waitSyncedJob := succeededExecutorJob(cluster, ActionWaitGreenSynced)
+		hookJob := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cluster.Name + "-validation-hook",
+				Namespace: cluster.Namespace,
+			},
+			Status: batchv1.JobStatus{
+				Conditions: []batchv1.JobCondition{{
+					Type:   batchv1.JobFailed,
+					Status: corev1.ConditionTrue,
+				}},
+				Failed: 1,
+			},
+		}
+		greenStatefulSet := &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cluster.Name + "-" + cluster.Status.BlueGreen.GreenRevision,
+				Namespace: cluster.Namespace,
+			},
+		}
+		client := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+			WithObjects(cluster, waitSyncedJob, hookJob, greenStatefulSet).
+			Build()
+		manager := &Manager{client: client, reader: client, scheme: scheme}
+
+		result, err := manager.executeStateMachine(context.Background(), logr.Discard(), cluster, "")
+		if err != nil {
+			t.Fatalf("executeStateMachine() error = %v", err)
+		}
+		if result.RequeueAfter != 0 {
+			t.Fatalf("executeStateMachine() result = %+v, want terminal abort without requeue", result)
+		}
+		if cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle {
+			t.Fatalf("phase = %s, want Idle", cluster.Status.BlueGreen.Phase)
+		}
+		if cluster.Status.BlueGreen.GreenRevision != "" {
+			t.Fatalf("green revision = %q, want empty after abort", cluster.Status.BlueGreen.GreenRevision)
+		}
+		if cluster.Status.BlueGreen.RollbackStartTime != nil {
+			t.Fatal("rollback start time set; early pre-promotion hook failure should abort before cutover")
+		}
+		if cluster.Status.OperationLock != nil {
+			t.Fatalf("operation lock = %+v, want released", cluster.Status.OperationLock)
+		}
+
+		staleGreen := &appsv1.StatefulSet{}
+		err = client.Get(context.Background(), types.NamespacedName{
+			Name:      greenStatefulSet.Name,
+			Namespace: greenStatefulSet.Namespace,
+		}, staleGreen)
+		if err == nil {
+			t.Fatal("green StatefulSet still exists after pre-promotion abort")
+		}
+		if !apierrors.IsNotFound(err) {
+			t.Fatalf("get green StatefulSet after abort: %v", err)
+		}
+
+		promoteJobName := upgrade.ExecutorJobName(
+			cluster.Name,
+			ActionPromoteGreenVoters,
+			"",
+			blueRevision,
+			greenRevision,
+		)
+		promoteJob := &batchv1.Job{}
+		err = client.Get(context.Background(), types.NamespacedName{
+			Name:      promoteJobName,
+			Namespace: cluster.Namespace,
+		}, promoteJob)
+		if err == nil {
+			t.Fatalf("promotion job %q exists after validation hook failure", promoteJobName)
+		}
+		if !apierrors.IsNotFound(err) {
+			t.Fatalf("get promotion job after abort: %v", err)
 		}
 	})
 }

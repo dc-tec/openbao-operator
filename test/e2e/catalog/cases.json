@@ -652,7 +652,8 @@
       "verifying TLS secrets are NOT created (ACME mode)",
       "checking for prerequisite resources (ConfigMap)",
       "waiting for StatefulSet to be created",
-      "waiting for StatefulSet pods to become Ready",
+      "waiting for the first ACME pod to become Ready after self-init",
+      "waiting for StatefulSet pods to reach the desired replica count",
       "waiting for the ACME shared cache PVC to become Bound",
       "verifying documented ACME readiness conditions",
       "validating that the config contains ACME parameters",
@@ -1778,6 +1779,7 @@
       "backup",
       "operation-lock",
       "slow",
+      "e2e-anchor",
       "case:upgrade-backup-lock-contention",
       "covers:operation-lock",
       "covers:rolling-upgrade",
@@ -1787,7 +1789,8 @@
       "upgrade",
       "backup",
       "operation-lock",
-      "slow"
+      "slow",
+      "e2e-anchor"
     ],
     "steps": [
       "starting a rolling upgrade",
@@ -1858,14 +1861,16 @@
       "upgrades",
       "cluster",
       "slow",
-      "bluegreen"
+      "bluegreen",
+      "e2e-anchor"
     ],
     "domainLabels": [
       "upgrade",
       "upgrades",
       "cluster",
       "slow",
-      "bluegreen"
+      "bluegreen",
+      "e2e-anchor"
     ],
     "steps": [
       "Writing a secret before upgrade",
@@ -1944,7 +1949,8 @@
       "cluster",
       "slow",
       "failure",
-      "bluegreen"
+      "bluegreen",
+      "e2e-anchor"
     ],
     "domainLabels": [
       "upgrade",
@@ -1952,7 +1958,8 @@
       "cluster",
       "slow",
       "failure",
-      "bluegreen"
+      "bluegreen",
+      "e2e-anchor"
     ],
     "steps": [
       "Triggering a Blue/Green upgrade",
@@ -2195,6 +2202,7 @@
       "cluster",
       "slow",
       "rolling",
+      "e2e-anchor",
       "read-replicas",
       "read-replicas-rolling"
     ],
@@ -2204,6 +2212,7 @@
       "cluster",
       "slow",
       "rolling",
+      "e2e-anchor",
       "read-replicas",
       "read-replicas-rolling"
     ],
@@ -2305,7 +2314,7 @@
   },
   {
     "id": "bluegreen-target-drift-restart",
-    "generatedId": "upgrade-target-drift-abandons-an-outdated-green-revision-and-72046d97",
+    "generatedId": "upgrade-target-drift-abandons-an-outdated-green-revision-without-0a3dcf0d",
     "caseLabel": "bluegreen-target-drift-restart",
     "coverage": [
       "bluegreen-drift",
@@ -2314,10 +2323,10 @@
     ],
     "file": "test/e2e/Upgrade_Target_Drift_test.go",
     "type": "It",
-    "name": "abandons an outdated green revision and converges on the new desired image",
+    "name": "abandons an outdated green revision without rolling back",
     "path": [
       "Upgrade Strategies: Blue/Green Drift",
-      "abandons an outdated green revision and converges on the new desired image"
+      "abandons an outdated green revision without rolling back"
     ],
     "labels": [
       "upgrade",
@@ -2338,8 +2347,8 @@
       "waiting for the first green revision to enter an early phase",
       "changing the desired target image while the first green revision is still in flight",
       "verifying the stale green workload is cleaned up",
-      "verifying the upgrade restarts from the new desired revision and completes",
-      "reconfirming the steady-state workload stays singular after the restart"
+      "verifying the stale target is abandoned before any rollback",
+      "verifying no stale workload remains in the namespace"
     ],
     "focused": false,
     "pending": false,

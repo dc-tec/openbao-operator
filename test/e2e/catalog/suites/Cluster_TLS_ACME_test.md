@@ -29,7 +29,8 @@ Recorded checkpoints:
 - verifying TLS secrets are NOT created (ACME mode)
 - checking for prerequisite resources (ConfigMap)
 - waiting for StatefulSet to be created
-- waiting for StatefulSet pods to become Ready
+- waiting for the first ACME pod to become Ready after self-init
+- waiting for StatefulSet pods to reach the desired replica count
 - waiting for the ACME shared cache PVC to become Bound
 - verifying documented ACME readiness conditions
 - validating that the config contains ACME parameters

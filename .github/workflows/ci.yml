@@ -805,12 +805,18 @@ jobs:
           E2E_HARDENED_CHANGED: ${{ needs.changes.outputs.e2e_hardened }}
           EXCLUDE_PENTEST_ON_DEFAULT_PR: ${{ matrix.exclude_pentest_on_default_pr }}
           LABEL_FILTER: ${{ matrix.label_filter }}
+          PR_LABEL_FILTER: ${{ matrix.pr_label_filter }}
           PR_SCOPE: ${{ matrix.pr_scope }}
           SHARD_NAME: ${{ matrix.name }}
         run: |
           set -euo pipefail
 
-          FILTER="${LABEL_FILTER}"
+          FULL_FILTER="${LABEL_FILTER}"
+          PR_FILTER="${PR_LABEL_FILTER}"
+          FILTER="${FULL_FILTER}"
+          if [[ "${FULL_E2E}" != "true" ]] && [[ -n "${PR_FILTER}" ]]; then
+            FILTER="${PR_FILTER}"
+          fi
           SHOULD_RUN="false"
 
           case "${PR_SCOPE}" in

@@ -39,6 +39,7 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 				ID:                       "backup-restore",
 				Name:                     "Backup & Restore",
 				LabelFilter:              "((dr || restore) && !openshift)",
+				PRLabelFilter:            "((dr && e2e-anchor) && !openshift)",
 				PRScope:                  "backup",
 				TimeoutMinutes:           45,
 				E2ETimeout:               "40m",
@@ -63,6 +64,9 @@ func TestBuildGithubMatrixPreservesLaneConfiguration(t *testing.T) {
 	}
 	if row.KindNodeImage != "kindest/node:v1.35.1" {
 		t.Fatalf("kind node image = %q, want central primary", row.KindNodeImage)
+	}
+	if row.PRLabelFilter != "((dr && e2e-anchor) && !openshift)" {
+		t.Fatalf("pr label filter = %q, want PR-optimized filter", row.PRLabelFilter)
 	}
 	if row.LoadBackupExecutorImage != "true" {
 		t.Fatalf("load backup image = %q, want true", row.LoadBackupExecutorImage)

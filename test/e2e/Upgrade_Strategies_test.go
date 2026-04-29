@@ -582,7 +582,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			dumpRollingUpgradeDiagnostics(ctx, admin, tenantNamespace, upgradeCluster.Name)
 		})
 
-		It("performs rolling upgrade", Label("read-replicas", "read-replicas-rolling"), func() {
+		It("performs rolling upgrade", Label("e2e-anchor", "read-replicas", "read-replicas-rolling"), func() {
 			cfg, err := ctrlconfig.GetConfig()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1644,7 +1644,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("executes Blue/Green upgrade cycle with pre-upgrade snapshot", func() {
+		It("executes Blue/Green upgrade cycle with pre-upgrade snapshot", Label("e2e-anchor"), func() {
 			By("Writing a secret before upgrade")
 			secretPath := "secret/bluegreen-upgrade-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
@@ -2366,7 +2366,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("induces executor failure and validates retry plus auto-abort behavior", func() {
+		It("induces executor failure and validates retry plus auto-abort behavior", Label("e2e-anchor"), func() {
 			var failedEarlyAction bluegreen.ExecutorAction
 
 			By("Triggering a Blue/Green upgrade")

@@ -66,6 +66,7 @@ ciLanes:
   - id: upgrade-rolling
     name: "Upgrade Rolling"
     labelFilter: "((upgrade && (rolling || snapshot || recovery || operation-lock) && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && (rolling || operation-lock) && !hardened) && !openshift)"
     prScope: upgrade
     timeoutMinutes: 45
     e2eTimeout: 40m
@@ -81,6 +82,7 @@ ciLanes:
   - id: upgrade-bluegreen
     name: "Upgrade Blue/Green"
     labelFilter: "((upgrade && (bluegreen || gateway || verification || rollback || chaos || failure) && !hardened) && !openshift)"
+    prLabelFilter: "((upgrade && e2e-anchor && bluegreen && !hardened) && !openshift)"
     prScope: upgrade
     timeoutMinutes: 60
     e2eTimeout: 55m
@@ -499,6 +501,7 @@ suites:
     labels:
       - upgrade
       - backup
+      - e2e-anchor
       - operation-lock
       - slow
     coverage:
@@ -526,6 +529,7 @@ suites:
       - upgrade
       - upgrades
       - cluster
+      - e2e-anchor
       - slow
       - read-replicas
       - read-replicas-rolling

@@ -9,15 +9,15 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
 | `upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17` | holds in Syncing until manual promotion after the pre-promotion hook succeeds | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification` |
-| `upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7` | executes Blue/Green upgrade cycle with pre-upgrade snapshot | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen` |
+| `upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7` | executes Blue/Green upgrade cycle with pre-upgrade snapshot | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `e2e-anchor` |
 | `upgrade-strategies-aborts-before-promotion-when-the-pre-230729f6` | aborts before promotion when the pre-promotion hook fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `failure` |
-| `upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124` | induces executor failure and validates retry plus auto-abort behavior | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen` |
+| `upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124` | induces executor failure and validates retry plus auto-abort behavior | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `e2e-anchor` |
 | `upgrade-strategies-keeps-httproute-stable-and-switches-external-94f5ef4e` | keeps HTTPRoute stable and switches external Service selector at cutover | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `bluegreen` |
 | `upgrade-strategies-creates-a-tlsroute-and-reports-healthy-0fb8639d` | creates a TLSRoute and reports healthy passthrough integration | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `gateway`, `requires-gateway-api`, `tls-passthrough` |
 | `upgrade-strategies-triggers-late-phase-rollback-after-promotion-c44db935` | triggers late-phase rollback after promotion failures and recovers when auth is restored | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `rollback` |
 | `upgrade-strategies-recovers-a-failed-rolling-upgrade-after-5a3c4b87` | recovers a failed rolling upgrade after a retry request clears stale state | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `recovery` |
 | `upgrade-strategies-retries-a-failed-rolling-pre-upgrade-fade7ad8` | retries a failed rolling pre-upgrade snapshot before starting rollout | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `snapshot`, `recovery` |
-| `upgrade-strategies-performs-rolling-upgrade-2302a23d` | performs rolling upgrade | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `read-replicas`, `read-replicas-rolling` |
+| `upgrade-strategies-performs-rolling-upgrade-2302a23d` | performs rolling upgrade | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `e2e-anchor`, `read-replicas`, `read-replicas-rolling` |
 | `upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa` | acknowledges break glass and resumes rollback after the upgrade policy is repaired | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 | `upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327` | enters safe mode when rollback consensus repair job fails | active | _none_ | `upgrade`, `upgrades`, `cluster`, `slow`, `chaos`, `bluegreen` |
 
@@ -47,7 +47,7 @@ State: `active`
 
 Covers: _none_
 
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `e2e-anchor`
 
 Recorded checkpoints:
 - Writing a secret before upgrade
@@ -90,7 +90,7 @@ State: `active`
 
 Covers: _none_
 
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `failure`, `bluegreen`, `e2e-anchor`
 
 Recorded checkpoints:
 - Triggering a Blue/Green upgrade
@@ -207,7 +207,7 @@ State: `active`
 
 Covers: _none_
 
-Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `read-replicas`, `read-replicas-rolling`
+Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `e2e-anchor`, `read-replicas`, `read-replicas-rolling`
 
 Recorded checkpoints:
 - Writing a secret before upgrade
