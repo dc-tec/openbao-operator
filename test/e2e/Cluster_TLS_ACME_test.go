@@ -167,7 +167,9 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", f.TenantName)
 	})
 
-	It("creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)", func() {
+	It("creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)", Label(
+		"case:tls-acme-self-init-ready",
+	), func() {
 		var err error
 
 		By("setting up ACME service and domain")

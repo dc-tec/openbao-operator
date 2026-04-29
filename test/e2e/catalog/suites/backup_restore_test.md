@@ -8,19 +8,21 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `backup-restore-executes-a-manual-backup-to-azure-e51c2b76` | executes a manual backup to Azure | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke` |
+| `dr-azure-provider-backup-smoke` | executes a manual backup to Azure | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke` |
 | `backup-restore-restores-from-azure-backup-using-openbaorestore-b3ea354a` | restores from Azure backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow` |
-| `backup-restore-executes-a-manual-backup-to-gcs-32e6203f` | executes a manual backup to GCS | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke` |
-| `backup-restore-completes-restore-deterministically-after-controller-restart-d873984e` | completes restore deterministically after controller restart while running | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `failure-injection` |
-| `backup-restore-creates-a-restorable-s3-backup-44a8d036` | creates a restorable S3 backup | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore` |
+| `dr-gcs-provider-backup-smoke` | executes a manual backup to GCS | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke` |
+| `dr-s3-restore-controller-restart` | completes restore deterministically after controller restart while running | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `failure-injection` |
+| `dr-s3-restorable-backup` | creates a restorable S3 backup | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore` |
 | `backup-restore-handles-transient-s3-auth-failure-with-10300347` | handles transient S3 auth failure with backup retry after controller restart | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `failure-injection` |
-| `backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175` | restores from S3 backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore` |
+| `dr-s3-restore-cr` | restores from S3 backup using OpenBaoRestore CR | active | _none_ | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `read-replicas`, `read-replicas-restore` |
 
-## `backup-restore-executes-a-manual-backup-to-azure-e51c2b76`
+## `dr-azure-provider-backup-smoke`
 
 Path: `DR: Storage Providers Backup & Restore > Azure Backup & Restore with Azurite > executes a manual backup to Azure`
 
 State: `active`
+
+Generated fallback ID: `backup-restore-executes-a-manual-backup-to-azure-e51c2b76`
 
 Covers: _none_
 
@@ -49,11 +51,13 @@ Recorded checkpoints:
 - waiting for the Azure restore to complete
 
 
-## `backup-restore-executes-a-manual-backup-to-gcs-32e6203f`
+## `dr-gcs-provider-backup-smoke`
 
 Path: `DR: Storage Providers Backup & Restore > GCS Backup with fake-gcs-server > executes a manual backup to GCS`
 
 State: `active`
+
+Generated fallback ID: `backup-restore-executes-a-manual-backup-to-gcs-32e6203f`
 
 Covers: _none_
 
@@ -66,11 +70,13 @@ Recorded checkpoints:
 - waiting for the GCS backup job to complete successfully
 
 
-## `backup-restore-completes-restore-deterministically-after-controller-restart-d873984e`
+## `dr-s3-restore-controller-restart`
 
 Path: `DR: Storage Providers Backup & Restore > S3 Backup & Restore with RustFS > completes restore deterministically after controller restart while running`
 
 State: `active`
+
+Generated fallback ID: `backup-restore-completes-restore-deterministically-after-controller-restart-d873984e`
 
 Covers: _none_
 
@@ -83,11 +89,13 @@ Recorded checkpoints:
 - ensuring restore remains terminally completed
 
 
-## `backup-restore-creates-a-restorable-s3-backup-44a8d036`
+## `dr-s3-restorable-backup`
 
 Path: `DR: Storage Providers Backup & Restore > S3 Backup & Restore with RustFS > creates a restorable S3 backup`
 
 State: `active`
+
+Generated fallback ID: `backup-restore-creates-a-restorable-s3-backup-44a8d036`
 
 Covers: _none_
 
@@ -120,11 +128,13 @@ Recorded checkpoints:
 - ensuring backup operation lock is released after recovery
 
 
-## `backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175`
+## `dr-s3-restore-cr`
 
 Path: `DR: Storage Providers Backup & Restore > S3 Backup & Restore with RustFS > restores from S3 backup using OpenBaoRestore CR`
 
 State: `active`
+
+Generated fallback ID: `backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175`
 
 Covers: _none_
 

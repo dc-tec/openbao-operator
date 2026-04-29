@@ -201,7 +201,9 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		_, _ = fmt.Fprintf(GinkgoWriter, "Tenant %q successfully provisioned\n", f.TenantName)
 	})
 
-	It("creates a Hardened cluster that self-initializes and stays unsealed across restarts", func() {
+	It("creates a Hardened cluster that self-initializes and stays unsealed across restarts", Label(
+		"case:hardened-self-init-auto-unseal",
+	), func() {
 		By("creating external TLS secrets required for TLS mode External")
 		Expect(e2ehelpers.EnsureExternalTLSSecrets(ctx, c, f.Namespace, clusterName, 1)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Created external TLS secrets for cluster %q\n", clusterName)
@@ -653,7 +655,9 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			dumpRollingUpgradeDiagnostics(ctx, c, f.Namespace, upgradeCluster.Name)
 		})
 
-		It("performs a hardened rolling upgrade", func() {
+		It("performs a hardened rolling upgrade", Label(
+			"case:hardened-rolling-upgrade",
+		), func() {
 			initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
 			targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
 			initialImage := fmt.Sprintf("openbao/openbao:%s", initialVersion)
@@ -896,7 +900,9 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 			dumpBlueGreenUpgradeDiagnostics(f.Namespace, upgradeCluster.Name)
 		})
 
-		It("performs a hardened blue/green upgrade", func() {
+		It("performs a hardened blue/green upgrade", Label(
+			"case:hardened-bluegreen-upgrade",
+		), func() {
 			initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
 			targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
 			initialImage := fmt.Sprintf("openbao/openbao:%s", initialVersion)

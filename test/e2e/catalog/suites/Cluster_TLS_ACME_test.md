@@ -8,14 +8,16 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8` | creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted) | active | _none_ | `tls`, `security`, `slow` |
+| `tls-acme-self-init-ready` | creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted) | active | _none_ | `tls`, `security`, `slow` |
 | `cluster-tls-acme-provisions-tenant-rbac-via-openbaotenant-cbd56667` | provisions tenant RBAC via OpenBaoTenant | active | _none_ | `tls`, `security`, `slow` |
 
-## `cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8`
+## `tls-acme-self-init-ready`
 
 Path: `ACME TLS (OpenBao native ACME client) > creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)`
 
 State: `active`
+
+Generated fallback ID: `cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8`
 
 Covers: _none_
 

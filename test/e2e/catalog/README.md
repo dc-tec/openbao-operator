@@ -13,7 +13,7 @@ Notes:
 
 - Files: `17`
 - Specs: `75`
-- Explicit case IDs: `16`
+- Explicit case IDs: `31`
 - Coverage tags: `41`
 
 ## Suites
@@ -22,9 +22,9 @@ Notes:
 | --- | ---: | ---: | ---: | --- | --- |
 | [Cluster Lifecycle: Deletion Policy](suites/Cluster_DeletionPolicy_test.md) | 3 | 3 | 0 | `lifecycle`, `cluster`, `deletion` | `test/e2e/Cluster_DeletionPolicy_test.go` |
 | [Cluster Lifecycle](suites/Cluster_Lifecycle_test.md) | 7 | 0 | 0 | `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke`, `critical`, `tenant` | `test/e2e/Cluster_Lifecycle_test.go` |
-| [Hardened profile (External TLS + Transit auto-unseal + SelfInit)](suites/Cluster_Profile_Hardened_test.md) | 5 | 0 | 0 | `profile-hardened`, `security`, `cluster`, `upgrade`, `bluegreen`, `hardened`, `rolling` | `test/e2e/Cluster_Profile_Hardened_test.go` |
+| [Hardened profile (External TLS + Transit auto-unseal + SelfInit)](suites/Cluster_Profile_Hardened_test.md) | 5 | 3 | 0 | `profile-hardened`, `security`, `cluster`, `upgrade`, `bluegreen`, `hardened`, `rolling` | `test/e2e/Cluster_Profile_Hardened_test.go` |
 | [Cluster Runtime Controls](suites/Cluster_Runtime_Controls_test.md) | 2 | 2 | 0 | `lifecycle`, `cluster`, `runtime` | `test/e2e/Cluster_Runtime_Controls_test.go` |
-| [ACME TLS (OpenBao native ACME client)](suites/Cluster_TLS_ACME_test.md) | 2 | 0 | 0 | `tls`, `security`, `slow` | `test/e2e/Cluster_TLS_ACME_test.go` |
+| [ACME TLS (OpenBao native ACME client)](suites/Cluster_TLS_ACME_test.md) | 2 | 1 | 0 | `tls`, `security`, `slow` | `test/e2e/Cluster_TLS_ACME_test.go` |
 | [Cluster TLS Lifecycle](suites/Cluster_TLS_Lifecycle_test.md) | 1 | 1 | 0 | `tls`, `cluster`, `lifecycle` | `test/e2e/Cluster_TLS_Lifecycle_test.go` |
 | [Manager Resilience](suites/Manager_Resilience_test.md) | 3 | 3 | 0 | `manager`, `cluster`, `e2e-anchor` | `test/e2e/Manager_Resilience_test.go` |
 | [Manager](suites/Operator_Manager_test.md) | 1 | 1 | 0 | `manager`, `critical`, `smoke` | `test/e2e/Operator_Manager_test.go` |
@@ -33,10 +33,10 @@ Notes:
 | [Tenant Data Isolation](suites/Tenant_Data_Isolation_test.md) | 1 | 1 | 0 | `security`, `tenant`, `tenancy` | `test/e2e/Tenant_Data_Isolation_test.go` |
 | [Tenant Isolation](suites/Tenant_Isolation_test.md) | 6 | 0 | 0 | `security`, `tenant`, `tenancy`, `critical`, `single-tenant` | `test/e2e/Tenant_Isolation_test.go` |
 | [Upgrade Strategies: Operation Lock Contention](suites/Upgrade_Operation_Lock_test.md) | 1 | 1 | 0 | `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor` | `test/e2e/Upgrade_Operation_Lock_test.go` |
-| [Upgrade Strategies](suites/Upgrade_Strategies_test.md) | 12 | 0 | 0 | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `e2e-anchor`, `failure`, `gateway`, `requires-gateway-api`, `tls-passthrough`, `rollback`, `rolling`, `recovery`, `snapshot`, `read-replicas`, `read-replicas-rolling`, `chaos` | `test/e2e/Upgrade_Strategies_test.go` |
+| [Upgrade Strategies](suites/Upgrade_Strategies_test.md) | 12 | 6 | 0 | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `e2e-anchor`, `failure`, `gateway`, `requires-gateway-api`, `tls-passthrough`, `rollback`, `rolling`, `recovery`, `snapshot`, `read-replicas`, `read-replicas-rolling`, `chaos` | `test/e2e/Upgrade_Strategies_test.go` |
 | [Upgrade Strategies: Blue/Green Drift](suites/Upgrade_Target_Drift_test.md) | 1 | 1 | 0 | `upgrade`, `bluegreen`, `slow` | `test/e2e/Upgrade_Target_Drift_test.go` |
 | [Security: Anti-Tamper Policy](suites/anti_tamper_policy_test.md) | 2 | 2 | 0 | `security`, `tamper`, `cluster`, `slow` | `test/e2e/anti_tamper_policy_test.go` |
-| [DR: Storage Providers Backup & Restore](suites/backup_restore_test.md) | 7 | 0 | 0 | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke`, `failure-injection`, `read-replicas`, `read-replicas-restore` | `test/e2e/backup_restore_test.go` |
+| [DR: Storage Providers Backup & Restore](suites/backup_restore_test.md) | 7 | 5 | 0 | `dr`, `backup`, `restore`, `storage-providers`, `nightly`, `slow`, `e2e-anchor`, `provider-smoke`, `failure-injection`, `read-replicas`, `read-replicas-restore` | `test/e2e/backup_restore_test.go` |
 
 ## Coverage Tags
 

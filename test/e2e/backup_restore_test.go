@@ -499,7 +499,12 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
-		It("creates a restorable S3 backup", Label("e2e-anchor", "read-replicas", "read-replicas-restore"), func() {
+		It("creates a restorable S3 backup", Label(
+			"e2e-anchor",
+			"case:dr-s3-restorable-backup",
+			"read-replicas",
+			"read-replicas-restore",
+		), func() {
 			By("Writing a secret before backup")
 			secretPath := "secret/backup-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
@@ -529,7 +534,12 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			recordLatestBackupKey(ctx, tenantFW, admin, tenantNamespace, drCluster.Name, &backupKey)
 		})
 
-		It("restores from S3 backup using OpenBaoRestore CR", Label("e2e-anchor", "read-replicas", "read-replicas-restore"), func() {
+		It("restores from S3 backup using OpenBaoRestore CR", Label(
+			"e2e-anchor",
+			"case:dr-s3-restore-cr",
+			"read-replicas",
+			"read-replicas-restore",
+		), func() {
 			Expect(backupKey).NotTo(BeEmpty(), "backup key should have been set by previous test")
 
 			restore := &openbaov1alpha1.OpenBaoRestore{
@@ -778,7 +788,11 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
-		It("completes restore deterministically after controller restart while running", Label("e2e-anchor", "failure-injection"), func() {
+		It("completes restore deterministically after controller restart while running", Label(
+			"e2e-anchor",
+			"case:dr-s3-restore-controller-restart",
+			"failure-injection",
+		), func() {
 			Expect(backupKey).NotTo(BeEmpty(), "backup key should be available before restore restart test")
 
 			restoreName := "s3-restore-restart"
@@ -964,7 +978,11 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
-		It("executes a manual backup to GCS", Label("e2e-anchor", "provider-smoke"), func() {
+		It("executes a manual backup to GCS", Label(
+			"e2e-anchor",
+			"case:dr-gcs-provider-backup-smoke",
+			"provider-smoke",
+		), func() {
 			By("annotating the cluster to trigger a manual GCS backup")
 			Eventually(func() error {
 				return triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)
@@ -1112,7 +1130,11 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			_ = tenantFW.Cleanup(cleanupCtx)
 		})
 
-		It("executes a manual backup to Azure", Label("e2e-anchor", "provider-smoke"), func() {
+		It("executes a manual backup to Azure", Label(
+			"e2e-anchor",
+			"case:dr-azure-provider-backup-smoke",
+			"provider-smoke",
+		), func() {
 			By("annotating the cluster to trigger a manual Azure backup")
 			Eventually(func() error {
 				return triggerManualBackup(ctx, admin, tenantNamespace, drCluster.Name)

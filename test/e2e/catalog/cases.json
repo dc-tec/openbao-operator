@@ -364,8 +364,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb",
+    "id": "hardened-bluegreen-upgrade",
     "generatedId": "cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb",
+    "caseLabel": "hardened-bluegreen-upgrade",
     "file": "test/e2e/Cluster_Profile_Hardened_test.go",
     "type": "It",
     "name": "performs a hardened blue/green upgrade",
@@ -380,7 +381,8 @@
       "cluster",
       "upgrade",
       "bluegreen",
-      "hardened"
+      "hardened",
+      "case:hardened-bluegreen-upgrade"
     ],
     "domainLabels": [
       "profile-hardened",
@@ -407,8 +409,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf",
+    "id": "hardened-rolling-upgrade",
     "generatedId": "cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf",
+    "caseLabel": "hardened-rolling-upgrade",
     "file": "test/e2e/Cluster_Profile_Hardened_test.go",
     "type": "It",
     "name": "performs a hardened rolling upgrade",
@@ -423,7 +426,8 @@
       "cluster",
       "upgrade",
       "rolling",
-      "hardened"
+      "hardened",
+      "case:hardened-rolling-upgrade"
     ],
     "domainLabels": [
       "profile-hardened",
@@ -450,8 +454,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d",
+    "id": "hardened-self-init-auto-unseal",
     "generatedId": "cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d",
+    "caseLabel": "hardened-self-init-auto-unseal",
     "file": "test/e2e/Cluster_Profile_Hardened_test.go",
     "type": "It",
     "name": "creates a Hardened cluster that self-initializes and stays unsealed across restarts",
@@ -462,7 +467,8 @@
     "labels": [
       "profile-hardened",
       "security",
-      "cluster"
+      "cluster",
+      "case:hardened-self-init-auto-unseal"
     ],
     "domainLabels": [
       "profile-hardened",
@@ -625,8 +631,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8",
+    "id": "tls-acme-self-init-ready",
     "generatedId": "cluster-tls-acme-creates-an-acme-tls-cluster-and-4caefad8",
+    "caseLabel": "tls-acme-self-init-ready",
     "file": "test/e2e/Cluster_TLS_ACME_test.go",
     "type": "It",
     "name": "creates an ACME TLS cluster and becomes Ready (no TLS secrets mounted)",
@@ -637,7 +644,8 @@
     "labels": [
       "tls",
       "security",
-      "slow"
+      "slow",
+      "case:tls-acme-self-init-ready"
     ],
     "domainLabels": [
       "tls",
@@ -1850,8 +1858,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7",
+    "id": "upgrade-bluegreen-snapshot-promotion",
     "generatedId": "upgrade-strategies-executes-blue-green-upgrade-cycle-with-bc1db3b7",
+    "caseLabel": "upgrade-bluegreen-snapshot-promotion",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "executes Blue/Green upgrade cycle with pre-upgrade snapshot",
@@ -1866,7 +1875,8 @@
       "cluster",
       "slow",
       "bluegreen",
-      "e2e-anchor"
+      "e2e-anchor",
+      "case:upgrade-bluegreen-snapshot-promotion"
     ],
     "domainLabels": [
       "upgrade",
@@ -1937,8 +1947,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124",
+    "id": "upgrade-bluegreen-executor-failure-auto-abort",
     "generatedId": "upgrade-strategies-induces-executor-failure-and-validates-retry-f587a124",
+    "caseLabel": "upgrade-bluegreen-executor-failure-auto-abort",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "induces executor failure and validates retry plus auto-abort behavior",
@@ -1954,7 +1965,8 @@
       "slow",
       "failure",
       "bluegreen",
-      "e2e-anchor"
+      "e2e-anchor",
+      "case:upgrade-bluegreen-executor-failure-auto-abort"
     ],
     "domainLabels": [
       "upgrade",
@@ -2018,8 +2030,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-keeps-httproute-stable-and-switches-external-7a9e6dd5",
+    "id": "upgrade-gateway-httproute-cutover",
     "generatedId": "upgrade-strategies-keeps-httproute-stable-and-switches-external-7a9e6dd5",
+    "caseLabel": "upgrade-gateway-httproute-cutover",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "keeps HTTPRoute stable and switches external Service selector at cutover",
@@ -2037,7 +2050,8 @@
       "gateway",
       "requires-gateway-api",
       "bluegreen",
-      "e2e-anchor"
+      "e2e-anchor",
+      "case:upgrade-gateway-httproute-cutover"
     ],
     "domainLabels": [
       "upgrade",
@@ -2194,8 +2208,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-performs-rolling-upgrade-2302a23d",
+    "id": "upgrade-rolling-happy-path",
     "generatedId": "upgrade-strategies-performs-rolling-upgrade-2302a23d",
+    "caseLabel": "upgrade-rolling-happy-path",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "performs rolling upgrade",
@@ -2211,6 +2226,7 @@
       "slow",
       "rolling",
       "e2e-anchor",
+      "case:upgrade-rolling-happy-path",
       "read-replicas",
       "read-replicas-rolling"
     ],
@@ -2239,8 +2255,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa",
+    "id": "upgrade-bluegreen-safe-mode-break-glass-recovery",
     "generatedId": "upgrade-strategies-acknowledges-break-glass-and-resumes-rollback-f99ce2fa",
+    "caseLabel": "upgrade-bluegreen-safe-mode-break-glass-recovery",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "acknowledges break glass and resumes rollback after the upgrade policy is repaired",
@@ -2255,7 +2272,8 @@
       "cluster",
       "slow",
       "chaos",
-      "bluegreen"
+      "bluegreen",
+      "case:upgrade-bluegreen-safe-mode-break-glass-recovery"
     ],
     "domainLabels": [
       "upgrade",
@@ -2277,8 +2295,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327",
+    "id": "upgrade-bluegreen-safe-mode-consensus-repair-failure",
     "generatedId": "upgrade-strategies-enters-safe-mode-when-rollback-consensus-e82ce327",
+    "caseLabel": "upgrade-bluegreen-safe-mode-consensus-repair-failure",
     "file": "test/e2e/Upgrade_Strategies_test.go",
     "type": "It",
     "name": "enters safe mode when rollback consensus repair job fails",
@@ -2293,7 +2312,8 @@
       "cluster",
       "slow",
       "chaos",
-      "bluegreen"
+      "bluegreen",
+      "case:upgrade-bluegreen-safe-mode-consensus-repair-failure"
     ],
     "domainLabels": [
       "upgrade",
@@ -2438,8 +2458,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-executes-a-manual-backup-to-azure-e51c2b76",
+    "id": "dr-azure-provider-backup-smoke",
     "generatedId": "backup-restore-executes-a-manual-backup-to-azure-e51c2b76",
+    "caseLabel": "dr-azure-provider-backup-smoke",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
     "name": "executes a manual backup to Azure",
@@ -2456,6 +2477,7 @@
       "nightly",
       "slow",
       "e2e-anchor",
+      "case:dr-azure-provider-backup-smoke",
       "provider-smoke"
     ],
     "domainLabels": [
@@ -2517,8 +2539,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-executes-a-manual-backup-to-gcs-32e6203f",
+    "id": "dr-gcs-provider-backup-smoke",
     "generatedId": "backup-restore-executes-a-manual-backup-to-gcs-32e6203f",
+    "caseLabel": "dr-gcs-provider-backup-smoke",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
     "name": "executes a manual backup to GCS",
@@ -2535,6 +2558,7 @@
       "nightly",
       "slow",
       "e2e-anchor",
+      "case:dr-gcs-provider-backup-smoke",
       "provider-smoke"
     ],
     "domainLabels": [
@@ -2559,8 +2583,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-completes-restore-deterministically-after-controller-restart-d873984e",
+    "id": "dr-s3-restore-controller-restart",
     "generatedId": "backup-restore-completes-restore-deterministically-after-controller-restart-d873984e",
+    "caseLabel": "dr-s3-restore-controller-restart",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
     "name": "completes restore deterministically after controller restart while running",
@@ -2577,6 +2602,7 @@
       "nightly",
       "slow",
       "e2e-anchor",
+      "case:dr-s3-restore-controller-restart",
       "failure-injection"
     ],
     "domainLabels": [
@@ -2601,8 +2627,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-creates-a-restorable-s3-backup-44a8d036",
+    "id": "dr-s3-restorable-backup",
     "generatedId": "backup-restore-creates-a-restorable-s3-backup-44a8d036",
+    "caseLabel": "dr-s3-restorable-backup",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
     "name": "creates a restorable S3 backup",
@@ -2619,6 +2646,7 @@
       "nightly",
       "slow",
       "e2e-anchor",
+      "case:dr-s3-restorable-backup",
       "read-replicas",
       "read-replicas-restore"
     ],
@@ -2688,8 +2716,9 @@
     "suiteTitle": ""
   },
   {
-    "id": "backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175",
+    "id": "dr-s3-restore-cr",
     "generatedId": "backup-restore-restores-from-s3-backup-using-openbaorestore-cbd34175",
+    "caseLabel": "dr-s3-restore-cr",
     "file": "test/e2e/backup_restore_test.go",
     "type": "It",
     "name": "restores from S3 backup using OpenBaoRestore CR",
@@ -2706,6 +2735,7 @@
       "nightly",
       "slow",
       "e2e-anchor",
+      "case:dr-s3-restore-cr",
       "read-replicas",
       "read-replicas-restore"
     ],

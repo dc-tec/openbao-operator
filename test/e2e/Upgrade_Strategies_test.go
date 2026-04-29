@@ -582,7 +582,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			dumpRollingUpgradeDiagnostics(ctx, admin, tenantNamespace, upgradeCluster.Name)
 		})
 
-		It("performs rolling upgrade", Label("e2e-anchor", "read-replicas", "read-replicas-rolling"), func() {
+		It("performs rolling upgrade", Label(
+			"e2e-anchor",
+			"case:upgrade-rolling-happy-path",
+			"read-replicas",
+			"read-replicas-rolling",
+		), func() {
 			cfg, err := ctrlconfig.GetConfig()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1644,7 +1649,10 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("executes Blue/Green upgrade cycle with pre-upgrade snapshot", Label("e2e-anchor"), func() {
+		It("executes Blue/Green upgrade cycle with pre-upgrade snapshot", Label(
+			"e2e-anchor",
+			"case:upgrade-bluegreen-snapshot-promotion",
+		), func() {
 			By("Writing a secret before upgrade")
 			secretPath := "secret/bluegreen-upgrade-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
@@ -2366,7 +2374,10 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("induces executor failure and validates retry plus auto-abort behavior", Label("e2e-anchor"), func() {
+		It("induces executor failure and validates retry plus auto-abort behavior", Label(
+			"e2e-anchor",
+			"case:upgrade-bluegreen-executor-failure-auto-abort",
+		), func() {
 			var failedEarlyAction bluegreen.ExecutorAction
 
 			By("Triggering a Blue/Green upgrade")
@@ -2788,7 +2799,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 		})
 
-		It("enters safe mode when rollback consensus repair job fails", func() {
+		It("enters safe mode when rollback consensus repair job fails", Label(
+			"case:upgrade-bluegreen-safe-mode-consensus-repair-failure",
+		), func() {
 			By("Writing a secret before upgrade")
 			secretPath := "secret/safemode-test"
 			secretData := map[string]string{"foo": "bar", "version": "v1"}
@@ -2930,7 +2943,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 		})
 
-		It("acknowledges break glass and resumes rollback after the upgrade policy is repaired", func() {
+		It("acknowledges break glass and resumes rollback after the upgrade policy is repaired", Label(
+			"case:upgrade-bluegreen-safe-mode-break-glass-recovery",
+		), func() {
 			By("Repairing the broken upgrade policy inside OpenBao")
 			bypassLabels := map[string]string{
 				constants.LabelOpenBaoCluster:   chaosCluster.Name,
@@ -3123,7 +3138,10 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				}
 			})
 
-			It("keeps HTTPRoute stable and switches external Service selector at cutover", Label("e2e-anchor"), func() {
+			It("keeps HTTPRoute stable and switches external Service selector at cutover", Label(
+				"e2e-anchor",
+				"case:upgrade-gateway-httproute-cutover",
+			), func() {
 				targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
 
 				By("Capturing HTTPRoute before upgrade to verify stability")

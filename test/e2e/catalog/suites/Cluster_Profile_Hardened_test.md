@@ -8,17 +8,19 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb` | performs a hardened blue/green upgrade | active | _none_ | `profile-hardened`, `security`, `cluster`, `upgrade`, `bluegreen`, `hardened` |
-| `cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf` | performs a hardened rolling upgrade | active | _none_ | `profile-hardened`, `security`, `cluster`, `upgrade`, `rolling`, `hardened` |
-| `cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d` | creates a Hardened cluster that self-initializes and stays unsealed across restarts | active | _none_ | `profile-hardened`, `security`, `cluster` |
+| `hardened-bluegreen-upgrade` | performs a hardened blue/green upgrade | active | _none_ | `profile-hardened`, `security`, `cluster`, `upgrade`, `bluegreen`, `hardened` |
+| `hardened-rolling-upgrade` | performs a hardened rolling upgrade | active | _none_ | `profile-hardened`, `security`, `cluster`, `upgrade`, `rolling`, `hardened` |
+| `hardened-self-init-auto-unseal` | creates a Hardened cluster that self-initializes and stays unsealed across restarts | active | _none_ | `profile-hardened`, `security`, `cluster` |
 | `cluster-profile-hardened-provisions-tenant-rbac-via-openbaotenant-90cecec2` | provisions tenant RBAC via OpenBaoTenant | active | _none_ | `profile-hardened`, `security`, `cluster` |
 | `cluster-profile-hardened-verifies-raft-autopilot-is-configured-with-f66c15e2` | verifies Raft Autopilot is configured with cleanup_dead_servers enabled | active | _none_ | `profile-hardened`, `security`, `cluster` |
 
-## `cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb`
+## `hardened-bluegreen-upgrade`
 
 Path: `Hardened profile (External TLS + Transit auto-unseal + SelfInit) > Hardened Blue/Green Upgrade > performs a hardened blue/green upgrade`
 
 State: `active`
+
+Generated fallback ID: `cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb`
 
 Covers: _none_
 
@@ -36,11 +38,13 @@ Recorded checkpoints:
 - verifying the test secret persists after the hardened blue/green upgrade
 
 
-## `cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf`
+## `hardened-rolling-upgrade`
 
 Path: `Hardened profile (External TLS + Transit auto-unseal + SelfInit) > Hardened Rolling Upgrade > performs a hardened rolling upgrade`
 
 State: `active`
+
+Generated fallback ID: `cluster-profile-hardened-performs-a-hardened-rolling-upgrade-514bbfcf`
 
 Covers: _none_
 
@@ -58,11 +62,13 @@ Recorded checkpoints:
 - verifying the test secret persists after the hardened upgrade
 
 
-## `cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d`
+## `hardened-self-init-auto-unseal`
 
 Path: `Hardened profile (External TLS + Transit auto-unseal + SelfInit) > creates a Hardened cluster that self-initializes and stays unsealed across restarts`
 
 State: `active`
+
+Generated fallback ID: `cluster-profile-hardened-creates-a-hardened-cluster-that-self-a3cf527d`
 
 Covers: _none_
 
