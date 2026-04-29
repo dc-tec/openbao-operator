@@ -349,9 +349,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			var err error
 
 			err = ensureRustFS(ctx, admin, cfg)
-			if err != nil {
-				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping S3 tests.", err))
-			}
+			Expect(err).NotTo(HaveOccurred(), "RustFS deployment failed")
 
 			tenantFW, err = framework.New(ctx, admin, "tenant-s3-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
@@ -864,9 +862,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			var err error
 
 			err = ensureFakeGCS(ctx, admin, fakeGCSNamespace)
-			if err != nil {
-				Skip(fmt.Sprintf("fake-gcs-server deployment failed: %v. Skipping GCS tests.", err))
-			}
+			Expect(err).NotTo(HaveOccurred(), "fake-gcs-server deployment failed")
 
 			tenantFW, err = framework.New(ctx, admin, "tenant-gcs-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
@@ -1012,9 +1008,7 @@ var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup",
 			var err error
 
 			err = ensureAzurite(ctx, admin, azuriteNamespace)
-			if err != nil {
-				Skip(fmt.Sprintf("Azurite deployment failed: %v. Skipping Azure tests.", err))
-			}
+			Expect(err).NotTo(HaveOccurred(), "Azurite deployment failed")
 
 			tenantFW, err = framework.New(ctx, admin, "tenant-azure-dr", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())

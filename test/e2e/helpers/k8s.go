@@ -3,6 +3,8 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -127,11 +129,11 @@ func waitForDeploymentReady(
 			for _, pod := range pods.Items {
 				if pod.Status.Phase == corev1.PodFailed {
 					return fmt.Errorf(
-						"%s pod %s/%s failed: %v",
+						"%s pod %s/%s failed:\n%s",
 						componentName,
 						pod.Namespace,
 						pod.Name,
-						pod.Status.ContainerStatuses,
+						formatDeploymentPodDiagnostics(ctx, c, namespace, name),
 					)
 				}
 			}
@@ -148,17 +150,72 @@ func waitForDeploymentReady(
 			)
 		case <-deploymentReadyDeadline.C:
 			return fmt.Errorf(
-				"timed out waiting for %s Deployment %s/%s to be ready (ready=%d/%d, replicas=%d)",
+				"timed out waiting for %s Deployment %s/%s to be ready (ready=%d/%d, replicas=%d)\n%s",
 				componentName,
 				namespace,
 				name,
 				current.Status.ReadyReplicas,
 				1,
 				current.Status.Replicas,
+				formatDeploymentPodDiagnostics(ctx, c, namespace, name),
 			)
 		case <-deploymentReadyTicker.C:
 		}
 	}
 
 	return nil
+}
+
+func formatDeploymentPodDiagnostics(ctx context.Context, c client.Client, namespace, appLabel string) string {
+	var pods corev1.PodList
+	if err := c.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels{"app": appLabel}); err != nil {
+		return fmt.Sprintf("pod diagnostics unavailable: %v", err)
+	}
+	if len(pods.Items) == 0 {
+		return "pods: (none found)"
+	}
+
+	sort.Slice(pods.Items, func(i, j int) bool {
+		return pods.Items[i].Name < pods.Items[j].Name
+	})
+
+	var b strings.Builder
+	b.WriteString("pods:\n")
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		fmt.Fprintf(
+			&b,
+			"- %s/%s phase=%s reason=%s message=%s\n",
+			pod.Namespace,
+			pod.Name,
+			pod.Status.Phase,
+			strings.TrimSpace(pod.Status.Reason),
+			strings.TrimSpace(pod.Status.Message),
+		)
+		for _, condition := range pod.Status.Conditions {
+			if condition.Status == corev1.ConditionTrue {
+				continue
+			}
+			fmt.Fprintf(
+				&b,
+				"  condition %s=%s reason=%s message=%s\n",
+				condition.Type,
+				condition.Status,
+				strings.TrimSpace(condition.Reason),
+				strings.TrimSpace(condition.Message),
+			)
+		}
+		for _, st := range pod.Status.ContainerStatuses {
+			fmt.Fprintf(
+				&b,
+				"  image %s=%s imageID=%s\n",
+				st.Name,
+				st.Image,
+				st.ImageID,
+			)
+		}
+		b.WriteString(formatPodContainerStates(pod))
+		b.WriteByte('\n')
+	}
+	return strings.TrimSpace(b.String())
 }

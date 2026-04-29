@@ -119,8 +119,9 @@ func EnsureFakeGCS(ctx context.Context, c client.Client, cfg GCSConfig) error {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  cfg.Name,
-							Image: cfg.Image,
+							Name:            cfg.Name,
+							Image:           cfg.Image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
 							Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: cfg.Port,

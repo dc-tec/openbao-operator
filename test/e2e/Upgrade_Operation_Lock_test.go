@@ -64,9 +64,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 		}
 
 		err = ensureRustFS(ctx, admin, cfg)
-		if err != nil {
-			Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping operation lock contention test.", err))
-		}
+		Expect(err).NotTo(HaveOccurred(), "RustFS deployment failed")
 
 		credentialsSecret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{

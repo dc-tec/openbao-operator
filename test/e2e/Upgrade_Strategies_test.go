@@ -900,9 +900,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 
 			err = ensureRustFS(ctx, admin, cfg)
-			if err != nil {
-				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping rolling snapshot recovery test.", err))
-			}
+			Expect(err).NotTo(HaveOccurred(), "RustFS deployment failed")
 
 			credentialsSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1426,9 +1424,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			}
 
 			err = ensureRustFS(ctx, admin, rCfg)
-			if err != nil {
-				Skip(fmt.Sprintf("RustFS deployment failed: %v. Skipping pre-upgrade snapshot tests.", err))
-			}
+			Expect(err).NotTo(HaveOccurred(), "RustFS deployment failed")
 
 			// Create S3 credentials Secret for RustFS
 			credentialsSecret = &corev1.Secret{
