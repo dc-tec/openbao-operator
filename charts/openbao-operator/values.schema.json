@@ -4,6 +4,10 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "global": {
+      "type": "object",
+      "description": "Global values shared by parent charts and subcharts"
+    },
     "nameOverride": {
       "type": "string",
       "description": "Override the chart name"
