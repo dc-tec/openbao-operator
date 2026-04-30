@@ -100,9 +100,54 @@ func TestLabelerConfigMatchesCIRoutingLabels(t *testing.T) {
 			wantLabels: []string{"backup", "restore"},
 		},
 		{
+			name:       "storage adapter routes backup lane",
+			path:       "internal/adapter/storage/s3.go",
+			wantLabels: []string{"backup", "restore", "storage"},
+		},
+		{
+			name:       "blobstore port routes backup lane",
+			path:       "internal/port/blobstore/blobstore.go",
+			wantLabels: []string{"backup", "interfaces", "restore", "storage"},
+		},
+		{
+			name:       "operation lifecycle routes operation-backed lanes",
+			path:       "internal/service/opslifecycle/lock.go",
+			wantLabels: []string{"backup", "operations", "restore", "upgrades"},
+		},
+		{
+			name:       "workload bluegreen port routes upgrade lane",
+			path:       "internal/port/workload/bluegreen.go",
+			wantLabels: []string{"cluster", "interfaces", "upgrades"},
+		},
+		{
 			name:       "provisioner app routes provisioner lane",
 			path:       "internal/app/provisioner/provisioner.go",
 			wantLabels: []string{"provisioner"},
+		},
+		{
+			name:       "provisioner chart routes provisioner lane",
+			path:       "charts/openbao-operator/templates/provisioner/deployment.yaml",
+			wantLabels: []string{"helm", "provisioner"},
+		},
+		{
+			name:       "controller status helper routes controller lane",
+			path:       "internal/platform/statusapply/openbaocluster.go",
+			wantLabels: []string{"controller"},
+		},
+		{
+			name:       "controller chart routes controller lane",
+			path:       "charts/openbao-operator/templates/controller/deployment.yaml",
+			wantLabels: []string{"controller", "helm"},
+		},
+		{
+			name:       "admission chart routes admission lane",
+			path:       "charts/openbao-operator/templates/admission/validating-policies.yaml",
+			wantLabels: []string{"admission", "helm", "vap"},
+		},
+		{
+			name:       "image verification port routes security lane",
+			path:       "internal/port/imageverify/imageverify.go",
+			wantLabels: []string{"interfaces", "security"},
 		},
 		{
 			name:       "cert service routes hardened security lane",
@@ -110,9 +155,64 @@ func TestLabelerConfigMatchesCIRoutingLabels(t *testing.T) {
 			wantLabels: []string{"certs", "security"},
 		},
 		{
+			name:       "networking service routes networking label",
+			path:       "internal/service/networking/policy.go",
+			wantLabels: []string{"infra", "networking"},
+		},
+		{
+			name:       "configuration service routes config label",
+			path:       "internal/service/configuration/render.go",
+			wantLabels: []string{"config"},
+		},
+		{
+			name:       "observability platform routes observability label",
+			path:       "internal/platform/observability/metrics.go",
+			wantLabels: []string{"observability"},
+		},
+		{
+			name:       "victoriametrics config routes observability label",
+			path:       "config/victoriametrics/vmagent.yaml",
+			wantLabels: []string{"observability"},
+		},
+		{
+			name:       "rbac chart routes rbac label",
+			path:       "charts/openbao-operator/templates/rbac/controller-clusterroles.yaml",
+			wantLabels: []string{"helm", "rbac"},
+		},
+		{
+			name:       "auth port routes auth label",
+			path:       "internal/port/auth/operator_jwt.go",
+			wantLabels: []string{"auth", "interfaces"},
+		},
+		{
+			name:       "init manager port routes init label",
+			path:       "internal/port/initmanager/initmanager.go",
+			wantLabels: []string{"init", "interfaces"},
+		},
+		{
+			name:       "openbao raft port routes openbao and raft labels",
+			path:       "internal/port/openbao/raft.go",
+			wantLabels: []string{"interfaces", "openbao", "raft"},
+		},
+		{
 			name:       "labeler changes are devops changes",
 			path:       ".github/labeler.yml",
 			wantLabels: []string{"devops"},
+		},
+		{
+			name:       "issue templates are devops changes",
+			path:       ".github/ISSUE_TEMPLATE/bug_report.yml",
+			wantLabels: []string{"devops"},
+		},
+		{
+			name:       "pull request template is devops metadata",
+			path:       ".github/pull_request_template.md",
+			wantLabels: []string{"devops", "documentation"},
+		},
+		{
+			name:       "github tool dependencies route dependency and devops labels",
+			path:       ".github/tools/package-lock.json",
+			wantLabels: []string{"dependencies", "devops"},
 		},
 	}
 
