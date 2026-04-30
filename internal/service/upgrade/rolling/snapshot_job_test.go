@@ -22,9 +22,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
@@ -605,7 +605,8 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 	_ = rbacv1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 
-	objs := []client.Object{cluster}
+	objs := make([]client.Object, 0, 1+len(failedJobs))
+	objs = append(objs, cluster)
 	objs = append(objs, failedJobs...)
 
 	k8sClient := fake.NewClientBuilder().
@@ -910,7 +911,8 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 	}
 
 	// Objects to add to the fake client
-	objs := []client.Object{cluster, runningJob, sts, caSecret}
+	objs := make([]client.Object, 0, 4+len(pods))
+	objs = append(objs, cluster, runningJob, sts, caSecret)
 	objs = append(objs, pods...)
 
 	k8sClient := fake.NewClientBuilder().
@@ -937,7 +939,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 		}, nil
 	}
 
-	manager := NewManagerWithClientFactory(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), mockFactory, portopenbao.ClientConfig{}, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+	manager := newManagerWithClientFactory(k8sClient, scheme, backup.NewUpgradeStrategyRuntime(k8sClient, scheme), mockFactory, security.NewImageVerifier(testLogger(), k8sClient, nil))
 
 	// Call Reconcile - it should handle pre-upgrade snapshot and requeue
 	_, err := manager.Reconcile(context.Background(), testLogger(), cluster)

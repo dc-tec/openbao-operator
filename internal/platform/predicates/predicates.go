@@ -17,9 +17,7 @@ limitations under the License.
 package controller
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -42,25 +40,6 @@ type OpenBaoClusterPredicateOptions struct {
 	ReconcileOnAdminOpsError bool
 	// ReconcileOnOperationLock enables reconciliation when status.operationLock changes.
 	ReconcileOnOperationLock bool
-}
-
-// OpenBaoClusterPredicate filters OpenBaoCluster events to only reconcile on
-// meaningful changes. This reduces noise and CPU usage by preventing the
-// operator from waking up for irrelevant changes like status-only updates.
-//
-// The predicate allows reconciliation when:
-//   - The resource is created
-//   - The resource is deleted
-//   - The Spec changes (detected via Generation change)
-//   - DeletionTimestamp changes (triggers deletion handling)
-//   - Finalizers change (triggers finalizer handling)
-//   - Metadata labels or annotations change (may affect behavior)
-//
-// Status-only updates (like ReadyReplicas, Phase, Conditions) are filtered out
-// since they don't require reconciliation - the controller updates status
-// based on observed state, not in response to status changes.
-func OpenBaoClusterPredicate() predicate.Predicate {
-	return OpenBaoClusterPredicateWithOptions(OpenBaoClusterPredicateOptions{})
 }
 
 // OpenBaoClusterPredicateWithOptions is like OpenBaoClusterPredicate but allows opting into
@@ -162,44 +141,6 @@ func adminOpsLastError(cluster *openbaov1alpha1.OpenBaoCluster) *openbaov1alpha1
 	return cluster.Status.AdminOps.LastError
 }
 
-// StatefulSetReadyReplicasPredicate filters StatefulSet update events to only
-// trigger reconciliation when ReadyReplicas changes. This is useful when
-// watching StatefulSets to detect when pods become ready.
-//
-// Note: Currently, the OpenBaoCluster controller does not watch StatefulSets
-// directly due to security constraints (namespace-scoped permissions). This
-// predicate is provided for future use or for controllers that do watch
-// StatefulSets.
-func StatefulSetReadyReplicasPredicate() predicate.Predicate {
-	return predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			// Always reconcile on create
-			return true
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			// Always reconcile on delete
-			return true
-		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldSts, ok := e.ObjectOld.(*appsv1.StatefulSet)
-			if !ok {
-				return true // If type assertion fails, allow reconciliation to be safe
-			}
-			newSts, ok := e.ObjectNew.(*appsv1.StatefulSet)
-			if !ok {
-				return true // If type assertion fails, allow reconciliation to be safe
-			}
-
-			// Only reconcile if ReadyReplicas changed
-			return oldSts.Status.ReadyReplicas != newSts.Status.ReadyReplicas
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			// Always reconcile on generic events (rare, but be safe)
-			return true
-		},
-	}
-}
-
 // OpenBaoTenantPredicate filters OpenBaoTenant events to only reconcile on
 // meaningful changes. Similar to OpenBaoClusterPredicate, this filters out
 // status-only updates.
@@ -253,39 +194,6 @@ func OpenBaoTenantPredicate() predicate.Predicate {
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
 			// Always reconcile on generic events (rare, but be safe)
-			return true
-		},
-	}
-}
-
-// ResourceGenerationChangedPredicate is a generic predicate that filters
-// update events to only trigger reconciliation when the Generation changes.
-// Generation changes indicate that the Spec has been modified.
-//
-// This is useful for any resource type that follows the standard Kubernetes
-// pattern where Generation increments on Spec changes.
-func ResourceGenerationChangedPredicate() predicate.Predicate {
-	return predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			return true
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			return true
-		},
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			oldObj, ok := e.ObjectOld.(metav1.Object)
-			if !ok {
-				return true
-			}
-			newObj, ok := e.ObjectNew.(metav1.Object)
-			if !ok {
-				return true
-			}
-
-			// Only reconcile if Generation changed
-			return oldObj.GetGeneration() != newObj.GetGeneration()
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
 			return true
 		},
 	}

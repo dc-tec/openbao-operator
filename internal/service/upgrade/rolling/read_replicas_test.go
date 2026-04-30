@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
@@ -35,7 +35,7 @@ func TestEnsureReadReplicaPoolReadyForRollingUpgrade_SkipsWhenReadReplicasAreNot
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), rollingTestClientFactory(), portopenbao.ClientConfig{}, nil, "")
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), rollingTestClientFactory(), nil)
 
 	result, waiting, err := mgr.ensureReadReplicaPoolReadyForRollingUpgrade(context.Background(), testr.New(t), cluster)
 	if err != nil {
@@ -57,7 +57,7 @@ func TestEnsureReadReplicaPoolReadyForRollingUpgrade_WaitsForStatefulSetConverge
 	readSTS.Status.CurrentRevision = readReplicaOldRevision
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(readSTS).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), rollingTestClientFactory(), portopenbao.ClientConfig{}, nil, "")
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), rollingTestClientFactory(), nil)
 
 	result, waiting, err := mgr.ensureReadReplicaPoolReadyForRollingUpgrade(context.Background(), testr.New(t), cluster)
 	if err != nil {
@@ -80,7 +80,7 @@ func TestEnsureReadReplicaPoolReadyForRollingUpgrade_WaitsForPodHealth(t *testin
 	caSecret := testClusterCASecret(cluster)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(readSTS, pod0, pod1, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), unhealthyReadReplicaClientFactory(), portopenbao.ClientConfig{}, nil, "")
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), unhealthyReadReplicaClientFactory(), nil)
 
 	result, waiting, err := mgr.ensureReadReplicaPoolReadyForRollingUpgrade(context.Background(), testr.New(t), cluster)
 	if err != nil {
@@ -103,7 +103,7 @@ func TestEnsureReadReplicaPoolReadyForRollingUpgrade_SucceedsWhenReadPoolConverg
 	caSecret := testClusterCASecret(cluster)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(readSTS, pod0, pod1, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), rollingTestClientFactory(), portopenbao.ClientConfig{}, nil, "")
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), rollingTestClientFactory(), nil)
 
 	result, waiting, err := mgr.ensureReadReplicaPoolReadyForRollingUpgrade(context.Background(), testr.New(t), cluster)
 	if err != nil {

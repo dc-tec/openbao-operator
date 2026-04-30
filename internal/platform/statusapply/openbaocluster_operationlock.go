@@ -66,18 +66,6 @@ func ApplyOpenBaoClusterOperationLockStatus(
 	return c.Status().Apply(ctx, applyConfig, applyOpts...)
 }
 
-// MutateAndApplyOpenBaoClusterOperationLockStatus safely persists the lock
-// plane with a read-mutate-apply flow.
-func MutateAndApplyOpenBaoClusterOperationLockStatus(
-	ctx context.Context,
-	c client.Client,
-	key types.NamespacedName,
-	mutate OpenBaoClusterOperationLockStatusMutator,
-	opts OpenBaoClusterOperationLockStatusApplyOptions,
-) (*openbaov1alpha1.OpenBaoCluster, error) {
-	return MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(ctx, nil, c, key, mutate, opts)
-}
-
 // MutateAndApplyOpenBaoClusterOperationLockStatusWithReader safely persists the
 // lock plane with a read-mutate-apply flow using reader for fresh read-before-
 // write and read-after-write visibility when needed.

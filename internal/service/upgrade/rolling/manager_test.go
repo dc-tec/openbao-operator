@@ -19,10 +19,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	upgradecore "github.com/dc-tec/openbao-operator/internal/service/upgrade/core"
@@ -319,14 +319,11 @@ func TestValidateUpgrade_LeaderUnknownIsTransientClusterState(t *testing.T) {
 	pod2 := readyRollingTestPod(cluster, 2, false)
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
-	mgr := NewManagerWithClientFactory(
+	mgr := newManagerWithClientFactory(
 		k8sClient,
 		scheme,
 		nil,
-		rollingTestClientFactory(),
-		portopenbao.ClientConfig{},
-		nil,
-		"",
+		rollingTestClientFactory(), nil,
 	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
@@ -391,14 +388,11 @@ func TestValidateUpgrade_ResumeHealthAllowsOneUnavailableTarget(t *testing.T) {
 	pod2 := pendingRollingTestPod(cluster, 2)
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
-	mgr := NewManagerWithClientFactory(
+	mgr := newManagerWithClientFactory(
 		k8sClient,
 		scheme,
 		nil,
-		rollingTestClientFactory(),
-		portopenbao.ClientConfig{},
-		nil,
-		"",
+		rollingTestClientFactory(), nil,
 	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	if err := mgr.validateUpgrade(context.Background(), testLogger(), cluster); err != nil {
@@ -449,14 +443,11 @@ func TestValidateUpgrade_ResumeHealthBlocksQuorumLoss(t *testing.T) {
 	pod2 := pendingRollingTestPod(cluster, 2)
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
-	mgr := NewManagerWithClientFactory(
+	mgr := newManagerWithClientFactory(
 		k8sClient,
 		scheme,
 		nil,
-		rollingTestClientFactory(),
-		portopenbao.ClientConfig{},
-		nil,
-		"",
+		rollingTestClientFactory(), nil,
 	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
@@ -499,14 +490,11 @@ func TestValidateUpgrade_ResumeHealthMarksTimedOutTargetAsPodNotReady(t *testing
 	}
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts).Build()
-	mgr := NewManagerWithClientFactory(
+	mgr := newManagerWithClientFactory(
 		k8sClient,
 		scheme,
 		nil,
-		rollingTestClientFactory(),
-		portopenbao.ClientConfig{},
-		nil,
-		"",
+		rollingTestClientFactory(), nil,
 	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
@@ -569,14 +557,11 @@ func TestReconcile_PersistsResumeValidationFailureStatus(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster, sts).
 		Build()
-	mgr := NewManagerWithClientFactory(
+	mgr := newManagerWithClientFactory(
 		k8sClient,
 		scheme,
 		nil,
-		rollingTestClientFactory(),
-		portopenbao.ClientConfig{},
-		nil,
-		"",
+		rollingTestClientFactory(), nil,
 	).WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
 
 	_, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
@@ -646,14 +631,11 @@ func TestValidateUpgrade_ResumeHealthBlocksNonTargetUnavailableReplica(t *testin
 	pod2 := readyRollingTestPod(cluster, 2, true)
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
-	mgr := NewManagerWithClientFactory(
+	mgr := newManagerWithClientFactory(
 		k8sClient,
 		scheme,
 		nil,
-		rollingTestClientFactory(),
-		portopenbao.ClientConfig{},
-		nil,
-		"",
+		rollingTestClientFactory(), nil,
 	)
 
 	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
@@ -711,14 +693,11 @@ func TestValidateUpgrade_ResumeHealthMarksTimedOutNonTargetAsPodNotReady(t *test
 	pod2 := readyRollingTestPod(cluster, 2, true)
 
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, caSecret, pod0, pod1, pod2).Build()
-	mgr := NewManagerWithClientFactory(
+	mgr := newManagerWithClientFactory(
 		k8sClient,
 		scheme,
 		nil,
-		rollingTestClientFactory(),
-		portopenbao.ClientConfig{},
-		nil,
-		"",
+		rollingTestClientFactory(), nil,
 	)
 
 	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)

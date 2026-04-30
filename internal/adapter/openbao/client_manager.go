@@ -90,30 +90,3 @@ func (m *ClientManager) Close() {
 	// Clear all state
 	m.states = make(map[string]*clientState)
 }
-
-// ClearCluster removes client state for a specific cluster.
-// Use this when a cluster is deleted to free resources and ensure
-// a fresh state if the cluster is recreated.
-func (m *ClientManager) ClearCluster(clusterKey string) {
-	if m == nil || clusterKey == "" {
-		return
-	}
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	delete(m.states, clusterKey)
-}
-
-// ClusterCount returns the number of clusters with active client state.
-// This is primarily useful for testing and debugging.
-func (m *ClientManager) ClusterCount() int {
-	if m == nil {
-		return 0
-	}
-
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	return len(m.states)
-}
