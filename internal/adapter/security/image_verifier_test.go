@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -437,7 +438,7 @@ func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			key := verifier.cacheKey(tt.digest, tt.config)
 
-			if !startsWith(key, tt.wantPrefix) {
+			if !strings.HasPrefix(key, tt.wantPrefix) {
 				t.Errorf("cacheKey() = %v, want prefix %v", key, tt.wantPrefix)
 			}
 
@@ -631,11 +632,6 @@ func TestCountBundleSignaturePredicates(t *testing.T) {
 	if len(observedPredicates) != 2 {
 		t.Fatalf("countBundleSignaturePredicates() observedPredicates len = %d, want 2", len(observedPredicates))
 	}
-}
-
-// startsWith is a helper function to check if a string starts with a prefix
-func startsWith(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
 
 func mustNewBundleAttestation(t *testing.T, payloadType, predicateType string) oci.Signature {

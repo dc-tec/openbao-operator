@@ -308,8 +308,6 @@ func restartControllerDeployment(ctx context.Context, c client.Client, namespace
 	return nil
 }
 
-// createE2ERequests helper removed in favor of e2ehelpers.CreateE2ERequests
-
 var _ = Describe("DR: Storage Providers Backup & Restore", Label("dr", "backup", "restore", "storage-providers", "nightly", "slow"), Ordered, func() {
 	ctx := context.Background()
 

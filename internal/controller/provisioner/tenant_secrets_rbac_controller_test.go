@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -188,7 +189,7 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 	}
 	wantWriterSecrets := []string{"cluster-a-root-token", "cluster-a-tls-ca", "cluster-a-tls-server", "cluster-a-unseal-key"}
 	sort.Strings(wantWriterSecrets)
-	if gotWriterSecrets := extractSecretResourceNames(writerRole.Rules); !slicesEqual(gotWriterSecrets, wantWriterSecrets) {
+	if gotWriterSecrets := extractSecretResourceNames(writerRole.Rules); !slices.Equal(gotWriterSecrets, wantWriterSecrets) {
 		t.Fatalf("writer secrets = %v, want %v", gotWriterSecrets, wantWriterSecrets)
 	}
 
@@ -201,7 +202,7 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 	}
 	wantReaderSecrets := []string{"backup-creds", "backup-token", "unseal-creds"}
 	sort.Strings(wantReaderSecrets)
-	if gotReaderSecrets := extractSecretResourceNames(readerRole.Rules); !slicesEqual(gotReaderSecrets, wantReaderSecrets) {
+	if gotReaderSecrets := extractSecretResourceNames(readerRole.Rules); !slices.Equal(gotReaderSecrets, wantReaderSecrets) {
 		t.Fatalf("reader secrets = %v, want %v", gotReaderSecrets, wantReaderSecrets)
 	}
 
@@ -324,7 +325,7 @@ func extractSecretResourceNames(rules []rbacv1.PolicyRule) []string {
 	var out []string
 	for i := range rules {
 		rule := rules[i]
-		if !contains(rule.Resources, "secrets") {
+		if !slices.Contains(rule.Resources, "secrets") {
 			continue
 		}
 		if len(rule.ResourceNames) == 0 {
@@ -334,25 +335,4 @@ func extractSecretResourceNames(rules []rbacv1.PolicyRule) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func contains(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
-func slicesEqual(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			return false
-		}
-	}
-	return true
 }

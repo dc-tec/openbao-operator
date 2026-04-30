@@ -5,6 +5,7 @@ package identity
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -276,7 +277,7 @@ func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
 		rule := &role.Rules[i]
 		if len(rule.APIGroups) > 0 && rule.APIGroups[0] == "" &&
 			len(rule.Resources) > 0 && rule.Resources[0] == "pods" &&
-			contains(rule.Verbs, "patch") {
+			slices.Contains(rule.Verbs, "patch") {
 			mutationRule = rule
 			break
 		}
@@ -289,7 +290,7 @@ func TestEnsureRBAC_IncludesBlueGreenPodResourceNames(t *testing.T) {
 		cluster.Name + "-rev-blue-0",
 		cluster.Name + "-rev-green-0",
 	} {
-		if !contains(mutationRule.ResourceNames, expected) {
+		if !slices.Contains(mutationRule.ResourceNames, expected) {
 			t.Fatalf("expected mutation rule to include %q, got %v", expected, mutationRule.ResourceNames)
 		}
 	}
@@ -328,7 +329,7 @@ func TestEnsureRBAC_RetainsReadReplicaPodResourceNamesDuringScaleDown(t *testing
 		rule := &role.Rules[i]
 		if len(rule.APIGroups) > 0 && rule.APIGroups[0] == "" &&
 			len(rule.Resources) > 0 && rule.Resources[0] == "pods" &&
-			contains(rule.Verbs, "patch") {
+			slices.Contains(rule.Verbs, "patch") {
 			mutationRule = rule
 			break
 		}
@@ -341,19 +342,10 @@ func TestEnsureRBAC_RetainsReadReplicaPodResourceNamesDuringScaleDown(t *testing
 		cluster.Name + "-read-0",
 		cluster.Name + "-read-1",
 	} {
-		if !contains(mutationRule.ResourceNames, expected) {
+		if !slices.Contains(mutationRule.ResourceNames, expected) {
 			t.Fatalf("expected mutation rule to include %q, got %v", expected, mutationRule.ResourceNames)
 		}
 	}
-}
-
-func contains(values []string, needle string) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
-	}
-	return false
 }
 
 func TestEnsureRBAC_IsIdempotent(t *testing.T) {

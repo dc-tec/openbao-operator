@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -77,39 +78,39 @@ func TestGenerateTenantRole(t *testing.T) {
 
 			for _, rule := range role.Rules {
 				// Check for OpenBaoCluster rule (uses commonVerbs, not "*")
-				if contains(rule.APIGroups, "openbao.org") &&
-					contains(rule.Resources, "openbaoclusters") &&
-					contains(rule.Verbs, "get") &&
-					contains(rule.Verbs, "create") {
+				if slices.Contains(rule.APIGroups, "openbao.org") &&
+					slices.Contains(rule.Resources, "openbaoclusters") &&
+					slices.Contains(rule.Verbs, "get") &&
+					slices.Contains(rule.Verbs, "create") {
 					hasOpenBaoClusterRule = true
 				}
 
 				// Check for StatefulSet rule (uses commonVerbs, not "*")
-				if contains(rule.APIGroups, "apps") &&
-					contains(rule.Resources, "statefulsets") &&
-					contains(rule.Verbs, "get") &&
-					contains(rule.Verbs, "create") {
+				if slices.Contains(rule.APIGroups, "apps") &&
+					slices.Contains(rule.Resources, "statefulsets") &&
+					slices.Contains(rule.Verbs, "get") &&
+					slices.Contains(rule.Verbs, "create") {
 					hasStatefulSetRule = true
 				}
 
 				// Check for Pod rule (includes delete for cleanup)
-				if contains(rule.APIGroups, "") &&
-					contains(rule.Resources, "pods") &&
-					contains(rule.Verbs, "get") &&
-					contains(rule.Verbs, "list") &&
-					contains(rule.Verbs, "delete") {
+				if slices.Contains(rule.APIGroups, "") &&
+					slices.Contains(rule.Resources, "pods") &&
+					slices.Contains(rule.Verbs, "get") &&
+					slices.Contains(rule.Verbs, "list") &&
+					slices.Contains(rule.Verbs, "delete") {
 					hasPodRule = true
 				}
 
 				// controller-runtime v0.23 emits events via events.k8s.io.
-				if contains(rule.APIGroups, "events.k8s.io") &&
-					contains(rule.Resources, "events") &&
-					contains(rule.Verbs, "create") &&
-					contains(rule.Verbs, "patch") {
+				if slices.Contains(rule.APIGroups, "events.k8s.io") &&
+					slices.Contains(rule.Resources, "events") &&
+					slices.Contains(rule.Verbs, "create") &&
+					slices.Contains(rule.Verbs, "patch") {
 					hasEventsK8sRule = true
 				}
 
-				if contains(rule.Resources, "resourcequotas") || contains(rule.Resources, "limitranges") {
+				if slices.Contains(rule.Resources, "resourcequotas") || slices.Contains(rule.Resources, "limitranges") {
 					hasQuotaOrLimitRangeRule = true
 				}
 			}
@@ -241,13 +242,13 @@ func TestGenerateTenantSecretsWriterRole_RestrictsMutationAccess(t *testing.T) {
 	}
 
 	createRule := findCoreSecretsRule(role.Rules, func(rule rbacv1.PolicyRule) bool {
-		return contains(rule.Verbs, "create") && len(rule.ResourceNames) == 0
+		return slices.Contains(rule.Verbs, "create") && len(rule.ResourceNames) == 0
 	})
 	if createRule == nil {
 		t.Fatalf("writer Role missing collection-level Secrets create rule: %#v", role.Rules)
 	}
 	for _, forbiddenVerb := range []string{"get", "list", "watch", "patch", "update", "delete"} {
-		if contains(createRule.Verbs, forbiddenVerb) {
+		if slices.Contains(createRule.Verbs, forbiddenVerb) {
 			t.Fatalf("writer create rule must not grant %q: %#v", forbiddenVerb, *createRule)
 		}
 	}
@@ -259,17 +260,17 @@ func TestGenerateTenantSecretsWriterRole_RestrictsMutationAccess(t *testing.T) {
 		t.Fatalf("writer Role missing resourceNames-scoped Secrets mutation rule: %#v", role.Rules)
 	}
 	for _, wantVerb := range []string{"delete", "get", "patch", "update"} {
-		if !contains(mutateRule.Verbs, wantVerb) {
+		if !slices.Contains(mutateRule.Verbs, wantVerb) {
 			t.Fatalf("writer mutation rule missing verb %q: %#v", wantVerb, *mutateRule)
 		}
 	}
 	for _, forbiddenVerb := range []string{"create", "list", "watch"} {
-		if contains(mutateRule.Verbs, forbiddenVerb) {
+		if slices.Contains(mutateRule.Verbs, forbiddenVerb) {
 			t.Fatalf("writer mutation rule must not grant %q: %#v", forbiddenVerb, *mutateRule)
 		}
 	}
 	for _, wantName := range secretNames {
-		if !contains(mutateRule.ResourceNames, wantName) {
+		if !slices.Contains(mutateRule.ResourceNames, wantName) {
 			t.Fatalf("writer mutation rule missing resourceName %q: %#v", wantName, *mutateRule)
 		}
 	}
@@ -308,5 +309,5 @@ func findCoreSecretsRule(rules []rbacv1.PolicyRule, keep func(rbacv1.PolicyRule)
 }
 
 func isCoreSecretsRule(rule rbacv1.PolicyRule) bool {
-	return contains(rule.APIGroups, "") && contains(rule.Resources, "secrets")
+	return slices.Contains(rule.APIGroups, "") && slices.Contains(rule.Resources, "secrets")
 }

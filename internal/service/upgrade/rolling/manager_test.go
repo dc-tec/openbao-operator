@@ -1806,7 +1806,7 @@ func TestValidateBackupConfig(t *testing.T) {
 			if tt.expectError {
 				if err == nil {
 					t.Error("expected error but got nil")
-				} else if tt.errorSubstr != "" && !containsSubstring(err.Error(), tt.errorSubstr) {
+				} else if tt.errorSubstr != "" && !strings.Contains(err.Error(), tt.errorSubstr) {
 					t.Errorf("error %q should contain %q", err.Error(), tt.errorSubstr)
 				}
 			} else {
@@ -1816,20 +1816,6 @@ func TestValidateBackupConfig(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper to check for substring in error message
-func containsSubstring(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && contains(s, substr))
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 // newScheme creates a scheme with all required types for testing

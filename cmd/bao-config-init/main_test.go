@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -255,54 +254,26 @@ func TestRenderConfig_HandlesMissingSelfInitFile(t *testing.T) {
 func TestCopyWrapper(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create a test wrapper binary (just some content)
 	wrapperContent := []byte("#!/bin/sh\necho 'test wrapper'")
 	sourcePath := filepath.Join(dir, "bao-wrapper")
 	if err := os.WriteFile(sourcePath, wrapperContent, 0o644); err != nil {
 		t.Fatalf("failed to create source wrapper: %v", err)
 	}
 
-	// Create /utils directory structure in temp dir for testing
-	utilsDir := filepath.Join(dir, "utils")
-	if err := os.MkdirAll(utilsDir, 0o755); err != nil {
-		t.Fatalf("failed to create utils directory: %v", err)
+	destPath := filepath.Join(dir, "utils", "bao-wrapper")
+	if err := copyBinary(sourcePath, destPath); err != nil {
+		t.Fatalf("copyBinary() error = %v", err)
 	}
 
-	// Test the copy logic manually (since copyWrapper hardcodes /utils/bao-wrapper)
-	// This verifies the same logic that copyWrapper uses
-	destPath := filepath.Join(utilsDir, "bao-wrapper")
-
-	sourceFile, err := os.Open(sourcePath)
-	if err != nil {
-		t.Fatalf("failed to open source: %v", err)
-	}
-	defer func() { _ = sourceFile.Close() }()
-
-	destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
-	if err != nil {
-		t.Fatalf("failed to create destination: %v", err)
-	}
-	defer func() { _ = destFile.Close() }()
-
-	if _, err := io.Copy(destFile, sourceFile); err != nil {
-		t.Fatalf("failed to copy: %v", err)
-	}
-	if err := os.Chmod(destPath, 0o755); err != nil {
-		t.Fatalf("failed to set permissions: %v", err)
-	}
-
-	// Verify file was copied and has correct permissions
 	info, err := os.Stat(destPath)
 	if err != nil {
 		t.Fatalf("failed to stat copied file: %v", err)
 	}
 
-	// Check permissions (executable)
 	if info.Mode().Perm()&0o111 == 0 {
 		t.Errorf("copied file should be executable, got permissions: %v", info.Mode().Perm())
 	}
 
-	// Verify content matches
 	copiedContent, err := os.ReadFile(destPath)
 	if err != nil {
 		t.Fatalf("failed to read copied file: %v", err)
