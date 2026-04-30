@@ -1,5 +1,8 @@
 # PR Labeler Configuration
-# Maps file patterns to labels for automatic PR labeling
+# Maps file patterns to labels for automatic PR labeling.
+#
+# Routing-sensitive labels used by CI E2E reruns:
+# backup, upgrades, security, provisioner, admission, controller.
 
 # Documentation changes
 documentation:
@@ -8,6 +11,7 @@ documentation:
           - 'docs/**/*'
           - 'README.md'
           - 'CONTRIBUTING.md'
+          - 'CHANGELOG.md'
           - 'LICENSE'
           - '**/*.md'
           - 'releases/**/*'
@@ -18,7 +22,7 @@ helm:
   - changed-files:
       - any-glob-to-any-file:
           - 'charts/openbao-operator/**/*'
-          - 'hack/helm*/**/*'
+          - 'hack/helmchart/**/*'
           - 'hack/helmvalues/**/*'
 
 # Test changes
@@ -26,19 +30,20 @@ tests:
   - changed-files:
       - any-glob-to-any-file:
           - '**/*_test.go'
-          - 'tests/**/*'
+          - '.ast-grep/tests/**/*'
           - 'test/**/*'
+          - 'tests/**/*'
           - 'hack/ci/**/*'
+          - 'hack/perfcheck/**/*'
 
 # Security related changes
 security:
   - changed-files:
       - any-glob-to-any-file:
           - 'config/policy/**/*'
-          - '**/security/**/*'
           - '.trivy*'
-          - '.github/workflows/dependency-review.yml'
           - 'internal/adapter/security/**/*'
+          - 'internal/port/imageverify/**/*'
           - 'internal/port/security/**/*'
           - 'internal/platform/openbaotls/**/*'
           - 'internal/service/certs/**/*'
@@ -53,183 +58,234 @@ security:
 # RBAC changes
 rbac:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'config/rbac/**/*'
-      - '**/rbac/**/*'
-      - '*role*.yaml'
-      - 'hack/gen-rbac/**/*'
+      - any-glob-to-any-file:
+          - 'config/rbac/**/*'
+          - 'config/samples/RBAC/**/*'
+          - 'charts/openbao-operator/templates/rbac/**/*'
+          - 'internal/service/provisioner/rbac*.go'
+          - '.ast-grep/rules/rbac-vap/**/*'
+          - '.ast-grep/tests/rbac-vap/**/*'
+          - '**/*role*.yaml'
+          - '**/*Role*.yaml'
 
 # Dependencies
 dependencies:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'go.mod'
-      - 'go.sum'
-      - 'vendor/**/*'
-      - 'Dockerfile*'
-      - '.github/dependabot.yml'
+      - any-glob-to-any-file:
+          - 'go.mod'
+          - 'go.sum'
+          - 'vendor/**/*'
+          - 'Dockerfile*'
+          - '.github/dependabot.yml'
+          - '.github/tools/package.json'
+          - '.github/tools/package-lock.json'
 
 # API / CRD changes
 api:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'api/**/*'
-      - 'config/crd/**/*'
+      - any-glob-to-any-file:
+          - 'api/**/*'
+          - 'config/crd/**/*'
+          - 'charts/openbao-operator/crds/**/*'
+          - 'docs/reference/api.md'
 
 # Controller changes
 controller:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/controller/**/*'
-      - 'internal/app/openbaocluster/**/*'
-      - 'cmd/controller/**/*'
-      - 'controllers/**/*'
+      - any-glob-to-any-file:
+          - 'internal/controller/**/*'
+          - 'internal/app/openbaocluster/**/*'
+          - 'internal/platform/entrypoint/**/*'
+          - 'internal/platform/predicates/**/*'
+          - 'internal/platform/statusapply/**/*'
+          - 'internal/platform/statuspatch/**/*'
+          - 'cmd/controller/**/*'
+          - 'charts/openbao-operator/templates/controller/**/*'
+          - 'config/manager/controller.yaml'
 
 # Provisioner changes
 provisioner:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/app/provisioner/**/*'
-      - 'internal/controller/provisioner/**/*'
-      - 'internal/service/provisioner/**/*'
-      - 'cmd/provisioner/**/*'
-      - '**/provisioner*'
+      - any-glob-to-any-file:
+          - 'internal/app/provisioner/**/*'
+          - 'internal/controller/provisioner/**/*'
+          - 'internal/service/provisioner/**/*'
+          - 'cmd/provisioner/**/*'
+          - 'charts/openbao-operator/templates/provisioner/**/*'
+          - 'config/manager/provisioner.yaml'
 
 # Cluster management changes
 cluster:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/adapter/cluster/**/*'
+      - any-glob-to-any-file:
+          - 'internal/adapter/cluster/**/*'
+          - 'internal/service/workload/**/*'
+          - 'internal/port/workload/**/*'
 
 # Storage backend changes (S3, GCS, Azure)
 storage:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/adapter/storage/**/*'
-      - '**/storage*'
+      - any-glob-to-any-file:
+          - 'internal/adapter/storage/**/*'
+          - 'internal/adapter/storageenv/**/*'
+          - 'internal/port/blobstore/**/*'
 
 # Admission controller changes
 admission:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'charts/openbao-operator/templates/admission/**/*'
-      - 'config/policy/**/*'
-      - 'internal/platform/admission/**/*'
-      - '**/admission*'
+      - any-glob-to-any-file:
+          - 'charts/openbao-operator/templates/admission/**/*'
+          - 'config/policy/**/*'
+          - 'internal/platform/admission/**/*'
 
 # Authentication changes
 auth:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/adapter/auth/**/*'
-      - '**/auth*'
+      - any-glob-to-any-file:
+          - 'internal/adapter/auth/**/*'
+          - 'internal/port/auth/**/*'
+          - 'internal/service/bootstrap/**/*'
 
 # Certificate management changes
 certs:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/service/certs/**/*'
-      - '**/cert*'
+      - any-glob-to-any-file:
+          - 'internal/service/certs/**/*'
+          - 'internal/platform/openbaotls/**/*'
+          - 'test/e2e/helpers/tls.go'
+          - '**/cert*'
 
 # Raft consensus changes
 raft:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/adapter/raft/**/*'
-      - '**/raft*'
+      - any-glob-to-any-file:
+          - 'internal/adapter/raft/**/*'
+          - 'internal/port/openbao/raft.go'
+          - 'internal/port/openbao/autopilot.go'
+          - '**/raft*'
 
 # Logging changes
 logging:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/platform/logging/**/*'
+      - any-glob-to-any-file:
+          - 'internal/platform/logging/**/*'
 
 # Networking changes
 networking:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'config/network-policy/**/*'
-      - 'internal/service/infra/network*'
+      - any-glob-to-any-file:
+          - 'config/network-policy/**/*'
+          - 'internal/service/networking/**/*'
+          - 'charts/openbao-operator/templates/networkpolicy.yaml'
+          - 'test/e2e/helpers/networkpolicy.go'
 
 # Observability / monitoring changes
 observability:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'config/prometheus/**/*'
-      - 'config/grafana/**/*'
+      - any-glob-to-any-file:
+          - 'config/prometheus/**/*'
+          - 'config/grafana/**/*'
+          - 'config/victoriametrics/**/*'
+          - 'internal/platform/observability/**/*'
+          - 'charts/openbao-operator/templates/metrics/**/*'
 
 # DevOps / CI-CD changes
 devops:
   - changed-files:
-    - any-glob-to-any-file:
-      - '.github/workflows/**/*'
-      - '.github/actions/**/*'
-      - '.github/scripts/**/*'
-      - '.github/labeler.yml'
-      - '.github/size-labeler.yml'
-      - 'Makefile'
-      - '**/Makefile'
-      - 'hack/ci/**/*'
-      - 'hack/build*'
-      - 'hack/release*'
-      - '.golangci.yml'
-      - '.devcontainer/**/*'
-      - '.vscode/**/*'
-      - 'release-please-*.json'
-      - 'hack/tools/**/*'
-      - 'hack/boilerplate.go.txt'
+      - any-glob-to-any-file:
+          - '.github/workflows/**/*'
+          - '.github/actions/**/*'
+          - '.github/scripts/**/*'
+          - '.github/ISSUE_TEMPLATE/**/*'
+          - '.github/pull_request_template.md'
+          - '.github/labeler.yml'
+          - '.github/size-labeler.yml'
+          - '.github/tools/package.json'
+          - '.github/tools/package-lock.json'
+          - 'Makefile'
+          - 'mk/**/*'
+          - '**/Makefile'
+          - 'hack/ci/**/*'
+          - 'hack/dev/**/*'
+          - 'hack/tools/**/*'
+          - 'hack/architecture/**/*'
+          - 'hack/build*'
+          - 'hack/release*'
+          - '.golangci.yml'
+          - '.devcontainer/**/*'
+          - '.vscode/**/*'
+          - 'release-please-*.json'
+          - 'hack/boilerplate.go.txt'
 
 # Infrastructure changes
 infra:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/service/infra/**/*'
-      - 'config/manager/**/*'
-      - 'config/default/**/*'
-      - 'config/overlays/**/*'
-      - 'config/samples/**/*'
+      - any-glob-to-any-file:
+          - 'config/manager/**/*'
+          - 'config/default/**/*'
+          - 'config/overlays/**/*'
+          - 'config/samples/**/*'
+          - 'internal/platform/resourceapply/**/*'
+          - 'internal/platform/resourceidentity/**/*'
+          - 'internal/service/identity/**/*'
+          - 'internal/service/networking/**/*'
+          - 'internal/service/workload/**/*'
+          - 'internal/service/workloadidentity/**/*'
 
 # OpenBao specific changes
 openbao:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'internal/adapter/openbao/**/*'
-      - 'cmd/bao*/**/*'
+      - any-glob-to-any-file:
+          - 'internal/adapter/openbao/**/*'
+          - 'internal/port/openbao/**/*'
+          - 'cmd/bao-wrapper/**/*'
 
 # Backup changes
 backup:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'api/v1alpha1/openbaorestore_types.go'
-      - 'internal/app/openbaorestore/**/*'
-      - 'internal/controller/openbaorestore/**/*'
-      - 'internal/port/backup/**/*'
-      - 'internal/service/backup/**/*'
-      - 'internal/service/restore/**/*'
-      - 'cmd/bao-backup/**/*'
-      - 'Dockerfile.backup'
-      - 'hack/ci/Dockerfile.fast.backup'
-      - 'test/e2e/e2e_suite_test.go'
-      - 'test/e2e/framework/**/*'
-      - 'test/e2e/helpers/**/*'
-      - 'test/e2e/backup_restore_test.go'
-      - 'test/e2e/suites.yaml'
+      - any-glob-to-any-file:
+          - 'api/v1alpha1/openbaorestore_types.go'
+          - 'internal/app/openbaorestore/**/*'
+          - 'internal/controller/openbaorestore/**/*'
+          - 'internal/adapter/storage/**/*'
+          - 'internal/adapter/storageenv/**/*'
+          - 'internal/port/backup/**/*'
+          - 'internal/port/blobstore/**/*'
+          - 'internal/service/backup/**/*'
+          - 'internal/service/opslifecycle/**/*'
+          - 'internal/service/restore/**/*'
+          - 'cmd/bao-backup/**/*'
+          - 'Dockerfile.backup'
+          - 'hack/ci/Dockerfile.fast.backup'
+          - 'test/e2e/e2e_suite_test.go'
+          - 'test/e2e/framework/**/*'
+          - 'test/e2e/helpers/**/*'
+          - 'test/e2e/backup_restore_test.go'
+          - 'test/e2e/suites.yaml'
 
 # Restore changes
 restore:
   - changed-files:
-    - any-glob-to-any-file:
-      - 'api/v1alpha1/openbaorestore_types.go'
-      - 'internal/app/openbaorestore/**/*'
-      - 'internal/controller/openbaorestore/**/*'
-      - 'internal/service/restore/**/*'
-      - 'cmd/bao-backup/restore_flow.go'
-      - 'test/e2e/backup_restore_test.go'
+      - any-glob-to-any-file:
+          - 'api/v1alpha1/openbaorestore_types.go'
+          - 'internal/app/openbaorestore/**/*'
+          - 'internal/controller/openbaorestore/**/*'
+          - 'internal/adapter/storage/**/*'
+          - 'internal/adapter/storageenv/**/*'
+          - 'internal/port/blobstore/**/*'
+          - 'internal/service/opslifecycle/**/*'
+          - 'internal/service/restore/**/*'
+          - 'cmd/bao-backup/restore_flow.go'
+          - 'test/e2e/backup_restore_test.go'
 
 # VAP (Validating Admission Policy) changes
 vap:
   - changed-files:
       - any-glob-to-any-file:
+          - 'config/policy/**/*'
+          - 'charts/openbao-operator/templates/admission/**/*'
+          - '.ast-grep/rules/rbac-vap/**/*'
+          - '.ast-grep/tests/rbac-vap/**/*'
           - '**/vap*/**/*'
           - '**/validating*'
 
@@ -237,7 +293,7 @@ vap:
 operations:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/adapter/operationlock/**/*'
+          - 'internal/service/opslifecycle/**/*'
           - 'internal/platform/reconcile/**/*'
           - 'cmd/bao-wrapper/**/*'
 
@@ -246,7 +302,9 @@ upgrades:
   - changed-files:
       - any-glob-to-any-file:
           - 'internal/port/backup/preupgrade.go'
+          - 'internal/port/workload/bluegreen.go'
           - 'internal/platform/constants/upgrade*'
+          - 'internal/service/opslifecycle/**/*'
           - 'internal/service/upgrade/**/*'
           - 'cmd/bao-upgrade/**/*'
           - 'Dockerfile.upgrade'
@@ -264,8 +322,11 @@ config:
   - changed-files:
       - any-glob-to-any-file:
           - 'internal/adapter/config/**/*'
+          - 'internal/service/configuration/**/*'
           - 'cmd/bao-config-init/**/*'
           - 'Dockerfile.init'
+          - 'hack/tools/openbao_config_schema/**/*'
+          - 'hack/tools/openbao_operator_schema_drift/**/*'
 
 # Constants
 constants:
@@ -284,12 +345,15 @@ init:
   - changed-files:
       - any-glob-to-any-file:
           - 'internal/service/init/**/*'
+          - 'internal/port/initmanager/**/*'
+          - 'cmd/bao-config-init/**/*'
+          - 'Dockerfile.init'
 
-# Interfaces
+# Ports and boundary interfaces
 interfaces:
   - changed-files:
       - any-glob-to-any-file:
-          - 'internal/interfaces/**/*'
+          - 'internal/port/**/*'
 
 # Kubernetes utilities
 kube:
