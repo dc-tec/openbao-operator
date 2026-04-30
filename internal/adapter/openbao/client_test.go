@@ -16,6 +16,20 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+type HealthResponse struct {
+	Initialized                bool   `json:"initialized"`
+	Sealed                     bool   `json:"sealed"`
+	Standby                    bool   `json:"standby"`
+	PerformanceStandby         bool   `json:"performance_standby"`
+	ReplicationPerformanceMode string `json:"replication_performance_mode,omitempty"`
+	ReplicationDRMode          string `json:"replication_dr_mode,omitempty"`
+	ServerTimeUTC              int64  `json:"server_time_utc,omitempty"`
+	Version                    string `json:"version,omitempty"`
+	ClusterName                string `json:"cluster_name,omitempty"`
+	LeaderAddress              string `json:"leader_address,omitempty"`
+	ClusterID                  string `json:"cluster_id,omitempty"`
+}
+
 type healthBoolTestCase struct {
 	name     string
 	response HealthResponse

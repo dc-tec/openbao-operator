@@ -393,23 +393,8 @@ func compareGolden(t *testing.T, name string, got []byte) {
 	}
 }
 
-func TestRenderOperatorBootstrapHCL(t *testing.T) {
-	config := OperatorBootstrapConfig{
-		OIDCIssuerURL: "https://kubernetes.default.svc",
-		JWTKeysPEM:    []string{"-----BEGIN PUBLIC KEY-----\ntest-public-key\n-----END PUBLIC KEY-----\n"},
-		OperatorNS:    "openbao-operator-system",
-		OperatorSA:    "openbao-operator-controller",
-	}
-
-	got, err := RenderOperatorBootstrapHCL(config)
-	if err != nil {
-		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
-	}
-
-	compareGolden(t, "render_operator_bootstrap", got)
-}
-
-func TestRenderOperatorBootstrapHCL_PrefersJWKSURL(t *testing.T) {
+func TestRenderSelfInitHCL_PrefersJWKSURL(t *testing.T) {
+	cluster := newMinimalCluster("hardened-cluster", "default")
 	config := OperatorBootstrapConfig{
 		OIDCIssuerURL: "https://issuer.example",
 		OIDCJWKSURL:   "https://issuer.example/keys",
@@ -419,9 +404,9 @@ func TestRenderOperatorBootstrapHCL_PrefersJWKSURL(t *testing.T) {
 		OperatorSA:    "openbao-operator-controller",
 	}
 
-	got, err := RenderOperatorBootstrapHCL(config)
+	got, err := RenderSelfInitHCL(cluster, &config)
 	if err != nil {
-		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
 	rendered := string(got)
@@ -436,7 +421,8 @@ func TestRenderOperatorBootstrapHCL_PrefersJWKSURL(t *testing.T) {
 	}
 }
 
-func TestRenderOperatorBootstrapHCL_PrefersOIDCDiscoveryURL(t *testing.T) {
+func TestRenderSelfInitHCL_PrefersOIDCDiscoveryURL(t *testing.T) {
+	cluster := newMinimalCluster("hardened-cluster", "default")
 	config := OperatorBootstrapConfig{
 		OIDCIssuerURL:    "https://issuer.example",
 		OIDCDiscoveryURL: "https://issuer.example",
@@ -445,9 +431,9 @@ func TestRenderOperatorBootstrapHCL_PrefersOIDCDiscoveryURL(t *testing.T) {
 		OperatorSA:       "openbao-operator-controller",
 	}
 
-	got, err := RenderOperatorBootstrapHCL(config)
+	got, err := RenderSelfInitHCL(cluster, &config)
 	if err != nil {
-		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
 	rendered := string(got)
@@ -462,7 +448,8 @@ func TestRenderOperatorBootstrapHCL_PrefersOIDCDiscoveryURL(t *testing.T) {
 	}
 }
 
-func TestRenderOperatorBootstrapHCL_FallsBackToStaticKeysWhenOIDCDiscoveryRequiresCA(t *testing.T) {
+func TestRenderSelfInitHCL_FallsBackToStaticKeysWhenOIDCDiscoveryRequiresCA(t *testing.T) {
+	cluster := newMinimalCluster("hardened-cluster", "default")
 	config := OperatorBootstrapConfig{
 		OIDCIssuerURL:      "https://kubernetes.default.svc.cluster.local",
 		OIDCDiscoveryURL:   "https://kubernetes.default.svc",
@@ -472,9 +459,9 @@ func TestRenderOperatorBootstrapHCL_FallsBackToStaticKeysWhenOIDCDiscoveryRequir
 		OperatorSA:         "openbao-operator-controller",
 	}
 
-	got, err := RenderOperatorBootstrapHCL(config)
+	got, err := RenderSelfInitHCL(cluster, &config)
 	if err != nil {
-		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
 	rendered := string(got)
@@ -486,7 +473,8 @@ func TestRenderOperatorBootstrapHCL_FallsBackToStaticKeysWhenOIDCDiscoveryRequir
 	}
 }
 
-func TestRenderOperatorBootstrapHCL_FallsBackToStaticKeysWhenJWKSURLHostDiffersWithoutCA(t *testing.T) {
+func TestRenderSelfInitHCL_FallsBackToStaticKeysWhenJWKSURLHostDiffersWithoutCA(t *testing.T) {
+	cluster := newMinimalCluster("hardened-cluster", "default")
 	config := OperatorBootstrapConfig{
 		OIDCIssuerURL: "https://kubernetes.default.svc.cluster.local",
 		OIDCJWKSURL:   "https://192.168.147.2:6443/openid/v1/jwks",
@@ -495,9 +483,9 @@ func TestRenderOperatorBootstrapHCL_FallsBackToStaticKeysWhenJWKSURLHostDiffersW
 		OperatorSA:    "openbao-operator-controller",
 	}
 
-	got, err := RenderOperatorBootstrapHCL(config)
+	got, err := RenderSelfInitHCL(cluster, &config)
 	if err != nil {
-		t.Fatalf("RenderOperatorBootstrapHCL() error = %v", err)
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
 	}
 
 	rendered := string(got)

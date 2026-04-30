@@ -298,27 +298,3 @@ func upgradePolicyForCluster(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	}
 	return jwtPolicyUpgradeRolling
 }
-
-// RenderOperatorBootstrapHCL renders the operator bootstrap initialize block.
-// This block configures JWT auth in OpenBao for operator authentication.
-func RenderOperatorBootstrapHCL(config OperatorBootstrapConfig) ([]byte, error) {
-	file := hclwrite.NewEmptyFile()
-	body := file.Body()
-
-	if strings.TrimSpace(config.OIDCIssuerURL) == "" {
-		return nil, fmt.Errorf("OIDC issuer URL is required to render operator bootstrap")
-	}
-	if strings.TrimSpace(config.OIDCDiscoveryURL) == "" && strings.TrimSpace(config.OIDCJWKSURL) == "" && len(config.JWTKeysPEM) == 0 {
-		return nil, fmt.Errorf("an OIDC discovery URL, a JWKS URL, or at least one JWT public key is required to render operator bootstrap")
-	}
-	if strings.TrimSpace(config.OperatorNS) == "" {
-		return nil, fmt.Errorf("operator namespace is required to render operator bootstrap")
-	}
-	if strings.TrimSpace(config.OperatorSA) == "" {
-		return nil, fmt.Errorf("operator service account name is required to render operator bootstrap")
-	}
-
-	body.AppendBlock(buildOperatorBootstrapInitializeBlock(config))
-
-	return file.Bytes(), nil
-}
