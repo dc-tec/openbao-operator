@@ -1,0 +1,23 @@
+id: no-nil-reader-withreader-forwarder
+valid:
+  - |
+    package runtime
+    func Acquire(ctx context.Context, reader Reader, c Client) error {
+      return AcquireWithReader(ctx, reader, c)
+    }
+  - |
+    package runtime
+    func acquire(ctx context.Context, c Client) error {
+      return AcquireWithReader(ctx, nil, c)
+    }
+invalid:
+  - |
+    package runtime
+    func Acquire(ctx context.Context, c Client) error {
+      return AcquireWithReader(ctx, nil, c)
+    }
+  - |
+    package runtime
+    func Release(ctx context.Context, c Client) error {
+      return lifecycle.ReleaseWithReader(ctx, nil, c)
+    }

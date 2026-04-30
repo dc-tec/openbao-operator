@@ -50,11 +50,6 @@ func (l OperationLock) IsHeldBy(lock *openbaov1alpha1.OperationLockStatus) bool 
 	return lock != nil && lock.Operation == l.Operation && lock.Holder == l.Holder
 }
 
-// Acquire acquires or renews the lock on the cluster status.
-func Acquire(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster, lock OperationLock, opts AcquireOptions) error {
-	return AcquireWithReader(ctx, nil, c, cluster, lock, opts)
-}
-
 // AcquireWithReader acquires or renews the lock on the cluster status using a
 // dedicated reader for fresh read-before-write visibility.
 func AcquireWithReader(
@@ -127,11 +122,6 @@ func AcquireWithReader(
 		Holder:    current.Holder,
 		Message:   current.Message,
 	}
-}
-
-// Release releases the lock when it is owned by the given operation identity.
-func Release(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster, lock OperationLock) error {
-	return ReleaseWithReader(ctx, nil, c, cluster, lock)
 }
 
 // ReleaseWithReader releases the lock when it is owned by the given operation

@@ -1,0 +1,26 @@
+id: no-production-test-double-exports
+snapshots:
+  ? |
+    package runtime
+    const TestingMode = "enabled"
+  : labels:
+    - source: TestingMode = "enabled"
+      style: primary
+      start: 22
+      end: 45
+  ? |
+    package runtime
+    func NewFakeManager() *Manager { return &Manager{} }
+  : labels:
+    - source: func NewFakeManager() *Manager { return &Manager{} }
+      style: primary
+      start: 16
+      end: 68
+  ? |
+    package runtime
+    type MockManager struct{}
+  : labels:
+    - source: MockManager struct{}
+      style: primary
+      start: 21
+      end: 41

@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-production-test-double-exports
+message: Keep test double helpers out of production packages; move them to _test.go files or internal/platform/testutil.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+  - api/**/*.go
+ignores:
+  - '**/*_test.go'
+  - internal/platform/testutil/**/*.go
+rule:
+  any:
+    - all:
+        - kind: function_declaration
+        - regex: '^func\s+(Mock|Fake|Stub|Testing|Chaos|[A-Z][A-Za-z0-9_]*(Mock|Fake|Stub|Testing|Chaos))[A-Za-z0-9_]*\s*\('
+    - all:
+        - kind: type_spec
+        - regex: '^(Mock|Fake|Stub|Testing|Chaos|[A-Z][A-Za-z0-9_]*(Mock|Fake|Stub|Testing|Chaos))[A-Za-z0-9_]*\b'
+    - all:
+        - kind: const_spec
+        - regex: '^(Mock|Fake|Stub|Testing|Chaos|[A-Z][A-Za-z0-9_]*(Mock|Fake|Stub|Testing|Chaos))[A-Za-z0-9_]*\b'
+    - all:
+        - kind: var_spec
+        - regex: '^(Mock|Fake|Stub|Testing|Chaos|[A-Z][A-Za-z0-9_]*(Mock|Fake|Stub|Testing|Chaos))[A-Za-z0-9_]*\b'
+note: Exported test doubles in production packages survive normal unused-code linting when tests reference them.

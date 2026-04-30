@@ -1,0 +1,20 @@
+id: no-platform-openbao-api-path-constants
+snapshots:
+  ? |
+    package constants
+    const (
+      APIPathSealStatus = "/v1/sys/seal-status"
+    )
+  : labels:
+    - source: APIPathSealStatus = "/v1/sys/seal-status"
+      style: primary
+      start: 28
+      end: 69
+  ? |
+    package constants
+    const APIPathHealth = "/v1/sys/health"
+  : labels:
+    - source: APIPathHealth = "/v1/sys/health"
+      style: primary
+      start: 24
+      end: 56
