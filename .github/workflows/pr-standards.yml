@@ -69,11 +69,13 @@ jobs:
           fi
 
           required_headers=(
-            "## Description"
+            "## Summary"
             "## Related Issues"
             "## Type of Change"
+            "## Risk and Compatibility"
+            "## Verification"
+            "## Reviewer Notes"
             "## Checklist"
-            "## Verification Process"
           )
 
           missing=0
