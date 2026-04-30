@@ -209,27 +209,15 @@ func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, pat
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, fmt.Sprintf("failed to execute raft %s request", action))
 	if err != nil {
-		if action == "demote" {
-			if translatedErr := translateRaftAPIErrorFromChain(err, portopenbao.ErrAlreadyNonVoter,
-				"already a non-voter",
-				"already non-voter",
-				"already non voter",
-			); translatedErr != nil {
-				return translatedErr
-			}
+		if translatedErr := translateRaftPeerActionAPIError(err, action); translatedErr != nil {
+			return translatedErr
 		}
 		return err
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		apiErr := portopenbao.NewAPIError(fmt.Sprintf("raft %s request failed", action), resp.StatusCode, body)
-		if action == "demote" {
-			if translatedErr := translateRaftAPIErrorFromChain(apiErr, portopenbao.ErrAlreadyNonVoter,
-				"already a non-voter",
-				"already non-voter",
-				"already non voter",
-			); translatedErr != nil {
-				return translatedErr
-			}
+		if translatedErr := translateRaftPeerActionAPIError(apiErr, action); translatedErr != nil {
+			return translatedErr
 		}
 		return apiErr
 	}
@@ -310,4 +298,24 @@ func translateRaftAPIErrorFromChain(err error, sentinel error, patterns ...strin
 	}
 
 	return fmt.Errorf("%w: %w", sentinel, apiErr)
+}
+
+func translateRaftPeerActionAPIError(err error, action string) error {
+	switch action {
+	case "promote":
+		return translateRaftAPIErrorFromChain(err, portopenbao.ErrAlreadyVoter,
+			"already a voter",
+			"already voter",
+			"not a non-voter",
+			"not non-voter",
+		)
+	case "demote":
+		return translateRaftAPIErrorFromChain(err, portopenbao.ErrAlreadyNonVoter,
+			"already a non-voter",
+			"already non-voter",
+			"already non voter",
+		)
+	default:
+		return nil
+	}
 }

@@ -520,15 +520,46 @@ func TestClient_DemoteRaftPeer_AlreadyNonVoterStatus(t *testing.T) {
 }
 
 func TestClient_DemoteRaftPeer_AlreadyNonVoterWrappedOverload(t *testing.T) {
+	assertTranslatedRaftPeerActionError(t, raftPeerActionTranslationTest{
+		path:         constants.APIPathRaftDemotePeer,
+		responseBody: "{\"errors\":[\"1 error occurred:\\n\\t* server is already a non-voter\\n\\n\"]}",
+		wantErr:      portopenbao.ErrAlreadyNonVoter,
+		call: func(ctx context.Context, client *Client) error {
+			return client.DemoteRaftPeer(ctx, "node-1")
+		},
+	})
+}
+
+func TestClient_PromoteRaftPeer_AlreadyVoterWrappedOverload(t *testing.T) {
+	assertTranslatedRaftPeerActionError(t, raftPeerActionTranslationTest{
+		path:         constants.APIPathRaftPromotePeer,
+		responseBody: "{\"errors\":[\"1 error occurred:\\n\\t* server is not a non-voter\\n\\n\"]}",
+		wantErr:      portopenbao.ErrAlreadyVoter,
+		call: func(ctx context.Context, client *Client) error {
+			return client.PromoteRaftPeer(ctx, "node-1")
+		},
+	})
+}
+
+type raftPeerActionTranslationTest struct {
+	path         string
+	responseBody string
+	wantErr      error
+	call         func(context.Context, *Client) error
+}
+
+func assertTranslatedRaftPeerActionError(t *testing.T, tc raftPeerActionTranslationTest) {
+	t.Helper()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathRaftDemotePeer {
+		if r.URL.Path != tc.path {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
 			t.Fatalf("unexpected method: %s", r.Method)
 		}
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("{\"errors\":[\"1 error occurred:\\n\\t* server is already a non-voter\\n\\n\"]}"))
+		_, _ = w.Write([]byte(tc.responseBody))
 	}))
 	defer server.Close()
 
@@ -540,15 +571,15 @@ func TestClient_DemoteRaftPeer_AlreadyNonVoterWrappedOverload(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 
-	err = client.DemoteRaftPeer(context.Background(), "node-1")
+	err = tc.call(context.Background(), client)
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !errors.Is(err, portopenbao.ErrAlreadyNonVoter) {
-		t.Fatalf("expected ErrAlreadyNonVoter, got %v", err)
+	if !errors.Is(err, tc.wantErr) {
+		t.Fatalf("expected %v, got %v", tc.wantErr, err)
 	}
 	if operatorerrors.IsTransientRemoteOverloaded(err) {
-		t.Fatalf("did not expect transient overload wrapper after benign demote translation, got %v", err)
+		t.Fatalf("did not expect transient overload wrapper after benign raft action translation, got %v", err)
 	}
 	assertStatusCode(t, err, http.StatusInternalServerError)
 }

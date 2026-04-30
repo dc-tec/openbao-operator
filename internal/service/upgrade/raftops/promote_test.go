@@ -72,6 +72,15 @@ func TestPromoteRaftPeerAndVerify(t *testing.T) {
 			wantReadCalls:    1,
 		},
 		{
+			name: "promote already voter error is benign without raft config verification",
+			client: &raftPeerPromoterStub{
+				promoteErr: portopenbao.ErrAlreadyVoter,
+				config:     raftConfigWithServer(false),
+			},
+			wantAlreadyVoter: true,
+			wantPromoteCalls: 1,
+		},
+		{
 			name: "promote error is benign when raft config converges to voter after stale read",
 			client: &raftPeerPromoterStub{
 				promoteErr: promoteErr,

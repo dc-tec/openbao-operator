@@ -2,6 +2,7 @@ package raftops
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -36,6 +37,10 @@ func promoteRaftPeerAndVerifyWithPolicy(
 	policy RetryPolicy,
 ) (bool, error) {
 	if err := client.PromoteRaftPeer(ctx, serverID); err != nil {
+		if errors.Is(err, portopenbao.ErrAlreadyVoter) {
+			return true, nil
+		}
+
 		isVoter, verifyErr := waitForRaftServerVoter(ctx, client, serverID, policy)
 		if verifyErr == nil && isVoter {
 			return true, nil
