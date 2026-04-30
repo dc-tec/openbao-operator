@@ -115,18 +115,6 @@ func PatchWorkloadOwnedFields(
 	return nil
 }
 
-// PatchAdminOpsOwnedFields patches only admin-ops controller owned status fields.
-func PatchAdminOpsOwnedFields(
-	ctx context.Context,
-	c client.Client,
-	logger logr.Logger,
-	original *openbaov1alpha1.OpenBaoCluster,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	reason string,
-) error {
-	return PatchAdminOpsOwnedFieldsWithReader(ctx, c, c, logger, original, cluster, reason)
-}
-
 // PatchAdminOpsOwnedFieldsWithReader patches only admin-ops controller owned
 // status fields, using reader for live read-before-write freshness when
 // available.

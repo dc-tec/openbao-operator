@@ -156,28 +156,28 @@ func resolveRestoreSettings(cfg *backupconfig.ExecutorConfig) (restoreSettings, 
 	}
 
 	settings := restoreSettings{
-		key: strings.TrimSpace(os.Getenv("RESTORE_KEY")),
+		key: strings.TrimSpace(os.Getenv(constants.EnvRestoreKey)),
 	}
 	if settings.key == "" {
-		return restoreSettings{}, fmt.Errorf("RESTORE_KEY environment variable is required")
+		return restoreSettings{}, fmt.Errorf("%s environment variable is required", constants.EnvRestoreKey)
 	}
 
-	settings.bucket = strings.TrimSpace(os.Getenv("RESTORE_BUCKET"))
+	settings.bucket = strings.TrimSpace(os.Getenv(constants.EnvRestoreBucket))
 	if settings.bucket == "" {
 		settings.bucket = cfg.BackupBucket
 	}
 
-	settings.endpoint = strings.TrimSpace(os.Getenv("RESTORE_ENDPOINT"))
+	settings.endpoint = strings.TrimSpace(os.Getenv(constants.EnvRestoreEndpoint))
 	if settings.endpoint == "" {
 		settings.endpoint = cfg.BackupEndpoint
 	}
 
-	settings.region = strings.TrimSpace(os.Getenv("RESTORE_REGION"))
+	settings.region = strings.TrimSpace(os.Getenv(constants.EnvRestoreRegion))
 	if settings.region == "" {
 		settings.region = cfg.BackupRegion
 	}
 
-	settings.usePathStyle = strings.EqualFold(strings.TrimSpace(os.Getenv("RESTORE_USE_PATH_STYLE")), "true")
+	settings.usePathStyle = strings.EqualFold(strings.TrimSpace(os.Getenv(constants.EnvRestoreUsePathStyle)), "true")
 
 	return settings, nil
 }

@@ -40,9 +40,6 @@ var (
 )
 
 const (
-	platformAuto                 = "auto"
-	platformKubernetes           = "kubernetes"
-	platformOpenShift            = "openshift"
 	controllerNameOpenBaoCluster = "openbaocluster"
 	controllerNameOpenBaoRestore = "openbaorestore"
 )

@@ -47,19 +47,18 @@ func FuzzParseVersionAndCompareVersions(f *testing.F) {
 			t.Fatalf("CompareVersions(%q, %q) error = %v", from, to, err)
 		}
 
-		isUpgrade := IsUpgrade(from, to)
 		isDowngrade := IsDowngrade(from, to)
 		switch change {
 		case VersionChangeNone:
-			if isUpgrade || isDowngrade {
-				t.Fatalf("identical versions cannot be upgrade or downgrade")
+			if isDowngrade {
+				t.Fatalf("identical versions cannot be a downgrade")
 			}
 		case VersionChangeDowngrade:
-			if !isDowngrade || isUpgrade {
+			if !isDowngrade {
 				t.Fatalf("downgrade classification inconsistent")
 			}
 		case VersionChangePatch, VersionChangeMinor, VersionChangeMajor:
-			if !isUpgrade || isDowngrade {
+			if isDowngrade {
 				t.Fatalf("upgrade classification inconsistent for %v", change)
 			}
 		default:

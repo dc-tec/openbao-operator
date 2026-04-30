@@ -6,6 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
@@ -22,8 +23,6 @@ const (
 	envBackupGCSProject          = "BACKUP_GCS_PROJECT"
 	envBackupAzureStorageAccount = "BACKUP_AZURE_STORAGE_ACCOUNT"
 	envBackupAzureContainer      = "BACKUP_AZURE_CONTAINER"
-	envRestoreRegion             = "RESTORE_REGION"
-	envRestoreUsePathStyle       = "RESTORE_USE_PATH_STYLE"
 	envBackupJWTAuthRole         = "BACKUP_JWT_AUTH_ROLE"
 	envBackupAuthMethod          = "BACKUP_AUTH_METHOD"
 
@@ -90,11 +89,11 @@ func AppendRestoreProviderEnvVars(envVars []corev1.EnvVar, target openbaov1alpha
 		region = defaultS3Region
 	}
 	envVars = append(envVars, corev1.EnvVar{
-		Name:  envRestoreRegion,
+		Name:  constants.EnvRestoreRegion,
 		Value: region,
 	})
 	envVars = append(envVars, corev1.EnvVar{
-		Name:  envRestoreUsePathStyle,
+		Name:  constants.EnvRestoreUsePathStyle,
 		Value: fmt.Sprintf("%t", target.UsePathStyle),
 	})
 	return envVars

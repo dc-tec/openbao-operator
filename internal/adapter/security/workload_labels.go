@@ -4,12 +4,7 @@ import (
 	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-)
-
-const (
-	labelOpenBaoProfile           = "openbao.org/profile"
-	labelOpenBaoDigestEnforcement = "openbao.org/digest-enforcement"
-	labelValueDigestRequired      = "required"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 // AddManagedWorkloadSecurityLabels applies optional security posture labels to
@@ -21,11 +16,11 @@ func AddManagedWorkloadSecurityLabels(labels map[string]string, cluster *openbao
 
 	profile := strings.TrimSpace(string(cluster.Spec.Profile))
 	if profile != "" {
-		labels[labelOpenBaoProfile] = profile
+		labels[constants.LabelOpenBaoProfile] = profile
 	}
 
 	if ManagedWorkloadDigestEnforcementRequired(cluster) {
-		labels[labelOpenBaoDigestEnforcement] = labelValueDigestRequired
+		labels[constants.LabelOpenBaoDigestEnforcement] = constants.LabelValueDigestEnforcementRequired
 	}
 }
 

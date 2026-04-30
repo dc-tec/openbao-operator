@@ -12,6 +12,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
+const deploymentNameSuffix = "green"
+
 func newManagerWithClientFactory(
 	c client.Client,
 	scheme *runtime.Scheme,

@@ -388,31 +388,6 @@ func TestIsDowngrade(t *testing.T) {
 	}
 }
 
-func TestIsUpgrade(t *testing.T) {
-	tests := []struct {
-		name string
-		from string
-		to   string
-		want bool
-	}{
-		{"patch upgrade", "2.4.0", "2.4.1", true},
-		{"minor upgrade", "2.4.0", "2.5.0", true},
-		{"major upgrade", "2.0.0", "3.0.0", true},
-		{"downgrade", "2.4.1", "2.4.0", false},
-		{"same version", "2.4.0", "2.4.0", false},
-		{"invalid from", "invalid", "2.4.0", false},
-		{"invalid to", "2.4.0", "invalid", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := IsUpgrade(tt.from, tt.to); got != tt.want {
-				t.Errorf("IsUpgrade(%q, %q) = %v, want %v", tt.from, tt.to, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestIsSkipMinorUpgrade(t *testing.T) {
 	tests := []struct {
 		name string

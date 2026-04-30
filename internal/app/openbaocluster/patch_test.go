@@ -116,8 +116,8 @@ func TestPatchAdminOpsOwnedFields_PatchesAdminOpsFieldsWithoutBackup(t *testing.
 		}).
 		Build()
 
-	if err := PatchAdminOpsOwnedFields(context.Background(), k8sClient, logr.Discard(), original, desired, "test"); err != nil {
-		t.Fatalf("PatchAdminOpsOwnedFields() error = %v", err)
+	if err := PatchAdminOpsOwnedFieldsWithReader(context.Background(), k8sClient, k8sClient, logr.Discard(), original, desired, "test"); err != nil {
+		t.Fatalf("PatchAdminOpsOwnedFieldsWithReader() error = %v", err)
 	}
 
 	if applyCalls < 1 {
@@ -192,8 +192,8 @@ func TestPatchAdminOpsOwnedFields_IgnoresBackupOnlyChanges(t *testing.T) {
 		}).
 		Build()
 
-	if err := PatchAdminOpsOwnedFields(context.Background(), k8sClient, logr.Discard(), original, desired, "backup-only"); err != nil {
-		t.Fatalf("PatchAdminOpsOwnedFields() error = %v", err)
+	if err := PatchAdminOpsOwnedFieldsWithReader(context.Background(), k8sClient, k8sClient, logr.Discard(), original, desired, "backup-only"); err != nil {
+		t.Fatalf("PatchAdminOpsOwnedFieldsWithReader() error = %v", err)
 	}
 
 	if applyCalls != 0 {

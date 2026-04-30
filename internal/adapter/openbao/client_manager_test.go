@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
@@ -127,7 +126,7 @@ func TestClientManager_CircuitBreakerIsolation(t *testing.T) {
 	var requests int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&requests, 1)
-		if r.URL.Path != constants.APIPathSysStepDown {
+		if r.URL.Path != apiPathSysStepDown {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusInternalServerError)
@@ -179,7 +178,7 @@ func TestClientManager_FactoryCreatesWorkingClients(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == constants.APIPathSysHealth {
+		if r.URL.Path == apiPathSysHealth {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"initialized":true,"sealed":false,"standby":false}`))
 			return

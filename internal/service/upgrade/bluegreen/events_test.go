@@ -114,7 +114,7 @@ func TestHandleManualRollbackRequest_EmitsRollbackStartedEvent(t *testing.T) {
 
 	cluster := newBlueGreenCluster()
 	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
-	cluster.Status.BlueGreen.GreenRevision = DeploymentNameSuffix
+	cluster.Status.BlueGreen.GreenRevision = deploymentNameSuffix
 	cluster.Spec.Upgrade.Requests = &openbaov1alpha1.UpgradeRequestConfig{
 		Rollback: "2026-03-10T12:05:00Z",
 	}

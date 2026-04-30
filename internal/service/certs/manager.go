@@ -58,12 +58,6 @@ func (n noopReloadSignaler) SignalReload(ctx context.Context, logger logr.Logger
 	return nil
 }
 
-// NewManager constructs a Manager that uses the provided Kubernetes client and a no-op reload signaler.
-// The scheme is used to set OwnerReferences on created resources for garbage collection.
-func NewManager(c client.Client, scheme *runtime.Scheme) *Manager {
-	return NewManagerWithReloader(c, scheme, nil)
-}
-
 // NewManagerWithReloader constructs a Manager with the provided client, scheme, and reload signaler.
 // When reloader is nil, a no-op implementation is used.
 // The scheme is used to set OwnerReferences on created resources for garbage collection.
