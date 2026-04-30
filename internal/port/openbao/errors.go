@@ -13,6 +13,8 @@ var (
 	ErrAlreadyInitialized = errors.New("OpenBao cluster already initialized")
 	// ErrAlreadyJoined indicates a raft join request was a no-op because the node is already in the cluster.
 	ErrAlreadyJoined = errors.New("OpenBao raft node already joined")
+	// ErrAlreadyVoter indicates a raft promote request was a no-op because the node is already a voter.
+	ErrAlreadyVoter = errors.New("OpenBao raft node already voter")
 	// ErrAlreadyNonVoter indicates a raft demote request was a no-op because the node is already a non-voter.
 	ErrAlreadyNonVoter = errors.New("OpenBao raft node already non-voter")
 )
