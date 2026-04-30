@@ -4795,6 +4795,7 @@ spec:
                   LastBackupTime is the timestamp of the last successful backup, if configured.
                   Deprecated: Use Backup.LastBackupTime instead.
                 format: date-time
+                nullable: true
                 type: string
               observedGeneration:
                 description: |-
@@ -4847,6 +4848,7 @@ spec:
               readReplicas:
                 description: ReadReplicas captures observed state for the read-replica
                   pool.
+                nullable: true
                 properties:
                   desiredReplicas:
                     description: DesiredReplicas is the desired number of read replicas.
