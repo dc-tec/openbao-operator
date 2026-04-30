@@ -1,12 +1,12 @@
 name: Bug report
-description: Report a defect or regression
+description: Report a reproducible defect or regression
 labels:
   - bug
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting! Please avoid posting secrets or sensitive logs.
+        Thanks for reporting! Please avoid posting secrets, tokens, credentials, keys, or sensitive logs.
 
   - type: input
     id: version
@@ -20,9 +20,9 @@ body:
   - type: input
     id: openbao_version
     attributes:
-      label: OpenBao Version
+      label: OpenBao version
       description: The version of the OpenBao container you are running (e.g., 2.4.4)
-      placeholder: 2.4.4
+      placeholder: 2.5.3
     validations:
       required: true
 
@@ -31,14 +31,99 @@ body:
     attributes:
       label: Kubernetes version
       description: Output of `kubectl version --short`
-      placeholder: Server Version: v1.35.x
+      placeholder: "Server Version: v1.35.x"
     validations:
       required: true
+
+  - type: dropdown
+    id: kubernetes_distribution
+    attributes:
+      label: Kubernetes distribution
+      description: Where are you running the operator?
+      options:
+        - kind
+        - minikube
+        - EKS
+        - GKE
+        - AKS
+        - OpenShift
+        - K3s
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Installation method
+      description: How did you deploy the operator?
+      options:
+        - Helm chart
+        - Manifests
+        - OLM
+        - Tilt/local development
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      description: Which part of the operator is affected?
+      options:
+        - Install/upgrade
+        - Reconciliation
+        - OpenBaoCluster status/conditions
+        - TLS/certificates
+        - Auto-unseal
+        - Backup/restore
+        - Helm chart
+        - RBAC
+        - Metrics/observability
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: What is the practical impact?
+      options:
+        - Cannot install or upgrade
+        - OpenBao cluster unavailable
+        - Feature is broken
+        - Degraded behavior
+        - Cosmetic or low impact
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Did this work before?
+      description: Tell us whether this appears to be a regression.
+      options:
+        - "No"
+        - "Yes"
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: last_good_version
+    attributes:
+      label: Last known good version
+      description: If this is a regression, which operator version last worked?
+      placeholder: X.Y.Z
 
   - type: textarea
     id: expected
     attributes:
       label: Expected behavior
+      description: What did you expect to happen?
     validations:
       required: true
 
@@ -46,6 +131,7 @@ body:
     id: actual
     attributes:
       label: Actual behavior
+      description: What happened instead?
     validations:
       required: true
 
@@ -54,13 +140,41 @@ body:
     attributes:
       label: Reproduction steps
       description: Minimal steps and manifests to reproduce
+      placeholder: |
+        1. Apply this OpenBaoCluster manifest...
+        2. Wait for reconciliation...
+        3. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: custom_resources
+    attributes:
+      label: Relevant OpenBao custom resources
+      description: Paste redacted OpenBaoCluster or related custom resources, if applicable.
+      placeholder: |
+        apiVersion: openbao.bao.io/v1alpha1
+        kind: OpenBaoCluster
+        metadata:
+          name: example
+      render: yaml
+
+  - type: textarea
+    id: status_events
+    attributes:
+      label: Status and events
+      description: Include relevant status conditions and Kubernetes events.
+      placeholder: |
+        kubectl get openbaocluster -A
+        kubectl describe openbaocluster <name> -n <namespace>
+        kubectl get events -n <namespace> --sort-by=.lastTimestamp
       render: shell
 
   - type: textarea
     id: logs
     attributes:
-      label: Relevant logs/events
-      description: Redact sensitive information (tokens, keys, credentials)
+      label: Operator logs
+      description: Include relevant controller/operator logs. Redact sensitive information (tokens, keys, credentials, Secret data).
       render: shell
 
   - type: textarea
