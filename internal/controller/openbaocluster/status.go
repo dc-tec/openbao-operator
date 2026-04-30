@@ -7,7 +7,6 @@ import (
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
@@ -22,37 +21,7 @@ import (
 // currentVersion, conditions, lastBackupTime.
 func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	cluster.Status.ObservedGeneration = cluster.Generation
-
-	// Create an apply configuration with just the status fields owned by Status controller.
-	applyCluster := &openbaov1alpha1.OpenBaoCluster{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: openbaov1alpha1.GroupVersion.String(),
-			Kind:       "OpenBaoCluster",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			ObservedGeneration: cluster.Status.ObservedGeneration,
-			Phase:              cluster.Status.Phase,
-			ActiveLeader:       cluster.Status.ActiveLeader,
-			ReadyReplicas:      cluster.Status.ReadyReplicas,
-			ReadReplicas:       cluster.Status.ReadReplicas,
-			CurrentVersion:     cluster.Status.CurrentVersion,
-			LastBackupTime:     cluster.Status.LastBackupTime,
-			Conditions:         cluster.Status.Conditions,
-		},
-	}
-
-	applyConfig, err := toApplyConfiguration(applyCluster, r.Client)
-	if err != nil {
-		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
-	}
-
-	return r.Status().Apply(ctx, applyConfig,
-		client.FieldOwner("openbao-status-controller"),
-	)
+	return appopenbaocluster.PatchStatusOwnedFields(ctx, r.Client, cluster)
 }
 
 func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {

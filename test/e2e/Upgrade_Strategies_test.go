@@ -430,8 +430,6 @@ func newStaleRollingStepDownJob(namespace, clusterName, podName, image string) *
 	}
 }
 
-// createE2ERequests helper removed in favor of e2ehelpers.CreateE2ERequests
-
 // === Tests ===
 
 var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "slow"), func() {

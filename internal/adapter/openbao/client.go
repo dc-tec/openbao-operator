@@ -11,22 +11,6 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
-// HealthResponse remains a local adapter test fixture type. Runtime contracts
-// that cross package boundaries use portopenbao.HealthStatus.
-type HealthResponse struct {
-	Initialized                bool   `json:"initialized"`
-	Sealed                     bool   `json:"sealed"`
-	Standby                    bool   `json:"standby"`
-	PerformanceStandby         bool   `json:"performance_standby"`
-	ReplicationPerformanceMode string `json:"replication_performance_mode,omitempty"`
-	ReplicationDRMode          string `json:"replication_dr_mode,omitempty"`
-	ServerTimeUTC              int64  `json:"server_time_utc,omitempty"`
-	Version                    string `json:"version,omitempty"`
-	ClusterName                string `json:"cluster_name,omitempty"`
-	LeaderAddress              string `json:"leader_address,omitempty"`
-	ClusterID                  string `json:"cluster_id,omitempty"`
-}
-
 // Client provides access to OpenBao's system API endpoints.
 // It is used by the UpgradeManager to check node health and perform leader step-down.
 type Client struct {

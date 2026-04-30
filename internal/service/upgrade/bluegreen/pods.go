@@ -56,16 +56,6 @@ func (m *Manager) getPodsByRevision(ctx context.Context, cluster *openbaov1alpha
 	return podList.Items, nil
 }
 
-// getGreenPods returns all pods belonging to the Green revision (convenience wrapper).
-func (m *Manager) getGreenPods(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, greenRevision string) ([]corev1.Pod, error) {
-	return m.getPodsByRevision(ctx, cluster, greenRevision)
-}
-
-// getBluePods returns all pods belonging to the Blue revision (convenience wrapper).
-func (m *Manager) getBluePods(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, blueRevision string) ([]corev1.Pod, error) {
-	return m.getPodsByRevision(ctx, cluster, blueRevision)
-}
-
 // cleanupGreenStatefulSet removes any lingering Green StatefulSet.
 func (m *Manager) cleanupGreenStatefulSet(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if cluster.Status.BlueGreen == nil || cluster.Status.BlueGreen.GreenRevision == "" {

@@ -84,26 +84,6 @@ func (m *Manager) WithReader(reader client.Reader) *Manager {
 	return m
 }
 
-func NewManagerWithClientFactory(
-	c client.Client,
-	scheme *runtime.Scheme,
-	workloadRuntime portworkload.BlueGreenRuntime,
-	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
-	clientFactory raftops.OpenBaoClientFactory,
-	clientConfig portopenbao.ClientConfig,
-	imageVerifier imageverify.Verifier,
-	operatorImageVerifier imageverify.Verifier,
-	platform string,
-	recorder ...events.EventRecorder,
-) *Manager {
-	mgr := NewManager(c, scheme, workloadRuntime, backupRuntime, clientConfig, imageVerifier, operatorImageVerifier, platform, recorder...)
-	if clientFactory != nil {
-		mgr.clientFactory = clientFactory
-	}
-	mgr.clusterOps = newOpenBaoClusterOps(c, mgr.clientFactory)
-	return mgr
-}
-
 func requeueShort() recon.Result {
 	return recon.Result{RequeueAfter: constants.RequeueShort}
 }

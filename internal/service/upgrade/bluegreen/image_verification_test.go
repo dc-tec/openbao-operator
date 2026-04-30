@@ -12,6 +12,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
+const imageVerificationFailurePolicyWarn = "Warn"
+
 type failurePolicyTestCase struct {
 	name     string
 	cluster  *openbaov1alpha1.OpenBaoCluster
@@ -45,11 +47,11 @@ func buildFailurePolicyCases(
 				cluster := &openbaov1alpha1.OpenBaoCluster{}
 				assign(&cluster.Spec, &openbaov1alpha1.ImageVerificationConfig{
 					Enabled:       true,
-					FailurePolicy: constants.ImageVerificationFailurePolicyWarn,
+					FailurePolicy: imageVerificationFailurePolicyWarn,
 				})
 				return cluster
 			}(),
-			expected: constants.ImageVerificationFailurePolicyWarn,
+			expected: imageVerificationFailurePolicyWarn,
 		},
 	}
 }
@@ -176,7 +178,7 @@ func TestVerifyImageDigest_TableDriven(t *testing.T) {
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
 						Enabled:       true,
-						FailurePolicy: constants.ImageVerificationFailurePolicyWarn,
+						FailurePolicy: imageVerificationFailurePolicyWarn,
 					},
 				},
 			},
@@ -262,7 +264,7 @@ func TestVerifyOperatorImageDigest_TableDriven(t *testing.T) {
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
 						Enabled:       true,
-						FailurePolicy: constants.ImageVerificationFailurePolicyWarn,
+						FailurePolicy: imageVerificationFailurePolicyWarn,
 					},
 				},
 			},

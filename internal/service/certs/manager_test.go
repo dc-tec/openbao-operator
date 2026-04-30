@@ -194,7 +194,7 @@ func TestReconcileCreatesCAAndServerSecrets(t *testing.T) {
 
 	client := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	manager := NewManager(client, scheme)
+	manager := NewManagerWithReloader(client, scheme, nil)
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -344,7 +344,7 @@ func TestReconcileBackfillsManagedSecretLabels(t *testing.T) {
 	}
 
 	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret, serverSecret).Build()
-	manager := NewManager(client, scheme)
+	manager := NewManagerWithReloader(client, scheme, nil)
 
 	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
@@ -663,7 +663,7 @@ func TestReconcileExternalModeWaitsForSecrets(t *testing.T) {
 	}
 
 	client := fake.NewClientBuilder().WithScheme(scheme).Build()
-	manager := NewManager(client, scheme)
+	manager := NewManagerWithReloader(client, scheme, nil)
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -824,7 +824,7 @@ func TestReconcileExternalModeTriggersReloadOnExistingSecrets(t *testing.T) {
 
 func TestReconcile_ACMEMode_SkipsReconciliation(t *testing.T) {
 	k8sClient := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).Build()
-	manager := NewManager(k8sClient, clientgoscheme.Scheme)
+	manager := NewManagerWithReloader(k8sClient, clientgoscheme.Scheme, nil)
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -880,7 +880,7 @@ func TestReconcile_ACMEMode_SkipsReconciliation(t *testing.T) {
 
 func TestReconcile_ACMEMode_WithTLSDisabled(t *testing.T) {
 	k8sClient := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).Build()
-	manager := NewManager(k8sClient, clientgoscheme.Scheme)
+	manager := NewManagerWithReloader(k8sClient, clientgoscheme.Scheme, nil)
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{

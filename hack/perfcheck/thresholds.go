@@ -74,10 +74,6 @@ type comparisonResult struct {
 	Warnings []string
 }
 
-func compareScenarioMetrics(scenarioName string, measured map[string]float64, thresholds scenarioThresholds) []string {
-	return compareScenarioMetricsDetailed(scenarioName, measured, thresholds).Findings
-}
-
 func applyScenarioPolicy(thresholds scenarioThresholds, scenario scenarioSpec) scenarioThresholds {
 	thresholds.LabelFilter = scenario.LabelFilter
 	if len(scenario.MetricPolicies) == 0 {

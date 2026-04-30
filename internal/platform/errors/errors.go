@@ -325,19 +325,6 @@ func IsCRDMissingError(err error) bool {
 	return strings.Contains(errStr, "could not find the requested resource")
 }
 
-// WrapCRDMissing wraps an error as a permanent config error for missing CRDs.
-func WrapCRDMissing(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	if IsCRDMissingError(err) {
-		return WrapPermanentConfig(fmt.Errorf("CRD not installed: %w", err))
-	}
-
-	return err
-}
-
 func isRuntimeNotRegisteredError(err error) bool {
 	for current := err; current != nil; current = errors.Unwrap(current) {
 		if runtime.IsNotRegisteredError(current) {

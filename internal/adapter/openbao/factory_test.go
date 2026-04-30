@@ -8,8 +8,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func newTestClientFactory(template ClientConfig) *ClientFactory {
@@ -65,7 +63,7 @@ func TestClientFactory_LoginJWT(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("unexpected method: %s", r.Method)
 		}
-		if r.URL.Path != constants.APIPathAuthJWTLogin {
+		if r.URL.Path != apiPathAuthJWTLogin {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		if got := r.Header.Get("Content-Type"); got != "application/json" {
@@ -100,7 +98,7 @@ func TestClientFactory_NewWithJWT(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathAuthJWTLogin {
+		if r.URL.Path != apiPathAuthJWTLogin {
 			http.NotFound(w, r)
 			return
 		}
@@ -160,7 +158,7 @@ func TestClientFactory_LoginJWT_Caching(t *testing.T) {
 
 	var loginRequests int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == constants.APIPathAuthJWTLogin {
+		if r.URL.Path == apiPathAuthJWTLogin {
 			atomic.AddInt32(&loginRequests, 1)
 			w.Header().Set("Content-Type", "application/json")
 			// Return a token with 12s TTL (2s valid cache, given 10s buffer)

@@ -14,22 +14,6 @@ import (
 // the provided desired cluster object before the apply is persisted.
 type OpenBaoClusterAdminOpsStatusMutator func(*openbaov1alpha1.OpenBaoCluster) error
 
-// MutateAndApplyOpenBaoClusterAdminOpsStatus safely persists the full adminops
-// status plane with a read-mutate-apply flow.
-//
-// This guards shared-plane writers against stale-object clobbering: the helper
-// reads the latest cluster before mutating and then applies the full adminops
-// plane under the canonical adminops field owner.
-func MutateAndApplyOpenBaoClusterAdminOpsStatus(
-	ctx context.Context,
-	c client.Client,
-	key types.NamespacedName,
-	mutate OpenBaoClusterAdminOpsStatusMutator,
-	opts OpenBaoClusterAdminOpsStatusApplyOptions,
-) (*openbaov1alpha1.OpenBaoCluster, error) {
-	return MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(ctx, nil, c, key, mutate, opts)
-}
-
 // MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader safely persists the full
 // adminops status plane with a read-mutate-apply flow using reader for
 // read-before-write and read-after-write freshness. Callers should pass an

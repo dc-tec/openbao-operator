@@ -34,21 +34,21 @@ import (
 func detectPlatform(cfg *rest.Config) string {
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return platformKubernetes
+		return constants.PlatformKubernetes
 	}
 
 	groups, err := clientset.Discovery().ServerGroups()
 	if err != nil {
-		return platformKubernetes
+		return constants.PlatformKubernetes
 	}
 
 	for _, g := range groups.Groups {
 		if g.Name == "security.openshift.io" {
-			return platformOpenShift
+			return constants.PlatformOpenShift
 		}
 	}
 
-	return platformKubernetes
+	return constants.PlatformKubernetes
 }
 
 func resolvePlatform(config *rest.Config, configured string) string {
@@ -57,9 +57,9 @@ func resolvePlatform(config *rest.Config, configured string) string {
 		platform = strings.ToLower(envPlatform)
 	}
 	if platform == "" {
-		platform = platformAuto
+		platform = constants.PlatformAuto
 	}
-	if platform == platformAuto {
+	if platform == constants.PlatformAuto {
 		detected := detectPlatform(config)
 		setupLog.Info("Auto-detected target platform", "platform", detected)
 		return detected

@@ -74,17 +74,3 @@ func SetUpgradeFailed(status *openbaov1alpha1.OpenBaoClusterStatus, reason, mess
 func ClearUpgrade(status *openbaov1alpha1.OpenBaoClusterStatus) {
 	status.Upgrade = nil
 }
-
-// IsUpgradeInProgress returns true if an upgrade is currently in progress.
-func IsUpgradeInProgress(status *openbaov1alpha1.OpenBaoClusterStatus) bool {
-	return status.Upgrade != nil
-}
-
-// GetUpgradeTargetVersion returns the target version of an in-progress upgrade.
-// Returns empty string if no upgrade is in progress.
-func GetUpgradeTargetVersion(status *openbaov1alpha1.OpenBaoClusterStatus) string {
-	if status.Upgrade == nil {
-		return ""
-	}
-	return status.Upgrade.TargetVersion
-}

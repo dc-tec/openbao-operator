@@ -674,57 +674,6 @@ func TestWrapPermanentPrerequisitesMissing(t *testing.T) {
 	}
 }
 
-func TestWrapCRDMissing(t *testing.T) {
-	tests := []struct {
-		name        string
-		err         error
-		wantWrapped bool
-		wantIsErr   bool
-	}{
-		{
-			name:        "nil error",
-			err:         nil,
-			wantWrapped: false,
-			wantIsErr:   false,
-		},
-		{
-			name:        "CRD missing error",
-			err:         newNoKindMatchError(),
-			wantWrapped: true,
-			wantIsErr:   true,
-		},
-		{
-			name:        "non-CRD error",
-			err:         newConnectionRefusedError(),
-			wantWrapped: false,
-			wantIsErr:   true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := WrapCRDMissing(tt.err)
-			if (got != nil) != tt.wantIsErr {
-				t.Errorf("WrapCRDMissing() error = %v, wantIsErr %v", got, tt.wantIsErr)
-				return
-			}
-			if got == nil {
-				return
-			}
-			if tt.wantWrapped {
-				if !errors.Is(got, ErrPermanentConfig) {
-					t.Errorf("WrapCRDMissing() should wrap CRD missing errors as ErrPermanentConfig")
-				}
-			} else {
-				// Non-CRD errors should be returned as-is
-				if got != tt.err {
-					t.Errorf("WrapCRDMissing() should return non-CRD errors as-is")
-				}
-			}
-		})
-	}
-}
-
 func TestIsTransient(t *testing.T) {
 	tests := []struct {
 		name string

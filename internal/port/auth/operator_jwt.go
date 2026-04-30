@@ -76,10 +76,3 @@ func BootstrapAudienceMatchesInstallation(cluster *openbaov1alpha1.OpenBaoCluste
 	override := BootstrapAudienceOverride(cluster)
 	return override == "" || override == OperatorJWTAudience(operatorAudience)
 }
-
-// EffectiveBootstrapAudience returns the audience that self-init bootstrap
-// should render into operator JWT roles. This is installation-scoped and does
-// not vary per cluster.
-func EffectiveBootstrapAudience(_ *openbaov1alpha1.OpenBaoCluster, operatorAudience string) string {
-	return OperatorJWTAudience(operatorAudience)
-}

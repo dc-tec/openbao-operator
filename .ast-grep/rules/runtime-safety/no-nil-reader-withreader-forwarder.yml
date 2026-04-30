@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-nil-reader-withreader-forwarder
+message: Avoid compatibility wrappers that call WithReader helpers with a nil reader; pass an explicit reader at call sites.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+  - api/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  pattern: |
+    func $NAME($$$PARAMS) $$$RET {
+      return $CALL($$$BEFORE, nil, $$$AFTER)
+    }
+constraints:
+  NAME:
+    regex: '^[A-Z]'
+  CALL:
+    regex: 'WithReader$'
+note: Nil-reader forwarders keep compatibility surfaces alive after production call sites have moved to explicit read-before-write flows.

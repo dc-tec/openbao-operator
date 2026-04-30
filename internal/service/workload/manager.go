@@ -161,7 +161,7 @@ func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov
 	configMap.Kind = ptrTo("ConfigMap")
 	configMap.APIVersion = ptrTo("v1")
 
-	applyOpts := []client.ApplyOption{client.ForceOwnership, client.FieldOwner("openbao-operator")}
+	applyOpts := []client.ApplyOption{client.ForceOwnership, client.FieldOwner(constants.FieldOwnerOpenBaoOperator)}
 	if err := m.client.Apply(ctx, configMap, applyOpts...); err != nil {
 		if operatorerrors.IsTransientKubernetesAPI(err) || apierrors.IsConflict(err) {
 			return operatorerrors.WrapTransientKubernetesAPI(fmt.Errorf("failed to ensure config ConfigMap %s/%s: %w", cluster.Namespace, cmName, err))

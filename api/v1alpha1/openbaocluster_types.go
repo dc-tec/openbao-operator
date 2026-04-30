@@ -2206,6 +2206,7 @@ type OpenBaoClusterStatus struct {
 	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
 	// ReadReplicas captures observed state for the read-replica pool.
 	// +optional
+	// +nullable
 	// +kubebuilder:validation:Nullable
 	ReadReplicas *ReadReplicaStatus `json:"readReplicas,omitempty"`
 	// CurrentVersion is the OpenBao version currently running on the cluster.
@@ -2224,6 +2225,7 @@ type OpenBaoClusterStatus struct {
 	// LastBackupTime is the timestamp of the last successful backup, if configured.
 	// Deprecated: Use Backup.LastBackupTime instead.
 	// +optional
+	// +nullable
 	// +kubebuilder:validation:Nullable
 	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
 	// Upgrade tracks the state of an in-progress upgrade (if any).

@@ -213,44 +213,13 @@ func TestOpenBaoClusterPredicateWithOptions_UpdateTypeFallback(t *testing.T) {
 	}
 }
 
-func TestOpenBaoClusterPredicateAndStatefulSetPredicate_AlwaysTrueEvents(t *testing.T) {
+func TestOpenBaoClusterPredicateWithOptions_AlwaysTrueEvents(t *testing.T) {
 	t.Parallel()
 
-	clusterPred := OpenBaoClusterPredicate()
-	stsPred := StatefulSetReadyReplicasPredicate()
+	clusterPred := OpenBaoClusterPredicateWithOptions(OpenBaoClusterPredicateOptions{})
 
 	if !clusterPred.Create(event.CreateEvent{}) || !clusterPred.Delete(event.DeleteEvent{}) || !clusterPred.Generic(event.GenericEvent{}) {
 		t.Fatal("openbaocluster predicate should allow create/delete/generic events")
-	}
-
-	if !stsPred.Create(event.CreateEvent{}) || !stsPred.Delete(event.DeleteEvent{}) || !stsPred.Generic(event.GenericEvent{}) {
-		t.Fatal("statefulset predicate should allow create/delete/generic events")
-	}
-}
-
-func TestStatefulSetReadyReplicasPredicate_Update(t *testing.T) {
-	t.Parallel()
-	pred := StatefulSetReadyReplicasPredicate()
-
-	oldSts := &appsv1.StatefulSet{}
-	newSts := oldSts.DeepCopy()
-	newSts.Status.ReadyReplicas = 1
-
-	if !pred.Update(event.UpdateEvent{ObjectOld: oldSts, ObjectNew: newSts}) {
-		t.Fatal("expected reconcile when ReadyReplicas changes")
-	}
-
-	oldSts = &appsv1.StatefulSet{}
-	newSts = oldSts.DeepCopy()
-	if pred.Update(event.UpdateEvent{ObjectOld: oldSts, ObjectNew: newSts}) {
-		t.Fatal("expected no reconcile when ReadyReplicas unchanged")
-	}
-
-	if !pred.Update(event.UpdateEvent{ObjectOld: baseClusterForPredicate(), ObjectNew: newSts}) {
-		t.Fatal("expected reconcile=true on old type assertion failure")
-	}
-	if !pred.Update(event.UpdateEvent{ObjectOld: oldSts, ObjectNew: baseClusterForPredicate()}) {
-		t.Fatal("expected reconcile=true on new type assertion failure")
 	}
 }
 
@@ -338,33 +307,5 @@ func TestOpenBaoTenantPredicate_Update(t *testing.T) {
 	}
 	if !pred.Update(event.UpdateEvent{ObjectOld: baseTenantForPredicate(), ObjectNew: &appsv1.StatefulSet{}}) {
 		t.Fatal("expected reconcile=true on new type assertion failure")
-	}
-}
-
-func TestResourceGenerationChangedPredicate(t *testing.T) {
-	t.Parallel()
-	pred := ResourceGenerationChangedPredicate()
-
-	if !pred.Create(event.CreateEvent{}) || !pred.Delete(event.DeleteEvent{}) || !pred.Generic(event.GenericEvent{}) {
-		t.Fatal("resource generation predicate should allow create/delete/generic events")
-	}
-
-	oldObj := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{Generation: 1}}
-	newObj := oldObj.DeepCopy()
-	newObj.Generation = 2
-	if !pred.Update(event.UpdateEvent{ObjectOld: oldObj, ObjectNew: newObj}) {
-		t.Fatal("expected reconcile when generation changes")
-	}
-
-	newObj.Generation = 1
-	if pred.Update(event.UpdateEvent{ObjectOld: oldObj, ObjectNew: newObj}) {
-		t.Fatal("expected no reconcile when generation unchanged")
-	}
-
-	if !pred.Update(event.UpdateEvent{ObjectOld: &appsv1.StatefulSet{}, ObjectNew: newObj}) {
-		t.Fatal("expected reconcile=true when old object is not metav1.Object")
-	}
-	if !pred.Update(event.UpdateEvent{ObjectOld: oldObj, ObjectNew: &appsv1.StatefulSet{}}) {
-		t.Fatal("expected reconcile=true when new object is not metav1.Object")
 	}
 }

@@ -20,7 +20,7 @@ func EnsureUpgradeServiceAccount(ctx context.Context, c client.Client, cluster *
 		return fmt.Errorf("cluster is required")
 	}
 	if fieldOwner == "" {
-		fieldOwner = "openbao-operator"
+		fieldOwner = constants.FieldOwnerOpenBaoOperator
 	}
 
 	saName := cluster.Name + constants.SuffixUpgradeServiceAccount

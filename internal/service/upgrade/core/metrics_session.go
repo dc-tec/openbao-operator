@@ -54,19 +54,6 @@ func EnsureUpgradeMetricsSession(namespace, name string, startedAt time.Time) (U
 	return state, true
 }
 
-// MarkUpgradeMetricsRollbackSeen marks a stored session as having observed a rollback.
-// The second return value reports whether a session existed.
-func MarkUpgradeMetricsRollbackSeen(namespace, name string) (UpgradeMetricsSessionState, bool) {
-	state, ok := GetUpgradeMetricsSession(namespace, name)
-	if !ok {
-		return UpgradeMetricsSessionState{}, false
-	}
-
-	state.RollbackSeen = true
-	SetUpgradeMetricsSession(namespace, name, state)
-	return state, true
-}
-
 // MarkUpgradeMetricsStepDownCounted marks a stored session as having counted a
 // step-down. When no session exists, one is created using startedAt. The second
 // return value reports whether this call newly marked the step-down.

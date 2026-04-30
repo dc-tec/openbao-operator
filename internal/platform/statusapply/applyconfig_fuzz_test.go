@@ -1,4 +1,4 @@
-package openbaocluster
+package statusapply
 
 import (
 	"errors"
@@ -35,7 +35,7 @@ func FuzzToApplyConfiguration(f *testing.F) {
 			}
 		}
 
-		var resolver gvkResolver
+		var resolver GVKResolver
 		if !hasGVK {
 			if resolverFails {
 				resolver = applyResolverAdapter{gvk: schema.GroupVersionKind{}, err: errors.New("resolver failed")}
@@ -44,7 +44,7 @@ func FuzzToApplyConfiguration(f *testing.F) {
 			}
 		}
 
-		cfg, err := toApplyConfiguration(obj, resolver)
+		cfg, err := ToApplyConfiguration(obj, resolver)
 		if useNilObject {
 			if err == nil {
 				t.Fatalf("expected nil object to fail")
@@ -57,14 +57,8 @@ func FuzzToApplyConfiguration(f *testing.F) {
 			}
 			return
 		}
-		if !hasGVK && resolver == nil {
-			if err == nil {
-				t.Fatalf("expected missing resolver to fail when GVK is empty")
-			}
-			return
-		}
 		if err != nil {
-			t.Fatalf("toApplyConfiguration() error = %v", err)
+			t.Fatalf("ToApplyConfiguration() error = %v", err)
 		}
 		if cfg == nil {
 			t.Fatalf("expected non-nil apply configuration")

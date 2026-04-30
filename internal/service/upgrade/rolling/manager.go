@@ -71,38 +71,6 @@ func NewManager(
 	}
 }
 
-// NewManagerWithClientFactory constructs a Manager with a custom OpenBao client factory.
-// This is primarily used for testing.
-func NewManagerWithClientFactory(
-	c client.Client,
-	scheme *runtime.Scheme,
-	backupRuntime portbackup.PreUpgradeSnapshotRuntime,
-	factory raftops.OpenBaoClientFactory,
-	clientConfig portopenbao.ClientConfig,
-	operatorImageVerifier imageverify.Verifier,
-	platform string,
-	recorder ...events.EventRecorder,
-) *Manager {
-	if factory == nil {
-		factory = raftops.DefaultOpenBaoClientFactory
-	}
-	var eventRecorder events.EventRecorder
-	if len(recorder) > 0 {
-		eventRecorder = recorder[0]
-	}
-	return &Manager{
-		client:                c,
-		reader:                c,
-		scheme:                scheme,
-		backupRuntime:         backupRuntime,
-		recorder:              eventRecorder,
-		clientFactory:         factory,
-		clientConfig:          clientConfig,
-		operatorImageVerifier: operatorImageVerifier,
-		Platform:              platform,
-	}
-}
-
 // WithReader configures a live reader for status read-before-write flows.
 func (m *Manager) WithReader(reader client.Reader) *Manager {
 	if reader != nil {

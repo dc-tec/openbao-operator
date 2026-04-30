@@ -162,8 +162,9 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_PropagatesMutatorError(
 		Build()
 
 	wantErr := errors.New("boom")
-	_, err := MutateAndApplyOpenBaoClusterOperationLockStatus(
+	_, err := MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(
 		context.Background(),
+		nil,
 		k8sClient,
 		types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
 		func(obj *openbaov1alpha1.OpenBaoCluster) error {
@@ -172,7 +173,7 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_PropagatesMutatorError(
 		OpenBaoClusterOperationLockStatusApplyOptions{},
 	)
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("MutateAndApplyOpenBaoClusterOperationLockStatus() error = %v, want %v", err, wantErr)
+		t.Fatalf("MutateAndApplyOpenBaoClusterOperationLockStatusWithReader() error = %v, want %v", err, wantErr)
 	}
 }
 
@@ -216,8 +217,9 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_ClearTakesOwnershipThen
 		WithReturnManagedFields().
 		Build()
 
-	_, err := MutateAndApplyOpenBaoClusterOperationLockStatus(
+	_, err := MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(
 		context.Background(),
+		nil,
 		k8sClient,
 		types.NamespacedName{Name: stored.Name, Namespace: stored.Namespace},
 		func(obj *openbaov1alpha1.OpenBaoCluster) error {
@@ -227,7 +229,7 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_ClearTakesOwnershipThen
 		OpenBaoClusterOperationLockStatusApplyOptions{},
 	)
 	if err != nil {
-		t.Fatalf("MutateAndApplyOpenBaoClusterOperationLockStatus() error = %v", err)
+		t.Fatalf("MutateAndApplyOpenBaoClusterOperationLockStatusWithReader() error = %v", err)
 	}
 
 	if len(applyPayloads) != 2 {

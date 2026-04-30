@@ -13,8 +13,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 )
@@ -51,7 +51,7 @@ func TestPatchStatusSSA_PreservesSiblingAdminOpsFieldsFromLatestObject(t *testin
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(stored.DeepCopy()).
 		Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, portopenbao.ClientConfig{}, nil, "").
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, nil).
 		WithReader(c).
 		WithAdminOpsStatusMutator(testAdminOpsMutator(c))
 
@@ -112,9 +112,9 @@ func TestWaitForFinalizationConverged_WaitsForStatefulSetConvergence(t *testing.
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	converged, err := mgr.waitForFinalizationConverged(context.Background(), testr.New(t), cluster)
 	if err != nil {
@@ -202,13 +202,13 @@ func TestWaitForFinalizationConverged_SucceedsWhenStatefulSetPodsAndHealthConver
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod0, pod1, pod2, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsHealthyFunc: func(ctx context.Context) (bool, error) {
 				return true, nil
 			},
 		}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	converged, err := mgr.waitForFinalizationConverged(context.Background(), testr.New(t), cluster)
 	if err != nil {
@@ -262,9 +262,9 @@ func TestWaitForFinalizationConverged_RepairsStalePartitionWhenStatusIsAlreadyCo
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	converged, err := mgr.waitForFinalizationConverged(context.Background(), testr.New(t), cluster)
 	if err != nil {
@@ -313,7 +313,7 @@ func TestPatchFinalizedUpgradeStatus_ClearsUpgradeWithoutTouchingCurrentVersion(
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, portopenbao.ClientConfig{}, nil, "").
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), nil, nil).
 		WithReader(c).
 		WithAdminOpsStatusMutator(testAdminOpsMutator(c))
 

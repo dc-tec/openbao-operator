@@ -2,7 +2,6 @@ package constants
 
 // Image verification failure policies.
 const (
-	ImageVerificationFailurePolicyWarn  = "Warn"
 	ImageVerificationFailurePolicyBlock = "Block"
 )
 

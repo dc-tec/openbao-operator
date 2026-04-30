@@ -1,0 +1,18 @@
+id: no-production-test-double-exports
+valid:
+  - |
+    package runtime
+    type managerStub struct{}
+  - |
+    package runtime
+    func NewManager() *Manager { return &Manager{} }
+invalid:
+  - |
+    package runtime
+    type MockManager struct{}
+  - |
+    package runtime
+    func NewFakeManager() *Manager { return &Manager{} }
+  - |
+    package runtime
+    const TestingMode = "enabled"

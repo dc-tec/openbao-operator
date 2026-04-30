@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"reflect"
+	"slices"
 	"sort"
 	"testing"
 
@@ -206,10 +207,10 @@ func TestEnsureTenantRBAC_UpdatesRoleWhenRulesChange(t *testing.T) {
 	// Verify at least one rule has the expected OpenBaoCluster permissions
 	hasExpectedRule := false
 	for _, rule := range role.Rules {
-		if contains(rule.APIGroups, "openbao.org") &&
-			contains(rule.Resources, "openbaoclusters") &&
-			contains(rule.Verbs, "get") &&
-			contains(rule.Verbs, "create") {
+		if slices.Contains(rule.APIGroups, "openbao.org") &&
+			slices.Contains(rule.Resources, "openbaoclusters") &&
+			slices.Contains(rule.Verbs, "get") &&
+			slices.Contains(rule.Verbs, "create") {
 			hasExpectedRule = true
 			break
 		}
@@ -677,7 +678,7 @@ func extractSecretResourceNames(rules []rbacv1.PolicyRule) []string {
 	var out []string
 	for i := range rules {
 		rule := rules[i]
-		if !contains(rule.Resources, "secrets") {
+		if !slices.Contains(rule.Resources, "secrets") {
 			continue
 		}
 		if len(rule.ResourceNames) == 0 {
@@ -687,16 +688,6 @@ func extractSecretResourceNames(rules []rbacv1.PolicyRule) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// contains is a helper function to check if a slice contains a value
-func contains(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
 }
 
 func TestEnsureTenantRBAC_AppliesConfiguredQuotas(t *testing.T) {

@@ -167,7 +167,7 @@ func TestStatefulSet_ACMEMode_NoShareProcessNamespace(t *testing.T) {
 	}
 }
 
-func TestStatefulSet_NonACMEMode_UsesWrapper(t *testing.T) {
+func TestStatefulSet_NonACMEMode_RendersSingleIsolatedContainer(t *testing.T) {
 	cluster := newMinimalCluster("external-cluster", "default")
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
 
@@ -179,7 +179,7 @@ func TestStatefulSet_NonACMEMode_UsesWrapper(t *testing.T) {
 	containers := statefulSet.Spec.Template.Spec.Containers
 	for _, container := range containers {
 		if container.Name == "tls-reloader" {
-			t.Fatal("expected StatefulSet to NOT have tls-reloader sidecar (wrapper approach)")
+			t.Fatal("expected StatefulSet to omit tls-reloader sidecar")
 		}
 	}
 	if len(containers) != 1 {
@@ -187,8 +187,13 @@ func TestStatefulSet_NonACMEMode_UsesWrapper(t *testing.T) {
 	}
 
 	openBaoContainer := containers[0]
-	if len(openBaoContainer.Command) == 0 || openBaoContainer.Command[0] != "/utils/bao-wrapper" {
-		t.Fatalf("expected OpenBao container to use wrapper as entrypoint, got command: %v", openBaoContainer.Command)
+	const wantEntrypoint = "/utils/bao-wrapper"
+	gotEntrypoint := ""
+	if len(openBaoContainer.Command) > 0 {
+		gotEntrypoint = openBaoContainer.Command[0]
+	}
+	if gotEntrypoint != wantEntrypoint {
+		t.Fatalf("OpenBao container command[0] = %q, want %q", gotEntrypoint, wantEntrypoint)
 	}
 
 	shareProcessNamespace := statefulSet.Spec.Template.Spec.ShareProcessNamespace

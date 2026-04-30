@@ -2,7 +2,9 @@ package openbaocluster
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -17,6 +19,55 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
+
+func TestPatchStatusOwnedFields_PreservesPointerClearsInApplyPayload(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "status-owned",
+			Namespace: "default",
+		},
+	}
+
+	scheme := newPatchTestScheme(t)
+	var capturedOptions client.SubResourceApplyOptions
+	var subResourceName string
+	var payload []byte
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceApply: func(_ context.Context, _ client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+				var err error
+				payload, err = json.Marshal(obj)
+				if err != nil {
+					return err
+				}
+				subResourceName = subResource
+				capturedOptions = *(&client.SubResourceApplyOptions{}).ApplyOpts(opts)
+				return nil
+			},
+		}).
+		Build()
+
+	if err := PatchStatusOwnedFields(context.Background(), k8sClient, cluster); err != nil {
+		t.Fatalf("PatchStatusOwnedFields() error = %v", err)
+	}
+
+	if subResourceName != "status" {
+		t.Fatalf("subResourceName = %q, want status", subResourceName)
+	}
+	if capturedOptions.FieldManager != constants.FieldOwnerStatus {
+		t.Fatalf("FieldManager = %q, want %q", capturedOptions.FieldManager, constants.FieldOwnerStatus)
+	}
+	gotPayload := string(payload)
+	for _, want := range []string{`"readReplicas":null`, `"lastBackupTime":null`} {
+		if !strings.Contains(gotPayload, want) {
+			t.Fatalf("apply payload missing %s: %s", want, gotPayload)
+		}
+	}
+}
 
 func TestPatchAdminOpsOwnedFields_PatchesAdminOpsFieldsWithoutBackup(t *testing.T) {
 	t.Parallel()
@@ -65,8 +116,8 @@ func TestPatchAdminOpsOwnedFields_PatchesAdminOpsFieldsWithoutBackup(t *testing.
 		}).
 		Build()
 
-	if err := PatchAdminOpsOwnedFields(context.Background(), k8sClient, logr.Discard(), original, desired, "test"); err != nil {
-		t.Fatalf("PatchAdminOpsOwnedFields() error = %v", err)
+	if err := PatchAdminOpsOwnedFieldsWithReader(context.Background(), k8sClient, k8sClient, logr.Discard(), original, desired, "test"); err != nil {
+		t.Fatalf("PatchAdminOpsOwnedFieldsWithReader() error = %v", err)
 	}
 
 	if applyCalls < 1 {
@@ -141,8 +192,8 @@ func TestPatchAdminOpsOwnedFields_IgnoresBackupOnlyChanges(t *testing.T) {
 		}).
 		Build()
 
-	if err := PatchAdminOpsOwnedFields(context.Background(), k8sClient, logr.Discard(), original, desired, "backup-only"); err != nil {
-		t.Fatalf("PatchAdminOpsOwnedFields() error = %v", err)
+	if err := PatchAdminOpsOwnedFieldsWithReader(context.Background(), k8sClient, k8sClient, logr.Discard(), original, desired, "backup-only"); err != nil {
+		t.Fatalf("PatchAdminOpsOwnedFieldsWithReader() error = %v", err)
 	}
 
 	if applyCalls != 0 {

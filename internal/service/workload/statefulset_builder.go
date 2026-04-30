@@ -20,7 +20,7 @@ const (
 	statefulSetTopologyKeyZone          = "topology.kubernetes.io/zone"
 )
 
-// buildStatefulSetWithRevision constructs a StatefulSet for the given OpenBaoCluster.
+// buildStatefulSetForSpec constructs a StatefulSet for the given OpenBaoCluster.
 // verifiedImageDigest is the verified image digest to use (if provided, overrides cluster.Spec.Image).
 // verifiedInitContainerDigest is the resolved init container image to use.
 // When operator image verification is enabled, this should be a digest.
@@ -113,20 +113,6 @@ func buildStatefulSetForSpec(cluster *openbaov1alpha1.OpenBaoCluster, configCont
 	security.AddManagedWorkloadSecurityLabels(statefulSet.Labels, cluster)
 
 	return statefulSet, nil
-}
-
-// buildStatefulSetWithRevision retains the blue/green-friendly voter path used by
-// existing callers while delegating to the pool-aware builder.
-func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, platform string) (*appsv1.StatefulSet, error) {
-	return buildStatefulSetForSpec(cluster, configContent, initialized, StatefulSetSpec{
-		Name:               statefulSetNameWithRevision(cluster, revision),
-		Pool:               constants.LabelValueOpenBaoWorkloadPoolVoter,
-		Revision:           revision,
-		Image:              verifiedImageDigest,
-		InitContainerImage: verifiedInitContainerDigest,
-		Replicas:           cluster.Spec.Replicas,
-		DisableSelfInit:    false,
-	}, platform)
 }
 
 func buildStatefulSetPVCRetentionPolicy() *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy {

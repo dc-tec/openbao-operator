@@ -65,7 +65,7 @@ func TestUpgradeMetricsSessionStore_TableDriven(t *testing.T) {
 	}
 }
 
-func TestEnsureAndMarkUpgradeMetricsSession(t *testing.T) {
+func TestEnsureAndMarkUpgradeMetricsStepDown(t *testing.T) {
 	t.Parallel()
 
 	namespace := "metrics"
@@ -103,11 +103,4 @@ func TestEnsureAndMarkUpgradeMetricsSession(t *testing.T) {
 		t.Fatal("expected second step-down mark to be ignored")
 	}
 
-	state, ok := MarkUpgradeMetricsRollbackSeen(namespace, cluster)
-	if !ok {
-		t.Fatal("expected rollback marker to find session")
-	}
-	if !state.RollbackSeen {
-		t.Fatal("expected rollback to be marked")
-	}
 }

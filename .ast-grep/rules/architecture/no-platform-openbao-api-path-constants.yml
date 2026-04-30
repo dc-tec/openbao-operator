@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-platform-openbao-api-path-constants
+message: Do not add shared OpenBao API path constants to platform/constants; keep API paths local to the OpenBao adapter.
+severity: warning
+language: Go
+files:
+  - internal/platform/constants/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  all:
+    - kind: const_spec
+    - regex: '^APIPath[A-Za-z0-9_]*\s*='
+note: Platform constants are for cross-cutting operator values; OpenBao API endpoint paths belong with the OpenBao client/adapter.

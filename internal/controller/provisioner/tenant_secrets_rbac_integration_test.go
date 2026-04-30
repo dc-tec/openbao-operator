@@ -5,6 +5,7 @@ package provisioner_test
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"testing"
 	"time"
@@ -94,7 +95,7 @@ func TestTenantSecretsRBAC_SetupWithManager_SynchronizesSecretAllowlists(t *test
 		}, writerRole); err != nil {
 			return false
 		}
-		if !slicesEqual(extractSecretResourceNames(writerRole.Rules), wantWriterSecrets) {
+		if !slices.Equal(extractSecretResourceNames(writerRole.Rules), wantWriterSecrets) {
 			return false
 		}
 
@@ -105,7 +106,7 @@ func TestTenantSecretsRBAC_SetupWithManager_SynchronizesSecretAllowlists(t *test
 		}, readerRole); err != nil {
 			return false
 		}
-		if !slicesEqual(extractSecretResourceNames(readerRole.Rules), wantReaderSecrets) {
+		if !slices.Equal(extractSecretResourceNames(readerRole.Rules), wantReaderSecrets) {
 			return false
 		}
 
@@ -133,7 +134,7 @@ func extractSecretResourceNames(rules []rbacv1.PolicyRule) []string {
 	var out []string
 	for i := range rules {
 		rule := rules[i]
-		if !contains(rule.Resources, "secrets") {
+		if !slices.Contains(rule.Resources, "secrets") {
 			continue
 		}
 		if len(rule.ResourceNames) == 0 {
@@ -143,25 +144,4 @@ func extractSecretResourceNames(rules []rbacv1.PolicyRule) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func contains(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
-func slicesEqual(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			return false
-		}
-	}
-	return true
 }

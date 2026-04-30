@@ -3,7 +3,6 @@ package backup
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/go-logr/logr"
 
@@ -65,16 +64,4 @@ func (m *Manager) applyRetention(ctx context.Context, logger logr.Logger, cluste
 	}
 
 	return nil
-}
-
-// countingReader wraps an io.Reader to count bytes read.
-type countingReader struct {
-	reader    io.Reader
-	bytesRead int64
-}
-
-func (r *countingReader) Read(p []byte) (int, error) {
-	n, err := r.reader.Read(p)
-	r.bytesRead += int64(n)
-	return n, err
 }

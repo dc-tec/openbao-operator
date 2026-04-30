@@ -10,11 +10,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"k8s.io/utils/ptr"
 )
+
+type HealthResponse struct {
+	Initialized                bool   `json:"initialized"`
+	Sealed                     bool   `json:"sealed"`
+	Standby                    bool   `json:"standby"`
+	PerformanceStandby         bool   `json:"performance_standby"`
+	ReplicationPerformanceMode string `json:"replication_performance_mode,omitempty"`
+	ReplicationDRMode          string `json:"replication_dr_mode,omitempty"`
+	ServerTimeUTC              int64  `json:"server_time_utc,omitempty"`
+	Version                    string `json:"version,omitempty"`
+	ClusterName                string `json:"cluster_name,omitempty"`
+	LeaderAddress              string `json:"leader_address,omitempty"`
+	ClusterID                  string `json:"cluster_id,omitempty"`
+}
 
 type healthBoolTestCase struct {
 	name     string
@@ -217,7 +230,7 @@ func TestClient_Health(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != constants.APIPathSysHealth {
+				if r.URL.Path != apiPathSysHealth {
 					t.Errorf("unexpected path: %s", r.URL.Path)
 				}
 				if r.Method != http.MethodGet {
@@ -362,7 +375,7 @@ func TestClient_StepDown(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != constants.APIPathSysStepDown {
+				if r.URL.Path != apiPathSysStepDown {
 					t.Errorf("unexpected path: %s", r.URL.Path)
 				}
 				if r.Method != http.MethodPut {
@@ -401,7 +414,7 @@ func TestClient_StepDown(t *testing.T) {
 
 func TestClient_JoinRaftCluster_AlreadyJoinedStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathRaftJoin {
+		if r.URL.Path != apiPathRaftJoin {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPut {
@@ -432,7 +445,7 @@ func TestClient_JoinRaftCluster_AlreadyJoinedStatus(t *testing.T) {
 
 func TestClient_JoinRaftCluster_NotJoinedResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathRaftJoin {
+		if r.URL.Path != apiPathRaftJoin {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
@@ -459,7 +472,7 @@ func TestClient_JoinRaftCluster_NotJoinedResponse(t *testing.T) {
 
 func TestClient_JoinRaftCluster_StandaloneStatusIsNotAlreadyJoined(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathRaftJoin {
+		if r.URL.Path != apiPathRaftJoin {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPut {
@@ -490,7 +503,7 @@ func TestClient_JoinRaftCluster_StandaloneStatusIsNotAlreadyJoined(t *testing.T)
 
 func TestClient_DemoteRaftPeer_AlreadyNonVoterStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathRaftDemotePeer {
+		if r.URL.Path != apiPathRaftDemotePeer {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
@@ -521,7 +534,7 @@ func TestClient_DemoteRaftPeer_AlreadyNonVoterStatus(t *testing.T) {
 
 func TestClient_DemoteRaftPeer_AlreadyNonVoterWrappedOverload(t *testing.T) {
 	assertTranslatedRaftPeerActionError(t, raftPeerActionTranslationTest{
-		path:         constants.APIPathRaftDemotePeer,
+		path:         apiPathRaftDemotePeer,
 		responseBody: "{\"errors\":[\"1 error occurred:\\n\\t* server is already a non-voter\\n\\n\"]}",
 		wantErr:      portopenbao.ErrAlreadyNonVoter,
 		call: func(ctx context.Context, client *Client) error {
@@ -532,7 +545,7 @@ func TestClient_DemoteRaftPeer_AlreadyNonVoterWrappedOverload(t *testing.T) {
 
 func TestClient_PromoteRaftPeer_AlreadyVoterWrappedOverload(t *testing.T) {
 	assertTranslatedRaftPeerActionError(t, raftPeerActionTranslationTest{
-		path:         constants.APIPathRaftPromotePeer,
+		path:         apiPathRaftPromotePeer,
 		responseBody: "{\"errors\":[\"1 error occurred:\\n\\t* server is not a non-voter\\n\\n\"]}",
 		wantErr:      portopenbao.ErrAlreadyVoter,
 		call: func(ctx context.Context, client *Client) error {
@@ -586,7 +599,7 @@ func assertTranslatedRaftPeerActionError(t *testing.T, tc raftPeerActionTranslat
 
 func TestClient_JoinRaftCluster_AlreadyJoinedWrappedOverload(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathRaftJoin {
+		if r.URL.Path != apiPathRaftJoin {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPut {
@@ -776,7 +789,7 @@ func TestClient_Init(t *testing.T) {
 			var serverInitErr error
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != constants.APIPathSysInit {
+				if r.URL.Path != apiPathSysInit {
 					t.Errorf("unexpected path: %s", r.URL.Path)
 				}
 				if r.Method != http.MethodPut {
@@ -836,7 +849,7 @@ func TestClient_Init(t *testing.T) {
 
 func TestClient_Init_UsesContextDeadlineBeyondDefaultRequestTimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathSysInit {
+		if r.URL.Path != apiPathSysInit {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.Method != http.MethodPut {
@@ -997,8 +1010,8 @@ func TestClient_LoginJWT(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != constants.APIPathAuthJWTLogin {
-					t.Errorf("unexpected path: %s, want %s", r.URL.Path, constants.APIPathAuthJWTLogin)
+				if r.URL.Path != apiPathAuthJWTLogin {
+					t.Errorf("unexpected path: %s, want %s", r.URL.Path, apiPathAuthJWTLogin)
 				}
 				if r.Method != http.MethodPost {
 					t.Errorf("unexpected method: %s", r.Method)
@@ -1063,7 +1076,7 @@ func TestClient_LoginJWT(t *testing.T) {
 
 func TestClient_ReadRaftAutopilotState_NotFoundPreservesStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != constants.APIPathRaftAutopilotState {
+		if r.URL.Path != apiPathRaftAutopilotState {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNotFound)

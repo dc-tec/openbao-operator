@@ -35,7 +35,7 @@ func (m *Manager) ensureGreenReadyForBlueDemotion(
 		return nil, fmt.Errorf("green revision is empty in DemotingBlue phase")
 	}
 
-	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
+	greenPods, err := m.getPodsByRevision(ctx, cluster, greenRevision)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Green pods: %w", err)
 	}
@@ -58,7 +58,7 @@ func (m *Manager) waitForGreenLeaderAfterBlueDemotion(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (phaseOutcome, bool, error) {
-	greenPods, err := m.getGreenPods(ctx, cluster, cluster.Status.BlueGreen.GreenRevision)
+	greenPods, err := m.getPodsByRevision(ctx, cluster, cluster.Status.BlueGreen.GreenRevision)
 	if err != nil {
 		return phaseOutcome{}, true, fmt.Errorf("failed to get Green pods after demotion: %w", err)
 	}
@@ -83,7 +83,7 @@ func (m *Manager) ensureGreenReadyForBlueCleanup(
 		return phaseOutcome{}, true, fmt.Errorf("green revision is empty in Cleanup phase")
 	}
 
-	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
+	greenPods, err := m.getPodsByRevision(ctx, cluster, greenRevision)
 	if err != nil {
 		return phaseOutcome{}, true, fmt.Errorf("failed to get Green pods: %w", err)
 	}
@@ -141,7 +141,7 @@ func (m *Manager) ensureBluePodsTerminated(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (phaseOutcome, bool, error) {
-	bluePods, err := m.getBluePods(ctx, cluster, cluster.Status.BlueGreen.BlueRevision)
+	bluePods, err := m.getPodsByRevision(ctx, cluster, cluster.Status.BlueGreen.BlueRevision)
 	if err != nil {
 		return phaseOutcome{}, true, fmt.Errorf("failed to check Blue pods: %w", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
 )
 
@@ -53,7 +54,7 @@ func parseRunConfig() (runConfig, error) {
 	flag.StringVar(&cfg.metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&cfg.enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics server")
-	flag.StringVar(&cfg.platform, "platform", "auto",
+	flag.StringVar(&cfg.platform, "platform", constants.PlatformAuto,
 		"The target platform (auto, kubernetes, openshift). Defaults to auto. "+
 			"This flag is deprecated and will be removed in a future release. "+
 			"Use the OPERATOR_PLATFORM environment variable instead.")

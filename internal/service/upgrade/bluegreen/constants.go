@@ -37,9 +37,6 @@ const (
 	// AnnotationSnapshotPhase labels snapshot Jobs with their role (e.g. pre-upgrade).
 	AnnotationSnapshotPhase = "openbao.org/snapshot-phase"
 
-	// DeploymentNameSuffix is the suffix for the Green StatefulSet name.
-	DeploymentNameSuffix = "green"
-
 	// ComponentValidationHook is the component name for validation hook.
 	ComponentValidationHook = "validation-hook"
 

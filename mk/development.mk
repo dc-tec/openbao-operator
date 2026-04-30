@@ -165,6 +165,10 @@ report-ast: generate-ast-rules ast-grep ## Run ast-grep rules in report mode (no
 lint-ast: generate-ast-rules ast-grep ## Run ast-grep rules in strict mode (treat all findings as errors).
 	@"$(AST_GREP)" scan -c .ast-grep/sgconfig.yml --report-style=medium --error .
 
+.PHONY: lint-testonly-exports
+lint-testonly-exports: ## Verify production exports are not referenced only from tests.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/testonly_exports
+
 .PHONY: test-ast
 test-ast: generate-ast-rules ast-grep ## Run ast-grep rule tests.
 	@"$(AST_GREP)" test -c .ast-grep/sgconfig.yml
@@ -746,7 +750,7 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	"$(GOLANGCI_LINT)" config verify
 
 .PHONY: lint-ci
-lint-ci: lint-config lint verify-arch-policy test-ast lint-ast ## Run CI lint gates (golangci-lint + ast-grep tests/scans).
+lint-ci: lint-config lint verify-arch-policy lint-testonly-exports test-ast lint-ast ## Run CI lint gates (golangci-lint + test-only export audit + ast-grep tests/scans).
 
 .PHONY: vulncheck
 vulncheck: govulncheck ## Run govulncheck to scan for known vulnerabilities (production code only). Findings listed in .govulnignore are ignored. Set VULNCHECK_SHOW_IGNORED=true to print traces even if all findings are ignored.

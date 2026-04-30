@@ -239,15 +239,6 @@ func IsDowngrade(from, to string) bool {
 	return change == VersionChangeDowngrade
 }
 
-// IsUpgrade returns true if changing from 'from' to 'to' would be an upgrade.
-func IsUpgrade(from, to string) bool {
-	change, err := CompareVersions(from, to)
-	if err != nil {
-		return false
-	}
-	return change == VersionChangePatch || change == VersionChangeMinor || change == VersionChangeMajor
-}
-
 // IsSkipMinorUpgrade returns true if the upgrade skips minor versions.
 // For example, 2.4.0 -> 2.6.0 skips 2.5.x.
 func IsSkipMinorUpgrade(from, to string) bool {

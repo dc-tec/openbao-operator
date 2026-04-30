@@ -74,21 +74,21 @@ func TestAcquireAndReleaseUpgradeOperationLock(t *testing.T) {
 		WithReturnManagedFields().
 		Build()
 
-	if err := AcquireUpgradeOperationLock(context.Background(), k8sClient, cluster, "starting upgrade"); err != nil {
-		t.Fatalf("AcquireUpgradeOperationLock() unexpected error: %v", err)
+	if err := AcquireUpgradeOperationLockWithReader(context.Background(), nil, k8sClient, cluster, "starting upgrade"); err != nil {
+		t.Fatalf("AcquireUpgradeOperationLockWithReader() unexpected error: %v", err)
 	}
 	if cluster.Status.OperationLock == nil {
-		t.Fatalf("AcquireUpgradeOperationLock() did not set cluster lock status")
+		t.Fatalf("AcquireUpgradeOperationLockWithReader() did not set cluster lock status")
 	}
 	if cluster.Status.OperationLock.Holder != UpgradeOperationLockHolder {
 		t.Fatalf("lock holder=%q, want %q", cluster.Status.OperationLock.Holder, UpgradeOperationLockHolder)
 	}
 
-	if err := ReleaseUpgradeLockIfHeld(context.Background(), k8sClient, logr.Discard(), cluster); err != nil {
-		t.Fatalf("ReleaseUpgradeLockIfHeld() unexpected error: %v", err)
+	if err := ReleaseUpgradeLockIfHeldWithReader(context.Background(), nil, k8sClient, logr.Discard(), cluster); err != nil {
+		t.Fatalf("ReleaseUpgradeLockIfHeldWithReader() unexpected error: %v", err)
 	}
 	if cluster.Status.OperationLock != nil {
-		t.Fatalf("ReleaseUpgradeLockIfHeld() did not clear in-memory lock")
+		t.Fatalf("ReleaseUpgradeLockIfHeldWithReader() did not clear in-memory lock")
 	}
 
 	stored := &openbaov1alpha1.OpenBaoCluster{}
@@ -128,15 +128,15 @@ func TestAcquireUpgradeLockBlocked(t *testing.T) {
 		WithObjects(cluster).
 		Build()
 
-	result, err := AcquireUpgradeLock(context.Background(), k8sClient, logr.Discard(), cluster, "starting upgrade")
+	result, err := AcquireUpgradeLockWithReader(context.Background(), nil, k8sClient, logr.Discard(), cluster, "starting upgrade")
 	if err != nil {
-		t.Fatalf("AcquireUpgradeLock() unexpected error: %v", err)
+		t.Fatalf("AcquireUpgradeLockWithReader() unexpected error: %v", err)
 	}
 	if !result.Blocked {
-		t.Fatal("AcquireUpgradeLock() Blocked=false, want true")
+		t.Fatal("AcquireUpgradeLockWithReader() Blocked=false, want true")
 	}
 	if !IsOperationLockHeld(result.LockErr) {
-		t.Fatalf("AcquireUpgradeLock() lockErr=%v, want held lock error", result.LockErr)
+		t.Fatalf("AcquireUpgradeLockWithReader() lockErr=%v, want held lock error", result.LockErr)
 	}
 }
 
@@ -167,8 +167,8 @@ func TestReleaseUpgradeLockIfHeldIgnoresForeignLock(t *testing.T) {
 		WithObjects(cluster).
 		Build()
 
-	if err := ReleaseUpgradeLockIfHeld(context.Background(), k8sClient, logr.Discard(), cluster); err != nil {
-		t.Fatalf("ReleaseUpgradeLockIfHeld() unexpected error: %v", err)
+	if err := ReleaseUpgradeLockIfHeldWithReader(context.Background(), nil, k8sClient, logr.Discard(), cluster); err != nil {
+		t.Fatalf("ReleaseUpgradeLockIfHeldWithReader() unexpected error: %v", err)
 	}
 	if cluster.Status.OperationLock == nil {
 		t.Fatal("foreign lock was cleared unexpectedly")
@@ -186,7 +186,7 @@ func TestUpgradeOperationLockRequiresCluster(t *testing.T) {
 		{
 			name: "acquire nil cluster",
 			invoke: func() error {
-				_, err := AcquireUpgradeLock(context.Background(), nil, logr.Discard(), nil, "message")
+				_, err := AcquireUpgradeLockWithReader(context.Background(), nil, nil, logr.Discard(), nil, "message")
 				return err
 			},
 			wantErr: "cluster is required",
@@ -194,7 +194,7 @@ func TestUpgradeOperationLockRequiresCluster(t *testing.T) {
 		{
 			name: "release nil cluster",
 			invoke: func() error {
-				return ReleaseUpgradeLockIfHeld(context.Background(), nil, logr.Discard(), nil)
+				return ReleaseUpgradeLockIfHeldWithReader(context.Background(), nil, nil, logr.Discard(), nil)
 			},
 			wantErr: "cluster is required",
 		},
@@ -245,7 +245,7 @@ func TestReleaseUpgradeLockOnErrorIfHeld(t *testing.T) {
 			Build()
 
 		cause := errors.New("validation failed")
-		err := ReleaseUpgradeLockOnErrorIfHeld(context.Background(), k8sClient, logr.Discard(), cluster, true, cause, "failed to release")
+		err := ReleaseUpgradeLockOnErrorIfHeldWithReader(context.Background(), nil, k8sClient, logr.Discard(), cluster, true, cause, "failed to release")
 		if !errors.Is(err, cause) {
 			t.Fatalf("error=%v, want joined cause %v", err, cause)
 		}
@@ -277,7 +277,7 @@ func TestReleaseUpgradeLockOnErrorIfHeld(t *testing.T) {
 			Build()
 
 		cause := errors.New("still active")
-		err := ReleaseUpgradeLockOnErrorIfHeld(context.Background(), k8sClient, logr.Discard(), cluster, false, cause, "failed to release")
+		err := ReleaseUpgradeLockOnErrorIfHeldWithReader(context.Background(), nil, k8sClient, logr.Discard(), cluster, false, cause, "failed to release")
 		if !errors.Is(err, cause) {
 			t.Fatalf("error=%v, want cause %v", err, cause)
 		}

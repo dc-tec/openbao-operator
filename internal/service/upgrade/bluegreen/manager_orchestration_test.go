@@ -375,7 +375,7 @@ func TestManager_MaybeHandleTargetRevisionDrift(t *testing.T) {
 	})
 }
 
-func TestNewManagerWithClientFactory_UsesProvidedFactory(t *testing.T) {
+func TestManagerWithClientFactoryUsesProvidedFactory(t *testing.T) {
 	t.Parallel()
 
 	scheme := newBlueGreenTestScheme(t)
@@ -387,7 +387,7 @@ func TestNewManagerWithClientFactory_UsesProvidedFactory(t *testing.T) {
 		return nil, sentinel
 	}
 
-	mgr := NewManagerWithClientFactory(client, scheme, nil, nil, factory, portopenbao.ClientConfig{}, nil, nil, "")
+	mgr := newManagerWithClientFactory(client, scheme, nil, nil, factory, portopenbao.ClientConfig{}, nil, nil, "")
 	if mgr.clusterOps == nil {
 		t.Fatal("expected clusterOps to be initialized")
 	}

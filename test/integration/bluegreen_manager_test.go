@@ -4,7 +4,6 @@
 package integration
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaotest "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -187,7 +185,7 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 	}
 }
 
-func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *testing.T) {
+func TestBlueGreenManager_DemotingBlue_LeaderLabel_AdvancesAfterDemotion(t *testing.T) {
 	namespace := newTestNamespace(t)
 
 	cluster := newMinimalClusterObj(namespace, "bluegreen-leader-fallback")
@@ -228,6 +226,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 				constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
 				constants.LabelOpenBaoRevision: targetGreenRevision,
 				portopenbao.LabelSealed:        "false",
+				portopenbao.LabelActive:        testTrueString,
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -270,18 +269,11 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 
 	controllerClient := newControllerClient(t)
 	workloadMgr := workloadsvc.NewManager(controllerClient, k8sScheme, "").WithReader(controllerClient)
-	mgr := bluegreen.NewManagerWithClientFactory(
+	mgr := bluegreen.NewManager(
 		k8sClient,
 		k8sScheme,
 		workloadMgr,
 		backup.NewUpgradeStrategyRuntime(k8sClient, k8sScheme),
-		func(_ portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
-			return &openbaotest.MockClusterActions{
-				IsLeaderFunc: func(ctx context.Context) (bool, error) {
-					return true, nil
-				},
-			}, nil
-		},
 		portopenbao.ClientConfig{},
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
 		security.NewImageVerifier(logr.Discard(), k8sClient, nil),
@@ -308,7 +300,7 @@ func TestBlueGreenManager_DemotingBlue_LeaderLabelLag_UsesHealthFallback(t *test
 		t.Fatalf("expected demotion job to be marked succeeded")
 	}
 
-	// Second reconcile should not stall due to missing leader labels; the API fallback should allow progress.
+	// Second reconcile should observe the Green leader and advance to cleanup.
 	if err := k8sClient.Get(ctx, clusterKey, latestCluster); err != nil {
 		t.Fatalf("get cluster: %v", err)
 	}

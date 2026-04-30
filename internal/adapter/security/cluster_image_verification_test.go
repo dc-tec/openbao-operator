@@ -23,6 +23,73 @@ func (v *captureVerifier) Verify(_ context.Context, _ string, config imageverify
 	return "ghcr.io/dc-tec/openbao-operator@sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
 }
 
+func compileRegExp(t *testing.T, expr string) *regexp.Regexp {
+	t.Helper()
+
+	if strings.TrimSpace(expr) == "" {
+		t.Fatal("expected non-empty regexp")
+	}
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		t.Fatalf("regexp %q did not compile: %v", expr, err)
+	}
+	return re
+}
+
+func assertGitHubOIDCIssuerRegExp(t *testing.T, expr string) {
+	t.Helper()
+
+	re := compileRegExp(t, expr)
+	if !re.MatchString("https://token.actions.githubusercontent.com") {
+		t.Fatalf("issuer regexp %q did not match GitHub Actions issuer", expr)
+	}
+	if re.MatchString("https://example.com/token.actions.githubusercontent.com") {
+		t.Fatalf("issuer regexp %q matched an unexpected issuer", expr)
+	}
+}
+
+func assertOpenBaoReleaseSubjectRegExp(t *testing.T, expr string) {
+	t.Helper()
+
+	re := compileRegExp(t, expr)
+	trusted := "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
+	if !re.MatchString(trusted) {
+		t.Fatalf("OpenBao release subject %q did not match %q", trusted, expr)
+	}
+	untrusted := "https://github.com/openbao/openbao/.github/workflows/ci.yml@refs/heads/main"
+	if re.MatchString(untrusted) {
+		t.Fatalf("OpenBao release regexp %q matched untrusted subject %q", expr, untrusted)
+	}
+}
+
+func assertOperatorSubjectRegExp(t *testing.T, expr string) {
+	t.Helper()
+
+	re := compileRegExp(t, expr)
+	trusted := []string{
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.3",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-edge.yml@refs/heads/main",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-nightly.yml@refs/heads/main",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/main",
+	}
+	for _, subject := range trusted {
+		if !re.MatchString(subject) {
+			t.Fatalf("trusted subject %q did not match %q", subject, expr)
+		}
+	}
+
+	untrusted := []string{
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/feature",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/ci.yml@refs/heads/main",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/heads/main",
+	}
+	for _, subject := range untrusted {
+		if re.MatchString(subject) {
+			t.Fatalf("untrusted subject %q unexpectedly matched %q", subject, expr)
+		}
+	}
+}
+
 func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -42,12 +109,8 @@ func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaults(t *testing.
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
-		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
-	}
-	if got := verifier.config.SubjectRegExp; got != openBaoReleaseSubjectRegExp {
-		t.Fatalf("subjectRegExp = %q, want %q", got, openBaoReleaseSubjectRegExp)
-	}
+	assertGitHubOIDCIssuerRegExp(t, verifier.config.IssuerRegExp)
+	assertOpenBaoReleaseSubjectRegExp(t, verifier.config.SubjectRegExp)
 }
 
 func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaultsForGHCR(t *testing.T) {
@@ -69,12 +132,8 @@ func TestVerifyImageForCluster_AppliesOfficialOpenBaoKeylessDefaultsForGHCR(t *t
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
-		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
-	}
-	if got := verifier.config.SubjectRegExp; got != openBaoReleaseSubjectRegExp {
-		t.Fatalf("subjectRegExp = %q, want %q", got, openBaoReleaseSubjectRegExp)
-	}
+	assertGitHubOIDCIssuerRegExp(t, verifier.config.IssuerRegExp)
+	assertOpenBaoReleaseSubjectRegExp(t, verifier.config.SubjectRegExp)
 }
 
 func TestVerifyOperatorImageForCluster_AppliesOfficialOperatorKeylessDefaults(t *testing.T) {
@@ -96,12 +155,8 @@ func TestVerifyOperatorImageForCluster_AppliesOfficialOperatorKeylessDefaults(t 
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
-		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
-	}
-	if got := verifier.config.SubjectRegExp; got != operatorSubjectRegExp {
-		t.Fatalf("subjectRegExp = %q, want %q", got, operatorSubjectRegExp)
-	}
+	assertGitHubOIDCIssuerRegExp(t, verifier.config.IssuerRegExp)
+	assertOperatorSubjectRegExp(t, verifier.config.SubjectRegExp)
 }
 
 func TestVerifyOperatorImageForCluster_AppliesDefaultsForEdgeTag(t *testing.T) {
@@ -123,41 +178,8 @@ func TestVerifyOperatorImageForCluster_AppliesDefaultsForEdgeTag(t *testing.T) {
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
-		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
-	}
-	if got := verifier.config.SubjectRegExp; got != operatorSubjectRegExp {
-		t.Fatalf("subjectRegExp = %q, want %q", got, operatorSubjectRegExp)
-	}
-}
-
-func TestOperatorSubjectRegExp_TrustedWorkflowIdentities(t *testing.T) {
-	t.Parallel()
-
-	re := regexp.MustCompile(operatorSubjectRegExp)
-
-	trusted := []string{
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/tags/v1.2.3",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-edge.yml@refs/heads/main",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-nightly.yml@refs/heads/main",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/main",
-	}
-	for _, subject := range trusted {
-		if !re.MatchString(subject) {
-			t.Fatalf("trusted subject %q did not match %q", subject, operatorSubjectRegExp)
-		}
-	}
-
-	untrusted := []string{
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/feature",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/ci.yml@refs/heads/main",
-		"https://github.com/dc-tec/openbao-operator/.github/workflows/release.yml@refs/heads/main",
-	}
-	for _, subject := range untrusted {
-		if re.MatchString(subject) {
-			t.Fatalf("untrusted subject %q unexpectedly matched %q", subject, operatorSubjectRegExp)
-		}
-	}
+	assertGitHubOIDCIssuerRegExp(t, verifier.config.IssuerRegExp)
+	assertOperatorSubjectRegExp(t, verifier.config.SubjectRegExp)
 }
 
 func TestVerifyOperatorImageForCluster_MissingIdentityForUnknownImageReturnsError(t *testing.T) {
@@ -209,12 +231,8 @@ func TestVerifyImageForCluster_DigestReferenceAppliesOfficialDefaults(t *testing
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
-		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
-	}
-	if got := verifier.config.SubjectRegExp; got != openBaoReleaseSubjectRegExp {
-		t.Fatalf("subjectRegExp = %q, want %q", got, openBaoReleaseSubjectRegExp)
-	}
+	assertGitHubOIDCIssuerRegExp(t, verifier.config.IssuerRegExp)
+	assertOpenBaoReleaseSubjectRegExp(t, verifier.config.SubjectRegExp)
 }
 
 func TestVerifyImageForCluster_HardenedWithOmittedConfigAppliesDefaults(t *testing.T) {
@@ -234,9 +252,7 @@ func TestVerifyImageForCluster_HardenedWithOmittedConfigAppliesDefaults(t *testi
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
-		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
-	}
+	assertGitHubOIDCIssuerRegExp(t, verifier.config.IssuerRegExp)
 }
 
 func TestVerifyOperatorImageForCluster_HardenedWithOmittedConfigAppliesDefaults(t *testing.T) {
@@ -256,9 +272,7 @@ func TestVerifyOperatorImageForCluster_HardenedWithOmittedConfigAppliesDefaults(
 	if !verifier.called {
 		t.Fatal("expected verifier to be called")
 	}
-	if got := verifier.config.IssuerRegExp; got != defaultGitHubOIDCIssuerRegExp {
-		t.Fatalf("issuerRegExp = %q, want %q", got, defaultGitHubOIDCIssuerRegExp)
-	}
+	assertGitHubOIDCIssuerRegExp(t, verifier.config.IssuerRegExp)
 }
 
 func TestIsImageVerificationEnabledHelpers(t *testing.T) {

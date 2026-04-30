@@ -18,8 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	openbaoapi "github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	openbaoapi "github.com/dc-tec/openbao-operator/internal/platform/testutil/openbao"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/backup"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
@@ -68,9 +68,9 @@ func TestStepDownLeader_DoesNotTimeoutFromUpgradeStart(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
 	if err != nil {
@@ -120,9 +120,9 @@ func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
 	if err == nil {
@@ -201,13 +201,13 @@ func TestStepDownLeader_FailsWhenSucceededJobStillLeavesTargetAsLeader(t *testin
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job, pod, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
 				return true, nil
 			},
 		}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
 	if err == nil {
@@ -285,14 +285,14 @@ func TestStepDownLeader_VerifiesTransferViaAPIWhenLabelsLag(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(job, pod, caSecret).Build()
 
 	var gotConfig portopenbao.ClientConfig
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		gotConfig = config
 		return &openbaoapi.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
 				return false, nil
 			},
 		}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
 	if err != nil {
@@ -346,13 +346,13 @@ func TestStepDownLeader_SkipsJobWhenTargetPodIsNotLeader(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsLeaderFunc: func(ctx context.Context) (bool, error) {
 				return false, nil
 			},
 		}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	ok, err := mgr.stepDownLeader(context.Background(), testr.New(t), cluster, podName, upgrade.NewMetrics(ns, name))
 	if err != nil {
@@ -461,13 +461,13 @@ func TestPerformPodByPodUpgrade_ResumesWhenTargetAlreadyRolledOut(t *testing.T) 
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod, caSecret).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{
 			IsHealthyFunc: func(ctx context.Context) (bool, error) {
 				return true, nil
 			},
 		}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	completed, err := mgr.performPodByPodUpgrade(context.Background(), testr.New(t), cluster, upgrade.NewMetrics(ns, name))
 	if err != nil {
@@ -546,9 +546,9 @@ func TestWaitForPodRevisionUpdated_WaitsUntilRevisionMatches(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	ok, err := mgr.waitForPodRevisionUpdated(context.Background(), testr.New(t), cluster, podName)
 	if err != nil {
@@ -603,9 +603,9 @@ func TestWaitForPodRevisionUpdated_SucceedsWhenRevisionMatches(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	ok, err := mgr.waitForPodRevisionUpdated(context.Background(), testr.New(t), cluster, podName)
 	if err != nil {
@@ -677,9 +677,9 @@ func TestWaitForPodRevisionUpdated_DeletesStalePodWhenImageMismatchesTemplate(t 
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sts, pod).Build()
-	mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 		return &openbaoapi.MockClusterActions{}, nil
-	}, portopenbao.ClientConfig{}, nil, "")
+	}, nil)
 
 	ok, err := mgr.waitForPodRevisionUpdated(context.Background(), testr.New(t), cluster, podName)
 	if err != nil {
@@ -751,9 +751,9 @@ func TestRollingWaitStages_TimeoutsMarkUpgradeFailed(t *testing.T) {
 			}
 
 			c := fake.NewClientBuilder().WithScheme(scheme).Build()
-			mgr := NewManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+			mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
 				return &openbaoapi.MockClusterActions{}, nil
-			}, portopenbao.ClientConfig{}, nil, "")
+			}, nil)
 
 			ok, err := tt.wait(mgr, context.Background(), testr.New(t), cluster, "c1-0")
 			if err == nil {

@@ -64,12 +64,12 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_UsesLatestStateAndPreservesS
 	stale.Status.Backup = nil
 
 	key := types.NamespacedName{Name: stale.Name, Namespace: stale.Namespace}
-	updated, err := MutateAndApplyOpenBaoClusterAdminOpsStatus(context.Background(), k8sClient, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+	updated, err := MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(context.Background(), nil, k8sClient, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		obj.Status.BreakGlass = &openbaov1alpha1.BreakGlassStatus{Active: true, Nonce: "nonce-1"}
 		return nil
 	}, OpenBaoClusterAdminOpsStatusApplyOptions{})
 	if err != nil {
-		t.Fatalf("MutateAndApplyOpenBaoClusterAdminOpsStatus() error = %v", err)
+		t.Fatalf("MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader() error = %v", err)
 	}
 
 	if updated.Status.Backup == nil || updated.Status.Backup.LastFailureReason != persistMe {
@@ -166,8 +166,9 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_PropagatesMutatorError(t *te
 		Build()
 
 	wantErr := errors.New("boom")
-	_, err := MutateAndApplyOpenBaoClusterAdminOpsStatus(
+	_, err := MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(
 		context.Background(),
+		nil,
 		k8sClient,
 		types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
 		func(obj *openbaov1alpha1.OpenBaoCluster) error {
@@ -176,7 +177,7 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_PropagatesMutatorError(t *te
 		OpenBaoClusterAdminOpsStatusApplyOptions{},
 	)
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("MutateAndApplyOpenBaoClusterAdminOpsStatus() error = %v, want %v", err, wantErr)
+		t.Fatalf("MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader() error = %v, want %v", err, wantErr)
 	}
 }
 
@@ -204,7 +205,7 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_ConcurrentWritersPreserveSib
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 20; i++ {
-			_, err := MutateAndApplyOpenBaoClusterAdminOpsStatus(context.Background(), k8sClient, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			_, err := MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(context.Background(), nil, k8sClient, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 				obj.Status.Backup = &openbaov1alpha1.BackupStatus{
 					LastFailureReason: "backup-writer",
 				}
@@ -220,7 +221,7 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_ConcurrentWritersPreserveSib
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 20; i++ {
-			_, err := MutateAndApplyOpenBaoClusterAdminOpsStatus(context.Background(), k8sClient, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			_, err := MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(context.Background(), nil, k8sClient, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 				obj.Status.Upgrade = &openbaov1alpha1.UpgradeProgress{
 					TargetVersion:    "2.5.0",
 					FromVersion:      "2.4.4",
@@ -241,7 +242,7 @@ func TestMutateAndApplyOpenBaoClusterAdminOpsStatus_ConcurrentWritersPreserveSib
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 20; i++ {
-			_, err := MutateAndApplyOpenBaoClusterAdminOpsStatus(context.Background(), k8sClient, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+			_, err := MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(context.Background(), nil, k8sClient, key, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 				obj.Status.BreakGlass = &openbaov1alpha1.BreakGlassStatus{
 					Active: true,
 					Nonce:  "nonce-concurrent",

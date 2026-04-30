@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 )
 
@@ -66,59 +65,6 @@ func TestClientManager_FactoryFor_AppliesTLSServerNameOverride(t *testing.T) {
 	}
 }
 
-func TestClientManager_ClusterCount(t *testing.T) {
-	t.Parallel()
-
-	mgr := NewClientManager(ClientConfig{})
-	defer mgr.Close()
-
-	if got := mgr.ClusterCount(); got != 0 {
-		t.Errorf("ClusterCount()=%d, expected 0", got)
-	}
-
-	_ = mgr.FactoryFor("ns/cluster1", nil)
-	if got := mgr.ClusterCount(); got != 1 {
-		t.Errorf("ClusterCount()=%d, expected 1", got)
-	}
-
-	_ = mgr.FactoryFor("ns/cluster2", nil)
-	if got := mgr.ClusterCount(); got != 2 {
-		t.Errorf("ClusterCount()=%d, expected 2", got)
-	}
-
-	// Same cluster key should not increase count
-	_ = mgr.FactoryFor("ns/cluster1", nil)
-	if got := mgr.ClusterCount(); got != 2 {
-		t.Errorf("ClusterCount()=%d, expected 2 (same cluster)", got)
-	}
-}
-
-func TestClientManager_ClearCluster(t *testing.T) {
-	t.Parallel()
-
-	mgr := NewClientManager(ClientConfig{})
-	defer mgr.Close()
-
-	_ = mgr.FactoryFor("ns/cluster1", nil)
-	_ = mgr.FactoryFor("ns/cluster2", nil)
-
-	if got := mgr.ClusterCount(); got != 2 {
-		t.Fatalf("ClusterCount()=%d, expected 2", got)
-	}
-
-	mgr.ClearCluster("ns/cluster1")
-
-	if got := mgr.ClusterCount(); got != 1 {
-		t.Errorf("ClusterCount()=%d after clear, expected 1", got)
-	}
-
-	// Clear again should be a no-op
-	mgr.ClearCluster("ns/cluster1")
-	if got := mgr.ClusterCount(); got != 1 {
-		t.Errorf("ClusterCount()=%d after double clear, expected 1", got)
-	}
-}
-
 func TestClientManager_Close(t *testing.T) {
 	t.Parallel()
 
@@ -129,8 +75,8 @@ func TestClientManager_Close(t *testing.T) {
 
 	mgr.Close()
 
-	if got := mgr.ClusterCount(); got != 0 {
-		t.Errorf("ClusterCount()=%d after Close, expected 0", got)
+	if got := clientManagerStateCount(t, mgr); got != 0 {
+		t.Errorf("client state count=%d after Close, expected 0", got)
 	}
 }
 
@@ -145,11 +91,16 @@ func TestClientManager_NilReceiver(t *testing.T) {
 	}
 
 	mgr.Close()
-	mgr.ClearCluster("ns/cluster")
+}
 
-	if got := mgr.ClusterCount(); got != 0 {
-		t.Errorf("ClusterCount()=%d for nil manager, expected 0", got)
+func clientManagerStateCount(t *testing.T, mgr *ClientManager) int {
+	t.Helper()
+	if mgr == nil {
+		return 0
 	}
+	mgr.mu.RLock()
+	defer mgr.mu.RUnlock()
+	return len(mgr.states)
 }
 
 func TestClientManager_CircuitBreakerIsolation(t *testing.T) {
@@ -175,7 +126,7 @@ func TestClientManager_CircuitBreakerIsolation(t *testing.T) {
 	var requests int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&requests, 1)
-		if r.URL.Path != constants.APIPathSysStepDown {
+		if r.URL.Path != apiPathSysStepDown {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusInternalServerError)
@@ -227,7 +178,7 @@ func TestClientManager_FactoryCreatesWorkingClients(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == constants.APIPathSysHealth {
+		if r.URL.Path == apiPathSysHealth {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"initialized":true,"sealed":false,"standby":false}`))
 			return

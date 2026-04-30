@@ -74,7 +74,7 @@ func (m *Manager) ensureBlueLeaderDuringRollback(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (phaseOutcome, bool, error) {
-	bluePods, err := m.getBluePods(ctx, cluster, cluster.Status.BlueGreen.BlueRevision)
+	bluePods, err := m.getPodsByRevision(ctx, cluster, cluster.Status.BlueGreen.BlueRevision)
 	if err != nil {
 		return phaseOutcome{}, true, fmt.Errorf("failed to get Blue pods: %w", err)
 	}
@@ -110,7 +110,7 @@ func (m *Manager) ensureGreenPodsRemovedDuringRollback(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (phaseOutcome, bool, error) {
-	greenPods, err := m.getGreenPods(ctx, cluster, cluster.Status.BlueGreen.GreenRevision)
+	greenPods, err := m.getPodsByRevision(ctx, cluster, cluster.Status.BlueGreen.GreenRevision)
 	if err != nil {
 		return phaseOutcome{}, true, fmt.Errorf("failed to check Green pods: %w", err)
 	}

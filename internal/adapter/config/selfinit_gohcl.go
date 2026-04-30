@@ -69,53 +69,6 @@ func buildInitializeRequestBlock(label, operation, path string, allowFailure boo
 	return gohcl.EncodeAsBlock(req, "request")
 }
 
-func buildOperatorBootstrapInitializeBlock(config OperatorBootstrapConfig) *hclwrite.Block {
-	initBlock := buildInitializeBlock("operator-bootstrap")
-	initBody := initBlock.Body()
-	jwtAudiences := jwtAuthAudiences(config)
-
-	// 1. Enable JWT Auth
-	{
-		req := buildInitializeRequestBlock(reqEnableJWTAuth, opUpdate, pathSysAuthJWT, false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTAuthEnableData{
-			Type:        authMethodJWT,
-			Description: authDesc,
-		}, "data"))
-		initBody.AppendBlock(req)
-	}
-
-	// 2. Configure OIDC
-	{
-		req := buildInitializeRequestBlock(reqConfigJWTAuth, opUpdate, pathAuthJWTConfig, false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(jwtConfigData(config), "data"))
-		initBody.AppendBlock(req)
-	}
-
-	// 3. Create Policy
-	{
-		req := buildInitializeRequestBlock(reqCreateOperatorPolicy, opUpdate, fmt.Sprintf("%s%s", pathSysPoliciesACLPrefix, authPolicyNameOperator), false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyHealthStepDownAutopilot}, "data"))
-		initBody.AppendBlock(req)
-	}
-
-	// 4. Bind Role
-	{
-		subject := fmt.Sprintf("system:serviceaccount:%s:%s", config.OperatorNS, config.OperatorSA)
-		req := buildInitializeRequestBlock(reqCreateOperatorRole, opUpdate, fmt.Sprintf("%s%s", pathAuthJWTRolePrefix, authRoleNameOperator), false)
-		req.Body().AppendBlock(gohcl.EncodeAsBlock(hclJWTRoleData{
-			RoleType:       authMethodJWT,
-			UserClaim:      "sub",
-			BoundAudiences: jwtAudiences,
-			BoundSubject:   &subject,
-			TokenPolicies:  []string{authPolicyNameOperator},
-			TTL:            "1h",
-		}, "data"))
-		initBody.AppendBlock(req)
-	}
-
-	return initBlock
-}
-
 func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoCluster, config OperatorBootstrapConfig) *hclwrite.Block {
 	initBlock := buildInitializeBlock("operator-bootstrap")
 	initBody := initBlock.Body()

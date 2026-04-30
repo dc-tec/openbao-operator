@@ -7,6 +7,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
+const imageVerificationFailurePolicyWarn = "Warn"
+
 func TestManagedWorkloadDigestEnforcementRequired(t *testing.T) {
 	t.Parallel()
 
@@ -42,7 +44,7 @@ func TestManagedWorkloadDigestEnforcementRequired(t *testing.T) {
 			name: "hardened with image verification warn policy still enforces digest requirement",
 			cluster: buildClusterWithVerification(
 				openbaov1alpha1.ProfileHardened,
-				enabledVerification(constants.ImageVerificationFailurePolicyWarn),
+				enabledVerification(imageVerificationFailurePolicyWarn),
 				enabledVerification(constants.ImageVerificationFailurePolicyBlock),
 			),
 			want: true,

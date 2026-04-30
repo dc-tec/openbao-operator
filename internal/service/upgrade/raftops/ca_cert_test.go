@@ -2,25 +2,31 @@ package raftops
 
 import (
 	"context"
-	"errors"
+	"strings"
 	"testing"
 
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestReadCACertSecret(t *testing.T) {
+func TestLoadClusterCACert(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, corev1.AddToScheme(scheme))
 
 	ctx := context.Background()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "s1"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{Enabled: true},
+		},
+	}
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "s1"},
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "s1-tls-ca"},
 		Data: map[string][]byte{
 			"ca.crt": []byte("cert"),
 		},
@@ -31,19 +37,25 @@ func TestReadCACertSecret(t *testing.T) {
 		WithObjects(secret).
 		Build()
 
-	got, err := ReadCACertSecret(ctx, c, types.NamespacedName{Namespace: "ns1", Name: "s1"})
+	got, err := LoadClusterCACert(ctx, c, cluster)
 	require.NoError(t, err)
 	require.Equal(t, []byte("cert"), got)
 }
 
-func TestReadCACertSecret_MissingKey(t *testing.T) {
+func TestLoadClusterCACert_MissingKey(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, corev1.AddToScheme(scheme))
 
 	ctx := context.Background()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "s1"},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			TLS: openbaov1alpha1.TLSConfig{Enabled: true},
+		},
+	}
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "s1"},
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "s1-tls-ca"},
 		Data:       map[string][]byte{},
 	}
 
@@ -52,7 +64,7 @@ func TestReadCACertSecret_MissingKey(t *testing.T) {
 		WithObjects(secret).
 		Build()
 
-	_, err := ReadCACertSecret(ctx, c, types.NamespacedName{Namespace: "ns1", Name: "s1"})
+	_, err := LoadClusterCACert(ctx, c, cluster)
 	require.Error(t, err)
-	require.True(t, errors.Is(err, ErrCACertMissing))
+	require.True(t, strings.Contains(err.Error(), `trust bundle key "ca.crt" missing`))
 }
