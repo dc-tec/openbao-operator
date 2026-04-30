@@ -223,7 +223,7 @@ nightly:
         - lane: security
           kubernetes: "@compatibility"
           coverage: compatibility-smoke
-          labelFilter: "(((security || tenant || tenancy) && critical && !pentest) && !openshift)"
+          labelFilter: "(((security || tenancy || (tenant && !lifecycle)) && critical && !pentest) && !openshift)"
           timeoutMinutes: 45
           e2eTimeout: 40m
 
