@@ -179,8 +179,7 @@ Labels: `upgrade`, `upgrades`, `cluster`, `slow`, `rolling`, `recovery`
 Recorded checkpoints:
 - Triggering a rolling upgrade with a bad non-semver image tag
 - Waiting for the rolling upgrade to initialize
-- Backdating upgrade start time to force the real timeout/retry path instead of waiting ten minutes
-- Waiting for the rolling upgrade to fail with a retryable status
+- Forcing the real timeout/retry path without waiting ten minutes
 - Injecting a stale deterministic step-down job for the retry cleanup path
 - Restoring the target image and requesting a rolling retry
 - Verifying retry preparation clears failed status, records the handled request, and removes the stale step-down job

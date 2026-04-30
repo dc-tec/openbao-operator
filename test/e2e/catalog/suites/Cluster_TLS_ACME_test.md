@@ -27,6 +27,7 @@ Recorded checkpoints:
 - setting up ACME service and domain
 - creating transit token secret for auto-unseal (include TLS CA for transit and PKI CA for ACME)
 - verifying transit token secret can access infra-bao transit key
+- preparing ACME shared cache storage
 - waiting for OpenBaoCluster to be observed by the API server
 - verifying TLS secrets are NOT created (ACME mode)
 - checking for prerequisite resources (ConfigMap)
