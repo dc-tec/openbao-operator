@@ -73,7 +73,7 @@ func TestCompareScenarioMetricsFindings(t *testing.T) {
 		metricReconcileP95:  9,
 	}
 
-	findings := compareScenarioMetrics("lifecycle", measured, thresholds)
+	findings := compareScenarioMetricsDetailed("lifecycle", measured, thresholds).Findings
 	if len(findings) != 1 {
 		t.Fatalf("findings len = %d, want 1 (%v)", len(findings), findings)
 	}

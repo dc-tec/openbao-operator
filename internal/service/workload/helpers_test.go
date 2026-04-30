@@ -13,6 +13,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 var testScheme = func() *runtime.Scheme {
@@ -57,4 +58,16 @@ func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 //nolint:unparam // test helpers vary these inputs across workload builder tests.
 func buildStatefulSet(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, platform string) (*appsv1.StatefulSet, error) {
 	return buildStatefulSetWithRevision(cluster, configContent, initialized, verifiedImageDigest, verifiedInitContainerDigest, "", platform)
+}
+
+func buildStatefulSetWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, configContent string, initialized bool, verifiedImageDigest string, verifiedInitContainerDigest string, revision string, platform string) (*appsv1.StatefulSet, error) {
+	return buildStatefulSetForSpec(cluster, configContent, initialized, StatefulSetSpec{
+		Name:               statefulSetNameWithRevision(cluster, revision),
+		Pool:               constants.LabelValueOpenBaoWorkloadPoolVoter,
+		Revision:           revision,
+		Image:              verifiedImageDigest,
+		InitContainerImage: verifiedInitContainerDigest,
+		Replicas:           cluster.Spec.Replicas,
+		DisableSelfInit:    false,
+	}, platform)
 }

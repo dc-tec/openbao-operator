@@ -68,7 +68,7 @@ func TestFixtureDrivenThresholdPassAndFail(t *testing.T) {
 			metricReconcileErrRatio: 0.1,
 		},
 	}
-	if findings := compareScenarioMetrics("fixture-pass", measured, passThresholds); len(findings) != 0 {
+	if findings := compareScenarioMetricsDetailed("fixture-pass", measured, passThresholds).Findings; len(findings) != 0 {
 		t.Fatalf("expected pass thresholds, got findings: %v", findings)
 	}
 
@@ -83,7 +83,7 @@ func TestFixtureDrivenThresholdPassAndFail(t *testing.T) {
 			metricReconcileErrRatio: 0.1,
 		},
 	}
-	findings := compareScenarioMetrics("fixture-fail", measured, failThresholds)
+	findings := compareScenarioMetricsDetailed("fixture-fail", measured, failThresholds).Findings
 	if len(findings) == 0 {
 		t.Fatalf("expected at least one finding for fail thresholds")
 	}
