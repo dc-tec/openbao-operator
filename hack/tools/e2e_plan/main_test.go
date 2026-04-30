@@ -2,13 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 const (
-	matrixBoolTrue  = "true"
-	matrixBoolFalse = "false"
+	compatibilitySmokeCoverage = "compatibility-smoke"
+	matrixBoolTrue             = "true"
+	matrixBoolFalse            = "false"
 )
 
 func testVersionPolicy() versionPolicy {
@@ -243,8 +245,8 @@ func TestBuildGithubNightlyMatrixExpandsLaneSetsAndRows(t *testing.T) {
 	if matrix.Include[2].KindNodeImage != "kindest/node:v1.34.3" {
 		t.Fatalf("smoke kind node image = %q, want compatibility image", matrix.Include[2].KindNodeImage)
 	}
-	if matrix.Include[2].Coverage != "compatibility-smoke" {
-		t.Fatalf("coverage = %q, want compatibility-smoke", matrix.Include[2].Coverage)
+	if matrix.Include[2].Coverage != compatibilitySmokeCoverage {
+		t.Fatalf("coverage = %q, want %s", matrix.Include[2].Coverage, compatibilitySmokeCoverage)
 	}
 }
 
@@ -344,6 +346,60 @@ func TestBuildGithubNightlyMatrixRejectsUnknownProfile(t *testing.T) {
 	}
 }
 
+func TestRepoManifestNightlyRoutingUsesCanonicalLaneFilters(t *testing.T) {
+	t.Parallel()
+
+	m := loadRepoManifest(t)
+	lanes, errs := validateLanes(m)
+	if len(errs) > 0 {
+		t.Fatalf("validate lanes: %s", strings.Join(errs, "; "))
+	}
+	securityLane, ok := lanes["security"]
+	if !ok {
+		t.Fatal("security lane is not defined")
+	}
+	if !strings.Contains(securityLane.LabelFilter, "tenant && !lifecycle") {
+		t.Fatalf("security lane label filter = %q, want tenant lifecycle exclusion", securityLane.LabelFilter)
+	}
+
+	compatVersion := firstVersion(t, m.Versions.Kubernetes.Compatibility, "compatibility")
+	dailyCompat := singleNightlyRow(t, m, "daily", nightlyFilters{
+		Lane:       "security",
+		Kubernetes: compatVersion,
+	})
+	if dailyCompat.Coverage != compatibilitySmokeCoverage {
+		t.Fatalf("daily security coverage = %q, want %s", dailyCompat.Coverage, compatibilitySmokeCoverage)
+	}
+	if strings.Contains(dailyCompat.LabelFilter, "|| tenant ||") {
+		t.Fatalf(
+			"daily security compatibility label filter = %q, must not select all tenant lifecycle specs",
+			dailyCompat.LabelFilter,
+		)
+	}
+	if !strings.Contains(dailyCompat.LabelFilter, "tenant && !lifecycle") {
+		t.Fatalf("daily security compatibility label filter = %q, want tenant lifecycle exclusion", dailyCompat.LabelFilter)
+	}
+
+	coreCompat := singleNightlyRow(t, m, "daily", nightlyFilters{
+		Lane:       "core",
+		Kubernetes: compatVersion,
+	})
+	if coreCompat.Coverage != compatibilitySmokeCoverage {
+		t.Fatalf("daily core coverage = %q, want %s", coreCompat.Coverage, compatibilitySmokeCoverage)
+	}
+	if !strings.Contains(coreCompat.LabelFilter, "lifecycle && smoke") ||
+		!strings.Contains(coreCompat.LabelFilter, "manager && smoke") {
+		t.Fatalf(
+			"daily core compatibility label filter = %q, want smoke-gated lifecycle and manager routing",
+			coreCompat.LabelFilter,
+		)
+	}
+
+	releaseGateVersion := firstVersion(t, m.Versions.Kubernetes.ReleaseGate, "releaseGate")
+	assertProfileUsesCanonicalLaneFilters(t, m, lanes, "weekly-full", "full", releaseGateVersion)
+	assertProfileUsesCanonicalLaneFilters(t, m, lanes, "release-gate", "release-gate", releaseGateVersion)
+}
+
 func TestGithubMatrixJSONShape(t *testing.T) {
 	t.Parallel()
 
@@ -392,4 +448,73 @@ func TestGithubMatrixJSONShape(t *testing.T) {
 	if !strings.Contains(out, `"rustfs_image":"docker.io/rustfs/rustfs@sha256:test-rustfs"`) {
 		t.Fatalf("matrix json missing rustfs image: %s", out)
 	}
+}
+
+func loadRepoManifest(t *testing.T) manifest {
+	t.Helper()
+
+	m, err := loadManifest(filepath.Join("..", "..", "..", "test", "e2e", "suites.yaml"))
+	if err != nil {
+		t.Fatalf("load repo manifest: %v", err)
+	}
+	return m
+}
+
+func singleNightlyRow(t *testing.T, m manifest, profile string, filters nightlyFilters) matrixRow {
+	t.Helper()
+
+	matrix, err := buildGithubNightlyMatrix(m, profile, filters)
+	if err != nil {
+		t.Fatalf("build %s nightly matrix: %v", profile, err)
+	}
+	if got := len(matrix.Include); got != 1 {
+		t.Fatalf("%s nightly matrix rows = %d, want 1", profile, got)
+	}
+	return matrix.Include[0]
+}
+
+func assertProfileUsesCanonicalLaneFilters(
+	t *testing.T,
+	m manifest,
+	lanes map[string]ciLaneConfig,
+	profile string,
+	coverage string,
+	kubernetes string,
+) {
+	t.Helper()
+
+	matrix, err := buildGithubNightlyMatrix(m, profile, nightlyFilters{Kubernetes: kubernetes})
+	if err != nil {
+		t.Fatalf("build %s nightly matrix: %v", profile, err)
+	}
+	if len(matrix.Include) == 0 {
+		t.Fatalf("%s nightly matrix produced no rows", profile)
+	}
+	for _, row := range matrix.Include {
+		if row.Coverage != coverage {
+			t.Fatalf("%s row %q coverage = %q, want %q", profile, row.ID, row.Coverage, coverage)
+		}
+		lane, ok := lanes[row.ID]
+		if !ok {
+			t.Fatalf("%s row references unknown lane %q", profile, row.ID)
+		}
+		if row.LabelFilter != lane.LabelFilter {
+			t.Fatalf(
+				"%s row %q label filter = %q, want canonical lane filter %q",
+				profile,
+				row.ID,
+				row.LabelFilter,
+				lane.LabelFilter,
+			)
+		}
+	}
+}
+
+func firstVersion(t *testing.T, versions []string, field string) string {
+	t.Helper()
+
+	if len(versions) == 0 {
+		t.Fatalf("versions.kubernetes.%s must not be empty", field)
+	}
+	return versions[0]
 }
