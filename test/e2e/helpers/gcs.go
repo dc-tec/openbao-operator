@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -8,6 +9,9 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -263,10 +267,11 @@ func CreateGCSCredentialsSecret(ctx context.Context, c client.Client, namespace,
 	return nil
 }
 
-// CreateFakeGCSBucket creates a bucket in the fake-gcs-server emulator by running a Pod inside the cluster.
+// CreateFakeGCSBucket creates a bucket in the fake-gcs-server emulator.
 // This is necessary because fake-gcs-server with -backend memory starts completely empty.
 // The bucket must exist before OpenBao's backup job attempts to write snapshots.
-// This function uses a Pod to make the HTTP request so it can access the cluster's internal DNS.
+// The request goes through the Kubernetes API server service proxy so the suite
+// does not depend on an extra curl/helper image pull.
 func CreateFakeGCSBucket(
 	ctx context.Context,
 	restCfg *rest.Config,
@@ -289,78 +294,72 @@ func CreateFakeGCSBucket(
 		return fmt.Errorf("bucket name is required")
 	}
 
-	// Normalize endpoint (remove trailing slash if present)
-	endpoint = strings.TrimSuffix(endpoint, "/")
-	url := fmt.Sprintf("%s/storage/v1/b?project=%s", endpoint, "test-project")
+	proxyURL, err := fakeGCSBucketProxyURL(restCfg, namespace, endpoint, "test-project")
+	if err != nil {
+		return err
+	}
 	payload := fmt.Sprintf(`{"name": "%s"}`, bucketName)
 
-	// Generate unique pod name
-	suffix, err := randomHexSuffix(4)
+	transport, err := rest.TransportFor(restCfg)
 	if err != nil {
-		return fmt.Errorf("failed to generate pod suffix: %w", err)
+		return fmt.Errorf("failed to create Kubernetes API transport: %w", err)
 	}
 
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("create-gcs-bucket-%s", suffix),
-			Namespace: namespace,
-			Labels: map[string]string{
-				"openbao.org/component": "gcs-bucket-create",
-			},
-		},
-		Spec: corev1.PodSpec{
-			RestartPolicy: corev1.RestartPolicyNever,
-			SecurityContext: &corev1.PodSecurityContext{
-				RunAsNonRoot: ptr.To(true),
-				RunAsUser:    ptr.To(int64(1000)),
-				RunAsGroup:   ptr.To(int64(1000)),
-				FSGroup:      ptr.To(int64(1000)),
-				SeccompProfile: &corev1.SeccompProfile{
-					Type: corev1.SeccompProfileTypeRuntimeDefault,
-				},
-			},
-			Containers: []corev1.Container{
-				{
-					Name:    "curl",
-					Image:   "curlimages/curl:8.4.0",
-					Command: []string{"/bin/sh", "-ec"},
-					Args: []string{fmt.Sprintf(`
-set -e
-# Create bucket via HTTP POST
-response=$(curl -s -w "\n%%{http_code}" -X POST -H "Content-Type: application/json" -d '%s' "%s")
-http_code=$(echo "$response" | tail -n1)
-body=$(echo "$response" | sed '$d')
-
-# Accept 200 (created) or 409 (already exists)
-if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 409 ]; then
-  echo "Bucket %s created or already exists (status: $http_code)"
-  exit 0
-else
-  echo "Failed to create bucket, status: $http_code, response: $body" >&2
-  exit 1
-fi
-`, payload, url, bucketName)},
-					SecurityContext: &corev1.SecurityContext{
-						AllowPrivilegeEscalation: ptr.To(false),
-						Capabilities: &corev1.Capabilities{
-							Drop: []corev1.Capability{"ALL"},
-						},
-						RunAsNonRoot: ptr.To(true),
-					},
-				},
-			},
-		},
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   defaultHTTPTimeout,
 	}
-
-	result, err := RunPodUntilCompletion(ctx, restCfg, c, pod, 2*time.Minute)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyURL, bytes.NewBufferString(payload))
 	if err != nil {
-		return fmt.Errorf("failed to run bucket creation pod: %w", err)
+		return fmt.Errorf("failed to build fake-gcs bucket creation request: %w", err)
 	}
+	req.Header.Set("Content-Type", "application/json")
 
-	if result.Phase != corev1.PodSucceeded {
-		return fmt.Errorf("bucket creation pod failed, phase=%s, logs:\n%s", result.Phase, result.Logs)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create fake-gcs bucket via Kubernetes service proxy: %w", err)
 	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
-	_ = DeletePodBestEffort(ctx, c, namespace, pod.Name)
-	return nil
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusConflict {
+		return nil
+	}
+	return fmt.Errorf("failed to create fake-gcs bucket %q: status=%d body=%s", bucketName, resp.StatusCode, strings.TrimSpace(string(body)))
 }
+
+func fakeGCSBucketProxyURL(restCfg *rest.Config, namespace, endpoint, project string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSuffix(endpoint, "/"))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse fake-gcs endpoint %q: %w", endpoint, err)
+	}
+	if parsed.Scheme == "" {
+		return "", fmt.Errorf("fake-gcs endpoint %q is missing a scheme", endpoint)
+	}
+	serviceName := strings.Split(parsed.Hostname(), ".")[0]
+	if serviceName == "" {
+		return "", fmt.Errorf("fake-gcs endpoint %q is missing a service hostname", endpoint)
+	}
+	port := parsed.Port()
+	if port == "" {
+		if parsed.Scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+
+	return fmt.Sprintf(
+		"%s/api/v1/namespaces/%s/services/%s:%s:%s/proxy/storage/v1/b?project=%s",
+		strings.TrimSuffix(restCfg.Host, "/"),
+		namespace,
+		parsed.Scheme,
+		serviceName,
+		port,
+		url.QueryEscape(project),
+	), nil
+}
+
+const defaultHTTPTimeout = 15 * time.Second

@@ -328,7 +328,9 @@ jobs:
       - name: Summarize E2E report
         if: always()
         env:
+          E2E_LABEL_FILTER: ${{ matrix.label_filter }}
           GOFLAGS: -mod=vendor
+          KIND_NODE_IMAGE: ${{ matrix.kind_node_image }}
         run: |
           set -euo pipefail
           if [[ -z "${E2E_JSON_REPORT:-}" ]] || [[ ! -s "${E2E_JSON_REPORT}" ]]; then

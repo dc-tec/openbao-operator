@@ -656,6 +656,7 @@
       "setting up ACME service and domain",
       "creating transit token secret for auto-unseal (include TLS CA for transit and PKI CA for ACME)",
       "verifying transit token secret can access infra-bao transit key",
+      "preparing ACME shared cache storage",
       "waiting for OpenBaoCluster to be observed by the API server",
       "verifying TLS secrets are NOT created (ACME mode)",
       "checking for prerequisite resources (ConfigMap)",
@@ -2154,8 +2155,7 @@
     "steps": [
       "Triggering a rolling upgrade with a bad non-semver image tag",
       "Waiting for the rolling upgrade to initialize",
-      "Backdating upgrade start time to force the real timeout/retry path instead of waiting ten minutes",
-      "Waiting for the rolling upgrade to fail with a retryable status",
+      "Forcing the real timeout/retry path without waiting ten minutes",
       "Injecting a stale deterministic step-down job for the retry cleanup path",
       "Restoring the target image and requesting a rolling retry",
       "Verifying retry preparation clears failed status, records the handled request, and removes the stale step-down job",
