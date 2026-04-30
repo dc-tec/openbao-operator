@@ -149,7 +149,7 @@ func TestEnsureUpgradeServiceAccountSuccess(t *testing.T) {
 		{
 			name:           "defaults field owner",
 			fieldOwner:     "",
-			wantFieldOwner: "openbao-operator",
+			wantFieldOwner: constants.FieldOwnerOpenBaoOperator,
 		},
 		{
 			name:           "uses provided field owner",

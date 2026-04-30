@@ -21,7 +21,7 @@ func (m *Manager) ensureBlueClusterReadyForGreen(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	blueRevision string,
 ) (phaseOutcome, bool, error) {
-	bluePods, err := m.getBluePods(ctx, cluster, blueRevision)
+	bluePods, err := m.getPodsByRevision(ctx, cluster, blueRevision)
 	if err != nil {
 		return phaseOutcome{}, true, fmt.Errorf("failed to get Blue pods: %w", err)
 	}
@@ -136,7 +136,7 @@ func (m *Manager) waitForGreenPodsReady(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	greenRevision string,
 ) (phaseOutcome, bool, error) {
-	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
+	greenPods, err := m.getPodsByRevision(ctx, cluster, greenRevision)
 	if err != nil {
 		return phaseOutcome{}, true, fmt.Errorf("failed to get Green pods: %w", err)
 	}

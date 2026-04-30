@@ -49,7 +49,7 @@ func (m *Manager) prepareUpgradeExecution(
 }
 
 func (m *Manager) ensureUpgradePrerequisites(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
-	if err := upgrade.EnsureUpgradeServiceAccount(ctx, m.client, cluster, "openbao-operator"); err != nil {
+	if err := upgrade.EnsureUpgradeServiceAccount(ctx, m.client, cluster, constants.FieldOwnerOpenBaoOperator); err != nil {
 		return fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 	if err := m.validateUpgrade(ctx, logger, cluster); err != nil {

@@ -180,7 +180,7 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		if cluster.Spec.SelfInit.OIDC.Issuer != "" {
 			issuer = cluster.Spec.SelfInit.OIDC.Issuer
 		}
-		audience := portauth.EffectiveBootstrapAudience(cluster, operatorAudience)
+		audience := portauth.OperatorJWTAudience(operatorAudience)
 
 		bootstrapConfig = &configbuilder.OperatorBootstrapConfig{
 			OIDCIssuerURL:      issuer,

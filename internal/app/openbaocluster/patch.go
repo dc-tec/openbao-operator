@@ -16,9 +16,48 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
 )
 
-const (
-	workloadFieldOwner = "openbao-workload-controller"
-)
+// PatchStatusOwnedFields patches only status-controller owned status fields.
+func PatchStatusOwnedFields(ctx context.Context, c client.Client, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil {
+		return fmt.Errorf("cluster is required")
+	}
+
+	applyCluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			ObservedGeneration: cluster.Status.ObservedGeneration,
+			Phase:              cluster.Status.Phase,
+			ActiveLeader:       cluster.Status.ActiveLeader,
+			ReadyReplicas:      cluster.Status.ReadyReplicas,
+			ReadReplicas:       cluster.Status.ReadReplicas,
+			CurrentVersion:     cluster.Status.CurrentVersion,
+			LastBackupTime:     cluster.Status.LastBackupTime,
+			Conditions:         cluster.Status.Conditions,
+		},
+	}
+
+	explicitNullPaths := make([]string, 0, 2)
+	if cluster.Status.ReadReplicas == nil {
+		explicitNullPaths = append(explicitNullPaths, "status.readReplicas")
+	}
+	if cluster.Status.LastBackupTime == nil {
+		explicitNullPaths = append(explicitNullPaths, "status.lastBackupTime")
+	}
+
+	applyConfig, err := statusapply.ToApplyConfigurationWithExplicitNulls(applyCluster, c, explicitNullPaths...)
+	if err != nil {
+		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
+	}
+
+	return c.Status().Apply(ctx, applyConfig, client.FieldOwner(constants.FieldOwnerStatus))
+}
 
 // PatchWorkloadOwnedFields patches only workload-controller owned status fields.
 func PatchWorkloadOwnedFields(
@@ -65,14 +104,14 @@ func PatchWorkloadOwnedFields(
 		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
 	}
 
-	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner(workloadFieldOwner)); err != nil {
+	if err := c.Status().Apply(ctx, applyConfig, client.FieldOwner(constants.FieldOwnerWorkloadStatus)); err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(1).Info("Skipping workload status patch because OpenBaoCluster no longer exists", "reason", reason)
 			return nil
 		}
 		return fmt.Errorf("failed to patch workload status (%s) for OpenBaoCluster %s/%s: %w", reason, cluster.Namespace, cluster.Name, err)
 	}
-	logger.V(1).Info("Patched OpenBaoCluster workload status (SSA)", "reason", reason, "fieldOwner", workloadFieldOwner)
+	logger.V(1).Info("Patched OpenBaoCluster workload status (SSA)", "reason", reason, "fieldOwner", constants.FieldOwnerWorkloadStatus)
 	return nil
 }
 

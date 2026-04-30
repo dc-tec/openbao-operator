@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
@@ -51,7 +52,7 @@ func (m *Manager) prepareBlueGreenReconcile(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (recon.Result, bool, error) {
-	if err := upgrade.EnsureUpgradeServiceAccount(ctx, m.client, cluster, "openbao-operator"); err != nil {
+	if err := upgrade.EnsureUpgradeServiceAccount(ctx, m.client, cluster, constants.FieldOwnerOpenBaoOperator); err != nil {
 		return recon.Result{}, false, fmt.Errorf("failed to ensure upgrade ServiceAccount: %w", err)
 	}
 

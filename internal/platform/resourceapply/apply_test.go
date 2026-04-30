@@ -2,6 +2,7 @@ package resourceapply
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -49,6 +50,21 @@ func TestApplyUnownedDoesNotSetOwnerReference(t *testing.T) {
 	}
 	if len(stored.OwnerReferences) != 0 {
 		t.Fatalf("expected no owner references, got %#v", stored.OwnerReferences)
+	}
+}
+
+func TestPrepareOwnedRequiresScheme(t *testing.T) {
+	t.Parallel()
+
+	owner := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default", UID: "12345"}}
+	obj := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "cfg", Namespace: "default"}}
+
+	err := PrepareOwned(obj, owner, nil)
+	if err == nil {
+		t.Fatal("PrepareOwned() expected error")
+	}
+	if !strings.Contains(err.Error(), "scheme is required") {
+		t.Fatalf("PrepareOwned() error = %q, want scheme requirement", err.Error())
 	}
 }
 

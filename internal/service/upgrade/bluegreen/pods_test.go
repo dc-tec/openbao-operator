@@ -183,32 +183,6 @@ func TestGetPodsByRevision_TableDriven(t *testing.T) {
 	}
 }
 
-func TestGetBluePods_UsesBlueRevisionWrapper(t *testing.T) {
-	t.Parallel()
-
-	scheme := newBlueGreenTestScheme(t)
-	cluster := newBlueGreenCluster()
-	bluePod := newGreenPod(cluster, "blue", "blue-0")
-	greenPod := newGreenPod(cluster, "green", "green-0")
-	mgr := &Manager{
-		client: fake.NewClientBuilder().
-			WithScheme(scheme).
-			WithObjects(bluePod, greenPod).
-			Build(),
-	}
-
-	pods, err := mgr.getBluePods(context.Background(), cluster, "blue")
-	if err != nil {
-		t.Fatalf("getBluePods() error = %v", err)
-	}
-	if len(pods) != 1 {
-		t.Fatalf("len(pods) = %d, want 1", len(pods))
-	}
-	if pods[0].Name != "blue-0" {
-		t.Fatalf("pods[0].Name = %q, want %q", pods[0].Name, "blue-0")
-	}
-}
-
 func TestCleanupGreenStatefulSet_TableDriven(t *testing.T) {
 	t.Parallel()
 

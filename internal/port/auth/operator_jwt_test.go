@@ -148,27 +148,3 @@ func TestBootstrapAudienceMatchesInstallation(t *testing.T) {
 		t.Fatal("BootstrapAudienceMatchesInstallation() = false, want true for empty override")
 	}
 }
-
-func TestEffectiveBootstrapAudience(t *testing.T) {
-	t.Parallel()
-
-	cluster := &openbaov1alpha1.OpenBaoCluster{
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			SelfInit: &openbaov1alpha1.SelfInitConfig{
-				Enabled: true,
-				OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
-					Enabled:  true,
-					Audience: "custom-audience",
-				},
-			},
-		},
-	}
-
-	if got := EffectiveBootstrapAudience(cluster, "runtime-audience"); got != "runtime-audience" {
-		t.Fatalf("EffectiveBootstrapAudience() = %q, want runtime-audience", got)
-	}
-
-	if got := EffectiveBootstrapAudience(nil, ""); got != TokenAudienceOpenBaoInternal {
-		t.Fatalf("EffectiveBootstrapAudience(nil, \"\") = %q, want %q", got, TokenAudienceOpenBaoInternal)
-	}
-}

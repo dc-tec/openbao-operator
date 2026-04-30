@@ -23,7 +23,7 @@ func (m *Manager) checkAbortConditions(ctx context.Context, logger logr.Logger, 
 		return false, nil
 	}
 
-	greenPods, err := m.getGreenPods(ctx, cluster, greenRevision)
+	greenPods, err := m.getPodsByRevision(ctx, cluster, greenRevision)
 	if err != nil {
 		return false, fmt.Errorf("failed to get Green pods: %w", err)
 	}

@@ -11,10 +11,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
 )
-
-const ssaFieldOwner = "openbao-operator"
 
 // EnsureBackupServiceAccount creates or updates the ServiceAccount for backup/snapshot Jobs.
 func EnsureBackupServiceAccount(ctx context.Context, c client.Client, scheme *runtime.Scheme, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -32,7 +31,7 @@ func EnsureBackupServiceAccount(ctx context.Context, c client.Client, scheme *ru
 		},
 	}
 
-	if err := applyResource(ctx, c, scheme, sa, cluster, ssaFieldOwner); err != nil {
+	if err := resourceapply.ApplyOwned(ctx, c, scheme, cluster, sa); err != nil {
 		return fmt.Errorf("failed to ensure backup ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
 	}
 
@@ -65,7 +64,7 @@ func EnsureBackupRBAC(ctx context.Context, c client.Client, scheme *runtime.Sche
 		},
 	}
 
-	if err := applyResource(ctx, c, scheme, role, cluster, ssaFieldOwner); err != nil {
+	if err := resourceapply.ApplyOwned(ctx, c, scheme, cluster, role); err != nil {
 		return fmt.Errorf("failed to ensure Role %s/%s: %w", cluster.Namespace, roleName, err)
 	}
 
@@ -93,7 +92,7 @@ func EnsureBackupRBAC(ctx context.Context, c client.Client, scheme *runtime.Sche
 		},
 	}
 
-	if err := applyResource(ctx, c, scheme, roleBinding, cluster, ssaFieldOwner); err != nil {
+	if err := resourceapply.ApplyOwned(ctx, c, scheme, cluster, roleBinding); err != nil {
 		return fmt.Errorf("failed to ensure RoleBinding %s/%s: %w", cluster.Namespace, roleBindingName, err)
 	}
 
