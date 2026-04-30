@@ -3,6 +3,31 @@ description: Propose an enhancement or new capability
 labels:
   - enhancement
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an improvement. Use this form for new behavior, APIs, or workflows, not reproducible defects.
+
+  - type: dropdown
+    id: affected_area
+    attributes:
+      label: Affected area
+      description: Which part of the operator would this change affect?
+      options:
+        - Install/upgrade
+        - Reconciliation
+        - OpenBaoCluster status/conditions
+        - TLS/certificates
+        - Auto-unseal
+        - Backup/restore
+        - Helm chart
+        - RBAC
+        - Metrics/observability
+        - Documentation
+        - Other
+    validations:
+      required: true
+
   - type: textarea
     id: problem
     attributes:
@@ -12,12 +37,12 @@ body:
       required: true
 
   - type: textarea
-    id: impact
+    id: use_case
     attributes:
-      label: Impact
-      description: Who will benefit from this feature? How valuable is it?
+      label: Use case
+      description: Describe the user workflow, deployment scenario, or operational need.
     validations:
-      required: false
+      required: true
 
   - type: textarea
     id: proposal
@@ -28,12 +53,53 @@ body:
       required: true
 
   - type: textarea
+    id: api_shape
+    attributes:
+      label: Proposed API or manifest shape
+      description: If this changes Kubernetes resources, Helm values, or configuration, show the shape you have in mind.
+      placeholder: |
+        apiVersion: openbao.bao.io/v1alpha1
+        kind: OpenBaoCluster
+        spec:
+          ...
+      render: yaml
+
+  - type: dropdown
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: How do you expect this to affect existing users?
+      options:
+        - Additive change
+        - Behavior change
+        - Breaking change
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      description: How do you solve or avoid this today, if at all?
+
+  - type: textarea
     id: alternatives
     attributes:
       label: Alternatives considered
+      description: Other designs or approaches you have considered.
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you be willing to contribute this?
+      options:
+        - "Yes"
+        - "No"
+        - Maybe
 
   - type: textarea
     id: additional
     attributes:
       label: Additional context
-
+      description: Links, diagrams, examples, related issues, or operational constraints.

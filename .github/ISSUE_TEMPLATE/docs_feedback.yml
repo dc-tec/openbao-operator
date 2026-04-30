@@ -8,12 +8,36 @@ body:
       value: |
         Thanks for helping improve the docs. Use this form for page quality problems, not product bugs or feature requests.
 
-  - type: input
-    id: page_path
+  - type: dropdown
+    id: docs_area
     attributes:
-      label: Docs page path
-      description: Route path for the page that needs work
-      placeholder: /openbao-operator/docs/...
+      label: Docs area
+      description: Which part of the documentation needs work?
+      options:
+        - Installation
+        - Configuration
+        - Operations
+        - Troubleshooting
+        - API reference
+        - Validated deployments
+        - Contributing
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: feedback_type
+    attributes:
+      label: Feedback type
+      description: What kind of documentation problem is this?
+      options:
+        - Confusing explanation
+        - Missing information
+        - Incorrect information
+        - Outdated information
+        - Broken link or navigation
+        - Typo or formatting problem
+        - Other
     validations:
       required: true
 
@@ -21,10 +45,17 @@ body:
     id: page_url
     attributes:
       label: Docs page URL
-      description: Full URL for the page that needs work
+      description: Full URL for the page that needs work.
       placeholder: https://dc-tec.github.io/openbao-operator/docs/...
     validations:
       required: true
+
+  - type: input
+    id: page_path
+    attributes:
+      label: Docs page path
+      description: Optional route path for the page that needs work.
+      placeholder: /openbao-operator/docs/...
 
   - type: textarea
     id: issue
@@ -39,6 +70,14 @@ body:
     attributes:
       label: What were you trying to do?
       description: The task or question you had when you opened the page.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What information did you expect?
+      description: Describe the answer, example, command, or guidance you were looking for.
     validations:
       required: true
 
