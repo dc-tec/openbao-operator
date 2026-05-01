@@ -15,6 +15,7 @@ const (
 	ReasonPrerequisitesReady                   = "PrerequisitesReady"
 	ReasonAdmissionPoliciesNotReady            = "AdmissionPoliciesNotReady"
 	ReasonAdmissionPoliciesReady               = "AdmissionPoliciesReady"
+	ReasonUnsafeAdmissionDisabled              = "UnsafeAdmissionDisabled"
 
 	ReasonInProgress = "InProgress"
 
@@ -35,6 +36,7 @@ const (
 	ReasonTransitAddressNotHTTPS                 = "TransitAddressNotHTTPS"
 	ReasonTransitInlineToken                     = "TransitInlineToken"
 	ReasonUnsealTLSSkipVerify                    = "UnsealTLSSkipVerify"
+	ReasonSecurityContextWeakening               = "SecurityContextWeakening"
 	ReasonUserAccessConfigured                   = "UserAccessConfigured"
 	ReasonUserAccessUnverified                   = "UserAccessUnverified"
 	ReasonRootTokenStored                        = "RootTokenStored"
@@ -105,11 +107,12 @@ const (
 	controllerNameAdminOps = "openbaocluster-adminops"
 	controllerNameStatus   = "openbaocluster-status"
 
-	annotationLastDevelopmentWarning   = "openbao.org/last-development-warning"
-	annotationLastAmbientUnsealNote    = "openbao.org/last-ambient-unseal-identity-note"
-	annotationLastProfileNotSetWarning = "openbao.org/last-profile-not-set-warning"
-	annotationLastRootTokenWarning     = "openbao.org/last-root-token-warning"
-	annotationLastStaticUnsealWarning  = "openbao.org/last-static-unseal-warning"
+	annotationLastDevelopmentWarning     = "openbao.org/last-development-warning"
+	annotationLastAmbientUnsealNote      = "openbao.org/last-ambient-unseal-identity-note"
+	annotationLastProfileNotSetWarning   = "openbao.org/last-profile-not-set-warning"
+	annotationLastRootTokenWarning       = "openbao.org/last-root-token-warning"
+	annotationLastStaticUnsealWarning    = "openbao.org/last-static-unseal-warning"
+	annotationLastUnsafeAdmissionWarning = "openbao.org/last-unsafe-admission-warning"
 )
 
 const securityWarningInterval = time.Hour

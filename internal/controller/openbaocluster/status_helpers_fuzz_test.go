@@ -14,11 +14,11 @@ import (
 )
 
 func FuzzEvaluateProductionReady(f *testing.F) {
-	f.Add(uint8(0), uint8(0), uint8(0), true, true, "all good")
-	f.Add(uint8(1), uint8(1), uint8(1), false, false, "missing admission")
-	f.Add(uint8(2), uint8(2), uint8(0), true, false, "development")
+	f.Add(uint8(0), uint8(0), uint8(0), true, true, false, "all good")
+	f.Add(uint8(1), uint8(1), uint8(1), false, false, false, "missing admission")
+	f.Add(uint8(2), uint8(2), uint8(0), true, false, true, "development")
 
-	f.Fuzz(func(t *testing.T, profileSeed, tlsSeed, unsealSeed uint8, selfInitEnabled, admissionReady bool, admissionSummary string) {
+	f.Fuzz(func(t *testing.T, profileSeed, tlsSeed, unsealSeed uint8, selfInitEnabled, admissionReady, unsafeAdmission bool, admissionSummary string) {
 		cluster := newOpenBaoClusterStatusTestObject()
 		cluster.Spec.Profile = fuzzProfile(profileSeed)
 		cluster.Spec.TLS = openbaov1alpha1.TLSConfig{
@@ -30,7 +30,7 @@ func FuzzEvaluateProductionReady(f *testing.F) {
 		}
 		cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{Enabled: selfInitEnabled}
 
-		status, reason, message := evaluateProductionReady(cluster, admissionReady, strings.TrimSpace(admissionSummary))
+		status, reason, message := evaluateProductionReady(cluster, admissionReady, strings.TrimSpace(admissionSummary), unsafeAdmission)
 		if reason == "" {
 			t.Fatalf("expected non-empty reason for production-ready evaluation")
 		}

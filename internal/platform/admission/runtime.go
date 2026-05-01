@@ -14,6 +14,11 @@ func RefreshStatus(ctx context.Context, tracker *Tracker, reader client.Reader) 
 	if tracker != nil {
 		return tracker.EnsureFresh(ctx)
 	}
+	if UnsafeAdmissionDisabled() {
+		status := unsafeModeStatus()
+		SetAdmissionDependenciesReady(status.OverallReady)
+		return cloneStatus(&status), nil
+	}
 
 	// Preserve existing unit-test behavior when callers seed the legacy global
 	// readiness signal without constructing a tracker.

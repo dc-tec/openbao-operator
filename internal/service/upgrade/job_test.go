@@ -13,7 +13,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -166,6 +168,50 @@ func TestBuildUpgradeExecutorJob_AllowsOIDCWithoutUpgradeConfig(t *testing.T) {
 	}
 	if !foundRole {
 		t.Fatalf("missing %s env var", constants.EnvUpgradeJWTAuthRole)
+	}
+}
+
+func TestBuildUpgradeExecutorJob_SetsResourceRequirements(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Upgrade: &openbaov1alpha1.UpgradeConfig{
+				Image:       "test-image",
+				JWTAuthRole: "test-role",
+			},
+		},
+	}
+
+	job, err := buildUpgradeExecutorJob(
+		cluster,
+		"test-job",
+		ExecutorAction("test"),
+		"run-id",
+		"",
+		"",
+		"",
+		portopenbao.ClientConfig{},
+		constants.PlatformKubernetes,
+	)
+	if err != nil {
+		t.Fatalf("buildUpgradeExecutorJob() error = %v", err)
+	}
+
+	resources := job.Spec.Template.Spec.Containers[0].Resources
+	if got := resources.Requests[corev1.ResourceCPU]; got.Cmp(resource.MustParse("100m")) != 0 {
+		t.Fatalf("CPU request = %s, want 100m", got.String())
+	}
+	if got := resources.Requests[corev1.ResourceMemory]; got.Cmp(resource.MustParse("128Mi")) != 0 {
+		t.Fatalf("memory request = %s, want 128Mi", got.String())
+	}
+	if got := resources.Limits[corev1.ResourceCPU]; got.Cmp(resource.MustParse("500m")) != 0 {
+		t.Fatalf("CPU limit = %s, want 500m", got.String())
+	}
+	if got := resources.Limits[corev1.ResourceMemory]; got.Cmp(resource.MustParse("512Mi")) != 0 {
+		t.Fatalf("memory limit = %s, want 512Mi", got.String())
 	}
 }
 
