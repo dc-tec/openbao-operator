@@ -194,6 +194,16 @@ replacements:
           group: admissionregistration.k8s.io
           version: v1
           kind: ValidatingAdmissionPolicy
+          name: openbao-operator-openbao-lock-managed-resource-mutations
+        fieldPaths:
+          - spec.variables.[name=provisioner_serviceaccount_name].expression
+        options:
+          delimiter: "'"
+          index: 1
+      - select:
+          group: admissionregistration.k8s.io
+          version: v1
+          kind: ValidatingAdmissionPolicy
           name: openbao-operator-openbao-restrict-provisioner-namespace-mutations
         fieldPaths:
           - spec.variables.[name=provisioner_serviceaccount_name].expression
