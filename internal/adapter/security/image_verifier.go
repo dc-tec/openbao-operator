@@ -33,9 +33,9 @@ type ImageVerifier struct {
 }
 
 // TrustedRootConfig specifies where to load the trusted root material from.
-// If ConfigMapName and ConfigMapNamespace are set, the trusted root will be
-// loaded from that ConfigMap (key: "trusted_root.json"). Otherwise, the
-// embedded trusted_root.json will be used.
+// If either ConfigMapName or ConfigMapNamespace is set, both values are required
+// and the trusted root must be loaded from that ConfigMap (key: "trusted_root.json").
+// When neither value is set, the embedded trusted_root.json is used.
 type TrustedRootConfig struct {
 	ConfigMapName      string
 	ConfigMapNamespace string
@@ -43,8 +43,8 @@ type TrustedRootConfig struct {
 
 // NewImageVerifier creates a new ImageVerifier with the provided logger and Kubernetes client.
 // The client is used to read ImagePullSecrets for private registry authentication.
-// trustedRootConfig is optional - if provided, the trusted root will be loaded from the
-// specified ConfigMap instead of using the embedded version.
+// trustedRootConfig is optional. When it names a ConfigMap, missing or invalid
+// ConfigMap data fails closed instead of falling back to the embedded root.
 func NewImageVerifier(logger logr.Logger, k8sClient client.Client, trustedRootConfig *TrustedRootConfig) *ImageVerifier {
 	return &ImageVerifier{
 		logger:            logger,

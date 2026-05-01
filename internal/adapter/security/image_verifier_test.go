@@ -11,6 +11,10 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/sigstore/cosign/v3/pkg/oci"
 	"github.com/sigstore/cosign/v3/pkg/oci/static"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
@@ -48,6 +52,128 @@ func TestNewImageVerifier(t *testing.T) {
 	if verifier.client != client {
 		t.Error("NewImageVerifier() client not set correctly")
 	}
+}
+
+func TestImageVerifier_LoadTrustedRoot_UsesEmbeddedWhenConfigAbsent(t *testing.T) {
+	verifier := NewImageVerifier(logr.Discard(), fake.NewClientBuilder().Build(), nil)
+
+	trustedRoot, err := verifier.loadTrustedRoot(context.Background())
+	if err != nil {
+		t.Fatalf("loadTrustedRoot() error = %v", err)
+	}
+	if trustedRoot == nil {
+		t.Fatal("loadTrustedRoot() returned nil trusted root")
+	}
+}
+
+func TestImageVerifier_LoadTrustedRoot_ConfigMap(t *testing.T) {
+	tests := []struct {
+		name        string
+		client      crclient.Client
+		config      *TrustedRootConfig
+		wantErrPart string
+	}{
+		{
+			name: "loads configured configmap",
+			client: newTrustedRootTestClient(t, &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "sigstore-root",
+					Namespace: "openbao-system",
+				},
+				Data: map[string]string{
+					trustedRootConfigMapKey: string(embeddedTrustedRootJSON),
+				},
+			}),
+			config: &TrustedRootConfig{
+				ConfigMapName:      "sigstore-root",
+				ConfigMapNamespace: "openbao-system",
+			},
+		},
+		{
+			name:   "missing configured configmap fails closed",
+			client: newTrustedRootTestClient(t),
+			config: &TrustedRootConfig{
+				ConfigMapName:      "sigstore-root",
+				ConfigMapNamespace: "openbao-system",
+			},
+			wantErrPart: "failed to load trusted root ConfigMap openbao-system/sigstore-root",
+		},
+		{
+			name: "missing trusted root key fails closed",
+			client: newTrustedRootTestClient(t, &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "sigstore-root",
+					Namespace: "openbao-system",
+				},
+				Data: map[string]string{"other": "{}"},
+			}),
+			config: &TrustedRootConfig{
+				ConfigMapName:      "sigstore-root",
+				ConfigMapNamespace: "openbao-system",
+			},
+			wantErrPart: `missing required key "trusted_root.json"`,
+		},
+		{
+			name: "invalid trusted root json fails closed",
+			client: newTrustedRootTestClient(t, &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "sigstore-root",
+					Namespace: "openbao-system",
+				},
+				Data: map[string]string{trustedRootConfigMapKey: "not-json"},
+			}),
+			config: &TrustedRootConfig{
+				ConfigMapName:      "sigstore-root",
+				ConfigMapNamespace: "openbao-system",
+			},
+			wantErrPart: "failed to parse trusted_root.json from ConfigMap openbao-system/sigstore-root",
+		},
+		{
+			name:        "partial config fails closed",
+			client:      newTrustedRootTestClient(t),
+			config:      &TrustedRootConfig{ConfigMapName: "sigstore-root"},
+			wantErrPart: "requires both namespace and name",
+		},
+		{
+			name:        "configured configmap without client fails closed",
+			client:      nil,
+			config:      &TrustedRootConfig{ConfigMapName: "sigstore-root", ConfigMapNamespace: "openbao-system"},
+			wantErrPart: "Kubernetes client is not available",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			verifier := NewImageVerifier(logr.Discard(), tt.client, tt.config)
+
+			trustedRoot, err := verifier.loadTrustedRoot(context.Background())
+			if tt.wantErrPart != "" {
+				if err == nil {
+					t.Fatal("loadTrustedRoot() error = nil, want error")
+				}
+				if !strings.Contains(err.Error(), tt.wantErrPart) {
+					t.Fatalf("loadTrustedRoot() error = %q, want substring %q", err.Error(), tt.wantErrPart)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("loadTrustedRoot() error = %v", err)
+			}
+			if trustedRoot == nil {
+				t.Fatal("loadTrustedRoot() returned nil trusted root")
+			}
+		})
+	}
+}
+
+func newTrustedRootTestClient(t *testing.T, objects ...crclient.Object) crclient.Client {
+	t.Helper()
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add corev1 scheme: %v", err)
+	}
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 }
 
 func TestImageVerifier_Verify_EmptyConfig(t *testing.T) {
