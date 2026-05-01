@@ -97,18 +97,6 @@ func buildNetworkPolicyIngressRules(
 		},
 	})
 
-	if cluster.Spec.Ingress != nil && cluster.Spec.Ingress.Enabled {
-		rules = append(rules, networkingv1.NetworkPolicyIngressRule{
-			Ports: []networkingv1.NetworkPolicyPort{
-				{
-					Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
-					Port:     &apiPort,
-				},
-			},
-			From: []networkingv1.NetworkPolicyPeer{},
-		})
-	}
-
 	return rules
 }
 

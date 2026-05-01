@@ -223,6 +223,14 @@ spec:
         (object.spec.gateway.hostname != "" && object.spec.gateway.gatewayRef.name != "")
       message: spec.gateway.hostname and spec.gateway.gatewayRef.name are required when Gateway is enabled.
     - expression: >-
+        !has(object.spec.ingress) ||
+        !has(object.spec.ingress.enabled) ||
+        object.spec.ingress.enabled == false ||
+        (has(object.spec.network) &&
+          has(object.spec.network.trustedIngressPeers) &&
+          size(object.spec.network.trustedIngressPeers) > 0)
+      message: spec.ingress.enabled requires at least one spec.network.trustedIngressPeers entry so NetworkPolicy ingress remains source-scoped.
+    - expression: >-
         !(variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot) ||
         variables.has_backup
       message: spec.backup is required when pre-upgrade snapshots are enabled (spec.upgrade.preUpgradeSnapshot or spec.upgrade.blueGreen.preUpgradeSnapshot).

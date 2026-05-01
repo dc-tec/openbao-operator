@@ -134,9 +134,14 @@ The dedicated read-replica Service remains available for explicit consumers, but
     enabled: true
     host: "bao.example.com"
     annotations:
-      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"`}
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+  network:
+    trustedIngressPeers:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx`}
 >
-  Use this when you already operate an ingress-controller standard and do not need the richer Gateway API route model.
+  Use this when you already operate an ingress-controller standard and do not need the richer Gateway API route model. Declare the ingress-controller peer so the operator-managed NetworkPolicy can keep OpenBao API ingress source-scoped.
 </CommandBlock>
 
   </TabItem>
