@@ -12,13 +12,17 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
-func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionReady bool, admissionSummary string) (metav1.ConditionStatus, string, string) {
+func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionReady bool, admissionSummary string, unsafeAdmission bool) (metav1.ConditionStatus, string, string) {
 	if cluster.Spec.Profile == "" {
 		return metav1.ConditionFalse, ReasonProfileNotSet, "spec.profile must be explicitly set to Hardened or Development"
 	}
 
 	if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment {
 		return metav1.ConditionFalse, ReasonDevelopmentProfile, "Development profile is not suitable for production"
+	}
+
+	if unsafeAdmission {
+		return metav1.ConditionFalse, ReasonUnsafeAdmissionDisabled, "Hardened profile requires enforced admission policies; unsafe admission mode is not considered production-ready"
 	}
 
 	if !admissionReady {

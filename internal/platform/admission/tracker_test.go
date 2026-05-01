@@ -61,6 +61,47 @@ func TestTracker_EnsureFreshCachesRecentStatus(t *testing.T) {
 	}
 }
 
+func TestTracker_MarkReadyForUnsafeMode(t *testing.T) {
+	tracker := NewTracker(nil, nil, nil, time.Minute)
+
+	tracker.MarkReadyForUnsafeMode()
+
+	current := tracker.Current()
+	if current == nil {
+		t.Fatal("Current() returned nil")
+	}
+	if !current.OverallReady || !current.UnsafeMode {
+		t.Fatalf("Current() = %#v, want overall ready unsafe status", current)
+	}
+}
+
+func TestTracker_EnsureFreshKeepsUnsafeMode(t *testing.T) {
+	t.Setenv("OPENBAO_UNSAFE_ADMISSION_DISABLED", "true")
+
+	tracker := NewTracker(
+		fake.NewClientBuilder().Build(),
+		[]Dependency{{
+			Name:        "missing-policy",
+			PolicyName:  "missing-policy",
+			BindingName: "missing-binding",
+		}},
+		[]string{""},
+		time.Nanosecond,
+	)
+	tracker.Set(Status{
+		CheckedAt:    time.Now().Add(-time.Hour),
+		OverallReady: false,
+	})
+
+	current, err := tracker.EnsureFresh(context.Background())
+	if err != nil {
+		t.Fatalf("EnsureFresh() returned unexpected error: %v", err)
+	}
+	if current == nil || !current.OverallReady || !current.UnsafeMode {
+		t.Fatalf("EnsureFresh() = %#v, want overall ready unsafe status", current)
+	}
+}
+
 func TestTracker_RefreshBypassesRecentCache(t *testing.T) {
 	t.Parallel()
 

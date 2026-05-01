@@ -66,13 +66,13 @@ Condition types defined in `api/v1alpha1`:
 | `GatewayIntegrationReady` | Operator-known Gateway API prerequisites and controller support for `spec.gateway` | `GatewayIntegrationReady`, `GatewayAPIMissing`, `GatewayReferenceMissing`, `GatewayClassMissing`, `GatewayClassPending`, `GatewayClassNotAccepted`, `GatewayVersionUnsupported`, `GatewayFeatureUnsupported`, `GatewayCapabilitiesUnknown`, `GatewayNotProgrammed`, `GatewayProgrammingPending`, `GatewayListenerIncompatible`, `Paused` |
 | `BackupConfigurationReady` | Operator-known backup Job prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired`, `Unknown`, `Paused` |
 | `CloudUnsealIdentityReady` | Operator-known authentication path for cloud KMS unseal on the main OpenBao Pods | `Ready`, `CredentialsSecretMissing`, `PrerequisitesMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `Unknown`, `Paused` |
-| `ProductionReady` | Indicates whether the cluster currently meets the operator's Hardened production posture checks. This condition does not represent API stability or project support level. | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored`, Gateway or ACME readiness reasons such as `GatewayFeatureUnsupported` or `ACMEGatewayNotConfiguredForPassthrough` |
+| `ProductionReady` | Indicates whether the cluster currently meets the operator's Hardened production posture checks. This condition does not represent API stability or project support level. | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `UnsafeAdmissionDisabled`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored`, Gateway or ACME readiness reasons such as `GatewayFeatureUnsupported` or `ACMEGatewayNotConfiguredForPassthrough` |
 | `Upgrading` | Upgrade state | `InProgress`, `Idle`, or upgrade failure reason |
 | `BackingUp` | Backup job state | `InProgress`, `Idle` |
 | `StorageConfigured` | Persistent storage class selection visibility | `StorageClassConfigured`, `StorageClassPending`, `StorageClassDefaulted`, `StorageClassUnset`, `StorageClassMismatch`, `StorageClassInconsistent` |
 | `Degraded` | Problem requiring attention | `BreakGlassRequired`, upgrade failure reason, workload or adminops error reason, `OIDCBootstrapConfigurationInvalid`, `APIServerNetworkConfigurationInvalid`, `RootTokenStored`, `Reconciling`, `Paused` |
 | `EtcdEncryptionWarning` | etcd encryption verification warning | `EtcdEncryptionUnknown` |
-| `SecurityRisk` | Relaxed security mode indicator | `DevelopmentProfile` |
+| `SecurityRisk` | Relaxed security mode indicator | `DevelopmentProfile`, `UnsafeAdmissionDisabled` |
 | `OpenBaoInitialized` | OpenBao initialization observed from registration labels | `Initialized`, `NotInitialized`, `Unknown` |
 | `OpenBaoSealed` | OpenBao seal state observed from registration labels | `Sealed`, `Unsealed`, `Unknown` |
 | `OpenBaoLeader` | Leader discovery from registration labels | `LeaderFound`, `LeaderUnknown`, `MultipleLeaders` |
@@ -118,6 +118,7 @@ Expect `Normal` events for routine progression and accepted operator input. Expe
 | :--- | :--- | :--- |
 | `Warning` | `ProfileNotSet` | `spec.profile` missing; reconciliation blocked. |
 | `Warning` | `DevelopmentProfile` | Development profile warning for production. |
+| `Warning` | `UnsafeAdmissionDisabled` | Unsafe admission mode is active, required admission guardrails are not enforced, and Hardened clusters are not production-ready. |
 | `Normal` | `AmbientUnsealIdentity` | Cloud KMS unseal is relying on ambient identity or the provider default chain for the main OpenBao Pods. This note is emitted only when the operator is not using a credentials Secret or explicit inline cloud credentials. |
 | `Warning` | `StaticUnsealInUse` | Static unseal warning. |
 | `Warning` | `RootTokenStored` | Self-init is disabled and the operator stored the root token Secret. |

@@ -43,16 +43,17 @@ func FuzzDefaultNamePrefixes(f *testing.F) {
 }
 
 func FuzzStatusSummaryMessage(f *testing.F) {
-	f.Add("dep-a", "missing binding", false, false)
-	f.Add("dep-b", "", false, true)
-	f.Add("", "", true, false)
+	f.Add("dep-a", "missing binding", false, false, false)
+	f.Add("dep-b", "", false, true, false)
+	f.Add("", "", true, false, true)
 
-	f.Fuzz(func(t *testing.T, depName, issue string, ready, overallReady bool) {
+	f.Fuzz(func(t *testing.T, depName, issue string, ready, overallReady, unsafeMode bool) {
 		depName = sanitizeAdmissionSummaryName(depName, "")
 		issue = sanitizeAdmissionSummaryText(issue)
 
 		status := Status{
 			OverallReady: overallReady,
+			UnsafeMode:   unsafeMode,
 			Dependencies: []DependencyStatus{
 				{
 					Dependency: Dependency{Name: depName},

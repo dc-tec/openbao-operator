@@ -97,7 +97,17 @@ func applyAllConditions(
 		Message:            "The operator cannot verify etcd encryption status. Ensure etcd encryption at rest is enabled in your Kubernetes cluster to protect Secrets (including unseal keys and root tokens) stored in etcd.",
 	})
 
-	if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment {
+	unsafeAdmission := admissionStatus != nil && admissionStatus.UnsafeMode
+	if unsafeAdmission {
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionSecurityRisk),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: gen,
+			LastTransitionTime: now,
+			Reason:             ReasonUnsafeAdmissionDisabled,
+			Message:            "Unsafe admission mode is active; required admission guardrails are not enforced.",
+		})
+	} else if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment {
 		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 			Type:               string(openbaov1alpha1.ConditionSecurityRisk),
 			Status:             metav1.ConditionTrue,
@@ -115,7 +125,7 @@ func applyAllConditions(
 	if admissionStatus != nil {
 		admissionSummary = admissionStatus.SummaryMessage()
 	}
-	productionStatus, productionReason, productionMessage := evaluateProductionReady(cluster, admissionReady, admissionSummary)
+	productionStatus, productionReason, productionMessage := evaluateProductionReady(cluster, admissionReady, admissionSummary, unsafeAdmission)
 	meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type:               string(openbaov1alpha1.ConditionProductionReady),
 		Status:             productionStatus,

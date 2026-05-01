@@ -14,10 +14,11 @@ import (
 
 func TestEvaluateProductionReady(t *testing.T) {
 	tests := []struct {
-		name       string
-		cluster    *openbaov1alpha1.OpenBaoCluster
-		wantStatus metav1.ConditionStatus
-		wantReason string
+		name            string
+		cluster         *openbaov1alpha1.OpenBaoCluster
+		unsafeAdmission bool
+		wantStatus      metav1.ConditionStatus
+		wantReason      string
 	}{
 		{
 			name: "profile not set",
@@ -36,6 +37,30 @@ func TestEvaluateProductionReady(t *testing.T) {
 			},
 			wantStatus: metav1.ConditionFalse,
 			wantReason: ReasonDevelopmentProfile,
+		},
+		{
+			name: "hardened with unsafe admission mode",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileHardened,
+					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeExternal,
+					},
+					Unseal: &openbaov1alpha1.UnsealConfig{
+						Type: "transit",
+						Transit: &openbaov1alpha1.TransitSealConfig{
+							Address:   "https://infra-bao.example",
+							KeyName:   "autounseal",
+							MountPath: "transit/",
+						},
+					},
+				},
+			},
+			unsafeAdmission: true,
+			wantStatus:      metav1.ConditionFalse,
+			wantReason:      ReasonUnsafeAdmissionDisabled,
 		},
 		{
 			name: "hardened with invalid api server network config",
@@ -386,7 +411,7 @@ func TestEvaluateProductionReady(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status, reason, _ := evaluateProductionReady(tt.cluster, true, "")
+			status, reason, _ := evaluateProductionReady(tt.cluster, true, "", tt.unsafeAdmission)
 			assert.Equal(t, tt.wantStatus, status)
 			assert.Equal(t, tt.wantReason, reason)
 		})
