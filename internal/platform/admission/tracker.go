@@ -62,16 +62,18 @@ func (t *Tracker) MarkReadyForUnsafeMode() {
 	if t == nil {
 		return
 	}
-	t.Set(Status{
-		CheckedAt:    time.Now(),
-		OverallReady: true,
-	})
+	t.Set(unsafeModeStatus())
 }
 
 // EnsureFresh refreshes the cached status when it is stale or absent.
 func (t *Tracker) EnsureFresh(ctx context.Context) (*Status, error) {
 	if t == nil {
 		return nil, nil
+	}
+	if UnsafeAdmissionDisabled() {
+		status := unsafeModeStatus()
+		t.Set(status)
+		return cloneStatus(&status), nil
 	}
 
 	t.mu.RLock()
@@ -90,6 +92,11 @@ func (t *Tracker) EnsureFresh(ctx context.Context) (*Status, error) {
 func (t *Tracker) Refresh(ctx context.Context) (*Status, error) {
 	if t == nil {
 		return nil, nil
+	}
+	if UnsafeAdmissionDisabled() {
+		status := unsafeModeStatus()
+		t.Set(status)
+		return cloneStatus(&status), nil
 	}
 
 	status, err := CheckDependencies(ctx, t.reader, t.dependencies, t.namePrefixes)
@@ -121,4 +128,12 @@ func cloneStatus(status *Status) *Status {
 	}
 
 	return &cloned
+}
+
+func unsafeModeStatus() Status {
+	return Status{
+		CheckedAt:    time.Now(),
+		OverallReady: true,
+		UnsafeMode:   true,
+	}
 }

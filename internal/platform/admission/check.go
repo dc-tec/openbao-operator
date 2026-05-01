@@ -34,6 +34,7 @@ type Status struct {
 	CheckedAt    time.Time
 	Dependencies []DependencyStatus
 	OverallReady bool
+	UnsafeMode   bool
 }
 
 const (
@@ -207,6 +208,10 @@ func CheckDependencies(ctx context.Context, c client.Reader, deps []Dependency, 
 // SummaryMessage returns a single-line summary for logs, Events, or Conditions.
 // It is safe to log (contains no sensitive data).
 func (s Status) SummaryMessage() string {
+	if s.UnsafeMode {
+		return "Admission policies are disabled by unsafe mode"
+	}
+
 	if s.OverallReady {
 		return "Required admission policies are installed and correctly bound"
 	}
