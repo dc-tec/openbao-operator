@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -53,6 +54,10 @@ func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionR
 
 	if transitAddressRequiresHTTPS(cluster) {
 		return metav1.ConditionFalse, ReasonTransitAddressNotHTTPS, "Hardened profile requires spec.unseal.transit.address to use a valid HTTPS URL"
+	}
+
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened && hardenedSecurityContextWeakensPodSecurity(cluster) {
+		return metav1.ConditionFalse, ReasonSecurityContextWeakening, "Hardened profile does not allow spec.securityContext overrides that weaken non-root, seccomp, sysctl, or OS constraints"
 	}
 
 	if usesCloudKMSUnseal(cluster) {
@@ -196,6 +201,43 @@ func transitAddressRequiresHTTPS(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	}
 
 	return !strings.EqualFold(u.Scheme, "https") || strings.TrimSpace(u.Host) == ""
+}
+
+func hardenedSecurityContextWeakensPodSecurity(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster == nil || cluster.Spec.SecurityContext == nil {
+		return false
+	}
+
+	securityContext := cluster.Spec.SecurityContext
+	if securityContext.RunAsNonRoot != nil && !*securityContext.RunAsNonRoot {
+		return true
+	}
+	if securityContext.RunAsUser != nil && *securityContext.RunAsUser == 0 {
+		return true
+	}
+	if securityContext.RunAsGroup != nil && *securityContext.RunAsGroup == 0 {
+		return true
+	}
+	if securityContext.FSGroup != nil && *securityContext.FSGroup == 0 {
+		return true
+	}
+	for _, supplementalGroup := range securityContext.SupplementalGroups {
+		if supplementalGroup == 0 {
+			return true
+		}
+	}
+	if securityContext.SeccompProfile != nil &&
+		securityContext.SeccompProfile.Type == corev1.SeccompProfileTypeUnconfined {
+		return true
+	}
+	if len(securityContext.Sysctls) > 0 {
+		return true
+	}
+	if securityContext.WindowsOptions != nil {
+		return true
+	}
+
+	return false
 }
 
 func usesCloudKMSUnseal(cluster *openbaov1alpha1.OpenBaoCluster) bool {

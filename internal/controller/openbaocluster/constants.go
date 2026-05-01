@@ -35,6 +35,7 @@ const (
 	ReasonTransitAddressNotHTTPS                 = "TransitAddressNotHTTPS"
 	ReasonTransitInlineToken                     = "TransitInlineToken"
 	ReasonUnsealTLSSkipVerify                    = "UnsealTLSSkipVerify"
+	ReasonSecurityContextWeakening               = "SecurityContextWeakening"
 	ReasonUserAccessConfigured                   = "UserAccessConfigured"
 	ReasonUserAccessUnverified                   = "UserAccessUnverified"
 	ReasonRootTokenStored                        = "RootTokenStored"
