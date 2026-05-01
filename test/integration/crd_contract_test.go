@@ -12,6 +12,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -207,6 +208,45 @@ func TestVAP_OpenBaoCluster_RejectsOIDCBootstrapWithoutSelfInitEnabled(t *testin
 	requireAdmissionDenied(t, err)
 	if !strings.Contains(err.Error(), "spec.selfInit.oidc.enabled requires spec.selfInit.enabled to be true") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_RequiresTrustedIngressPeersForManagedIngress(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-ingress-without-peer")
+	cluster.Spec.Ingress = &openbaov1alpha1.IngressConfig{
+		Enabled: true,
+		Host:    "bao.example.com",
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireAdmissionDenied(t, err)
+	wantMessage := "spec.ingress.enabled requires at least one spec.network.trustedIngressPeers"
+	if !strings.Contains(err.Error(), wantMessage) {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+
+	allowed := newMinimalClusterObj(namespace, "cluster-ingress-with-peer")
+	allowed.Spec.Ingress = &openbaov1alpha1.IngressConfig{
+		Enabled: true,
+		Host:    "bao.example.com",
+	}
+	allowed.Spec.Network = &openbaov1alpha1.NetworkConfig{
+		TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": "ingress-system",
+					},
+				},
+			},
+		},
+	}
+
+	if err := k8sClient.Create(ctx, allowed); err != nil {
+		t.Fatalf("expected ingress with trusted ingress peers to succeed, got: %v", err)
 	}
 }
 
