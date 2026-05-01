@@ -92,7 +92,7 @@ description: Pod hardening, projected-token handling, and runtime guardrails for
       cells: [
         "User and group",
         "Non-root by default on standard Kubernetes; OpenShift may assign UID/GID through SCC.",
-        "Avoid assuming a fixed platform-level UID unless you intentionally override `spec.securityContext`.",
+        "Hardened clusters may use `spec.securityContext` for safe non-root or OpenShift-compatible overrides only.",
       ],
       emphasis: "recommended",
     },
@@ -119,6 +119,14 @@ description: Pod hardening, projected-token handling, and runtime guardrails for
     },
   ]}
 />
+
+<Callout type="warning" title="Hardened security context overrides">
+
+The Hardened profile rejects pod-level `spec.securityContext` overrides that weaken runtime guarantees. Do not set
+`runAsNonRoot: false`, root UID/GID values, root supplemental groups, `seccompProfile.type: Unconfined`, pod sysctls,
+or Windows pod security options for Hardened OpenBao clusters.
+
+</Callout>
 
 <Callout type="note" title="Init container behavior">
 

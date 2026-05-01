@@ -194,6 +194,49 @@ spec:
         object.spec.operatorImageVerification.failurePolicy != "Warn"
       message: Hardened profile does not allow spec.operatorImageVerification.failurePolicy=Warn.
     - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.securityContext) ||
+        !has(object.spec.securityContext.runAsNonRoot) ||
+        object.spec.securityContext.runAsNonRoot == true
+      message: Hardened profile does not allow spec.securityContext.runAsNonRoot=false.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.securityContext) ||
+        !has(object.spec.securityContext.seccompProfile) ||
+        !has(object.spec.securityContext.seccompProfile.type) ||
+        object.spec.securityContext.seccompProfile.type != "Unconfined"
+      message: Hardened profile does not allow spec.securityContext.seccompProfile.type=Unconfined.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.securityContext) ||
+        ((!has(object.spec.securityContext.runAsUser) || object.spec.securityContext.runAsUser != 0) &&
+          (!has(object.spec.securityContext.runAsGroup) || object.spec.securityContext.runAsGroup != 0) &&
+          (!has(object.spec.securityContext.fsGroup) || object.spec.securityContext.fsGroup != 0))
+      message: Hardened profile does not allow root UID/GID overrides in spec.securityContext.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.securityContext) ||
+        !has(object.spec.securityContext.supplementalGroups) ||
+        object.spec.securityContext.supplementalGroups.all(group, group != 0)
+      message: Hardened profile does not allow root supplemental groups in spec.securityContext.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.securityContext) ||
+        !has(object.spec.securityContext.sysctls) ||
+        size(object.spec.securityContext.sysctls) == 0
+      message: Hardened profile does not allow pod sysctl overrides in spec.securityContext.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.securityContext) ||
+        !has(object.spec.securityContext.windowsOptions)
+      message: Hardened profile does not allow Windows pod security options in spec.securityContext.
+    - expression: >-
         !has(object.spec.initContainer) ||
         object.spec.initContainer.enabled == true
       message: spec.initContainer is optional; when set, spec.initContainer.enabled must be true.
