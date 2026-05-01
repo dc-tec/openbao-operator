@@ -608,3 +608,41 @@ func TestBuildNetworkPolicy_TrustedIngressPeers(t *testing.T) {
 		t.Fatal("expected trusted ingress peer rule with namespace and pod selector")
 	}
 }
+
+func TestBuildNetworkPolicy_IngressEnabledDoesNotAllowUnrestrictedAPIIngress(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-ingress",
+			Namespace: "openbao",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Ingress: &openbaov1alpha1.IngressConfig{
+				Enabled: true,
+				Host:    "bao.example.com",
+			},
+		},
+	}
+
+	policy, err := buildNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.96.0.0/12"}, "openbao-operator-system")
+	if err != nil {
+		t.Fatalf("buildNetworkPolicy() error: %v", err)
+	}
+
+	for i, rule := range policy.Spec.Ingress {
+		if !networkPolicyRuleAllowsPort(rule.Ports, constants.PortAPI) {
+			continue
+		}
+		if len(rule.From) == 0 {
+			t.Fatalf("ingress rule %d allows API port without source peers: %#v", i, rule)
+		}
+	}
+}
+
+func networkPolicyRuleAllowsPort(ports []networkingv1.NetworkPolicyPort, want int32) bool {
+	for _, port := range ports {
+		if port.Port != nil && port.Port.IntValue() == int(want) {
+			return true
+		}
+	}
+	return false
+}

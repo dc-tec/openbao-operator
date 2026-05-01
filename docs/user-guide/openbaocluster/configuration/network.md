@@ -181,7 +181,7 @@ description: Configure the operator-managed NetworkPolicy contract, including DN
           matchLabels:
             app.kubernetes.io/name: traefik`}
 >
-  Use this when the source is a user-managed ingress controller or Gateway data plane. It is usually clearer than writing a raw `ingressRules` block for the same case.
+  Use this when the source is a user-managed ingress controller or Gateway data plane. It is usually clearer than writing a raw `ingressRules` block for the same case. Managed `spec.ingress.enabled: true` configurations require at least one trusted ingress peer.
 </CommandBlock>
 
   </TabItem>

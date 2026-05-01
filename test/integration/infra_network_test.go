@@ -122,6 +122,17 @@ func TestInfraNetwork_Ingress_CreatesAndDeletes(t *testing.T) {
 		Enabled: true,
 		Host:    "bao.example.local",
 	}
+	cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+		TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": "ingress-system",
+					},
+				},
+			},
+		},
+	}
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("create OpenBaoCluster: %v", err)
 	}

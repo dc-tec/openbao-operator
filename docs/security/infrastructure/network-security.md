@@ -127,6 +127,8 @@ If you need additional ingress, use:
 - `spec.network.ingressRules` for additive peer rules
 - `spec.network.trustedIngressPeers` for user-managed ingress or passthrough proxies
 
+Managed `spec.ingress.enabled: true` configurations must declare at least one trusted ingress peer so the OpenBao API listener is not opened to every pod that can reach the namespace.
+
 <Callout type="note" title="Read replicas are client-serving Pods">
 
 When steady read replicas are enabled, the main client Service can route to both voter and read-replica Pods. That does not create a separate ingress policy surface by itself; the same cluster ingress rules still govern the client listener, and the optional dedicated read Service remains only a second Service object selecting the same client-serving port on the read pool.
