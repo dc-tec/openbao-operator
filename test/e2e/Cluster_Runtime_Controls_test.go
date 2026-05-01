@@ -189,6 +189,17 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 			Host:    host,
 			Path:    "/",
 		}
+		cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+			TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"kubernetes.io/metadata.name": "ingress-system",
+						},
+					},
+				},
+			},
+		}
 		Expect(c.Create(ctx, cluster)).To(Succeed())
 		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })
 
