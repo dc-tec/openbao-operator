@@ -4794,6 +4794,7 @@ spec:
                   LastBackupTime is the timestamp of the last successful backup, if configured.
                   Deprecated: Use Backup.LastBackupTime instead.
                 format: date-time
+                nullable: true
                 type: string
               observedGeneration:
                 description: |-
@@ -4846,6 +4847,7 @@ spec:
               readReplicas:
                 description: ReadReplicas captures observed state for the read-replica
                   pool.
+                nullable: true
                 properties:
                   desiredReplicas:
                     description: DesiredReplicas is the desired number of read replicas.
@@ -6016,6 +6018,20 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
   - admissionregistration.k8s.io
   resources:
   - validatingadmissionpolicies
@@ -6298,10 +6314,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260426-0e85decd3d3b
+          value: nightly-20260501-d67005c563bc
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:e95f7a208c7bbf61878947fcd309074b960366e344badf004f0d0c8b8dd626ff
+        image: ghcr.io/dc-tec/openbao-operator@sha256:04c79d6e098f6ec8aacedc74427f9d799675c5fa624749452115807b93ed2b20
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6416,8 +6432,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260426-0e85decd3d3b
-        image: ghcr.io/dc-tec/openbao-operator@sha256:e95f7a208c7bbf61878947fcd309074b960366e344badf004f0d0c8b8dd626ff
+          value: nightly-20260501-d67005c563bc
+        image: ghcr.io/dc-tec/openbao-operator@sha256:04c79d6e098f6ec8aacedc74427f9d799675c5fa624749452115807b93ed2b20
         livenessProbe:
           httpGet:
             path: /healthz
