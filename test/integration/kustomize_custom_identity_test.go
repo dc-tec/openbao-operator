@@ -54,6 +54,11 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 		objs,
 		"demo-openbao-operator-openbao-restrict-controller-secret-writes",
 	)
+	lockManagedPolicy := mustFindPolicy(
+		t,
+		objs,
+		"demo-openbao-operator-openbao-lock-managed-resource-mutations",
+	)
 	provisionerPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-restrict-provisioner-rbac")
 	tenantGovernancePolicy := mustFindPolicy(
 		t,
@@ -110,6 +115,13 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 		"controller_serviceaccount_name",
 	); got != testQuotedPrefixedCtrlSA {
 		t.Fatalf("controller secret policy controller_serviceaccount_name=%q, want %q", got, testQuotedPrefixedCtrlSA)
+	}
+	if got := policyVariableExpression(
+		t,
+		lockManagedPolicy,
+		"provisioner_serviceaccount_name",
+	); got != testQuotedPrefixedProvSA {
+		t.Fatalf("lock managed policy provisioner_serviceaccount_name=%q, want %q", got, testQuotedPrefixedProvSA)
 	}
 	if got := policyVariableExpression(
 		t,
