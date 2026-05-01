@@ -322,6 +322,9 @@ func transformPolicyToHelm(content string) string {
 	content = strings.ReplaceAll(content,
 		`'openbao-operator-controller'`,
 		`'{{ include "openbao-operator.controllerServiceAccountName" . }}'`)
+	content = strings.ReplaceAll(content,
+		`'openbao-operator-provisioner'`,
+		`'{{ include "openbao-operator.provisionerServiceAccountName" . }}'`)
 
 	return content
 }

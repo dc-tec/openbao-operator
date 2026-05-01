@@ -54,7 +54,7 @@ spec:
         '{{ include "openbao-operator.controllerServiceAccountName" . }}'
     - name: provisioner_serviceaccount_name
       expression: >-
-        'openbao-operator-provisioner'
+        '{{ include "openbao-operator.provisionerServiceAccountName" . }}'
     - name: controller_principal
       expression: >-
         'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name

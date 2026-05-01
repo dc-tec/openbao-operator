@@ -19,7 +19,7 @@ spec:
         '{{ .Release.Namespace }}'
     - name: provisioner_serviceaccount_name
       expression: >-
-        'openbao-operator-provisioner'
+        '{{ include "openbao-operator.provisionerServiceAccountName" . }}'
     - name: provisioner_principal
       expression: >-
         'system:serviceaccount:' + variables.operator_namespace + ':' + variables.provisioner_serviceaccount_name
