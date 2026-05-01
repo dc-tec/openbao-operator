@@ -240,6 +240,22 @@ helm-test: helm-sync helm-lint ## Test the Helm chart without requiring a live c
 		--namespace openbao-operator-system \
 		--include-crds \
 		--set tenancy.mode=multi > /dev/null
+	@echo "Testing Helm chart: provisioner admission identity follows fullnameOverride..."
+	@render="$$(helm template baoctl charts/openbao-operator \
+		--namespace openbao-system \
+		--include-crds \
+		--set tenancy.mode=multi \
+		--set fullnameOverride=baoctl)"; \
+		echo "$$render" | grep -q "name: baoctl-provisioner"; \
+		echo "$$render" | grep -q "'baoctl-provisioner'"; \
+		if echo "$$render" | grep -q "'openbao-operator-provisioner'"; then \
+			echo "Helm admission policies rendered a stale provisioner ServiceAccount name"; \
+			exit 1; \
+		fi
+	@if grep -R "'openbao-operator-provisioner'" charts/openbao-operator/templates/admission; then \
+		echo "Helm admission templates must derive the provisioner ServiceAccount name from helpers"; \
+		exit 1; \
+	fi
 	@echo "Testing Helm chart: templating with single-tenant mode..."
 	@helm template openbao-operator charts/openbao-operator \
 		--namespace openbao-operator-system \
