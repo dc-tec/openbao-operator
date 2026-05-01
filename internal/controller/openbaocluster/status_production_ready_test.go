@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -12,10 +14,11 @@ import (
 
 func TestEvaluateProductionReady(t *testing.T) {
 	tests := []struct {
-		name       string
-		cluster    *openbaov1alpha1.OpenBaoCluster
-		wantStatus metav1.ConditionStatus
-		wantReason string
+		name            string
+		cluster         *openbaov1alpha1.OpenBaoCluster
+		unsafeAdmission bool
+		wantStatus      metav1.ConditionStatus
+		wantReason      string
 	}{
 		{
 			name: "profile not set",
@@ -34,6 +37,30 @@ func TestEvaluateProductionReady(t *testing.T) {
 			},
 			wantStatus: metav1.ConditionFalse,
 			wantReason: ReasonDevelopmentProfile,
+		},
+		{
+			name: "hardened with unsafe admission mode",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileHardened,
+					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeExternal,
+					},
+					Unseal: &openbaov1alpha1.UnsealConfig{
+						Type: "transit",
+						Transit: &openbaov1alpha1.TransitSealConfig{
+							Address:   "https://infra-bao.example",
+							KeyName:   "autounseal",
+							MountPath: "transit/",
+						},
+					},
+				},
+			},
+			unsafeAdmission: true,
+			wantStatus:      metav1.ConditionFalse,
+			wantReason:      ReasonUnsafeAdmissionDisabled,
 		},
 		{
 			name: "hardened with invalid api server network config",
@@ -172,6 +199,32 @@ func TestEvaluateProductionReady(t *testing.T) {
 			},
 			wantStatus: metav1.ConditionFalse,
 			wantReason: ReasonTransitAddressNotHTTPS,
+		},
+		{
+			name: "hardened with security context weakening",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileHardened,
+					SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeExternal,
+					},
+					Unseal: &openbaov1alpha1.UnsealConfig{
+						Type: "transit",
+						Transit: &openbaov1alpha1.TransitSealConfig{
+							Address:   "https://infra-bao.example",
+							KeyName:   "autounseal",
+							MountPath: "transit/",
+						},
+					},
+					SecurityContext: &corev1.PodSecurityContext{
+						RunAsNonRoot: ptr.To(false),
+					},
+				},
+			},
+			wantStatus: metav1.ConditionFalse,
+			wantReason: ReasonSecurityContextWeakening,
 		},
 		{
 			name: "hardened cloud kms without ready unseal identity condition",
@@ -358,9 +411,110 @@ func TestEvaluateProductionReady(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status, reason, _ := evaluateProductionReady(tt.cluster, true, "")
+			status, reason, _ := evaluateProductionReady(tt.cluster, true, "", tt.unsafeAdmission)
 			assert.Equal(t, tt.wantStatus, status)
 			assert.Equal(t, tt.wantReason, reason)
+		})
+	}
+}
+
+func TestHardenedSecurityContextWeakensPodSecurity(t *testing.T) {
+	tests := []struct {
+		name            string
+		securityContext *corev1.PodSecurityContext
+		want            bool
+	}{
+		{
+			name:            "nil security context",
+			securityContext: nil,
+			want:            false,
+		},
+		{
+			name: "safe non-root overrides",
+			securityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot:       ptr.To(true),
+				RunAsUser:          ptr.To(int64(1001)),
+				RunAsGroup:         ptr.To(int64(1001)),
+				FSGroup:            ptr.To(int64(1001)),
+				SupplementalGroups: []int64{1002},
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeRuntimeDefault,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "run as root allowed",
+			securityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: ptr.To(false),
+			},
+			want: true,
+		},
+		{
+			name: "root run as user",
+			securityContext: &corev1.PodSecurityContext{
+				RunAsUser: ptr.To(int64(0)),
+			},
+			want: true,
+		},
+		{
+			name: "root run as group",
+			securityContext: &corev1.PodSecurityContext{
+				RunAsGroup: ptr.To(int64(0)),
+			},
+			want: true,
+		},
+		{
+			name: "root fs group",
+			securityContext: &corev1.PodSecurityContext{
+				FSGroup: ptr.To(int64(0)),
+			},
+			want: true,
+		},
+		{
+			name: "root supplemental group",
+			securityContext: &corev1.PodSecurityContext{
+				SupplementalGroups: []int64{0},
+			},
+			want: true,
+		},
+		{
+			name: "unconfined seccomp",
+			securityContext: &corev1.PodSecurityContext{
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeUnconfined,
+				},
+			},
+			want: true,
+		},
+		{
+			name: "pod sysctls",
+			securityContext: &corev1.PodSecurityContext{
+				Sysctls: []corev1.Sysctl{{
+					Name:  "kernel.shm_rmid_forced",
+					Value: "1",
+				}},
+			},
+			want: true,
+		},
+		{
+			name: "windows options",
+			securityContext: &corev1.PodSecurityContext{
+				WindowsOptions: &corev1.WindowsSecurityContextOptions{},
+			},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					SecurityContext: tt.securityContext,
+				},
+			}
+
+			assert.Equal(t, tt.want, hardenedSecurityContextWeakensPodSecurity(cluster))
 		})
 	}
 }

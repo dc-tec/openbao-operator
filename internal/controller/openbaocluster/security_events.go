@@ -14,6 +14,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 )
 
 func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -42,6 +43,10 @@ func (r *OpenBaoClusterReconciler) emitSecurityWarningEvents(ctx context.Context
 
 	if cluster.Spec.Profile == openbaov1alpha1.ProfileDevelopment {
 		maybeWarn(annotationLastDevelopmentWarning, ReasonDevelopmentProfile, "Cluster is using Development profile; this is not suitable for production")
+	}
+
+	if admission.UnsafeAdmissionDisabled() {
+		maybeWarn(annotationLastUnsafeAdmissionWarning, ReasonUnsafeAdmissionDisabled, "Unsafe admission mode is active; required admission guardrails are not enforced and Hardened clusters are not production-ready")
 	}
 
 	if isStaticUnseal(cluster) {

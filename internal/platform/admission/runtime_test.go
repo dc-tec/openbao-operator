@@ -279,6 +279,11 @@ func TestCheckDependencies_SummaryMessage(t *testing.T) {
 		t.Fatalf("unexpected ready summary: %q", got)
 	}
 
+	unsafe := Status{OverallReady: true, UnsafeMode: true}
+	if got := unsafe.SummaryMessage(); got != "Admission policies are disabled by unsafe mode" {
+		t.Fatalf("unexpected unsafe summary: %q", got)
+	}
+
 	notReady := Status{
 		OverallReady: false,
 		Dependencies: []DependencyStatus{
@@ -413,6 +418,25 @@ func TestUnsafeAdmissionDisabled(t *testing.T) {
 				t.Fatalf("UnsafeAdmissionDisabled()=%v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRefreshStatus_UnsafeAdmissionDisabled(t *testing.T) {
+	SetAdmissionDependenciesReady(false)
+	t.Cleanup(func() {
+		SetAdmissionDependenciesReady(false)
+	})
+	t.Setenv("OPENBAO_UNSAFE_ADMISSION_DISABLED", "true")
+
+	status, err := RefreshStatus(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatalf("RefreshStatus() error = %v", err)
+	}
+	if status == nil || !status.OverallReady || !status.UnsafeMode {
+		t.Fatalf("RefreshStatus() = %#v, want overall ready unsafe status", status)
+	}
+	if !AdmissionDependenciesReady() {
+		t.Fatal("expected legacy admission readiness signal to be true")
 	}
 }
 

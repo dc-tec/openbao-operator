@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -426,7 +427,135 @@ func TestVAP_OpenBaoCluster_AllowsHardenedOfficialImageVerificationDefaults(t *t
 	namespace := newTestNamespace(t)
 	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
 
-	cluster := newMinimalClusterObj(namespace, "cluster-hardened-image-verification-defaults")
+	cluster := newValidHardenedAdmissionCluster(namespace, "cluster-hardened-image-verification-defaults")
+	cluster.Spec.ImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+		Enabled:       true,
+		FailurePolicy: "Block",
+	}
+	cluster.Spec.OperatorImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+		Enabled:       true,
+		FailurePolicy: "Block",
+	}
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf(
+			"expected Hardened OpenBaoCluster with enabled official image verification defaults to succeed, got: %v",
+			err,
+		)
+	}
+}
+
+func TestVAP_OpenBaoCluster_RejectsHardenedWeakeningSecurityContext(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	tests := []struct {
+		name      string
+		configure func(*corev1.PodSecurityContext)
+		wantError string
+	}{
+		{
+			name: "run as root",
+			configure: func(securityContext *corev1.PodSecurityContext) {
+				securityContext.RunAsNonRoot = ptr.To(false)
+			},
+			wantError: "Hardened profile does not allow spec.securityContext.runAsNonRoot=false",
+		},
+		{
+			name: "unconfined seccomp",
+			configure: func(securityContext *corev1.PodSecurityContext) {
+				securityContext.SeccompProfile = &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeUnconfined,
+				}
+			},
+			wantError: "Hardened profile does not allow spec.securityContext.seccompProfile.type=Unconfined",
+		},
+		{
+			name: "root uid",
+			configure: func(securityContext *corev1.PodSecurityContext) {
+				securityContext.RunAsUser = ptr.To(int64(0))
+			},
+			wantError: "Hardened profile does not allow root UID/GID overrides in spec.securityContext",
+		},
+		{
+			name: "root gid",
+			configure: func(securityContext *corev1.PodSecurityContext) {
+				securityContext.RunAsGroup = ptr.To(int64(0))
+			},
+			wantError: "Hardened profile does not allow root UID/GID overrides in spec.securityContext",
+		},
+		{
+			name: "root fs group",
+			configure: func(securityContext *corev1.PodSecurityContext) {
+				securityContext.FSGroup = ptr.To(int64(0))
+			},
+			wantError: "Hardened profile does not allow root UID/GID overrides in spec.securityContext",
+		},
+		{
+			name: "root supplemental group",
+			configure: func(securityContext *corev1.PodSecurityContext) {
+				securityContext.SupplementalGroups = []int64{0}
+			},
+			wantError: "Hardened profile does not allow root supplemental groups in spec.securityContext",
+		},
+		{
+			name: "pod sysctl",
+			configure: func(securityContext *corev1.PodSecurityContext) {
+				securityContext.Sysctls = []corev1.Sysctl{{
+					Name:  "kernel.shm_rmid_forced",
+					Value: "1",
+				}}
+			},
+			wantError: "Hardened profile does not allow pod sysctl overrides in spec.securityContext",
+		},
+		{
+			name: "windows options",
+			configure: func(securityContext *corev1.PodSecurityContext) {
+				securityContext.WindowsOptions = &corev1.WindowsSecurityContextOptions{}
+			},
+			wantError: "Hardened profile does not allow Windows pod security options in spec.securityContext",
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newValidHardenedAdmissionCluster(namespace, fmt.Sprintf("cluster-hardened-security-%d", i))
+			cluster.Spec.SecurityContext = &corev1.PodSecurityContext{}
+			tt.configure(cluster.Spec.SecurityContext)
+
+			err := k8sClient.Create(ctx, cluster)
+			requireAdmissionDenied(t, err)
+			if !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+func TestVAP_OpenBaoCluster_AllowsHardenedSafeSecurityContextOverrides(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newValidHardenedAdmissionCluster(namespace, "cluster-hardened-safe-security")
+	cluster.Spec.SecurityContext = &corev1.PodSecurityContext{
+		RunAsNonRoot:        ptr.To(true),
+		RunAsUser:           ptr.To(int64(1001)),
+		RunAsGroup:          ptr.To(int64(1001)),
+		FSGroup:             ptr.To(int64(1001)),
+		FSGroupChangePolicy: ptr.To(corev1.FSGroupChangeOnRootMismatch),
+		SupplementalGroups:  []int64{1002},
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected Hardened OpenBaoCluster with safe securityContext overrides to succeed, got: %v", err)
+	}
+}
+
+func newValidHardenedAdmissionCluster(namespace, name string) *openbaov1alpha1.OpenBaoCluster {
+	cluster := newMinimalClusterObj(namespace, name)
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
@@ -446,21 +575,8 @@ func TestVAP_OpenBaoCluster_AllowsHardenedOfficialImageVerificationDefaults(t *t
 			KMSKeyID: "alias/openbao-unseal",
 		},
 	}
-	cluster.Spec.ImageVerification = &openbaov1alpha1.ImageVerificationConfig{
-		Enabled:       true,
-		FailurePolicy: "Block",
-	}
-	cluster.Spec.OperatorImageVerification = &openbaov1alpha1.ImageVerificationConfig{
-		Enabled:       true,
-		FailurePolicy: "Block",
-	}
 
-	if err := k8sClient.Create(ctx, cluster); err != nil {
-		t.Fatalf(
-			"expected Hardened OpenBaoCluster with enabled official image verification defaults to succeed, got: %v",
-			err,
-		)
-	}
+	return cluster
 }
 
 func TestVAP_OpenBaoCluster_RejectsDisabledInitContainerOverride(t *testing.T) {

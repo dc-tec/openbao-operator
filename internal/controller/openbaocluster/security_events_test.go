@@ -89,6 +89,60 @@ func TestEmitSecurityWarningEvents_RecordsAndPersistsTimestamps(t *testing.T) {
 	}
 }
 
+func TestEmitSecurityWarningEvents_EmitsUnsafeAdmissionModeWarning(t *testing.T) {
+	t.Setenv("OPENBAO_UNSAFE_ADMISSION_DISABLED", "true")
+
+	scheme := newOpenBaoClusterTestScheme(t)
+	cluster := newOpenBaoClusterStatusTestObject()
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Address:   "https://infra-bao.example",
+			KeyName:   "autounseal",
+			MountPath: "transit/",
+		},
+	}
+	cluster.Annotations = map[string]string{}
+
+	recorder := events.NewFakeRecorder(10)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster).
+		Build()
+	reconciler := &OpenBaoClusterReconciler{
+		Client: k8sClient,
+		ControllerRuntime: ControllerRuntime{
+			Recorder: recorder,
+		},
+	}
+
+	if err := reconciler.emitSecurityWarningEvents(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("emitSecurityWarningEvents() error = %v", err)
+	}
+
+	found := false
+	for i := 0; i < 3; i++ {
+		select {
+		case event := <-recorder.Events:
+			if strings.Contains(event, ReasonUnsafeAdmissionDisabled) {
+				found = true
+			}
+		default:
+		}
+	}
+	if !found {
+		t.Fatal("expected unsafe admission mode warning event to be recorded")
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updated); err != nil {
+		t.Fatalf("get updated cluster: %v", err)
+	}
+	if updated.Annotations[annotationLastUnsafeAdmissionWarning] == "" {
+		t.Fatalf("expected annotation %q to be persisted", annotationLastUnsafeAdmissionWarning)
+	}
+}
+
 func TestEmitSecurityWarningEvents_EmitsAmbientUnsealIdentityNote(t *testing.T) {
 	scheme := newOpenBaoClusterTestScheme(t)
 	cluster := newOpenBaoClusterStatusTestObject()

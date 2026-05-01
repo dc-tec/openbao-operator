@@ -114,6 +114,34 @@ func TestBuildSealedConditionAndApplyHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("applyAllConditions surfaces unsafe admission mode", func(t *testing.T) {
+		cluster := newOpenBaoClusterStatusTestObject()
+		cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type: "transit",
+			Transit: &openbaov1alpha1.TransitSealConfig{
+				Address:   "https://infra-bao.example",
+				KeyName:   "autounseal",
+				MountPath: "transit/",
+			},
+		}
+		admissionStatus := &admission.Status{
+			OverallReady: true,
+			UnsafeMode:   true,
+		}
+
+		applyAllConditions(cluster, &clusterState{}, admissionStatus, metav1.Now())
+
+		securityRisk := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionSecurityRisk))
+		if securityRisk == nil || securityRisk.Status != metav1.ConditionTrue || securityRisk.Reason != ReasonUnsafeAdmissionDisabled {
+			t.Fatalf("SecurityRisk condition = %#v, want true %s", securityRisk, ReasonUnsafeAdmissionDisabled)
+		}
+		productionReady := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionProductionReady))
+		if productionReady == nil || productionReady.Status != metav1.ConditionFalse || productionReady.Reason != ReasonUnsafeAdmissionDisabled {
+			t.Fatalf("ProductionReady condition = %#v, want false %s", productionReady, ReasonUnsafeAdmissionDisabled)
+		}
+	})
+
 	t.Run("applyNodeSecurityCapabilityMismatchCondition removes condition when apparmor disabled", func(t *testing.T) {
 		cluster := newOpenBaoClusterStatusTestObject()
 		cluster.Status.Conditions = []metav1.Condition{{
