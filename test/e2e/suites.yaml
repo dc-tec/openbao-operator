@@ -13,7 +13,8 @@ versions:
     releaseGate:
       - "1.34.3"
       - "1.35.1"
-    # Kubernetes 1.36.0 is upstream-supported, but kindest/node:v1.36.0 is not published yet.
+    # Kubernetes 1.36.0 is the next candidate once controller-runtime,
+    # k8s.io dependencies, Kind images, and release-gate coverage are ready.
     nextCandidate: "1.36.0"
 
 parallelism:

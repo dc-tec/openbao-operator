@@ -24,7 +24,7 @@ test('legacy latest user-guide route redirects into the new IA', async ({page}) 
   await page.goto('latest/user-guide');
   await expect(page).toHaveURL(/\/openbao-operator\/docs\/get-started$/);
   await expect(
-    page.getByRole('heading', {name: 'Deploy OpenBao Operator with a clear first path.'}),
+    page.getByRole('heading', {name: 'Get started with OpenBao Operator'}),
   ).toBeVisible();
 });
 
@@ -44,9 +44,9 @@ test('next docs expose the version banner and feedback controls', async ({page})
 test('stable docs expose the current release banner', async ({page}) => {
   await page.goto('docs');
 
-  await expect(page.getByRole('heading', {name: 'Choose the route that matches the work.'})).toBeVisible();
+  await expect(page.getByRole('heading', {name: 'OpenBao Operator documentation'})).toBeVisible();
   await expect(page.getByText('Published release documentation')).toBeVisible();
-  await expect(page.getByText('Version: 0.1.0')).toBeVisible();
+  await expect(page.getByText('Version: 0.2.0')).toBeVisible();
 });
 
 test('architecture section exposes grouped local navigation', async ({page}) => {

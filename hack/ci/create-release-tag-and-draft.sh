@@ -7,6 +7,7 @@ set -euo pipefail
 BASE_BRANCH="${BASE_BRANCH:-main}"
 MANIFEST_FILE="${MANIFEST_FILE:-.release-please-manifest.json}"
 CHART_FILE="${CHART_FILE:-charts/openbao-operator/Chart.yaml}"
+RELEASE_NOTES_DIR="${RELEASE_NOTES_DIR:-release-notes}"
 DRY_RUN="${DRY_RUN:-0}"
 
 GH_READ_TOKEN="${GH_READ_TOKEN:-${GH_TOKEN:-}}"
@@ -72,6 +73,44 @@ sanitize_release_notes() {
       }
     }
   '
+}
+
+manual_release_notes_path() {
+  local version="$1"
+  local extension path
+
+  for extension in mdx md; do
+    path="${RELEASE_NOTES_DIR}/${version}.${extension}"
+    if [[ -f "${path}" ]]; then
+      printf '%s\n' "${path}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+trim_file() {
+  awk '
+    {
+      lines[NR] = $0
+    }
+    END {
+      start = 1
+      while (start <= NR && lines[start] ~ /^[[:space:]]*$/) {
+        start++
+      }
+
+      end = NR
+      while (end >= start && lines[end] ~ /^[[:space:]]*$/) {
+        end--
+      }
+
+      for (i = start; i <= end; i++) {
+        print lines[i]
+      }
+    }
+  ' "$1"
 }
 
 gh_read() {
@@ -165,12 +204,28 @@ if [[ "${manifest_at_merge}" != "${version}" || "${chart_version_at_merge}" != "
 fi
 
 notes_file="$(mktemp)"
-trap 'rm -f "${notes_file}"' EXIT
+generated_notes_file="$(mktemp)"
+trap 'rm -f "${notes_file}" "${generated_notes_file}"' EXIT
 
-jq -r '.body // empty' <<<"${release_pr_json}" | sanitize_release_notes > "${notes_file}"
+jq -r '.body // empty' <<<"${release_pr_json}" | sanitize_release_notes > "${generated_notes_file}"
+
+if [[ ! -s "${generated_notes_file}" ]]; then
+  echo "release PR #${release_pr_number} body is empty after sanitization" >&2
+  exit 1
+fi
+
+if manual_notes_file="$(manual_release_notes_path "${version}")"; then
+  trim_file "${manual_notes_file}" > "${notes_file}"
+  if [[ -s "${notes_file}" ]]; then
+    printf '\n\n' >> "${notes_file}"
+  fi
+  cat "${generated_notes_file}" >> "${notes_file}"
+else
+  cat "${generated_notes_file}" > "${notes_file}"
+fi
 
 if [[ ! -s "${notes_file}" ]]; then
-  echo "release PR #${release_pr_number} body is empty after sanitization" >&2
+  echo "release notes for ${version} are empty" >&2
   exit 1
 fi
 
