@@ -6314,10 +6314,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260501-d67005c563bc
+          value: nightly-20260502-04cbd64cf035
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:04c79d6e098f6ec8aacedc74427f9d799675c5fa624749452115807b93ed2b20
+        image: ghcr.io/dc-tec/openbao-operator@sha256:fffae42d22c1fc73ccf22963c4be91ca03e078d4502b2adda07ec245897aad72
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6432,8 +6432,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260501-d67005c563bc
-        image: ghcr.io/dc-tec/openbao-operator@sha256:04c79d6e098f6ec8aacedc74427f9d799675c5fa624749452115807b93ed2b20
+          value: nightly-20260502-04cbd64cf035
+        image: ghcr.io/dc-tec/openbao-operator@sha256:fffae42d22c1fc73ccf22963c4be91ca03e078d4502b2adda07ec245897aad72
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7917,6 +7917,32 @@ spec:
       !has(object.spec.operatorImageVerification) || !has(object.spec.operatorImageVerification.failurePolicy)
       || object.spec.operatorImageVerification.failurePolicy != "Warn"'
     message: Hardened profile does not allow spec.operatorImageVerification.failurePolicy=Warn.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.securityContext) || !has(object.spec.securityContext.runAsNonRoot)
+      || object.spec.securityContext.runAsNonRoot == true'
+    message: Hardened profile does not allow spec.securityContext.runAsNonRoot=false.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.securityContext) || !has(object.spec.securityContext.seccompProfile)
+      || !has(object.spec.securityContext.seccompProfile.type) || object.spec.securityContext.seccompProfile.type
+      != "Unconfined"'
+    message: Hardened profile does not allow spec.securityContext.seccompProfile.type=Unconfined.
+  - expression: |-
+      !has(object.spec.profile) || object.spec.profile != "Hardened" || !has(object.spec.securityContext) || ((!has(object.spec.securityContext.runAsUser) || object.spec.securityContext.runAsUser != 0) &&
+
+        (!has(object.spec.securityContext.runAsGroup) || object.spec.securityContext.runAsGroup != 0) &&
+        (!has(object.spec.securityContext.fsGroup) || object.spec.securityContext.fsGroup != 0))
+    message: Hardened profile does not allow root UID/GID overrides in spec.securityContext.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.securityContext) || !has(object.spec.securityContext.supplementalGroups)
+      || object.spec.securityContext.supplementalGroups.all(group, group != 0)'
+    message: Hardened profile does not allow root supplemental groups in spec.securityContext.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.securityContext) || !has(object.spec.securityContext.sysctls)
+      || size(object.spec.securityContext.sysctls) == 0'
+    message: Hardened profile does not allow pod sysctl overrides in spec.securityContext.
+  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
+      !has(object.spec.securityContext) || !has(object.spec.securityContext.windowsOptions)'
+    message: Hardened profile does not allow Windows pod security options in spec.securityContext.
   - expression: '!has(object.spec.initContainer) || object.spec.initContainer.enabled
       == true'
     message: spec.initContainer is optional; when set, spec.initContainer.enabled
@@ -7944,6 +7970,13 @@ spec:
       != "")'
     message: spec.gateway.hostname and spec.gateway.gatewayRef.name are required when
       Gateway is enabled.
+  - expression: |-
+      !has(object.spec.ingress) || !has(object.spec.ingress.enabled) || object.spec.ingress.enabled == false || (has(object.spec.network) &&
+
+        has(object.spec.network.trustedIngressPeers) &&
+        size(object.spec.network.trustedIngressPeers) > 0)
+    message: spec.ingress.enabled requires at least one spec.network.trustedIngressPeers
+      entry so NetworkPolicy ingress remains source-scoped.
   - expression: '!(variables.has_pre_upgrade_snapshot || variables.has_bluegreen_pre_upgrade_snapshot)
       || variables.has_backup'
     message: spec.backup is required when pre-upgrade snapshots are enabled (spec.upgrade.preUpgradeSnapshot
