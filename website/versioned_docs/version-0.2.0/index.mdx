@@ -1,0 +1,100 @@
+---
+title: Operator Docs
+slug: /
+hide_title: true
+pageType: landing
+description: OpenBao Operator documentation for installation, configuration, operations, security, and reference material, with recovery and restore kept inside Operate.
+---
+
+<PageHero
+  variant="landing"
+  eyebrow="Operator docs"
+  title="OpenBao Operator documentation"
+  lede="Installation, configuration, day 2 operations, security, architecture, and reference material for OpenBao Operator. Recovery and restore guidance lives under Operate."
+  actions={[
+    {label: 'Start with Get Started', docId: 'user-guide/index', variant: 'primary'},
+    {label: 'Open Operate', docId: 'user-guide/openbaocluster/operations/index', variant: 'secondary'},
+  ]}
+>
+  <Checklist
+    title="Use these docs to"
+    items={[
+      'deploy OpenBao Operator for the first time',
+      'move from installation into configuration and day 2 operations',
+      'understand security posture and tenant boundaries',
+      'move from troubleshooting into recovery and restore when the cluster is unstable',
+    ]}
+  />
+</PageHero>
+
+<Callout type="note" title="Pre-GA release line">
+
+OpenBao Operator is intended for real deployments, but the CRD API remains `v1alpha1`, minor releases may introduce breaking changes, and support is best-effort for the latest published stable line.
+
+</Callout>
+
+<RouteList
+  title="Primary routes"
+  items={[
+    {
+      eyebrow: '01',
+      title: 'Get Started',
+      description: 'Choose a deployment model, install the operator, create the first cluster, and hand off cleanly into day 2 work.',
+      docId: 'user-guide/index',
+    },
+    {
+      eyebrow: '02',
+      title: 'Operate',
+      description: 'Plan upgrades, backups, maintenance, troubleshooting, recovery, and production hardening around the cluster lifecycle.',
+      docId: 'user-guide/openbaocluster/operations/index',
+    },
+    {
+      eyebrow: '03',
+      title: 'Security',
+      description: 'Understand the trust boundaries, admission posture, workload controls, and multi-tenant assumptions behind the platform.',
+      docId: 'security/index',
+    },
+  ]}
+/>
+
+<NextActions
+  title="Deployment planning"
+  items={[
+    {
+      label: 'Configure',
+      description: 'Set profiles, bootstrap, exposure, storage, and observability before production traffic arrives.',
+      docId: 'user-guide/openbaocluster/configuration/index',
+    },
+    {
+      label: 'Validated Deployments',
+      description: 'Use tested baselines, recipes, and DR lanes when you want a deployment path to reproduce.',
+      docId: 'user-guide/validated-deployments/index',
+    },
+  ]}
+/>
+
+<NextActions
+  title="Supporting sections"
+  items={[
+    {
+      label: 'Architecture',
+      description: 'Controller boundaries, lifecycle coordination, and the internal reasoning behind operator behavior.',
+      docId: 'architecture/index',
+    },
+    {
+      label: 'Reference',
+      description: 'Compatibility, support posture, API reference, and status and event semantics.',
+      docId: 'reference/index',
+    },
+    {
+      label: 'Releases',
+      description: 'Versioned release context aligned with the published docs and artifacts.',
+      to: '/releases',
+    },
+    {
+      label: 'Contribute',
+      description: 'Development setup, standards, CI, testing, and release management guidance.',
+      to: '/contribute',
+    },
+  ]}
+/>

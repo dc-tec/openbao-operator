@@ -30,7 +30,7 @@ test('docs navbar dropdown routes to validated deployments', async ({page}) => {
   await expect(page).toHaveURL(/\/openbao-operator\/docs\/validated-deployments$/);
   await expect(
     page.getByRole('heading', {
-      name: 'Choose a tested baseline by lane, then adapt it without forgetting what was actually proven.',
+      name: 'Validated deployment baselines',
     }),
   ).toBeVisible();
 });
@@ -42,7 +42,7 @@ test('version dropdown switches from next docs to the stable release line', asyn
   await versionDropdown.hover();
 
   const archivedRelease = page.locator('.dropdown__menu').getByRole('link', {
-    name: '0.1.0',
+    name: '0.2.0',
     exact: true,
   });
   await expect(archivedRelease).toBeVisible();
@@ -50,7 +50,7 @@ test('version dropdown switches from next docs to the stable release line', asyn
 
   await expect(page).toHaveURL(/\/openbao-operator\/docs\/get-started\/deployment-decision-guide$/);
   await expect(page.getByText('Published release documentation')).toBeVisible();
-  await expect(page.getByText('Version: 0.1.0')).toBeVisible();
+  await expect(page.getByText('Version: 0.2.0')).toBeVisible();
 });
 
 test.describe('curated legacy redirects stay alive', () => {

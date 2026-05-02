@@ -1,0 +1,145 @@
+---
+title: 0.2.0
+description: Release notes for OpenBao Operator 0.2.0.
+slug: /0.2.0
+---
+
+<StatusPill>0.2.0</StatusPill>
+
+Published 2026-05-01.
+
+<CardGrid>
+  <LinkCard title="Matching docs" to="/docs">
+    Open the docs experience aligned to this release line.
+  </LinkCard>
+  <LinkCard title="GitHub release" to="https://github.com/dc-tec/openbao-operator/releases/tag/0.2.0">
+    View release assets, tag metadata, and the GitHub release entry.
+  </LinkCard>
+</CardGrid>
+
+0.2.0 is the next stable pre-GA release line for OpenBao Operator. This
+release focuses on horizontal read scaling, safer day-2 maintenance workflows,
+and tighter production safety checks for hardened deployments.
+
+### Highlights
+
+* Added steady-state OpenBao read replicas through `spec.readReplicas`,
+  including separate read-replica status, optional dedicated read Service
+  support, and dashboard/metrics visibility.
+* Integrated read replicas with disruptive workflows: rolling upgrades,
+  blue/green upgrades, restores, restart ordering, and storage-resize ordering
+  now handle the read pool deliberately.
+* Added `spec.runtime.restartAt` as the primary API for explicit rolling
+  restart requests. The older `spec.maintenance.restartAt` path remains
+  temporarily for compatibility.
+* Reworked planned maintenance authorization so direct managed-resource
+  maintenance depends on Kubernetes RBAC for the custom `maintenance` verb on
+  the owning `OpenBaoCluster`.
+* Hardened production safety checks for managed Ingress exposure, Hardened pod
+  security context overrides, unsafe admission mode, and configured Sigstore
+  trusted roots.
+* Improved upgrade reliability across SSA ownership, rolling retry state,
+  blue/green recovery, Raft promote handling, and executor Job resource
+  defaults.
+
+### Breaking and Migration Notes
+
+* Managed Ingress now requires explicit source scoping. Clusters with
+  `spec.ingress.enabled=true` must configure at least one
+  `spec.network.trustedIngressPeers` entry before creating or updating the
+  `OpenBaoCluster` under admission enforcement.
+* Hardened clusters can no longer create or update pod-level
+  `spec.securityContext` overrides that weaken the runtime baseline. Remove
+  settings such as `runAsNonRoot=false`, root UID/GID values, root supplemental
+  groups, `Unconfined` seccomp, pod sysctls, or Windows pod security options
+  before upgrading with admission enforcement.
+* Existing Hardened clusters with weakening security context overrides are
+  reported as `ProductionReady=False` until corrected.
+
+### Operational Notes
+
+* Apply the `0.2.0` CRDs before upgrading the controller or Helm chart.
+* Existing initialized clusters may need an OpenBao policy update for
+  read-replica Autopilot health reporting. The operator policy needs `read` on
+  `sys/storage/raft/autopilot/state`; the operator does not mutate OpenBao
+  policies after bootstrap.
+* In multi-tenant mode, cluster reconciliation now waits until tenant onboarding
+  RBAC exists in the target namespace. GitOps flows that apply `OpenBaoTenant`
+  and `OpenBaoCluster` together may see the cluster pause and requeue until
+  onboarding completes.
+* Raft scale-downs are now staged one replica at a time, and PVCs for
+  scaled-down ordinals are deleted while StatefulSet deletion still retains
+  PVCs. Review replica-reduction procedures before scaling production clusters
+  down.
+* Unsafe admission mode now reports explicit degraded production posture instead
+  of looking equivalent to enforced admission policies.
+* If a configured trusted-root ConfigMap is missing, malformed, incomplete, or
+  unreadable, image verification now fails closed instead of falling back
+  silently to the embedded trusted root.
+
+### Upgrade from 0.1.x
+
+Before upgrading an existing `0.1.x` installation:
+
+1. Review every existing `OpenBaoCluster` before applying the new controller.
+2. For clusters with `spec.ingress.enabled=true`, configure at least one
+   `spec.network.trustedIngressPeers` entry.
+3. For `Hardened` clusters, remove pod-level `spec.securityContext` overrides
+   that weaken the default runtime baseline.
+4. For initialized clusters that will use read replicas, update the OpenBao
+   operator policy to allow `read` on
+   `sys/storage/raft/autopilot/state`.
+5. Apply the `0.2.0` CRDs first:
+
+   ```sh
+   kubectl apply -f https://github.com/dc-tec/openbao-operator/releases/download/0.2.0/crds.yaml
+   ```
+
+6. Upgrade the Helm release:
+
+   ```sh
+   helm upgrade openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
+     --version 0.2.0 \
+     --namespace openbao-operator-system \
+     --reuse-values
+   ```
+
+7. Verify the operator rollout, CRD presence, managed cluster conditions, and
+   recent events before continuing with OpenBao workload changes.
+
+Kubernetes `v1.34` and `v1.35` are the 0.2.0 release-gated versions. Kubernetes
+`v1.33` may work but is not release-gated for this line. Kubernetes `v1.36` is
+tracked as the next candidate once controller-runtime, Kind, and release-gate
+coverage are available.
+
+### Compatibility
+
+OpenBao Operator requires Kubernetes `v1.33+`. The current release validation
+baseline is Kubernetes `v1.34`-`v1.35` and OpenBao `2.5.3`, with config
+compatibility coverage for OpenBao `2.4.4`.
+
+### Features
+
+* **admission:** authorize maintenance through RBAC ([#347](https://github.com/dc-tec/openbao-operator/issues/347)) ([b7c05a7](https://github.com/dc-tec/openbao-operator/commit/b7c05a770bcc97ea1931caf0a3c05919540c38ab))
+* **api:** add runtime restart controls ([#348](https://github.com/dc-tec/openbao-operator/issues/348)) ([b1efd34](https://github.com/dc-tec/openbao-operator/commit/b1efd3442c2c5cd0a58c654b749103ab7cf5ac81))
+* **readreplicas:** add steady-state read replica topology and status ([#361](https://github.com/dc-tec/openbao-operator/issues/361)) ([9a74c14](https://github.com/dc-tec/openbao-operator/commit/9a74c143e9061f42f5c7557af7a7e9b767252926))
+* **readreplicas:** integrate read replicas with upgrade and restore workflows ([#362](https://github.com/dc-tec/openbao-operator/issues/362)) ([e8bf8b8](https://github.com/dc-tec/openbao-operator/commit/e8bf8b820c06ccab1fb81a9df25223dfbf4e0666))
+
+
+### Bug Fixes
+
+* **admission:** guard hardened security context overrides ([#390](https://github.com/dc-tec/openbao-operator/issues/390)) ([d0a6533](https://github.com/dc-tec/openbao-operator/commit/d0a6533a4c5dbb7b23e4c0c83abf6ee07a5b491e))
+* **helm:** allow global values in chart schema ([#378](https://github.com/dc-tec/openbao-operator/issues/378)) ([5dad02e](https://github.com/dc-tec/openbao-operator/commit/5dad02ebc4253ddb366f636e3aea60ffce5f4ffa))
+* **helm:** Helm provisioner admission identity ([#387](https://github.com/dc-tec/openbao-operator/issues/387)) ([f781c70](https://github.com/dc-tec/openbao-operator/commit/f781c70b885973b0d682cc102607d3e0b41f36dd))
+* **infra:** delete scaled-down raft PVCs ([#341](https://github.com/dc-tec/openbao-operator/issues/341)) ([f406e90](https://github.com/dc-tec/openbao-operator/commit/f406e9029d94c8e7984d77b66cf02b8a97f3c339))
+* **multitenancy:** gate cluster reconcile on tenant onboarding ([#359](https://github.com/dc-tec/openbao-operator/issues/359)) ([cfd850f](https://github.com/dc-tec/openbao-operator/commit/cfd850fcf819c4d1562644cc9495143cfee69b27))
+* **network:** Require source-scoped managed Ingress access ([#389](https://github.com/dc-tec/openbao-operator/issues/389)) ([a3cec85](https://github.com/dc-tec/openbao-operator/commit/a3cec85a56230560be8196ac02666ad38b7e136d))
+* **openbao:** stage safe raft scale-downs ([#339](https://github.com/dc-tec/openbao-operator/issues/339)) ([4da1ec7](https://github.com/dc-tec/openbao-operator/commit/4da1ec74f8e4e45e710a0fae51f86bbf44c257c8))
+* **probe:** stabilize openbao workload probes ([#371](https://github.com/dc-tec/openbao-operator/issues/371)) ([260547b](https://github.com/dc-tec/openbao-operator/commit/260547b71d3e12e2ec97ae500f9ed63ab1619804))
+* **provisioner:** reduce release reconciliation log noise ([#370](https://github.com/dc-tec/openbao-operator/issues/370)) ([b2f2bca](https://github.com/dc-tec/openbao-operator/commit/b2f2bcaf18dfef15348aa02b9f3de224c02e38ab))
+* **security:** fail closed for configured trusted roots ([#393](https://github.com/dc-tec/openbao-operator/issues/393)) ([04cbd64](https://github.com/dc-tec/openbao-operator/commit/04cbd64cf0356f111f0e3c0450b859008e6c5b69))
+* **status:** mark unsafe admission mode not production-ready ([#391](https://github.com/dc-tec/openbao-operator/issues/391)) ([98022a3](https://github.com/dc-tec/openbao-operator/commit/98022a3925742e011dbb8ce1fb55c2c79c5a1496))
+* **upgrade:** complete SSA ownership migration ([#345](https://github.com/dc-tec/openbao-operator/issues/345)) ([eafa931](https://github.com/dc-tec/openbao-operator/commit/eafa9317acf33155cc7863924b5cb4a8725f97bc))
+* **upgrade:** harden bluegreen and rolling recovery flakes ([#374](https://github.com/dc-tec/openbao-operator/issues/374)) ([62cf706](https://github.com/dc-tec/openbao-operator/commit/62cf706df50b8ff462e5893166fc61b83749b298))
+* **upgrade:** set executor job resource requirements ([#392](https://github.com/dc-tec/openbao-operator/issues/392)) ([8efb8da](https://github.com/dc-tec/openbao-operator/commit/8efb8da900d378139e35bd32c54489bcc74bec15))
+* **upgrade:** treat raft promote already-voter as no-op ([#382](https://github.com/dc-tec/openbao-operator/issues/382)) ([7d25753](https://github.com/dc-tec/openbao-operator/commit/7d25753b9c5c780e174e8adb5487f48c67128267))
