@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const rootDir = path.resolve(process.cwd(), '..');
 const changelogPath = path.join(rootDir, 'CHANGELOG.md');
+const releaseNotesDir = path.join(rootDir, 'release-notes');
 const releasesDir = path.join(rootDir, 'releases');
 const versionsPath = path.join(process.cwd(), 'versions.json');
 
@@ -35,6 +36,20 @@ async function loadDocsVersions() {
   } catch {
     return [];
   }
+}
+
+async function loadManualReleaseNote(slug) {
+  for (const extension of ['mdx', 'md']) {
+    try {
+      return (await fs.readFile(path.join(releaseNotesDir, `${slug}.${extension}`), 'utf8')).trim();
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }
+
+  return '';
 }
 
 function getDocsUrl(version, docsVersions) {
@@ -143,7 +158,7 @@ slug: /
 
 <StatusPill>${latest?.version ?? 'Current release'}</StatusPill>
 
-Release notes are generated from [CHANGELOG.md](https://github.com/dc-tec/openbao-operator/blob/main/CHANGELOG.md) and tied to the published docs experience.
+Release pages combine hand-written notes from [release-notes/](https://github.com/dc-tec/openbao-operator/tree/main/release-notes) with generated entries from [CHANGELOG.md](https://github.com/dc-tec/openbao-operator/blob/main/CHANGELOG.md).
 
 ## Latest highlighted release
 
@@ -167,6 +182,7 @@ ${archive}
 async function writeReleasePages(sections, docsVersions) {
   for (const section of sections) {
     const body = section.body.join('\n').trim();
+    const manualReleaseNote = await loadManualReleaseNote(section.slug);
     const githubReleaseUrl =
       section.version === 'Unreleased'
         ? 'https://github.com/dc-tec/openbao-operator/pulls?q=is%3Apr+is%3Aopen+label%3Arelease'
@@ -205,7 +221,7 @@ ${section.date ? `Published ${section.date}.` : 'This page tracks unreleased cha
   </LinkCard>
 </CardGrid>
 
-${body}
+${manualReleaseNote ? `${manualReleaseNote}\n\n` : ''}${body}
 `;
 
     await fs.writeFile(path.join(releasesDir, `${section.slug}.mdx`), content);
