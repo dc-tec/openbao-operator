@@ -30,14 +30,19 @@ The current stable release line is intended for real deployments, but it remains
   columns={['Version', 'Validated', 'Support posture', 'Production note']}
   rows={[
     {
-      cells: ['v1.35', 'PR gate plus nightly E2E', 'Best-effort supported on the latest stable line', 'Primary validated baseline'],
+      cells: ['v1.35', 'PR gate, release gate, and nightly E2E', 'Best-effort supported on the latest stable line', 'Primary validated baseline'],
       emphasis: 'recommended',
     },
     {
-      cells: ['v1.34', 'Nightly E2E', 'Best-effort supported on the latest stable line', 'Recommended after staging validation'],
+      cells: ['v1.34', 'Release gate, nightly E2E, and performance baseline', 'Best-effort supported on the latest stable line', 'Minimum validated version'],
     },
     {
-      cells: ['v1.33', 'Nightly E2E', 'Best-effort supported on the latest stable line', 'Minimum validated version'],
+      cells: ['v1.36', 'Not validated for the current release line', 'Tracked as the next supported Kubernetes candidate', 'Adopt after controller-runtime, Kind, and release-gate coverage are available'],
+      emphasis: 'caution',
+    },
+    {
+      cells: ['v1.33', 'Not validated for the current release line', 'May work but is not release-gated for 0.2.0', 'Validate in staging before carrying this version into the current pre-GA line'],
+      emphasis: 'caution',
     },
     {
       cells: ['v1.32', 'Not validated', 'Out of support scope', 'Do not use for the current pre-GA line'],
@@ -87,11 +92,14 @@ The current stable release line is intended for real deployments, but it remains
   columns={['Workflow', 'Scope', 'Versions tested']}
   rows={[
     {
-      cells: ['PR Gate', 'Logic, manifests, and primary compatibility path', 'K8s 1.35 + OpenBao 2.5.3'],
+      cells: ['PR Gate', 'Logic, manifests, and primary compatibility path', 'K8s 1.35.1 + OpenBao 2.5.3'],
       emphasis: 'recommended',
     },
     {
-      cells: ['Nightly E2E', 'Full lifecycle coverage', 'K8s 1.34 and 1.35 + OpenBao 2.5.3'],
+      cells: ['Release Gate E2E', 'Stable release lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.5.3'],
+    },
+    {
+      cells: ['Nightly E2E', 'Full lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.5.3'],
     },
     {
       cells: ['Nightly Config Compatibility', 'Render and config compatibility checks', 'OpenBao 2.4.4 and 2.5.3'],
