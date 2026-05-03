@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
@@ -93,9 +94,10 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 		return reconcileDeletion(ctx, logger, runtime, tenant, targetNS, key)
 	}
 
-	if !containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
-		tenant.Finalizers = append(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
-		if err := runtime.Client.Update(ctx, tenant); err != nil {
+	if !controllerutil.ContainsFinalizer(tenant, openbaov1alpha1.OpenBaoTenantFinalizer) {
+		original := tenant.DeepCopy()
+		controllerutil.AddFinalizer(tenant, openbaov1alpha1.OpenBaoTenantFinalizer)
+		if err := runtime.Client.Patch(ctx, tenant, client.MergeFrom(original)); err != nil {
 			return recon.Result{}, fmt.Errorf("failed to add finalizer to OpenBaoTenant %s: %w", key, err)
 		}
 		// Requeue to observe the resource with the finalizer attached.
@@ -160,7 +162,7 @@ func reconcileDeletion(
 	targetNS string,
 	key types.NamespacedName,
 ) (recon.Result, error) {
-	if !containsFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
+	if !controllerutil.ContainsFinalizer(tenant, openbaov1alpha1.OpenBaoTenantFinalizer) {
 		return recon.Result{}, nil
 	}
 
@@ -189,8 +191,9 @@ func reconcileDeletion(
 	})
 	runtime.emitTenantNormalEvent(tenant, ReasonTenantRBACCleaned, fmt.Sprintf("Cleaned tenant RBAC for namespace %s", targetNS))
 
-	tenant.Finalizers = removeFinalizer(tenant.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer)
-	if err := runtime.Client.Update(ctx, tenant); err != nil {
+	original := tenant.DeepCopy()
+	controllerutil.RemoveFinalizer(tenant, openbaov1alpha1.OpenBaoTenantFinalizer)
+	if err := runtime.Client.Patch(ctx, tenant, client.MergeFrom(original)); err != nil {
 		return recon.Result{}, fmt.Errorf("failed to remove finalizer from OpenBaoTenant %s: %w", key, err)
 	}
 
@@ -243,25 +246,6 @@ func ensureAdmissionDependenciesReady(
 
 func patchStatus(ctx context.Context, c client.Client, tenant *openbaov1alpha1.OpenBaoTenant, original *openbaov1alpha1.OpenBaoTenant) error {
 	return c.Status().Patch(ctx, tenant, client.MergeFrom(original))
-}
-
-func containsFinalizer(finalizers []string, value string) bool {
-	for _, f := range finalizers {
-		if f == value {
-			return true
-		}
-	}
-	return false
-}
-
-func removeFinalizer(finalizers []string, value string) []string {
-	result := make([]string, 0, len(finalizers))
-	for _, f := range finalizers {
-		if f != value {
-			result = append(result, f)
-		}
-	}
-	return result
 }
 
 func conditionTypeProvisioned(runtime TenantRuntime) string {
