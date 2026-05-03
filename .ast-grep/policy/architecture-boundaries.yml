@@ -47,6 +47,7 @@ layerCoverage:
       - platform/reconcile
       - platform/resourceapply
       - platform/resourceidentity
+      - platform/semver
       - platform/statusapply
       - platform/statuspatch
       - platform/testutil
