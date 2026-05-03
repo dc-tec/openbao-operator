@@ -333,6 +333,24 @@ func TestCompareVersions(t *testing.T) {
 			to:         "2.4.0-beta",
 			wantChange: VersionChangePatch,
 		},
+		{
+			name:       "numeric prerelease identifiers use semver precedence",
+			from:       "2.4.0-rc.2",
+			to:         "2.4.0-rc.10",
+			wantChange: VersionChangePatch,
+		},
+		{
+			name:       "numeric prerelease downgrade uses semver precedence",
+			from:       "2.4.0-rc.10",
+			to:         "2.4.0-rc.2",
+			wantChange: VersionChangeDowngrade,
+		},
+		{
+			name:       "build metadata does not affect precedence",
+			from:       "2.4.0+build.1",
+			to:         "2.4.0+build.2",
+			wantChange: VersionChangeNone,
+		},
 
 		// Error cases
 		{

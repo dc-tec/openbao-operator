@@ -107,27 +107,40 @@ func TestRenderHCLWithStructuredConfiguration(t *testing.T) {
 }
 
 func TestRenderHCLRejectsPluginAutoConfigForUnsupportedVersions(t *testing.T) {
-	cluster := newMinimalCluster("structured-config", "default")
-	autoDownload := true
-	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
-		Plugin: &openbaov1alpha1.PluginConfig{
-			AutoDownload: &autoDownload,
-		},
+	tests := []struct {
+		name    string
+		version string
+	}{
+		{name: "older release", version: "2.4.4"},
+		{name: "target prerelease", version: "2.5.0-rc.1"},
 	}
 
-	infraDetails := InfrastructureDetails{
-		HeadlessServiceName: cluster.Name,
-		Namespace:           cluster.Namespace,
-		APIPort:             8200,
-		ClusterPort:         8201,
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalCluster("structured-config", "default")
+			cluster.Spec.Version = tt.version
+			autoDownload := true
+			cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+				Plugin: &openbaov1alpha1.PluginConfig{
+					AutoDownload: &autoDownload,
+				},
+			}
 
-	_, err := RenderHCL(cluster, infraDetails)
-	if err == nil {
-		t.Fatalf("RenderHCL() expected error, got nil")
-	}
-	if !strings.Contains(err.Error(), "requires OpenBao >= 2.5.0") {
-		t.Fatalf("RenderHCL() error = %v, want version gate error", err)
+			infraDetails := InfrastructureDetails{
+				HeadlessServiceName: cluster.Name,
+				Namespace:           cluster.Namespace,
+				APIPort:             8200,
+				ClusterPort:         8201,
+			}
+
+			_, err := RenderHCL(cluster, infraDetails)
+			if err == nil {
+				t.Fatalf("RenderHCL() expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "requires OpenBao >= 2.5.0") {
+				t.Fatalf("RenderHCL() error = %v, want version gate error", err)
+			}
+		})
 	}
 }
 

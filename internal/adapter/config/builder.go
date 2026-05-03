@@ -3,10 +3,10 @@ package config
 import (
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
@@ -239,57 +239,7 @@ func validateConfigVersionCompatibility(cluster *openbaov1alpha1.OpenBaoCluster)
 }
 
 func openBaoVersionAtLeast(version string, wantMajor, wantMinor, wantPatch int) (bool, error) {
-	parsed, err := parseSemVer(version)
-	if err != nil {
-		return false, err
-	}
-
-	if parsed.major != wantMajor {
-		return parsed.major > wantMajor, nil
-	}
-	if parsed.minor != wantMinor {
-		return parsed.minor > wantMinor, nil
-	}
-	return parsed.patch >= wantPatch, nil
-}
-
-type semVer struct {
-	major int
-	minor int
-	patch int
-}
-
-func parseSemVer(version string) (semVer, error) {
-	if strings.TrimSpace(version) == "" {
-		return semVer{}, fmt.Errorf("version string is empty")
-	}
-
-	trimmed := strings.TrimPrefix(strings.TrimSpace(version), "v")
-
-	// Strip build metadata and prerelease suffixes.
-	if idx := strings.IndexAny(trimmed, "+-"); idx != -1 {
-		trimmed = trimmed[:idx]
-	}
-
-	parts := strings.Split(trimmed, ".")
-	if len(parts) != 3 {
-		return semVer{}, fmt.Errorf("invalid version format %q: expected MAJOR.MINOR.PATCH", version)
-	}
-
-	major, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return semVer{}, fmt.Errorf("invalid major version %q: %w", parts[0], err)
-	}
-	minor, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return semVer{}, fmt.Errorf("invalid minor version %q: %w", parts[1], err)
-	}
-	patch, err := strconv.Atoi(parts[2])
-	if err != nil {
-		return semVer{}, fmt.Errorf("invalid patch version %q: %w", parts[2], err)
-	}
-
-	return semVer{major: major, minor: minor, patch: patch}, nil
+	return platformsemver.AtLeast(version, wantMajor, wantMinor, wantPatch)
 }
 
 func upgradePolicyForCluster(cluster *openbaov1alpha1.OpenBaoCluster) string {

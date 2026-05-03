@@ -8,9 +8,10 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
 )
 
-func FuzzParseSemVer(f *testing.F) {
+func FuzzOpenBaoVersionAtLeast(f *testing.F) {
 	seeds := []string{
 		"",
 		"2.4.4",
@@ -27,7 +28,7 @@ func FuzzParseSemVer(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, version string) {
-		_, _ = parseSemVer(version)
+		_, _ = openBaoVersionAtLeast(version, 2, 5, 0)
 	})
 }
 
@@ -202,7 +203,7 @@ func sanitizeCRToken(v, fallback string) string {
 }
 
 func sanitizeVersion(v string) string {
-	if _, err := parseSemVer(v); err == nil {
+	if _, err := platformsemver.Parse(v); err == nil {
 		return v
 	}
 	return "2.5.0"
