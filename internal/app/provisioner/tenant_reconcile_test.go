@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,8 @@ import (
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
@@ -59,7 +62,11 @@ func newTenantRuntime(t *testing.T, objs ...client.Object) TenantRuntime {
 	if len(objs) > 0 {
 		builder = builder.WithObjects(objs...)
 	}
-	c := builder.Build()
+	return newTenantRuntimeWithClient(t, builder.Build())
+}
+
+func newTenantRuntimeWithClient(t *testing.T, c client.Client) TenantRuntime {
+	t.Helper()
 	mgr, err := provisionermanager.NewManager(c, logr.Discard())
 	if err != nil {
 		t.Fatalf("new manager: %v", err)
@@ -156,7 +163,7 @@ func TestReconcileOpenBaoTenant_FinalizerAndProvisioning(t *testing.T) {
 	if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
 		t.Fatalf("get updated tenant: %v", getErr)
 	}
-	if !containsFinalizer(updated.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
+	if !controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoTenantFinalizer) {
 		t.Fatalf("expected finalizer to be present")
 	}
 	if !updated.Status.Provisioned || updated.Status.LastError != "" {
@@ -301,7 +308,7 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 			if !apierrors.IsNotFound(getErr) {
 				t.Fatalf("get updated tenant: %v", getErr)
 			}
-		} else if containsFinalizer(updated.Finalizers, openbaov1alpha1.OpenBaoTenantFinalizer) {
+		} else if controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoTenantFinalizer) {
 			t.Fatalf("expected finalizer to be removed")
 		}
 
@@ -309,15 +316,107 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 	})
 }
 
-func TestFinalizerHelpers(t *testing.T) {
-	if containsFinalizer([]string{"a", "b"}, "c") {
-		t.Fatalf("containsFinalizer should be false for missing value")
+func TestReconcileOpenBaoTenant_FinalizerAddUsesMergePatch(t *testing.T) {
+	setAdmissionReady(t, true)
+
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{Name: "tenant", Namespace: "openbao-operator-system"},
+		Spec:       openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
 	}
-	if !containsFinalizer([]string{"a", "b"}, "a") {
-		t.Fatalf("containsFinalizer should be true for present value")
+
+	var patches int
+	var updates int
+	c := fake.NewClientBuilder().
+		WithScheme(newTenantScheme(t)).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoTenant{}).
+		WithObjects(tenant.DeepCopy()).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				updates++
+				return errors.New("unexpected update for finalizer")
+			},
+			Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				if obj.GetName() == tenant.Name && obj.GetNamespace() == tenant.Namespace {
+					patches++
+				}
+				return c.Patch(ctx, obj, patch, opts...)
+			},
+		}).
+		Build()
+	runtime := newTenantRuntimeWithClient(t, c)
+	req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
+
+	result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
+	if err != nil {
+		t.Fatalf("ReconcileOpenBaoTenant() error = %v", err)
 	}
-	remaining := removeFinalizer([]string{"a", "b", "a"}, "a")
-	if len(remaining) != 1 || remaining[0] != "b" {
-		t.Fatalf("removeFinalizer result=%v, want [b]", remaining)
+	if result.RequeueAfter != 5*time.Second {
+		t.Fatalf("requeueAfter=%v, want 5s", result.RequeueAfter)
+	}
+	if updates != 0 {
+		t.Fatalf("Update() calls = %d, want 0", updates)
+	}
+	if patches != 1 {
+		t.Fatalf("Patch() calls = %d, want 1", patches)
+	}
+
+	updated := &openbaov1alpha1.OpenBaoTenant{}
+	if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
+		t.Fatalf("get updated tenant: %v", getErr)
+	}
+	if !controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoTenantFinalizer) {
+		t.Fatalf("expected finalizer to be present")
+	}
+}
+
+func TestReconcileOpenBaoTenant_FinalizerRemoveUsesMergePatch(t *testing.T) {
+	setAdmissionReady(t, true)
+
+	now := metav1.Now()
+	tenant := &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "tenant",
+			Namespace:         "openbao-operator-system",
+			Finalizers:        []string{openbaov1alpha1.OpenBaoTenantFinalizer},
+			DeletionTimestamp: &now,
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
+	}
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns"}}
+
+	var patches int
+	var updates int
+	c := fake.NewClientBuilder().
+		WithScheme(newTenantScheme(t)).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoTenant{}).
+		WithObjects(tenant.DeepCopy(), ns.DeepCopy()).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				updates++
+				return errors.New("unexpected update for finalizer")
+			},
+			Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				if obj.GetName() == tenant.Name && obj.GetNamespace() == tenant.Namespace {
+					patches++
+				}
+				return c.Patch(ctx, obj, patch, opts...)
+			},
+		}).
+		Build()
+	runtime := newTenantRuntimeWithClient(t, c)
+	req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
+
+	result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
+	if err != nil {
+		t.Fatalf("ReconcileOpenBaoTenant() error = %v", err)
+	}
+	if result != (recon.Result{}) {
+		t.Fatalf("result=%v, want zero", result)
+	}
+	if updates != 0 {
+		t.Fatalf("Update() calls = %d, want 0", updates)
+	}
+	if patches != 1 {
+		t.Fatalf("Patch() calls = %d, want 1", patches)
 	}
 }

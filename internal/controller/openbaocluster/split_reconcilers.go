@@ -8,6 +8,8 @@ import (
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -241,21 +243,23 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 
 	if !cluster.DeletionTimestamp.IsZero() {
 		logger.Info("OpenBaoCluster is marked for deletion")
-		if containsFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer) {
+		if controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
 			if err := appopenbaocluster.HandleDeletion(ctx, logger, r.parent.deletionDependencies(), cluster); err != nil {
 				return ctrl.Result{}, err
 			}
-			cluster.Finalizers = removeFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)
-			if err := r.parent.Update(ctx, cluster); err != nil {
+			original := cluster.DeepCopy()
+			controllerutil.RemoveFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer)
+			if err := r.parent.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 			}
 		}
 		return ctrl.Result{}, nil
 	}
 
-	if !containsFinalizer(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer) {
-		cluster.Finalizers = append(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)
-		if err := r.parent.Update(ctx, cluster); err != nil {
+	if !controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
+		original := cluster.DeepCopy()
+		controllerutil.AddFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer)
+		if err := r.parent.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to add finalizer to OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 		}
 		return ctrl.Result{}, nil
