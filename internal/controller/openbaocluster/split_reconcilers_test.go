@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -10,6 +11,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -155,6 +158,135 @@ func TestOpenBaoClusterStatusReconciler_BypassesTenantOnboardingGateWhenRoleBind
 	}
 	if result.RequeueAfter != 0 {
 		t.Fatalf("Reconcile() requeueAfter = %s, want 0", result.RequeueAfter)
+	}
+}
+
+func TestOpenBaoClusterStatusReconciler_FinalizerAddUsesMergePatch(t *testing.T) {
+	t.Parallel()
+
+	scheme := newOpenBaoClusterTestScheme(t)
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "finalizer-patch",
+			Namespace: "default",
+		},
+	}
+
+	var patches int
+	var updates int
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster.DeepCopy()).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				updates++
+				return errors.New("unexpected update for finalizer")
+			},
+			Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				if obj.GetName() == cluster.Name && obj.GetNamespace() == cluster.Namespace {
+					patches++
+				}
+				return c.Patch(ctx, obj, patch, opts...)
+			},
+		}).
+		Build()
+
+	parent := &OpenBaoClusterReconciler{
+		Client: fakeClient,
+		ControllerRuntime: ControllerRuntime{
+			APIReader:         fakeClient,
+			Scheme:            scheme,
+			SingleTenantMode:  true,
+			OperatorNamespace: "openbao-operator-system",
+		},
+	}
+	reconciler := &openBaoClusterStatusReconciler{parent: parent}
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result != (ctrl.Result{}) {
+		t.Fatalf("Reconcile() result = %v, want zero", result)
+	}
+	if updates != 0 {
+		t.Fatalf("Update() calls = %d, want 0", updates)
+	}
+	if patches != 1 {
+		t.Fatalf("Patch() calls = %d, want 1", patches)
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	if err := fakeClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, updated); err != nil {
+		t.Fatalf("Get() updated cluster: %v", err)
+	}
+	if !controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoClusterFinalizer) {
+		t.Fatalf("expected finalizer to be present")
+	}
+}
+
+func TestOpenBaoClusterStatusReconciler_FinalizerRemoveUsesMergePatch(t *testing.T) {
+	t.Parallel()
+
+	scheme := newOpenBaoClusterTestScheme(t)
+	now := metav1.Now()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "finalizer-remove-patch",
+			Namespace:         "default",
+			Finalizers:        []string{openbaov1alpha1.OpenBaoClusterFinalizer},
+			DeletionTimestamp: &now,
+		},
+	}
+
+	var patches int
+	var updates int
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster.DeepCopy()).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				updates++
+				return errors.New("unexpected update for finalizer")
+			},
+			Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				if obj.GetName() == cluster.Name && obj.GetNamespace() == cluster.Namespace {
+					patches++
+				}
+				return c.Patch(ctx, obj, patch, opts...)
+			},
+		}).
+		Build()
+
+	parent := &OpenBaoClusterReconciler{
+		Client: fakeClient,
+		ControllerRuntime: ControllerRuntime{
+			APIReader:         fakeClient,
+			Scheme:            scheme,
+			SingleTenantMode:  true,
+			OperatorNamespace: "openbao-operator-system",
+		},
+	}
+	reconciler := &openBaoClusterStatusReconciler{parent: parent}
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result != (ctrl.Result{}) {
+		t.Fatalf("Reconcile() result = %v, want zero", result)
+	}
+	if updates != 0 {
+		t.Fatalf("Update() calls = %d, want 0", updates)
+	}
+	if patches != 1 {
+		t.Fatalf("Patch() calls = %d, want 1", patches)
 	}
 }
 
