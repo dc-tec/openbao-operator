@@ -6,9 +6,12 @@ message: OpenBaoClusterClaim Root app package must only import explicitly approv
 severity: warning
 language: Go
 files:
-    - internal/app/openbaoclusterclaim/**/*.go
+    - internal/app/openbaoclusterclaim/*.go
 ignores:
     - '**/*_test.go'
+    - internal/app/openbaoclusterclaim/backuprequest/**/*.go
+    - internal/app/openbaoclusterclaim/restorerequest/**/*.go
+    - internal/app/openbaoclusterclaim/upgraderequest/**/*.go
 rule:
     all:
         - kind: import_spec

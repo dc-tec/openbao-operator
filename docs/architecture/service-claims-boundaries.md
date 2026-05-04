@@ -48,6 +48,27 @@ a second hidden lifecycle engine.
   ]}
 />
 
+## Package structure
+
+The service-claims implementation is grouped under the `openbaoclusterclaim`
+module path while keeping each primary controller resource separate:
+
+```text
+internal/app/openbaoclusterclaim
+internal/app/openbaoclusterclaim/backuprequest
+internal/app/openbaoclusterclaim/restorerequest
+internal/app/openbaoclusterclaim/upgraderequest
+
+internal/controller/openbaoclusterclaim
+internal/controller/openbaoclusterclaim/backuprequest
+internal/controller/openbaoclusterclaim/restorerequest
+internal/controller/openbaoclusterclaim/upgraderequest
+```
+
+The root claim app owns catalog binding, materialization, connection
+publication, and claim status roll-up. The request subpackages own durable
+backup, restore, and upgrade request reconciliation for their own CRDs.
+
 ## Import and dependency rules
 
 Keep the dependency direction explicit:

@@ -217,7 +217,7 @@ jobs:
             echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(api/|cmd/controller/|internal/(adapter/(config/|kube/admission/openbaoclusterclaim/|storage/)|app/(openbaoclusterclaim|openbaoclusterclaimbackuprequest|openbaoclusterclaimrestorerequest|openbaoclusterclaimupgraderequest)/|controller/(openbaoclusterclaim|openbaoclusterclaimbackuprequest|openbaoclusterclaimrestorerequest|openbaoclusterclaimupgraderequest)/|platform/(admission/|constants/|observability/|resourceapply/)|service/(backup/|bootstrap/|claimcontract/|connectionpublishing/|networking/|provisioner/|restore/|upgrade/|webhookcerts/))|config/(crd/|grafana/|manager/|network-policy/|policy/|rbac/)|charts/openbao-operator/|docs/(architecture/service-claims\.md|reference/(api|status-and-events)\.md|user-guide/service-claims/)|test/e2e/(Claims_.*|claims_helpers_test\.go|e2e_.*|framework/.*|helpers/.*)|Makefile|mk/)'; then
+          if echo "${changed}" | grep -qE '^(api/|cmd/controller/|internal/(adapter/(config/|kube/admission/openbaoclusterclaim/|storage/)|app/openbaoclusterclaim/|controller/openbaoclusterclaim/|platform/(admission/|constants/|observability/|resourceapply/)|service/(backup/|bootstrap/|claimcontract/|connectionpublishing/|networking/|provisioner/|restore/|upgrade/|webhookcerts/))|config/(crd/|grafana/|manager/|network-policy/|policy/|rbac/)|charts/openbao-operator/|docs/(architecture/service-claims\.md|reference/(api|status-and-events)\.md|user-guide/service-claims/)|test/e2e/(Claims_.*|claims_helpers_test\.go|e2e_.*|framework/.*|helpers/.*)|Makefile|mk/)'; then
             echo "e2e_claims=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_claims=false" >> "${GITHUB_OUTPUT}"

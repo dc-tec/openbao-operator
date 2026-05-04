@@ -84,14 +84,14 @@ modules:
         - OpenBaoUpgradePolicy
       controllers:
         - openbaoclusterclaim
-        - openbaoclusterclaimbackuprequest
-        - openbaoclusterclaimrestorerequest
-        - openbaoclusterclaimupgraderequest
+        - openbaoclusterclaim/backuprequest
+        - openbaoclusterclaim/restorerequest
+        - openbaoclusterclaim/upgraderequest
       apps:
         - internal/app/openbaoclusterclaim
-        - internal/app/openbaoclusterclaimbackuprequest
-        - internal/app/openbaoclusterclaimrestorerequest
-        - internal/app/openbaoclusterclaimupgraderequest
+        - internal/app/openbaoclusterclaim/backuprequest
+        - internal/app/openbaoclusterclaim/restorerequest
+        - internal/app/openbaoclusterclaim/upgraderequest
       services:
         - internal/service/claimcontract
         - internal/service/connectionpublishing
@@ -124,13 +124,7 @@ modules:
       - api/v1alpha1/openbaoupgradepolicy_types.go
       - cmd/controller/runtime_setup_claims.go
       - internal/app/openbaoclusterclaim/**/*.go
-      - internal/app/openbaoclusterclaimbackuprequest/**/*.go
-      - internal/app/openbaoclusterclaimrestorerequest/**/*.go
-      - internal/app/openbaoclusterclaimupgraderequest/**/*.go
       - internal/controller/openbaoclusterclaim/**/*.go
-      - internal/controller/openbaoclusterclaimbackuprequest/**/*.go
-      - internal/controller/openbaoclusterclaimrestorerequest/**/*.go
-      - internal/controller/openbaoclusterclaimupgraderequest/**/*.go
       - internal/service/claimcontract/**/*.go
       - internal/service/connectionpublishing/**/*.go
       - internal/service/webhookcerts/**/*.go
@@ -287,9 +281,12 @@ controllerBoundaries:
   - name: openbaoclusterclaim
     displayName: OpenBaoClusterClaim
     files:
-      - internal/controller/openbaoclusterclaim/**/*.go
+      - internal/controller/openbaoclusterclaim/*.go
     ignores:
       - "**/*_test.go"
+      - internal/controller/openbaoclusterclaim/backuprequest/**/*.go
+      - internal/controller/openbaoclusterclaim/restorerequest/**/*.go
+      - internal/controller/openbaoclusterclaim/upgraderequest/**/*.go
     disallowImports:
       - internal/service/upgrade
       - internal/adapter/revision
@@ -297,43 +294,43 @@ controllerBoundaries:
     appFacadeRoot: internal/app/openbaoclusterclaim
     allowServiceImports: []
     allowAdapterImports: []
-  - name: openbaoclusterclaimbackuprequest
+  - name: openbaoclusterclaim/backuprequest
     displayName: OpenBaoClusterClaimBackupRequest
     files:
-      - internal/controller/openbaoclusterclaimbackuprequest/**/*.go
+      - internal/controller/openbaoclusterclaim/backuprequest/**/*.go
     ignores:
       - "**/*_test.go"
     disallowImports:
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
-    appFacadeRoot: internal/app/openbaoclusterclaimbackuprequest
+    appFacadeRoot: internal/app/openbaoclusterclaim/backuprequest
     allowServiceImports: []
     allowAdapterImports: []
-  - name: openbaoclusterclaimrestorerequest
+  - name: openbaoclusterclaim/restorerequest
     displayName: OpenBaoClusterClaimRestoreRequest
     files:
-      - internal/controller/openbaoclusterclaimrestorerequest/**/*.go
+      - internal/controller/openbaoclusterclaim/restorerequest/**/*.go
     ignores:
       - "**/*_test.go"
     disallowImports:
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
-    appFacadeRoot: internal/app/openbaoclusterclaimrestorerequest
+    appFacadeRoot: internal/app/openbaoclusterclaim/restorerequest
     allowServiceImports: []
     allowAdapterImports: []
-  - name: openbaoclusterclaimupgraderequest
+  - name: openbaoclusterclaim/upgraderequest
     displayName: OpenBaoClusterClaimUpgradeRequest
     files:
-      - internal/controller/openbaoclusterclaimupgraderequest/**/*.go
+      - internal/controller/openbaoclusterclaim/upgraderequest/**/*.go
     ignores:
       - "**/*_test.go"
     disallowImports:
       - internal/service/upgrade
       - internal/adapter/revision
       - internal/platform/logging
-    appFacadeRoot: internal/app/openbaoclusterclaimupgraderequest
+    appFacadeRoot: internal/app/openbaoclusterclaim/upgraderequest
     allowServiceImports: []
     allowAdapterImports: []
 
@@ -593,30 +590,33 @@ appBoundaries:
   - name: openbaoclusterclaim-root
     displayName: OpenBaoClusterClaim Root
     files:
-      - internal/app/openbaoclusterclaim/**/*.go
+      - internal/app/openbaoclusterclaim/*.go
     ignores:
       - "**/*_test.go"
+      - internal/app/openbaoclusterclaim/backuprequest/**/*.go
+      - internal/app/openbaoclusterclaim/restorerequest/**/*.go
+      - internal/app/openbaoclusterclaim/upgraderequest/**/*.go
     allowServiceImports:
       - internal/service/claimcontract
       - internal/service/connectionpublishing
   - name: openbaoclusterclaimbackuprequest-root
     displayName: OpenBaoClusterClaimBackupRequest Root
     files:
-      - internal/app/openbaoclusterclaimbackuprequest/**/*.go
+      - internal/app/openbaoclusterclaim/backuprequest/**/*.go
     ignores:
       - "**/*_test.go"
     allowServiceImports: []
   - name: openbaoclusterclaimrestorerequest-root
     displayName: OpenBaoClusterClaimRestoreRequest Root
     files:
-      - internal/app/openbaoclusterclaimrestorerequest/**/*.go
+      - internal/app/openbaoclusterclaim/restorerequest/**/*.go
     ignores:
       - "**/*_test.go"
     allowServiceImports: []
   - name: openbaoclusterclaimupgraderequest-root
     displayName: OpenBaoClusterClaimUpgradeRequest Root
     files:
-      - internal/app/openbaoclusterclaimupgraderequest/**/*.go
+      - internal/app/openbaoclusterclaim/upgraderequest/**/*.go
     ignores:
       - "**/*_test.go"
     allowServiceImports:

@@ -6,7 +6,7 @@ message: OpenBaoClusterClaimRestoreRequest Root app package must only import exp
 severity: warning
 language: Go
 files:
-    - internal/app/openbaoclusterclaimrestorerequest/**/*.go
+    - internal/app/openbaoclusterclaim/restorerequest/**/*.go
 ignores:
     - '**/*_test.go'
 rule:

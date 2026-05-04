@@ -149,6 +149,9 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
   caption="The claim path binds a tenant-facing request through the catalog, renders a bounded execution contract, then materializes the supported same-cluster runtime and publishes the connection contract."
   code={`graph TD
     ClaimCtrl["OpenBaoClusterClaim controller"] --> ClaimApp["internal/app/openbaoclusterclaim"]
+    BackupReqCtrl["Backup request controller"] --> BackupReqApp["openbaoclusterclaim/backuprequest"]
+    RestoreReqCtrl["Restore request controller"] --> RestoreReqApp["openbaoclusterclaim/restorerequest"]
+    UpgradeReqCtrl["Upgrade request controller"] --> UpgradeReqApp["openbaoclusterclaim/upgraderequest"]
 
     ClaimApp --> Catalog["claimcontract catalog binding"]
     ClaimApp --> Approved["Approved service contract"]
@@ -156,6 +159,11 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
     ClaimApp --> Placement["placement and materialization state"]
     ClaimApp --> Local["Same-cluster OpenBaoCluster materialization"]
     ClaimApp --> Connection["connectionpublishing"]
+    ClaimApp --> RequestSummary["request workflow summary"]
+
+    BackupReqApp --> RequestSummary
+    RestoreReqApp --> RequestSummary
+    UpgradeReqApp --> RequestSummary
 
     Local --> Runtime["OpenBaoCluster runtime path"]
 
@@ -163,9 +171,9 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
     classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
     classDef read fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
-    class ClaimCtrl,ClaimApp process;
+    class ClaimCtrl,ClaimApp,BackupReqCtrl,RestoreReqCtrl,UpgradeReqCtrl,BackupReqApp,RestoreReqApp,UpgradeReqApp process;
     class Catalog,Approved,Rendered,Placement,Connection read;
-    class Local,Runtime write;`}
+    class RequestSummary,Local,Runtime write;`}
 />
 
 <DecisionTable

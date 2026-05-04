@@ -6,9 +6,12 @@ message: OpenBaoClusterClaim controller must only import explicitly approved ada
 severity: warning
 language: Go
 files:
-    - internal/controller/openbaoclusterclaim/**/*.go
+    - internal/controller/openbaoclusterclaim/*.go
 ignores:
     - '**/*_test.go'
+    - internal/controller/openbaoclusterclaim/backuprequest/**/*.go
+    - internal/controller/openbaoclusterclaim/restorerequest/**/*.go
+    - internal/controller/openbaoclusterclaim/upgraderequest/**/*.go
 rule:
     all:
         - kind: import_spec

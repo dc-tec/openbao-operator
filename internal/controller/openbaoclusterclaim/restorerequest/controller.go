@@ -1,4 +1,4 @@
-package openbaoclusterclaimbackuprequest
+package restorerequest
 
 import (
 	"context"
@@ -6,38 +6,38 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaoclusterclaimbackuprequest "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaimbackuprequest"
+	apprestorerequest "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/restorerequest"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 )
 
-const controllerNameOpenBaoClusterClaimBackupRequest = "openbaoclusterclaimbackuprequest"
+const controllerNameOpenBaoClusterClaimRestoreRequest = "openbaoclusterclaimrestorerequest"
 
-type OpenBaoClusterClaimBackupRequestReconciler struct {
+type OpenBaoClusterClaimRestoreRequestReconciler struct {
 	client.Client
 	Reader              client.Reader
 	Scheme              *runtime.Scheme
 	EnableServiceClaims bool
-	AppReconciler       appopenbaoclusterclaimbackuprequest.Reconciler
+	AppReconciler       apprestorerequest.Reconciler
 }
 
-func (r *OpenBaoClusterClaimBackupRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenBaoClusterClaimRestoreRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	if r.AppReconciler == nil {
-		return ctrl.Result{}, fmt.Errorf("openbaoclusterclaimbackuprequest app reconciler is not configured")
+		return ctrl.Result{}, fmt.Errorf("openbaoclusterclaimrestorerequest app reconciler is not configured")
 	}
-	result, err := r.AppReconciler.Reconcile(ctx, req.NamespacedName, log.FromContext(ctx).WithName(controllerNameOpenBaoClusterClaimBackupRequest))
+	result, err := r.AppReconciler.Reconcile(ctx, req.NamespacedName, log.FromContext(ctx).WithName(controllerNameOpenBaoClusterClaimRestoreRequest))
 	r.syncMetrics(ctx, req.NamespacedName)
 	return ctrl.Result{RequeueAfter: result.RequeueAfter}, err
 }
 
-func (r *OpenBaoClusterClaimBackupRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenBaoClusterClaimRestoreRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Client == nil {
 		r.Client = mgr.GetClient()
 	}
@@ -48,7 +48,7 @@ func (r *OpenBaoClusterClaimBackupRequestReconciler) SetupWithManager(mgr ctrl.M
 		r.Reader = mgr.GetAPIReader()
 	}
 	if r.AppReconciler == nil {
-		r.AppReconciler = appopenbaoclusterclaimbackuprequest.NewReconciler(appopenbaoclusterclaimbackuprequest.Runtime{
+		r.AppReconciler = apprestorerequest.NewReconciler(apprestorerequest.Runtime{
 			Client:              r.Client,
 			Reader:              mgr.GetAPIReader(),
 			EnableServiceClaims: r.EnableServiceClaims,
@@ -56,21 +56,24 @@ func (r *OpenBaoClusterClaimBackupRequestReconciler) SetupWithManager(mgr ctrl.M
 	}
 
 	builder := ctrl.NewControllerManagedBy(mgr).
-		For(&openbaov1alpha1.OpenBaoClusterClaimBackupRequest{}).
-		Named(controllerNameOpenBaoClusterClaimBackupRequest)
+		For(&openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{}).
+		Named(controllerNameOpenBaoClusterClaimRestoreRequest)
 	if r.EnableServiceClaims {
 		builder = builder.Watches(
 			&openbaov1alpha1.OpenBaoClusterClaim{},
-			handler.EnqueueRequestsFromMapFunc(r.mapClaimToBackupRequests),
+			handler.EnqueueRequestsFromMapFunc(r.mapClaimToRestoreRequests),
 		).Watches(
 			&openbaov1alpha1.OpenBaoCluster{},
-			handler.EnqueueRequestsFromMapFunc(r.mapClaimManagedClusterToBackupRequests),
+			handler.EnqueueRequestsFromMapFunc(r.mapClaimManagedClusterToRestoreRequests),
+		).Watches(
+			&openbaov1alpha1.OpenBaoRestore{},
+			handler.EnqueueRequestsFromMapFunc(r.mapRestoreExecutionToRequest),
 		)
 	}
 	return builder.Complete(r)
 }
 
-func (r *OpenBaoClusterClaimBackupRequestReconciler) syncMetrics(ctx context.Context, key client.ObjectKey) {
+func (r *OpenBaoClusterClaimRestoreRequestReconciler) syncMetrics(ctx context.Context, key client.ObjectKey) {
 	reader := r.Reader
 	if reader == nil {
 		reader = r.Client
@@ -79,18 +82,18 @@ func (r *OpenBaoClusterClaimBackupRequestReconciler) syncMetrics(ctx context.Con
 		return
 	}
 
-	request := &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{}
+	request := &openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{}
 	if err := reader.Get(ctx, key, request); err != nil {
 		if apierrors.IsNotFound(err) {
-			observability.ClearClaimBackupRequest(key.Namespace, key.Name)
+			observability.ClearClaimRestoreRequest(key.Namespace, key.Name)
 		}
 		return
 	}
 
-	observability.SyncClaimBackupRequest(request)
+	observability.SyncClaimRestoreRequest(request)
 }
 
-func (r *OpenBaoClusterClaimBackupRequestReconciler) mapClaimToBackupRequests(
+func (r *OpenBaoClusterClaimRestoreRequestReconciler) mapClaimToRestoreRequests(
 	ctx context.Context,
 	obj client.Object,
 ) []reconcile.Request {
@@ -98,10 +101,10 @@ func (r *OpenBaoClusterClaimBackupRequestReconciler) mapClaimToBackupRequests(
 	if !ok || claim == nil {
 		return nil
 	}
-	return r.listBackupRequestsForClaim(ctx, claim.Namespace, claim.Name)
+	return r.listRestoreRequestsForClaim(ctx, claim.Namespace, claim.Name)
 }
 
-func (r *OpenBaoClusterClaimBackupRequestReconciler) mapClaimManagedClusterToBackupRequests(
+func (r *OpenBaoClusterClaimRestoreRequestReconciler) mapClaimManagedClusterToRestoreRequests(
 	ctx context.Context,
 	obj client.Object,
 ) []reconcile.Request {
@@ -117,10 +120,28 @@ func (r *OpenBaoClusterClaimBackupRequestReconciler) mapClaimManagedClusterToBac
 	if claimNamespace == "" || claimName == "" {
 		return nil
 	}
-	return r.listBackupRequestsForClaim(ctx, claimNamespace, claimName)
+	return r.listRestoreRequestsForClaim(ctx, claimNamespace, claimName)
 }
 
-func (r *OpenBaoClusterClaimBackupRequestReconciler) listBackupRequestsForClaim(
+func (r *OpenBaoClusterClaimRestoreRequestReconciler) mapRestoreExecutionToRequest(
+	_ context.Context,
+	obj client.Object,
+) []reconcile.Request {
+	restore, ok := obj.(*openbaov1alpha1.OpenBaoRestore)
+	if !ok || restore == nil {
+		return nil
+	}
+	requestNamespace := restore.Labels[constants.LabelOpenBaoClaimNamespace]
+	requestName := restore.Labels[constants.LabelOpenBaoClaimRestoreRequest]
+	if requestNamespace == "" || requestName == "" {
+		return nil
+	}
+	return []reconcile.Request{{
+		NamespacedName: client.ObjectKey{Namespace: requestNamespace, Name: requestName},
+	}}
+}
+
+func (r *OpenBaoClusterClaimRestoreRequestReconciler) listRestoreRequestsForClaim(
 	ctx context.Context,
 	namespace string,
 	claimName string,
@@ -129,7 +150,7 @@ func (r *OpenBaoClusterClaimBackupRequestReconciler) listBackupRequestsForClaim(
 		return nil
 	}
 
-	var requestList openbaov1alpha1.OpenBaoClusterClaimBackupRequestList
+	var requestList openbaov1alpha1.OpenBaoClusterClaimRestoreRequestList
 	if err := r.List(ctx, &requestList, client.InNamespace(namespace)); err != nil {
 		return nil
 	}

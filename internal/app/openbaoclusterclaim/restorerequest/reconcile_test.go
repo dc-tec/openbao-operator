@@ -1,4 +1,4 @@
-package openbaoclusterclaimrestorerequest
+package restorerequest
 
 import (
 	"context"

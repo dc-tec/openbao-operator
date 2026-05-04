@@ -6,9 +6,9 @@ import (
 	claimadmission "github.com/dc-tec/openbao-operator/internal/adapter/kube/admission/openbaoclusterclaim"
 	appopenbaoclusterclaim "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim"
 	openbaoclusterclaimcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim"
-	openbaoclusterclaimbackuprequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaimbackuprequest"
-	openbaoclusterclaimrestorerequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaimrestorerequest"
-	openbaoclusterclaimupgraderequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaimupgraderequest"
+	claimbackuprequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/backuprequest"
+	claimrestorerequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/restorerequest"
+	claimupgraderequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/upgraderequest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -48,21 +48,21 @@ func setupClaimControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) e
 		return fmt.Errorf("unable to create controller openbaoclusterclaim: %w", err)
 	}
 	if runtime.enableServiceClaims {
-		if err := (&openbaoclusterclaimbackuprequestcontroller.OpenBaoClusterClaimBackupRequestReconciler{
+		if err := (&claimbackuprequestcontroller.OpenBaoClusterClaimBackupRequestReconciler{
 			Client:              mgr.GetClient(),
 			Scheme:              mgr.GetScheme(),
 			EnableServiceClaims: runtime.enableServiceClaims,
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("unable to create controller openbaoclusterclaimbackuprequest: %w", err)
 		}
-		if err := (&openbaoclusterclaimrestorerequestcontroller.OpenBaoClusterClaimRestoreRequestReconciler{
+		if err := (&claimrestorerequestcontroller.OpenBaoClusterClaimRestoreRequestReconciler{
 			Client:              mgr.GetClient(),
 			Scheme:              mgr.GetScheme(),
 			EnableServiceClaims: runtime.enableServiceClaims,
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("unable to create controller openbaoclusterclaimrestorerequest: %w", err)
 		}
-		if err := (&openbaoclusterclaimupgraderequestcontroller.OpenBaoClusterClaimUpgradeRequestReconciler{
+		if err := (&claimupgraderequestcontroller.OpenBaoClusterClaimUpgradeRequestReconciler{
 			Client:              mgr.GetClient(),
 			Scheme:              mgr.GetScheme(),
 			EnableServiceClaims: runtime.enableServiceClaims,

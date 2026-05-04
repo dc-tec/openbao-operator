@@ -1,4 +1,4 @@
-package openbaoclusterclaimupgraderequest
+package upgraderequest
 
 import (
 	"context"
