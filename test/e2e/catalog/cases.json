@@ -5,6 +5,7 @@
     "caseLabel": "claims-functional-restore-request",
     "coverage": [
       "claim-restore-request",
+      "claim-restore-latest-successful-source",
       "claim-restore-backup-request-source",
       "claim-restore-status-projection"
     ],
@@ -20,6 +21,7 @@
       "claims-functional",
       "case:claims-functional-restore-request",
       "covers:claim-restore-request",
+      "covers:claim-restore-latest-successful-source",
       "covers:claim-restore-backup-request-source",
       "covers:claim-restore-status-projection"
     ],
@@ -30,6 +32,7 @@
     "steps": [
       "creating a fresh successful backup for the restore request to consume",
       "surfacing the completed claim backup in the namespaced backup request inventory",
+      "restoring the latest successful claim backup when no explicit source is selected",
       "waiting for the restore request to start or complete",
       "publishing the active restore workflow on claim status",
       "waiting for the restore request to complete successfully",
@@ -83,7 +86,9 @@
     "caseLabel": "claims-functional-upgrade-request",
     "coverage": [
       "claim-upgrade-request",
-      "claim-upgrade-rollout"
+      "claim-upgrade-rollout",
+      "claim-upgrade-version-rollout",
+      "claim-upgrade-blocked-incompatible"
     ],
     "file": "test/e2e/Claims_Functional_test.go",
     "type": "It",
@@ -98,6 +103,8 @@
       "case:claims-functional-upgrade-request",
       "covers:claim-upgrade-request",
       "covers:claim-upgrade-rollout",
+      "covers:claim-upgrade-version-rollout",
+      "covers:claim-upgrade-blocked-incompatible",
       "claims-upgrade"
     ],
     "domainLabels": [
@@ -106,6 +113,7 @@
       "claims-upgrade"
     ],
     "steps": [
+      "blocking an incompatible service-shape upgrade request before mutating the claim",
       "publishing the next immutable service-profile revision on the same offering alias",
       "waiting for the request to enter rollout",
       "waiting for the claim to publish an active maintenance summary",
@@ -155,7 +163,10 @@
     "generatedId": "claims-functional-projects-production-catalog-profiles-into-the-8b3e81aa",
     "caseLabel": "claims-functional-catalog-profiles",
     "coverage": [
+      "claim-catalog-unseal-profile",
       "claim-catalog-runtime-profile",
+      "claim-catalog-observability-profile",
+      "claim-catalog-storage-profile",
       "claim-catalog-network-profile",
       "claim-catalog-upgrade-policy",
       "claim-catalog-read-replica-profile"
@@ -171,7 +182,10 @@
       "claims",
       "claims-functional",
       "case:claims-functional-catalog-profiles",
+      "covers:claim-catalog-unseal-profile",
       "covers:claim-catalog-runtime-profile",
+      "covers:claim-catalog-observability-profile",
+      "covers:claim-catalog-storage-profile",
       "covers:claim-catalog-network-profile",
       "covers:claim-catalog-upgrade-policy",
       "covers:claim-catalog-read-replica-profile"

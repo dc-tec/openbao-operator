@@ -30,13 +30,9 @@ import (
 	"strings"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/dc-tec/openbao-operator/test/utils"
 )
@@ -134,6 +130,7 @@ func resolveE2EAPIServerEndpointIPs(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("failed to create API endpoint discovery client: %w", err)
 	}
 
+	//nolint:staticcheck // The suite still targets the legacy kubernetes Endpoints object for API server discovery.
 	endpoints := &corev1.Endpoints{}
 	if err := c.Get(ctx, client.ObjectKey{Namespace: "default", Name: "kubernetes"}, endpoints); err != nil {
 		return "", fmt.Errorf("failed to get kubernetes endpoints: %w", err)
@@ -177,13 +174,6 @@ func upsertEnvVar(container *corev1.Container, name string, value string) bool {
 	}
 	container.Env = append(container.Env, corev1.EnvVar{Name: name, Value: value})
 	return true
-}
-
-func kindClusterName(base string, index int) string {
-	if index < 1 {
-		index = 1
-	}
-	return fmt.Sprintf("%s-%d", base, index)
 }
 
 func withEnv(key string, value string, fn func()) {
@@ -307,6 +297,7 @@ func waitForServiceEndpoints(namespace string, serviceName string, timeout time.
 
 	deadline := time.Now().Add(timeout)
 	for {
+		//nolint:staticcheck // The readiness gate observes the service Endpoints published by the cluster.
 		endpoints := &corev1.Endpoints{}
 		err := c.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: serviceName}, endpoints)
 		if err == nil {
@@ -372,25 +363,4 @@ spec:
 		}
 		time.Sleep(time.Second)
 	}
-}
-
-func buildAppsClient() (client.Client, error) {
-	cfg, err := ctrlconfig.GetConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get kube config: %w", err)
-	}
-
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add client-go scheme: %w", err)
-	}
-	if err := appsv1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add apps scheme: %w", err)
-	}
-
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
-	}
-	return c, nil
 }

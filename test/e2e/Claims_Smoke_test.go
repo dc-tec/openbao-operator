@@ -89,7 +89,7 @@ var _ = Describe("Claims Smoke", Label("claims", "claims-smoke", "critical"), Or
 		Expect(c.Create(ctx, claim)).To(Succeed())
 
 		By("waiting for the claim to bind the selected offering to one immutable service profile")
-		updated, err := waitForClaimPinnedBinding(
+		_, err := waitForClaimPinnedBinding(
 			ctx,
 			c,
 			claim.Namespace,
@@ -102,7 +102,7 @@ var _ = Describe("Claims Smoke", Label("claims", "claims-smoke", "critical"), Or
 		Expect(err).NotTo(HaveOccurred())
 
 		By("waiting for the claim to reach Ready")
-		updated, err = waitForClaimPhase(
+		updated, err := waitForClaimPhase(
 			ctx,
 			c,
 			claim.Namespace,

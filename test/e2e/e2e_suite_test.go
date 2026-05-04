@@ -33,12 +33,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	appsv1 "k8s.io/api/apps/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -155,82 +149,6 @@ var (
 	existingClusterFullCleanup = os.Getenv("E2E_EXISTING_CLUSTER_FULL_CLEANUP") == e2eStringTrue
 )
 
-func patchOperatorKubeAPITokenAudience(ctx context.Context, namespace string) error {
-	audience := strings.TrimSpace(os.Getenv("OPENBAO_KUBE_API_AUDIENCE"))
-	if audience == "" {
-		return nil
-	}
-
-	cfg, err := ctrlconfig.GetConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get kube config: %w", err)
-	}
-
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add client-go scheme: %w", err)
-	}
-	if err := appsv1.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add apps scheme: %w", err)
-	}
-
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		return fmt.Errorf("failed to create client: %w", err)
-	}
-
-	patchDeployment := func(name string) error {
-		deploy := &appsv1.Deployment{}
-		if err := c.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, deploy); err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil
-			}
-			return err
-		}
-
-		orig := deploy.DeepCopy()
-		updated := false
-
-		for i := range deploy.Spec.Template.Spec.Volumes {
-			vol := &deploy.Spec.Template.Spec.Volumes[i]
-			if vol.Name != "kube-api-access" || vol.Projected == nil {
-				continue
-			}
-			for j := range vol.Projected.Sources {
-				src := &vol.Projected.Sources[j]
-				if src.ServiceAccountToken == nil {
-					continue
-				}
-				if src.ServiceAccountToken.Audience != audience {
-					src.ServiceAccountToken.Audience = audience
-					updated = true
-				}
-				break
-			}
-			break
-		}
-
-		if !updated {
-			return nil
-		}
-
-		if err := c.Patch(ctx, deploy, client.MergeFrom(orig)); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	if err := patchDeployment("openbao-operator-controller"); err != nil {
-		return fmt.Errorf("patch controller audience: %w", err)
-	}
-	if err := patchDeployment("openbao-operator-provisioner"); err != nil {
-		return fmt.Errorf("patch provisioner audience: %w", err)
-	}
-
-	return nil
-}
-
 func applyControllerEnvOverrides(namespace string) error {
 	overrides := make([]string, 0, 2)
 	for _, key := range []string{"OPENBAO_REQUEUE_STANDARD", "OPENBAO_JWT_AUTH_STRATEGY"} {
@@ -268,21 +186,6 @@ func applyControllerEnvOverrides(namespace string) error {
 		return fmt.Errorf("failed to wait for controller rollout: %w", err)
 	}
 	return nil
-}
-
-func withEnv(key string, value string, fn func()) {
-	previousValue, hadPrevious := os.LookupEnv(key)
-	if err := os.Setenv(key, value); err != nil {
-		panic(err)
-	}
-	defer func() {
-		if hadPrevious {
-			_ = os.Setenv(key, previousValue)
-			return
-		}
-		_ = os.Unsetenv(key)
-	}()
-	fn()
 }
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,

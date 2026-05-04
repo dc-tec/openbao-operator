@@ -250,6 +250,7 @@ nightly:
             - upgrade-bluegreen-recovery
             - upgrade-gateway
             - hardened
+            - service-claims
       rows:
         - lane: core
           kubernetes: "@compatibility"
@@ -280,6 +281,7 @@ nightly:
             - upgrade-bluegreen-recovery
             - upgrade-gateway
             - hardened
+            - service-claims
 
     - id: release-gate
       description: "Manual full compatibility gate before release promotion."
@@ -297,8 +299,100 @@ nightly:
             - upgrade-bluegreen-recovery
             - upgrade-gateway
             - hardened
+            - service-claims
 
 suites:
+  - id: claims-functional
+    title: "Claims Functional"
+    owner: claims
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Claims_Functional_test.go
+    labels:
+      - claims
+      - claims-functional
+      - claims-upgrade
+      - negative
+      - requires-gateway-api
+    coverage:
+      - claim-backup-request
+      - claim-backup-status-projection
+      - claim-catalog-network-profile
+      - claim-catalog-observability-profile
+      - claim-catalog-read-replica-profile
+      - claim-catalog-runtime-profile
+      - claim-catalog-storage-profile
+      - claim-catalog-unseal-profile
+      - claim-catalog-upgrade-policy
+      - claim-external-endpoint-publication
+      - claim-gateway
+      - claim-ingress
+      - claim-missing-bootstrap-source
+      - claim-restore-backup-request-source
+      - claim-restore-latest-successful-source
+      - claim-restore-request
+      - claim-restore-status-projection
+      - claim-upgrade-blocked-incompatible
+      - claim-upgrade-request
+      - claim-upgrade-rollout
+      - claim-upgrade-version-rollout
+    ci:
+      lanes:
+        - service-claims
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: claims-guardrails
+    title: "Claims Guardrails"
+    owner: claims
+    riskTier: high
+    isolation: shared-cluster
+    files:
+      - test/e2e/Claims_Guardrails_test.go
+    labels:
+      - claims
+      - claims-guardrails
+      - security
+      - admission
+    coverage:
+      - claim-managed-child-protection
+      - claim-materialization
+      - claim-offering-pin
+      - claim-spec-lock
+    ci:
+      lanes:
+        - service-claims
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: claims-smoke
+    title: "Claims Smoke"
+    owner: claims
+    riskTier: critical
+    isolation: parallel-safe
+    files:
+      - test/e2e/Claims_Smoke_test.go
+    labels:
+      - claims
+      - claims-smoke
+      - critical
+    coverage:
+      - claim-deletion
+      - same-cluster-cleanup
+      - same-cluster-connection
+      - same-cluster-materialization
+      - secret-bootstrap-projection
+      - service-offering-binding
+    ci:
+      lanes:
+        - service-claims
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
   - id: cluster-deletion-policy
     title: "Cluster Lifecycle: Deletion Policy"
     owner: core

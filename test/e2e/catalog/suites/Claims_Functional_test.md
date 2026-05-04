@@ -8,11 +8,11 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
-| `claims-functional-restore-request` | executes a claim restore request from a selected completed backup request | active | `claim-restore-request`, `claim-restore-backup-request-source`, `claim-restore-status-projection` | `claims`, `claims-functional` |
+| `claims-functional-restore-request` | executes a claim restore request from a selected completed backup request | active | `claim-restore-request`, `claim-restore-latest-successful-source`, `claim-restore-backup-request-source`, `claim-restore-status-projection` | `claims`, `claims-functional` |
 | `claims-functional-backup-request` | executes a manual claim backup request and projects the result onto claim status | active | `claim-backup-request`, `claim-backup-status-projection` | `claims`, `claims-functional` |
-| `claims-functional-upgrade-request` | executes an in-place claim upgrade request against a new service-profile revision | active | `claim-upgrade-request`, `claim-upgrade-rollout` | `claims`, `claims-functional`, `claims-upgrade` |
+| `claims-functional-upgrade-request` | executes an in-place claim upgrade request against a new service-profile revision | active | `claim-upgrade-request`, `claim-upgrade-rollout`, `claim-upgrade-version-rollout`, `claim-upgrade-blocked-incompatible` | `claims`, `claims-functional`, `claims-upgrade` |
 | `claims-functional-missing-bootstrap-source` | keeps the claim pending when a secret-backed bootstrap source is missing | active | `claim-missing-bootstrap-source` | `claims`, `claims-functional`, `negative` |
-| `claims-functional-catalog-profiles` | projects production catalog profiles into the claim-managed cluster | active | `claim-catalog-runtime-profile`, `claim-catalog-network-profile`, `claim-catalog-upgrade-policy`, `claim-catalog-read-replica-profile` | `claims`, `claims-functional` |
+| `claims-functional-catalog-profiles` | projects production catalog profiles into the claim-managed cluster | active | `claim-catalog-unseal-profile`, `claim-catalog-runtime-profile`, `claim-catalog-observability-profile`, `claim-catalog-storage-profile`, `claim-catalog-network-profile`, `claim-catalog-upgrade-policy`, `claim-catalog-read-replica-profile` | `claims`, `claims-functional` |
 | `claims-functional-gateway` | publishes the external gateway hostname once gateway integration is ready | active | `claim-gateway`, `claim-external-endpoint-publication` | `claims`, `claims-functional`, `requires-gateway-api` |
 | `claims-functional-ingress` | publishes the external ingress hostname once ingress integration is ready | active | `claim-ingress`, `claim-external-endpoint-publication` | `claims`, `claims-functional` |
 
@@ -24,13 +24,14 @@ State: `active`
 
 Generated fallback ID: `claims-functional-executes-a-claim-restore-request-from-c61d9ae9`
 
-Covers: `claim-restore-request`, `claim-restore-backup-request-source`, `claim-restore-status-projection`
+Covers: `claim-restore-request`, `claim-restore-latest-successful-source`, `claim-restore-backup-request-source`, `claim-restore-status-projection`
 
 Labels: `claims`, `claims-functional`
 
 Recorded checkpoints:
 - creating a fresh successful backup for the restore request to consume
 - surfacing the completed claim backup in the namespaced backup request inventory
+- restoring the latest successful claim backup when no explicit source is selected
 - waiting for the restore request to start or complete
 - publishing the active restore workflow on claim status
 - waiting for the restore request to complete successfully
@@ -64,11 +65,12 @@ State: `active`
 
 Generated fallback ID: `claims-functional-executes-an-in-place-claim-upgrade-9594909c`
 
-Covers: `claim-upgrade-request`, `claim-upgrade-rollout`
+Covers: `claim-upgrade-request`, `claim-upgrade-rollout`, `claim-upgrade-version-rollout`, `claim-upgrade-blocked-incompatible`
 
 Labels: `claims`, `claims-functional`, `claims-upgrade`
 
 Recorded checkpoints:
+- blocking an incompatible service-shape upgrade request before mutating the claim
 - publishing the next immutable service-profile revision on the same offering alias
 - waiting for the request to enter rollout
 - waiting for the claim to publish an active maintenance summary
@@ -98,7 +100,7 @@ State: `active`
 
 Generated fallback ID: `claims-functional-projects-production-catalog-profiles-into-the-8b3e81aa`
 
-Covers: `claim-catalog-runtime-profile`, `claim-catalog-network-profile`, `claim-catalog-upgrade-policy`, `claim-catalog-read-replica-profile`
+Covers: `claim-catalog-unseal-profile`, `claim-catalog-runtime-profile`, `claim-catalog-observability-profile`, `claim-catalog-storage-profile`, `claim-catalog-network-profile`, `claim-catalog-upgrade-policy`, `claim-catalog-read-replica-profile`
 
 Labels: `claims`, `claims-functional`
 

@@ -330,7 +330,10 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 
 	It("projects production catalog profiles into the claim-managed cluster", Label(
 		"case:claims-functional-catalog-profiles",
+		"covers:claim-catalog-unseal-profile",
 		"covers:claim-catalog-runtime-profile",
+		"covers:claim-catalog-observability-profile",
+		"covers:claim-catalog-storage-profile",
 		"covers:claim-catalog-network-profile",
 		"covers:claim-catalog-upgrade-policy",
 		"covers:claim-catalog-read-replica-profile",
@@ -344,17 +347,26 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		c := f.Client
 		catalog := newSameClusterClaimCatalog(f.Namespace)
 		storageProfileName := claimScopedName("storage", f.Namespace)
+		unsealProfileName := claimScopedName("unseal", f.Namespace)
 		runtimeProfileName := claimScopedName("runtime", f.Namespace)
+		observabilityProfileName := claimScopedName("observability", f.Namespace)
 		networkProfileName := claimScopedName("network", f.Namespace)
 		upgradePolicyName := claimScopedName("upgrade-policy", f.Namespace)
+		primaryStorageClass := claimScopedName("primary-storage", f.Namespace)
 
 		serviceProfile := catalog.serviceProfile()
 		readReplicas := int32(1)
 		serviceProfile.Spec.Cluster.ReadReplicas = &readReplicas
 		serviceProfile.Spec.Storage.ReadReplicaSize = "5Gi"
 		serviceProfile.Spec.Storage.ProfileRef = &openbaov1alpha1.LocalReference{Name: storageProfileName}
+		serviceProfile.Spec.Unseal = &openbaov1alpha1.OpenBaoServiceProfileUnsealSpec{
+			ProfileRef: &openbaov1alpha1.LocalReference{Name: unsealProfileName},
+		}
 		serviceProfile.Spec.Runtime = &openbaov1alpha1.OpenBaoServiceProfileRuntimeSpec{
 			ProfileRef: &openbaov1alpha1.LocalReference{Name: runtimeProfileName},
+		}
+		serviceProfile.Spec.Observability = &openbaov1alpha1.OpenBaoServiceProfileObservabilitySpec{
+			ProfileRef: &openbaov1alpha1.LocalReference{Name: observabilityProfileName},
 		}
 		serviceProfile.Spec.Network = &openbaov1alpha1.OpenBaoServiceProfileNetworkSpec{
 			ProfileRef: &openbaov1alpha1.LocalReference{Name: networkProfileName},
@@ -396,7 +408,9 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 				exposureClass,
 				catalog.backupProfile(),
 				&openbaov1alpha1.OpenBaoStorageProfile{ObjectMeta: metav1.ObjectMeta{Name: storageProfileName}},
+				&openbaov1alpha1.OpenBaoUnsealProfile{ObjectMeta: metav1.ObjectMeta{Name: unsealProfileName}},
 				&openbaov1alpha1.OpenBaoRuntimeProfile{ObjectMeta: metav1.ObjectMeta{Name: runtimeProfileName}},
+				&openbaov1alpha1.OpenBaoObservabilityProfile{ObjectMeta: metav1.ObjectMeta{Name: observabilityProfileName}},
 				&openbaov1alpha1.OpenBaoNetworkProfile{ObjectMeta: metav1.ObjectMeta{Name: networkProfileName}},
 				&openbaov1alpha1.OpenBaoUpgradePolicy{ObjectMeta: metav1.ObjectMeta{Name: upgradePolicyName}},
 			)
@@ -413,15 +427,40 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			&openbaov1alpha1.OpenBaoStorageProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: storageProfileName},
 				Spec: openbaov1alpha1.OpenBaoStorageProfileSpec{
+					Primary: &openbaov1alpha1.OpenBaoStorageProfileVolumeSpec{
+						StorageClassName: ptr.To(primaryStorageClass),
+					},
 					ReadReplica: &openbaov1alpha1.OpenBaoStorageProfileReadReplicaSpec{
 						UsePrimaryStorageClass: ptr.To(true),
+					},
+				},
+			},
+			&openbaov1alpha1.OpenBaoUnsealProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: unsealProfileName},
+				Spec: openbaov1alpha1.OpenBaoUnsealProfileSpec{
+					Mode: openbaov1alpha1.OpenBaoUnsealProfileModeOperatorManagedStatic,
+					Static: &openbaov1alpha1.StaticSealConfig{
+						CurrentKey:   "file:///etc/bao/unseal/key",
+						CurrentKeyID: "e2e-static",
 					},
 				},
 			},
 			&openbaov1alpha1.OpenBaoRuntimeProfile{
 				ObjectMeta: metav1.ObjectMeta{Name: runtimeProfileName},
 				Spec: openbaov1alpha1.OpenBaoRuntimeProfileSpec{
+					ServiceAccount: &openbaov1alpha1.ServiceAccountConfig{
+						Name: claimScopedName("workload-sa", f.Namespace),
+						Annotations: map[string]string{
+							"openbao.org/e2e-runtime-profile": "true",
+						},
+					},
+					PodMetadata: &openbaov1alpha1.PodMetadataConfig{
+						Labels: map[string]string{
+							"openbao.org/e2e-runtime-profile": "true",
+						},
+					},
 					HelperImages: &openbaov1alpha1.OpenBaoRuntimeProfileHelperImagesSpec{
+						Init:    configInitImage,
 						Restore: "example.com/openbao-restore:e2e",
 						Upgrade: "example.com/openbao-upgrade:e2e",
 					},
@@ -429,6 +468,21 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 						Template: &openbaov1alpha1.ReadReplicaTemplateConfig{
 							Metadata: &openbaov1alpha1.PodMetadataConfig{
 								Labels: map[string]string{"openbao.org/e2e-read-replica": "true"},
+							},
+						},
+					},
+				},
+			},
+			&openbaov1alpha1.OpenBaoObservabilityProfile{
+				ObjectMeta: metav1.ObjectMeta{Name: observabilityProfileName},
+				Spec: openbaov1alpha1.OpenBaoObservabilityProfileSpec{
+					Observability: &openbaov1alpha1.ObservabilityConfig{
+						Metrics: &openbaov1alpha1.MetricsConfig{
+							Enabled: true,
+							ServiceMonitor: &openbaov1alpha1.ServiceMonitorConfig{
+								Enabled:       true,
+								Interval:      "15s",
+								ScrapeTimeout: "5s",
 							},
 						},
 					},
@@ -472,18 +526,35 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			g.Expect(cluster.Spec.ReadReplicas).NotTo(BeNil())
 			g.Expect(cluster.Spec.ReadReplicas.Service).NotTo(BeNil())
 			g.Expect(cluster.Spec.ReadReplicas.Template).NotTo(BeNil())
+			g.Expect(cluster.Spec.Unseal).NotTo(BeNil())
+			g.Expect(cluster.Spec.ServiceAccount).NotTo(BeNil())
+			g.Expect(cluster.Spec.PodMetadata).NotTo(BeNil())
+			g.Expect(cluster.Spec.Observability).NotTo(BeNil())
 			g.Expect(cluster.Spec.Network).NotTo(BeNil())
 			g.Expect(cluster.Spec.Upgrade).NotTo(BeNil())
 			g.Expect(cluster.Spec.Restore).NotTo(BeNil())
 		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
+		Expect(cluster.Spec.Storage.StorageClassName).NotTo(BeNil())
+		Expect(*cluster.Spec.Storage.StorageClassName).To(Equal(primaryStorageClass))
 		Expect(cluster.Spec.ReadReplicas.Replicas).To(Equal(int32(1)))
 		Expect(cluster.Spec.ReadReplicas.Service.Enabled).To(BeTrue())
 		Expect(cluster.Spec.ReadReplicas.Service.Annotations).To(HaveKeyWithValue("openbao.org/e2e-read-service", "true"))
 		Expect(cluster.Spec.ReadReplicas.Template.Metadata.Labels).To(
 			HaveKeyWithValue("openbao.org/e2e-read-replica", "true"),
 		)
+		Expect(cluster.Spec.Unseal.Type).To(Equal("static"))
+		Expect(cluster.Spec.Unseal.Static).NotTo(BeNil())
+		Expect(cluster.Spec.Unseal.Static.CurrentKeyID).To(Equal("e2e-static"))
+		Expect(cluster.Spec.ServiceAccount.Name).To(Equal(claimScopedName("workload-sa", f.Namespace)))
+		Expect(cluster.Spec.ServiceAccount.Annotations).To(HaveKeyWithValue("openbao.org/e2e-runtime-profile", "true"))
+		Expect(cluster.Spec.PodMetadata.Labels).To(HaveKeyWithValue("openbao.org/e2e-runtime-profile", "true"))
+		Expect(cluster.Spec.Observability.Metrics).NotTo(BeNil())
+		Expect(cluster.Spec.Observability.Metrics.Enabled).To(BeTrue())
+		Expect(cluster.Spec.Observability.Metrics.ServiceMonitor.Interval).To(Equal("15s"))
 		Expect(cluster.Spec.Network.DNSNamespace).To(Equal("kube-system"))
+		Expect(cluster.Spec.InitContainer).NotTo(BeNil())
+		Expect(cluster.Spec.InitContainer.Image).To(Equal(configInitImage))
 		Expect(cluster.Spec.Upgrade.Strategy).To(Equal(openbaov1alpha1.UpdateStrategyBlueGreen))
 		Expect(cluster.Spec.Upgrade.Image).To(Equal("example.com/openbao-upgrade:e2e"))
 		Expect(cluster.Spec.Upgrade.BlueGreen).NotTo(BeNil())
@@ -500,12 +571,16 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			framework.DefaultPollInterval,
 			func(claim *openbaov1alpha1.OpenBaoClusterClaim) (bool, error) {
 				return claim.Status.Applied.StorageProfileRef != nil &&
+					claim.Status.Applied.UnsealProfileRef != nil &&
 					claim.Status.Applied.RuntimeProfileRef != nil &&
+					claim.Status.Applied.ObservabilityProfileRef != nil &&
 					claim.Status.Applied.NetworkProfileRef != nil &&
 					claim.Status.Applied.UpgradePolicyRef != nil, nil
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(updated.Status.Applied.UnsealProfileRef.Name).To(Equal(unsealProfileName))
+		Expect(updated.Status.Applied.ObservabilityProfileRef.Name).To(Equal(observabilityProfileName))
 		Expect(updated.Status.Applied.NetworkProfileRef.Name).To(Equal(networkProfileName))
 		Expect(updated.Status.Applied.UpgradePolicyRef.Name).To(Equal(upgradePolicyName))
 	})
@@ -514,11 +589,19 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		"case:claims-functional-upgrade-request",
 		"covers:claim-upgrade-request",
 		"covers:claim-upgrade-rollout",
+		"covers:claim-upgrade-version-rollout",
+		"covers:claim-upgrade-blocked-incompatible",
 		"claims-upgrade",
 	), func() {
 		if !serviceClaimsE2EEnabled() {
 			Skip("claim functional suite requires E2E_ENABLE_SERVICE_CLAIMS=true")
 		}
+		initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+		targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+		if initialVersion == targetVersion {
+			Skip(fmt.Sprintf("claim upgrade functional case requires different versions: from=%s to=%s", initialVersion, targetVersion))
+		}
+		targetImage := fmt.Sprintf("%s:%s", envOrDefault("RELATED_IMAGE_OPENBAO", "openbao/openbao"), targetVersion)
 
 		f, err := framework.NewSetup(ctx, "claims-functional-upgrade", operatorNamespace)
 		Expect(err).NotTo(HaveOccurred())
@@ -535,13 +618,20 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		backupProfileV2.Spec.TargetRef = &openbaov1alpha1.LocalReference{Name: backupTarget.Name}
 
 		serviceProfileV1 := catalog.serviceProfile()
+		serviceProfileV1.Spec.Cluster.Version = initialVersion
 		serviceProfileV2 := catalog.serviceProfile()
 		serviceProfileV2.Name = claimScopedName("service-v2", f.Namespace)
+		serviceProfileV2.Spec.Cluster.Version = targetVersion
 		serviceProfileV2.Spec.Backup.ProfileRef.Name = backupProfileV2.Name
+		blockedServiceProfile := catalog.serviceProfile()
+		blockedServiceProfile.Name = claimScopedName("service-blocked", f.Namespace)
+		blockedServiceProfile.Spec.Cluster.Version = targetVersion
+		blockedServiceProfile.Spec.Cluster.Voters = 3
 
 		serviceOffering := catalog.serviceOffering()
 		claim := catalog.sameClusterClaim(operatorNamespace, claimScopedName("claim", f.Namespace), f.TenantName)
 		upgradeRequestName := claimScopedName("upgrade", f.Namespace)
+		blockedUpgradeRequestName := claimScopedName("upgrade-blocked", f.Namespace)
 
 		DeferCleanup(func() {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -554,6 +644,12 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 					ObjectMeta: metav1.ObjectMeta{
 						Namespace: claim.Namespace,
 						Name:      upgradeRequestName,
+					},
+				},
+				&openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: claim.Namespace,
+						Name:      blockedUpgradeRequestName,
 					},
 				},
 			)
@@ -569,6 +665,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 				serviceOffering,
 				serviceProfileV1,
 				serviceProfileV2,
+				blockedServiceProfile,
 				catalog.secretBootstrapProfile(),
 				catalog.internalExposureClass(),
 				backupBackend,
@@ -591,11 +688,12 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			catalog.secretBootstrapProfile(),
 			serviceProfileV1,
 			serviceProfileV2,
+			blockedServiceProfile,
 			serviceOffering,
 		)).To(Succeed())
 		Expect(c.Create(ctx, claim)).To(Succeed())
 
-		updated, err := waitForClaimPinnedBinding(
+		_, err = waitForClaimPinnedBinding(
 			ctx,
 			c,
 			claim.Namespace,
@@ -606,7 +704,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			framework.DefaultPollInterval,
 		)
 		Expect(err).NotTo(HaveOccurred())
-		updated, err = waitForClaimPhase(
+		updated, err := waitForClaimPhase(
 			ctx,
 			c,
 			claim.Namespace,
@@ -635,9 +733,55 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			framework.DefaultPollInterval,
 		)).To(Succeed())
 
-		By("publishing the next immutable service-profile revision on the same offering alias")
+		By("blocking an incompatible service-shape upgrade request before mutating the claim")
 		Expect(c.Get(ctx, client.ObjectKeyFromObject(serviceOffering), serviceOffering)).To(Succeed())
 		originalOffering := serviceOffering.DeepCopy()
+		serviceOffering.Spec.CurrentRevisionRef.Name = blockedServiceProfile.Name
+		Expect(c.Patch(ctx, serviceOffering, client.MergeFrom(originalOffering))).To(Succeed())
+
+		blockedUpgradeRequest := &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: claim.Namespace,
+				Name:      blockedUpgradeRequestName,
+			},
+			Spec: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestSpec{
+				ClaimRef: openbaov1alpha1.LocalReference{Name: claim.Name},
+				Target: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestTargetSpec{
+					ServiceOfferingRef: &openbaov1alpha1.LocalReference{Name: catalog.OfferingName},
+				},
+			},
+		}
+		Expect(c.Create(ctx, blockedUpgradeRequest)).To(Succeed())
+		blockedResult, err := waitForClaimUpgradeRequestState(
+			ctx,
+			c,
+			blockedUpgradeRequest.Namespace,
+			blockedUpgradeRequest.Name,
+			openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
+			5*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(blockedResult.Status.Classification).NotTo(BeNil())
+		Expect(blockedResult.Status.Classification.Class).To(Equal(
+			openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked,
+		))
+		Expect(blockedResult.Status.Classification.Reason).To(Equal("UnsupportedServiceShapeChange"))
+		_, err = waitForClaimPinnedBinding(
+			ctx,
+			c,
+			claim.Namespace,
+			claim.Name,
+			catalog.OfferingName,
+			serviceProfileV1.Name,
+			3*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("publishing the next immutable service-profile revision on the same offering alias")
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(serviceOffering), serviceOffering)).To(Succeed())
+		originalOffering = serviceOffering.DeepCopy()
 		serviceOffering.Spec.CurrentRevisionRef.Name = serviceProfileV2.Name
 		Expect(c.Patch(ctx, serviceOffering, client.MergeFrom(originalOffering))).To(Succeed())
 
@@ -744,6 +888,9 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			localCluster := &openbaov1alpha1.OpenBaoCluster{}
 			key := types.NamespacedName{Namespace: localRef.Namespace, Name: localRef.Name}
 			g.Expect(c.Get(ctx, key, localCluster)).To(Succeed())
+			g.Expect(localCluster.Spec.Version).To(Equal(targetVersion))
+			g.Expect(localCluster.Spec.Image).To(Equal(targetImage))
+			g.Expect(localCluster.Status.CurrentVersion).To(Equal(targetVersion))
 			g.Expect(localCluster.Spec.Backup).NotTo(BeNil())
 			g.Expect(localCluster.Spec.Backup.Schedule).To(Equal("15 4 * * *"))
 		}, 5*time.Minute, framework.DefaultPollInterval).Should(Succeed())
@@ -765,7 +912,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		Expect(err).NotTo(HaveOccurred())
 		rustfsNamespace := claimScopedName("rustfs", f.Namespace)
 		rustfsEndpoint := fmt.Sprintf("http://rustfs-svc.%s.svc.cluster.local:9000", rustfsNamespace)
-		if err := ensureRustFS(ctx, f.Client, restCfg, rustfsNamespace); err != nil {
+		if err := ensureClaimRustFS(ctx, f.Client, restCfg, rustfsNamespace); err != nil {
 			Skip("claim backup functional case requires RustFS: " + err.Error())
 		}
 		Expect(err).NotTo(HaveOccurred())
@@ -966,7 +1113,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		)))
 
 		By("projecting the completed backup onto claim status and clearing the workflow summary")
-		updated, err = waitForClaim(
+		_, err = waitForClaim(
 			ctx,
 			c,
 			claim.Namespace,
@@ -989,6 +1136,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 	It("executes a claim restore request from a selected completed backup request", Label(
 		"case:claims-functional-restore-request",
 		"covers:claim-restore-request",
+		"covers:claim-restore-latest-successful-source",
 		"covers:claim-restore-backup-request-source",
 		"covers:claim-restore-status-projection",
 	), func() {
@@ -1003,7 +1151,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		Expect(err).NotTo(HaveOccurred())
 		rustfsNamespace := claimScopedName("rustfs", f.Namespace)
 		rustfsEndpoint := fmt.Sprintf("http://rustfs-svc.%s.svc.cluster.local:9000", rustfsNamespace)
-		if err := ensureRustFS(ctx, f.Client, restCfg, rustfsNamespace); err != nil {
+		if err := ensureClaimRustFS(ctx, f.Client, restCfg, rustfsNamespace); err != nil {
 			Skip("claim restore functional case requires RustFS: " + err.Error())
 		}
 		c := f.Client
@@ -1059,6 +1207,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		backupProfile.Spec.TargetRef = &openbaov1alpha1.LocalReference{Name: backupTarget.Name}
 		claim := catalog.sameClusterClaim(operatorNamespace, claimScopedName("claim", f.Namespace), f.TenantName)
 		backupRequestName := claimScopedName("backup-request", f.Namespace)
+		latestRestoreRequestName := claimScopedName("restore-latest", f.Namespace)
 		restoreRequestName := claimScopedName("restore-request", f.Namespace)
 
 		var localRef *openbaov1alpha1.NamespacedReference
@@ -1074,6 +1223,12 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 					&openbaov1alpha1.OpenBaoRestore{
 						ObjectMeta: metav1.ObjectMeta{
 							Namespace: localRef.Namespace,
+							Name:      latestRestoreRequestName,
+						},
+					},
+					&openbaov1alpha1.OpenBaoRestore{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: localRef.Namespace,
 							Name:      restoreRequestName,
 						},
 					},
@@ -1083,6 +1238,9 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			_ = deleteObjects(
 				cleanupCtx,
 				c,
+				&openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{
+					ObjectMeta: metav1.ObjectMeta{Namespace: claim.Namespace, Name: latestRestoreRequestName},
+				},
 				&openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{
 					ObjectMeta: metav1.ObjectMeta{Namespace: claim.Namespace, Name: restoreRequestName},
 				},
@@ -1191,7 +1349,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			HaveField("Status.SnapshotKey", backupResult.Status.SnapshotKey),
 		)))
 
-		updated, err = waitForClaim(
+		_, err = waitForClaim(
 			ctx,
 			c,
 			claim.Namespace,
@@ -1203,6 +1361,53 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 					claim.Status.Summary == nil &&
 					claim.Status.Backup != nil &&
 					claim.Status.Backup.LastBackupName == backupResult.Status.SnapshotKey, nil
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		latestRestoreRequest := &openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: claim.Namespace,
+				Name:      latestRestoreRequestName,
+			},
+			Spec: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestSpec{
+				ClaimRef: openbaov1alpha1.LocalReference{Name: claim.Name},
+			},
+		}
+		Expect(c.Create(ctx, latestRestoreRequest)).To(Succeed())
+
+		By("restoring the latest successful claim backup when no explicit source is selected")
+		latestRestoreResult, err := waitForClaimRestoreRequestState(
+			ctx,
+			c,
+			latestRestoreRequest.Namespace,
+			latestRestoreRequest.Name,
+			openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateSucceeded,
+			15*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(latestRestoreResult.Status.SnapshotKey).To(Equal(backupResult.Status.SnapshotKey))
+		Expect(latestRestoreResult.Status.RestoreRef).NotTo(BeNil())
+		rawLatestRestore := &openbaov1alpha1.OpenBaoRestore{}
+		Expect(c.Get(ctx, types.NamespacedName{
+			Namespace: latestRestoreResult.Status.RestoreRef.Namespace,
+			Name:      latestRestoreResult.Status.RestoreRef.Name,
+		}, rawLatestRestore)).To(Succeed())
+		Expect(rawLatestRestore.Spec.Cluster).To(Equal(localRef.Name))
+		Expect(rawLatestRestore.Spec.Source.Key).To(Equal(backupResult.Status.SnapshotKey))
+
+		_, err = waitForClaim(
+			ctx,
+			c,
+			claim.Namespace,
+			claim.Name,
+			5*time.Minute,
+			framework.DefaultPollInterval,
+			func(claim *openbaov1alpha1.OpenBaoClusterClaim) (bool, error) {
+				return claim.Status.Phase == openbaov1alpha1.OpenBaoClusterClaimPhaseReady &&
+					claim.Status.Summary == nil &&
+					claim.Status.Restore == nil, nil
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())

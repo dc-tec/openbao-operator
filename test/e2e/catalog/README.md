@@ -14,7 +14,7 @@ Notes:
 - Files: `22`
 - Specs: `95`
 - Explicit case IDs: `46`
-- Coverage tags: `69`
+- Coverage tags: `75`
 
 ## Suites
 
@@ -59,8 +59,11 @@ Notes:
 | `claim-backup-request` | 1 |
 | `claim-backup-status-projection` | 1 |
 | `claim-catalog-network-profile` | 1 |
+| `claim-catalog-observability-profile` | 1 |
 | `claim-catalog-read-replica-profile` | 1 |
 | `claim-catalog-runtime-profile` | 1 |
+| `claim-catalog-storage-profile` | 1 |
+| `claim-catalog-unseal-profile` | 1 |
 | `claim-catalog-upgrade-policy` | 1 |
 | `claim-deletion` | 1 |
 | `claim-gateway` | 1 |
@@ -70,11 +73,14 @@ Notes:
 | `claim-missing-bootstrap-source` | 1 |
 | `claim-offering-pin` | 1 |
 | `claim-restore-backup-request-source` | 1 |
+| `claim-restore-latest-successful-source` | 1 |
 | `claim-restore-request` | 1 |
 | `claim-restore-status-projection` | 1 |
 | `claim-spec-lock` | 1 |
+| `claim-upgrade-blocked-incompatible` | 1 |
 | `claim-upgrade-request` | 1 |
 | `claim-upgrade-rollout` | 1 |
+| `claim-upgrade-version-rollout` | 1 |
 | `configmap-protection` | 1 |
 | `controller-failover` | 1 |
 | `controller-outage` | 1 |

@@ -14,9 +14,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
 
 const (
@@ -32,6 +34,29 @@ const (
 
 func serviceClaimsE2EEnabled() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv(claimE2EEnableEnv)), "true")
+}
+
+func ensureClaimRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, namespace string) error {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	if err := c.Create(ctx, ns); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create claim RustFS namespace: %w", err)
+	}
+
+	cfg := e2ehelpers.DefaultRustFSConfig()
+	cfg.Namespace = namespace
+	cfg.Name = rustfsName
+	cfg.AccessKey = rustfsAccessKey
+	cfg.SecretKey = rustfsSecretKey
+	cfg.Buckets = []string{rustfsBucket}
+
+	if err := e2ehelpers.EnsureRustFS(ctx, c, restCfg, cfg); err != nil {
+		return fmt.Errorf("failed to deploy claim RustFS: %w", err)
+	}
+	return nil
 }
 
 func operatorJWTAudienceForClaimsE2E() string {
@@ -244,6 +269,7 @@ func deleteObjects(ctx context.Context, c client.Client, objects ...client.Objec
 	return nil
 }
 
+//nolint:unparam // Kept configurable so call sites can state their E2E wait contract.
 func waitForClaimPhase(
 	ctx context.Context,
 	c client.Client,
@@ -258,6 +284,7 @@ func waitForClaimPhase(
 	})
 }
 
+//nolint:unparam // Kept configurable so call sites can state their E2E wait contract.
 func waitForClaimPinnedBinding(
 	ctx context.Context,
 	c client.Client,
@@ -323,6 +350,7 @@ func waitForClaimConnectionSecret(
 	return secret, nil
 }
 
+//nolint:unparam // Kept configurable so call sites can state their E2E wait contract.
 func waitForClaimLocalClusterRef(
 	ctx context.Context,
 	c client.Client,
@@ -354,6 +382,7 @@ func waitForClusterDeleted(
 	}, true)
 }
 
+//nolint:unparam // Kept configurable so call sites can state their E2E wait contract.
 func waitForClaimDeleted(
 	ctx context.Context,
 	c client.Client,
@@ -416,35 +445,9 @@ func waitForClaim(
 	pollInterval time.Duration,
 	predicate func(*openbaov1alpha1.OpenBaoClusterClaim) (bool, error),
 ) (*openbaov1alpha1.OpenBaoClusterClaim, error) {
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-
-	for {
-		claim := &openbaov1alpha1.OpenBaoClusterClaim{}
-		if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, claim); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("get OpenBaoClusterClaim %s/%s: %w", namespace, name, err)
-			}
-		} else {
-			ok, err := predicate(claim)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				return claim, nil
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("context canceled while waiting for OpenBaoClusterClaim %s/%s: %w", namespace, name, ctx.Err())
-		case <-deadline.C:
-			return nil, fmt.Errorf("timed out waiting for OpenBaoClusterClaim %s/%s", namespace, name)
-		case <-ticker.C:
-		}
-	}
+	return waitForClaimObject(ctx, c, namespace, name, "OpenBaoClusterClaim", timeout, pollInterval, func() *openbaov1alpha1.OpenBaoClusterClaim {
+		return &openbaov1alpha1.OpenBaoClusterClaim{}
+	}, predicate)
 }
 
 func waitForClaimUpgradeRequest(
@@ -456,35 +459,9 @@ func waitForClaimUpgradeRequest(
 	pollInterval time.Duration,
 	predicate func(*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest) (bool, error),
 ) (*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest, error) {
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-
-	for {
-		request := &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{}
-		if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, request); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("get OpenBaoClusterClaimUpgradeRequest %s/%s: %w", namespace, name, err)
-			}
-		} else {
-			ok, err := predicate(request)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				return request, nil
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("context canceled while waiting for OpenBaoClusterClaimUpgradeRequest %s/%s: %w", namespace, name, ctx.Err())
-		case <-deadline.C:
-			return nil, fmt.Errorf("timed out waiting for OpenBaoClusterClaimUpgradeRequest %s/%s", namespace, name)
-		case <-ticker.C:
-		}
-	}
+	return waitForClaimObject(ctx, c, namespace, name, "OpenBaoClusterClaimUpgradeRequest", timeout, pollInterval, func() *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest {
+		return &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{}
+	}, predicate)
 }
 
 func waitForClaimBackupRequestState(
@@ -510,35 +487,9 @@ func waitForClaimBackupRequest(
 	pollInterval time.Duration,
 	predicate func(*openbaov1alpha1.OpenBaoClusterClaimBackupRequest) (bool, error),
 ) (*openbaov1alpha1.OpenBaoClusterClaimBackupRequest, error) {
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-
-	for {
-		request := &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{}
-		if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, request); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("get OpenBaoClusterClaimBackupRequest %s/%s: %w", namespace, name, err)
-			}
-		} else {
-			ok, err := predicate(request)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				return request, nil
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil, fmt.Errorf("context canceled while waiting for OpenBaoClusterClaimBackupRequest %s/%s: %w", namespace, name, ctx.Err())
-		case <-deadline.C:
-			return nil, fmt.Errorf("timed out waiting for OpenBaoClusterClaimBackupRequest %s/%s", namespace, name)
-		case <-ticker.C:
-		}
-	}
+	return waitForClaimObject(ctx, c, namespace, name, "OpenBaoClusterClaimBackupRequest", timeout, pollInterval, func() *openbaov1alpha1.OpenBaoClusterClaimBackupRequest {
+		return &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{}
+	}, predicate)
 }
 
 func waitForClaimRestoreRequestState(
@@ -564,32 +515,49 @@ func waitForClaimRestoreRequest(
 	pollInterval time.Duration,
 	predicate func(*openbaov1alpha1.OpenBaoClusterClaimRestoreRequest) (bool, error),
 ) (*openbaov1alpha1.OpenBaoClusterClaimRestoreRequest, error) {
+	return waitForClaimObject(ctx, c, namespace, name, "OpenBaoClusterClaimRestoreRequest", timeout, pollInterval, func() *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest {
+		return &openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{}
+	}, predicate)
+}
+
+func waitForClaimObject[T client.Object](
+	ctx context.Context,
+	c client.Client,
+	namespace string,
+	name string,
+	kind string,
+	timeout time.Duration,
+	pollInterval time.Duration,
+	newObject func() T,
+	predicate func(T) (bool, error),
+) (T, error) {
+	var zero T
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
 	for {
-		request := &openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{}
-		if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, request); err != nil {
+		object := newObject()
+		if err := c.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, object); err != nil {
 			if !apierrors.IsNotFound(err) {
-				return nil, fmt.Errorf("get OpenBaoClusterClaimRestoreRequest %s/%s: %w", namespace, name, err)
+				return zero, fmt.Errorf("get %s %s/%s: %w", kind, namespace, name, err)
 			}
 		} else {
-			ok, err := predicate(request)
+			ok, err := predicate(object)
 			if err != nil {
-				return nil, err
+				return zero, err
 			}
 			if ok {
-				return request, nil
+				return object, nil
 			}
 		}
 
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("context canceled while waiting for OpenBaoClusterClaimRestoreRequest %s/%s: %w", namespace, name, ctx.Err())
+			return zero, fmt.Errorf("context canceled while waiting for %s %s/%s: %w", kind, namespace, name, ctx.Err())
 		case <-deadline.C:
-			return nil, fmt.Errorf("timed out waiting for OpenBaoClusterClaimRestoreRequest %s/%s", namespace, name)
+			return zero, fmt.Errorf("timed out waiting for %s %s/%s", kind, namespace, name)
 		case <-ticker.C:
 		}
 	}

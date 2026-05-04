@@ -314,7 +314,9 @@ func installOperatorWithHelm(_ context.Context, namespace string) error {
 	if err != nil {
 		return fmt.Errorf("write Helm E2E values file: %w", err)
 	}
-	defer os.Remove(valuesFile)
+	defer func() {
+		_ = os.Remove(valuesFile)
+	}()
 
 	if !helmReleaseExists(namespace) {
 		cmd := exec.Command("make", "undeploy", "ignore-not-found=true", "wait=false") // #nosec G204 -- test harness command
@@ -370,7 +372,9 @@ func deleteRenderedHelmResources(namespace, valuesFile string) error {
 	if err := renderedFile.Close(); err != nil {
 		return err
 	}
-	defer os.Remove(renderedPath)
+	defer func() {
+		_ = os.Remove(renderedPath)
+	}()
 
 	templateArgs := []string{
 		"template", "openbao-operator", "charts/openbao-operator",
@@ -464,7 +468,7 @@ func writeHelmE2EValuesFile() (string, error) {
 		return "", err
 	}
 	if _, err := file.Write(data); err != nil {
-		file.Close()
+		_ = file.Close()
 		return "", err
 	}
 	if err := file.Close(); err != nil {

@@ -704,6 +704,7 @@ func validateNightlyCoverage(prefix, coverage string) []string {
 
 var allowedOwners = map[string]bool{
 	"backup-restore": true,
+	"claims":         true,
 	"core":           true,
 	"gitops":         true,
 	"hardening":      true,
@@ -738,6 +739,7 @@ var allowedParallelIsolation = map[string]bool{
 var allowedPRScopes = map[string]bool{
 	"always":   true,
 	"backup":   true,
+	"claims":   true,
 	"hardened": true,
 	"manual":   true,
 	"upgrade":  true,
