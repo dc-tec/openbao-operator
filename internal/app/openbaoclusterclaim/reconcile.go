@@ -126,11 +126,14 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		return r.reconcileDeletion(ctx, claim)
 	}
 
-	if claimsEnabled && ensureFinalizer(claim, openbaov1alpha1.OpenBaoClusterClaimFinalizer) {
-		if err := r.client.Update(ctx, claim); err != nil {
-			return recon.Result{}, fmt.Errorf("add OpenBaoClusterClaim finalizer: %w", err)
+	if claimsEnabled {
+		beforeFinalizer := claim.DeepCopy()
+		if ensureFinalizer(claim, openbaov1alpha1.OpenBaoClusterClaimFinalizer) {
+			if err := r.client.Patch(ctx, claim, client.MergeFrom(beforeFinalizer)); err != nil {
+				return recon.Result{}, fmt.Errorf("add OpenBaoClusterClaim finalizer: %w", err)
+			}
+			original = claim.DeepCopy()
 		}
-		original = claim.DeepCopy()
 	}
 
 	selectionPinned, err := r.reconcileServiceOfferingSelection(ctx, claim)

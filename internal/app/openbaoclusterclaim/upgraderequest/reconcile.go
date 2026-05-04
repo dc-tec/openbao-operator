@@ -74,6 +74,14 @@ type runtimeReconciler struct {
 	enableServiceClaims bool
 }
 
+type requestEvaluation struct {
+	state          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState
+	reason         string
+	current        *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus
+	target         *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus
+	classification *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestClassificationStatus
+}
+
 func NewReconciler(deps Runtime) Reconciler {
 	reader := deps.Reader
 	if reader == nil {
@@ -98,13 +106,13 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 	logger = logger.WithValues("openBaoClusterClaimUpgradeRequest", key.String())
 	original := request.DeepCopy()
 
-	state, reason, current, target, classification := r.reconcileRequestState(ctx, request)
+	evaluation := r.reconcileRequestState(ctx, request)
 	request.Status.ObservedGeneration = request.Generation
-	request.Status.State = state
-	request.Status.Reason = reason
-	request.Status.Current = current
-	request.Status.Target = target
-	request.Status.Classification = classification
+	request.Status.State = evaluation.state
+	request.Status.Reason = evaluation.reason
+	request.Status.Current = evaluation.current
+	request.Status.Target = evaluation.target
+	request.Status.Classification = evaluation.classification
 	request.Status.Conditions = nil
 
 	if reflect.DeepEqual(original.Status, request.Status) {
@@ -115,8 +123,8 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		return recon.Result{}, fmt.Errorf("patch OpenBaoClusterClaimUpgradeRequest status: %w", err)
 	}
 
-	logger.Info("Reconciled OpenBaoClusterClaimUpgradeRequest", "state", state, "reason", reason)
-	return requeueForState(state), nil
+	logger.Info("Reconciled OpenBaoClusterClaimUpgradeRequest", "state", evaluation.state, "reason", evaluation.reason)
+	return requeueForState(evaluation.state), nil
 }
 
 func requeueForState(openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState) recon.Result {
@@ -126,73 +134,78 @@ func requeueForState(openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState) rec
 func (r runtimeReconciler) reconcileRequestState(
 	ctx context.Context,
 	request *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
-) (
-	openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState,
-	string,
-	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus,
-	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus,
-	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestClassificationStatus,
-) {
+) requestEvaluation {
 	if request == nil {
-		return "", "", nil, nil, nil
+		return requestEvaluation{}
 	}
 	if isTerminalRequestState(request.Status.State) {
-		return request.Status.State,
-			request.Status.Reason,
-			revisionStatusCopy(request.Status.Current),
-			revisionStatusCopy(request.Status.Target),
-			classificationStatusCopy(request.Status.Classification)
+		return requestEvaluation{
+			state:          request.Status.State,
+			reason:         request.Status.Reason,
+			current:        revisionStatusCopy(request.Status.Current),
+			target:         revisionStatusCopy(request.Status.Target),
+			classification: classificationStatusCopy(request.Status.Classification),
+		}
 	}
 	if !r.enableServiceClaims {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reasonServiceClaimsDisabled, nil, nil,
-			classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonServiceClaimsDisabled)
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
+			reason:         reasonServiceClaimsDisabled,
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonServiceClaimsDisabled),
+		}
 	}
 
 	claim := &openbaov1alpha1.OpenBaoClusterClaim{}
 	if err := r.reader.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: request.Spec.ClaimRef.Name}, claim); err != nil {
 		if apierrors.IsNotFound(err) {
-			return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-				reasonClaimNotFound, nil, nil, nil
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonClaimNotFound}
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonClaimReadFailed, nil, nil, nil
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonClaimReadFailed}
 	}
 
 	currentStatus := currentRevisionStatus(claim)
 	if other, err := r.findEarlierActiveRequest(ctx, request); err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonUpgradeRequestListFailed, currentStatus, nil, nil
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonUpgradeRequestListFailed, current: currentStatus}
 	} else if other != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reasonAnotherUpgradeRequestActive, currentStatus, nil,
-			classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonAnotherUpgradeRequestActive)
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
+			reason:         reasonAnotherUpgradeRequestActive,
+			current:        currentStatus,
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonAnotherUpgradeRequestActive),
+		}
 	}
 	if !claim.DeletionTimestamp.IsZero() {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reasonClaimDeleting, currentStatus, nil,
-			classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonClaimDeleting)
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
+			reason:         reasonClaimDeleting,
+			current:        currentStatus,
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonClaimDeleting),
+		}
 	}
 	if claim.Status.Materialization.Mode != openbaov1alpha1.OpenBaoClusterClaimMaterializationModeSameCluster || claim.Status.Materialization.LocalRef == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reasonClaimNotMaterializedForSameCluster, currentStatus, nil,
-			classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonClaimNotMaterializedForSameCluster)
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
+			reason:         reasonClaimNotMaterializedForSameCluster,
+			current:        currentStatus,
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonClaimNotMaterializedForSameCluster),
+		}
 	}
 	if claim.Status.Applied.ServiceProfileRef == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reasonClaimHasNoAppliedRevision, currentStatus, nil,
-			classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonClaimHasNoAppliedRevision)
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
+			reason:         reasonClaimHasNoAppliedRevision,
+			current:        currentStatus,
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonClaimHasNoAppliedRevision),
+		}
 	}
 
 	currentCatalog, err := r.resolveCatalogBundle(ctx, claim.Status.Applied.ServiceProfileRef.Name)
 	if err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonCurrentCatalogResolutionFailed, currentStatus, nil, nil
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonCurrentCatalogResolutionFailed, current: currentStatus}
 	}
 	currentApproved, currentValidation := claimcontract.BindApprovedServiceContract(claimForAppliedRevision(claim), currentCatalog)
 	if !currentValidation.Valid || currentApproved == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonCurrentContractInvalid, currentStatus, nil, nil
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonCurrentContractInvalid, current: currentStatus}
 	}
 	currentStatus = revisionStatusFromContract(claim.Status.Applied.ServiceOfferingRef, claim.Status.Applied.ServiceProfileRef, currentApproved)
 
@@ -202,7 +215,7 @@ func (r runtimeReconciler) reconcileRequestState(
 		if apierrors.IsNotFound(err) {
 			reason = reasonTargetNotFound
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason, currentStatus, nil, nil
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reason, current: currentStatus}
 	}
 	desiredClaim := claim.DeepCopy()
 	if resolvedOffering != nil {
@@ -214,13 +227,11 @@ func (r runtimeReconciler) reconcileRequestState(
 
 	targetCatalog, err := r.resolveCatalogBundle(ctx, targetProfile.Name)
 	if err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonTargetCatalogResolutionFailed, currentStatus, nil, nil
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonTargetCatalogResolutionFailed, current: currentStatus}
 	}
 	targetApproved, targetValidation := claimcontract.BindApprovedServiceContract(desiredClaim, targetCatalog)
 	if !targetValidation.Valid || targetApproved == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonTargetContractInvalid, currentStatus, nil, nil
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonTargetContractInvalid, current: currentStatus}
 	}
 	targetStatus := revisionStatusFromResolvedTarget(resolvedOffering, targetProfile, targetApproved)
 
@@ -233,23 +244,43 @@ func (r runtimeReconciler) reconcileRequestState(
 			claimUpgradeRequestToken(claim) == upgradeRequestToken(request) {
 			return r.observeInPlaceRollout(ctx, claim, currentStatus, targetStatus, classification)
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reasonAlreadyApplied, currentStatus, targetStatus,
-			classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonAlreadyApplied)
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
+			reason:         reasonAlreadyApplied,
+			current:        currentStatus,
+			target:         targetStatus,
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonAlreadyApplied),
+		}
 	}
 	switch classificationClass {
 	case openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassInPlace:
 		if !claimSpecMatchesTarget(claim, resolvedOffering, targetProfile) {
 			if err := r.promoteClaimTarget(ctx, request, claim, resolvedOffering, targetProfile); err != nil {
-				return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-					reasonClaimUpdateFailed, currentStatus, targetStatus, classification
+				return requestEvaluation{
+					state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
+					reason:         reasonClaimUpdateFailed,
+					current:        currentStatus,
+					target:         targetStatus,
+					classification: classification,
+				}
 			}
-			return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-				reasonRolloutRequested, currentStatus, targetStatus, classification
+			return requestEvaluation{
+				state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
+				reason:         reasonRolloutRequested,
+				current:        currentStatus,
+				target:         targetStatus,
+				classification: classification,
+			}
 		}
 		return r.observeInPlaceRollout(ctx, claim, currentStatus, targetStatus, classification)
 	default:
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked, classificationReason, currentStatus, targetStatus, classification
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
+			reason:         classificationReason,
+			current:        currentStatus,
+			target:         targetStatus,
+			classification: classification,
+		}
 	}
 }
 
@@ -369,42 +400,35 @@ func (r runtimeReconciler) observeInPlaceRollout(
 	currentStatus *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus,
 	targetStatus *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus,
 	classification *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestClassificationStatus,
-) (
-	openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState,
-	string,
-	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus,
-	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus,
-	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestClassificationStatus,
-) {
+) requestEvaluation {
 	if claim == nil || claim.Status.Materialization.LocalRef == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-			reasonLocalClusterPending, currentStatus, targetStatus, classification
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
+			reason:         reasonLocalClusterPending,
+			current:        currentStatus,
+			target:         targetStatus,
+			classification: classification,
+		}
 	}
 	if !appliedRevisionMatchesTarget(claim, targetStatus) {
 		switch claim.Status.Rollout.State {
 		case openbaov1alpha1.OpenBaoClusterClaimRolloutStateBlocked:
-			return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-				reasonClaimRolloutBlocked, currentStatus, targetStatus, classification
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonClaimRolloutBlocked, current: currentStatus, target: targetStatus, classification: classification}
 		case openbaov1alpha1.OpenBaoClusterClaimRolloutStateFailed:
-			return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-				reasonClaimRolloutFailed, currentStatus, targetStatus, classification
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonClaimRolloutFailed, current: currentStatus, target: targetStatus, classification: classification}
 		default:
-			return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-				reasonAppliedRevisionPending, currentStatus, targetStatus, classification
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut, reason: reasonAppliedRevisionPending, current: currentStatus, target: targetStatus, classification: classification}
 		}
 	}
 	switch claim.Status.Rollout.State {
 	case openbaov1alpha1.OpenBaoClusterClaimRolloutStateBlocked:
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonClaimRolloutBlocked, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonClaimRolloutBlocked, current: currentStatus, target: targetStatus, classification: classification}
 	case openbaov1alpha1.OpenBaoClusterClaimRolloutStateFailed:
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonClaimRolloutFailed, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonClaimRolloutFailed, current: currentStatus, target: targetStatus, classification: classification}
 	case openbaov1alpha1.OpenBaoClusterClaimRolloutStatePending,
 		openbaov1alpha1.OpenBaoClusterClaimRolloutStateRendering,
 		openbaov1alpha1.OpenBaoClusterClaimRolloutStateRollingOut:
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-			reasonClaimRolloutInProgress, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut, reason: reasonClaimRolloutInProgress, current: currentStatus, target: targetStatus, classification: classification}
 	}
 
 	localCluster := &openbaov1alpha1.OpenBaoCluster{}
@@ -413,36 +437,34 @@ func (r runtimeReconciler) observeInPlaceRollout(
 		Name:      claim.Status.Materialization.LocalRef.Name,
 	}, localCluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-				reasonLocalClusterPending, currentStatus, targetStatus, classification
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut, reason: reasonLocalClusterPending, current: currentStatus, target: targetStatus, classification: classification}
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonLocalClusterReadFailed, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonLocalClusterReadFailed, current: currentStatus, target: targetStatus, classification: classification}
 	}
 
 	if localCluster.Status.Phase == openbaov1alpha1.ClusterPhaseFailed {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
-			reasonLocalClusterFailed, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonLocalClusterFailed, current: currentStatus, target: targetStatus, classification: classification}
 	}
 	if localCluster.Status.ObservedGeneration < localCluster.Generation {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-			reasonLocalClusterReconciling, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut, reason: reasonLocalClusterReconciling, current: currentStatus, target: targetStatus, classification: classification}
 	}
 	if localCluster.Status.Upgrade != nil || localCluster.Status.Phase == openbaov1alpha1.ClusterPhaseUpgrading {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-			reasonUpgradeInProgress, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut, reason: reasonUpgradeInProgress, current: currentStatus, target: targetStatus, classification: classification}
 	}
 	if localCluster.Status.Phase != openbaov1alpha1.ClusterPhaseRunning {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-			reasonLocalClusterNotReady, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut, reason: reasonLocalClusterNotReady, current: currentStatus, target: targetStatus, classification: classification}
 	}
 	if !claimServiceReadyForUpgradeCompletion(claim) {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
-			reasonClaimNotReadyYet, currentStatus, targetStatus, classification
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut, reason: reasonClaimNotReadyYet, current: currentStatus, target: targetStatus, classification: classification}
 	}
 
-	return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded,
-		reasonUpgradeApplied, currentStatus, targetStatus, classification
+	return requestEvaluation{
+		state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded,
+		reason:         reasonUpgradeApplied,
+		current:        currentStatus,
+		target:         targetStatus,
+		classification: classification,
+	}
 }
 
 func claimServiceReadyForUpgradeCompletion(claim *openbaov1alpha1.OpenBaoClusterClaim) bool {

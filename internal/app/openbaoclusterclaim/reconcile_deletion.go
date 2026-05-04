@@ -27,12 +27,12 @@ func (r runtimeReconciler) reconcileDeletion(ctx context.Context, claim *openbao
 		return recon.Result{}, nil
 	}
 
-	updated := claim.DeepCopy()
-	updated.Finalizers = removeFinalizer(updated.Finalizers, openbaov1alpha1.OpenBaoClusterClaimFinalizer)
-	if reflect.DeepEqual(updated.Finalizers, claim.Finalizers) {
+	original := claim.DeepCopy()
+	claim.Finalizers = removeFinalizer(claim.Finalizers, openbaov1alpha1.OpenBaoClusterClaimFinalizer)
+	if reflect.DeepEqual(claim.Finalizers, original.Finalizers) {
 		return recon.Result{}, nil
 	}
-	if err := r.client.Update(ctx, updated); err != nil {
+	if err := r.client.Patch(ctx, claim, client.MergeFrom(original)); err != nil {
 		return recon.Result{}, fmt.Errorf("remove OpenBaoClusterClaim finalizer: %w", err)
 	}
 

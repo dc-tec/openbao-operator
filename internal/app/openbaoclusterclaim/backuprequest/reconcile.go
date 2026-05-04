@@ -52,6 +52,15 @@ type runtimeReconciler struct {
 	enableServiceClaims bool
 }
 
+type requestEvaluation struct {
+	state          openbaov1alpha1.OpenBaoClusterClaimBackupRequestState
+	reason         string
+	clusterRef     *openbaov1alpha1.NamespacedReference
+	startTime      *metav1.Time
+	completionTime *metav1.Time
+	snapshotKey    string
+}
+
 func NewReconciler(deps Runtime) Reconciler {
 	reader := deps.Reader
 	if reader == nil {
@@ -76,14 +85,14 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 	logger = logger.WithValues("openBaoClusterClaimBackupRequest", key.String())
 	original := request.DeepCopy()
 
-	state, reason, clusterRef, startTime, completionTime, snapshotKey := r.reconcileRequestState(ctx, request)
+	evaluation := r.reconcileRequestState(ctx, request)
 	request.Status.ObservedGeneration = request.Generation
-	request.Status.State = state
-	request.Status.Reason = reason
-	request.Status.ClusterRef = clusterRef
-	request.Status.StartTime = startTime
-	request.Status.CompletionTime = completionTime
-	request.Status.SnapshotKey = snapshotKey
+	request.Status.State = evaluation.state
+	request.Status.Reason = evaluation.reason
+	request.Status.ClusterRef = evaluation.clusterRef
+	request.Status.StartTime = evaluation.startTime
+	request.Status.CompletionTime = evaluation.completionTime
+	request.Status.SnapshotKey = evaluation.snapshotKey
 	request.Status.Conditions = nil
 
 	if reflect.DeepEqual(original.Status, request.Status) {
@@ -94,53 +103,69 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		return recon.Result{}, fmt.Errorf("patch OpenBaoClusterClaimBackupRequest status: %w", err)
 	}
 
-	logger.Info("Reconciled OpenBaoClusterClaimBackupRequest", "state", state, "reason", reason)
+	logger.Info("Reconciled OpenBaoClusterClaimBackupRequest", "state", evaluation.state, "reason", evaluation.reason)
 	return recon.Result{}, nil
 }
 
 func (r runtimeReconciler) reconcileRequestState(
 	ctx context.Context,
 	request *openbaov1alpha1.OpenBaoClusterClaimBackupRequest,
-) (
-	openbaov1alpha1.OpenBaoClusterClaimBackupRequestState,
-	string,
-	*openbaov1alpha1.NamespacedReference,
-	*metav1.Time,
-	*metav1.Time,
-	string,
-) {
+) requestEvaluation {
 	if request == nil {
-		return "", "", nil, nil, nil, ""
+		return requestEvaluation{}
 	}
 	if isTerminalRequestState(request.Status.State) {
-		return request.Status.State,
-			request.Status.Reason,
-			namespacedReferenceCopy(request.Status.ClusterRef),
-			timeCopy(request.Status.StartTime),
-			timeCopy(request.Status.CompletionTime),
-			request.Status.SnapshotKey
+		return requestEvaluation{
+			state:          request.Status.State,
+			reason:         request.Status.Reason,
+			clusterRef:     namespacedReferenceCopy(request.Status.ClusterRef),
+			startTime:      timeCopy(request.Status.StartTime),
+			completionTime: timeCopy(request.Status.CompletionTime),
+			snapshotKey:    request.Status.SnapshotKey,
+		}
 	}
 	if !r.enableServiceClaims {
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked, reasonServiceClaimsDisabled, nil, nil, nil, ""
+		return requestEvaluation{
+			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked,
+			reason: reasonServiceClaimsDisabled,
+		}
 	}
 
 	claim := &openbaov1alpha1.OpenBaoClusterClaim{}
 	if err := r.reader.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: request.Spec.ClaimRef.Name}, claim); err != nil {
 		if apierrors.IsNotFound(err) {
-			return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed, reasonClaimNotFound, nil, nil, nil, ""
+			return requestEvaluation{
+				state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
+				reason: reasonClaimNotFound,
+			}
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed, reasonClaimReadFailed, nil, nil, nil, ""
+		return requestEvaluation{
+			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
+			reason: reasonClaimReadFailed,
+		}
 	}
 	if other, err := r.findEarlierActiveRequest(ctx, request); err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed, reasonBackupRequestListFailed, nil, nil, nil, ""
+		return requestEvaluation{
+			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
+			reason: reasonBackupRequestListFailed,
+		}
 	} else if other != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked, reasonAnotherBackupRequestActive, nil, nil, nil, ""
+		return requestEvaluation{
+			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked,
+			reason: reasonAnotherBackupRequestActive,
+		}
 	}
 	if !claim.DeletionTimestamp.IsZero() {
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked, reasonClaimDeleting, nil, nil, nil, ""
+		return requestEvaluation{
+			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked,
+			reason: reasonClaimDeleting,
+		}
 	}
 	if claim.Status.Materialization.Mode != openbaov1alpha1.OpenBaoClusterClaimMaterializationModeSameCluster || claim.Status.Materialization.LocalRef == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked, reasonClaimNotMaterializedForSameCluster, nil, nil, nil, ""
+		return requestEvaluation{
+			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked,
+			reason: reasonClaimNotMaterializedForSameCluster,
+		}
 	}
 
 	clusterRef := &openbaov1alpha1.NamespacedReference{
@@ -150,12 +175,24 @@ func (r runtimeReconciler) reconcileRequestState(
 	localCluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := r.reader.Get(ctx, types.NamespacedName{Namespace: clusterRef.Namespace, Name: clusterRef.Name}, localCluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed, reasonLocalClusterNotFound, clusterRef, nil, nil, ""
+			return requestEvaluation{
+				state:      openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
+				reason:     reasonLocalClusterNotFound,
+				clusterRef: clusterRef,
+			}
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed, reasonLocalClusterReadFailed, clusterRef, nil, nil, ""
+		return requestEvaluation{
+			state:      openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
+			reason:     reasonLocalClusterReadFailed,
+			clusterRef: clusterRef,
+		}
 	}
 	if !localCluster.DeletionTimestamp.IsZero() {
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked, reasonLocalClusterDeleting, clusterRef, nil, nil, ""
+		return requestEvaluation{
+			state:      openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked,
+			reason:     reasonLocalClusterDeleting,
+			clusterRef: clusterRef,
+		}
 	}
 
 	triggerToken := backupTriggerToken(request)
@@ -163,9 +200,17 @@ func (r runtimeReconciler) reconcileRequestState(
 		return observeTriggeredRequest(localCluster, clusterRef)
 	}
 	if err := r.ensureTriggerAnnotation(ctx, localCluster, triggerToken); err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed, reasonTriggerUpdateFailed, clusterRef, nil, nil, ""
+		return requestEvaluation{
+			state:      openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
+			reason:     reasonTriggerUpdateFailed,
+			clusterRef: clusterRef,
+		}
 	}
-	return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStatePending, reasonBackupRequested, clusterRef, nil, nil, ""
+	return requestEvaluation{
+		state:      openbaov1alpha1.OpenBaoClusterClaimBackupRequestStatePending,
+		reason:     reasonBackupRequested,
+		clusterRef: clusterRef,
+	}
 }
 
 func (r runtimeReconciler) findEarlierActiveRequest(
@@ -216,17 +261,15 @@ func (r runtimeReconciler) ensureTriggerAnnotation(
 func observeTriggeredRequest(
 	localCluster *openbaov1alpha1.OpenBaoCluster,
 	clusterRef *openbaov1alpha1.NamespacedReference,
-) (
-	openbaov1alpha1.OpenBaoClusterClaimBackupRequestState,
-	string,
-	*openbaov1alpha1.NamespacedReference,
-	*metav1.Time,
-	*metav1.Time,
-	string,
-) {
+) requestEvaluation {
 	startTime := localCluster.Status.Backup.LastAttemptTime.DeepCopy()
 	if localClusterBackupInProgress(localCluster) {
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateRunning, reasonBackupInProgress, clusterRef, startTime, nil, ""
+		return requestEvaluation{
+			state:      openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateRunning,
+			reason:     reasonBackupInProgress,
+			clusterRef: clusterRef,
+			startTime:  startTime,
+		}
 	}
 	if backupAttemptFailed(localCluster.Status.Backup) {
 		completion := localCluster.Status.Backup.LastFailureTime.DeepCopy()
@@ -234,13 +277,32 @@ func observeTriggeredRequest(
 		if reason == "" {
 			reason = reasonBackupFailed
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed, reason, clusterRef, startTime, completion, ""
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
+			reason:         reason,
+			clusterRef:     clusterRef,
+			startTime:      startTime,
+			completionTime: completion,
+		}
 	}
 	if backupAttemptSucceeded(localCluster.Status.Backup) {
 		completion := localCluster.Status.Backup.LastBackupTime.DeepCopy()
-		return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateSucceeded, reasonBackupCompleted, clusterRef, startTime, completion, localCluster.Status.Backup.LastBackupName
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateSucceeded,
+			reason:         reasonBackupCompleted,
+			clusterRef:     clusterRef,
+			startTime:      startTime,
+			completionTime: completion,
+			snapshotKey:    localCluster.Status.Backup.LastBackupName,
+		}
 	}
-	return openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateRunning, reasonBackupCompletionPending, clusterRef, startTime, nil, localCluster.Status.Backup.LastBackupName
+	return requestEvaluation{
+		state:       openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateRunning,
+		reason:      reasonBackupCompletionPending,
+		clusterRef:  clusterRef,
+		startTime:   startTime,
+		snapshotKey: localCluster.Status.Backup.LastBackupName,
+	}
 }
 
 func backupAttemptObserved(status *openbaov1alpha1.BackupStatus, triggerToken string) bool {

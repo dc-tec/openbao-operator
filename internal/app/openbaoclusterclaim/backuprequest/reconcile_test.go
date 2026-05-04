@@ -25,7 +25,8 @@ func TestReconcileRequestState_ServiceClaimsDisabled(t *testing.T) {
 	t.Parallel()
 
 	reconciler := runtimeReconciler{enableServiceClaims: false}
-	state, reason, clusterRef, startTime, completionTime, snapshotKey := reconciler.reconcileRequestState(context.Background(), &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{})
+	evaluation := reconciler.reconcileRequestState(context.Background(), &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{})
+	state, reason, clusterRef, startTime, completionTime, snapshotKey := evaluation.state, evaluation.reason, evaluation.clusterRef, evaluation.startTime, evaluation.completionTime, evaluation.snapshotKey
 	if state != openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked)
 	}
@@ -51,7 +52,8 @@ func TestReconcileRequestState_PreservesTerminalStatus(t *testing.T) {
 	request.Status.SnapshotKey = "snapshots/payments-bao/failed.snap"
 
 	reconciler := runtimeReconciler{enableServiceClaims: true}
-	state, reason, clusterRef, startTime, completionTime, snapshotKey := reconciler.reconcileRequestState(context.Background(), request)
+	evaluation := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, clusterRef, startTime, completionTime, snapshotKey := evaluation.state, evaluation.reason, evaluation.clusterRef, evaluation.startTime, evaluation.completionTime, evaluation.snapshotKey
 	if state != openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed)
 	}
@@ -75,7 +77,8 @@ func TestReconcileRequestState_RequestsManualBackup(t *testing.T) {
 	reconciler := newBackupRequestTestReconciler(t, baseBackupRequestObjects()...)
 	request := newBackupRequest("backup-1")
 
-	state, reason, clusterRef, startTime, completionTime, snapshotKey := reconciler.reconcileRequestState(context.Background(), request)
+	evaluation := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, clusterRef, startTime, completionTime, snapshotKey := evaluation.state, evaluation.reason, evaluation.clusterRef, evaluation.startTime, evaluation.completionTime, evaluation.snapshotKey
 	if state != openbaov1alpha1.OpenBaoClusterClaimBackupRequestStatePending {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimBackupRequestStatePending)
 	}
@@ -120,7 +123,8 @@ func TestReconcileRequestState_SucceedsAfterBackupCompletes(t *testing.T) {
 	reconciler := newBackupRequestTestReconciler(t, objects...)
 	request := newBackupRequest("backup-1")
 
-	state, reason, clusterRef, startTime, completionTime, snapshotKey := reconciler.reconcileRequestState(context.Background(), request)
+	evaluation := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, clusterRef, startTime, completionTime, snapshotKey := evaluation.state, evaluation.reason, evaluation.clusterRef, evaluation.startTime, evaluation.completionTime, evaluation.snapshotKey
 	if state != openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateSucceeded {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateSucceeded)
 	}
@@ -161,7 +165,8 @@ func TestReconcileRequestState_FailsAfterBackupFailure(t *testing.T) {
 	reconciler := newBackupRequestTestReconciler(t, objects...)
 	request := newBackupRequest("backup-1")
 
-	state, reason, _, startTime, completionTime, snapshotKey := reconciler.reconcileRequestState(context.Background(), request)
+	evaluation := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, startTime, completionTime, snapshotKey := evaluation.state, evaluation.reason, evaluation.startTime, evaluation.completionTime, evaluation.snapshotKey
 	if state != openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed)
 	}
@@ -196,7 +201,8 @@ func TestReconcileRequestState_BlocksWhenAnotherRequestIsActive(t *testing.T) {
 	request := newBackupRequest("backup-2")
 	request.CreationTimestamp = metav1.NewTime(time.Unix(1700000100, 0).UTC())
 
-	state, reason, _, _, _, _ := reconciler.reconcileRequestState(context.Background(), request)
+	evaluation := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason := evaluation.state, evaluation.reason
 	if state != openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked)
 	}

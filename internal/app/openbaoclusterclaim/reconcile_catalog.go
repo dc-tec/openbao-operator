@@ -372,9 +372,9 @@ func (r runtimeReconciler) reconcileServiceOfferingSelection(
 		return false, nil
 	}
 
-	updated := claim.DeepCopy()
-	updated.Spec.ServiceProfileRef = openbaov1alpha1.LocalReference{Name: revisionName}
-	if err := r.client.Update(ctx, updated); err != nil {
+	original := claim.DeepCopy()
+	claim.Spec.ServiceProfileRef = openbaov1alpha1.LocalReference{Name: revisionName}
+	if err := r.client.Patch(ctx, claim, client.MergeFrom(original)); err != nil {
 		return false, fmt.Errorf(
 			"pin OpenBaoClusterClaim %s/%s to OpenBaoServiceOffering %q revision %q: %w",
 			claim.Namespace,
@@ -384,7 +384,6 @@ func (r runtimeReconciler) reconcileServiceOfferingSelection(
 			err,
 		)
 	}
-	claim.Spec.ServiceProfileRef = updated.Spec.ServiceProfileRef
 	return true, nil
 }
 

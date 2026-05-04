@@ -101,7 +101,7 @@ func TestReconcileRequestState_ServiceClaimsDisabled(t *testing.T) {
 	t.Parallel()
 
 	reconciler := runtimeReconciler{enableServiceClaims: false}
-	state, reason, current, target, classification := reconciler.reconcileRequestState(context.Background(), &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{})
+	state, reason, current, target, classification := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{}))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked)
 	}
@@ -132,7 +132,7 @@ func TestReconcileRequestState_PreservesTerminalStatus(t *testing.T) {
 	)
 
 	reconciler := runtimeReconciler{enableServiceClaims: true}
-	state, reason, current, target, classification := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, current, target, classification := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), request))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed)
 	}
@@ -159,7 +159,7 @@ func TestReconcileRequestState_PromotesClaimSpecForInPlaceUpgrade(t *testing.T) 
 		ServiceOfferingRef: &openbaov1alpha1.LocalReference{Name: "standard"},
 	})
 
-	state, reason, current, target, classification := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, current, target, classification := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), request))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut)
 	}
@@ -219,7 +219,7 @@ func TestReconcileRequestState_UsesAppliedRevisionDuringRollout(t *testing.T) {
 	})
 	request.Status.State = openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut
 
-	state, reason, current, target, classification := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, current, target, classification := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), request))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut)
 	}
@@ -263,7 +263,7 @@ func TestReconcileRequestState_BlocksWhenTargetRevisionAlreadyApplied(t *testing
 		ServiceProfileRef: &openbaov1alpha1.LocalReference{Name: standardV2Name},
 	})
 
-	state, reason, _, target, classification := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, _, target, classification := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), request))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked)
 	}
@@ -317,7 +317,7 @@ func TestReconcileRequestState_ObservesPromotedTargetWhenStatusWasLost(t *testin
 	}
 	reconciler := newUpgradeTestReconciler(t, objects...)
 
-	state, reason, current, target, classification := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, current, target, classification := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), request))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded)
 	}
@@ -359,7 +359,7 @@ func TestReconcileRequestState_BlocksWhenAnotherRequestIsActive(t *testing.T) {
 		ServiceOfferingRef: &openbaov1alpha1.LocalReference{Name: "standard"},
 	})
 
-	state, reason, current, target, classification := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, current, target, classification := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), request))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked)
 	}
@@ -412,7 +412,7 @@ func TestReconcileRequestState_SucceedsAfterSameClusterConvergence(t *testing.T)
 	})
 	request.Status.State = openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut
 
-	state, reason, current, target, classification := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, current, target, classification := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), request))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded)
 	}
@@ -469,7 +469,7 @@ func TestReconcileRequestState_SucceedsWhenClaimIsDegradedButServiceRemainsAvail
 	})
 	request.Status.State = openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut
 
-	state, reason, _, _, _ := reconciler.reconcileRequestState(context.Background(), request)
+	state, reason, _, _, _ := upgradeEvaluationFields(reconciler.reconcileRequestState(context.Background(), request))
 	if state != openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded {
 		t.Fatalf("state = %q, want %q", state, openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded)
 	}
@@ -525,6 +525,20 @@ func newTestScheme(t *testing.T) *runtime.Scheme {
 		t.Fatalf("AddToScheme() error = %v", err)
 	}
 	return scheme
+}
+
+func upgradeEvaluationFields(evaluation requestEvaluation) (
+	openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState,
+	string,
+	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus,
+	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus,
+	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestClassificationStatus,
+) {
+	return evaluation.state,
+		evaluation.reason,
+		evaluation.current,
+		evaluation.target,
+		evaluation.classification
 }
 
 func newUpgradeTestReconciler(t *testing.T, objects ...client.Object) runtimeReconciler {

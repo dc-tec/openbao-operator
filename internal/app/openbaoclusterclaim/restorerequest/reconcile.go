@@ -69,6 +69,16 @@ type runtimeReconciler struct {
 	enableServiceClaims bool
 }
 
+type requestEvaluation struct {
+	state          openbaov1alpha1.OpenBaoClusterClaimRestoreRequestState
+	reason         string
+	clusterRef     *openbaov1alpha1.NamespacedReference
+	restoreRef     *openbaov1alpha1.NamespacedReference
+	startTime      *metav1.Time
+	completionTime *metav1.Time
+	snapshotKey    string
+}
+
 func NewReconciler(deps Runtime) Reconciler {
 	reader := deps.Reader
 	if reader == nil {
@@ -93,15 +103,15 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 	logger = logger.WithValues("openBaoClusterClaimRestoreRequest", key.String())
 	original := request.DeepCopy()
 
-	state, reason, clusterRef, restoreRef, startTime, completionTime, snapshotKey := r.reconcileRequestState(ctx, request)
+	evaluation := r.reconcileRequestState(ctx, request)
 	request.Status.ObservedGeneration = request.Generation
-	request.Status.State = state
-	request.Status.Reason = reason
-	request.Status.ClusterRef = clusterRef
-	request.Status.RestoreRef = restoreRef
-	request.Status.StartTime = startTime
-	request.Status.CompletionTime = completionTime
-	request.Status.SnapshotKey = snapshotKey
+	request.Status.State = evaluation.state
+	request.Status.Reason = evaluation.reason
+	request.Status.ClusterRef = evaluation.clusterRef
+	request.Status.RestoreRef = evaluation.restoreRef
+	request.Status.StartTime = evaluation.startTime
+	request.Status.CompletionTime = evaluation.completionTime
+	request.Status.SnapshotKey = evaluation.snapshotKey
 	request.Status.Conditions = nil
 
 	if reflect.DeepEqual(original.Status, request.Status) {
@@ -112,55 +122,52 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		return recon.Result{}, fmt.Errorf("patch OpenBaoClusterClaimRestoreRequest status: %w", err)
 	}
 
-	logger.Info("Reconciled OpenBaoClusterClaimRestoreRequest", "state", state, "reason", reason)
+	logger.Info("Reconciled OpenBaoClusterClaimRestoreRequest", "state", evaluation.state, "reason", evaluation.reason)
 	return recon.Result{}, nil
 }
 
 func (r runtimeReconciler) reconcileRequestState(
 	ctx context.Context,
 	request *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest,
-) (
-	openbaov1alpha1.OpenBaoClusterClaimRestoreRequestState,
-	string,
-	*openbaov1alpha1.NamespacedReference,
-	*openbaov1alpha1.NamespacedReference,
-	*metav1.Time,
-	*metav1.Time,
-	string,
-) {
+) requestEvaluation {
 	if request == nil {
-		return "", "", nil, nil, nil, nil, ""
+		return requestEvaluation{}
 	}
 	if isTerminalRequestState(request.Status.State) {
-		return request.Status.State,
-			request.Status.Reason,
-			namespacedReferenceCopy(request.Status.ClusterRef),
-			namespacedReferenceCopy(request.Status.RestoreRef),
-			timeCopy(request.Status.StartTime),
-			timeCopy(request.Status.CompletionTime),
-			request.Status.SnapshotKey
+		return requestEvaluation{
+			state:          request.Status.State,
+			reason:         request.Status.Reason,
+			clusterRef:     namespacedReferenceCopy(request.Status.ClusterRef),
+			restoreRef:     namespacedReferenceCopy(request.Status.RestoreRef),
+			startTime:      timeCopy(request.Status.StartTime),
+			completionTime: timeCopy(request.Status.CompletionTime),
+			snapshotKey:    request.Status.SnapshotKey,
+		}
 	}
 	if !r.enableServiceClaims {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reasonServiceClaimsDisabled, nil, nil, nil, nil, ""
+		return requestEvaluation{
+			state:  openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked,
+			reason: reasonServiceClaimsDisabled,
+		}
 	}
 
 	claim := &openbaov1alpha1.OpenBaoClusterClaim{}
 	if err := r.reader.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: request.Spec.ClaimRef.Name}, claim); err != nil {
 		if apierrors.IsNotFound(err) {
-			return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonClaimNotFound, nil, nil, nil, nil, ""
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonClaimNotFound}
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonClaimReadFailed, nil, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonClaimReadFailed}
 	}
 	if other, err := r.findEarlierActiveRequest(ctx, request); err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonRestoreRequestListFailed, nil, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonRestoreRequestListFailed}
 	} else if other != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reasonAnotherRestoreRequestActive, nil, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonAnotherRestoreRequestActive}
 	}
 	if !claim.DeletionTimestamp.IsZero() {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reasonClaimDeleting, nil, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonClaimDeleting}
 	}
 	if claim.Status.Materialization.Mode != openbaov1alpha1.OpenBaoClusterClaimMaterializationModeSameCluster || claim.Status.Materialization.LocalRef == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reasonClaimNotMaterializedForSameCluster, nil, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonClaimNotMaterializedForSameCluster}
 	}
 
 	clusterRef := &openbaov1alpha1.NamespacedReference{
@@ -170,28 +177,28 @@ func (r runtimeReconciler) reconcileRequestState(
 	localCluster := &openbaov1alpha1.OpenBaoCluster{}
 	if err := r.reader.Get(ctx, types.NamespacedName{Namespace: clusterRef.Namespace, Name: clusterRef.Name}, localCluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonLocalClusterNotFound, clusterRef, nil, nil, nil, ""
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonLocalClusterNotFound, clusterRef: clusterRef}
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonLocalClusterReadFailed, clusterRef, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonLocalClusterReadFailed, clusterRef: clusterRef}
 	}
 	if !localCluster.DeletionTimestamp.IsZero() {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reasonLocalClusterDeleting, clusterRef, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonLocalClusterDeleting, clusterRef: clusterRef}
 	}
 	if localCluster.Spec.Backup == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reasonBackupNotConfigured, clusterRef, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonBackupNotConfigured, clusterRef: clusterRef}
 	}
 	snapshot := r.resolveRestoreSnapshotKey(ctx, request, localCluster)
 	if snapshot.failedReason != "" {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, snapshot.failedReason, clusterRef, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: snapshot.failedReason, clusterRef: clusterRef}
 	}
 	if snapshot.blockedReason != "" {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, snapshot.blockedReason, clusterRef, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: snapshot.blockedReason, clusterRef: clusterRef}
 	}
 	snapshotKey := snapshot.key
 
 	restore, err := r.resolveOwnedRestoreExecution(ctx, request)
 	if err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonRestoreExecutionReadFailed, clusterRef, nil, nil, nil, snapshotKey
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonRestoreExecutionReadFailed, clusterRef: clusterRef, snapshotKey: snapshotKey}
 	}
 	if restore != nil {
 		return observeRestoreExecution(restore, clusterRef)
@@ -199,13 +206,13 @@ func (r runtimeReconciler) reconcileRequestState(
 
 	restoreImage, err := resolveRestoreExecutionImage(localCluster)
 	if err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonRestoreImageResolutionFailed, clusterRef, nil, nil, nil, snapshotKey
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonRestoreImageResolutionFailed, clusterRef: clusterRef, snapshotKey: snapshotKey}
 	}
 
 	if other, err := r.findConflictingActiveRestore(ctx, clusterRef, request.Name); err != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonRestoreExecutionListFailed, clusterRef, nil, nil, nil, snapshotKey
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonRestoreExecutionListFailed, clusterRef: clusterRef, snapshotKey: snapshotKey}
 	} else if other != nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reasonAnotherRestoreExecutionActive, clusterRef, nil, nil, nil, snapshotKey
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonAnotherRestoreExecutionActive, clusterRef: clusterRef, snapshotKey: snapshotKey}
 	}
 
 	desired := desiredRestoreExecution(request, localCluster, snapshotKey, restoreImage)
@@ -213,23 +220,23 @@ func (r runtimeReconciler) reconcileRequestState(
 		if apierrors.IsAlreadyExists(err) {
 			existing := &openbaov1alpha1.OpenBaoRestore{}
 			if getErr := r.reader.Get(ctx, client.ObjectKeyFromObject(desired), existing); getErr != nil {
-				return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonRestoreExecutionReadFailed, clusterRef, nil, nil, nil, snapshotKey
+				return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonRestoreExecutionReadFailed, clusterRef: clusterRef, snapshotKey: snapshotKey}
 			}
 			if existing.Labels[constants.LabelOpenBaoClaimRestoreRequest] != request.Name {
-				return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reasonRestoreExecutionNameConflict, clusterRef, nil, nil, nil, snapshotKey
+				return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonRestoreExecutionNameConflict, clusterRef: clusterRef, snapshotKey: snapshotKey}
 			}
 			return observeRestoreExecution(existing, clusterRef)
 		}
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reasonRestoreCreateFailed, clusterRef, nil, nil, nil, snapshotKey
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonRestoreCreateFailed, clusterRef: clusterRef, snapshotKey: snapshotKey}
 	}
 
-	return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStatePending,
-		reasonRestoreRequested,
-		clusterRef,
-		&openbaov1alpha1.NamespacedReference{Namespace: desired.Namespace, Name: desired.Name},
-		nil,
-		nil,
-		snapshotKey
+	return requestEvaluation{
+		state:       openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStatePending,
+		reason:      reasonRestoreRequested,
+		clusterRef:  clusterRef,
+		restoreRef:  &openbaov1alpha1.NamespacedReference{Namespace: desired.Namespace, Name: desired.Name},
+		snapshotKey: snapshotKey,
+	}
 }
 
 func (r runtimeReconciler) findEarlierActiveRequest(
@@ -481,17 +488,9 @@ func backupRequestClusterMatches(ref *openbaov1alpha1.NamespacedReference, clust
 func observeRestoreExecution(
 	restore *openbaov1alpha1.OpenBaoRestore,
 	clusterRef *openbaov1alpha1.NamespacedReference,
-) (
-	openbaov1alpha1.OpenBaoClusterClaimRestoreRequestState,
-	string,
-	*openbaov1alpha1.NamespacedReference,
-	*openbaov1alpha1.NamespacedReference,
-	*metav1.Time,
-	*metav1.Time,
-	string,
-) {
+) requestEvaluation {
 	if restore == nil {
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStatePending, reasonRestorePending, clusterRef, nil, nil, nil, ""
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStatePending, reason: reasonRestorePending, clusterRef: clusterRef}
 	}
 
 	restoreRef := &openbaov1alpha1.NamespacedReference{Namespace: restore.Namespace, Name: restore.Name}
@@ -506,37 +505,43 @@ func observeRestoreExecution(
 
 	switch phase {
 	case openbaov1alpha1.RestorePhaseCompleted:
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateSucceeded,
-			reasonRestoreCompleted,
-			clusterRef,
-			restoreRef,
-			timeCopy(restore.Status.StartTime),
-			timeCopy(restore.Status.CompletionTime),
-			snapshotKey
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateSucceeded,
+			reason:         reasonRestoreCompleted,
+			clusterRef:     clusterRef,
+			restoreRef:     restoreRef,
+			startTime:      timeCopy(restore.Status.StartTime),
+			completionTime: timeCopy(restore.Status.CompletionTime),
+			snapshotKey:    snapshotKey,
+		}
 	case openbaov1alpha1.RestorePhaseFailed:
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed,
-			restoreExecutionReason(restore),
-			clusterRef,
-			restoreRef,
-			timeCopy(restore.Status.StartTime),
-			timeCopy(restore.Status.CompletionTime),
-			snapshotKey
+		return requestEvaluation{
+			state:          openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed,
+			reason:         restoreExecutionReason(restore),
+			clusterRef:     clusterRef,
+			restoreRef:     restoreRef,
+			startTime:      timeCopy(restore.Status.StartTime),
+			completionTime: timeCopy(restore.Status.CompletionTime),
+			snapshotKey:    snapshotKey,
+		}
 	case openbaov1alpha1.RestorePhaseValidating, openbaov1alpha1.RestorePhaseRunning:
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateRunning,
-			restoreExecutionReason(restore),
-			clusterRef,
-			restoreRef,
-			timeCopy(restore.Status.StartTime),
-			nil,
-			snapshotKey
+		return requestEvaluation{
+			state:       openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateRunning,
+			reason:      restoreExecutionReason(restore),
+			clusterRef:  clusterRef,
+			restoreRef:  restoreRef,
+			startTime:   timeCopy(restore.Status.StartTime),
+			snapshotKey: snapshotKey,
+		}
 	default:
-		return openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStatePending,
-			restoreExecutionReason(restore),
-			clusterRef,
-			restoreRef,
-			timeCopy(restore.Status.StartTime),
-			nil,
-			snapshotKey
+		return requestEvaluation{
+			state:       openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStatePending,
+			reason:      restoreExecutionReason(restore),
+			clusterRef:  clusterRef,
+			restoreRef:  restoreRef,
+			startTime:   timeCopy(restore.Status.StartTime),
+			snapshotKey: snapshotKey,
+		}
 	}
 }
 
