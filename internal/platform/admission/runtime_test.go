@@ -441,7 +441,10 @@ func TestRefreshStatus_UnsafeAdmissionDisabled(t *testing.T) {
 }
 
 func TestSetAdmissionDependenciesReady(t *testing.T) {
-	t.Parallel()
+	SetAdmissionDependenciesReady(false)
+	t.Cleanup(func() {
+		SetAdmissionDependenciesReady(false)
+	})
 
 	SetAdmissionDependenciesReady(true)
 	if !AdmissionDependenciesReady() {
