@@ -1,5 +1,5 @@
 ---
-title: Understand the service catalog
+title: Understand catalog objects
 description: Platform-owned catalog objects behind OpenBaoClusterClaim, including stable offerings, immutable profiles, exposure policy, bootstrap policy, and backup policy.
 slug: /service-claims/catalog
 hide_title: true
@@ -8,8 +8,51 @@ journey: get-started
 ---
 
 <PageHeader
-  title="Understand the service catalog"
-  lede="The service catalog is the platform-owned policy surface behind OpenBaoClusterClaim. Tenant users bind through a stable offering alias, while platform admins manage the immutable service revisions and the lower policy objects they reference."
+  title="Understand catalog objects"
+  lede="The service catalog is the platform-owned policy behind OpenBaoClusterClaim. Tenant users select an offering. Platform admins manage the versioned service profile and the implementation profiles behind that offering."
+/>
+
+<DecisionTable
+  title="Core catalog terms"
+  columns={['Term', 'Meaning', 'Who works with it']}
+  rows={[
+    {
+      cells: [
+        'Offering',
+        'Stable name tenants select, such as `dev-internal` or `hardened-edge`.',
+        'Platform admins publish it. Tenant users reference it.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Service profile',
+        'Immutable service revision that defines the OpenBao version, size, bootstrap mode, exposure class, backup posture, and lifecycle defaults.',
+        'Platform admins create a new revision when the service contract changes.',
+      ],
+    },
+    {
+      cells: [
+        'Implementation profiles',
+        'Platform-owned wiring for storage classes, ACME cache storage, unseal, runtime identity, network policy, observability, backup targets, and upgrade policy.',
+        'Platform admins own them. Tenant users normally read only the offering name.',
+      ],
+    },
+    {
+      cells: [
+        'Claim',
+        'Tenant request for one OpenBao service through an offering and bounded parameters.',
+        'Tenant users create it in their namespace.',
+      ],
+    },
+    {
+      cells: [
+        'Materialized cluster',
+        'Operator-created `OpenBaoCluster` that runs the service for the claim.',
+        'The controller owns it; use it for deep workload status, not direct tenant edits.',
+      ],
+    },
+  ]}
 />
 
 <DecisionTable
@@ -20,7 +63,7 @@ journey: get-started
       cells: [
         'OpenBaoServiceOffering',
         'Platform admin',
-        'Stable friendly alias that points new claims at the current immutable service-profile revision.',
+        'Stable alias that points new claims at the current immutable service-profile revision.',
         'Mutable. Existing claims do not live-follow later offering changes.',
       ],
       emphasis: 'recommended',
@@ -182,9 +225,14 @@ Catalog objects are part of the platform policy surface. Tenant users should not
   title="Continue catalog-driven provisioning"
   items={[
     {
-      label: 'Publish a catalog',
-      description: 'Create a minimum catalog or production catalog with concrete examples.',
+      label: 'Publish a minimum catalog',
+      description: 'Create the first internal offering with the smallest useful profile set.',
       docId: 'user-guide/service-claims/publish-service-catalog',
+    },
+    {
+      label: 'Publish a production catalog',
+      description: 'Add hardened storage, unseal, runtime, network, observability, backup, exposure, and upgrade policy profiles.',
+      docId: 'user-guide/service-claims/publish-production-catalog',
     },
     {
       label: 'Check catalog support',
@@ -192,7 +240,7 @@ Catalog objects are part of the platform policy surface. Tenant users should not
       docId: 'user-guide/service-claims/support-matrix',
     },
     {
-      label: 'Apply the first claim',
+      label: 'Request a service',
       description: 'Use the same-cluster quickstart once the offering and its backing catalog objects exist.',
       docId: 'user-guide/service-claims/getting-started',
     },

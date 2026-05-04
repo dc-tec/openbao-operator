@@ -1,0 +1,42 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoClusterClaimUpgradeRequest
+metadata:
+  name: team-a-vault-upgrade
+  namespace: team-a-dev
+spec:
+  claimRef:
+    name: team-a-vault
+  target:
+    serviceOfferingRef:
+      name: dev-internal
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoClusterClaimBackupRequest
+metadata:
+  name: team-a-vault-backup
+  namespace: team-a-dev
+spec:
+  claimRef:
+    name: team-a-vault
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoClusterClaimRestoreRequest
+metadata:
+  name: team-a-vault-restore-latest
+  namespace: team-a-dev
+spec:
+  claimRef:
+    name: team-a-vault
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoClusterClaimRestoreRequest
+metadata:
+  name: team-a-vault-restore-from-backup
+  namespace: team-a-dev
+spec:
+  claimRef:
+    name: team-a-vault
+  source:
+    mode: BackupRequest
+    backupRequestRef:
+      name: team-a-vault-backup

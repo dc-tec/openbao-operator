@@ -1,0 +1,10 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoClusterClaim
+metadata:
+  name: team-a-vault
+  namespace: team-a-dev
+spec:
+  tenantRef:
+    name: team-a-onboarding
+  serviceOfferingRef:
+    name: dev-internal

@@ -1,6 +1,6 @@
 ---
-title: Apply the first claim
-description: Apply a same-cluster OpenBaoClusterClaim against a published service offering and verify the local workload and connection contract.
+title: Request a service
+description: Request a same-cluster OpenBao service through OpenBaoClusterClaim and verify the local workload and connection contract.
 slug: /service-claims/get-started
 hide_title: true
 pageType: task
@@ -8,8 +8,8 @@ journey: get-started
 ---
 
 <PageHeader
-  title="Apply the first same-cluster service claim"
-  lede="Use this quickstart after the operator install, tenant onboarding, and service catalog are already in place. The platform team publishes the catalog objects. Tenant users submit only the claim."
+  title="Request a service through a claim"
+  lede="Use this tenant workflow after the operator install, tenant onboarding, and service catalog are already in place. The platform team publishes catalog objects. Tenant users submit only the claim."
 />
 
 <Checklist
@@ -35,12 +35,12 @@ using this tenant claim workflow.
 
 </Callout>
 
-## Apply the claim
+## Create the claim
 
 <CommandBlock
   language="yaml"
   label="configure"
-  title="Create a claim that selects a stable service offering"
+  title="Request service through a stable offering"
   code={`apiVersion: openbao.org/v1alpha1
 kind: OpenBaoClusterClaim
 metadata:
@@ -52,14 +52,16 @@ spec:
   serviceOfferingRef:
     name: dev-internal`}
 >
-  `serviceOfferingRef` is the normal tenant-facing entry point. The claim binds through the stable offering alias and the platform pins the request to the current immutable service-profile revision behind that alias.
+  `serviceOfferingRef` is the normal tenant-facing entry point. The controller resolves the offering and pins the current immutable service-profile revision behind that alias.
 </CommandBlock>
 
 <CommandBlock
   language="bash"
   label="apply"
   title="Apply the claim"
-  code={`kubectl apply -f claim.yaml`}
+  code={`kubectl apply -f claim.yaml
+# or use the checked-in sample:
+kubectl apply -f config/samples/claims/dev-internal-claim.yaml`}
 />
 
 ## Verify the claim and the materialized workload
@@ -114,22 +116,27 @@ After the claim is materially bound, the spec is no longer a free-form edit surf
   title="Continue the claim workflow"
   items={[
     {
-      label: 'Publish a catalog',
+      label: 'Publish a minimum catalog',
       description: 'Create the platform-owned offering and profile revisions this claim selects.',
       docId: 'user-guide/service-claims/publish-service-catalog',
     },
     {
-      label: 'Run day-2 workflows',
+      label: 'Publish a production catalog',
+      description: 'Use this path when tenants should request a hardened offering such as `hardened-edge`.',
+      docId: 'user-guide/service-claims/publish-production-catalog',
+    },
+    {
+      label: 'Operate claim services',
       description: 'Use explicit request objects for in-place upgrades, manual backups, and restores.',
       docId: 'user-guide/service-claims/day-2-workflows',
     },
     {
-      label: 'Review the service catalog',
+      label: 'Understand catalog objects',
       description: 'Understand which catalog objects exist behind the claim and which of them remain mutable.',
       docId: 'user-guide/service-claims/service-catalog',
     },
     {
-      label: 'Troubleshoot a claim',
+      label: 'Troubleshoot claim services',
       description: 'Route pending, failed, or not-yet-published claims to the right surface quickly.',
       docId: 'user-guide/service-claims/troubleshooting',
     },

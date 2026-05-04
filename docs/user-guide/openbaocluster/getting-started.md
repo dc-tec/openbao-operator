@@ -25,7 +25,7 @@ journeyStep: 4
 
 <Callout type="note" title="Use this page only for the direct workload path">
 
-This page is the direct `OpenBaoCluster` workflow. If the platform team published a service catalog and wants tenant users to request service through `OpenBaoClusterClaim`, use [Choose service claims](../service-claims/overview.md) and [Apply the first claim](../service-claims/getting-started.md) instead.
+This page is the direct `OpenBaoCluster` workflow. If the platform team published a service catalog and wants tenant users to request service through `OpenBaoClusterClaim`, use [Choose service claims](../service-claims/overview.md) and [Request a service](../service-claims/getting-started.md) instead.
 
 </Callout>
 

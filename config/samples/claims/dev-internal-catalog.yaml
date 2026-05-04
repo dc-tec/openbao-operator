@@ -1,0 +1,60 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoExposureClass
+metadata:
+  name: dev-internal-v1
+spec:
+  publishMode: ClusterInternal
+  hostnamePolicy:
+    mode: Generated
+    domainSuffix: svc.cluster.local
+  tlsPolicy:
+    mode: OperatorManaged
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoBootstrapProfile
+metadata:
+  name: bootstrap-basic-v1
+spec:
+  operatorLifecycleAuth:
+    mode: JWT
+    jwt:
+      audience: openbao-operator
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoBackupProfile
+metadata:
+  name: backup-disabled-v1
+spec: {}
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoServiceProfile
+metadata:
+  name: dev-internal-v1
+spec:
+  cluster:
+    version: "2.5.0"
+    voters: 1
+    securityProfile: Development
+  storage:
+    primarySize: 10Gi
+  bootstrap:
+    mode: SelfInit
+    profileRef:
+      name: bootstrap-basic-v1
+  exposure:
+    classRef:
+      name: dev-internal-v1
+  backup:
+    profileRef:
+      name: backup-disabled-v1
+  lifecycle:
+    upgradeStrategy: RollingUpdate
+    preUpgradeSnapshot: true
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoServiceOffering
+metadata:
+  name: dev-internal
+spec:
+  currentRevisionRef:
+    name: dev-internal-v1

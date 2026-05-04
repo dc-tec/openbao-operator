@@ -1,6 +1,6 @@
 ---
-title: Troubleshoot a claim
-description: Capture the failing claim surface first, then route service-catalog, bootstrap, materialization, and exposure failures to the right fix.
+title: Troubleshoot claim services
+description: Capture the failing claim surface first, then route catalog, bootstrap, materialization, workflow, and exposure failures to the right fix.
 slug: /service-claims/troubleshooting
 hide_title: true
 pageType: task
@@ -8,7 +8,7 @@ journey: operate
 ---
 
 <PageHeader
-  title="Troubleshoot by claim symptom"
+  title="Troubleshoot claim services"
   lede="Capture the claim, the materialized local cluster, and the connection contract first. Then route the symptom to catalog binding, bootstrap dependencies, materialization, or edge publication."
 />
 

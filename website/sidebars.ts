@@ -90,48 +90,53 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'doc',
-          id: 'user-guide/service-claims/publish-service-catalog',
-          label: 'Publish a service catalog',
-        },
-        {
-          type: 'doc',
-          id: 'user-guide/service-claims/getting-started',
-          label: 'Apply the first claim',
-        },
-        {
-          type: 'doc',
-          id: 'user-guide/service-claims/day-2-workflows',
-          label: 'Run day-2 workflows',
-        },
-        {
-          type: 'doc',
           id: 'user-guide/service-claims/service-catalog',
-          label: 'Understand the service catalog',
+          label: 'Understand catalog objects',
         },
         {
           type: 'doc',
           id: 'user-guide/service-claims/support-matrix',
-          label: 'Service catalog support matrix',
+          label: 'Check supported shapes',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/publish-service-catalog',
+          label: 'Publish a minimum catalog',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/publish-production-catalog',
+          label: 'Publish a production catalog',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/getting-started',
+          label: 'Request a service',
+        },
+        {
+          type: 'doc',
+          id: 'user-guide/service-claims/day-2-workflows',
+          label: 'Operate claim services',
         },
         {
           type: 'doc',
           id: 'user-guide/service-claims/exposure',
-          label: 'Plan claim exposure',
+          label: 'Plan exposure',
         },
         {
           type: 'doc',
           id: 'user-guide/service-claims/bootstrap-dependencies',
-          label: 'Understand bootstrap dependencies',
+          label: 'Plan bootstrap dependencies',
         },
         {
           type: 'doc',
           id: 'user-guide/service-claims/troubleshooting',
-          label: 'Troubleshoot a claim',
+          label: 'Troubleshoot claim services',
         },
         {
           type: 'doc',
           id: 'user-guide/service-claims/unsupported-workflows',
-          label: 'Unsupported claim workflows',
+          label: 'Unsupported workflows',
         },
       ],
     },
@@ -639,6 +644,11 @@ const sidebars: SidebarsConfig = {
               type: 'doc',
               id: 'architecture/service-claims-boundaries',
               label: 'Service-claim boundaries',
+            },
+            {
+              type: 'doc',
+              id: 'architecture/service-claims-extension-guide',
+              label: 'Extend service claims',
             },
             {
               type: 'doc',

@@ -87,12 +87,12 @@ The projected bootstrap artifacts and the claim connection Secret are operator-m
   title="Continue the claim path"
   items={[
     {
-      label: 'Review the service catalog',
+      label: 'Understand catalog objects',
       description: 'See how bootstrap profiles fit into the wider service catalog behind the claim.',
       docId: 'user-guide/service-claims/service-catalog',
     },
     {
-      label: 'Troubleshoot a claim',
+      label: 'Troubleshoot claim services',
       description: 'Use the troubleshooting page when bootstrap dependencies are missing or remain pending.',
       docId: 'user-guide/service-claims/troubleshooting',
     },

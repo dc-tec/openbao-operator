@@ -1,0 +1,5 @@
+resources:
+  - dev-internal-catalog.yaml
+  - dev-internal-claim.yaml
+  - hardened-edge-catalog.yaml
+  - claim-day2-requests.yaml

@@ -108,7 +108,7 @@ The controller fails closed when the requested hostname is not a valid DNS subdo
       docId: 'user-guide/service-claims/bootstrap-dependencies',
     },
     {
-      label: 'Troubleshoot a claim',
+      label: 'Troubleshoot claim services',
       description: 'Route pending edge publication and readiness issues to the right surface quickly.',
       docId: 'user-guide/service-claims/troubleshooting',
     },

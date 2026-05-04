@@ -80,7 +80,7 @@ When a claim workflow cannot be projected honestly into the current same-cluster
   title="Continue from the current supported scope"
   items={[
     {
-      label: 'Apply the first claim',
+      label: 'Request a service',
       description: 'Return to the supported same-cluster quickstart when the desired workflow is inside the current release scope.',
       docId: 'user-guide/service-claims/getting-started',
     },

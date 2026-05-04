@@ -238,7 +238,7 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
       docId: 'user-guide/openbaocluster/getting-started',
     },
     {
-      label: 'Apply the first claim',
+      label: 'Request a service',
       description: 'Use the service-claim quickstart when the platform team published a service catalog and tenant users should request service through that bounded path.',
       docId: 'user-guide/service-claims/getting-started',
     },

@@ -126,7 +126,7 @@ claim has reached `Ready`.
     {
       cells: [
         'Platform admin',
-        'Publish a service catalog',
+        'Understand the catalog model, then publish a minimum or production catalog',
         'A stable `OpenBaoServiceOffering` backed by immutable service-profile and implementation-profile revisions.',
       ],
       emphasis: 'recommended',
@@ -134,14 +134,14 @@ claim has reached `Ready`.
     {
       cells: [
         'Tenant user',
-        'Apply the first claim',
+        'Request a service',
         'An `OpenBaoClusterClaim` that selects an offering and receives a connection contract.',
       ],
     },
     {
       cells: [
         'Operator',
-        'Run claim day-2 workflows',
+        'Operate claim services',
         'Immutable request objects for upgrade, backup, and restore workflows.',
       ],
     },
@@ -152,19 +152,24 @@ claim has reached `Ready`.
   title="Continue the claim path"
   items={[
     {
-      label: 'Publish a catalog',
-      description: 'Create the platform-owned offering and profile revisions before tenants submit claims.',
+      label: 'Understand the catalog',
+      description: 'Learn the small catalog object model before authoring platform-owned profiles.',
+      docId: 'user-guide/service-claims/service-catalog',
+    },
+    {
+      label: 'Check supported shapes',
+      description: 'Confirm whether the desired OpenBaoCluster shape belongs in the service catalog.',
+      docId: 'user-guide/service-claims/support-matrix',
+    },
+    {
+      label: 'Publish a minimum catalog',
+      description: 'Create the platform-owned offering and first profile revision before tenants submit claims.',
       docId: 'user-guide/service-claims/publish-service-catalog',
     },
     {
-      label: 'Apply the first claim',
-      description: 'Use the same-cluster quickstart once the operator install, target namespace, and service catalog are ready.',
+      label: 'Request a service',
+      description: 'Use the same-cluster tenant workflow once the operator install, target namespace, and service catalog are ready.',
       docId: 'user-guide/service-claims/getting-started',
-    },
-    {
-      label: 'Review the service catalog',
-      description: 'See which objects remain platform-owned and how service offerings map claims to immutable service-profile revisions.',
-      docId: 'user-guide/service-claims/service-catalog',
     },
     {
       label: 'Stay on direct clusters',

@@ -1,0 +1,212 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoStorageProfile
+metadata:
+  name: production-storage-v1
+spec:
+  primary:
+    storageClassName: fast-ssd
+  readReplica:
+    usePrimaryStorageClass: true
+  acmeCache:
+    mode: ManagedPVC
+    size: 1Gi
+    storageClassName: nfs-rwx
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoRuntimeProfile
+metadata:
+  name: production-runtime-v1
+spec:
+  serviceAccount:
+    annotations:
+      example.com/workload-identity: openbao
+  helperImages:
+    init: registry.example.com/openbao-init:2.5.0
+    backup: registry.example.com/openbao-backup:2.5.0
+    restore: registry.example.com/openbao-backup:2.5.0
+    upgrade: registry.example.com/openbao-upgrade:2.5.0
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoNetworkProfile
+metadata:
+  name: production-network-v1
+spec:
+  dnsNamespace: kube-system
+  egressRules:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/8
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoObservabilityProfile
+metadata:
+  name: production-observability-v1
+spec:
+  observability:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+        interval: 30s
+        scrapeTimeout: 10s
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoUnsealProfile
+metadata:
+  name: production-transit-v1
+spec:
+  mode: Transit
+  transit:
+    address: https://transit-bao.openbao-infra.svc:8200
+    keyName: openbao-unseal
+    mountPath: transit
+  credentialsSecretRef:
+    name: transit-unseal-token
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoUpgradePolicy
+metadata:
+  name: production-bluegreen-v1
+spec:
+  blueGreen:
+    autoPromote: false
+    minSyncDuration: 30s
+    maxJobFailures: 1
+    autoRollback:
+      enabled: true
+      onJobFailure: true
+      onValidationFailure: true
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoBackupBackend
+metadata:
+  name: object-storage-s3-v1
+spec:
+  driver: ObjectStorage
+  objectStorage:
+    provider: s3
+    endpoint: https://s3.example.com
+    region: eu-west-1
+    usePathStyle: true
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoBackupAuthProfile
+metadata:
+  name: object-storage-static-v1
+spec:
+  mode: StaticCredentials
+  staticCredentials:
+    secretName: openbao-backup-credentials
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoTransferProfile
+metadata:
+  name: object-storage-transfer-v1
+spec:
+  partSize: 10485760
+  concurrency: 3
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoBackupTarget
+metadata:
+  name: object-storage-target-v1
+spec:
+  backendRef:
+    name: object-storage-s3-v1
+  authProfileRef:
+    name: object-storage-static-v1
+  transportProfileRef:
+    name: object-storage-transfer-v1
+  locationPolicy:
+    location:
+      mode: Fixed
+      value: openbao-backups
+    keyPrefix:
+      template: claims/{{ claim.namespace }}/{{ claim.name }}
+      allowClaimPartition: true
+  policy:
+    deletionBehavior: Retain
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoBackupProfile
+metadata:
+  name: object-storage-scheduled-v1
+spec:
+  schedule: "0 */6 * * *"
+  retention:
+    maxCount: 28
+    maxAge: 168h
+  targetRef:
+    name: object-storage-target-v1
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoExposureClass
+metadata:
+  name: gateway-public-v1
+spec:
+  publishMode: Gateway
+  hostnamePolicy:
+    mode: Generated
+    domainSuffix: apps.example.com
+    claim:
+      enabled: true
+      allowedSuffixes:
+        - apps.example.com
+  tlsPolicy:
+    mode: ACME
+    acme:
+      directoryURL: https://acme-v02.api.letsencrypt.org/directory
+      email: platform@example.com
+      domains:
+        - "*.apps.example.com"
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoServiceProfile
+metadata:
+  name: hardened-edge-v1
+spec:
+  cluster:
+    version: "2.5.0"
+    voters: 3
+    readReplicas: 1
+    securityProfile: Hardened
+  storage:
+    primarySize: 20Gi
+    readReplicaSize: 10Gi
+    profileRef:
+      name: production-storage-v1
+  bootstrap:
+    mode: SelfInit
+    profileRef:
+      name: bootstrap-basic-v1
+  exposure:
+    classRef:
+      name: gateway-public-v1
+  unseal:
+    profileRef:
+      name: production-transit-v1
+  runtime:
+    profileRef:
+      name: production-runtime-v1
+  observability:
+    profileRef:
+      name: production-observability-v1
+  network:
+    profileRef:
+      name: production-network-v1
+  backup:
+    profileRef:
+      name: object-storage-scheduled-v1
+  lifecycle:
+    policyRef:
+      name: production-bluegreen-v1
+    upgradeStrategy: BlueGreen
+    preUpgradeSnapshot: true
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoServiceOffering
+metadata:
+  name: hardened-edge
+spec:
+  currentRevisionRef:
+    name: hardened-edge-v1

@@ -1,6 +1,6 @@
 ---
-title: Run claim day-2 workflows
-description: Request bounded same-cluster claim upgrades, manual backups, and restores without dropping down to direct OpenBaoCluster edits.
+title: Operate claim services
+description: Request bounded same-cluster service upgrades, manual backups, and restores without editing the claim-managed OpenBaoCluster directly.
 slug: /service-claims/day-2-workflows
 hide_title: true
 pageType: task
@@ -8,8 +8,8 @@ journey: operate
 ---
 
 <PageHeader
-  title="Run bounded claim day-2 workflows"
-  lede="Same-cluster service claims now support explicit day-2 request objects for in-place upgrades, manual backups, and restores. Use these workflows instead of editing the materialized claim or the local OpenBaoCluster directly."
+  title="Operate claim services"
+  lede="Use explicit request objects for in-place upgrades, manual backups, and restores. Do not edit the materialized claim or the local OpenBaoCluster directly for these workflows."
 />
 
 <Checklist
@@ -82,7 +82,7 @@ spec:
     serviceOfferingRef:
       name: dev-internal`}
 >
-  The operator classifies the target first. Unsupported changes fail closed as `Blocked` or `ReplacementRequired` instead of mutating the claim spec directly.
+  The operator classifies the target first. Unsupported changes fail closed as `Blocked` instead of mutating the claim spec directly.
 </CommandBlock>
 
 ## Request a manual backup
@@ -170,6 +170,15 @@ kubectl get openbaoclusterclaimrestorerequest team-a-vault-restore -n team-a-pro
   Watch `status.phase`, `status.summary`, `status.upgrade`, `status.backup`, and `status.restore` on the claim. Request objects then give the narrower workflow view with current state, reason, and the resolved target object references.
 </CommandBlock>
 
+<CommandBlock
+  language="bash"
+  label="apply"
+  title="Apply the checked-in request examples"
+  code={`kubectl apply -f config/samples/claims/claim-day2-requests.yaml`}
+>
+  The sample contains one upgrade request, one manual backup request, and both restore source modes. Apply only the operation you intend to run against a ready claim.
+</CommandBlock>
+
 <DecisionTable
   kind="reference"
   title="What to expect during workflow execution"
@@ -210,7 +219,7 @@ The request objects are immutable and the operator serializes same-kind maintena
   title="Continue claim operations"
   items={[
     {
-      label: 'Troubleshoot a claim',
+      label: 'Troubleshoot claim services',
       description: 'Route blocked or failed day-2 workflows to the right controller, policy, or workload surface.',
       docId: 'user-guide/service-claims/troubleshooting',
     },

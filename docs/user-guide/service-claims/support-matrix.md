@@ -27,7 +27,7 @@ keeps it unsupported.
   columns={['Direct cluster area', 'Claim/catalog surface', 'Notes']}
   rows={[
     {
-      cells: ['Version, voter count, read-replica count, security profile', '`OpenBaoServiceProfile.spec.cluster`', 'Service-defining shape. Replacement-class changes require explicit workflows rather than claim spec edits.'],
+      cells: ['Version, voter count, read-replica count, security profile', '`OpenBaoServiceProfile.spec.cluster`', 'Only compatible in-place version changes are supported through claim upgrade requests. Other service-shape changes are blocked in this release.'],
       emphasis: 'recommended',
     },
     {
@@ -126,21 +126,30 @@ keeps it unsupported.
   ]}
 />
 
-## Adoption preflight implications
+## Future adoption planning
 
-Future adoption must compare the direct `OpenBaoCluster` to the selected
-service profile and auxiliary profiles before ownership changes. Adoption should
-fail closed when a direct cluster depends on unsupported raw configuration,
-unmodeled storage or unseal posture, custom image behavior, ACME cache storage
-that is not represented, or lifecycle settings that the catalog cannot express.
+There is no public adoption workflow in the current claim release. Existing
+direct `OpenBaoCluster` workloads remain direct-managed.
+
+A future adoption workflow would need to compare the direct `OpenBaoCluster` to
+the selected service profile and auxiliary profiles before ownership changes.
+It should fail closed when a direct cluster depends on unsupported raw
+configuration, unmodeled storage or unseal posture, custom image behavior, ACME
+cache storage that is not represented, or lifecycle settings that the catalog
+cannot express.
 
 <NextActions
   title="Use the matrix"
   items={[
     {
-      label: 'Publish a catalog',
-      description: 'Create a catalog that stays inside the supported matrix.',
+      label: 'Publish a minimum catalog',
+      description: 'Create the first internal offering inside the supported matrix.',
       docId: 'user-guide/service-claims/publish-service-catalog',
+    },
+    {
+      label: 'Publish a production catalog',
+      description: 'Add implementation profiles for hardened storage, unseal, runtime, network, observability, backup, and upgrade policy.',
+      docId: 'user-guide/service-claims/publish-production-catalog',
     },
     {
       label: 'Read unsupported workflows',

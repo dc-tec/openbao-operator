@@ -124,6 +124,11 @@ Deferred intentionally:
       docId: 'architecture/service-claims-boundaries',
     },
     {
+      label: 'Extend service claims',
+      description: 'Use the maintainer checklist for catalog fields, tenant parameters, runtime projections, and request workflows.',
+      docId: 'architecture/service-claims-extension-guide',
+    },
+    {
       label: 'Open component design',
       description: 'Return to the broader controller, app, and manager boundaries for the rest of the operator.',
       docId: 'architecture/components',
