@@ -241,7 +241,7 @@ func TestClaimUpgradeRequestMetrics_ReplaceAndClear(t *testing.T) {
 
 	request.Status.State = openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut
 	request.Status.Reason = "RollingOut"
-	request.Status.Classification.Class = openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired
+	request.Status.Classification.Class = openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked
 	SyncClaimUpgradeRequest(request)
 
 	if after := testutil.CollectAndCount(claimUpgradeRequestStateGauge); after != stateBefore+1 {

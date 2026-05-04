@@ -63,7 +63,6 @@ func desiredUpgradeStatus(
 func isTerminalClaimUpgradeRequestState(state openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState) bool {
 	switch state {
 	case openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded,
-		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateReplacementRequired,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed:
 		return true

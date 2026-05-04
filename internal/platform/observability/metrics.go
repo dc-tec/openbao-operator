@@ -795,10 +795,8 @@ func claimMaterializationModes() []openbaov1alpha1.OpenBaoClusterClaimMaterializ
 func claimUpgradeRequestStates() []openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState {
 	return []openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState{
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStatePending,
-		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateClassifying,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded,
-		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateReplacementRequired,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed,
 	}
@@ -807,7 +805,6 @@ func claimUpgradeRequestStates() []openbaov1alpha1.OpenBaoClusterClaimUpgradeReq
 func claimUpgradeRequestClasses() []openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClass {
 	return []openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClass{
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassInPlace,
-		openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked,
 	}
 }

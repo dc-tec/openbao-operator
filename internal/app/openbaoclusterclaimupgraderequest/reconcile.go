@@ -18,44 +18,44 @@ import (
 )
 
 const (
-	reasonServiceClaimsDisabled                 = "ServiceClaimsDisabled"
-	reasonClaimNotFound                         = "ClaimNotFound"
-	reasonClaimReadFailed                       = "ClaimReadFailed"
-	reasonUpgradeRequestListFailed              = "UpgradeRequestListFailed"
-	reasonAnotherUpgradeRequestActive           = "AnotherUpgradeRequestActive"
-	reasonClaimDeleting                         = "ClaimDeleting"
-	reasonClaimNotMaterializedForSameCluster    = "ClaimNotMaterializedForSameCluster"
-	reasonClaimHasNoAppliedRevision             = "ClaimHasNoAppliedRevision"
-	reasonCurrentCatalogResolutionFailed        = "CurrentCatalogResolutionFailed"
-	reasonCurrentContractInvalid                = "CurrentContractInvalid"
-	reasonTargetResolutionFailed                = "TargetResolutionFailed"
-	reasonTargetNotFound                        = "TargetNotFound"
-	reasonTargetCatalogResolutionFailed         = "TargetCatalogResolutionFailed"
-	reasonTargetContractInvalid                 = "TargetContractInvalid"
-	reasonAlreadyApplied                        = "AlreadyApplied"
-	reasonClaimUpdateFailed                     = "ClaimUpdateFailed"
-	reasonRolloutRequested                      = "RolloutRequested"
-	reasonLocalClusterPending                   = "LocalClusterPending"
-	reasonClaimRolloutBlocked                   = "ClaimRolloutBlocked"
-	reasonClaimRolloutFailed                    = "ClaimRolloutFailed"
-	reasonAppliedRevisionPending                = "AppliedRevisionPending"
-	reasonClaimRolloutInProgress                = "ClaimRolloutInProgress"
-	reasonLocalClusterReadFailed                = "LocalClusterReadFailed"
-	reasonLocalClusterFailed                    = "LocalClusterFailed"
-	reasonLocalClusterReconciling               = "LocalClusterReconciling"
-	reasonUpgradeInProgress                     = "UpgradeInProgress"
-	reasonLocalClusterNotReady                  = "LocalClusterNotReady"
-	reasonClaimNotReadyYet                      = "ClaimNotReadyYet"
-	reasonUpgradeApplied                        = "UpgradeApplied"
-	reasonClassificationInputsInvalid           = "ClassificationInputsInvalid"
-	reasonBootstrapChangeRequiresReprovision    = "BootstrapChangeRequiresReprovision"
-	reasonBackupLocationChangeRequiresMigration = "BackupLocationChangeRequiresMigration"
-	reasonBackupExecutionIdentityChanged        = "BackupExecutionIdentityChanged"
-	reasonReplacementWorkflowRequired           = "ReplacementWorkflowRequired"
-	reasonInPlaceSupported                      = "InPlaceSupported"
-	reasonEquivalentServiceShape                = "EquivalentServiceShape"
-	conditionTypeServiceAvailable               = "ServiceAvailable"
-	conditionTypeMaintenanceActive              = "MaintenanceActive"
+	reasonServiceClaimsDisabled              = "ServiceClaimsDisabled"
+	reasonClaimNotFound                      = "ClaimNotFound"
+	reasonClaimReadFailed                    = "ClaimReadFailed"
+	reasonUpgradeRequestListFailed           = "UpgradeRequestListFailed"
+	reasonAnotherUpgradeRequestActive        = "AnotherUpgradeRequestActive"
+	reasonClaimDeleting                      = "ClaimDeleting"
+	reasonClaimNotMaterializedForSameCluster = "ClaimNotMaterializedForSameCluster"
+	reasonClaimHasNoAppliedRevision          = "ClaimHasNoAppliedRevision"
+	reasonCurrentCatalogResolutionFailed     = "CurrentCatalogResolutionFailed"
+	reasonCurrentContractInvalid             = "CurrentContractInvalid"
+	reasonTargetResolutionFailed             = "TargetResolutionFailed"
+	reasonTargetNotFound                     = "TargetNotFound"
+	reasonTargetCatalogResolutionFailed      = "TargetCatalogResolutionFailed"
+	reasonTargetContractInvalid              = "TargetContractInvalid"
+	reasonAlreadyApplied                     = "AlreadyApplied"
+	reasonClaimUpdateFailed                  = "ClaimUpdateFailed"
+	reasonRolloutRequested                   = "RolloutRequested"
+	reasonLocalClusterPending                = "LocalClusterPending"
+	reasonClaimRolloutBlocked                = "ClaimRolloutBlocked"
+	reasonClaimRolloutFailed                 = "ClaimRolloutFailed"
+	reasonAppliedRevisionPending             = "AppliedRevisionPending"
+	reasonClaimRolloutInProgress             = "ClaimRolloutInProgress"
+	reasonLocalClusterReadFailed             = "LocalClusterReadFailed"
+	reasonLocalClusterFailed                 = "LocalClusterFailed"
+	reasonLocalClusterReconciling            = "LocalClusterReconciling"
+	reasonUpgradeInProgress                  = "UpgradeInProgress"
+	reasonLocalClusterNotReady               = "LocalClusterNotReady"
+	reasonClaimNotReadyYet                   = "ClaimNotReadyYet"
+	reasonUpgradeApplied                     = "UpgradeApplied"
+	reasonClassificationInputsInvalid        = "ClassificationInputsInvalid"
+	reasonBootstrapChangeRequiresReprovision = "BootstrapChangeRequiresReprovision"
+	reasonBackupLocationChangeUnsupported    = "BackupLocationChangeUnsupported"
+	reasonBackupExecutionIdentityChanged     = "BackupExecutionIdentityChanged"
+	reasonUnsupportedServiceShapeChange      = "UnsupportedServiceShapeChange"
+	reasonInPlaceSupported                   = "InPlaceSupported"
+	reasonEquivalentServiceShape             = "EquivalentServiceShape"
+	conditionTypeServiceAvailable            = "ServiceAvailable"
+	conditionTypeMaintenanceActive           = "MaintenanceActive"
 )
 
 type Reconciler interface {
@@ -248,8 +248,6 @@ func (r runtimeReconciler) reconcileRequestState(
 				reasonRolloutRequested, currentStatus, targetStatus, classification
 		}
 		return r.observeInPlaceRollout(ctx, claim, currentStatus, targetStatus, classification)
-	case openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired:
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateReplacementRequired, classificationReason, currentStatus, targetStatus, classification
 	default:
 		return openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked, classificationReason, currentStatus, targetStatus, classification
 	}
@@ -283,7 +281,6 @@ func (r runtimeReconciler) findEarlierActiveRequest(
 func isTerminalRequestState(state openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestState) bool {
 	switch state {
 	case openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded,
-		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateReplacementRequired,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
 		openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed:
 		return true
@@ -716,7 +713,7 @@ func classifyUpgrade(
 		return openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonBootstrapChangeRequiresReprovision
 	}
 	if currentApproved.Backup.Parameters.Location != targetApproved.Backup.Parameters.Location || currentApproved.Backup.Parameters.Partition != targetApproved.Backup.Parameters.Partition {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonBackupLocationChangeRequiresMigration
+		return openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonBackupLocationChangeUnsupported
 	}
 	if backupTargetName(currentCatalog) != backupTargetName(targetCatalog) || backupBackendName(currentCatalog) != backupBackendName(targetCatalog) || backupAuthName(currentCatalog) != backupAuthName(targetCatalog) || transferProfileName(currentCatalog) != transferProfileName(targetCatalog) {
 		return openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonBackupExecutionIdentityChanged
@@ -730,7 +727,7 @@ func classifyUpgrade(
 		!reflect.DeepEqual(currentApproved.Observability, targetApproved.Observability) ||
 		!reflect.DeepEqual(currentApproved.Network, targetApproved.Network) ||
 		currentApproved.Exposure.ClassRef.Name != targetApproved.Exposure.ClassRef.Name {
-		return openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired, reasonReplacementWorkflowRequired
+		return openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonUnsupportedServiceShapeChange
 	}
 	if currentApproved.Cluster.Version != targetApproved.Cluster.Version ||
 		!reflect.DeepEqual(currentApproved.Lifecycle, targetApproved.Lifecycle) ||

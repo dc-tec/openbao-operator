@@ -63,12 +63,12 @@ func TestClassifyUpgrade(t *testing.T) {
 			wantReason: "BackupExecutionIdentityChanged",
 		},
 		{
-			name: "exposure class change requires replacement",
+			name: "exposure class change is blocked",
 			mutateTarget: func(contract *claimcontract.ApprovedServiceContract, _ *claimcontract.CatalogBundle) {
 				contract.Exposure.ClassRef.Name = "external-v2"
 			},
-			wantClass:  openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired,
-			wantReason: "ReplacementWorkflowRequired",
+			wantClass:  openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked,
+			wantReason: "UnsupportedServiceShapeChange",
 		},
 	}
 

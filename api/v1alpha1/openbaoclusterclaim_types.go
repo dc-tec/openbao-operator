@@ -80,8 +80,9 @@ type OpenBaoClusterClaimSpec struct {
 	// ServiceOfferingRef identifies the friendly stable service-offering alias selected by the claim.
 	// +optional
 	ServiceOfferingRef *LocalReference `json:"serviceOfferingRef,omitempty"`
-	// ServiceProfileRef identifies the pinned immutable service-offering revision requested by the claim.
-	ServiceProfileRef LocalReference `json:"serviceProfileRef"`
+	// ServiceProfileRef identifies the pinned immutable service-profile revision requested by the claim or stored by the controller after resolving ServiceOfferingRef.
+	// +optional
+	ServiceProfileRef LocalReference `json:"serviceProfileRef,omitempty"`
 	// ServiceParameters carries the bounded claim-facing override surface.
 	// +optional
 	ServiceParameters *OpenBaoClusterClaimServiceParametersSpec `json:"serviceParameters,omitempty"`

@@ -19,20 +19,16 @@ package v1alpha1
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 // OpenBaoClusterClaimUpgradeRequestState summarizes request progress.
-// +kubebuilder:validation:Enum=Pending;Classifying;RollingOut;Succeeded;ReplacementRequired;Blocked;Failed
+// +kubebuilder:validation:Enum=Pending;RollingOut;Succeeded;Blocked;Failed
 type OpenBaoClusterClaimUpgradeRequestState string
 
 const (
 	// OpenBaoClusterClaimUpgradeRequestStatePending indicates the request was admitted but not yet evaluated.
 	OpenBaoClusterClaimUpgradeRequestStatePending OpenBaoClusterClaimUpgradeRequestState = "Pending"
-	// OpenBaoClusterClaimUpgradeRequestStateClassifying indicates target resolution and compatibility evaluation are in progress.
-	OpenBaoClusterClaimUpgradeRequestStateClassifying OpenBaoClusterClaimUpgradeRequestState = "Classifying"
 	// OpenBaoClusterClaimUpgradeRequestStateRollingOut indicates the claim has entered rollout toward the classified target revision.
 	OpenBaoClusterClaimUpgradeRequestStateRollingOut OpenBaoClusterClaimUpgradeRequestState = "RollingOut"
 	// OpenBaoClusterClaimUpgradeRequestStateSucceeded indicates the request completed successfully.
 	OpenBaoClusterClaimUpgradeRequestStateSucceeded OpenBaoClusterClaimUpgradeRequestState = "Succeeded"
-	// OpenBaoClusterClaimUpgradeRequestStateReplacementRequired indicates the requested change needs a later replacement workflow.
-	OpenBaoClusterClaimUpgradeRequestStateReplacementRequired OpenBaoClusterClaimUpgradeRequestState = "ReplacementRequired"
 	// OpenBaoClusterClaimUpgradeRequestStateBlocked indicates the requested change is outside the supported upgrade boundary.
 	OpenBaoClusterClaimUpgradeRequestStateBlocked OpenBaoClusterClaimUpgradeRequestState = "Blocked"
 	// OpenBaoClusterClaimUpgradeRequestStateFailed indicates the request could not be evaluated or executed successfully.
@@ -40,14 +36,12 @@ const (
 )
 
 // OpenBaoClusterClaimUpgradeClassificationClass summarizes the evaluated compatibility class.
-// +kubebuilder:validation:Enum=InPlace;ReplacementRequired;Blocked
+// +kubebuilder:validation:Enum=InPlace;Blocked
 type OpenBaoClusterClaimUpgradeClassificationClass string
 
 const (
 	// OpenBaoClusterClaimUpgradeClassificationClassInPlace indicates the request can converge through the in-place upgrade path.
 	OpenBaoClusterClaimUpgradeClassificationClassInPlace OpenBaoClusterClaimUpgradeClassificationClass = "InPlace"
-	// OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired indicates the request needs a later replacement workflow.
-	OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired OpenBaoClusterClaimUpgradeClassificationClass = "ReplacementRequired"
 	// OpenBaoClusterClaimUpgradeClassificationClassBlocked indicates the request is outside the supported upgrade model.
 	OpenBaoClusterClaimUpgradeClassificationClassBlocked OpenBaoClusterClaimUpgradeClassificationClass = "Blocked"
 )

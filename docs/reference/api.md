@@ -3484,7 +3484,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `tenantRef` _[LocalReference](#localreference)_ | TenantRef identifies the tenant that governs this claim. |  |  |
 | `serviceOfferingRef` _[LocalReference](#localreference)_ | ServiceOfferingRef identifies the friendly stable service-offering alias selected by the claim. |  | Optional: \{\} <br /> |
-| `serviceProfileRef` _[LocalReference](#localreference)_ | ServiceProfileRef identifies the pinned immutable service-offering revision requested by the claim. |  |  |
+| `serviceProfileRef` _[LocalReference](#localreference)_ | ServiceProfileRef identifies the pinned immutable service-profile revision requested by the claim or stored by the controller after resolving ServiceOfferingRef. |  | Optional: \{\} <br /> |
 | `serviceParameters` _[OpenBaoClusterClaimServiceParametersSpec](#openbaoclusterclaimserviceparametersspec)_ | ServiceParameters carries the bounded claim-facing override surface. |  | Optional: \{\} <br /> |
 
 
@@ -3560,7 +3560,7 @@ _Underlying type:_ _string_
 OpenBaoClusterClaimUpgradeClassificationClass summarizes the evaluated compatibility class.
 
 _Validation:_
-- Enum: [InPlace ReplacementRequired Blocked]
+- Enum: [InPlace Blocked]
 
 _Appears in:_
 - [OpenBaoClusterClaimUpgradeRequestClassificationStatus](#openbaoclusterclaimupgraderequestclassificationstatus)
@@ -3568,7 +3568,6 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `InPlace` | OpenBaoClusterClaimUpgradeClassificationClassInPlace indicates the request can converge through the in-place upgrade path.<br /> |
-| `ReplacementRequired` | OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired indicates the request needs a later replacement workflow.<br /> |
 | `Blocked` | OpenBaoClusterClaimUpgradeClassificationClassBlocked indicates the request is outside the supported upgrade model.<br /> |
 
 
@@ -3586,7 +3585,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `class` _[OpenBaoClusterClaimUpgradeClassificationClass](#openbaoclusterclaimupgradeclassificationclass)_ | Class is the evaluated compatibility class. |  | Enum: [InPlace ReplacementRequired Blocked] <br />Optional: \{\} <br /> |
+| `class` _[OpenBaoClusterClaimUpgradeClassificationClass](#openbaoclusterclaimupgradeclassificationclass)_ | Class is the evaluated compatibility class. |  | Enum: [InPlace Blocked] <br />Optional: \{\} <br /> |
 | `reason` _string_ | Reason explains the evaluated compatibility class. |  | Optional: \{\} <br /> |
 
 
@@ -3597,7 +3596,7 @@ _Underlying type:_ _string_
 OpenBaoClusterClaimUpgradeRequestState summarizes request progress.
 
 _Validation:_
-- Enum: [Pending Classifying RollingOut Succeeded ReplacementRequired Blocked Failed]
+- Enum: [Pending RollingOut Succeeded Blocked Failed]
 
 _Appears in:_
 - [OpenBaoClusterClaimUpgradeRequestStatus](#openbaoclusterclaimupgraderequeststatus)
@@ -3606,10 +3605,8 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `Pending` | OpenBaoClusterClaimUpgradeRequestStatePending indicates the request was admitted but not yet evaluated.<br /> |
-| `Classifying` | OpenBaoClusterClaimUpgradeRequestStateClassifying indicates target resolution and compatibility evaluation are in progress.<br /> |
 | `RollingOut` | OpenBaoClusterClaimUpgradeRequestStateRollingOut indicates the claim has entered rollout toward the classified target revision.<br /> |
 | `Succeeded` | OpenBaoClusterClaimUpgradeRequestStateSucceeded indicates the request completed successfully.<br /> |
-| `ReplacementRequired` | OpenBaoClusterClaimUpgradeRequestStateReplacementRequired indicates the requested change needs a later replacement workflow.<br /> |
 | `Blocked` | OpenBaoClusterClaimUpgradeRequestStateBlocked indicates the requested change is outside the supported upgrade boundary.<br /> |
 | `Failed` | OpenBaoClusterClaimUpgradeRequestStateFailed indicates the request could not be evaluated or executed successfully.<br /> |
 
@@ -3629,7 +3626,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `requestRef` _[LocalReference](#localreference)_ | RequestRef identifies the active immutable upgrade-request object. |  | Optional: \{\} <br /> |
-| `state` _[OpenBaoClusterClaimUpgradeRequestState](#openbaoclusterclaimupgraderequeststate)_ | State is the current workflow state reported by the upgrade request. |  | Enum: [Pending Classifying RollingOut Succeeded ReplacementRequired Blocked Failed] <br />Optional: \{\} <br /> |
+| `state` _[OpenBaoClusterClaimUpgradeRequestState](#openbaoclusterclaimupgraderequeststate)_ | State is the current workflow state reported by the upgrade request. |  | Enum: [Pending RollingOut Succeeded Blocked Failed] <br />Optional: \{\} <br /> |
 | `reason` _string_ | Reason explains the current workflow state. |  | Optional: \{\} <br /> |
 | `classification` _[OpenBaoClusterClaimUpgradeRequestClassificationStatus](#openbaoclusterclaimupgraderequestclassificationstatus)_ | Classification summarizes the evaluated compatibility class when available. |  | Optional: \{\} <br /> |
 
@@ -4133,7 +4130,7 @@ _Underlying type:_ _string_
 OpenBaoClusterClaimUpgradeClassificationClass summarizes the evaluated compatibility class.
 
 _Validation:_
-- Enum: [InPlace ReplacementRequired Blocked]
+- Enum: [InPlace Blocked]
 
 _Appears in:_
 - [OpenBaoClusterClaimUpgradeRequestClassificationStatus](#openbaoclusterclaimupgraderequestclassificationstatus)
@@ -4141,7 +4138,6 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `InPlace` | OpenBaoClusterClaimUpgradeClassificationClassInPlace indicates the request can converge through the in-place upgrade path.<br /> |
-| `ReplacementRequired` | OpenBaoClusterClaimUpgradeClassificationClassReplacementRequired indicates the request needs a later replacement workflow.<br /> |
 | `Blocked` | OpenBaoClusterClaimUpgradeClassificationClassBlocked indicates the request is outside the supported upgrade model.<br /> |
 
 
@@ -4177,7 +4173,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `class` _[OpenBaoClusterClaimUpgradeClassificationClass](#openbaoclusterclaimupgradeclassificationclass)_ | Class is the evaluated compatibility class. |  | Enum: [InPlace ReplacementRequired Blocked] <br />Optional: \{\} <br /> |
+| `class` _[OpenBaoClusterClaimUpgradeClassificationClass](#openbaoclusterclaimupgradeclassificationclass)_ | Class is the evaluated compatibility class. |  | Enum: [InPlace Blocked] <br />Optional: \{\} <br /> |
 | `reason` _string_ | Reason explains the evaluated compatibility class. |  | Optional: \{\} <br /> |
 
 
@@ -4224,7 +4220,7 @@ _Underlying type:_ _string_
 OpenBaoClusterClaimUpgradeRequestState summarizes request progress.
 
 _Validation:_
-- Enum: [Pending Classifying RollingOut Succeeded ReplacementRequired Blocked Failed]
+- Enum: [Pending RollingOut Succeeded Blocked Failed]
 
 _Appears in:_
 - [OpenBaoClusterClaimUpgradeRequestStatus](#openbaoclusterclaimupgraderequeststatus)
@@ -4233,10 +4229,8 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `Pending` | OpenBaoClusterClaimUpgradeRequestStatePending indicates the request was admitted but not yet evaluated.<br /> |
-| `Classifying` | OpenBaoClusterClaimUpgradeRequestStateClassifying indicates target resolution and compatibility evaluation are in progress.<br /> |
 | `RollingOut` | OpenBaoClusterClaimUpgradeRequestStateRollingOut indicates the claim has entered rollout toward the classified target revision.<br /> |
 | `Succeeded` | OpenBaoClusterClaimUpgradeRequestStateSucceeded indicates the request completed successfully.<br /> |
-| `ReplacementRequired` | OpenBaoClusterClaimUpgradeRequestStateReplacementRequired indicates the requested change needs a later replacement workflow.<br /> |
 | `Blocked` | OpenBaoClusterClaimUpgradeRequestStateBlocked indicates the requested change is outside the supported upgrade boundary.<br /> |
 | `Failed` | OpenBaoClusterClaimUpgradeRequestStateFailed indicates the request could not be evaluated or executed successfully.<br /> |
 
@@ -4255,7 +4249,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `observedGeneration` _integer_ | ObservedGeneration is the latest request generation observed by the controller. |  | Optional: \{\} <br /> |
-| `state` _[OpenBaoClusterClaimUpgradeRequestState](#openbaoclusterclaimupgraderequeststate)_ | State is the current request workflow state. |  | Enum: [Pending Classifying RollingOut Succeeded ReplacementRequired Blocked Failed] <br />Optional: \{\} <br /> |
+| `state` _[OpenBaoClusterClaimUpgradeRequestState](#openbaoclusterclaimupgraderequeststate)_ | State is the current request workflow state. |  | Enum: [Pending RollingOut Succeeded Blocked Failed] <br />Optional: \{\} <br /> |
 | `reason` _string_ | Reason explains the current workflow state. |  | Optional: \{\} <br /> |
 | `current` _[OpenBaoClusterClaimUpgradeRequestRevisionStatus](#openbaoclusterclaimupgraderequestrevisionstatus)_ | Current summarizes the currently applied claim revision state when available. |  | Optional: \{\} <br /> |
 | `target` _[OpenBaoClusterClaimUpgradeRequestRevisionStatus](#openbaoclusterclaimupgraderequestrevisionstatus)_ | Target summarizes the resolved target revision state when available. |  | Optional: \{\} <br /> |

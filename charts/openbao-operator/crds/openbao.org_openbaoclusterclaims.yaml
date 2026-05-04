@@ -95,8 +95,9 @@ spec:
                     type: object
                 type: object
               serviceProfileRef:
-                description: ServiceProfileRef identifies the pinned immutable service-offering
-                  revision requested by the claim.
+                description: ServiceProfileRef identifies the pinned immutable service-profile
+                  revision requested by the claim or stored by the controller after
+                  resolving ServiceOfferingRef.
                 properties:
                   name:
                     description: Name is the referenced object name.
@@ -116,7 +117,6 @@ spec:
                 - name
                 type: object
             required:
-            - serviceProfileRef
             - tenantRef
             type: object
           status:
@@ -806,7 +806,6 @@ spec:
                         description: Class is the evaluated compatibility class.
                         enum:
                         - InPlace
-                        - ReplacementRequired
                         - Blocked
                         type: string
                       reason:
@@ -832,10 +831,8 @@ spec:
                       upgrade request.
                     enum:
                     - Pending
-                    - Classifying
                     - RollingOut
                     - Succeeded
-                    - ReplacementRequired
                     - Blocked
                     - Failed
                     type: string

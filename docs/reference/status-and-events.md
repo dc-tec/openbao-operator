@@ -110,11 +110,9 @@ The claim workflow request objects are immutable, namespaced request records. Th
 | State | Meaning | Common Reasons |
 | :--- | :--- | :--- |
 | `Pending` | Request admitted and waiting for target resolution or claim promotion | initial admission before target promotion |
-| `Classifying` | Reserved API state for explicit target-evaluation phases | not emitted by the current controller implementation |
 | `RollingOut` | Claim target was promoted and the in-place rollout is converging | `RolloutRequested`, `AppliedRevisionPending`, `ClaimRolloutInProgress`, `UpgradeInProgress`, `LocalClusterReconciling`, `ClaimNotReadyYet` |
 | `Succeeded` | In-place upgrade completed successfully | `UpgradeApplied` |
-| `ReplacementRequired` | The requested change needs a later replacement workflow | compatibility reasons such as `ExposureClassChanged` or other replacement-class reasons |
-| `Blocked` | Request is outside the supported in-place claim upgrade boundary | `ServiceClaimsDisabled`, `AnotherUpgradeRequestActive`, `ClaimDeleting`, `ClaimNotMaterializedForSameCluster`, `ClaimHasNoAppliedRevision`, `AlreadyApplied`, blocked classification reasons such as `BootstrapChangeRequiresReprovision` |
+| `Blocked` | Request is outside the supported in-place claim upgrade boundary | `ServiceClaimsDisabled`, `AnotherUpgradeRequestActive`, `ClaimDeleting`, `ClaimNotMaterializedForSameCluster`, `ClaimHasNoAppliedRevision`, `AlreadyApplied`, blocked classification reasons such as `BootstrapChangeRequiresReprovision`, `BackupLocationChangeUnsupported`, or `UnsupportedServiceShapeChange` |
 | `Failed` | Request could not be evaluated or could not complete rollout safely | `ClaimNotFound`, `ClaimReadFailed`, `CurrentCatalogResolutionFailed`, `TargetCatalogResolutionFailed`, `ClaimUpdateFailed`, `ClaimRolloutBlocked`, `ClaimRolloutFailed`, `LocalClusterFailed` |
 
 ### OpenBaoClusterClaimBackupRequest states

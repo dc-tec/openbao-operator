@@ -122,7 +122,6 @@ spec:
                     description: Class is the evaluated compatibility class.
                     enum:
                     - InPlace
-                    - ReplacementRequired
                     - Blocked
                     type: string
                   reason:
@@ -255,10 +254,8 @@ spec:
                 description: State is the current request workflow state.
                 enum:
                 - Pending
-                - Classifying
                 - RollingOut
                 - Succeeded
-                - ReplacementRequired
                 - Blocked
                 - Failed
                 type: string

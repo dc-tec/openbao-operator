@@ -299,7 +299,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (reason) (openbao_claim_upgrade_request_state{exported_namespace=~\"$namespace\", claim=~\"$claim\", state=~\"Blocked|Failed|ReplacementRequired\"})",
+          "expr": "sum by (reason) (openbao_claim_upgrade_request_state{exported_namespace=~\"$namespace\", claim=~\"$claim\", state=~\"Blocked|Failed\"})",
           "legendFormat": "{{reason}}",
           "refId": "A"
         }
