@@ -66,7 +66,7 @@ func TestMapClaimToUpgradeRequests(t *testing.T) {
 		},
 	}
 
-	requests := reconciler.mapClaimToUpgradeRequests(ctx, claim)
+	requests := reconciler.requestMapper().FromClaim()(ctx, claim)
 	if len(requests) != 2 {
 		t.Fatalf("request count = %d, want 2", len(requests))
 	}
@@ -116,7 +116,7 @@ func TestMapClaimManagedClusterToUpgradeRequests(t *testing.T) {
 			},
 		}
 
-		requests := reconciler.mapClaimManagedClusterToUpgradeRequests(ctx, cluster)
+		requests := reconciler.requestMapper().FromClaimManagedCluster()(ctx, cluster)
 		if len(requests) != 1 {
 			t.Fatalf("request count = %d, want 1", len(requests))
 		}
@@ -136,7 +136,7 @@ func TestMapClaimManagedClusterToUpgradeRequests(t *testing.T) {
 			},
 		}
 
-		requests := reconciler.mapClaimManagedClusterToUpgradeRequests(ctx, cluster)
+		requests := reconciler.requestMapper().FromClaimManagedCluster()(ctx, cluster)
 		if len(requests) != 0 {
 			t.Fatalf("request count = %d, want 0", len(requests))
 		}
@@ -153,7 +153,7 @@ func TestMapClaimManagedClusterToUpgradeRequests(t *testing.T) {
 			},
 		}
 
-		requests := reconciler.mapClaimManagedClusterToUpgradeRequests(ctx, cluster)
+		requests := reconciler.requestMapper().FromClaimManagedCluster()(ctx, cluster)
 		if len(requests) != 0 {
 			t.Fatalf("request count = %d, want 0", len(requests))
 		}

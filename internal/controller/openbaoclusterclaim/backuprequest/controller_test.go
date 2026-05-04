@@ -45,7 +45,7 @@ func TestMapClaimToBackupRequests(t *testing.T) {
 	}
 
 	claim := &openbaov1alpha1.OpenBaoClusterClaim{ObjectMeta: metav1.ObjectMeta{Namespace: "payments", Name: "payments-bao"}}
-	requests := reconciler.mapClaimToBackupRequests(ctx, claim)
+	requests := reconciler.requestMapper().FromClaim()(ctx, claim)
 	if len(requests) != 2 {
 		t.Fatalf("request count = %d, want 2", len(requests))
 	}
@@ -88,7 +88,7 @@ func TestMapClaimManagedClusterToBackupRequests(t *testing.T) {
 			},
 		}}
 
-		requests := reconciler.mapClaimManagedClusterToBackupRequests(ctx, cluster)
+		requests := reconciler.requestMapper().FromClaimManagedCluster()(ctx, cluster)
 		if len(requests) != 1 {
 			t.Fatalf("request count = %d, want 1", len(requests))
 		}
@@ -103,7 +103,7 @@ func TestMapClaimManagedClusterToBackupRequests(t *testing.T) {
 		cluster := &openbaov1alpha1.OpenBaoCluster{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
 			constants.LabelOpenBaoOwnershipMode: constants.LabelValueOpenBaoOwnershipDirectManaged,
 		}}}
-		if requests := reconciler.mapClaimManagedClusterToBackupRequests(ctx, cluster); len(requests) != 0 {
+		if requests := reconciler.requestMapper().FromClaimManagedCluster()(ctx, cluster); len(requests) != 0 {
 			t.Fatalf("request count = %d, want 0", len(requests))
 		}
 	})

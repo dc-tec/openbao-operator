@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appupgraderequest "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/upgraderequest"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/requestwatch"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,94 +52,53 @@ func (r *OpenBaoClusterClaimUpgradeRequestReconciler) SetupWithManager(mgr ctrl.
 			EnableServiceClaims: r.EnableServiceClaims,
 		})
 	}
+	mapper := r.requestMapper()
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{}).
 		Named(controllerNameOpenBaoClusterClaimUpgradeRequest)
 	if r.EnableServiceClaims {
 		builder = builder.Watches(
 			&openbaov1alpha1.OpenBaoClusterClaim{},
-			handler.EnqueueRequestsFromMapFunc(r.mapClaimToUpgradeRequests),
+			handler.EnqueueRequestsFromMapFunc(mapper.FromClaim()),
 		).Watches(
 			&openbaov1alpha1.OpenBaoCluster{},
-			handler.EnqueueRequestsFromMapFunc(r.mapClaimManagedClusterToUpgradeRequests),
+			handler.EnqueueRequestsFromMapFunc(mapper.FromClaimManagedCluster()),
 		)
 	}
 	return builder.Complete(r)
 }
 
 func (r *OpenBaoClusterClaimUpgradeRequestReconciler) syncMetrics(ctx context.Context, key client.ObjectKey) {
-	reader := r.Reader
-	if reader == nil {
-		reader = r.Client
-	}
-	if reader == nil {
-		return
-	}
-
-	request := &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{}
-	if err := reader.Get(ctx, key, request); err != nil {
-		if apierrors.IsNotFound(err) {
-			observability.ClearClaimUpgradeRequest(key.Namespace, key.Name)
-		}
-		return
-	}
-
-	observability.SyncClaimUpgradeRequest(request)
+	requestwatch.SyncMetrics(
+		ctx,
+		key,
+		r.Reader,
+		r.Client,
+		func() *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest {
+			return &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{}
+		},
+		observability.SyncClaimUpgradeRequest,
+		observability.ClearClaimUpgradeRequest,
+	)
 }
 
-func (r *OpenBaoClusterClaimUpgradeRequestReconciler) mapClaimToUpgradeRequests(
-	ctx context.Context,
-	obj client.Object,
-) []reconcile.Request {
-	claim, ok := obj.(*openbaov1alpha1.OpenBaoClusterClaim)
-	if !ok || claim == nil {
-		return nil
+func (r *OpenBaoClusterClaimUpgradeRequestReconciler) requestMapper() requestwatch.Mapper[
+	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
+	*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestList,
+] {
+	return requestwatch.Mapper[
+		*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
+		*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestList,
+	]{
+		Reader: r.Client,
+		NewList: func() *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestList {
+			return &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestList{}
+		},
+		Items: func(list *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestList) []*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest {
+			return requestwatch.ObjectPointers(list.Items)
+		},
+		ClaimName: func(request *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest) string {
+			return request.Spec.ClaimRef.Name
+		},
 	}
-	return r.listUpgradeRequestsForClaim(ctx, claim.Namespace, claim.Name)
-}
-
-func (r *OpenBaoClusterClaimUpgradeRequestReconciler) mapClaimManagedClusterToUpgradeRequests(
-	ctx context.Context,
-	obj client.Object,
-) []reconcile.Request {
-	cluster, ok := obj.(*openbaov1alpha1.OpenBaoCluster)
-	if !ok || cluster == nil {
-		return nil
-	}
-	if cluster.Labels[constants.LabelOpenBaoOwnershipMode] != constants.LabelValueOpenBaoOwnershipClaimManaged {
-		return nil
-	}
-	claimNamespace := cluster.Labels[constants.LabelOpenBaoClaimNamespace]
-	claimName := cluster.Labels[constants.LabelOpenBaoClaimName]
-	if claimNamespace == "" || claimName == "" {
-		return nil
-	}
-	return r.listUpgradeRequestsForClaim(ctx, claimNamespace, claimName)
-}
-
-func (r *OpenBaoClusterClaimUpgradeRequestReconciler) listUpgradeRequestsForClaim(
-	ctx context.Context,
-	namespace string,
-	claimName string,
-) []reconcile.Request {
-	if r.Client == nil || namespace == "" || claimName == "" {
-		return nil
-	}
-
-	var requestList openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestList
-	if err := r.List(ctx, &requestList, client.InNamespace(namespace)); err != nil {
-		return nil
-	}
-
-	requests := make([]reconcile.Request, 0, len(requestList.Items))
-	for i := range requestList.Items {
-		request := &requestList.Items[i]
-		if request.Spec.ClaimRef.Name != claimName {
-			continue
-		}
-		requests = append(requests, reconcile.Request{
-			NamespacedName: client.ObjectKeyFromObject(request),
-		})
-	}
-	return requests
 }
