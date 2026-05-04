@@ -13,13 +13,15 @@ journey: architecture
 
 <DiagramFrame
   title="Pipeline stages"
-  caption="The controller accepts a tenant claim, resolves catalog intent, binds an approved contract, renders execution inputs, materializes the same-cluster runtime, then publishes the tenant-facing connection contract."
+  caption="The root claim app accepts a tenant claim, resolves catalog intent, binds an approved contract, renders execution inputs, materializes the same-cluster runtime, observes bounded workflow state, then publishes and summarizes the tenant-facing contract."
   code={`graph LR
     Accept["Accept claim"] --> Catalog["Resolve catalog"]
     Catalog --> Approved["Bind approved contract"]
     Approved --> Rendered["Render execution contract"]
     Rendered --> Materialize["Materialize OpenBaoCluster"]
     Materialize --> Publish["Publish connection"]
+    Materialize --> Workflow["Observe active claim workflows"]
+    Workflow --> Status["Summarize status"]
     Publish --> Status["Summarize status"]
 
     classDef input fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
@@ -27,7 +29,7 @@ journey: architecture
     classDef output fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
     class Accept,Catalog input;
-    class Approved,Rendered,Materialize stage;
+    class Approved,Rendered,Materialize,Workflow stage;
     class Publish,Status output;`}
 />
 
@@ -136,6 +138,21 @@ Connection publication turns runtime readiness into tenant-facing output:
 
 Do not shortcut endpoint publication by assuming an edge object exists. External
 endpoint readiness is part of the claim contract.
+
+## Summarize claim state
+
+The root claim app keeps the tenant-facing status surface coherent by grouping
+related runtime and request workflow state before deriving:
+
+- `status.phase`
+- service availability and maintenance conditions
+- connection, backup, restore, upgrade, rollout, and applied revision summaries
+- the short diagnostic `status.summary`
+
+Backup, restore, and upgrade request controllers own their request CRD status.
+Core lifecycle managers own `OpenBaoCluster` and `OpenBaoRestore` status. The
+root claim app only observes those surfaces and projects a bounded summary back
+onto `OpenBaoClusterClaim`.
 
 ## Maintain the stage boundary
 

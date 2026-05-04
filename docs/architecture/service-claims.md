@@ -8,7 +8,7 @@ description: Internal architecture for OpenBaoClusterClaim, including contract s
 
 <PageHeader
   title="Service-claim architecture"
-  lede="OpenBaoClusterClaim adds a catalog-driven provisioning path on top of the existing OpenBaoCluster runtime. The claim controller binds a tenant-facing request to immutable catalog revisions, renders an execution contract, then materializes the same-cluster workload while preserving the direct OpenBaoCluster boundary as the runtime contract."
+  lede="OpenBaoClusterClaim adds a catalog-driven provisioning and day-2 request path on top of the existing OpenBaoCluster runtime. The claim controller binds a tenant-facing request to immutable catalog revisions, renders an execution contract, materializes the same-cluster workload, and summarizes bounded claim-native workflows while preserving the direct OpenBaoCluster boundary as the runtime contract."
 />
 
 <DecisionTable
@@ -42,12 +42,15 @@ description: Internal architecture for OpenBaoClusterClaim, including contract s
 
 <DiagramFrame
   title="Claim-to-runtime pipeline"
-  caption="The claim path binds through the catalog, produces internal contract stages, then materializes the same-cluster workload while preserving the direct OpenBaoCluster API seam."
+  caption="The claim path binds through the catalog, produces internal contract stages, materializes the same-cluster workload, and rolls direct-runtime and request-workflow state back into the claim."
   code={`graph LR
     Claim["OpenBaoClusterClaim"] --> Approved["Approved service contract"]
     Approved --> Rendered["Rendered execution contract"]
     Rendered --> Local["Same-cluster OpenBaoCluster"]
     Local --> Publish["Connection publication"]
+    Day2["Claim workflow requests"] --> Status["Claim status summary"]
+    Local --> Status
+    Publish --> Status
 
     Catalog["Catalog objects"] --> Approved
     Rendered --> Deps["Projected bootstrap and edge dependencies"]
@@ -56,9 +59,9 @@ description: Internal architecture for OpenBaoClusterClaim, including contract s
     classDef control fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
     classDef data fill:transparent,stroke:#79c0ab,stroke-width:2px,color:#e6f4ef;
 
-    class Claim,Catalog actor;
+    class Claim,Catalog,Day2 actor;
     class Approved,Rendered,Local control;
-    class Publish,Deps data;`}
+    class Publish,Deps,Status data;`}
 />
 
 ## Keep the direct runtime seam
@@ -71,6 +74,7 @@ For the supported same-cluster path today:
 2. the controller produces approved and rendered internal contracts
 3. the system materializes a local `OpenBaoCluster`
 4. workload managers still own bootstrap, networking, identity, initialization, and StatefulSet behavior behind that materialized cluster
+5. claim request controllers serialize supported backup, restore, and in-place upgrade intent while core managers execute concrete lifecycle work
 
 That design keeps the current architecture honest:
 
@@ -101,12 +105,15 @@ Supported now:
 - stable offering alias binding
 - internal, ingress, and gateway exposure through the cataloged path
 - secret-backed self-init bootstrap projection
+- claim-native backup, restore, and in-place upgrade request workflows
+- claim status summaries, active maintenance projection, and claim workflow metrics
 
 Deferred intentionally:
 
 - adoption
 - migration
-- post-materialization rollout workflows
+- replacement-class rollout and migration workflows
+- arbitrary post-materialization spec mutation as a workflow shortcut
 - non-`SelfInit` bootstrap modes
 - full multi-cluster claim convergence as the primary public story
 

@@ -95,6 +95,23 @@ Checklist:
 5. Use low-cardinality states and reasons that operators can alert on.
 6. Add user-guide examples, status reference entries, metrics labels, and e2e coverage.
 
+Current request controllers live below `internal/app/openbaoclusterclaim/<request>`
+and `internal/controller/openbaoclusterclaim/<request>`. Keep request execution
+logic in those subpackages. Use the root claim app only to observe the active
+request and summarize it on `OpenBaoClusterClaim`.
+
+## Add watch reactivity
+
+Use module-local watch helpers when a related resource should requeue a claim or
+claim request:
+
+1. Put root-claim event mapping in `internal/controller/openbaoclusterclaim/claimwatch`.
+2. Put request-controller event mapping in `internal/controller/openbaoclusterclaim/requestwatch`.
+3. Put shared key construction or metric-sync helpers in `internal/controller/openbaoclusterclaim/watchutil`.
+4. Do not import another resource reconciler to reuse watch code.
+5. Keep watch fan-out narrow. Prefer claim-managed resources and explicit request
+   references over broad Secret, ConfigMap, Gateway, or Ingress watches.
+
 ## Keep the runtime seam honest
 
 The claim layer materializes same-cluster services through `OpenBaoCluster`.

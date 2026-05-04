@@ -60,14 +60,21 @@ internal/app/openbaoclusterclaim/restorerequest
 internal/app/openbaoclusterclaim/upgraderequest
 
 internal/controller/openbaoclusterclaim
+internal/controller/openbaoclusterclaim/claimwatch
+internal/controller/openbaoclusterclaim/requestwatch
 internal/controller/openbaoclusterclaim/backuprequest
 internal/controller/openbaoclusterclaim/restorerequest
 internal/controller/openbaoclusterclaim/upgraderequest
+internal/controller/openbaoclusterclaim/watchutil
 ```
 
 The root claim app owns catalog binding, materialization, connection
 publication, and claim status roll-up. The request subpackages own durable
 backup, restore, and upgrade request reconciliation for their own CRDs.
+Controller helpers under `claimwatch`, `requestwatch`, and `watchutil` are
+module-local plumbing: they map related resource events back to claim or
+claim-request keys and share metric-sync behavior without turning the root
+controller into a mixed-concern file.
 
 ## Import and dependency rules
 
@@ -77,7 +84,9 @@ Keep the dependency direction explicit:
   or other optional platform modules
 - claim code may depend on core API contracts and narrow services, but not on
   controller internals from other modules
-- controllers should not import other controllers
+- controllers should not import other resource reconcilers or controller
+  implementation packages; module-local watch helper packages are allowed when
+  they do not own reconciliation themselves
 - app-layer orchestration should not import adapters directly
 - optional modules should communicate through approved CRDs, status, and service
   contracts rather than package reach-through
@@ -136,6 +145,9 @@ Day-2 operations that change runtime state use request APIs:
 These APIs are immutable, status-driven, and serialized by the controllers. Add
 new disruptive operations as request APIs for the same reason: they need
 classification, lock awareness, observable state, and clear failure semantics.
+The root claim app observes active request and restore-execution state only to
+derive claim phase, summary, and workflow sub-status; it does not execute the
+underlying backup, restore, or upgrade lifecycle itself.
 
 Do not use claim spec mutation as a shortcut for rollout, migration, restore,
 restart, or maintenance behavior.
