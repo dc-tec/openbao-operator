@@ -14,43 +14,39 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/requestworkflow"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 const (
-	reasonServiceClaimsDisabled              = "ServiceClaimsDisabled"
-	reasonClaimNotFound                      = "ClaimNotFound"
-	reasonClaimReadFailed                    = "ClaimReadFailed"
-	reasonRestoreRequestListFailed           = "RestoreRequestListFailed"
-	reasonAnotherRestoreRequestActive        = "AnotherRestoreRequestActive"
-	reasonClaimDeleting                      = "ClaimDeleting"
-	reasonClaimNotMaterializedForSameCluster = "ClaimNotMaterializedForSameCluster"
-	reasonLocalClusterNotFound               = "LocalClusterNotFound"
-	reasonLocalClusterReadFailed             = "LocalClusterReadFailed"
-	reasonLocalClusterDeleting               = "LocalClusterDeleting"
-	reasonBackupNotConfigured                = "BackupNotConfigured"
-	reasonRestoreExecutionReadFailed         = "RestoreExecutionReadFailed"
-	reasonRestoreImageResolutionFailed       = "RestoreImageResolutionFailed"
-	reasonRestoreExecutionListFailed         = "RestoreExecutionListFailed"
-	reasonAnotherRestoreExecutionActive      = "AnotherRestoreExecutionActive"
-	reasonRestoreExecutionNameConflict       = "RestoreExecutionNameConflict"
-	reasonRestoreCreateFailed                = "RestoreCreateFailed"
-	reasonRestoreRequested                   = "RestoreRequested"
-	reasonInvalidRestoreSource               = "InvalidRestoreSource"
-	reasonNoSuccessfulBackupAvailable        = "NoSuccessfulBackupAvailable"
-	reasonBackupRequestRefRequired           = "BackupRequestRefRequired"
-	reasonBackupRequestNotFound              = "BackupRequestNotFound"
-	reasonBackupRequestReadFailed            = "BackupRequestReadFailed"
-	reasonBackupRequestClaimMismatch         = "BackupRequestClaimMismatch"
-	reasonBackupRequestNotSucceeded          = "BackupRequestNotSucceeded"
-	reasonBackupRequestClusterUnknown        = "BackupRequestClusterUnknown"
-	reasonBackupRequestClusterMismatch       = "BackupRequestClusterMismatch"
-	reasonBackupRequestSnapshotMissing       = "BackupRequestSnapshotMissing"
-	reasonRestorePending                     = "RestorePending"
-	reasonRestoreFailed                      = "RestoreFailed"
-	reasonRestoreCompleted                   = "RestoreCompleted"
+	reasonRestoreRequestListFailed      = "RestoreRequestListFailed"
+	reasonAnotherRestoreRequestActive   = "AnotherRestoreRequestActive"
+	reasonLocalClusterNotFound          = "LocalClusterNotFound"
+	reasonLocalClusterReadFailed        = "LocalClusterReadFailed"
+	reasonLocalClusterDeleting          = "LocalClusterDeleting"
+	reasonBackupNotConfigured           = "BackupNotConfigured"
+	reasonRestoreExecutionReadFailed    = "RestoreExecutionReadFailed"
+	reasonRestoreImageResolutionFailed  = "RestoreImageResolutionFailed"
+	reasonRestoreExecutionListFailed    = "RestoreExecutionListFailed"
+	reasonAnotherRestoreExecutionActive = "AnotherRestoreExecutionActive"
+	reasonRestoreExecutionNameConflict  = "RestoreExecutionNameConflict"
+	reasonRestoreCreateFailed           = "RestoreCreateFailed"
+	reasonRestoreRequested              = "RestoreRequested"
+	reasonInvalidRestoreSource          = "InvalidRestoreSource"
+	reasonNoSuccessfulBackupAvailable   = "NoSuccessfulBackupAvailable"
+	reasonBackupRequestRefRequired      = "BackupRequestRefRequired"
+	reasonBackupRequestNotFound         = "BackupRequestNotFound"
+	reasonBackupRequestReadFailed       = "BackupRequestReadFailed"
+	reasonBackupRequestClaimMismatch    = "BackupRequestClaimMismatch"
+	reasonBackupRequestNotSucceeded     = "BackupRequestNotSucceeded"
+	reasonBackupRequestClusterUnknown   = "BackupRequestClusterUnknown"
+	reasonBackupRequestClusterMismatch  = "BackupRequestClusterMismatch"
+	reasonBackupRequestSnapshotMissing  = "BackupRequestSnapshotMissing"
+	reasonRestorePending                = "RestorePending"
+	reasonRestoreFailed                 = "RestoreFailed"
+	reasonRestoreCompleted              = "RestoreCompleted"
 )
 
 type Reconciler interface {
@@ -147,16 +143,16 @@ func (r runtimeReconciler) reconcileRequestState(
 	if !r.enableServiceClaims {
 		return requestEvaluation{
 			state:  openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked,
-			reason: reasonServiceClaimsDisabled,
+			reason: requestworkflow.ReasonServiceClaimsDisabled,
 		}
 	}
 
 	claim := &openbaov1alpha1.OpenBaoClusterClaim{}
 	if err := r.reader.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: request.Spec.ClaimRef.Name}, claim); err != nil {
 		if apierrors.IsNotFound(err) {
-			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonClaimNotFound}
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: requestworkflow.ReasonClaimNotFound}
 		}
-		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonClaimReadFailed}
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: requestworkflow.ReasonClaimReadFailed}
 	}
 	if other, err := r.findEarlierActiveRequest(ctx, request); err != nil {
 		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateFailed, reason: reasonRestoreRequestListFailed}
@@ -164,10 +160,10 @@ func (r runtimeReconciler) reconcileRequestState(
 		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonAnotherRestoreRequestActive}
 	}
 	if !claim.DeletionTimestamp.IsZero() {
-		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonClaimDeleting}
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: requestworkflow.ReasonClaimDeleting}
 	}
 	if claim.Status.Materialization.Mode != openbaov1alpha1.OpenBaoClusterClaimMaterializationModeSameCluster || claim.Status.Materialization.LocalRef == nil {
-		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: reasonClaimNotMaterializedForSameCluster}
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStateBlocked, reason: requestworkflow.ReasonClaimNotMaterializedForSameCluster}
 	}
 
 	clusterRef := &openbaov1alpha1.NamespacedReference{

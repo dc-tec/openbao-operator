@@ -13,27 +13,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/requestworkflow"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
 
 const (
-	reasonServiceClaimsDisabled              = "ServiceClaimsDisabled"
-	reasonClaimNotFound                      = "ClaimNotFound"
-	reasonClaimReadFailed                    = "ClaimReadFailed"
-	reasonBackupRequestListFailed            = "BackupRequestListFailed"
-	reasonAnotherBackupRequestActive         = "AnotherBackupRequestActive"
-	reasonClaimDeleting                      = "ClaimDeleting"
-	reasonClaimNotMaterializedForSameCluster = "ClaimNotMaterializedForSameCluster"
-	reasonLocalClusterNotFound               = "LocalClusterNotFound"
-	reasonLocalClusterReadFailed             = "LocalClusterReadFailed"
-	reasonLocalClusterDeleting               = "LocalClusterDeleting"
-	reasonTriggerUpdateFailed                = "TriggerUpdateFailed"
-	reasonBackupRequested                    = "BackupRequested"
-	reasonBackupInProgress                   = "BackupInProgress"
-	reasonBackupFailed                       = "BackupFailed"
-	reasonBackupCompleted                    = "BackupCompleted"
-	reasonBackupCompletionPending            = "BackupCompletionPending"
+	reasonBackupRequestListFailed    = "BackupRequestListFailed"
+	reasonAnotherBackupRequestActive = "AnotherBackupRequestActive"
+	reasonLocalClusterNotFound       = "LocalClusterNotFound"
+	reasonLocalClusterReadFailed     = "LocalClusterReadFailed"
+	reasonLocalClusterDeleting       = "LocalClusterDeleting"
+	reasonTriggerUpdateFailed        = "TriggerUpdateFailed"
+	reasonBackupRequested            = "BackupRequested"
+	reasonBackupInProgress           = "BackupInProgress"
+	reasonBackupFailed               = "BackupFailed"
+	reasonBackupCompleted            = "BackupCompleted"
+	reasonBackupCompletionPending    = "BackupCompletionPending"
 )
 
 type Reconciler interface {
@@ -127,7 +123,7 @@ func (r runtimeReconciler) reconcileRequestState(
 	if !r.enableServiceClaims {
 		return requestEvaluation{
 			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked,
-			reason: reasonServiceClaimsDisabled,
+			reason: requestworkflow.ReasonServiceClaimsDisabled,
 		}
 	}
 
@@ -136,12 +132,12 @@ func (r runtimeReconciler) reconcileRequestState(
 		if apierrors.IsNotFound(err) {
 			return requestEvaluation{
 				state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
-				reason: reasonClaimNotFound,
+				reason: requestworkflow.ReasonClaimNotFound,
 			}
 		}
 		return requestEvaluation{
 			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateFailed,
-			reason: reasonClaimReadFailed,
+			reason: requestworkflow.ReasonClaimReadFailed,
 		}
 	}
 	if other, err := r.findEarlierActiveRequest(ctx, request); err != nil {
@@ -158,13 +154,13 @@ func (r runtimeReconciler) reconcileRequestState(
 	if !claim.DeletionTimestamp.IsZero() {
 		return requestEvaluation{
 			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked,
-			reason: reasonClaimDeleting,
+			reason: requestworkflow.ReasonClaimDeleting,
 		}
 	}
 	if claim.Status.Materialization.Mode != openbaov1alpha1.OpenBaoClusterClaimMaterializationModeSameCluster || claim.Status.Materialization.LocalRef == nil {
 		return requestEvaluation{
 			state:  openbaov1alpha1.OpenBaoClusterClaimBackupRequestStateBlocked,
-			reason: reasonClaimNotMaterializedForSameCluster,
+			reason: requestworkflow.ReasonClaimNotMaterializedForSameCluster,
 		}
 	}
 

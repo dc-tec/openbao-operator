@@ -12,19 +12,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/requestworkflow"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/service/claimcontract"
 )
 
 const (
-	reasonServiceClaimsDisabled              = "ServiceClaimsDisabled"
-	reasonClaimNotFound                      = "ClaimNotFound"
-	reasonClaimReadFailed                    = "ClaimReadFailed"
 	reasonUpgradeRequestListFailed           = "UpgradeRequestListFailed"
 	reasonAnotherUpgradeRequestActive        = "AnotherUpgradeRequestActive"
-	reasonClaimDeleting                      = "ClaimDeleting"
-	reasonClaimNotMaterializedForSameCluster = "ClaimNotMaterializedForSameCluster"
 	reasonClaimHasNoAppliedRevision          = "ClaimHasNoAppliedRevision"
 	reasonCurrentCatalogResolutionFailed     = "CurrentCatalogResolutionFailed"
 	reasonCurrentContractInvalid             = "CurrentContractInvalid"
@@ -150,17 +146,17 @@ func (r runtimeReconciler) reconcileRequestState(
 	if !r.enableServiceClaims {
 		return requestEvaluation{
 			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reason:         reasonServiceClaimsDisabled,
-			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonServiceClaimsDisabled),
+			reason:         requestworkflow.ReasonServiceClaimsDisabled,
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, requestworkflow.ReasonServiceClaimsDisabled),
 		}
 	}
 
 	claim := &openbaov1alpha1.OpenBaoClusterClaim{}
 	if err := r.reader.Get(ctx, types.NamespacedName{Namespace: request.Namespace, Name: request.Spec.ClaimRef.Name}, claim); err != nil {
 		if apierrors.IsNotFound(err) {
-			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonClaimNotFound}
+			return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: requestworkflow.ReasonClaimNotFound}
 		}
-		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: reasonClaimReadFailed}
+		return requestEvaluation{state: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateFailed, reason: requestworkflow.ReasonClaimReadFailed}
 	}
 
 	currentStatus := currentRevisionStatus(claim)
@@ -177,17 +173,17 @@ func (r runtimeReconciler) reconcileRequestState(
 	if !claim.DeletionTimestamp.IsZero() {
 		return requestEvaluation{
 			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reason:         reasonClaimDeleting,
+			reason:         requestworkflow.ReasonClaimDeleting,
 			current:        currentStatus,
-			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonClaimDeleting),
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, requestworkflow.ReasonClaimDeleting),
 		}
 	}
 	if claim.Status.Materialization.Mode != openbaov1alpha1.OpenBaoClusterClaimMaterializationModeSameCluster || claim.Status.Materialization.LocalRef == nil {
 		return requestEvaluation{
 			state:          openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateBlocked,
-			reason:         reasonClaimNotMaterializedForSameCluster,
+			reason:         requestworkflow.ReasonClaimNotMaterializedForSameCluster,
 			current:        currentStatus,
-			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, reasonClaimNotMaterializedForSameCluster),
+			classification: classificationStatus(openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassBlocked, requestworkflow.ReasonClaimNotMaterializedForSameCluster),
 		}
 	}
 	if claim.Status.Applied.ServiceProfileRef == nil {
