@@ -25,9 +25,7 @@ func claimPhase(
 	ownership result,
 	localCluster *openbaov1alpha1.OpenBaoCluster,
 	publication connectionpublishing.PublicationResult,
-	activeUpgradeRequest *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
-	activeRestoreRequest *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest,
-	activeRestoreExecution *openbaov1alpha1.OpenBaoRestore,
+	activeWorkflows activeClaimWorkflows,
 ) openbaov1alpha1.OpenBaoClusterClaimPhase {
 	if !contract.Valid {
 		if contract.Reason == openbaov1alpha1.ReasonInvalid {
@@ -57,7 +55,7 @@ func claimPhase(
 		switch localCluster.Status.Phase {
 		case openbaov1alpha1.ClusterPhaseRunning:
 			if publication.Publishable {
-				if maintenanceActive(activeUpgradeRequest, activeRestoreRequest, activeRestoreExecution) {
+				if maintenanceActive(activeWorkflows) {
 					return openbaov1alpha1.OpenBaoClusterClaimPhaseDegraded
 				}
 				if localClusterBackupDegraded(localCluster) {
@@ -418,56 +416,24 @@ func controllerCondition(enabled bool, generation int64) metav1.Condition {
 }
 
 func acceptanceCondition(validation result, generation int64) metav1.Condition {
-	condition := metav1.Condition{
-		Type:               conditionTypeAccepted,
-		ObservedGeneration: generation,
-		LastTransitionTime: metav1.Now(),
-		Reason:             string(validation.Reason),
-		Message:            validation.Message,
-	}
-	if validation.Valid {
-		condition.Status = metav1.ConditionTrue
-		return condition
-	}
-	condition.Status = metav1.ConditionFalse
-	return condition
+	return resultCondition(conditionTypeAccepted, validation, generation)
 }
 
 func serviceContractCondition(validation result, generation int64) metav1.Condition {
-	condition := metav1.Condition{
-		Type:               conditionTypeServiceContract,
-		ObservedGeneration: generation,
-		LastTransitionTime: metav1.Now(),
-		Reason:             string(validation.Reason),
-		Message:            validation.Message,
-	}
-	if validation.Valid {
-		condition.Status = metav1.ConditionTrue
-		return condition
-	}
-	condition.Status = metav1.ConditionFalse
-	return condition
+	return resultCondition(conditionTypeServiceContract, validation, generation)
 }
 
 func materializationCondition(validation result, generation int64) metav1.Condition {
-	condition := metav1.Condition{
-		Type:               conditionTypeMaterialization,
-		ObservedGeneration: generation,
-		LastTransitionTime: metav1.Now(),
-		Reason:             string(validation.Reason),
-		Message:            validation.Message,
-	}
-	if validation.Valid {
-		condition.Status = metav1.ConditionTrue
-		return condition
-	}
-	condition.Status = metav1.ConditionFalse
-	return condition
+	return resultCondition(conditionTypeMaterialization, validation, generation)
 }
 
 func ownershipCondition(validation result, generation int64) metav1.Condition {
+	return resultCondition(conditionTypeOwnershipReady, validation, generation)
+}
+
+func resultCondition(conditionType string, validation result, generation int64) metav1.Condition {
 	condition := metav1.Condition{
-		Type:               conditionTypeOwnershipReady,
+		Type:               conditionType,
 		ObservedGeneration: generation,
 		LastTransitionTime: metav1.Now(),
 		Reason:             string(validation.Reason),
@@ -502,9 +468,7 @@ func serviceAvailabilityCondition(
 	publication connectionpublishing.PublicationResult,
 	localResolved result,
 	localCluster *openbaov1alpha1.OpenBaoCluster,
-	activeUpgradeRequest *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
-	activeRestoreRequest *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest,
-	activeRestoreExecution *openbaov1alpha1.OpenBaoRestore,
+	activeWorkflows activeClaimWorkflows,
 	generation int64,
 ) metav1.Condition {
 	condition := metav1.Condition{
@@ -521,7 +485,7 @@ func serviceAvailabilityCondition(
 		return condition
 	case openbaov1alpha1.OpenBaoClusterClaimPhaseDegraded:
 		condition.Status = metav1.ConditionTrue
-		if reason, message, _, ok := activeMaintenanceStatus(activeUpgradeRequest, activeRestoreRequest, activeRestoreExecution); ok {
+		if reason, message, _, ok := activeMaintenanceStatus(activeWorkflows); ok {
 			condition.Reason = reason
 			condition.Message = message
 			return condition
@@ -576,19 +540,14 @@ func serviceAvailabilityCondition(
 	}
 }
 
-func maintenanceActiveCondition(
-	activeUpgradeRequest *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
-	activeRestoreRequest *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest,
-	activeRestoreExecution *openbaov1alpha1.OpenBaoRestore,
-	generation int64,
-) metav1.Condition {
+func maintenanceActiveCondition(activeWorkflows activeClaimWorkflows, generation int64) metav1.Condition {
 	condition := metav1.Condition{
 		Type:               conditionTypeMaintenanceActive,
 		ObservedGeneration: generation,
 		LastTransitionTime: metav1.Now(),
 	}
 
-	if reason, message, _, ok := activeMaintenanceStatus(activeUpgradeRequest, activeRestoreRequest, activeRestoreExecution); ok {
+	if reason, message, _, ok := activeMaintenanceStatus(activeWorkflows); ok {
 		condition.Status = metav1.ConditionTrue
 		condition.Reason = reason
 		condition.Message = message
@@ -601,47 +560,36 @@ func maintenanceActiveCondition(
 	return condition
 }
 
-func maintenanceActive(
-	activeUpgradeRequest *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
-	activeRestoreRequest *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest,
-	activeRestoreExecution *openbaov1alpha1.OpenBaoRestore,
-) bool {
-	_, _, _, ok := activeMaintenanceStatus(activeUpgradeRequest, activeRestoreRequest, activeRestoreExecution)
+func maintenanceActive(activeWorkflows activeClaimWorkflows) bool {
+	_, _, _, ok := activeMaintenanceStatus(activeWorkflows)
 	return ok
 }
 
-func activeMaintenanceStatus(
-	activeUpgradeRequest *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
-	activeRestoreRequest *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest,
-	activeRestoreExecution *openbaov1alpha1.OpenBaoRestore,
-) (reason string, message string, sourceRef *openbaov1alpha1.TypedObjectReference, ok bool) {
-	if activeUpgradeRequest == nil || isTerminalUpgradeRequestState(activeUpgradeRequest.Status.State) {
-		return activeRestoreStatus(activeRestoreRequest, activeRestoreExecution)
+func activeMaintenanceStatus(activeWorkflows activeClaimWorkflows) (reason string, message string, sourceRef *openbaov1alpha1.TypedObjectReference, ok bool) {
+	if activeWorkflows.UpgradeRequest == nil || isTerminalUpgradeRequestState(activeWorkflows.UpgradeRequest.Status.State) {
+		return activeRestoreStatus(activeWorkflows)
 	}
-	state := activeUpgradeRequest.Status.State
+	state := activeWorkflows.UpgradeRequest.Status.State
 	if state == "" {
 		state = openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStatePending
 	}
-	return string(state), "Service instance remains available while an upgrade workflow is active.", upgradeRequestSourceRef(activeUpgradeRequest), true
+	return string(state), "Service instance remains available while an upgrade workflow is active.", upgradeRequestSourceRef(activeWorkflows.UpgradeRequest), true
 }
 
-func activeRestoreStatus(
-	activeRestoreRequest *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest,
-	activeRestoreExecution *openbaov1alpha1.OpenBaoRestore,
-) (reason string, message string, sourceRef *openbaov1alpha1.TypedObjectReference, ok bool) {
-	if activeRestoreRequest != nil && !isTerminalClaimRestoreRequestState(activeRestoreRequest.Status.State) {
-		state := activeRestoreRequest.Status.State
+func activeRestoreStatus(activeWorkflows activeClaimWorkflows) (reason string, message string, sourceRef *openbaov1alpha1.TypedObjectReference, ok bool) {
+	if activeWorkflows.RestoreRequest != nil && !isTerminalClaimRestoreRequestState(activeWorkflows.RestoreRequest.Status.State) {
+		state := activeWorkflows.RestoreRequest.Status.State
 		if state == "" {
 			state = openbaov1alpha1.OpenBaoClusterClaimRestoreRequestStatePending
 		}
-		return string(state), "Service instance remains available while a restore workflow is active.", claimRestoreRequestSourceRef(activeRestoreRequest), true
+		return string(state), "Service instance remains available while a restore workflow is active.", claimRestoreRequestSourceRef(activeWorkflows.RestoreRequest), true
 	}
-	if activeRestoreExecution == nil || isTerminalRestorePhase(activeRestoreExecution.Status.Phase) {
+	if activeWorkflows.RestoreExecution == nil || isTerminalRestorePhase(activeWorkflows.RestoreExecution.Status.Phase) {
 		return "", "", nil, false
 	}
-	state := activeRestoreExecution.Status.Phase
+	state := activeWorkflows.RestoreExecution.Status.Phase
 	if state == "" {
 		state = openbaov1alpha1.RestorePhasePending
 	}
-	return string(state), "Service instance remains available while a restore workflow is active.", restoreSourceRef(activeRestoreExecution), true
+	return string(state), "Service instance remains available while a restore workflow is active.", restoreSourceRef(activeWorkflows.RestoreExecution), true
 }

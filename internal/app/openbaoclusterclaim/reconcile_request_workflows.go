@@ -6,6 +6,13 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+type activeClaimWorkflows struct {
+	UpgradeRequest   *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest
+	BackupRequest    *openbaov1alpha1.OpenBaoClusterClaimBackupRequest
+	RestoreRequest   *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest
+	RestoreExecution *openbaov1alpha1.OpenBaoRestore
+}
+
 func (r runtimeReconciler) resolveActiveBackupRequest(
 	ctx context.Context,
 	claim *openbaov1alpha1.OpenBaoClusterClaim,

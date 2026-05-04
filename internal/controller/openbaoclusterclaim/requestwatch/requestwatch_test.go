@@ -65,63 +65,6 @@ func TestMapper(t *testing.T) {
 	}
 }
 
-func TestSyncMetrics(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	key := client.ObjectKey{Namespace: "payments", Name: "backup-1"}
-	reader := fake.NewClientBuilder().
-		WithScheme(newTestScheme(t)).
-		WithObjects(&openbaov1alpha1.OpenBaoClusterClaimBackupRequest{
-			ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name},
-		}).
-		Build()
-
-	var synced client.ObjectKey
-	var cleared client.ObjectKey
-	SyncMetrics(
-		ctx,
-		key,
-		reader,
-		nil,
-		func() *openbaov1alpha1.OpenBaoClusterClaimBackupRequest {
-			return &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{}
-		},
-		func(request *openbaov1alpha1.OpenBaoClusterClaimBackupRequest) {
-			synced = client.ObjectKeyFromObject(request)
-		},
-		func(namespace, name string) {
-			cleared = client.ObjectKey{Namespace: namespace, Name: name}
-		},
-	)
-	if synced != key {
-		t.Fatalf("synced key = %#v, want %#v", synced, key)
-	}
-	if cleared != (client.ObjectKey{}) {
-		t.Fatalf("cleared key = %#v, want empty", cleared)
-	}
-
-	missingKey := client.ObjectKey{Namespace: "payments", Name: "missing"}
-	SyncMetrics(
-		ctx,
-		missingKey,
-		reader,
-		nil,
-		func() *openbaov1alpha1.OpenBaoClusterClaimBackupRequest {
-			return &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{}
-		},
-		func(*openbaov1alpha1.OpenBaoClusterClaimBackupRequest) {
-			t.Fatal("sync called for missing request")
-		},
-		func(namespace, name string) {
-			cleared = client.ObjectKey{Namespace: namespace, Name: name}
-		},
-	)
-	if cleared != missingKey {
-		t.Fatalf("cleared key = %#v, want %#v", cleared, missingKey)
-	}
-}
-
 func backupRequestMapper(reader client.Reader) Mapper[
 	*openbaov1alpha1.OpenBaoClusterClaimBackupRequest,
 	*openbaov1alpha1.OpenBaoClusterClaimBackupRequestList,

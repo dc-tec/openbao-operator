@@ -156,15 +156,21 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 	if err != nil {
 		return recon.Result{}, fmt.Errorf("resolve active OpenBaoClusterClaimRestoreRequest: %w", err)
 	}
+	activeWorkflows := activeClaimWorkflows{
+		UpgradeRequest: activeUpgradeRequest,
+		BackupRequest:  activeBackupRequest,
+		RestoreRequest: activeRestoreRequest,
+	}
 
 	tenant, acceptance := r.resolveTenant(ctx, claim)
 	catalog, catalogResolution := r.resolveCatalogBundle(ctx, claim, acceptance)
-	approvedContract, contractResolution := r.resolveApprovedServiceContract(claim, activeUpgradeRequest, catalog, acceptance, catalogResolution)
+	approvedContract, contractResolution := r.resolveApprovedServiceContract(claim, activeWorkflows.UpgradeRequest, catalog, acceptance, catalogResolution)
 	localTarget, localResolved := r.resolveSameClusterMaterialization(claim, tenant, acceptance)
 	activeRestoreExecution, err := r.resolveActiveRestoreExecution(ctx, localTarget, localResolved)
 	if err != nil {
 		return recon.Result{}, fmt.Errorf("resolve active OpenBaoRestore: %w", err)
 	}
+	activeWorkflows.RestoreExecution = activeRestoreExecution
 	bootstrapInputs, bootstrapResolution := r.resolveSameClusterBootstrapInputs(ctx, claim, localTarget, catalog)
 	renderedContract, renderedResolution := r.resolveRenderedExecutionContract(
 		claim,
@@ -240,9 +246,9 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		renderedResolution,
 	)
 	claim.Status.Rollout = desiredRolloutStatus(contractResolution, renderedResolution, localClusterResolution, localResolved, claim)
-	claim.Status.Upgrade = desiredUpgradeStatus(activeUpgradeRequest)
-	claim.Status.Restore = desiredRestoreStatus(activeRestoreRequest, activeRestoreExecution)
-	claim.Status.Backup = desiredBackupStatusWithRequest(localCluster, activeBackupRequest)
+	claim.Status.Upgrade = desiredUpgradeStatus(activeWorkflows.UpgradeRequest)
+	claim.Status.Restore = desiredRestoreStatus(activeWorkflows.RestoreRequest, activeWorkflows.RestoreExecution)
+	claim.Status.Backup = desiredBackupStatusWithRequest(localCluster, activeWorkflows.BackupRequest)
 	claim.Status.Phase = claimPhase(
 		contractResolution,
 		renderedResolution,
@@ -251,9 +257,7 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		ownershipResult,
 		localCluster,
 		publication,
-		activeUpgradeRequest,
-		activeRestoreRequest,
-		activeRestoreExecution,
+		activeWorkflows,
 	)
 	meta.SetStatusCondition(&claim.Status.Conditions, controllerCondition(claimsEnabled, claim.Generation))
 	meta.SetStatusCondition(&claim.Status.Conditions, acceptanceCondition(acceptance, claim.Generation))
@@ -266,12 +270,10 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		publication,
 		localResolved,
 		localCluster,
-		activeUpgradeRequest,
-		activeRestoreRequest,
-		activeRestoreExecution,
+		activeWorkflows,
 		claim.Generation,
 	))
-	meta.SetStatusCondition(&claim.Status.Conditions, maintenanceActiveCondition(activeUpgradeRequest, activeRestoreRequest, activeRestoreExecution, claim.Generation))
+	meta.SetStatusCondition(&claim.Status.Conditions, maintenanceActiveCondition(activeWorkflows, claim.Generation))
 	claim.Status.Summary = desiredStatusSummary(
 		claim,
 		acceptance,
@@ -280,10 +282,7 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		ownershipResult,
 		localCluster,
 		publication,
-		activeUpgradeRequest,
-		activeBackupRequest,
-		activeRestoreRequest,
-		activeRestoreExecution,
+		activeWorkflows,
 	)
 
 	if reflect.DeepEqual(original.Status, claim.Status) && !localClusterEnsured && !connectionChanged {

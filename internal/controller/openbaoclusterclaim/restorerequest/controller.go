@@ -12,6 +12,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	apprestorerequest "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/restorerequest"
 	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/requestwatch"
+	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/watchutil"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -75,7 +76,7 @@ func (r *OpenBaoClusterClaimRestoreRequestReconciler) SetupWithManager(mgr ctrl.
 }
 
 func (r *OpenBaoClusterClaimRestoreRequestReconciler) syncMetrics(ctx context.Context, key client.ObjectKey) {
-	requestwatch.SyncMetrics(
+	watchutil.SyncMetrics(
 		ctx,
 		key,
 		r.Reader,

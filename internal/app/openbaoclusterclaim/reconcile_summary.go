@@ -15,20 +15,17 @@ func desiredStatusSummary(
 	ownership result,
 	localCluster *openbaov1alpha1.OpenBaoCluster,
 	publication connectionpublishing.PublicationResult,
-	activeUpgradeRequest *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest,
-	activeBackupRequest *openbaov1alpha1.OpenBaoClusterClaimBackupRequest,
-	activeRestoreRequest *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest,
-	activeRestoreExecution *openbaov1alpha1.OpenBaoRestore,
+	activeWorkflows activeClaimWorkflows,
 ) *openbaov1alpha1.OpenBaoClusterClaimStatusSummary {
 	if claim == nil {
 		return nil
 	}
 
-	if reason, message, sourceRef, ok := activeMaintenanceStatus(activeUpgradeRequest, activeRestoreRequest, activeRestoreExecution); ok {
+	if reason, message, sourceRef, ok := activeMaintenanceStatus(activeWorkflows); ok {
 		severity := openbaov1alpha1.OpenBaoClusterClaimStatusSeverityInfo
-		if activeRestoreRequest != nil || activeRestoreExecution != nil {
+		if activeWorkflows.RestoreRequest != nil || activeWorkflows.RestoreExecution != nil {
 			severity = openbaov1alpha1.OpenBaoClusterClaimStatusSeverityWarning
-			message = activeRestoreSummaryMessage(activeRestoreRequest, activeRestoreExecution)
+			message = activeRestoreSummaryMessage(activeWorkflows.RestoreRequest, activeWorkflows.RestoreExecution)
 		}
 		return newClaimStatusSummary(
 			severity,
@@ -81,7 +78,7 @@ func desiredStatusSummary(
 	if summary := summaryFromPublication(claim, publication); summary != nil {
 		return summary
 	}
-	if summary := summaryFromBackupRequest(activeBackupRequest, localCluster); summary != nil {
+	if summary := summaryFromBackupRequest(activeWorkflows.BackupRequest, localCluster); summary != nil {
 		return summary
 	}
 

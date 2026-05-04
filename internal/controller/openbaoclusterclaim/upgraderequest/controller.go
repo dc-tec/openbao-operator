@@ -10,6 +10,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appupgraderequest "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/upgraderequest"
 	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/requestwatch"
+	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/watchutil"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -69,7 +70,7 @@ func (r *OpenBaoClusterClaimUpgradeRequestReconciler) SetupWithManager(mgr ctrl.
 }
 
 func (r *OpenBaoClusterClaimUpgradeRequestReconciler) syncMetrics(ctx context.Context, key client.ObjectKey) {
-	requestwatch.SyncMetrics(
+	watchutil.SyncMetrics(
 		ctx,
 		key,
 		r.Reader,

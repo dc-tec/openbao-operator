@@ -10,6 +10,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appbackuprequest "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/backuprequest"
 	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/requestwatch"
+	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/watchutil"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,7 +71,7 @@ func (r *OpenBaoClusterClaimBackupRequestReconciler) SetupWithManager(mgr ctrl.M
 }
 
 func (r *OpenBaoClusterClaimBackupRequestReconciler) syncMetrics(ctx context.Context, key client.ObjectKey) {
-	requestwatch.SyncMetrics(
+	watchutil.SyncMetrics(
 		ctx,
 		key,
 		r.Reader,

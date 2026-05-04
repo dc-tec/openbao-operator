@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appopenbaoclusterclaim "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/claimwatch"
+	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/watchutil"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -61,30 +60,32 @@ func (r *OpenBaoClusterClaimReconciler) SetupWithManager(mgr ctrl.Manager) error
 		})
 	}
 
+	tenantMapper := claimwatch.TenantMapper{Reader: r.Client}
+	restoreMapper := claimwatch.RestoreMapper{Reader: r.Client}
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoClusterClaim{}).
 		Watches(
 			&openbaov1alpha1.OpenBaoTenant{},
-			handler.EnqueueRequestsFromMapFunc(r.mapTenantToClaims),
+			handler.EnqueueRequestsFromMapFunc(tenantMapper.FromTenant()),
 		).
 		Named(controllerNameOpenBaoClusterClaim)
 
 	if r.EnableServiceClaims {
 		builder = builder.Watches(
 			&openbaov1alpha1.OpenBaoCluster{},
-			handler.EnqueueRequestsFromMapFunc(r.mapLocalClusterToClaim),
+			handler.EnqueueRequestsFromMapFunc(claimwatch.FromManagedCluster()),
 		).Watches(
 			&openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{},
-			handler.EnqueueRequestsFromMapFunc(r.mapUpgradeRequestToClaim),
+			handler.EnqueueRequestsFromMapFunc(claimwatch.FromUpgradeRequest()),
 		).Watches(
 			&openbaov1alpha1.OpenBaoClusterClaimBackupRequest{},
-			handler.EnqueueRequestsFromMapFunc(r.mapBackupRequestToClaim),
+			handler.EnqueueRequestsFromMapFunc(claimwatch.FromBackupRequest()),
 		).Watches(
 			&openbaov1alpha1.OpenBaoClusterClaimRestoreRequest{},
-			handler.EnqueueRequestsFromMapFunc(r.mapRestoreRequestToClaim),
+			handler.EnqueueRequestsFromMapFunc(claimwatch.FromRestoreRequest()),
 		).Watches(
 			&openbaov1alpha1.OpenBaoRestore{},
-			handler.EnqueueRequestsFromMapFunc(r.mapRestoreToClaim),
+			handler.EnqueueRequestsFromMapFunc(restoreMapper.FromRestore()),
 		)
 	}
 
@@ -92,157 +93,15 @@ func (r *OpenBaoClusterClaimReconciler) SetupWithManager(mgr ctrl.Manager) error
 }
 
 func (r *OpenBaoClusterClaimReconciler) syncMetrics(ctx context.Context, key client.ObjectKey) {
-	reader := r.Reader
-	if reader == nil {
-		reader = r.Client
-	}
-	if reader == nil {
-		return
-	}
-
-	claim := &openbaov1alpha1.OpenBaoClusterClaim{}
-	if err := reader.Get(ctx, key, claim); err != nil {
-		if apierrors.IsNotFound(err) {
-			observability.ClearClaim(key.Namespace, key.Name)
-		}
-		return
-	}
-
-	observability.SyncClaim(claim)
-}
-
-func (r *OpenBaoClusterClaimReconciler) mapTenantToClaims(
-	ctx context.Context,
-	obj client.Object,
-) []reconcile.Request {
-	tenant, ok := obj.(*openbaov1alpha1.OpenBaoTenant)
-	if !ok || tenant == nil {
-		return nil
-	}
-
-	var claimList openbaov1alpha1.OpenBaoClusterClaimList
-	if err := r.List(ctx, &claimList, client.InNamespace(tenant.Namespace)); err != nil {
-		return nil
-	}
-
-	requests := make([]reconcile.Request, 0, len(claimList.Items))
-	for i := range claimList.Items {
-		claim := &claimList.Items[i]
-		if claim.Spec.TenantRef.Name != tenant.Name {
-			continue
-		}
-		requests = append(requests, reconcile.Request{
-			NamespacedName: client.ObjectKeyFromObject(claim),
-		})
-	}
-
-	return requests
-}
-
-func (r *OpenBaoClusterClaimReconciler) mapLocalClusterToClaim(
-	_ context.Context,
-	obj client.Object,
-) []reconcile.Request {
-	cluster, ok := obj.(*openbaov1alpha1.OpenBaoCluster)
-	if !ok || cluster == nil {
-		return nil
-	}
-	if cluster.Labels[constants.LabelOpenBaoOwnershipMode] != constants.LabelValueOpenBaoOwnershipClaimManaged {
-		return nil
-	}
-	claimNamespace := cluster.Labels[constants.LabelOpenBaoClaimNamespace]
-	claimName := cluster.Labels[constants.LabelOpenBaoClaimName]
-	if claimNamespace == "" || claimName == "" {
-		return nil
-	}
-
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{
-			Namespace: claimNamespace,
-			Name:      claimName,
+	watchutil.SyncMetrics(
+		ctx,
+		key,
+		r.Reader,
+		r.Client,
+		func() *openbaov1alpha1.OpenBaoClusterClaim {
+			return &openbaov1alpha1.OpenBaoClusterClaim{}
 		},
-	}}
-}
-
-func (r *OpenBaoClusterClaimReconciler) mapUpgradeRequestToClaim(
-	_ context.Context,
-	obj client.Object,
-) []reconcile.Request {
-	request, ok := obj.(*openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest)
-	if !ok || request == nil || request.Namespace == "" || request.Spec.ClaimRef.Name == "" {
-		return nil
-	}
-
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{
-			Namespace: request.Namespace,
-			Name:      request.Spec.ClaimRef.Name,
-		},
-	}}
-}
-
-func (r *OpenBaoClusterClaimReconciler) mapBackupRequestToClaim(
-	_ context.Context,
-	obj client.Object,
-) []reconcile.Request {
-	request, ok := obj.(*openbaov1alpha1.OpenBaoClusterClaimBackupRequest)
-	if !ok || request == nil || request.Namespace == "" || request.Spec.ClaimRef.Name == "" {
-		return nil
-	}
-
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{
-			Namespace: request.Namespace,
-			Name:      request.Spec.ClaimRef.Name,
-		},
-	}}
-}
-
-func (r *OpenBaoClusterClaimReconciler) mapRestoreRequestToClaim(
-	_ context.Context,
-	obj client.Object,
-) []reconcile.Request {
-	request, ok := obj.(*openbaov1alpha1.OpenBaoClusterClaimRestoreRequest)
-	if !ok || request == nil || request.Namespace == "" || request.Spec.ClaimRef.Name == "" {
-		return nil
-	}
-
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{
-			Namespace: request.Namespace,
-			Name:      request.Spec.ClaimRef.Name,
-		},
-	}}
-}
-
-func (r *OpenBaoClusterClaimReconciler) mapRestoreToClaim(
-	ctx context.Context,
-	obj client.Object,
-) []reconcile.Request {
-	restore, ok := obj.(*openbaov1alpha1.OpenBaoRestore)
-	if !ok || restore == nil || restore.Namespace == "" || restore.Spec.Cluster == "" {
-		return nil
-	}
-
-	cluster := &openbaov1alpha1.OpenBaoCluster{}
-	key := client.ObjectKey{Namespace: restore.Namespace, Name: restore.Spec.Cluster}
-	if err := r.Get(ctx, key, cluster); err != nil {
-		return nil
-	}
-
-	if cluster.Labels[constants.LabelOpenBaoOwnershipMode] != constants.LabelValueOpenBaoOwnershipClaimManaged {
-		return nil
-	}
-	claimNamespace := cluster.Labels[constants.LabelOpenBaoClaimNamespace]
-	claimName := cluster.Labels[constants.LabelOpenBaoClaimName]
-	if claimNamespace == "" || claimName == "" {
-		return nil
-	}
-
-	return []reconcile.Request{{
-		NamespacedName: client.ObjectKey{
-			Namespace: claimNamespace,
-			Name:      claimName,
-		},
-	}}
+		observability.SyncClaim,
+		observability.ClearClaim,
+	)
 }

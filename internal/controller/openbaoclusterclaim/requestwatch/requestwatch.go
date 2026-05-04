@@ -3,13 +3,12 @@ package requestwatch
 import (
 	"context"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/watchutil"
 )
 
 type Mapper[T client.Object, L client.ObjectList] struct {
@@ -35,12 +34,12 @@ func (m Mapper[T, L]) FromClaimManagedCluster() handler.MapFunc {
 		if !ok || cluster == nil {
 			return nil
 		}
-		if cluster.Labels[constants.LabelOpenBaoOwnershipMode] != constants.LabelValueOpenBaoOwnershipClaimManaged {
+		requests := watchutil.RequestForClaimManagedLabels(cluster.Labels)
+		if len(requests) != 1 {
 			return nil
 		}
-		claimNamespace := cluster.Labels[constants.LabelOpenBaoClaimNamespace]
-		claimName := cluster.Labels[constants.LabelOpenBaoClaimName]
-		return m.ForClaim(ctx, claimNamespace, claimName)
+		key := requests[0].NamespacedName
+		return m.ForClaim(ctx, key.Namespace, key.Name)
 	}
 }
 
@@ -74,31 +73,4 @@ func ObjectPointers[T any](items []T) []*T {
 		pointers = append(pointers, &items[i])
 	}
 	return pointers
-}
-
-func SyncMetrics[T client.Object](
-	ctx context.Context,
-	key client.ObjectKey,
-	reader client.Reader,
-	fallback client.Reader,
-	newObject func() T,
-	sync func(T),
-	clear func(namespace, name string),
-) {
-	if reader == nil {
-		reader = fallback
-	}
-	if reader == nil || newObject == nil || sync == nil || clear == nil {
-		return
-	}
-
-	obj := newObject()
-	if err := reader.Get(ctx, key, obj); err != nil {
-		if apierrors.IsNotFound(err) {
-			clear(key.Namespace, key.Name)
-		}
-		return
-	}
-
-	sync(obj)
 }
