@@ -139,10 +139,10 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
       path: secure-audit
       description: "Secure audit logging"
       fileOptions:
-        file_path: "/openbao/audit/audit.jsonl"
+        filePath: "/openbao/audit/audit.jsonl"
         format: "json"`}
 >
-  Use `auditFileStorage` when a collector reads file audit records from Kubernetes storage. The file path must live under the audit storage mount path.
+  Include audit devices in the cluster baseline so the service starts with the expected audit configuration. Use `auditFileStorage` when a collector reads file audit records from Kubernetes storage; the file path must live under the audit storage mount path. Prefer this over API-based audit creation from self-init requests.
 </CommandBlock>
 
 <DecisionTable

@@ -8,7 +8,7 @@ description: Configure bootstrap requests, operator OIDC setup, and verification
 
 <PageHeader
   title="Declarative cluster bootstrap"
-  lede="Self-initialization applies auth methods, policies, audit devices, and other bootstrap state from the `OpenBaoCluster` manifest and then revokes the bootstrap root token. Use this page to configure the bootstrap contract and the access paths that must exist after initialization."
+  lede="Self-initialization applies auth methods, policies, secret engines, and other API bootstrap state from the `OpenBaoCluster` manifest and then revokes the bootstrap root token. Configure audit devices through `spec.audit` so they are rendered as OpenBao server configuration instead of API-created audit devices."
 />
 
 
@@ -42,10 +42,11 @@ description: Configure bootstrap requests, operator OIDC setup, and verification
   title="Self-init bootstrap flow"
   caption="The cluster initializes, applies the declared requests, and then revokes the bootstrap credential instead of treating it as a permanent operating dependency."
   code={`flowchart LR
-    Cluster["OpenBaoCluster"] --> Init["Cluster initializes"]
+    Cluster["OpenBaoCluster"] --> ServerConfig["Render server config"]
+    ServerConfig --> Audit["spec.audit devices"]
+    ServerConfig --> Init["Cluster initializes"]
     Init --> Requests["Apply selfInit requests"]
-    Requests --> Auth["Auth methods and policies"]
-    Requests --> Audit["Audit devices and engines"]
+    Requests --> Auth["Auth methods, policies, engines"]
     Requests --> Revoke["Revoke root token"]
     Revoke --> Ready["Cluster ready for day 2"]
 
@@ -53,7 +54,7 @@ description: Configure bootstrap requests, operator OIDC setup, and verification
     classDef process fill:transparent,stroke:#fdd0a4,stroke-width:2px,color:#e6f4ef;
     classDef write fill:transparent,stroke:#87d6be,stroke-width:2px,color:#e6f4ef;
 
-    class Cluster,Init read;
+    class Cluster,ServerConfig,Init read;
     class Requests,Revoke process;
     class Auth,Audit,Ready write;`}
 />
@@ -97,20 +98,23 @@ If the cluster will self-initialize, define the human login path in `selfInit.re
 <CommandBlock
   language="yaml"
   label="configure"
-  title="Start from the minimum self-init block"
+  title="Pair self-init with declarative audit"
   code={`spec:
+  audit:
+    - type: file
+      path: stdout
+      fileOptions:
+        filePath: stdout
   selfInit:
     enabled: true
     requests:
-      - name: enable-audit
+      - name: enable-userpass-auth
         operation: update
-        path: sys/audit/file
-        auditDevice:
-          type: file
-          fileOptions:
-            filePath: /tmp/audit.log`}
+        path: sys/auth/userpass
+        authMethod:
+          type: userpass`}
 >
-  `requests` defines the bootstrap state. Include the minimum auth, policy, and audit configuration the cluster needs immediately after initialization.
+  `spec.audit` defines audit devices in server configuration. `selfInit.requests` defines bootstrap API calls such as auth methods, policies, and secret engines.
 </CommandBlock>
 
 <CommandBlock
@@ -173,13 +177,6 @@ If the cluster will self-initialize, define the human login path in `selfInit.re
     },
     {
       cells: [
-        "`auditDevice`",
-        "Turn on audit logging at bootstrap time.",
-        "File or stdout audit devices required by your environment.",
-      ],
-    },
-    {
-      cells: [
         "`data`",
         "Fallback for raw API payloads when no structured field exists.",
         "Specialized configuration that is not covered by the higher-level request fields yet.",
@@ -192,6 +189,12 @@ If the cluster will self-initialize, define the human login path in `selfInit.re
 <Callout type="danger" title="Do not embed raw secrets in requests">
 
 Avoid placing passwords, tokens, or key material directly in the manifest. Use Kubernetes Secrets where supported and treat bootstrap content like the rest of your GitOps security surface.
+
+</Callout>
+
+<Callout type="warning" title="Configure audit devices with spec.audit">
+
+OpenBao rejects API-created audit devices unless `unsafeAllowAPIAuditCreation` is enabled. Keep audit devices in `spec.audit`; reserve `selfInit.requests[].auditDevice` for exceptional compatibility cases where you have deliberately enabled that unsafe OpenBao option.
 
 </Callout>
 
@@ -243,7 +246,7 @@ Avoid placing passwords, tokens, or key material directly in the manifest. Use K
   ]}
 />
 
-## Common bootstrap patterns
+## Common bootstrap and baseline patterns
 
 <Tabs groupId="self-init-patterns">
   <TabItem value="auth-method" label="Auth method">
@@ -298,19 +301,18 @@ Avoid placing passwords, tokens, or key material directly in the manifest. Use K
 />
 
   </TabItem>
-  <TabItem value="audit-device" label="Audit device">
+  <TabItem value="audit-device" label="Audit baseline">
 
 <CommandBlock
   language="yaml"
   label="configure"
-  title="Enable audit logging at bootstrap"
-  code={`- name: enable-file-audit
-  operation: update
-  path: sys/audit/file
-  auditDevice:
-    type: file
-    fileOptions:
-      filePath: /var/log/openbao/audit.log`}
+  title="Enable audit logging declaratively"
+  code={`spec:
+  audit:
+    - type: file
+      path: file
+      fileOptions:
+        filePath: /var/log/openbao/audit.log`}
 />
 
   </TabItem>

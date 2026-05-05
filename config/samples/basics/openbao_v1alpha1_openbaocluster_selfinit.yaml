@@ -4,7 +4,7 @@
 # declarative cluster bootstrapping. When enabled:
 # - OpenBao initializes itself automatically on first start
 # - The root token is automatically revoked after initialization (not stored)
-# - Initial configuration (audit devices, auth methods, etc.) is applied during init
+# - Initial bootstrap requests (auth methods, policies, mounts, etc.) are applied during init
 #
 # Requires OpenBao v2.4.0 or later.
 # See: https://openbao.org/docs/configuration/self-init/
@@ -31,20 +31,20 @@ spec:
     ui: true
     logging:
       format: "json"
+      file: "/var/log/openbao/openbao.log"
+  # Audit devices are server configuration. Configure them with spec.audit rather
+  # than API-based self-init requests.
+  audit:
+    - type: file
+      path: stdout
+      fileOptions:
+        filePath: stdout
   # Self-initialization configuration
   selfInit:
     enabled: true
     oidc:
       enabled: true
     requests:
-      # Enable stdout audit logging (useful for debugging)
-      - name: enable-stdout-audit
-        operation: update
-        path: sys/audit/stdout
-        auditDevice:
-          type: file
-          fileOptions:
-            filePath: stdout
       # Enable Kubernetes authentication
       - name: enable-kubernetes-auth
         operation: update

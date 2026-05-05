@@ -62,6 +62,13 @@ spec:
     maxLeaseTTL: "8760h" # 1 year
     # UI enabled for management
     ui: true
+  # Declarative audit devices are rendered into OpenBao server configuration.
+  # Do not enable audit devices through self-init API requests.
+  audit:
+    - type: file
+      path: file
+      fileOptions:
+        filePath: /var/log/openbao/audit.log
   # External KMS auto-unseal (required for Hardened profile)
   # No static unseal key Secret is created - the root of trust is the KMS service
   unseal:
@@ -82,14 +89,6 @@ spec:
     oidc:
       enabled: true
     requests:
-      # Enable file audit logging
-      - name: enable-file-audit
-        operation: update
-        path: sys/audit/file
-        auditDevice:
-          type: file
-          fileOptions:
-            filePath: /var/log/openbao/audit.log
       # JWT authentication is automatically bootstrapped by spec.selfInit.oidc.enabled
       # Backup and upgrade policies/roles are also automatically created when
       # spec.backup.jwtAuthRole and spec.upgrade.jwtAuthRole are configured

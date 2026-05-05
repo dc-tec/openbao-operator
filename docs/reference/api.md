@@ -2318,7 +2318,9 @@ _Appears in:_
 
 
 SelfInitAuditDevice provides structured configuration for enabling audit devices
-via self-init requests. This replaces the need for raw JSON in the Data field.
+via self-init requests. Prefer OpenBaoCluster.spec.audit for normal deployments;
+OpenBao rejects API-created audit devices unless unsafe API audit creation is
+deliberately enabled in spec.configuration.
 See: https://openbao.org/api-docs/system/audit/
 
 
@@ -2454,11 +2456,11 @@ _Appears in:_
 | `name` _string_ | Name is a unique identifier for this request (used as the block name).<br />Must match regex ^[A-Za-z_][A-Za-z0-9_-]*$ |  | MaxLength: 64 <br />MinLength: 1 <br />Pattern: `^[A-Za-z_][A-Za-z0-9_-]*$` <br /> |
 | `operation` _[SelfInitOperation](#selfinitoperation)_ | Operation is the API operation type: create, read, update, delete, or list. |  | Enum: [create read update delete list patch] <br /> |
 | `path` _string_ | Path is the API path to call (e.g., "sys/audit/stdout", "auth/kubernetes/config"). |  | MinLength: 1 <br /> |
-| `auditDevice` _[SelfInitAuditDevice](#selfinitauditdevice)_ | AuditDevice configures an audit device when Path starts with "sys/audit/".<br />This provides structured configuration for audit devices instead of raw JSON.<br />Only used when Path matches the pattern "sys/audit/*". |  | Optional: \{\} <br /> |
+| `auditDevice` _[SelfInitAuditDevice](#selfinitauditdevice)_ | AuditDevice configures an audit device when Path starts with "sys/audit/".<br />Prefer spec.audit for normal deployments; OpenBao rejects API-created audit<br />devices unless spec.configuration.unsafeAllowAPIAuditCreation is enabled.<br />This field is retained for explicit compatibility cases only. |  | Optional: \{\} <br /> |
 | `authMethod` _[SelfInitAuthMethod](#selfinitauthmethod)_ | AuthMethod configures an auth method when Path starts with "sys/auth/".<br />This provides structured configuration for enabling auth methods.<br />Only used when Path matches the pattern "sys/auth/*". |  | Optional: \{\} <br /> |
 | `secretEngine` _[SelfInitSecretEngine](#selfinitsecretengine)_ | SecretEngine configures a secret engine when Path starts with "sys/mounts/".<br />This provides structured configuration for enabling secret engines.<br />Only used when Path matches the pattern "sys/mounts/*". |  | Optional: \{\} <br /> |
 | `policy` _[SelfInitPolicy](#selfinitpolicy)_ | Policy configures a policy when Path starts with "sys/policies/".<br />This provides structured configuration for creating/updating policies.<br />Only used when Path matches the pattern "sys/policies/*". |  | Optional: \{\} <br /> |
-| `data` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#json-v1-apiextensions-k8s-io)_ | Data contains the request payload for paths that don't have structured types.<br />This must be a JSON/YAML object whose shape matches the target API endpoint.<br />Nested maps and lists are supported and are rendered into the initialize stanza as HCL objects.<br />**Note:** For common paths, use structured types instead:<br />- `sys/audit/*` → use `auditDevice`<br />- `sys/auth/*` → use `authMethod`<br />- `sys/mounts/*` → use `secretEngine`<br />- `sys/policies/*` → use `policy`<br />This payload is stored in the OpenBaoCluster resource and persisted in etcd;<br />it must not contain sensitive values such as tokens, passwords, or unseal keys. |  | Optional: \{\} <br /> |
+| `data` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#json-v1-apiextensions-k8s-io)_ | Data contains the request payload for paths that don't have structured types.<br />This must be a JSON/YAML object whose shape matches the target API endpoint.<br />Nested maps and lists are supported and are rendered into the initialize stanza as HCL objects.<br />**Note:** For common paths, use structured types instead:<br />- `sys/audit/*` → prefer `spec.audit`; use `auditDevice` only with unsafe API audit creation enabled<br />- `sys/auth/*` → use `authMethod`<br />- `sys/mounts/*` → use `secretEngine`<br />- `sys/policies/*` → use `policy`<br />This payload is stored in the OpenBaoCluster resource and persisted in etcd;<br />it must not contain sensitive values such as tokens, passwords, or unseal keys. |  | Optional: \{\} <br /> |
 | `allowFailure` _boolean_ | AllowFailure allows this request to fail without blocking initialization.<br />Defaults to false. |  | Optional: \{\} <br /> |
 
 

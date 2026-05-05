@@ -3600,8 +3600,9 @@ spec:
                         auditDevice:
                           description: |-
                             AuditDevice configures an audit device when Path starts with "sys/audit/".
-                            This provides structured configuration for audit devices instead of raw JSON.
-                            Only used when Path matches the pattern "sys/audit/*".
+                            Prefer spec.audit for normal deployments; OpenBao rejects API-created audit
+                            devices unless spec.configuration.unsafeAllowAPIAuditCreation is enabled.
+                            This field is retained for explicit compatibility cases only.
                           properties:
                             description:
                               description: Description is an optional description
@@ -3808,7 +3809,7 @@ spec:
                             Nested maps and lists are supported and are rendered into the initialize stanza as HCL objects.
 
                             **Note:** For common paths, use structured types instead:
-                            - `sys/audit/*` → use `auditDevice`
+                            - `sys/audit/*` → prefer `spec.audit`; use `auditDevice` only with unsafe API audit creation enabled
                             - `sys/auth/*` → use `authMethod`
                             - `sys/mounts/*` → use `secretEngine`
                             - `sys/policies/*` → use `policy`

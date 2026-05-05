@@ -40,7 +40,7 @@ keeps it unsupported.
       cells: ['ACME shared cache storage', '`OpenBaoStorageProfile.spec.acmeCache`', 'Native OpenBao ACME needs RWX cache storage. Keep this platform-owned.'],
     },
     {
-      cells: ['Self-init bootstrap, lifecycle JWT auth, auth methods, policies, audit bootstrap', '`OpenBaoBootstrapProfile`', 'The current claim runtime supports `SelfInit` only. Secret and ConfigMap-backed bootstrap dependencies are projected.'],
+      cells: ['Self-init bootstrap, lifecycle JWT auth, auth methods, policies, audit bootstrap', '`OpenBaoBootstrapProfile`', 'The current claim runtime supports `SelfInit` only. Auth and policy dependencies are projected for self-init; audit sink dependencies render to materialized `spec.audit`.'],
     },
     {
       cells: ['Internal, ingress, and gateway exposure', '`OpenBaoExposureClass`, `OpenBaoEntrypoint`, `OpenBaoIngressPolicy`', 'Endpoint publication waits for the selected edge integration to be ready.'],

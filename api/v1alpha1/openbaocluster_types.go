@@ -1065,8 +1065,9 @@ type SelfInitRequest struct {
 	// +kubebuilder:validation:MinLength=1
 	Path string `json:"path"`
 	// AuditDevice configures an audit device when Path starts with "sys/audit/".
-	// This provides structured configuration for audit devices instead of raw JSON.
-	// Only used when Path matches the pattern "sys/audit/*".
+	// Prefer spec.audit for normal deployments; OpenBao rejects API-created audit
+	// devices unless spec.configuration.unsafeAllowAPIAuditCreation is enabled.
+	// This field is retained for explicit compatibility cases only.
 	// +optional
 	AuditDevice *SelfInitAuditDevice `json:"auditDevice,omitempty"`
 	// AuthMethod configures an auth method when Path starts with "sys/auth/".
@@ -1089,7 +1090,7 @@ type SelfInitRequest struct {
 	// Nested maps and lists are supported and are rendered into the initialize stanza as HCL objects.
 	//
 	// **Note:** For common paths, use structured types instead:
-	// - `sys/audit/*` → use `auditDevice`
+	// - `sys/audit/*` → prefer `spec.audit`; use `auditDevice` only with unsafe API audit creation enabled
 	// - `sys/auth/*` → use `authMethod`
 	// - `sys/mounts/*` → use `secretEngine`
 	// - `sys/policies/*` → use `policy`
@@ -1105,7 +1106,9 @@ type SelfInitRequest struct {
 }
 
 // SelfInitAuditDevice provides structured configuration for enabling audit devices
-// via self-init requests. This replaces the need for raw JSON in the Data field.
+// via self-init requests. Prefer OpenBaoCluster.spec.audit for normal deployments;
+// OpenBao rejects API-created audit devices unless unsafe API audit creation is
+// deliberately enabled in spec.configuration.
 // See: https://openbao.org/api-docs/system/audit/
 // +kubebuilder:validation:XValidation:rule="self.type == 'file' || !has(self.fileOptions)",message="fileOptions is only supported when type is file"
 // +kubebuilder:validation:XValidation:rule="self.type != 'file' || has(self.fileOptions) || has(self.sinkFromRef)",message="fileOptions or sinkFromRef is required when type is file"
