@@ -3,6 +3,7 @@ package openbaoclusterclaim
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -16,6 +17,7 @@ import (
 )
 
 const bootstrapProjectionComponent = "claim-bootstrap-projection"
+const bootstrapProjectionNamePrefix = "claim-bootstrap-"
 
 func (r runtimeReconciler) ensureLocalBootstrapProjectedArtifacts(
 	ctx context.Context,
@@ -252,6 +254,15 @@ func (r runtimeReconciler) deleteProjectedBootstrapArtifact(
 	obj, description := projectedBootstrapDeletionObject(namespace, ref)
 	if obj == nil {
 		return false, nil
+	}
+	if ref.Kind == kindSecret && strings.HasPrefix(ref.Name, bootstrapProjectionNamePrefix) {
+		if err := r.client.Delete(ctx, obj); err != nil {
+			if apierrors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, fmt.Errorf("delete projected bootstrap %s %s/%s: %w", description, namespace, ref.Name, err)
+		}
+		return true, nil
 	}
 	if err := r.readClient().Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 		if apierrors.IsNotFound(err) {
