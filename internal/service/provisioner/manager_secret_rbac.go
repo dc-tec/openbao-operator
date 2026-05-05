@@ -13,6 +13,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	clusterpkg "github.com/dc-tec/openbao-operator/internal/adapter/cluster"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
@@ -100,6 +101,18 @@ func accumulateTenantSecretNames(cluster *openbaov1alpha1.OpenBaoCluster, writer
 		}
 		reader[perm.Name] = struct{}{}
 	}
+	accumulateRetentionSecretNames(cluster, writer)
+}
+
+func accumulateRetentionSecretNames(cluster *openbaov1alpha1.OpenBaoCluster, writer map[string]struct{}) {
+	if cluster == nil || cluster.Name == "" || writer == nil {
+		return
+	}
+	// Retain deletion probes generated recovery Secret candidates before removing
+	// the cluster finalizer. Keep these exact names authorized even when a profile
+	// does not create them, so Kubernetes can return NotFound instead of Forbidden.
+	writer[cluster.Name+constants.SuffixUnsealKey] = struct{}{}
+	writer[cluster.Name+constants.SuffixRootToken] = struct{}{}
 }
 
 func accumulateRestoreTenantSecretNames(restore *openbaov1alpha1.OpenBaoRestore, clustersByName map[string]*openbaov1alpha1.OpenBaoCluster, reader map[string]struct{}) {

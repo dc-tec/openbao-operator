@@ -901,6 +901,20 @@ func TestEnsureTenantSecretRBAC_TracksProjectedBootstrapSecretRefsFromClusters(t
 	if got := extractSecretResourceNames(readerRole.Rules); !reflect.DeepEqual(got, wantReaderNames) {
 		t.Errorf("reader Role allowlist = %v, want %v", got, wantReaderNames)
 	}
+
+	writerRole := &rbacv1.Role{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretsWriterRoleName}, writerRole); err != nil {
+		t.Fatalf("expected writer Role to exist: %v", err)
+	}
+	wantWriterNames := []string{
+		"bao" + constants.SuffixRootToken,
+		"bao" + constants.SuffixTLSCA,
+		"bao" + constants.SuffixTLSServer,
+		"bao" + constants.SuffixUnsealKey,
+	}
+	if got := extractSecretResourceNames(writerRole.Rules); !reflect.DeepEqual(got, wantWriterNames) {
+		t.Errorf("writer Role allowlist = %v, want %v", got, wantWriterNames)
+	}
 }
 
 func TestEnsureTenantSecretRBAC_TracksSameClusterClaimBootstrapSourceSecrets(t *testing.T) {
