@@ -65,9 +65,9 @@ func validSameClusterAppliedStatus() *openbaov1alpha1.OpenBaoClusterClaimApplied
 	return &status
 }
 
-func validSameClusterAppliedStatusWithOffering(name string) *openbaov1alpha1.OpenBaoClusterClaimAppliedStatus {
+func validSameClusterAppliedStatusWithStandardOffering() *openbaov1alpha1.OpenBaoClusterClaimAppliedStatus {
 	status := validSameClusterAppliedStatus()
-	status.ServiceOfferingRef = &openbaov1alpha1.LocalReference{Name: name}
+	status.ServiceOfferingRef = &openbaov1alpha1.LocalReference{Name: "standard-ha"}
 	return status
 }
 

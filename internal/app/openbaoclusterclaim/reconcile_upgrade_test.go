@@ -11,6 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/claimcontract"
 	"github.com/dc-tec/openbao-operator/internal/service/connectionpublishing"
 )
 
@@ -220,6 +221,25 @@ func TestValidateMaterializedServiceSelectionChange_AllowsActiveInPlaceUpgradeRe
 	got := validateMaterializedServiceSelectionChange(claim, request)
 	if !got.Valid {
 		t.Fatalf("validateMaterializedServiceSelectionChange() = %#v, want valid", got)
+	}
+}
+
+func TestDesiredAppliedStatusClearsOfferingRefForDirectProfileUpgrade(t *testing.T) {
+	t.Parallel()
+
+	claim := validClaim()
+	claim.Spec.ServiceOfferingRef = nil
+	claim.Spec.ServiceProfileRef = openbaov1alpha1.LocalReference{Name: "standard-ha-v1"}
+
+	current := *validSameClusterAppliedStatusWithStandardOffering()
+	approved, validation := claimcontract.BindApprovedServiceContract(claim, sameClusterCatalogBundle())
+	if !validation.Valid || approved == nil {
+		t.Fatalf("BindApprovedServiceContract() validation = %#v, approved = %#v", validation, approved)
+	}
+
+	got := desiredAppliedStatus(current, claim, approved, nil, result{Valid: true}, result{Valid: false})
+	if got.ServiceOfferingRef != nil {
+		t.Fatalf("ServiceOfferingRef = %#v, want nil for direct serviceProfileRef claim", got.ServiceOfferingRef)
 	}
 }
 

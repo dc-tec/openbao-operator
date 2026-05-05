@@ -180,7 +180,7 @@ func TestReconcileOpenBaoClusterClaim(t *testing.T) {
 			wantConnectionBy: string(openbaov1alpha1.ReasonPending),
 			wantMode:         openbaov1alpha1.OpenBaoClusterClaimMaterializationModeSameCluster,
 			wantLocalRef:     &openbaov1alpha1.NamespacedReference{Namespace: "payments", Name: "payments-bao"},
-			wantApplied:      validSameClusterAppliedStatusWithOffering("standard-ha"),
+			wantApplied:      validSameClusterAppliedStatusWithStandardOffering(),
 			wantLocalObj:     true,
 			wantFinalizer:    true,
 		},
@@ -867,8 +867,8 @@ func TestReconcileOpenBaoClusterClaimPinsServiceOfferingBeforeMaterialization(t 
 	if updated.Status.Phase != openbaov1alpha1.OpenBaoClusterClaimPhaseProvisioning {
 		t.Fatalf("Phase after second reconcile = %q, want %q", updated.Status.Phase, openbaov1alpha1.OpenBaoClusterClaimPhaseProvisioning)
 	}
-	if !reflect.DeepEqual(updated.Status.Applied, derefAppliedStatus(validSameClusterAppliedStatusWithOffering("standard-ha"))) {
-		t.Fatalf("Applied after second reconcile = %#v, want %#v", updated.Status.Applied, derefAppliedStatus(validSameClusterAppliedStatusWithOffering("standard-ha")))
+	if !reflect.DeepEqual(updated.Status.Applied, derefAppliedStatus(validSameClusterAppliedStatusWithStandardOffering())) {
+		t.Fatalf("Applied after second reconcile = %#v, want %#v", updated.Status.Applied, derefAppliedStatus(validSameClusterAppliedStatusWithStandardOffering()))
 	}
 }
 

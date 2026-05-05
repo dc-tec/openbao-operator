@@ -285,7 +285,7 @@ func desiredAppliedStatus(
 
 	applied := claimcontract.AppliedStatus(approved)
 	applied.ServiceOfferingRef = copyLocalReference(current.ServiceOfferingRef)
-	if claim != nil && claim.Spec.ServiceOfferingRef != nil && claim.Spec.ServiceOfferingRef.Name != "" {
+	if claim != nil {
 		applied.ServiceOfferingRef = copyLocalReference(claim.Spec.ServiceOfferingRef)
 	}
 	applied.ApprovedContract = claimcontract.ContractIdentityStatus(claimcontract.IdentityHash(approved))
