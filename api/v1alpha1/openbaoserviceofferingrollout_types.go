@@ -150,6 +150,7 @@ type OpenBaoServiceOfferingRolloutStatus struct {
 // +kubebuilder:printcolumn:name="Offering",type="string",JSONPath=".spec.offeringRef.name"
 // +kubebuilder:printcolumn:name="Target",type="string",JSONPath=".spec.targetRevisionRef.name"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state"
+// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.reason"
 // +kubebuilder:printcolumn:name="Total",type="integer",JSONPath=".status.total",priority=1
 // +kubebuilder:printcolumn:name="Succeeded",type="integer",JSONPath=".status.succeeded",priority=1
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

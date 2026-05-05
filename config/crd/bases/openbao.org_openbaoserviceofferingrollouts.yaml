@@ -26,6 +26,9 @@ spec:
     - jsonPath: .status.state
       name: State
       type: string
+    - jsonPath: .status.reason
+      name: Reason
+      type: string
     - jsonPath: .status.total
       name: Total
       priority: 1

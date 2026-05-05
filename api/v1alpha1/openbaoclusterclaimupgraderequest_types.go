@@ -124,6 +124,7 @@ type OpenBaoClusterClaimUpgradeRequestStatus struct {
 // +kubebuilder:resource:shortName=obclaimupgrade
 // +kubebuilder:printcolumn:name="Claim",type="string",JSONPath=".spec.claimRef.name"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state"
+// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.reason"
 // +kubebuilder:printcolumn:name="Class",type="string",JSONPath=".status.classification.class",priority=1
 // +kubebuilder:printcolumn:name="Target",type="string",JSONPath=".status.target.serviceProfileRef.name",priority=1
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

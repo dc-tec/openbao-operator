@@ -76,6 +76,7 @@ type OpenBaoClusterClaimBackupRequestStatus struct {
 // +kubebuilder:resource:shortName=obclaimbackup
 // +kubebuilder:printcolumn:name="Claim",type="string",JSONPath=".spec.claimRef.name"
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.state"
+// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.reason"
 // +kubebuilder:printcolumn:name="Snapshot",type="string",JSONPath=".status.snapshotKey",priority=1
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 

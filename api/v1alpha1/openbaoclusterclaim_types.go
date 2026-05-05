@@ -408,6 +408,10 @@ type OpenBaoClusterClaimStatus struct {
 // +kubebuilder:printcolumn:name="Offering",type="string",JSONPath=".spec.serviceOfferingRef.name"
 // +kubebuilder:printcolumn:name="Profile",type="string",JSONPath=".spec.serviceProfileRef.name"
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.summary.reason"
+// +kubebuilder:printcolumn:name="Endpoint",type="string",JSONPath=".status.connection.endpoint",priority=1
+// +kubebuilder:printcolumn:name="AppliedProfile",type="string",JSONPath=".status.applied.serviceProfileRef.name",priority=1
+// +kubebuilder:printcolumn:name="AppliedOffering",type="string",JSONPath=".status.applied.serviceOfferingRef.name",priority=1
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // OpenBaoClusterClaim is the user-facing namespaced request for an OpenBao service instance.
