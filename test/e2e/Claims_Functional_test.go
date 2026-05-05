@@ -45,6 +45,9 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		ingressClassName := claimScopedName("ingress-class", f.Namespace)
 		entrypointName := claimScopedName("entrypoint", f.Namespace)
 		ingressPolicyName := claimScopedName("ingress-policy", f.Namespace)
+		networkProfileName := claimScopedName("network", f.Namespace)
+		serviceProfile := catalog.serviceProfile()
+		attachClaimNetworkProfile(serviceProfile, networkProfileName)
 
 		var claim *openbaov1alpha1.OpenBaoClusterClaim
 
@@ -65,11 +68,12 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 				c,
 				&networkingv1.IngressClass{ObjectMeta: metav1.ObjectMeta{Name: ingressClassName}},
 				catalog.serviceOffering(),
-				catalog.serviceProfile(),
+				serviceProfile,
 				catalog.secretBootstrapProfile(),
 				&openbaov1alpha1.OpenBaoExposureClass{ObjectMeta: metav1.ObjectMeta{Name: catalog.ExposureName}},
 				&openbaov1alpha1.OpenBaoEntrypoint{ObjectMeta: metav1.ObjectMeta{Name: entrypointName}},
 				&openbaov1alpha1.OpenBaoIngressPolicy{ObjectMeta: metav1.ObjectMeta{Name: ingressPolicyName}},
+				&openbaov1alpha1.OpenBaoNetworkProfile{ObjectMeta: metav1.ObjectMeta{Name: networkProfileName}},
 				catalog.backupProfile(),
 			)
 			_ = f.Cleanup(cleanupCtx)
@@ -81,8 +85,9 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			catalog.bootstrapAuthSecret(f.Namespace),
 			catalog.backupProfile(),
 			catalog.secretBootstrapProfile(),
-			catalog.serviceProfile(),
+			serviceProfile,
 			catalog.serviceOffering(),
+			claimTrustedIngressNetworkProfile(networkProfileName),
 			&networkingv1.IngressClass{
 				ObjectMeta: metav1.ObjectMeta{Name: ingressClassName},
 				Spec: networkingv1.IngressClassSpec{
@@ -203,6 +208,9 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		gatewayName := claimScopedName("gateway", f.Namespace)
 		entrypointName := claimScopedName("entrypoint", f.Namespace)
 		gatewayHost := claimScopedName("vault", f.Namespace) + ".gateway.example.internal"
+		networkProfileName := claimScopedName("network", f.Namespace)
+		serviceProfile := catalog.serviceProfile()
+		attachClaimNetworkProfile(serviceProfile, networkProfileName)
 
 		Expect(f.InstallGatewayAPI()).To(Succeed())
 
@@ -226,10 +234,11 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 				&gatewayv1.Gateway{ObjectMeta: metav1.ObjectMeta{Name: gatewayName, Namespace: f.Namespace}},
 				&gatewayv1.GatewayClass{ObjectMeta: metav1.ObjectMeta{Name: gatewayClassName}},
 				catalog.serviceOffering(),
-				catalog.serviceProfile(),
+				serviceProfile,
 				catalog.secretBootstrapProfile(),
 				&openbaov1alpha1.OpenBaoExposureClass{ObjectMeta: metav1.ObjectMeta{Name: catalog.ExposureName}},
 				&openbaov1alpha1.OpenBaoEntrypoint{ObjectMeta: metav1.ObjectMeta{Name: entrypointName}},
+				&openbaov1alpha1.OpenBaoNetworkProfile{ObjectMeta: metav1.ObjectMeta{Name: networkProfileName}},
 				catalog.backupProfile(),
 			)
 			_ = f.Cleanup(cleanupCtx)
@@ -243,8 +252,9 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			catalog.bootstrapAuthSecret(f.Namespace),
 			catalog.backupProfile(),
 			catalog.secretBootstrapProfile(),
-			catalog.serviceProfile(),
+			serviceProfile,
 			catalog.serviceOffering(),
+			claimTrustedIngressNetworkProfile(networkProfileName),
 			&gatewayv1.Gateway{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      gatewayName,
@@ -1061,7 +1071,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		Expect(c.Create(ctx, backupRequest)).To(Succeed())
 
 		By("waiting for the claim to publish the active backup workflow summary")
-		_, err = waitForClaim(
+		updated, err = waitForClaim(
 			ctx,
 			c,
 			claim.Namespace,
@@ -1113,7 +1123,7 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		)))
 
 		By("projecting the completed backup onto claim status and clearing the workflow summary")
-		_, err = waitForClaim(
+		updated, err = waitForClaim(
 			ctx,
 			c,
 			claim.Namespace,

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,6 +35,27 @@ const (
 
 func serviceClaimsE2EEnabled() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv(claimE2EEnableEnv)), "true")
+}
+
+func claimTrustedIngressNetworkProfile(name string) *openbaov1alpha1.OpenBaoNetworkProfile {
+	return &openbaov1alpha1.OpenBaoNetworkProfile{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Spec: openbaov1alpha1.OpenBaoNetworkProfileSpec{
+			TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": "default",
+					},
+				},
+			}},
+		},
+	}
+}
+
+func attachClaimNetworkProfile(profile *openbaov1alpha1.OpenBaoServiceProfile, networkProfileName string) {
+	profile.Spec.Network = &openbaov1alpha1.OpenBaoServiceProfileNetworkSpec{
+		ProfileRef: &openbaov1alpha1.LocalReference{Name: networkProfileName},
+	}
 }
 
 func ensureClaimRustFS(ctx context.Context, c client.Client, restCfg *rest.Config, namespace string) error {
@@ -419,7 +441,9 @@ func waitForClaimUpgradeCleared(
 	pollInterval time.Duration,
 ) (*openbaov1alpha1.OpenBaoClusterClaim, error) {
 	return waitForClaim(ctx, c, namespace, name, timeout, pollInterval, func(claim *openbaov1alpha1.OpenBaoClusterClaim) (bool, error) {
-		return claim.Status.Upgrade == nil, nil
+		return claim.Status.Phase == openbaov1alpha1.OpenBaoClusterClaimPhaseReady &&
+			claim.Status.Summary == nil &&
+			claim.Status.Upgrade == nil, nil
 	})
 }
 
