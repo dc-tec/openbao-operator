@@ -906,6 +906,498 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		}, 5*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 	})
 
+	It("executes a Blue/Green claim upgrade request against a new service-profile revision", Label(
+		"case:claims-functional-bluegreen-upgrade-request",
+		"covers:claim-bluegreen-upgrade",
+		"covers:claim-upgrade-bluegreen",
+		"claims-bluegreen",
+		"claims-upgrade",
+	), func() {
+		if !serviceClaimsE2EEnabled() {
+			Skip("claim functional suite requires E2E_ENABLE_SERVICE_CLAIMS=true")
+		}
+		initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+		targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+		if initialVersion == targetVersion {
+			Skip(fmt.Sprintf("claim Blue/Green upgrade functional case requires different versions: from=%s to=%s", initialVersion, targetVersion))
+		}
+		targetImage := fmt.Sprintf("%s:%s", envOrDefault("RELATED_IMAGE_OPENBAO", "openbao/openbao"), targetVersion)
+
+		f, err := framework.NewSetup(ctx, "claims-functional-bluegreen", operatorNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		c := f.Client
+		catalog := newSameClusterClaimCatalog(f.Namespace)
+		upgradePolicyName := claimScopedName("bluegreen-policy", f.Namespace)
+		autoPromote := true
+		maxJobFailures := int32(2)
+
+		backupProfile := catalog.backupProfile()
+		serviceProfileV1 := catalog.serviceProfile()
+		serviceProfileV1.Spec.Cluster.Version = initialVersion
+		serviceProfileV1.Spec.Cluster.Voters = 3
+		serviceProfileV1.Spec.Lifecycle.UpgradeStrategy = openbaov1alpha1.UpdateStrategyBlueGreen
+		serviceProfileV1.Spec.Lifecycle.PolicyRef = &openbaov1alpha1.LocalReference{Name: upgradePolicyName}
+		serviceProfileV2 := catalog.serviceProfile()
+		serviceProfileV2.Name = claimScopedName("service-bluegreen-v2", f.Namespace)
+		serviceProfileV2.Spec.Cluster.Version = targetVersion
+		serviceProfileV2.Spec.Cluster.Voters = 3
+		serviceProfileV2.Spec.Lifecycle.UpgradeStrategy = openbaov1alpha1.UpdateStrategyBlueGreen
+		serviceProfileV2.Spec.Lifecycle.PolicyRef = &openbaov1alpha1.LocalReference{Name: upgradePolicyName}
+		upgradePolicy := &openbaov1alpha1.OpenBaoUpgradePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: upgradePolicyName},
+			Spec: openbaov1alpha1.OpenBaoUpgradePolicySpec{
+				BlueGreen: &openbaov1alpha1.OpenBaoUpgradePolicyBlueGreenSpec{
+					AutoPromote:     &autoPromote,
+					MinSyncDuration: "1s",
+					MaxJobFailures:  &maxJobFailures,
+				},
+			},
+		}
+		serviceOffering := catalog.serviceOffering()
+		claim := catalog.sameClusterClaim(operatorNamespace, claimScopedName("claim", f.Namespace), f.TenantName)
+		upgradeRequestName := claimScopedName("bluegreen-upgrade", f.Namespace)
+
+		DeferCleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+			defer cancel()
+
+			_ = deleteObjects(
+				cleanupCtx,
+				c,
+				&openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: claim.Namespace,
+						Name:      upgradeRequestName,
+					},
+				},
+			)
+			latest := &openbaov1alpha1.OpenBaoClusterClaim{}
+			if err := c.Get(cleanupCtx, client.ObjectKeyFromObject(claim), latest); err == nil {
+				_ = c.Delete(cleanupCtx, latest)
+				_ = waitForClaimDeleted(cleanupCtx, c, latest.Namespace, latest.Name, 3*time.Minute, framework.DefaultPollInterval)
+			}
+
+			_ = deleteObjects(
+				cleanupCtx,
+				c,
+				serviceOffering,
+				serviceProfileV1,
+				serviceProfileV2,
+				upgradePolicy,
+				catalog.secretBootstrapProfile(),
+				catalog.internalExposureClass(),
+				backupProfile,
+			)
+			_ = f.Cleanup(cleanupCtx)
+		})
+
+		Expect(createObjects(
+			ctx,
+			c,
+			catalog.bootstrapAuthSecret(f.Namespace),
+			backupProfile,
+			catalog.internalExposureClass(),
+			catalog.secretBootstrapProfile(),
+			upgradePolicy,
+			serviceProfileV1,
+			serviceProfileV2,
+			serviceOffering,
+		)).To(Succeed())
+		Expect(c.Create(ctx, claim)).To(Succeed())
+
+		_, err = waitForClaimPinnedBinding(
+			ctx,
+			c,
+			claim.Namespace,
+			claim.Name,
+			catalog.OfferingName,
+			serviceProfileV1.Name,
+			6*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = waitForClaimPhase(
+			ctx,
+			c,
+			claim.Namespace,
+			claim.Name,
+			openbaov1alpha1.OpenBaoClusterClaimPhaseReady,
+			10*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		localRef, err := waitForClaimLocalClusterRef(
+			ctx,
+			c,
+			claim.Namespace,
+			claim.Name,
+			3*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(f.WaitForClusterPhase(
+			ctx,
+			localRef.Name,
+			openbaov1alpha1.ClusterPhaseRunning,
+			10*time.Minute,
+			framework.DefaultPollInterval,
+		)).To(Succeed())
+		Eventually(func(g Gomega) {
+			localCluster := &openbaov1alpha1.OpenBaoCluster{}
+			key := types.NamespacedName{Namespace: localRef.Namespace, Name: localRef.Name}
+			g.Expect(c.Get(ctx, key, localCluster)).To(Succeed())
+			g.Expect(localCluster.Spec.Upgrade).NotTo(BeNil())
+			g.Expect(localCluster.Spec.Upgrade.Strategy).To(Equal(openbaov1alpha1.UpdateStrategyBlueGreen))
+			g.Expect(localCluster.Spec.Upgrade.BlueGreen).NotTo(BeNil())
+			g.Expect(localCluster.Spec.Upgrade.BlueGreen.Verification).NotTo(BeNil())
+			g.Expect(localCluster.Spec.Upgrade.BlueGreen.Verification.MinSyncDuration).To(Equal("1s"))
+			g.Expect(localCluster.Status.BlueGreen).NotTo(BeNil())
+			g.Expect(localCluster.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+		}, 8*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+
+		By("publishing the Blue/Green target revision and requesting the claim upgrade")
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(serviceOffering), serviceOffering)).To(Succeed())
+		originalOffering := serviceOffering.DeepCopy()
+		serviceOffering.Spec.CurrentRevisionRef.Name = serviceProfileV2.Name
+		Expect(c.Patch(ctx, serviceOffering, client.MergeFrom(originalOffering))).To(Succeed())
+
+		upgradeRequest := &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: claim.Namespace,
+				Name:      upgradeRequestName,
+			},
+			Spec: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestSpec{
+				ClaimRef: openbaov1alpha1.LocalReference{Name: claim.Name},
+				Target: openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestTargetSpec{
+					ServiceOfferingRef: &openbaov1alpha1.LocalReference{Name: catalog.OfferingName},
+				},
+			},
+		}
+		Expect(c.Create(ctx, upgradeRequest)).To(Succeed())
+
+		By("waiting for the claim upgrade request to drive the Blue/Green rollout")
+		request, err := waitForClaimUpgradeRequest(
+			ctx,
+			c,
+			upgradeRequest.Namespace,
+			upgradeRequest.Name,
+			6*time.Minute,
+			framework.DefaultPollInterval,
+			func(request *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest) (bool, error) {
+				return request.Status.State == openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut ||
+					request.Status.State == openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded, nil
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(request.Status.Target).NotTo(BeNil())
+		Expect(request.Status.Target.ServiceProfileRef).NotTo(BeNil())
+		Expect(request.Status.Target.ServiceProfileRef.Name).To(Equal(serviceProfileV2.Name))
+		Expect(request.Status.Classification).NotTo(BeNil())
+		Expect(request.Status.Classification.Class).To(Equal(
+			openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassInPlace,
+		))
+
+		By("waiting for the Blue/Green-managed cluster to converge to the target version")
+		request, err = waitForClaimUpgradeRequestState(
+			ctx,
+			c,
+			upgradeRequest.Namespace,
+			upgradeRequest.Name,
+			openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateSucceeded,
+			20*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(request.Status.Classification).NotTo(BeNil())
+		Expect(request.Status.Classification.Class).To(Equal(
+			openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassInPlace,
+		))
+		_, err = waitForClaimPinnedBinding(
+			ctx,
+			c,
+			claim.Namespace,
+			claim.Name,
+			catalog.OfferingName,
+			serviceProfileV2.Name,
+			10*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		_, err = waitForClaimUpgradeCleared(
+			ctx,
+			c,
+			claim.Namespace,
+			claim.Name,
+			5*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func(g Gomega) {
+			localCluster := &openbaov1alpha1.OpenBaoCluster{}
+			key := types.NamespacedName{Namespace: localRef.Namespace, Name: localRef.Name}
+			g.Expect(c.Get(ctx, key, localCluster)).To(Succeed())
+			g.Expect(localCluster.Spec.Version).To(Equal(targetVersion))
+			g.Expect(localCluster.Spec.Image).To(Equal(targetImage))
+			g.Expect(localCluster.Spec.Upgrade).NotTo(BeNil())
+			g.Expect(localCluster.Spec.Upgrade.Strategy).To(Equal(openbaov1alpha1.UpdateStrategyBlueGreen))
+			g.Expect(localCluster.Status.CurrentVersion).To(Equal(targetVersion))
+			g.Expect(localCluster.Status.BlueGreen).NotTo(BeNil())
+			g.Expect(localCluster.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+			g.Expect(localCluster.Status.BlueGreen.GreenRevision).To(BeEmpty())
+		}, 10*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+	})
+
+	It("rolls out a service-offering revision across claims with bounded concurrency", Label(
+		"case:claims-functional-service-offering-rollout",
+		"covers:claim-service-offering-rollout",
+		"covers:claim-service-offering-rollout-concurrency",
+		"claims-rollout",
+		"claims-concurrency",
+		"claims-upgrade",
+	), func() {
+		if !serviceClaimsE2EEnabled() {
+			Skip("claim functional suite requires E2E_ENABLE_SERVICE_CLAIMS=true")
+		}
+		initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+		targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+		if initialVersion == targetVersion {
+			Skip(fmt.Sprintf("claim rollout functional case requires different versions: from=%s to=%s", initialVersion, targetVersion))
+		}
+		targetImage := fmt.Sprintf("%s:%s", envOrDefault("RELATED_IMAGE_OPENBAO", "openbao/openbao"), targetVersion)
+
+		f, err := framework.NewSetup(ctx, "claims-functional-rollout", operatorNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		c := f.Client
+		catalog := newSameClusterClaimCatalog(f.Namespace)
+		backupBackend := catalog.backupBackend()
+		backupTarget := catalog.backupTarget()
+		backupProfileV1 := catalog.backupProfile()
+		backupProfileV1.Spec.Schedule = "0 3 * * *"
+		backupProfileV1.Spec.TargetRef = &openbaov1alpha1.LocalReference{Name: backupTarget.Name}
+		backupProfileV2 := catalog.backupProfile()
+		backupProfileV2.Name = claimScopedName("backup-rollout-v2", f.Namespace)
+		backupProfileV2.Spec.Schedule = "45 4 * * *"
+		backupProfileV2.Spec.TargetRef = &openbaov1alpha1.LocalReference{Name: backupTarget.Name}
+
+		serviceProfileV1 := catalog.serviceProfile()
+		serviceProfileV1.Spec.Cluster.Version = initialVersion
+		serviceProfileV2 := catalog.serviceProfile()
+		serviceProfileV2.Name = claimScopedName("service-rollout-v2", f.Namespace)
+		serviceProfileV2.Spec.Cluster.Version = targetVersion
+		serviceProfileV2.Spec.Backup.ProfileRef.Name = backupProfileV2.Name
+		serviceOffering := catalog.serviceOffering()
+		claimA := catalog.sameClusterClaim(operatorNamespace, claimScopedName("claim-a", f.Namespace), f.TenantName)
+		claimB := catalog.sameClusterClaim(operatorNamespace, claimScopedName("claim-b", f.Namespace), f.TenantName)
+		rolloutName := claimScopedName("offering-rollout", f.Namespace)
+		maxConcurrent := int32(1)
+		rollout := &openbaov1alpha1.OpenBaoServiceOfferingRollout{
+			ObjectMeta: metav1.ObjectMeta{Name: rolloutName},
+			Spec: openbaov1alpha1.OpenBaoServiceOfferingRolloutSpec{
+				OfferingRef:       openbaov1alpha1.LocalReference{Name: catalog.OfferingName},
+				TargetRevisionRef: openbaov1alpha1.LocalReference{Name: serviceProfileV2.Name},
+				Selector: &openbaov1alpha1.OpenBaoServiceOfferingRolloutSelectorSpec{
+					Namespaces: []string{operatorNamespace},
+				},
+				Strategy: &openbaov1alpha1.OpenBaoServiceOfferingRolloutStrategySpec{
+					MaxConcurrent: &maxConcurrent,
+					Mode:          openbaov1alpha1.OpenBaoServiceOfferingRolloutModeInPlaceOnly,
+				},
+			},
+		}
+
+		DeferCleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			_ = deleteObjects(
+				cleanupCtx,
+				c,
+				&openbaov1alpha1.OpenBaoServiceOfferingRollout{
+					ObjectMeta: metav1.ObjectMeta{Name: rolloutName},
+				},
+			)
+			requests, err := listClaimUpgradeRequestsForRollout(cleanupCtx, c, rolloutName)
+			if err == nil {
+				for i := range requests {
+					_ = c.Delete(cleanupCtx, &requests[i])
+				}
+			}
+			for _, claim := range []*openbaov1alpha1.OpenBaoClusterClaim{claimA, claimB} {
+				latest := &openbaov1alpha1.OpenBaoClusterClaim{}
+				if err := c.Get(cleanupCtx, client.ObjectKeyFromObject(claim), latest); err == nil {
+					_ = c.Delete(cleanupCtx, latest)
+					_ = waitForClaimDeleted(cleanupCtx, c, latest.Namespace, latest.Name, 3*time.Minute, framework.DefaultPollInterval)
+				}
+			}
+
+			_ = deleteObjects(
+				cleanupCtx,
+				c,
+				serviceOffering,
+				serviceProfileV1,
+				serviceProfileV2,
+				catalog.secretBootstrapProfile(),
+				catalog.internalExposureClass(),
+				backupBackend,
+				backupTarget,
+				backupProfileV1,
+				backupProfileV2,
+			)
+			_ = f.Cleanup(cleanupCtx)
+		})
+
+		Expect(createObjects(
+			ctx,
+			c,
+			catalog.bootstrapAuthSecret(f.Namespace),
+			backupBackend,
+			backupTarget,
+			backupProfileV1,
+			backupProfileV2,
+			catalog.internalExposureClass(),
+			catalog.secretBootstrapProfile(),
+			serviceProfileV1,
+			serviceProfileV2,
+			serviceOffering,
+		)).To(Succeed())
+		Expect(c.Create(ctx, claimA)).To(Succeed())
+		Expect(c.Create(ctx, claimB)).To(Succeed())
+
+		localRefs := make(map[string]*openbaov1alpha1.NamespacedReference, 2)
+		for _, claim := range []*openbaov1alpha1.OpenBaoClusterClaim{claimA, claimB} {
+			_, err = waitForClaimPinnedBinding(
+				ctx,
+				c,
+				claim.Namespace,
+				claim.Name,
+				catalog.OfferingName,
+				serviceProfileV1.Name,
+				6*time.Minute,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = waitForClaimPhase(
+				ctx,
+				c,
+				claim.Namespace,
+				claim.Name,
+				openbaov1alpha1.OpenBaoClusterClaimPhaseReady,
+				8*time.Minute,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			localRef, err := waitForClaimLocalClusterRef(
+				ctx,
+				c,
+				claim.Namespace,
+				claim.Name,
+				3*time.Minute,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			localRefs[claim.Name] = localRef
+			Expect(f.WaitForClusterPhase(
+				ctx,
+				localRef.Name,
+				openbaov1alpha1.ClusterPhaseRunning,
+				8*time.Minute,
+				framework.DefaultPollInterval,
+			)).To(Succeed())
+		}
+
+		By("publishing the next offering revision and creating a bounded rollout intent")
+		Expect(c.Get(ctx, client.ObjectKeyFromObject(serviceOffering), serviceOffering)).To(Succeed())
+		originalOffering := serviceOffering.DeepCopy()
+		serviceOffering.Spec.CurrentRevisionRef.Name = serviceProfileV2.Name
+		Expect(c.Patch(ctx, serviceOffering, client.MergeFrom(originalOffering))).To(Succeed())
+		Expect(c.Create(ctx, rollout)).To(Succeed())
+
+		By("observing bounded rollout-owned claim upgrade request concurrency")
+		Eventually(func(g Gomega) {
+			requests, err := listClaimUpgradeRequestsForRollout(ctx, c, rolloutName)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(requests).NotTo(BeEmpty())
+
+			updatedRollout := &openbaov1alpha1.OpenBaoServiceOfferingRollout{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Name: rolloutName}, updatedRollout)).To(Succeed())
+			g.Expect(updatedRollout.Status.Total).To(Equal(int32(2)))
+			for _, claimStatus := range updatedRollout.Status.Claims {
+				if claimStatus.RequestRef == nil {
+					continue
+				}
+				g.Expect(claimStatus.RequestRef.Namespace).To(Equal(operatorNamespace))
+			}
+		}, 2*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+		Consistently(func(g Gomega) {
+			requests, err := listClaimUpgradeRequestsForRollout(ctx, c, rolloutName)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			active := 0
+			for _, request := range requests {
+				switch request.Status.State {
+				case "",
+					openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStatePending,
+					openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut:
+					active++
+				}
+			}
+			g.Expect(active).To(BeNumerically("<=", 1))
+		}, 90*time.Second, framework.DefaultPollInterval).Should(Succeed())
+
+		By("waiting for the rollout to promote both selected claims")
+		updatedRollout, err := waitForServiceOfferingRolloutState(
+			ctx,
+			c,
+			rolloutName,
+			openbaov1alpha1.OpenBaoServiceOfferingRolloutStateSucceeded,
+			20*time.Minute,
+			framework.DefaultPollInterval,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(updatedRollout.Status.Total).To(Equal(int32(2)))
+		Expect(updatedRollout.Status.Succeeded).To(Equal(int32(2)))
+		Expect(updatedRollout.Status.Failed).To(Equal(int32(0)))
+		Expect(updatedRollout.Status.Blocked).To(Equal(int32(0)))
+		requests, err := listClaimUpgradeRequestsForRollout(ctx, c, rolloutName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(requests).To(HaveLen(2))
+
+		for _, claim := range []*openbaov1alpha1.OpenBaoClusterClaim{claimA, claimB} {
+			_, err = waitForClaimPinnedBinding(
+				ctx,
+				c,
+				claim.Namespace,
+				claim.Name,
+				catalog.OfferingName,
+				serviceProfileV2.Name,
+				10*time.Minute,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = waitForClaimUpgradeCleared(
+				ctx,
+				c,
+				claim.Namespace,
+				claim.Name,
+				5*time.Minute,
+				framework.DefaultPollInterval,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			localRef := localRefs[claim.Name]
+			Eventually(func(g Gomega) {
+				localCluster := &openbaov1alpha1.OpenBaoCluster{}
+				key := types.NamespacedName{Namespace: localRef.Namespace, Name: localRef.Name}
+				g.Expect(c.Get(ctx, key, localCluster)).To(Succeed())
+				g.Expect(localCluster.Spec.Version).To(Equal(targetVersion))
+				g.Expect(localCluster.Spec.Image).To(Equal(targetImage))
+				g.Expect(localCluster.Status.CurrentVersion).To(Equal(targetVersion))
+				g.Expect(localCluster.Spec.Backup).NotTo(BeNil())
+				g.Expect(localCluster.Spec.Backup.Schedule).To(Equal("45 4 * * *"))
+			}, 5*time.Minute, framework.DefaultPollInterval).Should(Succeed())
+		}
+	})
+
 	It("executes a manual claim backup request and projects the result onto claim status", Label(
 		"case:claims-functional-backup-request",
 		"covers:claim-backup-request",

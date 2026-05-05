@@ -1,5 +1,45 @@
 [
   {
+    "id": "claims-functional-bluegreen-upgrade-request",
+    "generatedId": "claims-functional-executes-a-blue-green-claim-upgrade-d52e13bd",
+    "caseLabel": "claims-functional-bluegreen-upgrade-request",
+    "coverage": [
+      "claim-bluegreen-upgrade",
+      "claim-upgrade-bluegreen"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "executes a Blue/Green claim upgrade request against a new service-profile revision",
+    "path": [
+      "Claims Functional",
+      "executes a Blue/Green claim upgrade request against a new service-profile revision"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-bluegreen-upgrade-request",
+      "covers:claim-bluegreen-upgrade",
+      "covers:claim-upgrade-bluegreen",
+      "claims-bluegreen",
+      "claims-upgrade"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional",
+      "claims-bluegreen",
+      "claims-upgrade"
+    ],
+    "steps": [
+      "publishing the Blue/Green target revision and requesting the claim upgrade",
+      "waiting for the claim upgrade request to drive the Blue/Green rollout",
+      "waiting for the Blue/Green-managed cluster to converge to the target version"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "claims-functional-restore-request",
     "generatedId": "claims-functional-executes-a-claim-restore-request-from-c61d9ae9",
     "caseLabel": "claims-functional-restore-request",
@@ -264,6 +304,48 @@
     ],
     "steps": [
       "publishing a load balancer address on the managed Ingress"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "claims-functional-service-offering-rollout",
+    "generatedId": "claims-functional-rolls-out-a-service-offering-revision-bd9a74d5",
+    "caseLabel": "claims-functional-service-offering-rollout",
+    "coverage": [
+      "claim-service-offering-rollout",
+      "claim-service-offering-rollout-concurrency"
+    ],
+    "file": "test/e2e/Claims_Functional_test.go",
+    "type": "It",
+    "name": "rolls out a service-offering revision across claims with bounded concurrency",
+    "path": [
+      "Claims Functional",
+      "rolls out a service-offering revision across claims with bounded concurrency"
+    ],
+    "labels": [
+      "claims",
+      "claims-functional",
+      "case:claims-functional-service-offering-rollout",
+      "covers:claim-service-offering-rollout",
+      "covers:claim-service-offering-rollout-concurrency",
+      "claims-rollout",
+      "claims-concurrency",
+      "claims-upgrade"
+    ],
+    "domainLabels": [
+      "claims",
+      "claims-functional",
+      "claims-rollout",
+      "claims-concurrency",
+      "claims-upgrade"
+    ],
+    "steps": [
+      "publishing the next offering revision and creating a bounded rollout intent",
+      "observing bounded rollout-owned claim upgrade request concurrency",
+      "waiting for the rollout to promote both selected claims"
     ],
     "focused": false,
     "pending": false,

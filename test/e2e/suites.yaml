@@ -312,12 +312,16 @@ suites:
     labels:
       - claims
       - claims-functional
+      - claims-bluegreen
+      - claims-concurrency
+      - claims-rollout
       - claims-upgrade
       - negative
       - requires-gateway-api
     coverage:
       - claim-backup-request
       - claim-backup-status-projection
+      - claim-bluegreen-upgrade
       - claim-catalog-network-profile
       - claim-catalog-observability-profile
       - claim-catalog-read-replica-profile
@@ -333,7 +337,10 @@ suites:
       - claim-restore-latest-successful-source
       - claim-restore-request
       - claim-restore-status-projection
+      - claim-service-offering-rollout
+      - claim-service-offering-rollout-concurrency
       - claim-upgrade-blocked-incompatible
+      - claim-upgrade-bluegreen
       - claim-upgrade-request
       - claim-upgrade-rollout
       - claim-upgrade-version-rollout

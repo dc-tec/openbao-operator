@@ -8,6 +8,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
+| `claims-functional-bluegreen-upgrade-request` | executes a Blue/Green claim upgrade request against a new service-profile revision | active | `claim-bluegreen-upgrade`, `claim-upgrade-bluegreen` | `claims`, `claims-functional`, `claims-bluegreen`, `claims-upgrade` |
 | `claims-functional-restore-request` | executes a claim restore request from a selected completed backup request | active | `claim-restore-request`, `claim-restore-latest-successful-source`, `claim-restore-backup-request-source`, `claim-restore-status-projection` | `claims`, `claims-functional` |
 | `claims-functional-backup-request` | executes a manual claim backup request and projects the result onto claim status | active | `claim-backup-request`, `claim-backup-status-projection` | `claims`, `claims-functional` |
 | `claims-functional-upgrade-request` | executes an in-place claim upgrade request against a new service-profile revision | active | `claim-upgrade-request`, `claim-upgrade-rollout`, `claim-upgrade-version-rollout`, `claim-upgrade-blocked-incompatible` | `claims`, `claims-functional`, `claims-upgrade` |
@@ -15,6 +16,25 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `claims-functional-catalog-profiles` | projects production catalog profiles into the claim-managed cluster | active | `claim-catalog-unseal-profile`, `claim-catalog-runtime-profile`, `claim-catalog-observability-profile`, `claim-catalog-storage-profile`, `claim-catalog-network-profile`, `claim-catalog-upgrade-policy`, `claim-catalog-read-replica-profile` | `claims`, `claims-functional` |
 | `claims-functional-gateway` | publishes the external gateway hostname once gateway integration is ready | active | `claim-gateway`, `claim-external-endpoint-publication` | `claims`, `claims-functional`, `requires-gateway-api` |
 | `claims-functional-ingress` | publishes the external ingress hostname once ingress integration is ready | active | `claim-ingress`, `claim-external-endpoint-publication` | `claims`, `claims-functional` |
+| `claims-functional-service-offering-rollout` | rolls out a service-offering revision across claims with bounded concurrency | active | `claim-service-offering-rollout`, `claim-service-offering-rollout-concurrency` | `claims`, `claims-functional`, `claims-rollout`, `claims-concurrency`, `claims-upgrade` |
+
+## `claims-functional-bluegreen-upgrade-request`
+
+Path: `Claims Functional > executes a Blue/Green claim upgrade request against a new service-profile revision`
+
+State: `active`
+
+Generated fallback ID: `claims-functional-executes-a-blue-green-claim-upgrade-d52e13bd`
+
+Covers: `claim-bluegreen-upgrade`, `claim-upgrade-bluegreen`
+
+Labels: `claims`, `claims-functional`, `claims-bluegreen`, `claims-upgrade`
+
+Recorded checkpoints:
+- publishing the Blue/Green target revision and requesting the claim upgrade
+- waiting for the claim upgrade request to drive the Blue/Green rollout
+- waiting for the Blue/Green-managed cluster to converge to the target version
+
 
 ## `claims-functional-restore-request`
 
@@ -135,3 +155,21 @@ Labels: `claims`, `claims-functional`
 
 Recorded checkpoints:
 - publishing a load balancer address on the managed Ingress
+
+
+## `claims-functional-service-offering-rollout`
+
+Path: `Claims Functional > rolls out a service-offering revision across claims with bounded concurrency`
+
+State: `active`
+
+Generated fallback ID: `claims-functional-rolls-out-a-service-offering-revision-bd9a74d5`
+
+Covers: `claim-service-offering-rollout`, `claim-service-offering-rollout-concurrency`
+
+Labels: `claims`, `claims-functional`, `claims-rollout`, `claims-concurrency`, `claims-upgrade`
+
+Recorded checkpoints:
+- publishing the next offering revision and creating a bounded rollout intent
+- observing bounded rollout-owned claim upgrade request concurrency
+- waiting for the rollout to promote both selected claims

@@ -12,15 +12,15 @@ Notes:
 ## Summary
 
 - Files: `22`
-- Specs: `95`
-- Explicit case IDs: `46`
-- Coverage tags: `75`
+- Specs: `97`
+- Explicit case IDs: `48`
+- Coverage tags: `79`
 
 ## Suites
 
 | Suite | Cases | Tracked | Pending | Labels | Source |
 | --- | ---: | ---: | ---: | --- | --- |
-| [Claims Functional](suites/Claims_Functional_test.md) | 7 | 7 | 0 | `claims`, `claims-functional`, `claims-upgrade`, `negative`, `requires-gateway-api` | `test/e2e/Claims_Functional_test.go` |
+| [Claims Functional](suites/Claims_Functional_test.md) | 9 | 9 | 0 | `claims`, `claims-functional`, `claims-bluegreen`, `claims-upgrade`, `negative`, `requires-gateway-api`, `claims-rollout`, `claims-concurrency` | `test/e2e/Claims_Functional_test.go` |
 | [Claims Guardrails](suites/Claims_Guardrails_test.md) | 4 | 4 | 0 | `claims`, `claims-guardrails`, `security`, `admission` | `test/e2e/Claims_Guardrails_test.go` |
 | [Claims Smoke](suites/Claims_Smoke_test.md) | 2 | 2 | 0 | `claims`, `claims-smoke`, `critical` | `test/e2e/Claims_Smoke_test.go` |
 | [Cluster Lifecycle: Deletion Policy](suites/Cluster_DeletionPolicy_test.md) | 3 | 3 | 0 | `lifecycle`, `cluster`, `deletion` | `test/e2e/Cluster_DeletionPolicy_test.go` |
@@ -58,6 +58,7 @@ Notes:
 | `cert-replacement` | 1 |
 | `claim-backup-request` | 1 |
 | `claim-backup-status-projection` | 1 |
+| `claim-bluegreen-upgrade` | 1 |
 | `claim-catalog-network-profile` | 1 |
 | `claim-catalog-observability-profile` | 1 |
 | `claim-catalog-read-replica-profile` | 1 |
@@ -76,8 +77,11 @@ Notes:
 | `claim-restore-latest-successful-source` | 1 |
 | `claim-restore-request` | 1 |
 | `claim-restore-status-projection` | 1 |
+| `claim-service-offering-rollout` | 1 |
+| `claim-service-offering-rollout-concurrency` | 1 |
 | `claim-spec-lock` | 1 |
 | `claim-upgrade-blocked-incompatible` | 1 |
+| `claim-upgrade-bluegreen` | 1 |
 | `claim-upgrade-request` | 1 |
 | `claim-upgrade-rollout` | 1 |
 | `claim-upgrade-version-rollout` | 1 |

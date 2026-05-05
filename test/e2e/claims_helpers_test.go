@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
 
@@ -430,6 +432,53 @@ func waitForClaimUpgradeRequestState(
 	return waitForClaimUpgradeRequest(ctx, c, namespace, name, timeout, pollInterval, func(request *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest) (bool, error) {
 		return request.Status.State == expected, nil
 	})
+}
+
+func waitForServiceOfferingRolloutState(
+	ctx context.Context,
+	c client.Client,
+	name string,
+	expected openbaov1alpha1.OpenBaoServiceOfferingRolloutState,
+	timeout time.Duration,
+	pollInterval time.Duration,
+) (*openbaov1alpha1.OpenBaoServiceOfferingRollout, error) {
+	return waitForServiceOfferingRollout(ctx, c, name, timeout, pollInterval, func(rollout *openbaov1alpha1.OpenBaoServiceOfferingRollout) (bool, error) {
+		return rollout.Status.State == expected, nil
+	})
+}
+
+func waitForServiceOfferingRollout(
+	ctx context.Context,
+	c client.Client,
+	name string,
+	timeout time.Duration,
+	pollInterval time.Duration,
+	predicate func(*openbaov1alpha1.OpenBaoServiceOfferingRollout) (bool, error),
+) (*openbaov1alpha1.OpenBaoServiceOfferingRollout, error) {
+	return waitForClaimObject(ctx, c, "", name, "OpenBaoServiceOfferingRollout", timeout, pollInterval, func() *openbaov1alpha1.OpenBaoServiceOfferingRollout {
+		return &openbaov1alpha1.OpenBaoServiceOfferingRollout{}
+	}, predicate)
+}
+
+func listClaimUpgradeRequestsForRollout(
+	ctx context.Context,
+	c client.Client,
+	rolloutName string,
+) ([]openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest, error) {
+	list := &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestList{}
+	if err := c.List(ctx, list, client.MatchingLabels{
+		constants.LabelOpenBaoServiceOfferingRollout: rolloutName,
+	}); err != nil {
+		return nil, fmt.Errorf("list claim upgrade requests for rollout %s: %w", rolloutName, err)
+	}
+
+	requests := append([]openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest(nil), list.Items...)
+	sort.Slice(requests, func(i, j int) bool {
+		left := requests[i].Namespace + "/" + requests[i].Name
+		right := requests[j].Namespace + "/" + requests[j].Name
+		return left < right
+	})
+	return requests, nil
 }
 
 func waitForClaimUpgradeCleared(
