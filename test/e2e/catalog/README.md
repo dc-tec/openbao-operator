@@ -14,7 +14,7 @@ Notes:
 - Files: `22`
 - Specs: `97`
 - Explicit case IDs: `48`
-- Coverage tags: `79`
+- Coverage tags: `80`
 
 ## Suites
 
@@ -74,6 +74,7 @@ Notes:
 | `claim-missing-bootstrap-source` | 1 |
 | `claim-offering-pin` | 1 |
 | `claim-restore-backup-request-source` | 1 |
+| `claim-restore-bluegreen` | 1 |
 | `claim-restore-latest-successful-source` | 1 |
 | `claim-restore-request` | 1 |
 | `claim-restore-status-projection` | 1 |

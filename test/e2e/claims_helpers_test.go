@@ -609,6 +609,7 @@ func waitForClaimObject[T client.Object](
 	defer deadline.Stop()
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
+	lastStatus := ""
 
 	for {
 		object := newObject()
@@ -617,6 +618,7 @@ func waitForClaimObject[T client.Object](
 				return zero, fmt.Errorf("get %s %s/%s: %w", kind, namespace, name, err)
 			}
 		} else {
+			lastStatus = describeClaimWaitObject(object)
 			ok, err := predicate(object)
 			if err != nil {
 				return zero, err
@@ -630,10 +632,133 @@ func waitForClaimObject[T client.Object](
 		case <-ctx.Done():
 			return zero, fmt.Errorf("context canceled while waiting for %s %s/%s: %w", kind, namespace, name, ctx.Err())
 		case <-deadline.C:
-			return zero, fmt.Errorf("timed out waiting for %s %s/%s", kind, namespace, name)
+			if lastStatus != "" {
+				return zero, fmt.Errorf("timed out waiting for %s %s/%s; last observed status: %s", kind, namespace, name, lastStatus)
+			}
+			return zero, fmt.Errorf("timed out waiting for %s %s/%s; object was not observed", kind, namespace, name)
 		case <-ticker.C:
 		}
 	}
+}
+
+func describeClaimWaitObject[T client.Object](object T) string {
+	switch obj := any(object).(type) {
+	case *openbaov1alpha1.OpenBaoClusterClaim:
+		return describeOpenBaoClusterClaimWaitStatus(obj)
+	case *openbaov1alpha1.OpenBaoClusterClaimBackupRequest:
+		return describeClaimBackupRequestWaitStatus(obj)
+	case *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest:
+		return describeClaimRestoreRequestWaitStatus(obj)
+	case *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest:
+		return describeClaimUpgradeRequestWaitStatus(obj)
+	case *openbaov1alpha1.OpenBaoServiceOfferingRollout:
+		return describeServiceOfferingRolloutWaitStatus(obj)
+	default:
+		return ""
+	}
+}
+
+func describeOpenBaoClusterClaimWaitStatus(claim *openbaov1alpha1.OpenBaoClusterClaim) string {
+	parts := []string{
+		fmt.Sprintf("phase=%q", claim.Status.Phase),
+		fmt.Sprintf("observedGeneration=%d", claim.Status.ObservedGeneration),
+	}
+	if claim.Status.Materialization.LocalRef != nil {
+		parts = append(parts, fmt.Sprintf("localRef=%s/%s", claim.Status.Materialization.LocalRef.Namespace, claim.Status.Materialization.LocalRef.Name))
+	}
+	if claim.Status.Applied.ServiceOfferingRef != nil {
+		parts = append(parts, "appliedOffering="+claim.Status.Applied.ServiceOfferingRef.Name)
+	}
+	if claim.Status.Applied.ServiceProfileRef != nil {
+		parts = append(parts, "appliedProfile="+claim.Status.Applied.ServiceProfileRef.Name)
+	}
+	if claim.Status.Rollout.State != "" {
+		parts = append(parts, fmt.Sprintf("rollout=%q/%q", claim.Status.Rollout.State, claim.Status.Rollout.Reason))
+	}
+	if claim.Status.Upgrade != nil {
+		parts = append(parts, fmt.Sprintf("upgrade=%q/%q", claim.Status.Upgrade.State, claim.Status.Upgrade.Reason))
+	}
+	if claim.Status.Backup != nil {
+		parts = append(parts, fmt.Sprintf("backup=%q/%q last=%q", claim.Status.Backup.RequestState, claim.Status.Backup.RequestReason, claim.Status.Backup.LastBackupName))
+	}
+	if claim.Status.Restore != nil {
+		parts = append(parts, fmt.Sprintf("restore=%q/%q snapshot=%q", claim.Status.Restore.RequestState, claim.Status.Restore.RequestReason, claim.Status.Restore.SnapshotKey))
+	}
+	if claim.Status.Summary != nil {
+		parts = append(parts, fmt.Sprintf("summary=%q/%q %q", claim.Status.Summary.Severity, claim.Status.Summary.Reason, compactClaimWaitMessage(claim.Status.Summary.Message)))
+	}
+	if condition := firstFalseClaimWaitCondition(claim.Status.Conditions); condition != nil {
+		parts = append(parts, fmt.Sprintf("condition=%s/%s %q", condition.Type, condition.Reason, compactClaimWaitMessage(condition.Message)))
+	}
+	return strings.Join(parts, " ")
+}
+
+func describeClaimBackupRequestWaitStatus(request *openbaov1alpha1.OpenBaoClusterClaimBackupRequest) string {
+	return strings.Join([]string{
+		fmt.Sprintf("state=%q", request.Status.State),
+		fmt.Sprintf("reason=%q", request.Status.Reason),
+		fmt.Sprintf("snapshot=%q", request.Status.SnapshotKey),
+		fmt.Sprintf("observedGeneration=%d", request.Status.ObservedGeneration),
+	}, " ")
+}
+
+func describeClaimRestoreRequestWaitStatus(request *openbaov1alpha1.OpenBaoClusterClaimRestoreRequest) string {
+	parts := []string{
+		fmt.Sprintf("state=%q", request.Status.State),
+		fmt.Sprintf("reason=%q", request.Status.Reason),
+		fmt.Sprintf("snapshot=%q", request.Status.SnapshotKey),
+		fmt.Sprintf("observedGeneration=%d", request.Status.ObservedGeneration),
+	}
+	if request.Status.RestoreRef != nil {
+		parts = append(parts, fmt.Sprintf("restoreRef=%s/%s", request.Status.RestoreRef.Namespace, request.Status.RestoreRef.Name))
+	}
+	return strings.Join(parts, " ")
+}
+
+func describeClaimUpgradeRequestWaitStatus(request *openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest) string {
+	parts := []string{
+		fmt.Sprintf("state=%q", request.Status.State),
+		fmt.Sprintf("reason=%q", request.Status.Reason),
+		fmt.Sprintf("observedGeneration=%d", request.Status.ObservedGeneration),
+	}
+	if request.Status.Classification != nil {
+		parts = append(parts, fmt.Sprintf("classification=%q/%q", request.Status.Classification.Class, request.Status.Classification.Reason))
+	}
+	if request.Status.Target != nil && request.Status.Target.ServiceProfileRef != nil {
+		parts = append(parts, "targetProfile="+request.Status.Target.ServiceProfileRef.Name)
+	}
+	return strings.Join(parts, " ")
+}
+
+func describeServiceOfferingRolloutWaitStatus(rollout *openbaov1alpha1.OpenBaoServiceOfferingRollout) string {
+	return strings.Join([]string{
+		fmt.Sprintf("state=%q", rollout.Status.State),
+		fmt.Sprintf("reason=%q", rollout.Status.Reason),
+		fmt.Sprintf("total=%d", rollout.Status.Total),
+		fmt.Sprintf("pending=%d", rollout.Status.Pending),
+		fmt.Sprintf("running=%d", rollout.Status.Running),
+		fmt.Sprintf("succeeded=%d", rollout.Status.Succeeded),
+		fmt.Sprintf("blocked=%d", rollout.Status.Blocked),
+		fmt.Sprintf("failed=%d", rollout.Status.Failed),
+		fmt.Sprintf("observedGeneration=%d", rollout.Status.ObservedGeneration),
+	}, " ")
+}
+
+func firstFalseClaimWaitCondition(conditions []metav1.Condition) *metav1.Condition {
+	for i := range conditions {
+		if conditions[i].Status == metav1.ConditionFalse {
+			return &conditions[i]
+		}
+	}
+	return nil
+}
+
+func compactClaimWaitMessage(message string) string {
+	message = strings.TrimSpace(strings.Join(strings.Fields(message), " "))
+	if len(message) <= 240 {
+		return message
+	}
+	return message[:240] + "..."
 }
 
 func waitForObjectDeletionOrPresence(

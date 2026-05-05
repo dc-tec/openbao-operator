@@ -334,6 +334,7 @@ suites:
       - claim-ingress
       - claim-missing-bootstrap-source
       - claim-restore-backup-request-source
+      - claim-restore-bluegreen
       - claim-restore-latest-successful-source
       - claim-restore-request
       - claim-restore-status-projection

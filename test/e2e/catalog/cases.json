@@ -47,6 +47,7 @@
       "claim-restore-request",
       "claim-restore-latest-successful-source",
       "claim-restore-backup-request-source",
+      "claim-restore-bluegreen",
       "claim-restore-status-projection"
     ],
     "file": "test/e2e/Claims_Functional_test.go",
@@ -63,11 +64,14 @@
       "covers:claim-restore-request",
       "covers:claim-restore-latest-successful-source",
       "covers:claim-restore-backup-request-source",
-      "covers:claim-restore-status-projection"
+      "covers:claim-restore-bluegreen",
+      "covers:claim-restore-status-projection",
+      "claims-bluegreen"
     ],
     "domainLabels": [
       "claims",
-      "claims-functional"
+      "claims-functional",
+      "claims-bluegreen"
     ],
     "steps": [
       "creating a fresh successful backup for the restore request to consume",

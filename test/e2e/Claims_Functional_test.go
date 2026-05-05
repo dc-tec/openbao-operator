@@ -1640,7 +1640,9 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		"covers:claim-restore-request",
 		"covers:claim-restore-latest-successful-source",
 		"covers:claim-restore-backup-request-source",
+		"covers:claim-restore-bluegreen",
 		"covers:claim-restore-status-projection",
+		"claims-bluegreen",
 	), func() {
 		if !serviceClaimsE2EEnabled() {
 			Skip("claim functional suite requires E2E_ENABLE_SERVICE_CLAIMS=true")
@@ -1707,6 +1709,22 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 		backupProfile := catalog.backupProfile()
 		backupProfile.Spec.Schedule = "17 4 * * *"
 		backupProfile.Spec.TargetRef = &openbaov1alpha1.LocalReference{Name: backupTarget.Name}
+		upgradePolicyName := claimScopedName("bluegreen-policy", f.Namespace)
+		autoPromote := true
+		maxJobFailures := int32(2)
+		upgradePolicy := &openbaov1alpha1.OpenBaoUpgradePolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: upgradePolicyName},
+			Spec: openbaov1alpha1.OpenBaoUpgradePolicySpec{
+				BlueGreen: &openbaov1alpha1.OpenBaoUpgradePolicyBlueGreenSpec{
+					AutoPromote:     &autoPromote,
+					MinSyncDuration: "1s",
+					MaxJobFailures:  &maxJobFailures,
+				},
+			},
+		}
+		serviceProfile := catalog.serviceProfile()
+		serviceProfile.Spec.Lifecycle.UpgradeStrategy = openbaov1alpha1.UpdateStrategyBlueGreen
+		serviceProfile.Spec.Lifecycle.PolicyRef = &openbaov1alpha1.LocalReference{Name: upgradePolicyName}
 		claim := catalog.sameClusterClaim(operatorNamespace, claimScopedName("claim", f.Namespace), f.TenantName)
 		backupRequestName := claimScopedName("backup-request", f.Namespace)
 		latestRestoreRequestName := claimScopedName("restore-latest", f.Namespace)
@@ -1763,7 +1781,8 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 				credentialsSecret,
 				backupAuthProfile,
 				catalog.serviceOffering(),
-				catalog.serviceProfile(),
+				serviceProfile,
+				upgradePolicy,
 				catalog.secretBootstrapProfile(),
 				catalog.internalExposureClass(),
 				backupProfile,
@@ -1784,7 +1803,8 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			backupProfile,
 			catalog.internalExposureClass(),
 			catalog.secretBootstrapProfile(),
-			catalog.serviceProfile(),
+			upgradePolicy,
+			serviceProfile,
 			catalog.serviceOffering(),
 		)).To(Succeed())
 		Expect(c.Create(ctx, claim)).To(Succeed())
@@ -1817,6 +1837,14 @@ var _ = Describe("Claims Functional", Label("claims", "claims-functional"), func
 			8*time.Minute,
 			framework.DefaultPollInterval,
 		)).To(Succeed())
+		Eventually(func(g Gomega) {
+			localCluster := &openbaov1alpha1.OpenBaoCluster{}
+			g.Expect(c.Get(ctx, types.NamespacedName{Namespace: localRef.Namespace, Name: localRef.Name}, localCluster)).To(Succeed())
+			g.Expect(localCluster.Spec.Upgrade).NotTo(BeNil())
+			g.Expect(localCluster.Spec.Upgrade.Strategy).To(Equal(openbaov1alpha1.UpdateStrategyBlueGreen))
+			g.Expect(localCluster.Status.BlueGreen).NotTo(BeNil())
+			g.Expect(localCluster.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+		}, 8*time.Minute, framework.DefaultPollInterval).Should(Succeed())
 
 		By("creating a fresh successful backup for the restore request to consume")
 		backupRequest := &openbaov1alpha1.OpenBaoClusterClaimBackupRequest{

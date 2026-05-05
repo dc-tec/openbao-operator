@@ -9,7 +9,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
 | `claims-functional-bluegreen-upgrade-request` | executes a Blue/Green claim upgrade request against a new service-profile revision | active | `claim-bluegreen-upgrade`, `claim-upgrade-bluegreen` | `claims`, `claims-functional`, `claims-bluegreen`, `claims-upgrade` |
-| `claims-functional-restore-request` | executes a claim restore request from a selected completed backup request | active | `claim-restore-request`, `claim-restore-latest-successful-source`, `claim-restore-backup-request-source`, `claim-restore-status-projection` | `claims`, `claims-functional` |
+| `claims-functional-restore-request` | executes a claim restore request from a selected completed backup request | active | `claim-restore-request`, `claim-restore-latest-successful-source`, `claim-restore-backup-request-source`, `claim-restore-bluegreen`, `claim-restore-status-projection` | `claims`, `claims-functional`, `claims-bluegreen` |
 | `claims-functional-backup-request` | executes a manual claim backup request and projects the result onto claim status | active | `claim-backup-request`, `claim-backup-status-projection` | `claims`, `claims-functional` |
 | `claims-functional-upgrade-request` | executes an in-place claim upgrade request against a new service-profile revision | active | `claim-upgrade-request`, `claim-upgrade-rollout`, `claim-upgrade-version-rollout`, `claim-upgrade-blocked-incompatible` | `claims`, `claims-functional`, `claims-upgrade` |
 | `claims-functional-missing-bootstrap-source` | keeps the claim pending when a secret-backed bootstrap source is missing | active | `claim-missing-bootstrap-source` | `claims`, `claims-functional`, `negative` |
@@ -44,9 +44,9 @@ State: `active`
 
 Generated fallback ID: `claims-functional-executes-a-claim-restore-request-from-c61d9ae9`
 
-Covers: `claim-restore-request`, `claim-restore-latest-successful-source`, `claim-restore-backup-request-source`, `claim-restore-status-projection`
+Covers: `claim-restore-request`, `claim-restore-latest-successful-source`, `claim-restore-backup-request-source`, `claim-restore-bluegreen`, `claim-restore-status-projection`
 
-Labels: `claims`, `claims-functional`
+Labels: `claims`, `claims-functional`, `claims-bluegreen`
 
 Recorded checkpoints:
 - creating a fresh successful backup for the restore request to consume
