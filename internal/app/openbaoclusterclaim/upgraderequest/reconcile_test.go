@@ -2,12 +2,14 @@ package upgraderequest
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -95,6 +97,30 @@ func TestClassifyUpgrade(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEmitUpgradeRequestEventsPublishesClassificationAndState(t *testing.T) {
+	t.Parallel()
+
+	recorder := events.NewFakeRecorder(4)
+	reconciler := runtimeReconciler{recorder: recorder}
+	request := newUpgradeRequest("upgrade-event", openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestTargetSpec{
+		ServiceOfferingRef: &openbaov1alpha1.LocalReference{Name: standardOfferingName},
+	})
+	request.Status.State = openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestStateRollingOut
+	request.Status.Reason = reasonRolloutRequested
+	request.Status.Target = &openbaov1alpha1.OpenBaoClusterClaimUpgradeRequestRevisionStatus{
+		ServiceProfileRef: &openbaov1alpha1.OpenBaoClusterClaimBoundRevisionReference{Name: standardV2Name, UID: "standard-v2-uid"},
+	}
+	request.Status.Classification = classificationStatus(
+		openbaov1alpha1.OpenBaoClusterClaimUpgradeClassificationClassInPlace,
+		reasonInPlaceSupported,
+	)
+
+	reconciler.emitUpgradeRequestEvents(&openbaov1alpha1.OpenBaoClusterClaimUpgradeRequest{}, request)
+
+	expectEventContains(t, recorder, "Normal", reasonUpgradeClassified, reasonInPlaceSupported)
+	expectEventContains(t, recorder, "Normal", reasonRolloutRequested, standardV2Name)
 }
 
 func TestReconcileRequestState_ServiceClaimsDisabled(t *testing.T) {
@@ -755,4 +781,19 @@ func targetApprovedContractStatus() *openbaov1alpha1.OpenBaoClusterClaimContract
 	contract, _ := baselineApprovedContractAndCatalog()
 	contract.Cluster.Version = version240
 	return claimcontract.ContractIdentityStatus(claimcontract.IdentityHash(contract))
+}
+
+func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
+	t.Helper()
+
+	select {
+	case event := <-recorder.Events:
+		for _, part := range parts {
+			if !strings.Contains(event, part) {
+				t.Fatalf("event %q does not contain %q", event, part)
+			}
+		}
+	default:
+		t.Fatalf("expected event containing %q, got none", strings.Join(parts, ", "))
+	}
 }

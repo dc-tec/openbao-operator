@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -39,12 +40,14 @@ type Reconciler interface {
 type Runtime struct {
 	Client              client.Client
 	Reader              client.Reader
+	Recorder            events.EventRecorder
 	EnableServiceClaims bool
 }
 
 type runtimeReconciler struct {
 	client              client.Client
 	reader              client.Reader
+	recorder            events.EventRecorder
 	enableServiceClaims bool
 }
 
@@ -62,7 +65,12 @@ func NewReconciler(deps Runtime) Reconciler {
 	if reader == nil {
 		reader = deps.Client
 	}
-	return runtimeReconciler{client: deps.Client, reader: reader, enableServiceClaims: deps.EnableServiceClaims}
+	return runtimeReconciler{
+		client:              deps.Client,
+		reader:              reader,
+		recorder:            deps.Recorder,
+		enableServiceClaims: deps.EnableServiceClaims,
+	}
 }
 
 func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedName, logger logr.Logger) (recon.Result, error) {
@@ -98,9 +106,41 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 	if err := r.client.Status().Patch(ctx, request, client.MergeFrom(original)); err != nil {
 		return recon.Result{}, fmt.Errorf("patch OpenBaoClusterClaimBackupRequest status: %w", err)
 	}
+	r.emitBackupRequestEvent(original, request)
 
 	logger.Info("Reconciled OpenBaoClusterClaimBackupRequest", "state", evaluation.state, "reason", evaluation.reason)
 	return recon.Result{}, nil
+}
+
+func (r runtimeReconciler) emitBackupRequestEvent(
+	original *openbaov1alpha1.OpenBaoClusterClaimBackupRequest,
+	request *openbaov1alpha1.OpenBaoClusterClaimBackupRequest,
+) {
+	if original == nil || request == nil {
+		return
+	}
+	oldState := string(original.Status.State)
+	newState := string(request.Status.State)
+	oldReason := original.Status.Reason
+	newReason := request.Status.Reason
+	if !requestworkflow.StateTransitionChanged(oldState, oldReason, newState, newReason) {
+		return
+	}
+
+	note := fmt.Sprintf("Backup request for claim %s is %s", request.Spec.ClaimRef.Name, request.Status.State)
+	if request.Status.Reason != "" {
+		note = fmt.Sprintf("%s: %s", note, request.Status.Reason)
+	}
+	if request.Status.SnapshotKey != "" {
+		note = fmt.Sprintf("%s (snapshot %s)", note, request.Status.SnapshotKey)
+	}
+	requestworkflow.EmitEvent(
+		r.recorder,
+		request,
+		requestworkflow.EventTypeForState(newState),
+		requestworkflow.EventReason(newState, newReason, "BackupRequest"),
+		note,
+	)
 }
 
 func (r runtimeReconciler) reconcileRequestState(

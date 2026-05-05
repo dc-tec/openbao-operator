@@ -95,6 +95,23 @@ rules:
       - create
       - delete
       - patch
+  # Required for user-facing claim and claim-workflow Events in tenant namespaces.
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - events.k8s.io
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+      - update
   # Read-only access to admission policies that are required security dependencies.
   # The controller only needs deterministic-name GETs (no list/watch).
   - apiGroups:

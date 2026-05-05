@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -41,6 +42,7 @@ const (
 	reasonRolloutInProgress                 = "RolloutInProgress"
 	reasonClaimUpgradeRequestBlocked        = "ClaimUpgradeRequestBlocked"
 	reasonClaimUpgradeRequestFailed         = "ClaimUpgradeRequestFailed"
+	reasonRolloutProgressing                = "RolloutProgressing"
 	reasonRolloutCompleted                  = "RolloutCompleted"
 	defaultRolloutMaxConcurrent       int32 = 1
 )
@@ -52,12 +54,14 @@ type Reconciler interface {
 type Runtime struct {
 	Client              client.Client
 	Reader              client.Reader
+	Recorder            events.EventRecorder
 	EnableServiceClaims bool
 }
 
 type runtimeReconciler struct {
 	client              client.Client
 	reader              client.Reader
+	recorder            events.EventRecorder
 	enableServiceClaims bool
 }
 
@@ -79,6 +83,7 @@ func NewReconciler(deps Runtime) Reconciler {
 	return runtimeReconciler{
 		client:              deps.Client,
 		reader:              reader,
+		recorder:            deps.Recorder,
 		enableServiceClaims: deps.EnableServiceClaims,
 	}
 }
@@ -105,10 +110,72 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 		if err := r.client.Status().Patch(ctx, rollout, client.MergeFrom(original)); err != nil {
 			return recon.Result{}, fmt.Errorf("patch OpenBaoServiceOfferingRollout status: %w", err)
 		}
+		r.emitRolloutEvents(original, rollout)
 		logger.Info("Reconciled OpenBaoServiceOfferingRollout", "state", rollout.Status.State, "reason", rollout.Status.Reason)
 	}
 
 	return requeueForStatus(rollout.Status), evaluation.err
+}
+
+func (r runtimeReconciler) emitRolloutEvents(
+	original *openbaov1alpha1.OpenBaoServiceOfferingRollout,
+	rollout *openbaov1alpha1.OpenBaoServiceOfferingRollout,
+) {
+	if original == nil || rollout == nil {
+		return
+	}
+	oldState := string(original.Status.State)
+	newState := string(rollout.Status.State)
+	oldReason := original.Status.Reason
+	newReason := rollout.Status.Reason
+	if requestworkflow.StateTransitionChanged(oldState, oldReason, newState, newReason) {
+		requestworkflow.EmitEvent(
+			r.recorder,
+			rollout,
+			requestworkflow.EventTypeForState(newState),
+			requestworkflow.EventReason(newState, newReason, "OfferingRollout"),
+			rolloutEventNote(rollout, fmt.Sprintf("Service offering rollout is %s", rollout.Status.State)),
+		)
+		return
+	}
+	if rolloutProgressChanged(original.Status, rollout.Status) {
+		requestworkflow.EmitEvent(
+			r.recorder,
+			rollout,
+			requestworkflow.EventTypeForState(newState),
+			reasonRolloutProgressing,
+			rolloutEventNote(rollout, "Service offering rollout progressed"),
+		)
+	}
+}
+
+func rolloutProgressChanged(
+	oldStatus openbaov1alpha1.OpenBaoServiceOfferingRolloutStatus,
+	newStatus openbaov1alpha1.OpenBaoServiceOfferingRolloutStatus,
+) bool {
+	return oldStatus.Total != newStatus.Total ||
+		oldStatus.Pending != newStatus.Pending ||
+		oldStatus.Running != newStatus.Running ||
+		oldStatus.Succeeded != newStatus.Succeeded ||
+		oldStatus.Blocked != newStatus.Blocked ||
+		oldStatus.Failed != newStatus.Failed
+}
+
+func rolloutEventNote(rollout *openbaov1alpha1.OpenBaoServiceOfferingRollout, prefix string) string {
+	note := prefix
+	if rollout.Status.Reason != "" {
+		note = fmt.Sprintf("%s: %s", note, rollout.Status.Reason)
+	}
+	return fmt.Sprintf(
+		"%s (total %d, pending %d, running %d, succeeded %d, blocked %d, failed %d)",
+		note,
+		rollout.Status.Total,
+		rollout.Status.Pending,
+		rollout.Status.Running,
+		rollout.Status.Succeeded,
+		rollout.Status.Blocked,
+		rollout.Status.Failed,
+	)
 }
 
 func (r runtimeReconciler) evaluate(

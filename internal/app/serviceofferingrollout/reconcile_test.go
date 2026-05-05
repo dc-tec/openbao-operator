@@ -2,12 +2,14 @@ package serviceofferingrollout
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -76,6 +78,27 @@ func TestReconcile_CreatesUpgradeRequestForEligibleClaim(t *testing.T) {
 	if updated.Status.TargetRevisionRef == nil || updated.Status.TargetRevisionRef.Name != testProfileV2 {
 		t.Fatalf("target revision status = %#v, want %s", updated.Status.TargetRevisionRef, testProfileV2)
 	}
+}
+
+func TestReconcileEmitsRolloutEvent(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	rollout := newRollout()
+	recorder := events.NewFakeRecorder(2)
+	reconciler := newTestReconciler(t,
+		rollout,
+		newOffering(testProfileV2),
+		newProfile(),
+		newClaim("bao-a", testProfileV1),
+	)
+	reconciler.recorder = recorder
+
+	if _, err := reconciler.Reconcile(ctx, client.ObjectKeyFromObject(rollout), logr.Discard()); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	expectEventContains(t, recorder, "Normal", reasonRolloutInProgress, "total 1")
 }
 
 func TestReconcile_RespectsMaxConcurrent(t *testing.T) {
@@ -295,6 +318,21 @@ func newRollout() *openbaov1alpha1.OpenBaoServiceOfferingRollout {
 			OfferingRef:       openbaov1alpha1.LocalReference{Name: testOffering},
 			TargetRevisionRef: openbaov1alpha1.LocalReference{Name: testProfileV2},
 		},
+	}
+}
+
+func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
+	t.Helper()
+
+	select {
+	case event := <-recorder.Events:
+		for _, part := range parts {
+			if !strings.Contains(event, part) {
+				t.Fatalf("event %q does not contain %q", event, part)
+			}
+		}
+	default:
+		t.Fatalf("expected event containing %q, got none", strings.Join(parts, ", "))
 	}
 }
 

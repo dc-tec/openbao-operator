@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -22,6 +23,7 @@ const controllerNameOpenBaoClusterClaim = "openbaoclusterclaim"
 type OpenBaoClusterClaimReconciler struct {
 	client.Client
 	Reader                   client.Reader
+	Recorder                 events.EventRecorder
 	Scheme                   *runtime.Scheme
 	EnableServiceClaims      bool
 	SameClusterNetwork       appopenbaoclusterclaim.SameClusterNetworkConfig
@@ -49,10 +51,14 @@ func (r *OpenBaoClusterClaimReconciler) SetupWithManager(mgr ctrl.Manager) error
 	if r.Reader == nil {
 		r.Reader = mgr.GetAPIReader()
 	}
+	if r.Recorder == nil {
+		r.Recorder = mgr.GetEventRecorder(controllerNameOpenBaoClusterClaim)
+	}
 	if r.AppReconciler == nil {
 		r.AppReconciler = appopenbaoclusterclaim.NewReconciler(appopenbaoclusterclaim.Runtime{
 			Client:                   r.Client,
 			Reader:                   mgr.GetAPIReader(),
+			Recorder:                 r.Recorder,
 			Scheme:                   r.Scheme,
 			EnableServiceClaims:      r.EnableServiceClaims,
 			SameClusterNetwork:       r.SameClusterNetwork,

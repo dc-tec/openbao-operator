@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -21,6 +22,7 @@ const controllerNameOpenBaoServiceOfferingRollout = "openbaoserviceofferingrollo
 type OpenBaoServiceOfferingRolloutReconciler struct {
 	client.Client
 	Reader              client.Reader
+	Recorder            events.EventRecorder
 	Scheme              *runtime.Scheme
 	EnableServiceClaims bool
 	AppReconciler       approllout.Reconciler
@@ -44,10 +46,14 @@ func (r *OpenBaoServiceOfferingRolloutReconciler) SetupWithManager(mgr ctrl.Mana
 	if r.Reader == nil {
 		r.Reader = mgr.GetAPIReader()
 	}
+	if r.Recorder == nil {
+		r.Recorder = mgr.GetEventRecorder(controllerNameOpenBaoServiceOfferingRollout)
+	}
 	if r.AppReconciler == nil {
 		r.AppReconciler = approllout.NewReconciler(approllout.Runtime{
 			Client:              r.Client,
 			Reader:              r.Reader,
+			Recorder:            r.Recorder,
 			EnableServiceClaims: r.EnableServiceClaims,
 		})
 	}

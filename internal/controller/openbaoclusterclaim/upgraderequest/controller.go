@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -22,6 +23,7 @@ const controllerNameOpenBaoClusterClaimUpgradeRequest = "openbaoclusterclaimupgr
 type OpenBaoClusterClaimUpgradeRequestReconciler struct {
 	client.Client
 	Reader              client.Reader
+	Recorder            events.EventRecorder
 	Scheme              *runtime.Scheme
 	EnableServiceClaims bool
 	AppReconciler       appupgraderequest.Reconciler
@@ -46,10 +48,14 @@ func (r *OpenBaoClusterClaimUpgradeRequestReconciler) SetupWithManager(mgr ctrl.
 	if r.Reader == nil {
 		r.Reader = mgr.GetAPIReader()
 	}
+	if r.Recorder == nil {
+		r.Recorder = mgr.GetEventRecorder(controllerNameOpenBaoClusterClaimUpgradeRequest)
+	}
 	if r.AppReconciler == nil {
 		r.AppReconciler = appupgraderequest.NewReconciler(appupgraderequest.Runtime{
 			Client:              r.Client,
 			Reader:              mgr.GetAPIReader(),
+			Recorder:            r.Recorder,
 			EnableServiceClaims: r.EnableServiceClaims,
 		})
 	}

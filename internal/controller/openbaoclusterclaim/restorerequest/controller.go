@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -24,6 +25,7 @@ const controllerNameOpenBaoClusterClaimRestoreRequest = "openbaoclusterclaimrest
 type OpenBaoClusterClaimRestoreRequestReconciler struct {
 	client.Client
 	Reader              client.Reader
+	Recorder            events.EventRecorder
 	Scheme              *runtime.Scheme
 	EnableServiceClaims bool
 	AppReconciler       apprestorerequest.Reconciler
@@ -48,10 +50,14 @@ func (r *OpenBaoClusterClaimRestoreRequestReconciler) SetupWithManager(mgr ctrl.
 	if r.Reader == nil {
 		r.Reader = mgr.GetAPIReader()
 	}
+	if r.Recorder == nil {
+		r.Recorder = mgr.GetEventRecorder(controllerNameOpenBaoClusterClaimRestoreRequest)
+	}
 	if r.AppReconciler == nil {
 		r.AppReconciler = apprestorerequest.NewReconciler(apprestorerequest.Runtime{
 			Client:              r.Client,
 			Reader:              mgr.GetAPIReader(),
+			Recorder:            r.Recorder,
 			EnableServiceClaims: r.EnableServiceClaims,
 		})
 	}

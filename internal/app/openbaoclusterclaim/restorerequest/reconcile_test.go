@@ -2,16 +2,20 @@ package restorerequest
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/requestworkflow"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
@@ -38,6 +42,21 @@ func TestReconcileRequestState_ServiceClaimsDisabled(t *testing.T) {
 	if clusterRef != nil || restoreRef != nil || startTime != nil || completionTime != nil || snapshotKey != "" {
 		t.Fatalf("unexpected non-empty state payload: %#v %#v %#v %#v %q", clusterRef, restoreRef, startTime, completionTime, snapshotKey)
 	}
+}
+
+func TestReconcileEmitsRestoreRequestEvent(t *testing.T) {
+	t.Parallel()
+
+	request := newRestoreRequest("restore-event")
+	recorder := events.NewFakeRecorder(2)
+	reconciler := newRestoreRequestTestReconciler(t, request)
+	reconciler.recorder = recorder
+
+	if _, err := reconciler.Reconcile(context.Background(), client.ObjectKeyFromObject(request), logr.Discard()); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	expectEventContains(t, recorder, "Warning", requestworkflow.ReasonClaimNotFound)
 }
 
 func TestReconcileRequestState_RequestsManualRestore(t *testing.T) {
@@ -713,4 +732,19 @@ func baseRestoreRequestObjects() []client.Object {
 		},
 	}
 	return []client.Object{claim, cluster}
+}
+
+func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
+	t.Helper()
+
+	select {
+	case event := <-recorder.Events:
+		for _, part := range parts {
+			if !strings.Contains(event, part) {
+				t.Fatalf("event %q does not contain %q", event, part)
+			}
+		}
+	default:
+		t.Fatalf("expected event containing %q, got none", strings.Join(parts, ", "))
+	}
 }

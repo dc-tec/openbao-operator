@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -51,6 +52,7 @@ type Reconciler interface {
 type Runtime struct {
 	Client                   client.Client
 	Reader                   client.Reader
+	Recorder                 events.EventRecorder
 	Scheme                   *runtime.Scheme
 	EnableServiceClaims      bool
 	SameClusterNetwork       SameClusterNetworkConfig
@@ -60,6 +62,7 @@ type Runtime struct {
 type runtimeReconciler struct {
 	client                   client.Client
 	reader                   client.Reader
+	recorder                 events.EventRecorder
 	scheme                   *runtime.Scheme
 	enableServiceClaims      bool
 	sameClusterNetwork       SameClusterNetworkConfig
@@ -90,6 +93,7 @@ func NewReconciler(deps Runtime) Reconciler {
 	return runtimeReconciler{
 		client:                   deps.Client,
 		reader:                   reader,
+		recorder:                 deps.Recorder,
 		scheme:                   deps.Scheme,
 		enableServiceClaims:      deps.EnableServiceClaims,
 		sameClusterNetwork:       deps.SameClusterNetwork,
@@ -122,6 +126,7 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 			if err := r.client.Status().Patch(ctx, claim, client.MergeFrom(original)); err != nil {
 				return recon.Result{}, fmt.Errorf("patch deleting OpenBaoClusterClaim status: %w", err)
 			}
+			r.emitClaimEvents(original, claim)
 		}
 		return r.reconcileDeletion(ctx, claim)
 	}
@@ -293,6 +298,7 @@ func (r runtimeReconciler) Reconcile(ctx context.Context, key types.NamespacedNa
 	if err := r.client.Status().Patch(ctx, claim, client.MergeFrom(original)); err != nil {
 		return recon.Result{}, fmt.Errorf("patch OpenBaoClusterClaim status: %w", err)
 	}
+	r.emitClaimEvents(original, claim)
 
 	logger.Info(
 		"Reconciled OpenBaoClusterClaim state",
