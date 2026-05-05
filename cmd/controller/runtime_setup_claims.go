@@ -83,7 +83,7 @@ func setupClaimAdmission(mgr ctrl.Manager, runtime controllerProcessRuntime) {
 		claimadmission.MutatingWebhookPath,
 		&admission.Webhook{
 			Handler: claimadmission.NewServiceOfferingMutator(
-				mgr.GetClient(),
+				mgr.GetAPIReader(),
 				mgr.GetScheme(),
 				runtime.enableServiceClaims,
 				runtime.operatorNamespace,

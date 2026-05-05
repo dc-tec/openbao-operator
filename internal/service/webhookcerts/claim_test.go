@@ -3,23 +3,28 @@ package webhookcerts
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"testing"
 
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 func TestPrepareClaimWebhookRuntimeCreatesSecretAndConfiguration(t *testing.T) {
 	t.Parallel()
 
 	clientset := k8sfake.NewSimpleClientset()
-	runtime, err := PrepareClaimWebhookRuntime(context.Background(), clientset, "openbao-operator-system", true, "openbao-operator-")
+	preparedRuntime, err := PrepareClaimWebhookRuntime(context.Background(), clientset, "openbao-operator-system", true, "openbao-operator-")
 	if err != nil {
 		t.Fatalf("PrepareClaimWebhookRuntime() error = %v", err)
 	}
-	if runtime.CertDir == "" {
+	if preparedRuntime.CertDir == "" {
 		t.Fatalf("PrepareClaimWebhookRuntime() CertDir = empty, want non-empty")
 	}
 
@@ -29,6 +34,9 @@ func TestPrepareClaimWebhookRuntimeCreatesSecretAndConfiguration(t *testing.T) {
 	}
 	if len(secret.Data[caCertKey]) == 0 || len(secret.Data[tlsCertKey]) == 0 || len(secret.Data[tlsKeyKey]) == 0 {
 		t.Fatalf("Secret data = %#v, want CA and serving cert material", secret.Data)
+	}
+	if _, ok := secret.Data["ca.key"]; ok {
+		t.Fatalf("Secret data contains ca.key, want only public CA bundle and serving cert material")
 	}
 
 	config, err := clientset.AdmissionregistrationV1().MutatingWebhookConfigurations().Get(context.Background(), "openbao-operator-openbaoclusterclaim-service-offering", metav1.GetOptions{})
@@ -77,6 +85,51 @@ func TestPrepareClaimWebhookRuntimeReusesExistingSecretBundle(t *testing.T) {
 	}
 	if got := base64.StdEncoding.EncodeToString(secretAfter.Data[tlsCertKey]); got != certBefore {
 		t.Fatalf("serving certificate rotated unexpectedly")
+	}
+}
+
+func TestPrepareClaimWebhookRuntimeToleratesCreateRaces(t *testing.T) {
+	t.Parallel()
+
+	clientset := k8sfake.NewSimpleClientset()
+	secretCreateRaced := false
+	webhookCreateRaced := false
+	clientset.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if secretCreateRaced {
+			return false, nil, nil
+		}
+		secretCreateRaced = true
+		createAction := action.(k8stesting.CreateAction)
+		secret := createAction.GetObject().(*corev1.Secret).DeepCopy()
+		if err := clientset.Tracker().Create(corev1.SchemeGroupVersion.WithResource("secrets"), secret, secret.Namespace); err != nil {
+			return true, nil, err
+		}
+		return true, nil, apierrors.NewAlreadyExists(schema.GroupResource{Resource: "secrets"}, secret.Name)
+	})
+	clientset.PrependReactor("create", "mutatingwebhookconfigurations", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if webhookCreateRaced {
+			return false, nil, nil
+		}
+		webhookCreateRaced = true
+		createAction := action.(k8stesting.CreateAction)
+		config := createAction.GetObject().(*admissionregistrationv1.MutatingWebhookConfiguration).DeepCopy()
+		if err := clientset.Tracker().Create(admissionregistrationv1.SchemeGroupVersion.WithResource("mutatingwebhookconfigurations"), config, ""); err != nil {
+			return true, nil, err
+		}
+		return true, nil, apierrors.NewAlreadyExists(schema.GroupResource{
+			Group:    admissionregistrationv1.GroupName,
+			Resource: "mutatingwebhookconfigurations",
+		}, config.Name)
+	})
+
+	if _, err := PrepareClaimWebhookRuntime(context.Background(), clientset, "openbao-operator-system", true, "openbao-operator-"); err != nil {
+		t.Fatalf("PrepareClaimWebhookRuntime() error = %v", err)
+	}
+	if !secretCreateRaced {
+		t.Fatalf("Secret create race reactor was not exercised")
+	}
+	if !webhookCreateRaced {
+		t.Fatalf("MutatingWebhookConfiguration create race reactor was not exercised")
 	}
 }
 
@@ -132,6 +185,17 @@ func TestPrepareClaimWebhookRuntimeUpdatesStaleConfiguration(t *testing.T) {
 			Webhooks:   []admissionregistrationv1.MutatingWebhook{{Name: "wrong"}},
 		},
 	)
+	updateAttempts := 0
+	clientset.PrependReactor("update", "mutatingwebhookconfigurations", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		updateAttempts++
+		if updateAttempts == 1 {
+			return true, nil, apierrors.NewConflict(schema.GroupResource{
+				Group:    admissionregistrationv1.GroupName,
+				Resource: "mutatingwebhookconfigurations",
+			}, "openbao-operator-openbaoclusterclaim-service-offering", errors.New("stale resource version"))
+		}
+		return false, nil, nil
+	})
 	if _, err := PrepareClaimWebhookRuntime(context.Background(), clientset, "openbao-operator-system", true, "openbao-operator-"); err != nil {
 		t.Fatalf("PrepareClaimWebhookRuntime() error = %v", err)
 	}
@@ -141,5 +205,8 @@ func TestPrepareClaimWebhookRuntimeUpdatesStaleConfiguration(t *testing.T) {
 	}
 	if len(config.Webhooks) != 1 || config.Webhooks[0].Name != "mopenbaoclusterclaims.openbao.org" {
 		t.Fatalf("webhooks = %#v, want rewritten claim webhook configuration", config.Webhooks)
+	}
+	if updateAttempts != 2 {
+		t.Fatalf("MutatingWebhookConfiguration update attempts = %d, want 2", updateAttempts)
 	}
 }

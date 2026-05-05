@@ -24,6 +24,7 @@ import (
 	kubernetes "k8s.io/client-go/kubernetes"
 	admissionregistrationv1client "k8s.io/client-go/kubernetes/typed/admissionregistration/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 )
 
@@ -35,7 +36,6 @@ const (
 	claimWebhookPort        = int32(443)
 
 	caCertKey  = "ca.crt"
-	caKeyKey   = "ca.key"
 	tlsCertKey = "tls.crt"
 	tlsKeyKey  = "tls.key"
 
@@ -108,10 +108,9 @@ type certBundle struct {
 }
 
 type generatedBundle struct {
-	caPEM    []byte
-	caKeyPEM []byte
-	tlsPEM   []byte
-	keyPEM   []byte
+	caPEM  []byte
+	tlsPEM []byte
+	keyPEM []byte
 }
 
 func ensureClaimWebhookSecret(
@@ -121,22 +120,54 @@ func ensureClaimWebhookSecret(
 	names ClaimWebhookResourceNames,
 ) (certBundle, error) {
 	now := time.Now().UTC()
-	secret, getErr := secrets.Get(ctx, names.SecretName, metav1.GetOptions{})
-	if getErr == nil {
-		bundle, valid, validateErr := readAndValidateBundle(secret, namespace, names.ServiceName, now)
-		if validateErr == nil && valid {
-			return bundle, nil
+	var result certBundle
+	if err := retry.OnError(retry.DefaultBackoff, isRetryableWebhookRuntimeMutationError, func() error {
+		secret, getErr := secrets.Get(ctx, names.SecretName, metav1.GetOptions{})
+		if getErr == nil {
+			bundle, valid, validateErr := readAndValidateBundle(secret, namespace, names.ServiceName, now)
+			if validateErr == nil && valid {
+				result = bundle
+				return nil
+			}
 		}
-	}
-	if getErr != nil && !apierrors.IsNotFound(getErr) {
-		return certBundle{}, fmt.Errorf("get claim webhook TLS Secret %s/%s: %w", namespace, names.SecretName, getErr)
-	}
+		if getErr != nil && !apierrors.IsNotFound(getErr) {
+			return fmt.Errorf("get claim webhook TLS Secret %s/%s: %w", namespace, names.SecretName, getErr)
+		}
 
-	bundle, err := generateBundle(namespace, names.ServiceName, now)
-	if err != nil {
-		return certBundle{}, err
+		bundle, err := generateBundle(namespace, names.ServiceName, now)
+		if err != nil {
+			return err
+		}
+		desired := desiredClaimWebhookSecret(namespace, names, bundle)
+		if apierrors.IsNotFound(getErr) {
+			if _, err := secrets.Create(ctx, desired, metav1.CreateOptions{}); err != nil {
+				if isRetryableWebhookRuntimeMutationError(err) {
+					return err
+				}
+				return fmt.Errorf("create claim webhook TLS Secret %s/%s: %w", namespace, names.SecretName, err)
+			}
+			result = certBundle(bundle)
+			return nil
+		}
+		secret.Type = desired.Type
+		secret.Labels = desired.Labels
+		secret.Data = desired.Data
+		if _, err := secrets.Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
+			if isRetryableWebhookRuntimeMutationError(err) {
+				return err
+			}
+			return fmt.Errorf("update claim webhook TLS Secret %s/%s: %w", namespace, names.SecretName, err)
+		}
+		result = certBundle(bundle)
+		return nil
+	}); err != nil {
+		return certBundle{}, fmt.Errorf("reconcile claim webhook TLS Secret %s/%s: %w", namespace, names.SecretName, err)
 	}
-	desired := &corev1.Secret{
+	return result, nil
+}
+
+func desiredClaimWebhookSecret(namespace string, names ClaimWebhookResourceNames, bundle generatedBundle) *corev1.Secret {
+	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      names.SecretName,
 			Namespace: namespace,
@@ -150,24 +181,14 @@ func ensureClaimWebhookSecret(
 		Type: corev1.SecretTypeTLS,
 		Data: map[string][]byte{
 			caCertKey:  bundle.caPEM,
-			caKeyKey:   bundle.caKeyPEM,
 			tlsCertKey: bundle.tlsPEM,
 			tlsKeyKey:  bundle.keyPEM,
 		},
 	}
-	if apierrors.IsNotFound(getErr) {
-		if _, err := secrets.Create(ctx, desired, metav1.CreateOptions{}); err != nil {
-			return certBundle{}, fmt.Errorf("create claim webhook TLS Secret %s/%s: %w", namespace, names.SecretName, err)
-		}
-		return certBundle{caPEM: bundle.caPEM, tlsPEM: bundle.tlsPEM, keyPEM: bundle.keyPEM}, nil
-	}
-	secret.Type = desired.Type
-	secret.Labels = desired.Labels
-	secret.Data = desired.Data
-	if _, err := secrets.Update(ctx, secret, metav1.UpdateOptions{}); err != nil {
-		return certBundle{}, fmt.Errorf("update claim webhook TLS Secret %s/%s: %w", namespace, names.SecretName, err)
-	}
-	return certBundle{caPEM: bundle.caPEM, tlsPEM: bundle.tlsPEM, keyPEM: bundle.keyPEM}, nil
+}
+
+func isRetryableWebhookRuntimeMutationError(err error) bool {
+	return apierrors.IsAlreadyExists(err) || apierrors.IsConflict(err)
 }
 
 func readAndValidateBundle(secret *corev1.Secret, namespace, serviceName string, now time.Time) (certBundle, bool, error) {
@@ -210,7 +231,7 @@ func readAndValidateBundle(secret *corev1.Secret, namespace, serviceName string,
 }
 
 func generateBundle(namespace, serviceName string, now time.Time) (generatedBundle, error) {
-	caCertPEM, caKeyPEM, caCert, caKey, err := generateCA(now)
+	caCertPEM, caCert, caKey, err := generateCA(now)
 	if err != nil {
 		return generatedBundle{}, err
 	}
@@ -218,17 +239,17 @@ func generateBundle(namespace, serviceName string, now time.Time) (generatedBund
 	if err != nil {
 		return generatedBundle{}, err
 	}
-	return generatedBundle{caPEM: caCertPEM, caKeyPEM: caKeyPEM, tlsPEM: tlsCertPEM, keyPEM: tlsKeyPEM}, nil
+	return generatedBundle{caPEM: caCertPEM, tlsPEM: tlsCertPEM, keyPEM: tlsKeyPEM}, nil
 }
 
-func generateCA(now time.Time) ([]byte, []byte, *x509.Certificate, *ecdsa.PrivateKey, error) {
+func generateCA(now time.Time) ([]byte, *x509.Certificate, *ecdsa.PrivateKey, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("generate claim webhook CA key: %w", err)
+		return nil, nil, nil, fmt.Errorf("generate claim webhook CA key: %w", err)
 	}
 	serial, err := randomSerialNumber()
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("generate claim webhook CA serial: %w", err)
+		return nil, nil, nil, fmt.Errorf("generate claim webhook CA serial: %w", err)
 	}
 	tpl := &x509.Certificate{
 		SerialNumber:          serial,
@@ -241,19 +262,14 @@ func generateCA(now time.Time) ([]byte, []byte, *x509.Certificate, *ecdsa.Privat
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("create claim webhook CA certificate: %w", err)
+		return nil, nil, nil, fmt.Errorf("create claim webhook CA certificate: %w", err)
 	}
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("parse claim webhook CA certificate: %w", err)
+		return nil, nil, nil, fmt.Errorf("parse claim webhook CA certificate: %w", err)
 	}
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyDER, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("marshal claim webhook CA key: %w", err)
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	return caPEM, keyPEM, cert, key, nil
+	return caPEM, cert, key, nil
 }
 
 func generateServingCert(namespace, serviceName string, now time.Time, caCert *x509.Certificate, caKey *ecdsa.PrivateKey) ([]byte, []byte, error) {
@@ -299,7 +315,42 @@ func ensureClaimWebhookConfiguration(
 	caPEM []byte,
 	names ClaimWebhookResourceNames,
 ) error {
-	desired := &admissionregistrationv1.MutatingWebhookConfiguration{
+	if err := retry.OnError(retry.DefaultBackoff, isRetryableWebhookRuntimeMutationError, func() error {
+		desired := desiredClaimWebhookConfiguration(namespace, caPEM, names)
+		existing, err := configs.Get(ctx, names.WebhookConfigurationName, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			if _, err := configs.Create(ctx, desired, metav1.CreateOptions{}); err != nil {
+				if isRetryableWebhookRuntimeMutationError(err) {
+					return err
+				}
+				return fmt.Errorf("create claim mutating webhook configuration %s: %w", names.WebhookConfigurationName, err)
+			}
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("get claim mutating webhook configuration %s: %w", names.WebhookConfigurationName, err)
+		}
+		existing.Labels = desired.Labels
+		existing.Webhooks = desired.Webhooks
+		if _, err := configs.Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
+			if isRetryableWebhookRuntimeMutationError(err) {
+				return err
+			}
+			return fmt.Errorf("update claim mutating webhook configuration %s: %w", names.WebhookConfigurationName, err)
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("reconcile claim mutating webhook configuration %s: %w", names.WebhookConfigurationName, err)
+	}
+	return nil
+}
+
+func desiredClaimWebhookConfiguration(
+	namespace string,
+	caPEM []byte,
+	names ClaimWebhookResourceNames,
+) *admissionregistrationv1.MutatingWebhookConfiguration {
+	return &admissionregistrationv1.MutatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: names.WebhookConfigurationName,
 			Labels: map[string]string{
@@ -336,23 +387,6 @@ func ensureClaimWebhookConfiguration(
 			}},
 		}},
 	}
-
-	existing, err := configs.Get(ctx, names.WebhookConfigurationName, metav1.GetOptions{})
-	if apierrors.IsNotFound(err) {
-		if _, err := configs.Create(ctx, desired, metav1.CreateOptions{}); err != nil {
-			return fmt.Errorf("create claim mutating webhook configuration %s: %w", names.WebhookConfigurationName, err)
-		}
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("get claim mutating webhook configuration %s: %w", names.WebhookConfigurationName, err)
-	}
-	existing.Labels = desired.Labels
-	existing.Webhooks = desired.Webhooks
-	if _, err := configs.Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("update claim mutating webhook configuration %s: %w", names.WebhookConfigurationName, err)
-	}
-	return nil
 }
 
 func deleteClaimWebhookConfiguration(
