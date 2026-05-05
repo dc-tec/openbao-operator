@@ -28,12 +28,20 @@ journey: operate
   rows={[
     {
       cells: [
-        'Upgrade request',
-        'Move an existing claim to a newer compatible service-offering or service-profile revision.',
-        '`OpenBaoClusterClaimUpgradeRequest`',
+        'Offering rollout',
+        'Let a platform admin move selected claims bound to a service offering to the offering\'s current service-profile revision.',
+        '`OpenBaoServiceOfferingRollout` creates `OpenBaoClusterClaimUpgradeRequest` objects',
         'Same-cluster materialized claims and in-place compatible changes only.',
       ],
       emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Upgrade request',
+        'Move one existing claim to a newer compatible service-offering or service-profile revision.',
+        '`OpenBaoClusterClaimUpgradeRequest`',
+        'Same-cluster materialized claims and in-place compatible changes only.',
+      ],
     },
     {
       cells: [
@@ -63,6 +71,43 @@ When you need a specific claim-created snapshot, select the completed `OpenBaoCl
 </Callout>
 
 ## Request an in-place upgrade
+
+Use an offering rollout when the platform owns the OpenBao version movement for
+all or a selected subset of claims. First publish the new immutable
+`OpenBaoServiceProfile`, then move the stable `OpenBaoServiceOffering` alias to
+that revision, then create the rollout object.
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Roll out the current offering revision"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoServiceOffering
+metadata:
+  name: dev-internal
+spec:
+  currentRevisionRef:
+    name: dev-internal-v2
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoServiceOfferingRollout
+metadata:
+  name: dev-internal-v2-rollout
+spec:
+  offeringRef:
+    name: dev-internal
+  targetRevisionRef:
+    name: dev-internal-v2
+  selector:
+    namespaces:
+      - team-a-prod
+      - team-b-prod
+  strategy:
+    maxConcurrent: 1
+    mode: InPlaceOnly`}
+>
+  The rollout selects claims currently applied through `dev-internal`, creates one namespaced `OpenBaoClusterClaimUpgradeRequest` per eligible claim, and waits for those request objects to report progress. The target revision must match `OpenBaoServiceOffering.spec.currentRevisionRef.name`; otherwise the rollout blocks without creating requests.
+</CommandBlock>
 
 Use an explicit upgrade request when the platform has published a newer service revision and the change is still inside the supported in-place boundary.
 
@@ -162,6 +207,7 @@ Start with the claim surface before dropping into raw workflow objects.
   label="inspect"
   title="Inspect claim and workflow status"
   code={`kubectl get openbaoclusterclaim team-a-vault -n team-a-prod -o yaml
+kubectl get openbaoserviceofferingrollout dev-internal-v2-rollout -o yaml
 kubectl get openbaoclusterclaimupgraderequest team-a-vault-upgrade -n team-a-prod -o yaml
 kubectl get openbaoclusterclaimbackuprequest -n team-a-prod -o wide
 kubectl get openbaoclusterclaimbackuprequest team-a-vault-backup -n team-a-prod -o yaml
@@ -184,6 +230,14 @@ kubectl get openbaoclusterclaimrestorerequest team-a-vault-restore -n team-a-pro
   title="What to expect during workflow execution"
   columns={['Workflow', 'Claim view while active', 'Request object state when healthy']}
   rows={[
+    {
+      cells: [
+        'Offering rollout',
+        'Selected claims usually move to `Degraded` one at a time while their generated upgrade requests run.',
+        '`Running`, then `Succeeded`; `Blocked` if any generated upgrade request classifies the target as unsupported.',
+      ],
+      emphasis: 'recommended',
+    },
     {
       cells: [
         'Upgrade request',

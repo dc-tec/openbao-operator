@@ -14,7 +14,7 @@ journey: get-started
 
 <Callout type="warning" title="Current scope">
 
-The supported public scope today is same-cluster service claims with explicit request workflows for in-place upgrades, manual backups, and restore from the latest successful or selected completed claim backup request. Adoption, migration, non-`SelfInit` bootstrap modes, and broader multi-cluster claim convergence remain out of scope.
+The supported public scope today is same-cluster service claims with platform-owned offering rollouts, explicit per-claim request workflows for in-place upgrades, manual backups, and restore from the latest successful or selected completed claim backup request. Adoption, migration, non-`SelfInit` bootstrap modes, and broader multi-cluster claim convergence remain out of scope.
 
 </Callout>
 
@@ -112,6 +112,7 @@ Do not use the claim surface yet for:
 2. migrating between same-cluster and multi-cluster execution paths
 3. treating free-form post-materialization claim edits as rollout automation
 4. bootstrap modes other than `SelfInit`
+5. replacement-class offering rollouts that require reprovisioning instead of in-place upgrade
 
 ## Follow the role-specific path
 

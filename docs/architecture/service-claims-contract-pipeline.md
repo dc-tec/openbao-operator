@@ -149,10 +149,12 @@ related runtime and request workflow state before deriving:
 - connection, backup, restore, upgrade, rollout, and applied revision summaries
 - the short diagnostic `status.summary`
 
-Backup, restore, and upgrade request controllers own their request CRD status.
-Core lifecycle managers own `OpenBaoCluster` and `OpenBaoRestore` status. The
-root claim app only observes those surfaces and projects a bounded summary back
-onto `OpenBaoClusterClaim`.
+Offering rollout, backup, restore, and upgrade request controllers own their
+workflow CRD status. The offering rollout controller only creates per-claim
+upgrade requests; it does not mutate claims directly. Core lifecycle managers
+own `OpenBaoCluster` and `OpenBaoRestore` status. The root claim app only
+observes those surfaces and projects a bounded summary back onto
+`OpenBaoClusterClaim`.
 
 ## Maintain the stage boundary
 

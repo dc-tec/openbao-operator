@@ -138,16 +138,19 @@ object permits them.
 
 Day-2 operations that change runtime state use request APIs:
 
+- `OpenBaoServiceOfferingRollout`
 - `OpenBaoClusterClaimUpgradeRequest`
 - `OpenBaoClusterClaimBackupRequest`
 - `OpenBaoClusterClaimRestoreRequest`
 
-These APIs are immutable, status-driven, and serialized by the controllers. Add
-new disruptive operations as request APIs for the same reason: they need
-classification, lock awareness, observable state, and clear failure semantics.
-The root claim app observes active request and restore-execution state only to
-derive claim phase, summary, and workflow sub-status; it does not execute the
-underlying backup, restore, or upgrade lifecycle itself.
+These APIs are immutable and status-driven. `OpenBaoServiceOfferingRollout`
+orchestrates platform-owned offering movement by creating per-claim upgrade
+requests; the generated request objects still own classification and execution.
+Add new disruptive operations as explicit workflow APIs for the same reason:
+they need classification, lock awareness, observable state, and clear failure
+semantics. The root claim app observes active request and restore-execution
+state only to derive claim phase, summary, and workflow sub-status; it does not
+execute the underlying backup, restore, or upgrade lifecycle itself.
 
 Do not use claim spec mutation as a shortcut for rollout, migration, restore,
 restart, or maintenance behavior.
