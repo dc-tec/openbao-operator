@@ -7,9 +7,10 @@ metadata:
     app.kubernetes.io/component: controller
     app.kubernetes.io/managed-by: kustomize
 rules:
-  # Read/write access to OpenBaoClusterClaim resources across the cluster.
-  # The claim controller is namespaced but cluster-scoped in tenancy mode, so it
-  # needs full lifecycle and status access on its primary CRD.
+  # Read/write access to OpenBaoClusterClaim and claim workflow resources across
+  # the cluster. The claim controller is namespaced but cluster-scoped in
+  # tenancy mode, so it needs full lifecycle and status access on its primary
+  # CRDs.
   - apiGroups:
       - openbao.org
     resources:
@@ -25,6 +26,9 @@ rules:
       - openbaoclusterclaimupgraderequests
       - openbaoclusterclaimupgraderequests/status
       - openbaoclusterclaimupgraderequests/finalizers
+      - openbaoserviceofferingrollouts
+      - openbaoserviceofferingrollouts/status
+      - openbaoserviceofferingrollouts/finalizers
     verbs:
       - create
       - delete

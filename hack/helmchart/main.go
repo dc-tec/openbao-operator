@@ -55,6 +55,7 @@ var coreChartCRDFiles = map[string]struct{}{
 	"openbao.org_openbaorestores.yaml":                    {},
 	"openbao.org_openbaoruntimeprofiles.yaml":             {},
 	"openbao.org_openbaoserviceofferings.yaml":            {},
+	"openbao.org_openbaoserviceofferingrollouts.yaml":     {},
 	"openbao.org_openbaoserviceprofiles.yaml":             {},
 	"openbao.org_openbaostorageprofiles.yaml":             {},
 	"openbao.org_openbaotenants.yaml":                     {},

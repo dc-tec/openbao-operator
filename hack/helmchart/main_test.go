@@ -139,6 +139,7 @@ func TestSyncCRDsFiltersToCoreChartAndPrunesStaleOutputs(t *testing.T) {
 	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaorestores.yaml"), sampleCRD("openbaorestores.openbao.org"))
 	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoruntimeprofiles.yaml"), sampleCRD("openbaoruntimeprofiles.openbao.org"))
 	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoserviceofferings.yaml"), sampleCRD("openbaoserviceofferings.openbao.org"))
+	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoserviceofferingrollouts.yaml"), sampleCRD("openbaoserviceofferingrollouts.openbao.org"))
 	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoserviceprofiles.yaml"), sampleCRD("openbaoserviceprofiles.openbao.org"))
 	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaostorageprofiles.yaml"), sampleCRD("openbaostorageprofiles.openbao.org"))
 	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaotenants.yaml"), sampleCRD("openbaotenants.openbao.org"))
@@ -168,6 +169,7 @@ func TestSyncCRDsFiltersToCoreChartAndPrunesStaleOutputs(t *testing.T) {
 		"openbao.org_openbaorestores.yaml",
 		"openbao.org_openbaoruntimeprofiles.yaml",
 		"openbao.org_openbaoserviceofferings.yaml",
+		"openbao.org_openbaoserviceofferingrollouts.yaml",
 		"openbao.org_openbaoserviceprofiles.yaml",
 		"openbao.org_openbaostorageprofiles.yaml",
 		"openbao.org_openbaotenants.yaml",

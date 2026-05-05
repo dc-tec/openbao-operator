@@ -299,6 +299,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
@@ -391,6 +392,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
@@ -3062,6 +3064,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
@@ -3091,6 +3094,7 @@ _Appears in:_
 - [OpenBaoClusterClaimMaterializationStatus](#openbaoclusterclaimmaterializationstatus)
 - [OpenBaoClusterClaimRestoreRequestStatus](#openbaoclusterclaimrestorerequeststatus)
 - [OpenBaoClusterClaimRestoreStatus](#openbaoclusterclaimrestorestatus)
+- [OpenBaoServiceOfferingRolloutClaimStatus](#openbaoserviceofferingrolloutclaimstatus)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -3224,6 +3228,7 @@ _Appears in:_
 - [OpenBaoClusterClaimAppliedStatus](#openbaoclusterclaimappliedstatus)
 - [OpenBaoClusterClaimRenderedDependencyStatus](#openbaoclusterclaimrendereddependencystatus)
 - [OpenBaoClusterClaimUpgradeRequestRevisionStatus](#openbaoclusterclaimupgraderequestrevisionstatus)
+- [OpenBaoServiceOfferingRolloutStatus](#openbaoserviceofferingrolloutstatus)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -3601,6 +3606,7 @@ _Validation:_
 _Appears in:_
 - [OpenBaoClusterClaimUpgradeRequestStatus](#openbaoclusterclaimupgraderequeststatus)
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
+- [OpenBaoServiceOfferingRolloutClaimStatus](#openbaoserviceofferingrolloutclaimstatus)
 
 | Field | Description |
 | --- | --- |
@@ -3721,6 +3727,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
@@ -3750,6 +3757,7 @@ _Appears in:_
 - [OpenBaoClusterClaimMaterializationStatus](#openbaoclusterclaimmaterializationstatus)
 - [OpenBaoClusterClaimRestoreRequestStatus](#openbaoclusterclaimrestorerequeststatus)
 - [OpenBaoClusterClaimRestoreStatus](#openbaoclusterclaimrestorestatus)
+- [OpenBaoServiceOfferingRolloutClaimStatus](#openbaoserviceofferingrolloutclaimstatus)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -3877,6 +3885,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
@@ -3906,6 +3915,7 @@ _Appears in:_
 - [OpenBaoClusterClaimMaterializationStatus](#openbaoclusterclaimmaterializationstatus)
 - [OpenBaoClusterClaimRestoreRequestStatus](#openbaoclusterclaimrestorerequeststatus)
 - [OpenBaoClusterClaimRestoreStatus](#openbaoclusterclaimrestorestatus)
+- [OpenBaoServiceOfferingRolloutClaimStatus](#openbaoserviceofferingrolloutclaimstatus)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -4070,6 +4080,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
@@ -4098,6 +4109,7 @@ _Appears in:_
 - [OpenBaoClusterClaimAppliedStatus](#openbaoclusterclaimappliedstatus)
 - [OpenBaoClusterClaimRenderedDependencyStatus](#openbaoclusterclaimrendereddependencystatus)
 - [OpenBaoClusterClaimUpgradeRequestRevisionStatus](#openbaoclusterclaimupgraderequestrevisionstatus)
+- [OpenBaoServiceOfferingRolloutStatus](#openbaoserviceofferingrolloutstatus)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -4225,6 +4237,7 @@ _Validation:_
 _Appears in:_
 - [OpenBaoClusterClaimUpgradeRequestStatus](#openbaoclusterclaimupgraderequeststatus)
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
+- [OpenBaoServiceOfferingRolloutClaimStatus](#openbaoserviceofferingrolloutclaimstatus)
 
 | Field | Description |
 | --- | --- |
@@ -4420,6 +4433,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
@@ -5605,6 +5619,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
@@ -5692,6 +5707,284 @@ _Appears in:_
 
 </TabItem>
 
+<TabItem value="openbaoserviceofferingrollout" label="OpenBaoServiceOfferingRollout">
+
+## Packages
+- [openbao.org/v1alpha1](#openbaoorgv1alpha1)
+
+
+## openbao.org/v1alpha1
+
+Package v1alpha1 contains API Schema definitions for the openbao v1alpha1 API group.
+
+### Resource Types
+- [OpenBaoServiceOfferingRollout](#openbaoserviceofferingrollout)
+
+
+
+#### LocalReference
+
+
+
+LocalReference identifies another object by name.
+
+
+
+_Appears in:_
+- [OpenBaoBackupProfileSpec](#openbaobackupprofilespec)
+- [OpenBaoBackupTargetSpec](#openbaobackuptargetspec)
+- [OpenBaoClusterClaimAppliedStatus](#openbaoclusterclaimappliedstatus)
+- [OpenBaoClusterClaimBackupRequestSpec](#openbaoclusterclaimbackuprequestspec)
+- [OpenBaoClusterClaimBackupStatus](#openbaoclusterclaimbackupstatus)
+- [OpenBaoClusterClaimConnectionStatus](#openbaoclusterclaimconnectionstatus)
+- [OpenBaoClusterClaimRestoreRequestSourceSpec](#openbaoclusterclaimrestorerequestsourcespec)
+- [OpenBaoClusterClaimRestoreRequestSpec](#openbaoclusterclaimrestorerequestspec)
+- [OpenBaoClusterClaimRestoreStatus](#openbaoclusterclaimrestorestatus)
+- [OpenBaoClusterClaimSpec](#openbaoclusterclaimspec)
+- [OpenBaoClusterClaimUpgradeRequestRevisionStatus](#openbaoclusterclaimupgraderequestrevisionstatus)
+- [OpenBaoClusterClaimUpgradeRequestSpec](#openbaoclusterclaimupgraderequestspec)
+- [OpenBaoClusterClaimUpgradeRequestTargetSpec](#openbaoclusterclaimupgraderequesttargetspec)
+- [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
+- [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
+- [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
+- [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
+- [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
+- [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)
+- [OpenBaoServiceProfileExposureSpec](#openbaoserviceprofileexposurespec)
+- [OpenBaoServiceProfileLifecycleSpec](#openbaoserviceprofilelifecyclespec)
+- [OpenBaoServiceProfileNetworkSpec](#openbaoserviceprofilenetworkspec)
+- [OpenBaoServiceProfileObservabilitySpec](#openbaoserviceprofileobservabilityspec)
+- [OpenBaoServiceProfileRuntimeSpec](#openbaoserviceprofileruntimespec)
+- [OpenBaoServiceProfileStorageSpec](#openbaoserviceprofilestoragespec)
+- [OpenBaoServiceProfileUnsealSpec](#openbaoserviceprofileunsealspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the referenced object name. |  | MinLength: 1 <br /> |
+
+
+#### NamespacedReference
+
+
+
+NamespacedReference identifies another object by namespace and name.
+
+
+
+_Appears in:_
+- [OpenBaoClusterClaimBackupRequestStatus](#openbaoclusterclaimbackuprequeststatus)
+- [OpenBaoClusterClaimMaterializationStatus](#openbaoclusterclaimmaterializationstatus)
+- [OpenBaoClusterClaimRestoreRequestStatus](#openbaoclusterclaimrestorerequeststatus)
+- [OpenBaoClusterClaimRestoreStatus](#openbaoclusterclaimrestorestatus)
+- [OpenBaoServiceOfferingRolloutClaimStatus](#openbaoserviceofferingrolloutclaimstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `namespace` _string_ | Namespace is the referenced object namespace. |  | MinLength: 1 <br /> |
+| `name` _string_ | Name is the referenced object name. |  | MinLength: 1 <br /> |
+
+
+#### OpenBaoClusterClaimBoundRevisionReference
+
+
+
+OpenBaoClusterClaimBoundRevisionReference identifies a bound immutable catalog revision by name and UID.
+
+
+
+_Appears in:_
+- [OpenBaoClusterClaimAppliedStatus](#openbaoclusterclaimappliedstatus)
+- [OpenBaoClusterClaimRenderedDependencyStatus](#openbaoclusterclaimrendereddependencystatus)
+- [OpenBaoClusterClaimUpgradeRequestRevisionStatus](#openbaoclusterclaimupgraderequestrevisionstatus)
+- [OpenBaoServiceOfferingRolloutStatus](#openbaoserviceofferingrolloutstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the immutable catalog object name. |  |  |
+| `uid` _string_ | UID is the Kubernetes object UID observed when the claim bound this revision. |  |  |
+
+
+#### OpenBaoClusterClaimUpgradeRequestState
+
+_Underlying type:_ _string_
+
+OpenBaoClusterClaimUpgradeRequestState summarizes request progress.
+
+_Validation:_
+- Enum: [Pending RollingOut Succeeded Blocked Failed]
+
+_Appears in:_
+- [OpenBaoClusterClaimUpgradeRequestStatus](#openbaoclusterclaimupgraderequeststatus)
+- [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
+- [OpenBaoServiceOfferingRolloutClaimStatus](#openbaoserviceofferingrolloutclaimstatus)
+
+| Field | Description |
+| --- | --- |
+| `Pending` | OpenBaoClusterClaimUpgradeRequestStatePending indicates the request was admitted but not yet evaluated.<br /> |
+| `RollingOut` | OpenBaoClusterClaimUpgradeRequestStateRollingOut indicates the claim has entered rollout toward the classified target revision.<br /> |
+| `Succeeded` | OpenBaoClusterClaimUpgradeRequestStateSucceeded indicates the request completed successfully.<br /> |
+| `Blocked` | OpenBaoClusterClaimUpgradeRequestStateBlocked indicates the requested change is outside the supported upgrade boundary.<br /> |
+| `Failed` | OpenBaoClusterClaimUpgradeRequestStateFailed indicates the request could not be evaluated or executed successfully.<br /> |
+
+
+#### OpenBaoServiceOfferingRollout
+
+
+
+OpenBaoServiceOfferingRollout is an admin-owned rollout intent for promoting claims bound to a service offering.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `openbao.org/v1alpha1` | | |
+| `kind` _string_ | `OpenBaoServiceOfferingRollout` | | |
+| `spec` _[OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)_ |  |  |  |
+| `status` _[OpenBaoServiceOfferingRolloutStatus](#openbaoserviceofferingrolloutstatus)_ |  |  |  |
+
+
+#### OpenBaoServiceOfferingRolloutClaimStatus
+
+
+
+OpenBaoServiceOfferingRolloutClaimStatus summarizes rollout progress for one selected claim.
+
+
+
+_Appears in:_
+- [OpenBaoServiceOfferingRolloutStatus](#openbaoserviceofferingrolloutstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `namespace` _string_ | Namespace is the claim namespace. |  |  |
+| `name` _string_ | Name is the claim name. |  |  |
+| `requestRef` _[NamespacedReference](#namespacedreference)_ | RequestRef identifies the claim upgrade request created for this claim when one exists. |  | Optional: \{\} <br /> |
+| `state` _[OpenBaoClusterClaimUpgradeRequestState](#openbaoclusterclaimupgraderequeststate)_ | State is the rollout state observed for this claim. |  | Enum: [Pending RollingOut Succeeded Blocked Failed] <br />Optional: \{\} <br /> |
+| `reason` _string_ | Reason explains the per-claim rollout state. |  | Optional: \{\} <br /> |
+
+
+#### OpenBaoServiceOfferingRolloutMode
+
+_Underlying type:_ _string_
+
+OpenBaoServiceOfferingRolloutMode controls which upgrade classes the rollout may drive.
+
+_Validation:_
+- Enum: [InPlaceOnly]
+
+_Appears in:_
+- [OpenBaoServiceOfferingRolloutStrategySpec](#openbaoserviceofferingrolloutstrategyspec)
+
+| Field | Description |
+| --- | --- |
+| `InPlaceOnly` | OpenBaoServiceOfferingRolloutModeInPlaceOnly limits rollouts to the existing in-place claim upgrade workflow.<br /> |
+
+
+#### OpenBaoServiceOfferingRolloutSelectorSpec
+
+
+
+OpenBaoServiceOfferingRolloutSelectorSpec selects claims bound to the offering.
+
+
+
+_Appears in:_
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `namespaces` _string array_ | Namespaces restricts the rollout to explicitly named claim namespaces. Empty selects all namespaces. |  | Optional: \{\} <br /> |
+| `claimSelector` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#labelselector-v1-meta)_ | ClaimSelector restricts the rollout to claims with matching labels. |  | Optional: \{\} <br /> |
+
+
+#### OpenBaoServiceOfferingRolloutSpec
+
+
+
+OpenBaoServiceOfferingRolloutSpec defines the desired state of OpenBaoServiceOfferingRollout.
+
+
+
+_Appears in:_
+- [OpenBaoServiceOfferingRollout](#openbaoserviceofferingrollout)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `offeringRef` _[LocalReference](#localreference)_ | OfferingRef identifies the stable service-offering alias to roll out. |  |  |
+| `targetRevisionRef` _[LocalReference](#localreference)_ | TargetRevisionRef identifies the immutable service-profile revision that the offering must currently point at. |  |  |
+| `selector` _[OpenBaoServiceOfferingRolloutSelectorSpec](#openbaoserviceofferingrolloutselectorspec)_ | Selector restricts which claims bound to the offering are included. |  | Optional: \{\} <br /> |
+| `strategy` _[OpenBaoServiceOfferingRolloutStrategySpec](#openbaoserviceofferingrolloutstrategyspec)_ | Strategy controls rollout orchestration. |  | Optional: \{\} <br /> |
+
+
+#### OpenBaoServiceOfferingRolloutState
+
+_Underlying type:_ _string_
+
+OpenBaoServiceOfferingRolloutState summarizes rollout progress.
+
+_Validation:_
+- Enum: [Pending Running Succeeded Blocked Failed]
+
+_Appears in:_
+- [OpenBaoServiceOfferingRolloutStatus](#openbaoserviceofferingrolloutstatus)
+
+| Field | Description |
+| --- | --- |
+| `Pending` | OpenBaoServiceOfferingRolloutStatePending indicates the rollout has not yet started.<br /> |
+| `Running` | OpenBaoServiceOfferingRolloutStateRunning indicates the rollout is creating or waiting for claim upgrade requests.<br /> |
+| `Succeeded` | OpenBaoServiceOfferingRolloutStateSucceeded indicates all selected claims are on the target revision.<br /> |
+| `Blocked` | OpenBaoServiceOfferingRolloutStateBlocked indicates rollout intent is valid but cannot proceed without operator action.<br /> |
+| `Failed` | OpenBaoServiceOfferingRolloutStateFailed indicates the rollout controller could not evaluate or create required requests.<br /> |
+
+
+#### OpenBaoServiceOfferingRolloutStatus
+
+
+
+OpenBaoServiceOfferingRolloutStatus defines the observed state of OpenBaoServiceOfferingRollout.
+
+
+
+_Appears in:_
+- [OpenBaoServiceOfferingRollout](#openbaoserviceofferingrollout)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `observedGeneration` _integer_ | ObservedGeneration is the latest rollout generation observed by the controller. |  | Optional: \{\} <br /> |
+| `state` _[OpenBaoServiceOfferingRolloutState](#openbaoserviceofferingrolloutstate)_ | State is the current rollout workflow state. |  | Enum: [Pending Running Succeeded Blocked Failed] <br />Optional: \{\} <br /> |
+| `reason` _string_ | Reason explains the current rollout workflow state. |  | Optional: \{\} <br /> |
+| `targetRevisionRef` _[OpenBaoClusterClaimBoundRevisionReference](#openbaoclusterclaimboundrevisionreference)_ | TargetRevisionRef identifies the resolved immutable target revision. |  | Optional: \{\} <br /> |
+| `total` _integer_ | Total is the number of claims selected by this rollout. |  | Optional: \{\} <br /> |
+| `pending` _integer_ | Pending is the number of selected claims waiting for a rollout slot or request evaluation. |  | Optional: \{\} <br /> |
+| `running` _integer_ | Running is the number of selected claims with an active rollout request. |  | Optional: \{\} <br /> |
+| `succeeded` _integer_ | Succeeded is the number of selected claims that reached the target revision. |  | Optional: \{\} <br /> |
+| `blocked` _integer_ | Blocked is the number of selected claims whose upgrade request is blocked. |  | Optional: \{\} <br /> |
+| `failed` _integer_ | Failed is the number of selected claims whose upgrade request failed. |  | Optional: \{\} <br /> |
+| `claims` _[OpenBaoServiceOfferingRolloutClaimStatus](#openbaoserviceofferingrolloutclaimstatus) array_ | Claims summarizes selected claim rollout progress. |  | Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions represent the latest available observations of the rollout state. |  | Optional: \{\} <br /> |
+
+
+#### OpenBaoServiceOfferingRolloutStrategySpec
+
+
+
+OpenBaoServiceOfferingRolloutStrategySpec controls rollout orchestration.
+
+
+
+_Appears in:_
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `maxConcurrent` _integer_ | MaxConcurrent limits the number of active claim upgrade requests created by this rollout. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+| `mode` _[OpenBaoServiceOfferingRolloutMode](#openbaoserviceofferingrolloutmode)_ | Mode controls which upgrade classes the rollout may drive. | InPlaceOnly | Enum: [InPlaceOnly] <br />Optional: \{\} <br /> |
+
+</TabItem>
+
 <TabItem value="openbaoserviceprofile" label="OpenBaoServiceProfile">
 
 ## Packages
@@ -5732,6 +6025,7 @@ _Appears in:_
 - [OpenBaoClusterClaimUpgradeStatus](#openbaoclusterclaimupgradestatus)
 - [OpenBaoExposureClassSpec](#openbaoexposureclassspec)
 - [OpenBaoServiceOfferingLifecycleSpec](#openbaoserviceofferinglifecyclespec)
+- [OpenBaoServiceOfferingRolloutSpec](#openbaoserviceofferingrolloutspec)
 - [OpenBaoServiceOfferingSpec](#openbaoserviceofferingspec)
 - [OpenBaoServiceProfileBackupSpec](#openbaoserviceprofilebackupspec)
 - [OpenBaoServiceProfileBootstrapSpec](#openbaoserviceprofilebootstrapspec)

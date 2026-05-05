@@ -53,6 +53,9 @@ rules:
       - openbaoclusterclaimupgraderequests
       - openbaoclusterclaimupgraderequests/status
       - openbaoclusterclaimupgraderequests/finalizers
+      - openbaoserviceofferingrollouts
+      - openbaoserviceofferingrollouts/status
+      - openbaoserviceofferingrollouts/finalizers
     verbs:
       - create
       - delete

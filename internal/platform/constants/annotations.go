@@ -14,4 +14,6 @@ const (
 	AnnotationRestartAt = "openbao.org/restart-at"
 	// AnnotationClaimUpgradeRequest records the claim-upgrade request that promoted claim service selectors.
 	AnnotationClaimUpgradeRequest = "openbao.org/claim-upgrade-request"
+	// AnnotationServiceOfferingRolloutUID records the rollout UID that created a claim-upgrade request.
+	AnnotationServiceOfferingRolloutUID = "openbao.org/service-offering-rollout-uid"
 )

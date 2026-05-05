@@ -9,6 +9,7 @@ import (
 	claimbackuprequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/backuprequest"
 	claimrestorerequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/restorerequest"
 	claimupgraderequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/upgraderequest"
+	serviceofferingrolloutcontroller "github.com/dc-tec/openbao-operator/internal/controller/serviceofferingrollout"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -68,6 +69,13 @@ func setupClaimControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) e
 			EnableServiceClaims: runtime.enableServiceClaims,
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("unable to create controller openbaoclusterclaimupgraderequest: %w", err)
+		}
+		if err := (&serviceofferingrolloutcontroller.OpenBaoServiceOfferingRolloutReconciler{
+			Client:              mgr.GetClient(),
+			Scheme:              mgr.GetScheme(),
+			EnableServiceClaims: runtime.enableServiceClaims,
+		}).SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("unable to create controller openbaoserviceofferingrollout: %w", err)
 		}
 	}
 
