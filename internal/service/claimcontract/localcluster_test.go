@@ -566,29 +566,6 @@ func TestDesiredSameClusterClusterProjectsBootstrapRefs(t *testing.T) {
 				}
 			},
 		},
-		{
-			name: "audit device",
-			rendered: RenderedBootstrap{
-				Mode: openbaov1alpha1.OpenBaoBootstrapModeSelfInit,
-				Audit: &RenderedBootstrapAuditSpec{
-					Devices: []RenderedBootstrapAuditDeviceSpec{{
-						Type: "file",
-						Path: "stdout",
-						SinkFromRef: &openbaov1alpha1.TypedObjectReference{
-							Kind: "Secret",
-							Name: "claim-bootstrap-audit-a1b2c3d4",
-						},
-					}},
-				},
-			},
-			wantPath: "sys/audit/stdout",
-			assertSingle: func(t *testing.T, req openbaov1alpha1.SelfInitRequest) {
-				t.Helper()
-				if got := req.AuditDevice; got == nil || got.SinkFromRef == nil || got.SinkFromRef.Name != "claim-bootstrap-audit-a1b2c3d4" {
-					t.Fatalf("audit request = %#v, want projected sinkFromRef", got)
-				}
-			},
-		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -619,6 +596,59 @@ func TestDesiredSameClusterClusterProjectsBootstrapRefs(t *testing.T) {
 			}
 			tt.assertSingle(t, cluster.Spec.SelfInit.Requests[0])
 		})
+	}
+}
+
+func TestDesiredSameClusterClusterProjectsAuditDevicesDeclaratively(t *testing.T) {
+	t.Parallel()
+
+	claim := &openbaov1alpha1.OpenBaoClusterClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "payments-bao", Namespace: "payments"},
+	}
+	rendered := &RenderedExecutionContract{
+		TargetNamespace: "payments",
+		Cluster: RenderedCluster{
+			Version:         "2.6.0",
+			Replicas:        1,
+			SecurityProfile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Storage: RenderedStorage{PrimarySize: "20Gi"},
+		Bootstrap: RenderedBootstrap{
+			Mode: openbaov1alpha1.OpenBaoBootstrapModeSelfInit,
+			Audit: &RenderedBootstrapAuditSpec{
+				Devices: []RenderedBootstrapAuditDeviceSpec{{
+					Type:        "file",
+					Path:        testAuditStdoutPath,
+					Description: "stdout audit",
+					SinkFromRef: &openbaov1alpha1.TypedObjectReference{
+						Kind: "Secret",
+						Name: "claim-bootstrap-audit-a1b2c3d4",
+					},
+					FileOptions: &openbaov1alpha1.FileAuditOptions{FilePath: testAuditStdoutPath},
+				}},
+			},
+		},
+		Exposure: RenderedExposure{
+			PublishMode: openbaov1alpha1.OpenBaoExposurePublishModeClusterInternal,
+		},
+	}
+
+	cluster := mustDesiredSameClusterCluster(t, claim, rendered)
+	if cluster.Spec.SelfInit == nil {
+		t.Fatalf("cluster/selfInit = %#v, want enabled self-init config", cluster)
+	}
+	if len(cluster.Spec.SelfInit.Requests) != 0 {
+		t.Fatalf("selfInit requests = %#v, want no audit self-init requests", cluster.Spec.SelfInit.Requests)
+	}
+	if len(cluster.Spec.Audit) != 1 {
+		t.Fatalf("spec.audit = %#v, want one declarative audit device", cluster.Spec.Audit)
+	}
+	audit := cluster.Spec.Audit[0]
+	if audit.Type != "file" || audit.Path != testAuditStdoutPath || audit.Description != "stdout audit" {
+		t.Fatalf("audit device = %#v, want file/stdout declarative audit", audit)
+	}
+	if audit.FileOptions == nil || audit.FileOptions.FilePath != testAuditStdoutPath {
+		t.Fatalf("audit fileOptions = %#v, want stdout file path", audit.FileOptions)
 	}
 }
 

@@ -96,11 +96,15 @@ func DesiredSameClusterCluster(
 	if !selfInitResult.Valid {
 		return nil, selfInitResult
 	}
-	if len(selfInitRequests) == 0 {
+	auditDevices, auditResult := renderedAuditDevices(rendered)
+	if !auditResult.Valid {
+		return nil, auditResult
+	}
+	if len(selfInitRequests) == 0 && len(auditDevices) == 0 {
 		return nil, ValidationResult{
 			Valid:   false,
 			Reason:  openbaov1alpha1.ReasonInvalid,
-			Message: "Same-cluster claim materialization requires at least one concrete self-init request after bootstrap rendering.",
+			Message: "Same-cluster claim materialization requires at least one concrete self-init request or declarative audit device after bootstrap rendering.",
 		}
 	}
 
@@ -151,6 +155,9 @@ func DesiredSameClusterCluster(
 		Service:  renderedServiceConfig(rendered),
 		Upgrade:  upgrade,
 		SelfInit: renderedSelfInitConfig(rendered, selfInitRequests),
+	}
+	if len(auditDevices) > 0 {
+		spec.Audit = auditDevices
 	}
 	if unseal != nil {
 		spec.Unseal = unseal

@@ -107,7 +107,12 @@ func (r runtimeReconciler) resolveSameClusterAuditSink(
 	}
 
 	sink := struct {
-		Path string `json:"path"`
+		Path          string                              `json:"path"`
+		Description   string                              `json:"description,omitempty"`
+		FileOptions   *openbaov1alpha1.FileAuditOptions   `json:"fileOptions,omitempty"`
+		HTTPOptions   *openbaov1alpha1.HTTPAuditOptions   `json:"httpOptions,omitempty"`
+		SyslogOptions *openbaov1alpha1.SyslogAuditOptions `json:"syslogOptions,omitempty"`
+		SocketOptions *openbaov1alpha1.SocketAuditOptions `json:"socketOptions,omitempty"`
 	}{}
 	if err := json.Unmarshal([]byte(raw), &sink); err != nil {
 		return claimcontract.ProjectedBootstrapAuditSink{}, result{
@@ -125,12 +130,17 @@ func (r runtimeReconciler) resolveSameClusterAuditSink(
 	}
 
 	return claimcontract.ProjectedBootstrapAuditSink{
-			Artifact: artifact,
-			Path:     strings.Trim(strings.TrimSpace(sink.Path), "/"),
+			Artifact:      artifact,
+			Path:          strings.Trim(strings.TrimSpace(sink.Path), "/"),
+			Description:   sink.Description,
+			FileOptions:   sink.FileOptions.DeepCopy(),
+			HTTPOptions:   sink.HTTPOptions.DeepCopy(),
+			SyslogOptions: sink.SyslogOptions.DeepCopy(),
+			SocketOptions: sink.SocketOptions.DeepCopy(),
 		}, result{
 			Valid:   true,
 			Reason:  openbaov1alpha1.ReasonAccepted,
-			Message: "Bootstrap audit-device source has been projected for same-cluster self-init execution.",
+			Message: "Bootstrap audit-device source has been projected for same-cluster declarative audit configuration.",
 		}
 }
 

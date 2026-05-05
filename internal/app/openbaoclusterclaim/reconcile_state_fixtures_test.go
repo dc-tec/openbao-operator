@@ -303,6 +303,9 @@ func validSameClusterAuditAppliedStatusForKind(kind string) *openbaov1alpha1.Ope
 				claimcontract.BootstrapAuditDeviceIdentity(auditDevice): {
 					Artifact: artifact,
 					Path:     "stdout",
+					FileOptions: &openbaov1alpha1.FileAuditOptions{
+						FilePath: "stdout",
+					},
 				},
 			},
 		},

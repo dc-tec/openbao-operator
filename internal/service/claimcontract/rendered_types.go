@@ -91,10 +91,15 @@ type ProjectedBootstrapArtifact struct {
 }
 
 // ProjectedBootstrapAuditSink captures one projected audit sink artifact plus
-// the resolved audit path used to build the self-init request path.
+// the resolved declarative audit-device configuration.
 type ProjectedBootstrapAuditSink struct {
-	Artifact ProjectedBootstrapArtifact
-	Path     string
+	Artifact      ProjectedBootstrapArtifact
+	Path          string
+	Description   string
+	FileOptions   *openbaov1alpha1.FileAuditOptions
+	HTTPOptions   *openbaov1alpha1.HTTPAuditOptions
+	SyslogOptions *openbaov1alpha1.SyslogAuditOptions
+	SocketOptions *openbaov1alpha1.SocketAuditOptions
 }
 
 // SameClusterBootstrapResolvedInputs captures locally resolved bootstrap dependency
@@ -151,9 +156,14 @@ type RenderedBootstrapPoliciesSpec struct {
 
 // RenderedBootstrapAuditDeviceSpec captures one rendered bootstrap audit device.
 type RenderedBootstrapAuditDeviceSpec struct {
-	Type        string
-	SinkFromRef *openbaov1alpha1.TypedObjectReference
-	Path        string
+	Type          string
+	SinkFromRef   *openbaov1alpha1.TypedObjectReference
+	Path          string
+	Description   string
+	FileOptions   *openbaov1alpha1.FileAuditOptions
+	HTTPOptions   *openbaov1alpha1.HTTPAuditOptions
+	SyslogOptions *openbaov1alpha1.SyslogAuditOptions
+	SocketOptions *openbaov1alpha1.SocketAuditOptions
 }
 
 // RenderedBootstrapAuditSpec captures rendered audit-device bootstrap inputs.

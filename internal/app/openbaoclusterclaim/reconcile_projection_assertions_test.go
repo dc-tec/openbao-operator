@@ -221,18 +221,15 @@ func assertProjectedLocalClusterWithAuditDevice(
 	t.Helper()
 
 	assertProjectedLocalCluster(t, claim, cluster)
-	var foundAudit bool
-	for _, request := range cluster.Spec.SelfInit.Requests {
-		if request.Path != "sys/audit/stdout" {
-			continue
-		}
-		foundAudit = true
-		if request.AuditDevice == nil || request.AuditDevice.SinkFromRef == nil {
-			t.Fatalf("audit request = %#v, want sinkFromRef-backed audit device", request.AuditDevice)
-		}
+	if len(cluster.Spec.Audit) != 1 {
+		t.Fatalf("cluster spec.audit = %#v, want one declarative audit device", cluster.Spec.Audit)
 	}
-	if !foundAudit {
-		t.Fatalf("cluster selfInit requests = %#v, want sys/audit/stdout request", cluster.Spec.SelfInit.Requests)
+	audit := cluster.Spec.Audit[0]
+	if audit.Type != "file" || audit.Path != "stdout" {
+		t.Fatalf("audit device = %#v, want file/stdout declarative audit", audit)
+	}
+	if audit.FileOptions == nil || audit.FileOptions.FilePath != "stdout" {
+		t.Fatalf("audit fileOptions = %#v, want stdout file path", audit.FileOptions)
 	}
 }
 

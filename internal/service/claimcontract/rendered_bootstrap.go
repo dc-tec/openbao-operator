@@ -166,9 +166,14 @@ func renderBootstrapAudit(
 			}
 		}
 		rendered.Devices = append(rendered.Devices, RenderedBootstrapAuditDeviceSpec{
-			Type:        device.Type,
-			SinkFromRef: cloneTypedObjectReference(&sink.Artifact.Ref),
-			Path:        sink.Path,
+			Type:          device.Type,
+			SinkFromRef:   cloneTypedObjectReference(&sink.Artifact.Ref),
+			Path:          sink.Path,
+			Description:   sink.Description,
+			FileOptions:   sink.FileOptions.DeepCopy(),
+			HTTPOptions:   sink.HTTPOptions.DeepCopy(),
+			SyslogOptions: sink.SyslogOptions.DeepCopy(),
+			SocketOptions: sink.SocketOptions.DeepCopy(),
 		})
 	}
 

@@ -101,8 +101,25 @@ func renderedSelfInitRequests(rendered *RenderedExecutionContract) ([]openbaov1a
 			})
 		}
 	}
+	return requests, ValidationResult{
+		Valid:   true,
+		Reason:  openbaov1alpha1.ReasonAccepted,
+		Message: "Rendered bootstrap contract is compatible with same-cluster self-init projection.",
+	}
+}
+
+func renderedAuditDevices(rendered *RenderedExecutionContract) ([]openbaov1alpha1.AuditDevice, ValidationResult) {
+	if rendered == nil {
+		return nil, ValidationResult{
+			Valid:   false,
+			Reason:  openbaov1alpha1.ReasonPending,
+			Message: "Rendered bootstrap contract is required to build declarative audit devices.",
+		}
+	}
+
+	var devices []openbaov1alpha1.AuditDevice
 	if rendered.Bootstrap.Audit != nil {
-		for i, device := range rendered.Bootstrap.Audit.Devices {
+		for _, device := range rendered.Bootstrap.Audit.Devices {
 			auditPath := strings.Trim(strings.TrimSpace(device.Path), "/")
 			if auditPath == "" {
 				return nil, ValidationResult{
@@ -111,21 +128,21 @@ func renderedSelfInitRequests(rendered *RenderedExecutionContract) ([]openbaov1a
 					Message: "Rendered bootstrap audit device must resolve to a non-empty path.",
 				}
 			}
-			requests = append(requests, openbaov1alpha1.SelfInitRequest{
-				Name:      fmt.Sprintf("enable-audit-%d", i+1),
-				Operation: openbaov1alpha1.SelfInitOperationUpdate,
-				Path:      "sys/audit/" + auditPath,
-				AuditDevice: &openbaov1alpha1.SelfInitAuditDevice{
-					Type:        device.Type,
-					SinkFromRef: cloneTypedObjectReference(device.SinkFromRef),
-				},
+			devices = append(devices, openbaov1alpha1.AuditDevice{
+				Type:          device.Type,
+				Path:          auditPath,
+				Description:   device.Description,
+				FileOptions:   device.FileOptions.DeepCopy(),
+				HTTPOptions:   device.HTTPOptions.DeepCopy(),
+				SyslogOptions: device.SyslogOptions.DeepCopy(),
+				SocketOptions: device.SocketOptions.DeepCopy(),
 			})
 		}
 	}
 
-	return requests, ValidationResult{
+	return devices, ValidationResult{
 		Valid:   true,
 		Reason:  openbaov1alpha1.ReasonAccepted,
-		Message: "Rendered bootstrap contract is compatible with same-cluster self-init projection.",
+		Message: "Rendered bootstrap audit devices are compatible with declarative OpenBaoCluster audit configuration.",
 	}
 }

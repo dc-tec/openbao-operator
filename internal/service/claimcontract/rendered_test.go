@@ -502,10 +502,14 @@ func TestRenderSameClusterExecutionContractRendersAuditDevices(t *testing.T) {
 							Name: "claim-bootstrap-audit-a1b2c3d4",
 						},
 						SecretData: map[string][]byte{
-							"sink.json": []byte(`{"path":"stdout","fileOptions":{"filePath":"stdout"}}`),
+							"sink.json": []byte(`{"path":"stdout","description":"stdout audit","fileOptions":{"filePath":"stdout"}}`),
 						},
 					},
-					Path: testAuditStdoutPath,
+					Path:        testAuditStdoutPath,
+					Description: "stdout audit",
+					FileOptions: &openbaov1alpha1.FileAuditOptions{
+						FilePath: "stdout",
+					},
 				},
 			},
 		},
@@ -521,5 +525,11 @@ func TestRenderSameClusterExecutionContractRendersAuditDevices(t *testing.T) {
 	}
 	if got := rendered.Bootstrap.Audit.Devices[0].SinkFromRef; got == nil || got.Kind != testSecretRefKind || got.Name != "claim-bootstrap-audit-a1b2c3d4" {
 		t.Fatalf("rendered audit sinkFromRef = %#v, want projected Secret ref", got)
+	}
+	if got := rendered.Bootstrap.Audit.Devices[0].Description; got != "stdout audit" {
+		t.Fatalf("rendered audit description = %q, want stdout audit", got)
+	}
+	if got := rendered.Bootstrap.Audit.Devices[0].FileOptions; got == nil || got.FilePath != "stdout" {
+		t.Fatalf("rendered audit fileOptions = %#v, want stdout file path", got)
 	}
 }
