@@ -10,22 +10,21 @@ import (
 )
 
 func FuzzLoadUpgradeExecutorConfig(f *testing.F) {
-	f.Add("default", "openbao", "3", string(ExecutorActionRollingStepDownLeader), "upgrade-role", "jwt-token", "ca-data", "", "", "100", "10m")
-	f.Add("ns", "cluster", "3", string(ExecutorActionBlueGreenRepairConsensus), "role", "token", "ca", "blue", "green", "250", "2m")
-	f.Add("", "cluster", "x", "", "", "", "", "", "", "bad", "forever")
+	tmpDir := f.TempDir()
+	jwtPath := filepath.Join(tmpDir, "upgrade.jwt")
+	caPath := filepath.Join(tmpDir, "ca.crt")
+	if err := os.WriteFile(jwtPath, []byte("jwt-token"), 0o600); err != nil {
+		f.Fatalf("failed to write JWT token file: %v", err)
+	}
+	if err := os.WriteFile(caPath, []byte("ca-data"), 0o600); err != nil {
+		f.Fatalf("failed to write CA file: %v", err)
+	}
 
-	f.Fuzz(func(t *testing.T, namespace, clusterName, replicas, action, jwtRole, jwtToken, caData, blueRevision, greenRevision, syncThreshold, timeout string) {
-		tmpDir := t.TempDir()
-		jwtPath := filepath.Join(tmpDir, "upgrade.jwt")
-		caPath := filepath.Join(tmpDir, "ca.crt")
+	f.Add("default", "openbao", "3", string(ExecutorActionRollingStepDownLeader), "upgrade-role", "", "", "100", "10m")
+	f.Add("ns", "cluster", "3", string(ExecutorActionBlueGreenRepairConsensus), "role", "blue", "green", "250", "2m")
+	f.Add("", "cluster", "x", "", "", "", "", "bad", "forever")
 
-		if err := os.WriteFile(jwtPath, []byte(sanitizeUpgradeConfigText(jwtToken)), 0o600); err != nil {
-			t.Fatalf("failed to write JWT token file: %v", err)
-		}
-		if err := os.WriteFile(caPath, []byte(sanitizeUpgradeConfigText(caData)), 0o600); err != nil {
-			t.Fatalf("failed to write CA file: %v", err)
-		}
-
+	f.Fuzz(func(t *testing.T, namespace, clusterName, replicas, action, jwtRole, blueRevision, greenRevision, syncThreshold, timeout string) {
 		t.Setenv(constants.EnvClusterNamespace, sanitizeUpgradeConfigText(namespace))
 		t.Setenv(constants.EnvClusterName, sanitizeUpgradeConfigText(clusterName))
 		t.Setenv(constants.EnvClusterReplicas, sanitizeUpgradeConfigText(replicas))
