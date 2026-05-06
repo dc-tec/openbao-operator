@@ -125,79 +125,83 @@ jobs:
           git fetch --no-tags --prune --depth=1 origin "${base_sha}" || true
 
           changed="$(git diff --name-only "${base_sha}" "${head_sha}" || true)"
-          if echo "${changed}" | grep -qE '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/)'; then
+          changed_matches() {
+            grep -qE "$1" <<< "${changed}"
+          }
+
+          if changed_matches '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/)'; then
             echo "chart=true" >> "${GITHUB_OUTPUT}"
           else
             echo "chart=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(\.github/workflows/|\.github/actions/)'; then
+          if changed_matches '^(\.github/workflows/|\.github/actions/)'; then
             echo "workflow=true" >> "${GITHUB_OUTPUT}"
           else
             echo "workflow=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(docs/|releases/|website/|hack/docs/|CHANGELOG\.md|README\.md|\.github/actions/docs-build/)'; then
+          if changed_matches '^(docs/|releases/|website/|hack/docs/|CHANGELOG\.md|README\.md|\.github/actions/docs-build/)'; then
             echo "docs=true" >> "${GITHUB_OUTPUT}"
           else
             echo "docs=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|config/|test/|docs/reference/api\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|boilerplate\.go\.txt)|\.golangci\.yml|\.github/tools/)'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|test/|docs/reference/api\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|boilerplate\.go\.txt)|\.golangci\.yml|\.github/tools/)'; then
             echo "go_quality=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_quality=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|config/|go\.(mod|sum)$|vendor/|Makefile|mk/|test/(integration/|unit/))'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|go\.(mod|sum)$|vendor/|Makefile|mk/|test/(integration/|unit/))'; then
             echo "go_tests=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_tests=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(api/|internal/adapter/config/|internal/service/infra/|internal/app/openbaocluster/|internal/controller/openbaocluster/|go\.(mod|sum)$|Makefile|mk/)'; then
+          if changed_matches '^(api/|internal/adapter/config/|internal/service/infra/|internal/app/openbaocluster/|internal/controller/openbaocluster/|go\.(mod|sum)$|Makefile|mk/)'; then
             echo "config_compat=true" >> "${GITHUB_OUTPUT}"
           else
             echo "config_compat=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|config/|charts/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|vendor/|\.trivyignore|\.trivy\.yaml|Makefile|mk/)'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|charts/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|vendor/|\.trivyignore|\.trivy\.yaml|Makefile|mk/)'; then
             echo "security_scan=true" >> "${GITHUB_OUTPUT}"
           else
             echo "security_scan=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/|cmd/|go\.(mod|sum)$|vendor/|Dockerfile(\..*)?$|\.dockerignore|Makefile|mk/|\.github/workflows/ci\.yml)'; then
+          if changed_matches '^(internal/|cmd/|go\.(mod|sum)$|vendor/|Dockerfile(\..*)?$|\.dockerignore|Makefile|mk/|\.github/workflows/ci\.yml)'; then
             echo "security_image=true" >> "${GITHUB_OUTPUT}"
           else
             echo "security_image=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/|cmd/|go\.(mod|sum)$|hack/ci/fuzz\.sh|mk/|\.github/workflows/(ci|nightly)\.yml|Makefile)'; then
+          if changed_matches '^(internal/|cmd/|go\.(mod|sum)$|hack/ci/fuzz\.sh|mk/|\.github/workflows/(ci|nightly)\.yml|Makefile)'; then
             echo "fuzz=true" >> "${GITHUB_OUTPUT}"
           else
             echo "fuzz=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|Makefile|mk/)'; then
+          if changed_matches '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|Makefile|mk/)'; then
             echo "e2e=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/service/backup/|internal/service/restore/|cmd/bao-backup/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|backup_restore_test\.go)|Makefile|mk/)'; then
+          if changed_matches '^(internal/service/backup/|internal/service/restore/|cmd/bao-backup/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|backup_restore_test\.go)|Makefile|mk/)'; then
             echo "e2e_backup=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_backup=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/service/upgrade/|cmd/bao-upgrade/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|Upgrade_Strategies_test\.go|Upgrade_Target_Drift_test\.go|Upgrade_Operation_Lock_test\.go)|Makefile|mk/)'; then
+          if changed_matches '^(internal/service/upgrade/|cmd/bao-upgrade/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|Upgrade_Strategies_test\.go|Upgrade_Target_Drift_test\.go|Upgrade_Operation_Lock_test\.go)|Makefile|mk/)'; then
             echo "e2e_upgrade=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_upgrade=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if echo "${changed}" | grep -qE '^(internal/adapter/security/|internal/platform/admission/|internal/service/provisioner/|cmd/provisioner/|config/policy/|internal/controller/|cmd/controller/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|Cluster_Profile_Hardened_test\.go|Cluster_TLS_ACME_test\.go|GitOps_Contract_test\.go|hardened_signed_suite\.go)|Makefile|mk/)'; then
+          if changed_matches '^(internal/adapter/security/|internal/platform/admission/|internal/service/provisioner/|cmd/provisioner/|config/policy/|internal/controller/|cmd/controller/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|Cluster_Profile_Hardened_test\.go|Cluster_TLS_ACME_test\.go|GitOps_Contract_test\.go|hardened_signed_suite\.go)|Makefile|mk/)'; then
             echo "e2e_hardened=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"
