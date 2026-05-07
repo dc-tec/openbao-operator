@@ -65,6 +65,13 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 					Name: "provider-creds",
 				},
 			}
+			if tc.unsealType == "pkcs11" {
+				cluster.Spec.Unseal.PKCS11 = &openbaov1alpha1.PKCS11SealConfig{
+					Lib:        "/usr/local/lib/libpkcs11.so",
+					TokenLabel: "OpenBao",
+					KeyLabel:   "bao-root-key-aes",
+				}
+			}
 
 			env := buildContainerEnv(cluster)
 			mounts := buildContainerVolumeMounts(cluster, path.Dir(openBaoRenderedConfig))
@@ -166,6 +173,82 @@ func TestSealWiring_OCIKMSAPIKey_WithCredentials_IncludesOCIConfigEnv(t *testing
 	}
 	if configEnv.Value != sealCredsVolumeMountPath+"/config" {
 		t.Fatalf("OCI_CONFIG_FILE = %q, want %q", configEnv.Value, sealCredsVolumeMountPath+"/config")
+	}
+}
+
+func TestSealWiring_PKCS11RuntimeEnv(t *testing.T) {
+	cluster := newMinimalCluster("seal-pkcs11-runtime", "default")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "pkcs11",
+		CredentialsSecretRef: &corev1.LocalObjectReference{
+			Name: "pkcs11-creds",
+		},
+		PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+			Lib:        "/usr/local/lib/libpkcs11.so",
+			TokenLabel: "OpenBao",
+			KeyLabel:   "bao-root-key-aes",
+			Mechanism:  "AES_GCM",
+			Runtime: &openbaov1alpha1.PKCS11RuntimeConfig{
+				LibraryPath: "/usr/local/lib",
+				Env: []openbaov1alpha1.PKCS11RuntimeEnvVar{
+					{Name: "CRYPTOSERVER", SecretKey: "cryptoserver"},
+				},
+				FileEnv: []openbaov1alpha1.PKCS11RuntimeFileEnvVar{
+					{Name: "CS_PKCS11_R3_CFG", SecretKey: "cs_pkcs11_R3.cfg"},
+				},
+			},
+		},
+	}
+
+	env := buildContainerEnv(cluster)
+
+	for name, want := range map[string]string{
+		"BAO_SEAL_TYPE":       "pkcs11",
+		"BAO_HSM_LIB":         "/usr/local/lib/libpkcs11.so",
+		"BAO_HSM_TOKEN_LABEL": "OpenBao",
+		"BAO_HSM_KEY_LABEL":   "bao-root-key-aes",
+		"BAO_HSM_MECHANISM":   "AES_GCM",
+		"LD_LIBRARY_PATH":     "/usr/local/lib",
+		"CS_PKCS11_R3_CFG":    "/etc/bao/seal-creds/cs_pkcs11_R3.cfg",
+	} {
+		got := findEnvVar(env, name)
+		if got == nil || got.Value != want {
+			t.Fatalf("%s = %v, want %q", name, got, want)
+		}
+	}
+
+	cryptoServer := findEnvVar(env, "CRYPTOSERVER")
+	if cryptoServer == nil || cryptoServer.ValueFrom == nil || cryptoServer.ValueFrom.SecretKeyRef == nil {
+		t.Fatal("expected CRYPTOSERVER to come from SecretKeyRef")
+	}
+	if cryptoServer.ValueFrom.SecretKeyRef.Name != "pkcs11-creds" || cryptoServer.ValueFrom.SecretKeyRef.Key != "cryptoserver" {
+		t.Fatalf("CRYPTOSERVER SecretKeyRef = %s/%s, want pkcs11-creds/cryptoserver", cryptoServer.ValueFrom.SecretKeyRef.Name, cryptoServer.ValueFrom.SecretKeyRef.Key)
+	}
+
+	hsmPIN := findEnvVar(env, "BAO_HSM_PIN")
+	if hsmPIN == nil || hsmPIN.ValueFrom == nil || hsmPIN.ValueFrom.SecretKeyRef == nil {
+		t.Fatal("expected BAO_HSM_PIN to come from SecretKeyRef")
+	}
+}
+
+func TestSealWiring_PKCS11InlinePINDoesNotInjectHSMPINEnv(t *testing.T) {
+	cluster := newMinimalCluster("seal-pkcs11-inline-pin", "default")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "pkcs11",
+		CredentialsSecretRef: &corev1.LocalObjectReference{
+			Name: "pkcs11-creds",
+		},
+		PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+			Lib:        "/usr/local/lib/libpkcs11.so",
+			TokenLabel: "OpenBao",
+			KeyLabel:   "bao-root-key-aes",
+			PIN:        "1234",
+		},
+	}
+
+	env := buildContainerEnv(cluster)
+	if hasEnvVar(env, "BAO_HSM_PIN") {
+		t.Fatal("expected BAO_HSM_PIN env var to be absent when pin is configured inline")
 	}
 }
 

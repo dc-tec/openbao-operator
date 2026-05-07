@@ -1028,6 +1028,62 @@ _Appears in:_
 | `renewedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | RenewedAt is updated when the holder reasserts the lock during reconciliation. |  | Optional: \{\} <br /> |
 
 
+#### PKCS11RuntimeConfig
+
+
+
+PKCS11RuntimeConfig configures local runtime wiring needed by PKCS#11 vendor
+libraries. It is intentionally scoped to environment variables and library
+lookup paths so HSM integrations do not require custom wrapper scripts.
+
+
+
+_Appears in:_
+- [PKCS11SealConfig](#pkcs11sealconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `libraryPath` _string_ | LibraryPath sets LD_LIBRARY_PATH for the OpenBao process. Use this when<br />the configured PKCS#11 module depends on sibling vendor libraries that<br />are not in the image's default dynamic linker search path. |  | Optional: \{\} <br /> |
+| `env` _[PKCS11RuntimeEnvVar](#pkcs11runtimeenvvar) array_ | Env exposes literal environment variables from keys in<br />spec.unseal.credentialsSecretRef. Use this for vendor runtime settings<br />such as HSM endpoints or authentication key references. |  | MaxItems: 16 <br />Optional: \{\} <br /> |
+| `fileEnv` _[PKCS11RuntimeFileEnvVar](#pkcs11runtimefileenvvar) array_ | FileEnv exposes environment variables whose values are paths to files<br />mounted from keys in spec.unseal.credentialsSecretRef. Use this for vendor<br />settings that expect a config file path, for example SOFTHSM2_CONF or<br />vendor-specific PKCS#11 client configuration variables. |  | MaxItems: 16 <br />Optional: \{\} <br /> |
+
+
+#### PKCS11RuntimeEnvVar
+
+
+
+PKCS11RuntimeEnvVar maps a PKCS#11 runtime environment variable to a key in
+spec.unseal.credentialsSecretRef.
+
+
+
+_Appears in:_
+- [PKCS11RuntimeConfig](#pkcs11runtimeconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the environment variable name to expose to the OpenBao process.<br />Names owned by OpenBao's PKCS#11 seal configuration, such as BAO_HSM_PIN,<br />are managed by the operator and must not be configured here. |  | Pattern: `^[A-Za-z_][A-Za-z0-9_]*$` <br /> |
+| `secretKey` _string_ | SecretKey is the key in spec.unseal.credentialsSecretRef to source as the<br />environment variable value. |  | MinLength: 1 <br />Pattern: `^[-._A-Za-z0-9]+$` <br /> |
+
+
+#### PKCS11RuntimeFileEnvVar
+
+
+
+PKCS11RuntimeFileEnvVar maps a PKCS#11 runtime environment variable to the
+mounted file path for a key in spec.unseal.credentialsSecretRef.
+
+
+
+_Appears in:_
+- [PKCS11RuntimeConfig](#pkcs11runtimeconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the environment variable name to expose to the OpenBao process. |  | Pattern: `^[A-Za-z_][A-Za-z0-9_]*$` <br /> |
+| `secretKey` _string_ | SecretKey is the key in spec.unseal.credentialsSecretRef whose mounted<br />file path should become the environment variable value. |  | MinLength: 1 <br />Pattern: `^[-._A-Za-z0-9]+$` <br /> |
+
+
 #### PKCS11SealConfig
 
 
@@ -1052,6 +1108,7 @@ _Appears in:_
 | `disableSoftwareEncryption` _boolean_ | DisableSoftwareEncryption disables the software encryption fallback. |  | Optional: \{\} <br /> |
 | `disabled` _boolean_ | Disabled disables this seal configuration, for example during seal migration. |  | Optional: \{\} <br /> |
 | `rsaOAEPHash` _string_ | RSAOAEPHash specifies the hash algorithm to use for RSA with OAEP padding.<br />Valid values: sha1, sha224, sha256, sha384, sha512. |  | Enum: [sha1 sha224 sha256 sha384 sha512] <br />Optional: \{\} <br /> |
+| `runtime` _[PKCS11RuntimeConfig](#pkcs11runtimeconfig)_ | Runtime configures local PKCS#11 vendor runtime wiring such as library<br />lookup paths and environment variables sourced from credentialsSecretRef. |  | Optional: \{\} <br /> |
 
 
 #### Plugin

@@ -1383,6 +1383,62 @@ type OCIKMSSealConfig struct {
 	Disabled *bool `json:"disabled,omitempty"`
 }
 
+// PKCS11RuntimeConfig configures local runtime wiring needed by PKCS#11 vendor
+// libraries. It is intentionally scoped to environment variables and library
+// lookup paths so HSM integrations do not require custom wrapper scripts.
+type PKCS11RuntimeConfig struct {
+	// LibraryPath sets LD_LIBRARY_PATH for the OpenBao process. Use this when
+	// the configured PKCS#11 module depends on sibling vendor libraries that
+	// are not in the image's default dynamic linker search path.
+	// +optional
+	LibraryPath string `json:"libraryPath,omitempty"`
+
+	// Env exposes literal environment variables from keys in
+	// spec.unseal.credentialsSecretRef. Use this for vendor runtime settings
+	// such as HSM endpoints or authentication key references.
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	Env []PKCS11RuntimeEnvVar `json:"env,omitempty"`
+
+	// FileEnv exposes environment variables whose values are paths to files
+	// mounted from keys in spec.unseal.credentialsSecretRef. Use this for vendor
+	// settings that expect a config file path, for example SOFTHSM2_CONF or
+	// vendor-specific PKCS#11 client configuration variables.
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	FileEnv []PKCS11RuntimeFileEnvVar `json:"fileEnv,omitempty"`
+}
+
+// PKCS11RuntimeEnvVar maps a PKCS#11 runtime environment variable to a key in
+// spec.unseal.credentialsSecretRef.
+type PKCS11RuntimeEnvVar struct {
+	// Name is the environment variable name to expose to the OpenBao process.
+	// Names owned by OpenBao's PKCS#11 seal configuration, such as BAO_HSM_PIN,
+	// are managed by the operator and must not be configured here.
+	// +kubebuilder:validation:Pattern=`^[A-Za-z_][A-Za-z0-9_]*$`
+	Name string `json:"name"`
+
+	// SecretKey is the key in spec.unseal.credentialsSecretRef to source as the
+	// environment variable value.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[-._A-Za-z0-9]+$`
+	SecretKey string `json:"secretKey"`
+}
+
+// PKCS11RuntimeFileEnvVar maps a PKCS#11 runtime environment variable to the
+// mounted file path for a key in spec.unseal.credentialsSecretRef.
+type PKCS11RuntimeFileEnvVar struct {
+	// Name is the environment variable name to expose to the OpenBao process.
+	// +kubebuilder:validation:Pattern=`^[A-Za-z_][A-Za-z0-9_]*$`
+	Name string `json:"name"`
+
+	// SecretKey is the key in spec.unseal.credentialsSecretRef whose mounted
+	// file path should become the environment variable value.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[-._A-Za-z0-9]+$`
+	SecretKey string `json:"secretKey"`
+}
+
 // PKCS11SealConfig configures the PKCS#11 seal type.
 // See: https://openbao.org/docs/configuration/seal/pkcs11/
 // +kubebuilder:validation:XValidation:rule="(has(self.slot) && size(self.slot) > 0) || (has(self.tokenLabel) && size(self.tokenLabel) > 0)",message="spec.unseal.pkcs11.slot or spec.unseal.pkcs11.tokenLabel is required"
@@ -1430,6 +1486,11 @@ type PKCS11SealConfig struct {
 	// +kubebuilder:validation:Enum=sha1;sha224;sha256;sha384;sha512
 	// +optional
 	RSAOAEPHash string `json:"rsaOAEPHash,omitempty"`
+
+	// Runtime configures local PKCS#11 vendor runtime wiring such as library
+	// lookup paths and environment variables sourced from credentialsSecretRef.
+	// +optional
+	Runtime *PKCS11RuntimeConfig `json:"runtime,omitempty"`
 }
 
 // StaticSealConfig configures the static seal type.

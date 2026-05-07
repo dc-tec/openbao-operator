@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -736,6 +737,80 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
 		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
 			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
+		}
+	})
+
+	t.Run("runtime env mappings require credentials secret keys", func(t *testing.T) {
+		cluster := newMinimalCluster("pkcs11-runtime-env", "default")
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type: "pkcs11",
+			CredentialsSecretRef: &corev1.LocalObjectReference{
+				Name: "pkcs11-creds",
+			},
+			PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+				Lib:        "/usr/lib/softhsm/libsofthsm2.so",
+				TokenLabel: "bao-token",
+				KeyLabel:   "bao",
+				Runtime: &openbaov1alpha1.PKCS11RuntimeConfig{
+					Env: []openbaov1alpha1.PKCS11RuntimeEnvVar{
+						{Name: "CRYPTOSERVER", SecretKey: "cryptoserver"},
+					},
+					FileEnv: []openbaov1alpha1.PKCS11RuntimeFileEnvVar{
+						{Name: "CS_PKCS11_R3_CFG", SecretKey: "cs_pkcs11_R3.cfg"},
+					},
+				},
+			},
+		}
+
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "pkcs11-creds", Namespace: "default"},
+			Data: map[string][]byte{
+				"BAO_HSM_PIN":  []byte("1234"),
+				"cryptoserver": []byte("hsm.example.test"),
+			},
+		}
+		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
+		mgr := NewManager(client, testScheme, "operator-system")
+		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
+		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "cs_pkcs11_R3.cfg") {
+			t.Fatalf("error = %v, want missing runtime file key", err)
+		}
+
+		secret.Data["cs_pkcs11_R3.cfg"] = []byte("config")
+		client = fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
+		mgr = NewManager(client, testScheme, "operator-system")
+		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
+			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("runtime env mappings cannot override seal-owned env vars", func(t *testing.T) {
+		cluster := newMinimalCluster("pkcs11-runtime-reserved-env", "default")
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type: "pkcs11",
+			PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+				Lib:        "/usr/lib/softhsm/libsofthsm2.so",
+				TokenLabel: "bao-token",
+				KeyLabel:   "bao",
+				PIN:        "1234",
+				Runtime: &openbaov1alpha1.PKCS11RuntimeConfig{
+					Env: []openbaov1alpha1.PKCS11RuntimeEnvVar{
+						{Name: "BAO_HSM_PIN", SecretKey: "pin"},
+					},
+				},
+			},
+		}
+
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
+		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
+		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "managed by spec.unseal.pkcs11") {
+			t.Fatalf("error = %v, want seal-owned env rejection", err)
 		}
 	})
 }

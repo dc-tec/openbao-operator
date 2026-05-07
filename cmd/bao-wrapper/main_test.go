@@ -5,8 +5,52 @@ import (
 	"crypto/sha256"
 	"io"
 	"os"
+	"strings"
 	"testing"
+
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
+
+func TestRunPreflightChecks_PKCS11Library(t *testing.T) {
+	t.Run("skips when seal type is not pkcs11", func(t *testing.T) {
+		t.Setenv(portopenbao.EnvBaoSealType, "transit")
+		t.Setenv(portopenbao.EnvBaoHSMLib, "/missing/pkcs11.so")
+
+		if err := runPreflightChecks(); err != nil {
+			t.Fatalf("runPreflightChecks() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("passes when configured library exists", func(t *testing.T) {
+		tmpFile, err := os.CreateTemp(t.TempDir(), "libpkcs11-*.so")
+		if err != nil {
+			t.Fatalf("failed to create temp library: %v", err)
+		}
+		if err := tmpFile.Close(); err != nil {
+			t.Fatalf("failed to close temp library: %v", err)
+		}
+
+		t.Setenv(portopenbao.EnvBaoSealType, "pkcs11")
+		t.Setenv(portopenbao.EnvBaoHSMLib, tmpFile.Name())
+
+		if err := runPreflightChecks(); err != nil {
+			t.Fatalf("runPreflightChecks() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("fails clearly when configured library is missing", func(t *testing.T) {
+		t.Setenv(portopenbao.EnvBaoSealType, "pkcs11")
+		t.Setenv(portopenbao.EnvBaoHSMLib, "/missing/pkcs11.so")
+
+		err := runPreflightChecks()
+		if err == nil {
+			t.Fatal("runPreflightChecks() error = nil, want missing library error")
+		}
+		if !strings.Contains(err.Error(), `PKCS#11 library "/missing/pkcs11.so" is not accessible`) {
+			t.Fatalf("error = %v, want clear PKCS#11 library message", err)
+		}
+	})
+}
 
 // Test_getFileHash tests the getFileHash function with various file scenarios.
 // This is a unit test focusing on deterministic file hashing logic.

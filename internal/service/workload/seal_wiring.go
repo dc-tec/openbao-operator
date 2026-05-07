@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"path"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -8,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -228,13 +230,47 @@ type pkcs11SealWiringProvider struct {
 }
 
 func (p *pkcs11SealWiringProvider) EnvVars() []corev1.EnvVar {
-	if p.cluster.Spec.Unseal == nil || p.cluster.Spec.Unseal.CredentialsSecretRef == nil {
+	if p.cluster.Spec.Unseal == nil || p.cluster.Spec.Unseal.PKCS11 == nil {
 		return nil
 	}
 
-	return []corev1.EnvVar{
-		envVarFromCredentialsSecret(p.cluster, "BAO_HSM_PIN", "BAO_HSM_PIN"),
+	cfg := p.cluster.Spec.Unseal.PKCS11
+	env := []corev1.EnvVar{
+		{Name: portopenbao.EnvBaoSealType, Value: "pkcs11"},
+		{Name: portopenbao.EnvBaoHSMLib, Value: cfg.Lib},
 	}
+	if strings.TrimSpace(cfg.Slot) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMSlot, Value: cfg.Slot})
+	}
+	if strings.TrimSpace(cfg.TokenLabel) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMTokenLabel, Value: cfg.TokenLabel})
+	}
+	if strings.TrimSpace(cfg.KeyLabel) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMKeyLabel, Value: cfg.KeyLabel})
+	}
+	if strings.TrimSpace(cfg.KeyID) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMKeyID, Value: cfg.KeyID})
+	}
+	if strings.TrimSpace(cfg.Mechanism) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMMechanism, Value: cfg.Mechanism})
+	}
+	if strings.TrimSpace(cfg.RSAOAEPHash) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMRSAOAEPHash, Value: cfg.RSAOAEPHash})
+	}
+	if cfg.Runtime != nil && strings.TrimSpace(cfg.Runtime.LibraryPath) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvLDLibraryPath, Value: cfg.Runtime.LibraryPath})
+	}
+
+	if p.cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return env
+	}
+
+	if strings.TrimSpace(cfg.PIN) == "" {
+		env = append(env, envVarFromCredentialsSecret(p.cluster, portopenbao.EnvBaoHSMPIN, portopenbao.EnvBaoHSMPIN))
+	}
+	env = append(env, pkcs11RuntimeEnvVars(p.cluster)...)
+
+	return env
 }
 
 func (p *pkcs11SealWiringProvider) VolumeMounts() []corev1.VolumeMount {
@@ -243,6 +279,35 @@ func (p *pkcs11SealWiringProvider) VolumeMounts() []corev1.VolumeMount {
 
 func (p *pkcs11SealWiringProvider) Volumes() []corev1.Volume {
 	return (&credentialsSecretSealWiringProvider{cluster: p.cluster}).Volumes()
+}
+
+func pkcs11RuntimeEnvVars(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
+	if cluster == nil || cluster.Spec.Unseal == nil || cluster.Spec.Unseal.PKCS11 == nil ||
+		cluster.Spec.Unseal.PKCS11.Runtime == nil || cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return nil
+	}
+
+	secretName := cluster.Spec.Unseal.CredentialsSecretRef.Name
+	runtime := cluster.Spec.Unseal.PKCS11.Runtime
+	env := make([]corev1.EnvVar, 0, len(runtime.Env)+len(runtime.FileEnv))
+	for _, item := range runtime.Env {
+		env = append(env, corev1.EnvVar{
+			Name: item.Name,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+					Key:                  item.SecretKey,
+				},
+			},
+		})
+	}
+	for _, item := range runtime.FileEnv {
+		env = append(env, corev1.EnvVar{
+			Name:  item.Name,
+			Value: path.Join(sealCredsVolumeMountPath, item.SecretKey),
+		})
+	}
+	return env
 }
 
 type transitSealWiringProvider struct {
