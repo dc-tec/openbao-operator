@@ -6,6 +6,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func statefulSetNameWithRevision(cluster *openbaov1alpha1.OpenBaoCluster, rev string) string {
@@ -22,7 +23,7 @@ func usesStaticSeal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	if cluster.Spec.Unseal.Type == "" {
 		return true
 	}
-	return cluster.Spec.Unseal.Type == "static"
+	return cluster.Spec.Unseal.Type == portopenbao.SealTypeStatic
 }
 
 func statefulSetNameForSpec(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) string {

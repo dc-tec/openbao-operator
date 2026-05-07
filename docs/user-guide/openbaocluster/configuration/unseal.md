@@ -158,13 +158,71 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     {
       cells: [
         "PKCS#11",
-        "Needed when `spec.unseal.pkcs11.pin` is omitted.",
-        "`BAO_HSM_PIN`.",
-        "The operator also requires either `slot` or `tokenLabel`, but not both.",
+        "Needed when `spec.unseal.pkcs11.pin` is omitted or PKCS#11 runtime env/config files are sourced from Secret data.",
+        "`BAO_HSM_PIN`, plus every key referenced by `spec.unseal.pkcs11.runtime.env[*].secretKey` and `spec.unseal.pkcs11.runtime.fileEnv[*].secretKey`.",
+        "The operator also requires either `slot` or `tokenLabel`, but not both. The OpenBao image must include HSM support and the configured vendor PKCS#11 module.",
       ],
     },
   ]}
 />
+
+## PKCS#11 runtime wiring
+
+PKCS#11 deployments need two separate pieces before OpenBao can initialize or unseal: external key material in the HSM and a runtime that can load the vendor PKCS#11 module. OpenBao does not create PKCS#11 key material for you; create the key through the HSM vendor tooling before the cluster starts.
+
+Use `spec.unseal.pkcs11.runtime` for vendor runtime settings that would otherwise require a custom entrypoint wrapper:
+
+- `libraryPath` sets `LD_LIBRARY_PATH` for vendor libraries that depend on sibling shared objects.
+- `env` maps environment variables to literal values stored in `credentialsSecretRef`.
+- `fileEnv` maps environment variables to mounted file paths under `/etc/bao/seal-creds`.
+
+The operator manages the OpenBao seal-owned environment variables (`BAO_SEAL_TYPE`, `BAO_HSM_LIB`, `BAO_HSM_PIN`, and related `BAO_HSM_*` values) from `spec.unseal.pkcs11`; do not duplicate those names in `runtime.env` or `runtime.fileEnv`.
+
+### HSM deployment checklist
+
+For PKCS#11-backed production clusters, validate the HSM integration outside the operator before creating the `OpenBaoCluster`:
+
+- Use an OpenBao image with HSM support plus the vendor PKCS#11 module and dependent shared libraries.
+- Pre-create the wrapping key in the HSM. OpenBao expects the key to exist and to allow the configured operation.
+- Choose a mechanism that matches the HSM object type. `AES_GCM` uses a secret key; `RSA_PKCS_OAEP` uses an RSA key pair and may require `rsaOAEPHash`.
+- Store the token PIN and vendor runtime material in `credentialsSecretRef`; avoid putting `pin` directly in GitOps-managed manifests.
+- Use `runtime.libraryPath` when the vendor module depends on sibling shared objects.
+- Use `runtime.env` for vendor settings that are literal values and `runtime.fileEnv` for vendor settings that expect file paths.
+- Only keys referenced by `runtime.fileEnv` are projected into the Pod as files. The PIN and `runtime.env` values remain Secret-backed environment variables and are not mounted under `/etc/bao/seal-creds`.
+
+The wrapper fails fast when `BAO_SEAL_TYPE=pkcs11` but the configured `BAO_HSM_LIB` is missing or points at a directory. Missing Secret keys are rejected during operator prerequisite validation before the workload reaches an opaque OpenBao startup failure.
+
+<CommandBlock
+  language="yaml"
+  label="example"
+  title="PKCS#11 unseal with vendor runtime env"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: bao-hsm
+  namespace: openbao
+spec:
+  image: registry.example.com/openbao-hsm-vendor:2.5.3
+  unseal:
+    type: pkcs11
+    credentialsSecretRef:
+      name: pkcs11-runtime
+    pkcs11:
+      lib: /usr/local/lib/libpkcs11.so
+      tokenLabel: OpenBao
+      keyLabel: bao-root-key-aes
+      mechanism: AES_GCM
+      runtime:
+        libraryPath: /usr/local/lib
+        env:
+          - name: CRYPTOSERVER
+            secretKey: cryptoserver
+        fileEnv:
+          - name: CS_PKCS11_R3_CFG
+            secretKey: cs_pkcs11_R3.cfg`}
+>
+  The Secret `pkcs11-runtime` must include `BAO_HSM_PIN`, `cryptoserver`, and `cs_pkcs11_R3.cfg`. The operator projects only the `fileEnv` key `cs_pkcs11_R3.cfg` under `/etc/bao/seal-creds`, sets `CS_PKCS11_R3_CFG=/etc/bao/seal-creds/cs_pkcs11_R3.cfg`, and fails fast if `/usr/local/lib/libpkcs11.so` is not present in the container.
+</CommandBlock>
 
 ## Static unseal details
 

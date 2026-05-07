@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"path"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -8,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -42,19 +44,19 @@ func newSealWiringProvider(cluster *openbaov1alpha1.OpenBaoCluster) sealWiringPr
 	}
 
 	switch cluster.Spec.Unseal.Type {
-	case unsealTypeTransit:
+	case portopenbao.SealTypeTransit:
 		return &transitSealWiringProvider{cluster: cluster}
-	case "gcpckms":
+	case portopenbao.SealTypeGCPCKMS:
 		return &gcpCKMSSealWiringProvider{cluster: cluster}
-	case "awskms":
+	case portopenbao.SealTypeAWSKMS:
 		return &awsKMSSealWiringProvider{cluster: cluster}
-	case "azurekeyvault":
+	case portopenbao.SealTypeAzureKeyVault:
 		return &azureKeyVaultSealWiringProvider{cluster: cluster}
-	case "kmip":
+	case portopenbao.SealTypeKMIP:
 		return &kmipSealWiringProvider{cluster: cluster}
-	case "ocikms":
+	case portopenbao.SealTypeOCIKMS:
 		return &ociKMSSealWiringProvider{cluster: cluster}
-	case "pkcs11":
+	case portopenbao.SealTypePKCS11:
 		return &pkcs11SealWiringProvider{cluster: cluster}
 	default:
 		// Preserve current behavior: treat unknown non-static seal types as requiring
@@ -141,9 +143,9 @@ func (p *awsKMSSealWiringProvider) EnvVars() []corev1.EnvVar {
 	}
 
 	return []corev1.EnvVar{
-		envVarFromCredentialsSecret(p.cluster, "AWS_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID"),
-		envVarFromCredentialsSecret(p.cluster, "AWS_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"),
-		envVarFromCredentialsSecret(p.cluster, "AWS_SESSION_TOKEN", "AWS_SESSION_TOKEN"),
+		envVarFromCredentialsSecret(p.cluster, envAWSAccessKeyID, envAWSAccessKeyID),
+		envVarFromCredentialsSecret(p.cluster, envAWSSecretAccessKey, envAWSSecretAccessKey),
+		envVarFromCredentialsSecret(p.cluster, envAWSSessionToken, envAWSSessionToken),
 	}
 }
 
@@ -165,11 +167,11 @@ func (p *azureKeyVaultSealWiringProvider) EnvVars() []corev1.EnvVar {
 	}
 
 	return []corev1.EnvVar{
-		envVarFromCredentialsSecret(p.cluster, "AZURE_TENANT_ID", "AZURE_TENANT_ID"),
-		envVarFromCredentialsSecret(p.cluster, "AZURE_CLIENT_ID", "AZURE_CLIENT_ID"),
-		envVarFromCredentialsSecret(p.cluster, "AZURE_CLIENT_SECRET", "AZURE_CLIENT_SECRET"),
-		envVarFromCredentialsSecret(p.cluster, "AZURE_ENVIRONMENT", "AZURE_ENVIRONMENT"),
-		envVarFromCredentialsSecret(p.cluster, "AZURE_AD_RESOURCE", "AZURE_AD_RESOURCE"),
+		envVarFromCredentialsSecret(p.cluster, envAzureTenantID, envAzureTenantID),
+		envVarFromCredentialsSecret(p.cluster, envAzureClientID, envAzureClientID),
+		envVarFromCredentialsSecret(p.cluster, envAzureClientSecret, envAzureClientSecret),
+		envVarFromCredentialsSecret(p.cluster, envAzureEnvironment, envAzureEnvironment),
+		envVarFromCredentialsSecret(p.cluster, envAzureADResource, envAzureADResource),
 	}
 }
 
@@ -209,8 +211,8 @@ func (p *ociKMSSealWiringProvider) EnvVars() []corev1.EnvVar {
 
 	return []corev1.EnvVar{
 		{
-			Name:  "OCI_CONFIG_FILE",
-			Value: sealCredsVolumeMountPath + "/config",
+			Name:  envOCIConfigFile,
+			Value: sealCredsVolumeMountPath + "/" + secretKeyOCIConfig,
 		},
 	}
 }
@@ -228,21 +230,138 @@ type pkcs11SealWiringProvider struct {
 }
 
 func (p *pkcs11SealWiringProvider) EnvVars() []corev1.EnvVar {
-	if p.cluster.Spec.Unseal == nil || p.cluster.Spec.Unseal.CredentialsSecretRef == nil {
+	if p.cluster.Spec.Unseal == nil || p.cluster.Spec.Unseal.PKCS11 == nil {
 		return nil
 	}
 
-	return []corev1.EnvVar{
-		envVarFromCredentialsSecret(p.cluster, "BAO_HSM_PIN", "BAO_HSM_PIN"),
+	cfg := p.cluster.Spec.Unseal.PKCS11
+	env := []corev1.EnvVar{
+		{Name: portopenbao.EnvBaoSealType, Value: portopenbao.SealTypePKCS11},
+		{Name: portopenbao.EnvBaoHSMLib, Value: cfg.Lib},
 	}
+	if strings.TrimSpace(cfg.Slot) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMSlot, Value: cfg.Slot})
+	}
+	if strings.TrimSpace(cfg.TokenLabel) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMTokenLabel, Value: cfg.TokenLabel})
+	}
+	if strings.TrimSpace(cfg.KeyLabel) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMKeyLabel, Value: cfg.KeyLabel})
+	}
+	if strings.TrimSpace(cfg.KeyID) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMKeyID, Value: cfg.KeyID})
+	}
+	if strings.TrimSpace(cfg.Mechanism) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMMechanism, Value: cfg.Mechanism})
+	}
+	if strings.TrimSpace(cfg.RSAOAEPHash) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvBaoHSMRSAOAEPHash, Value: cfg.RSAOAEPHash})
+	}
+	if cfg.Runtime != nil && strings.TrimSpace(cfg.Runtime.LibraryPath) != "" {
+		env = append(env, corev1.EnvVar{Name: portopenbao.EnvLDLibraryPath, Value: cfg.Runtime.LibraryPath})
+	}
+
+	if p.cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return env
+	}
+
+	if strings.TrimSpace(cfg.PIN) == "" {
+		env = append(env, envVarFromCredentialsSecret(p.cluster, portopenbao.EnvBaoHSMPIN, portopenbao.EnvBaoHSMPIN))
+	}
+	env = append(env, pkcs11RuntimeEnvVars(p.cluster)...)
+
+	return env
 }
 
 func (p *pkcs11SealWiringProvider) VolumeMounts() []corev1.VolumeMount {
-	return (&credentialsSecretSealWiringProvider{cluster: p.cluster}).VolumeMounts()
+	if !pkcs11NeedsCredentialsSecretVolume(p.cluster) {
+		return nil
+	}
+	return []corev1.VolumeMount{
+		{
+			Name:      sealCredsVolumeName,
+			MountPath: sealCredsVolumeMountPath,
+			ReadOnly:  true,
+		},
+	}
 }
 
 func (p *pkcs11SealWiringProvider) Volumes() []corev1.Volume {
-	return (&credentialsSecretSealWiringProvider{cluster: p.cluster}).Volumes()
+	if !pkcs11NeedsCredentialsSecretVolume(p.cluster) {
+		return nil
+	}
+	return []corev1.Volume{
+		{
+			Name: sealCredsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  p.cluster.Spec.Unseal.CredentialsSecretRef.Name,
+					DefaultMode: ptr.To(secretFileMode),
+					Items:       pkcs11RuntimeFileEnvSecretItems(p.cluster),
+				},
+			},
+		},
+	}
+}
+
+func pkcs11RuntimeEnvVars(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
+	if cluster == nil || cluster.Spec.Unseal == nil || cluster.Spec.Unseal.PKCS11 == nil ||
+		cluster.Spec.Unseal.PKCS11.Runtime == nil || cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return nil
+	}
+
+	secretName := cluster.Spec.Unseal.CredentialsSecretRef.Name
+	mappings := portopenbao.PKCS11RuntimeMappings(cluster.Spec.Unseal.PKCS11.Runtime)
+	env := make([]corev1.EnvVar, 0, len(mappings))
+	for _, item := range mappings {
+		switch item.Kind {
+		case portopenbao.PKCS11RuntimeMappingEnv:
+			env = append(env, corev1.EnvVar{
+				Name: item.Name,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+						Key:                  item.SecretKey,
+					},
+				},
+			})
+		case portopenbao.PKCS11RuntimeMappingFileEnv:
+			env = append(env, corev1.EnvVar{
+				Name:  item.Name,
+				Value: path.Join(sealCredsVolumeMountPath, item.SecretKey),
+			})
+		}
+	}
+	return env
+}
+
+func pkcs11NeedsCredentialsSecretVolume(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return len(pkcs11RuntimeFileEnvSecretItems(cluster)) > 0
+}
+
+func pkcs11RuntimeFileEnvSecretItems(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.KeyToPath {
+	if cluster == nil || cluster.Spec.Unseal == nil || cluster.Spec.Unseal.PKCS11 == nil ||
+		cluster.Spec.Unseal.PKCS11.Runtime == nil || cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return nil
+	}
+
+	mappings := portopenbao.PKCS11RuntimeMappings(cluster.Spec.Unseal.PKCS11.Runtime)
+	items := make([]corev1.KeyToPath, 0, len(mappings))
+	seen := make(map[string]struct{}, len(mappings))
+	for _, item := range mappings {
+		if item.Kind != portopenbao.PKCS11RuntimeMappingFileEnv {
+			continue
+		}
+		if _, ok := seen[item.SecretKey]; ok {
+			continue
+		}
+		seen[item.SecretKey] = struct{}{}
+		items = append(items, corev1.KeyToPath{
+			Key:  item.SecretKey,
+			Path: item.SecretKey,
+		})
+	}
+	return items
 }
 
 type transitSealWiringProvider struct {
@@ -262,10 +381,10 @@ func (p *transitSealWiringProvider) EnvVars() []corev1.EnvVar {
 	// avoiding issues with trailing newlines in mounted Secret files.
 	return []corev1.EnvVar{
 		{
-			Name: "VAULT_TOKEN",
+			Name: envVaultToken,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					Key: "token",
+					Key: secretKeyTransitToken,
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: p.cluster.Spec.Unseal.CredentialsSecretRef.Name,
 					},
@@ -297,8 +416,8 @@ func (p *gcpCKMSSealWiringProvider) EnvVars() []corev1.EnvVar {
 	// /etc/bao/seal-creds/credentials.json and referenced by the environment variable.
 	return []corev1.EnvVar{
 		{
-			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-			Value: sealCredsVolumeMountPath + "/credentials.json",
+			Name:  envGoogleApplicationCreds,
+			Value: sealCredsVolumeMountPath + "/" + secretKeyGoogleCredentials,
 		},
 	}
 }

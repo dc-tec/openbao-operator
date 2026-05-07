@@ -18,6 +18,9 @@ import (
 const (
 	// openBaoInitTimeout is the timeout for initialization operations
 	openBaoInitTimeout = 30 * time.Second
+	// selfInitHealthTimeout bounds passive health observation while waiting for
+	// OpenBao native self-initialization to complete.
+	selfInitHealthTimeout = 10 * time.Second
 	// rootTokenSecretKey is the key used to store the root token in the Secret data.
 	rootTokenSecretKey = "token"
 	// rootTokenStoreTimeout is the maximum time we will spend trying to persist the root token Secret
