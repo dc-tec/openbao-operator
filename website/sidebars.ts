@@ -728,6 +728,22 @@ const sidebars: SidebarsConfig = {
         },
       ],
     },
+    {
+      type: 'category',
+      label: 'Design',
+      link: {
+        type: 'doc',
+        id: 'design/index',
+      },
+      items: [
+        {
+          type: 'doc',
+          id: 'design/claims-and-service-offerings',
+          label: 'Claims and Service Offerings',
+        },
+      ],
+    },
+    'roadmap',
   ],
 };
 
