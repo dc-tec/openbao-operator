@@ -30,3 +30,5 @@ RUN set -eux; \
     chmod 0755 /usr/local/bin/bao-softhsm-wrapper; \
     chown -R 100:1000 /opt/openbao-softhsm; \
     chmod -R u=rwX,g=rX,o= /opt/openbao-softhsm
+
+USER 100:1000
