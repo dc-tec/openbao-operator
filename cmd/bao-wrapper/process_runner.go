@@ -15,6 +15,9 @@ import (
 
 func run(ctx context.Context) error {
 	applyUmaskFromEnv()
+	if err := runPreflightChecks(); err != nil {
+		return err
+	}
 
 	var (
 		watchFile string

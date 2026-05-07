@@ -6,6 +6,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const reasonPrerequisitesMissing = "PrerequisitesMissing"
@@ -30,7 +31,7 @@ func (m *Manager) validateUnsealPrerequisites(ctx context.Context, cluster *open
 		return m.validateKMIPUnsealPrerequisites(ctx, cluster)
 	case "ocikms":
 		return m.validateOCIKMSUnsealPrerequisites(ctx, cluster)
-	case "pkcs11":
+	case portopenbao.SealTypePKCS11:
 		return m.validatePKCS11UnsealPrerequisites(ctx, cluster)
 	default:
 		return nil

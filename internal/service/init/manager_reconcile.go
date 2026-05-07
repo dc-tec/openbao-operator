@@ -91,12 +91,17 @@ func (m *Manager) reconcileSelfInit(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pod *corev1.Pod,
 ) recon.Result {
+	emitNormalEvent(m.recorder, cluster, ReasonInitStarted, "Self-initialization in progress for cluster %s", cluster.Name)
+
 	if handled, result := m.reconcileSelfInitFromServiceLabels(ctx, logger, cluster, pod); handled {
 		return result
 	}
 
-	result := m.reconcileSelfInitFromPodReadiness(ctx, logger, cluster, pod)
-	return result
+	if handled, result := m.reconcileSelfInitFromPodReadiness(ctx, logger, cluster, pod); handled {
+		return result
+	}
+
+	return m.reconcileSelfInitFromHealth(ctx, logger, cluster, pod)
 }
 
 func (m *Manager) reconcileSelfInitFromServiceLabels(
@@ -120,7 +125,6 @@ func (m *Manager) reconcileSelfInitFromServiceLabels(
 	}
 
 	logger.Info("OpenBao service registration labels indicate initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
-	emitNormalEvent(m.recorder, cluster, ReasonInitStarted, "Self-initialization in progress for cluster %s", cluster.Name)
 	m.markSelfInitComplete(ctx, logger, cluster)
 	return true, recon.Result{RequeueAfter: constants.RequeueShort}
 }
@@ -130,15 +134,47 @@ func (m *Manager) reconcileSelfInitFromPodReadiness(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pod *corev1.Pod,
-) recon.Result {
-	emitNormalEvent(m.recorder, cluster, ReasonInitStarted, "Self-initialization in progress for cluster %s", cluster.Name)
+) (bool, recon.Result) {
 	if isPodReady(pod) {
 		logger.Info("OpenBao pod is Ready; marking cluster as initialized", "pod", pod.Name)
 		m.markSelfInitComplete(ctx, logger, cluster)
+		return true, recon.Result{RequeueAfter: constants.RequeueShort}
+	}
+
+	return false, recon.Result{}
+}
+
+func (m *Manager) reconcileSelfInitFromHealth(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	pod *corev1.Pod,
+) recon.Result {
+	client, err := m.newOpenBaoClient(ctx, cluster)
+	if err != nil {
+		logger.Info("Self-initialization health observation is not ready yet; will retry", "pod", pod.Name, "error", err)
 		return recon.Result{RequeueAfter: constants.RequeueShort}
 	}
 
-	logger.Info("Self-initialization is enabled; waiting for pod to become Ready", "pod", pod.Name)
+	healthCtx, cancel := context.WithTimeout(ctx, selfInitHealthTimeout)
+	defer cancel()
+
+	health, err := client.Health(healthCtx)
+	if err != nil {
+		logger.Info("Self-initialization health observation failed; will retry", "pod", pod.Name, "error", err)
+		return recon.Result{RequeueAfter: constants.RequeueShort}
+	}
+	if health != nil && health.Initialized && !health.Sealed {
+		logger.Info("OpenBao health endpoint reports initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
+		m.markSelfInitComplete(ctx, logger, cluster)
+		return recon.Result{RequeueAfter: constants.RequeueShort}
+	}
+	if health != nil {
+		logger.Info("Self-initialization is enabled; waiting for OpenBao health to report initialized and unsealed", "pod", pod.Name, "initialized", health.Initialized, "sealed", health.Sealed)
+		return recon.Result{RequeueAfter: constants.RequeueShort}
+	}
+
+	logger.Info("Self-initialization is enabled; waiting for OpenBao health observation", "pod", pod.Name)
 	return recon.Result{RequeueAfter: constants.RequeueShort}
 }
 

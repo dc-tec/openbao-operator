@@ -67,6 +67,17 @@ docker-build-upgrade: ## Build docker image with the upgrade helper.
 docker-push-upgrade: ## Push docker image with the upgrade helper.
 	$(CONTAINER_TOOL) push ${IMG}
 
+OPENBAO_SOFTHSM_BASE_IMAGE ?= openbao/openbao-hsm:2.5.3
+OPENBAO_SOFTHSM_IMG ?= openbao-softhsm:dev
+
+.PHONY: docker-build-e2e-openbao-softhsm
+docker-build-e2e-openbao-softhsm: ## Build the test-only OpenBao image with SoftHSM PKCS#11 support.
+	$(CONTAINER_TOOL) build \
+		-f test/e2e/images/openbao-softhsm/Dockerfile \
+		--build-arg OPENBAO_HSM_BASE_IMAGE=$(OPENBAO_SOFTHSM_BASE_IMAGE) \
+		-t $(OPENBAO_SOFTHSM_IMG) \
+		test/e2e/images/openbao-softhsm
+
 .PHONY: docker-release
 docker-release: docker-release-build docker-release-push ## Build and push all images to registry with consistent VERSION.
 

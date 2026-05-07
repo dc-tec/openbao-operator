@@ -10,6 +10,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestSealWiring_StaticDefault_MountsUnseal(t *testing.T) {
@@ -25,7 +26,7 @@ func TestSealWiring_StaticDefault_MountsUnseal(t *testing.T) {
 	if hasVolumeMount(mounts, sealCredsVolumeName) {
 		t.Fatalf("expected %q volume mount to be absent for static seal", sealCredsVolumeName)
 	}
-	if hasEnvVar(env, "VAULT_TOKEN") || hasEnvVar(env, "VAULT_CACERT") || hasEnvVar(env, "GOOGLE_APPLICATION_CREDENTIALS") {
+	if hasEnvVar(env, envVaultToken) || hasEnvVar(env, "VAULT_CACERT") || hasEnvVar(env, envGoogleApplicationCreds) {
 		t.Fatalf("expected no external-seal env vars for static seal")
 	}
 
@@ -43,17 +44,29 @@ func TestSealWiring_StaticDefault_MountsUnseal(t *testing.T) {
 
 func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testing.T) {
 	cases := []struct {
-		name         string
-		unsealType   string
-		expectEnvVar []string
+		name                  string
+		unsealType            string
+		expectSealCredsVolume bool
+		expectEnvVar          []string
 	}{
-		{name: "transit", unsealType: "transit", expectEnvVar: []string{"VAULT_TOKEN"}},
-		{name: "gcpckms", unsealType: "gcpckms", expectEnvVar: []string{"GOOGLE_APPLICATION_CREDENTIALS"}},
-		{name: "awskms", unsealType: "awskms", expectEnvVar: []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"}},
-		{name: "azurekeyvault", unsealType: "azurekeyvault", expectEnvVar: []string{"AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_ENVIRONMENT", "AZURE_AD_RESOURCE"}},
-		{name: "kmip", unsealType: "kmip"},
-		{name: "ocikms", unsealType: "ocikms"},
-		{name: "pkcs11", unsealType: "pkcs11", expectEnvVar: []string{"BAO_HSM_PIN"}},
+		{name: "transit", unsealType: portopenbao.SealTypeTransit, expectSealCredsVolume: true, expectEnvVar: []string{envVaultToken}},
+		{name: "gcpckms", unsealType: portopenbao.SealTypeGCPCKMS, expectSealCredsVolume: true, expectEnvVar: []string{envGoogleApplicationCreds}},
+		{name: "awskms", unsealType: portopenbao.SealTypeAWSKMS, expectSealCredsVolume: true, expectEnvVar: []string{envAWSAccessKeyID, envAWSSecretAccessKey, envAWSSessionToken}},
+		{
+			name:                  "azurekeyvault",
+			unsealType:            portopenbao.SealTypeAzureKeyVault,
+			expectSealCredsVolume: true,
+			expectEnvVar: []string{
+				envAzureTenantID,
+				envAzureClientID,
+				envAzureClientSecret,
+				envAzureEnvironment,
+				envAzureADResource,
+			},
+		},
+		{name: "kmip", unsealType: portopenbao.SealTypeKMIP, expectSealCredsVolume: true},
+		{name: "ocikms", unsealType: portopenbao.SealTypeOCIKMS, expectSealCredsVolume: true},
+		{name: "pkcs11", unsealType: portopenbao.SealTypePKCS11, expectEnvVar: []string{portopenbao.EnvBaoHSMPIN}},
 	}
 
 	for _, tc := range cases {
@@ -64,6 +77,13 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 				CredentialsSecretRef: &corev1.LocalObjectReference{
 					Name: "provider-creds",
 				},
+			}
+			if tc.unsealType == portopenbao.SealTypePKCS11 {
+				cluster.Spec.Unseal.PKCS11 = &openbaov1alpha1.PKCS11SealConfig{
+					Lib:        "/usr/local/lib/libpkcs11.so",
+					TokenLabel: "OpenBao",
+					KeyLabel:   "bao-root-key-aes",
+				}
 			}
 
 			env := buildContainerEnv(cluster)
@@ -78,14 +98,18 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 			}
 
 			sealCredsVol, ok := getVolume(volumes, sealCredsVolumeName)
-			if !ok {
-				t.Fatalf("expected %q volume to be present when credentialsSecretRef is set", sealCredsVolumeName)
-			}
-			if sealCredsVol.Secret == nil || sealCredsVol.Secret.SecretName != "provider-creds" {
-				t.Fatalf("expected %q volume to use secret %q", sealCredsVolumeName, "provider-creds")
-			}
-			if !hasVolumeMountWithPath(mounts, sealCredsVolumeName, sealCredsVolumeMountPath) {
-				t.Fatalf("expected %q volume mount at %q when credentialsSecretRef is set", sealCredsVolumeName, sealCredsVolumeMountPath)
+			if tc.expectSealCredsVolume {
+				if !ok {
+					t.Fatalf("expected %q volume to be present when credentialsSecretRef is set", sealCredsVolumeName)
+				}
+				if sealCredsVol.Secret == nil || sealCredsVol.Secret.SecretName != "provider-creds" {
+					t.Fatalf("expected %q volume to use secret %q", sealCredsVolumeName, "provider-creds")
+				}
+				if !hasVolumeMountWithPath(mounts, sealCredsVolumeName, sealCredsVolumeMountPath) {
+					t.Fatalf("expected %q volume mount at %q when credentialsSecretRef is set", sealCredsVolumeName, sealCredsVolumeMountPath)
+				}
+			} else if ok || hasVolumeMount(mounts, sealCredsVolumeName) {
+				t.Fatalf("expected %q volume/mount to be absent for seal type %q without file-backed credentials", sealCredsVolumeName, tc.unsealType)
 			}
 
 			for _, envName := range tc.expectEnvVar {
@@ -94,13 +118,13 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 				}
 			}
 
-			if tc.unsealType == "transit" {
-				vaultToken := findEnvVar(env, "VAULT_TOKEN")
+			if tc.unsealType == portopenbao.SealTypeTransit {
+				vaultToken := findEnvVar(env, envVaultToken)
 				if vaultToken == nil || vaultToken.ValueFrom == nil || vaultToken.ValueFrom.SecretKeyRef == nil {
-					t.Fatalf("expected VAULT_TOKEN to come from SecretKeyRef for transit seal")
+					t.Fatalf("expected %s to come from SecretKeyRef for transit seal", envVaultToken)
 				}
-				if vaultToken.ValueFrom.SecretKeyRef.Name != "provider-creds" || vaultToken.ValueFrom.SecretKeyRef.Key != "token" {
-					t.Fatalf("expected VAULT_TOKEN SecretKeyRef to be %q/%q, got %q/%q", "provider-creds", "token", vaultToken.ValueFrom.SecretKeyRef.Name, vaultToken.ValueFrom.SecretKeyRef.Key)
+				if vaultToken.ValueFrom.SecretKeyRef.Name != "provider-creds" || vaultToken.ValueFrom.SecretKeyRef.Key != secretKeyTransitToken {
+					t.Fatalf("expected %s SecretKeyRef to be %q/%q, got %q/%q", envVaultToken, "provider-creds", secretKeyTransitToken, vaultToken.ValueFrom.SecretKeyRef.Name, vaultToken.ValueFrom.SecretKeyRef.Key)
 				}
 			}
 		})
@@ -108,7 +132,15 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 }
 
 func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(t *testing.T) {
-	types := []string{"transit", "gcpckms", "awskms", "azurekeyvault", "kmip", "ocikms", "pkcs11"}
+	types := []string{
+		portopenbao.SealTypeTransit,
+		portopenbao.SealTypeGCPCKMS,
+		portopenbao.SealTypeAWSKMS,
+		portopenbao.SealTypeAzureKeyVault,
+		portopenbao.SealTypeKMIP,
+		portopenbao.SealTypeOCIKMS,
+		portopenbao.SealTypePKCS11,
+	}
 
 	for _, unsealType := range types {
 		t.Run(unsealType, func(t *testing.T) {
@@ -122,7 +154,7 @@ func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(
 			if hasVolume(volumes, sealCredsVolumeName) || hasVolumeMount(mounts, sealCredsVolumeName) {
 				t.Fatalf("expected %q volume/mount to be absent when credentialsSecretRef is not set", sealCredsVolumeName)
 			}
-			if hasEnvVar(env, "VAULT_TOKEN") || hasEnvVar(env, "VAULT_CACERT") || hasEnvVar(env, "GOOGLE_APPLICATION_CREDENTIALS") {
+			if hasEnvVar(env, envVaultToken) || hasEnvVar(env, "VAULT_CACERT") || hasEnvVar(env, envGoogleApplicationCreds) {
 				t.Fatalf("expected no credentials-derived env vars when credentialsSecretRef is not set")
 			}
 		})
@@ -132,7 +164,7 @@ func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(
 func TestSealWiring_TransitInlineToken_DoesNotInjectVaultTokenEnv(t *testing.T) {
 	cluster := newMinimalCluster("seal-transit-inline-token", "default")
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-		Type: "transit",
+		Type: portopenbao.SealTypeTransit,
 		CredentialsSecretRef: &corev1.LocalObjectReference{
 			Name: "provider-creds",
 		},
@@ -142,15 +174,15 @@ func TestSealWiring_TransitInlineToken_DoesNotInjectVaultTokenEnv(t *testing.T) 
 	}
 
 	env := buildContainerEnv(cluster)
-	if hasEnvVar(env, "VAULT_TOKEN") {
-		t.Fatalf("expected VAULT_TOKEN to be absent when transit token is configured inline")
+	if hasEnvVar(env, envVaultToken) {
+		t.Fatalf("expected %s to be absent when transit token is configured inline", envVaultToken)
 	}
 }
 
 func TestSealWiring_OCIKMSAPIKey_WithCredentials_IncludesOCIConfigEnv(t *testing.T) {
 	cluster := newMinimalCluster("seal-ocikms-api-key", "default")
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-		Type: "ocikms",
+		Type: portopenbao.SealTypeOCIKMS,
 		CredentialsSecretRef: &corev1.LocalObjectReference{
 			Name: "provider-creds",
 		},
@@ -160,12 +192,139 @@ func TestSealWiring_OCIKMSAPIKey_WithCredentials_IncludesOCIConfigEnv(t *testing
 	}
 
 	env := buildContainerEnv(cluster)
-	configEnv := findEnvVar(env, "OCI_CONFIG_FILE")
+	configEnv := findEnvVar(env, envOCIConfigFile)
 	if configEnv == nil {
-		t.Fatal("expected OCI_CONFIG_FILE env var for ocikms api-key mode")
+		t.Fatalf("expected %s env var for ocikms api-key mode", envOCIConfigFile)
 	}
-	if configEnv.Value != sealCredsVolumeMountPath+"/config" {
-		t.Fatalf("OCI_CONFIG_FILE = %q, want %q", configEnv.Value, sealCredsVolumeMountPath+"/config")
+	if configEnv.Value != sealCredsVolumeMountPath+"/"+secretKeyOCIConfig {
+		t.Fatalf("%s = %q, want %q", envOCIConfigFile, configEnv.Value, sealCredsVolumeMountPath+"/"+secretKeyOCIConfig)
+	}
+}
+
+func TestSealWiring_PKCS11RuntimeEnv(t *testing.T) {
+	cluster := newMinimalCluster("seal-pkcs11-runtime", "default")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: portopenbao.SealTypePKCS11,
+		CredentialsSecretRef: &corev1.LocalObjectReference{
+			Name: "pkcs11-creds",
+		},
+		PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+			Lib:        "/usr/local/lib/libpkcs11.so",
+			TokenLabel: "OpenBao",
+			KeyLabel:   "bao-root-key-aes",
+			Mechanism:  "AES_GCM",
+			Runtime: &openbaov1alpha1.PKCS11RuntimeConfig{
+				LibraryPath: "/usr/local/lib",
+				Env: []openbaov1alpha1.PKCS11RuntimeEnvVar{
+					{Name: "CRYPTOSERVER", SecretKey: "cryptoserver"},
+				},
+				FileEnv: []openbaov1alpha1.PKCS11RuntimeFileEnvVar{
+					{Name: "CS_PKCS11_R3_CFG", SecretKey: "cs_pkcs11_R3.cfg"},
+				},
+			},
+		},
+	}
+
+	env := buildContainerEnv(cluster)
+
+	for name, want := range map[string]string{
+		portopenbao.EnvBaoSealType:      portopenbao.SealTypePKCS11,
+		portopenbao.EnvBaoHSMLib:        "/usr/local/lib/libpkcs11.so",
+		portopenbao.EnvBaoHSMTokenLabel: "OpenBao",
+		portopenbao.EnvBaoHSMKeyLabel:   "bao-root-key-aes",
+		portopenbao.EnvBaoHSMMechanism:  "AES_GCM",
+		portopenbao.EnvLDLibraryPath:    "/usr/local/lib",
+		"CS_PKCS11_R3_CFG":              "/etc/bao/seal-creds/cs_pkcs11_R3.cfg",
+	} {
+		got := findEnvVar(env, name)
+		if got == nil || got.Value != want {
+			t.Fatalf("%s = %v, want %q", name, got, want)
+		}
+	}
+
+	cryptoServer := findEnvVar(env, "CRYPTOSERVER")
+	if cryptoServer == nil || cryptoServer.ValueFrom == nil || cryptoServer.ValueFrom.SecretKeyRef == nil {
+		t.Fatal("expected CRYPTOSERVER to come from SecretKeyRef")
+	}
+	if cryptoServer.ValueFrom.SecretKeyRef.Name != "pkcs11-creds" || cryptoServer.ValueFrom.SecretKeyRef.Key != "cryptoserver" {
+		t.Fatalf("CRYPTOSERVER SecretKeyRef = %s/%s, want pkcs11-creds/cryptoserver", cryptoServer.ValueFrom.SecretKeyRef.Name, cryptoServer.ValueFrom.SecretKeyRef.Key)
+	}
+
+	hsmPIN := findEnvVar(env, portopenbao.EnvBaoHSMPIN)
+	if hsmPIN == nil || hsmPIN.ValueFrom == nil || hsmPIN.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("expected %s to come from SecretKeyRef", portopenbao.EnvBaoHSMPIN)
+	}
+
+	mounts := buildContainerVolumeMounts(cluster, path.Dir(openBaoRenderedConfig))
+	volumes := buildStatefulSetVolumes(cluster, StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter})
+	if !hasVolumeMountWithPath(mounts, sealCredsVolumeName, sealCredsVolumeMountPath) {
+		t.Fatalf("expected %q volume mount at %q for PKCS#11 fileEnv", sealCredsVolumeName, sealCredsVolumeMountPath)
+	}
+	sealCredsVol, ok := getVolume(volumes, sealCredsVolumeName)
+	if !ok || sealCredsVol.Secret == nil {
+		t.Fatalf("expected %q Secret volume for PKCS#11 fileEnv", sealCredsVolumeName)
+	}
+	if sealCredsVol.Secret.SecretName != "pkcs11-creds" {
+		t.Fatalf("%q SecretName = %q, want pkcs11-creds", sealCredsVolumeName, sealCredsVol.Secret.SecretName)
+	}
+	if len(sealCredsVol.Secret.Items) != 1 {
+		t.Fatalf("%q projected item count = %d, want 1", sealCredsVolumeName, len(sealCredsVol.Secret.Items))
+	}
+	if got := sealCredsVol.Secret.Items[0]; got.Key != "cs_pkcs11_R3.cfg" || got.Path != "cs_pkcs11_R3.cfg" {
+		t.Fatalf("%q projected item = %#v, want cs_pkcs11_R3.cfg only", sealCredsVolumeName, got)
+	}
+}
+
+func TestSealWiring_PKCS11RuntimeEnvOnlyDoesNotMountSecretVolume(t *testing.T) {
+	cluster := newMinimalCluster("seal-pkcs11-runtime-env-only", "default")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: portopenbao.SealTypePKCS11,
+		CredentialsSecretRef: &corev1.LocalObjectReference{
+			Name: "pkcs11-creds",
+		},
+		PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+			Lib:        "/usr/local/lib/libpkcs11.so",
+			TokenLabel: "OpenBao",
+			KeyLabel:   "bao-root-key-aes",
+			Runtime: &openbaov1alpha1.PKCS11RuntimeConfig{
+				Env: []openbaov1alpha1.PKCS11RuntimeEnvVar{
+					{Name: "CRYPTOSERVER", SecretKey: "cryptoserver"},
+				},
+			},
+		},
+	}
+
+	env := buildContainerEnv(cluster)
+	cryptoServer := findEnvVar(env, "CRYPTOSERVER")
+	if cryptoServer == nil || cryptoServer.ValueFrom == nil || cryptoServer.ValueFrom.SecretKeyRef == nil {
+		t.Fatal("expected CRYPTOSERVER to come from SecretKeyRef")
+	}
+
+	mounts := buildContainerVolumeMounts(cluster, path.Dir(openBaoRenderedConfig))
+	volumes := buildStatefulSetVolumes(cluster, StatefulSetSpec{Pool: constants.LabelValueOpenBaoWorkloadPoolVoter})
+	if hasVolume(volumes, sealCredsVolumeName) || hasVolumeMount(mounts, sealCredsVolumeName) {
+		t.Fatalf("expected %q volume/mount to be absent for PKCS#11 env-only runtime settings", sealCredsVolumeName)
+	}
+}
+
+func TestSealWiring_PKCS11InlinePINDoesNotInjectHSMPINEnv(t *testing.T) {
+	cluster := newMinimalCluster("seal-pkcs11-inline-pin", "default")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: portopenbao.SealTypePKCS11,
+		CredentialsSecretRef: &corev1.LocalObjectReference{
+			Name: "pkcs11-creds",
+		},
+		PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+			Lib:        "/usr/local/lib/libpkcs11.so",
+			TokenLabel: "OpenBao",
+			KeyLabel:   "bao-root-key-aes",
+			PIN:        "1234",
+		},
+	}
+
+	env := buildContainerEnv(cluster)
+	if hasEnvVar(env, portopenbao.EnvBaoHSMPIN) {
+		t.Fatalf("expected %s env var to be absent when pin is configured inline", portopenbao.EnvBaoHSMPIN)
 	}
 }
 
@@ -174,7 +333,7 @@ func TestSealWiring_StaticExplicitAndImplicit_StillMountsUnseal(t *testing.T) {
 		name   string
 		unseal *openbaov1alpha1.UnsealConfig
 	}{
-		{name: "explicit-static", unseal: &openbaov1alpha1.UnsealConfig{Type: "static"}},
+		{name: "explicit-static", unseal: &openbaov1alpha1.UnsealConfig{Type: portopenbao.SealTypeStatic}},
 		{name: "implicit-empty-type", unseal: &openbaov1alpha1.UnsealConfig{}},
 	}
 
