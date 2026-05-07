@@ -274,11 +274,34 @@ func (p *pkcs11SealWiringProvider) EnvVars() []corev1.EnvVar {
 }
 
 func (p *pkcs11SealWiringProvider) VolumeMounts() []corev1.VolumeMount {
-	return (&credentialsSecretSealWiringProvider{cluster: p.cluster}).VolumeMounts()
+	if !pkcs11NeedsCredentialsSecretVolume(p.cluster) {
+		return nil
+	}
+	return []corev1.VolumeMount{
+		{
+			Name:      sealCredsVolumeName,
+			MountPath: sealCredsVolumeMountPath,
+			ReadOnly:  true,
+		},
+	}
 }
 
 func (p *pkcs11SealWiringProvider) Volumes() []corev1.Volume {
-	return (&credentialsSecretSealWiringProvider{cluster: p.cluster}).Volumes()
+	if !pkcs11NeedsCredentialsSecretVolume(p.cluster) {
+		return nil
+	}
+	return []corev1.Volume{
+		{
+			Name: sealCredsVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  p.cluster.Spec.Unseal.CredentialsSecretRef.Name,
+					DefaultMode: ptr.To(secretFileMode),
+					Items:       pkcs11RuntimeFileEnvSecretItems(p.cluster),
+				},
+			},
+		},
+	}
 }
 
 func pkcs11RuntimeEnvVars(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
@@ -310,6 +333,35 @@ func pkcs11RuntimeEnvVars(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvV
 		}
 	}
 	return env
+}
+
+func pkcs11NeedsCredentialsSecretVolume(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return len(pkcs11RuntimeFileEnvSecretItems(cluster)) > 0
+}
+
+func pkcs11RuntimeFileEnvSecretItems(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.KeyToPath {
+	if cluster == nil || cluster.Spec.Unseal == nil || cluster.Spec.Unseal.PKCS11 == nil ||
+		cluster.Spec.Unseal.PKCS11.Runtime == nil || cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return nil
+	}
+
+	mappings := portopenbao.PKCS11RuntimeMappings(cluster.Spec.Unseal.PKCS11.Runtime)
+	items := make([]corev1.KeyToPath, 0, len(mappings))
+	seen := make(map[string]struct{}, len(mappings))
+	for _, item := range mappings {
+		if item.Kind != portopenbao.PKCS11RuntimeMappingFileEnv {
+			continue
+		}
+		if _, ok := seen[item.SecretKey]; ok {
+			continue
+		}
+		seen[item.SecretKey] = struct{}{}
+		items = append(items, corev1.KeyToPath{
+			Key:  item.SecretKey,
+			Path: item.SecretKey,
+		})
+	}
+	return items
 }
 
 type transitSealWiringProvider struct {

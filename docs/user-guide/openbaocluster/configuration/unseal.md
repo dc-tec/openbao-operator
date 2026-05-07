@@ -188,6 +188,7 @@ For PKCS#11-backed production clusters, validate the HSM integration outside the
 - Store the token PIN and vendor runtime material in `credentialsSecretRef`; avoid putting `pin` directly in GitOps-managed manifests.
 - Use `runtime.libraryPath` when the vendor module depends on sibling shared objects.
 - Use `runtime.env` for vendor settings that are literal values and `runtime.fileEnv` for vendor settings that expect file paths.
+- Only keys referenced by `runtime.fileEnv` are projected into the Pod as files. The PIN and `runtime.env` values remain Secret-backed environment variables and are not mounted under `/etc/bao/seal-creds`.
 
 The wrapper fails fast when `BAO_SEAL_TYPE=pkcs11` but the configured `BAO_HSM_LIB` is missing or points at a directory. Missing Secret keys are rejected during operator prerequisite validation before the workload reaches an opaque OpenBao startup failure.
 
@@ -220,7 +221,7 @@ spec:
           - name: CS_PKCS11_R3_CFG
             secretKey: cs_pkcs11_R3.cfg`}
 >
-  The Secret `pkcs11-runtime` must include `BAO_HSM_PIN`, `cryptoserver`, and `cs_pkcs11_R3.cfg`. The operator mounts the Secret at `/etc/bao/seal-creds`, sets `CS_PKCS11_R3_CFG=/etc/bao/seal-creds/cs_pkcs11_R3.cfg`, and fails fast if `/usr/local/lib/libpkcs11.so` is not present in the container.
+  The Secret `pkcs11-runtime` must include `BAO_HSM_PIN`, `cryptoserver`, and `cs_pkcs11_R3.cfg`. The operator projects only the `fileEnv` key `cs_pkcs11_R3.cfg` under `/etc/bao/seal-creds`, sets `CS_PKCS11_R3_CFG=/etc/bao/seal-creds/cs_pkcs11_R3.cfg`, and fails fast if `/usr/local/lib/libpkcs11.so` is not present in the container.
 </CommandBlock>
 
 ## Static unseal details
