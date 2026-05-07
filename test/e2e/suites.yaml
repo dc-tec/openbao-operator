@@ -179,6 +179,24 @@ ciLanes:
     preloadHardenedAssets: true
     preloadStorageEmulators: []
 
+  - id: hsm
+    name: "HSM / PKCS#11"
+    labelFilter: "((hsm || pkcs11) && !openshift)"
+    prScope: manual
+    timeoutMinutes: 45
+    e2eTimeout: 40m
+    includeInPRMatrix: false
+    excludePentestOnDefaultPR: false
+    hardenedSigned: false
+    openBaoImage: "openbao-softhsm:dev"
+    hardenedInitImage: ""
+    hardenedUpgradeExecutorImage: ""
+    loadBackupExecutorImage: false
+    loadUpgradeExecutorImage: false
+    preloadUpgradeImages: false
+    preloadHardenedAssets: false
+    preloadStorageEmulators: []
+
   - id: platform-openshift
     name: "OpenShift Platform"
     labelFilter: "(openshift && platform)"
@@ -341,6 +359,27 @@ suites:
       lanes:
         - hardened
       pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-unseal-pkcs11
+    title: "Cluster PKCS#11 Unseal"
+    owner: core
+    riskTier: high
+    isolation: global-mutator
+    files:
+      - test/e2e/Cluster_Unseal_PKCS11_test.go
+    labels:
+      - cluster
+      - lifecycle
+      - unseal
+      - pkcs11
+      - hsm
+    coverage: []
+    ci:
+      lanes:
+        - hsm
+      pullRequest: manual
     nightly:
       policy: primary-version-full
 

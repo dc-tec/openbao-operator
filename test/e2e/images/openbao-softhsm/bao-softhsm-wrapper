@@ -1,0 +1,47 @@
+#!/bin/sh
+set -eu
+
+if [ "${1:-}" != "server" ]; then
+  exec /bin/bao.real "$@"
+fi
+
+token_dir="/bao/data/softhsm/tokens"
+seed_dir="/opt/openbao-softhsm/tokens"
+module="${BAO_HSM_LIB:-/usr/lib/softhsm/libsofthsm2.so}"
+pin="${BAO_HSM_PIN:-1234}"
+
+mkdir -p "${token_dir}"
+
+if ! find "${token_dir}" -mindepth 1 -maxdepth 1 | grep -q .; then
+  cp -R "${seed_dir}/." "${token_dir}/"
+  chmod -R u=rwX,g=rwX,o= "${token_dir}"
+fi
+
+if ! softhsm2-util --show-slots | grep -Eq 'Label:[[:space:]]+OpenBao'; then
+  echo "SoftHSM token OpenBao was not found" >&2
+  exit 1
+fi
+
+if ! pkcs11-tool \
+  --module "${module}" \
+  --token-label OpenBao \
+  --login \
+  --pin "${pin}" \
+  --list-objects \
+  --type privkey | grep -q 'bao-root-key-rsa'; then
+  echo "SoftHSM private key bao-root-key-rsa was not found" >&2
+  exit 1
+fi
+
+if ! pkcs11-tool \
+  --module "${module}" \
+  --token-label OpenBao \
+  --login \
+  --pin "${pin}" \
+  --list-objects \
+  --type pubkey | grep -q 'bao-root-key-rsa'; then
+  echo "SoftHSM public key bao-root-key-rsa was not found" >&2
+  exit 1
+fi
+
+exec /bin/bao.real "$@"
