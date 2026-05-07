@@ -3,9 +3,6 @@ package openbao
 import openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 
 const (
-	// SealTypePKCS11 is the OpenBao PKCS#11 seal type wire value.
-	SealTypePKCS11 = "pkcs11"
-
 	EnvBaoSealType           = "BAO_SEAL_TYPE"
 	EnvBaoHSMLib             = "BAO_HSM_LIB"
 	EnvBaoHSMSlot            = "BAO_HSM_SLOT"

@@ -25,7 +25,21 @@ const (
 	kubeRootCAConfigMapName  = "kube-root-ca.crt"
 	openBaoBinaryName        = constants.BinaryBao
 	configHashAnnotation     = "openbao.org/config-hash"
-	unsealTypeTransit        = "transit"
+
+	envAWSAccessKeyID          = "AWS_ACCESS_KEY_ID"
+	envAWSSecretAccessKey      = "AWS_SECRET_ACCESS_KEY" // #nosec G101 -- environment variable name, not a secret value
+	envAWSSessionToken         = "AWS_SESSION_TOKEN"     // #nosec G101 -- environment variable name, not a secret value
+	envAzureADResource         = "AZURE_AD_RESOURCE"
+	envAzureClientID           = "AZURE_CLIENT_ID"
+	envAzureClientSecret       = "AZURE_CLIENT_SECRET" // #nosec G101 -- environment variable name, not a secret value
+	envAzureEnvironment        = "AZURE_ENVIRONMENT"
+	envAzureTenantID           = "AZURE_TENANT_ID"
+	envGoogleApplicationCreds  = "GOOGLE_APPLICATION_CREDENTIALS" // #nosec G101 -- environment variable name, not a secret value
+	envOCIConfigFile           = "OCI_CONFIG_FILE"
+	envVaultToken              = "VAULT_TOKEN"      // #nosec G101 -- environment variable name, not a secret value
+	secretKeyGoogleCredentials = "credentials.json" // #nosec G101 -- Secret data key name, not a secret value
+	secretKeyOCIConfig         = "config"
+	secretKeyTransitToken      = "token" // #nosec G101 -- Secret data key name, not a secret value
 
 	openBaoUserID  = constants.UserOpenBao
 	openBaoGroupID = constants.GroupOpenBao

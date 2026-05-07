@@ -26,7 +26,7 @@ func TestSealWiring_StaticDefault_MountsUnseal(t *testing.T) {
 	if hasVolumeMount(mounts, sealCredsVolumeName) {
 		t.Fatalf("expected %q volume mount to be absent for static seal", sealCredsVolumeName)
 	}
-	if hasEnvVar(env, "VAULT_TOKEN") || hasEnvVar(env, "VAULT_CACERT") || hasEnvVar(env, "GOOGLE_APPLICATION_CREDENTIALS") {
+	if hasEnvVar(env, envVaultToken) || hasEnvVar(env, "VAULT_CACERT") || hasEnvVar(env, envGoogleApplicationCreds) {
 		t.Fatalf("expected no external-seal env vars for static seal")
 	}
 
@@ -48,13 +48,23 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 		unsealType   string
 		expectEnvVar []string
 	}{
-		{name: "transit", unsealType: "transit", expectEnvVar: []string{"VAULT_TOKEN"}},
-		{name: "gcpckms", unsealType: "gcpckms", expectEnvVar: []string{"GOOGLE_APPLICATION_CREDENTIALS"}},
-		{name: "awskms", unsealType: "awskms", expectEnvVar: []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"}},
-		{name: "azurekeyvault", unsealType: "azurekeyvault", expectEnvVar: []string{"AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_ENVIRONMENT", "AZURE_AD_RESOURCE"}},
-		{name: "kmip", unsealType: "kmip"},
-		{name: "ocikms", unsealType: "ocikms"},
-		{name: "pkcs11", unsealType: portopenbao.SealTypePKCS11, expectEnvVar: []string{"BAO_HSM_PIN"}},
+		{name: "transit", unsealType: portopenbao.SealTypeTransit, expectEnvVar: []string{envVaultToken}},
+		{name: "gcpckms", unsealType: portopenbao.SealTypeGCPCKMS, expectEnvVar: []string{envGoogleApplicationCreds}},
+		{name: "awskms", unsealType: portopenbao.SealTypeAWSKMS, expectEnvVar: []string{envAWSAccessKeyID, envAWSSecretAccessKey, envAWSSessionToken}},
+		{
+			name:       "azurekeyvault",
+			unsealType: portopenbao.SealTypeAzureKeyVault,
+			expectEnvVar: []string{
+				envAzureTenantID,
+				envAzureClientID,
+				envAzureClientSecret,
+				envAzureEnvironment,
+				envAzureADResource,
+			},
+		},
+		{name: "kmip", unsealType: portopenbao.SealTypeKMIP},
+		{name: "ocikms", unsealType: portopenbao.SealTypeOCIKMS},
+		{name: "pkcs11", unsealType: portopenbao.SealTypePKCS11, expectEnvVar: []string{portopenbao.EnvBaoHSMPIN}},
 	}
 
 	for _, tc := range cases {
@@ -102,13 +112,13 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 				}
 			}
 
-			if tc.unsealType == "transit" {
-				vaultToken := findEnvVar(env, "VAULT_TOKEN")
+			if tc.unsealType == portopenbao.SealTypeTransit {
+				vaultToken := findEnvVar(env, envVaultToken)
 				if vaultToken == nil || vaultToken.ValueFrom == nil || vaultToken.ValueFrom.SecretKeyRef == nil {
-					t.Fatalf("expected VAULT_TOKEN to come from SecretKeyRef for transit seal")
+					t.Fatalf("expected %s to come from SecretKeyRef for transit seal", envVaultToken)
 				}
-				if vaultToken.ValueFrom.SecretKeyRef.Name != "provider-creds" || vaultToken.ValueFrom.SecretKeyRef.Key != "token" {
-					t.Fatalf("expected VAULT_TOKEN SecretKeyRef to be %q/%q, got %q/%q", "provider-creds", "token", vaultToken.ValueFrom.SecretKeyRef.Name, vaultToken.ValueFrom.SecretKeyRef.Key)
+				if vaultToken.ValueFrom.SecretKeyRef.Name != "provider-creds" || vaultToken.ValueFrom.SecretKeyRef.Key != secretKeyTransitToken {
+					t.Fatalf("expected %s SecretKeyRef to be %q/%q, got %q/%q", envVaultToken, "provider-creds", secretKeyTransitToken, vaultToken.ValueFrom.SecretKeyRef.Name, vaultToken.ValueFrom.SecretKeyRef.Key)
 				}
 			}
 		})
@@ -116,7 +126,15 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 }
 
 func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(t *testing.T) {
-	types := []string{"transit", "gcpckms", "awskms", "azurekeyvault", "kmip", "ocikms", portopenbao.SealTypePKCS11}
+	types := []string{
+		portopenbao.SealTypeTransit,
+		portopenbao.SealTypeGCPCKMS,
+		portopenbao.SealTypeAWSKMS,
+		portopenbao.SealTypeAzureKeyVault,
+		portopenbao.SealTypeKMIP,
+		portopenbao.SealTypeOCIKMS,
+		portopenbao.SealTypePKCS11,
+	}
 
 	for _, unsealType := range types {
 		t.Run(unsealType, func(t *testing.T) {
@@ -130,7 +148,7 @@ func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(
 			if hasVolume(volumes, sealCredsVolumeName) || hasVolumeMount(mounts, sealCredsVolumeName) {
 				t.Fatalf("expected %q volume/mount to be absent when credentialsSecretRef is not set", sealCredsVolumeName)
 			}
-			if hasEnvVar(env, "VAULT_TOKEN") || hasEnvVar(env, "VAULT_CACERT") || hasEnvVar(env, "GOOGLE_APPLICATION_CREDENTIALS") {
+			if hasEnvVar(env, envVaultToken) || hasEnvVar(env, "VAULT_CACERT") || hasEnvVar(env, envGoogleApplicationCreds) {
 				t.Fatalf("expected no credentials-derived env vars when credentialsSecretRef is not set")
 			}
 		})
@@ -140,7 +158,7 @@ func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(
 func TestSealWiring_TransitInlineToken_DoesNotInjectVaultTokenEnv(t *testing.T) {
 	cluster := newMinimalCluster("seal-transit-inline-token", "default")
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-		Type: "transit",
+		Type: portopenbao.SealTypeTransit,
 		CredentialsSecretRef: &corev1.LocalObjectReference{
 			Name: "provider-creds",
 		},
@@ -150,15 +168,15 @@ func TestSealWiring_TransitInlineToken_DoesNotInjectVaultTokenEnv(t *testing.T) 
 	}
 
 	env := buildContainerEnv(cluster)
-	if hasEnvVar(env, "VAULT_TOKEN") {
-		t.Fatalf("expected VAULT_TOKEN to be absent when transit token is configured inline")
+	if hasEnvVar(env, envVaultToken) {
+		t.Fatalf("expected %s to be absent when transit token is configured inline", envVaultToken)
 	}
 }
 
 func TestSealWiring_OCIKMSAPIKey_WithCredentials_IncludesOCIConfigEnv(t *testing.T) {
 	cluster := newMinimalCluster("seal-ocikms-api-key", "default")
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-		Type: "ocikms",
+		Type: portopenbao.SealTypeOCIKMS,
 		CredentialsSecretRef: &corev1.LocalObjectReference{
 			Name: "provider-creds",
 		},
@@ -168,12 +186,12 @@ func TestSealWiring_OCIKMSAPIKey_WithCredentials_IncludesOCIConfigEnv(t *testing
 	}
 
 	env := buildContainerEnv(cluster)
-	configEnv := findEnvVar(env, "OCI_CONFIG_FILE")
+	configEnv := findEnvVar(env, envOCIConfigFile)
 	if configEnv == nil {
-		t.Fatal("expected OCI_CONFIG_FILE env var for ocikms api-key mode")
+		t.Fatalf("expected %s env var for ocikms api-key mode", envOCIConfigFile)
 	}
-	if configEnv.Value != sealCredsVolumeMountPath+"/config" {
-		t.Fatalf("OCI_CONFIG_FILE = %q, want %q", configEnv.Value, sealCredsVolumeMountPath+"/config")
+	if configEnv.Value != sealCredsVolumeMountPath+"/"+secretKeyOCIConfig {
+		t.Fatalf("%s = %q, want %q", envOCIConfigFile, configEnv.Value, sealCredsVolumeMountPath+"/"+secretKeyOCIConfig)
 	}
 }
 
@@ -204,13 +222,13 @@ func TestSealWiring_PKCS11RuntimeEnv(t *testing.T) {
 	env := buildContainerEnv(cluster)
 
 	for name, want := range map[string]string{
-		"BAO_SEAL_TYPE":       portopenbao.SealTypePKCS11,
-		"BAO_HSM_LIB":         "/usr/local/lib/libpkcs11.so",
-		"BAO_HSM_TOKEN_LABEL": "OpenBao",
-		"BAO_HSM_KEY_LABEL":   "bao-root-key-aes",
-		"BAO_HSM_MECHANISM":   "AES_GCM",
-		"LD_LIBRARY_PATH":     "/usr/local/lib",
-		"CS_PKCS11_R3_CFG":    "/etc/bao/seal-creds/cs_pkcs11_R3.cfg",
+		portopenbao.EnvBaoSealType:      portopenbao.SealTypePKCS11,
+		portopenbao.EnvBaoHSMLib:        "/usr/local/lib/libpkcs11.so",
+		portopenbao.EnvBaoHSMTokenLabel: "OpenBao",
+		portopenbao.EnvBaoHSMKeyLabel:   "bao-root-key-aes",
+		portopenbao.EnvBaoHSMMechanism:  "AES_GCM",
+		portopenbao.EnvLDLibraryPath:    "/usr/local/lib",
+		"CS_PKCS11_R3_CFG":              "/etc/bao/seal-creds/cs_pkcs11_R3.cfg",
 	} {
 		got := findEnvVar(env, name)
 		if got == nil || got.Value != want {
@@ -226,9 +244,9 @@ func TestSealWiring_PKCS11RuntimeEnv(t *testing.T) {
 		t.Fatalf("CRYPTOSERVER SecretKeyRef = %s/%s, want pkcs11-creds/cryptoserver", cryptoServer.ValueFrom.SecretKeyRef.Name, cryptoServer.ValueFrom.SecretKeyRef.Key)
 	}
 
-	hsmPIN := findEnvVar(env, "BAO_HSM_PIN")
+	hsmPIN := findEnvVar(env, portopenbao.EnvBaoHSMPIN)
 	if hsmPIN == nil || hsmPIN.ValueFrom == nil || hsmPIN.ValueFrom.SecretKeyRef == nil {
-		t.Fatal("expected BAO_HSM_PIN to come from SecretKeyRef")
+		t.Fatalf("expected %s to come from SecretKeyRef", portopenbao.EnvBaoHSMPIN)
 	}
 }
 
@@ -248,8 +266,8 @@ func TestSealWiring_PKCS11InlinePINDoesNotInjectHSMPINEnv(t *testing.T) {
 	}
 
 	env := buildContainerEnv(cluster)
-	if hasEnvVar(env, "BAO_HSM_PIN") {
-		t.Fatal("expected BAO_HSM_PIN env var to be absent when pin is configured inline")
+	if hasEnvVar(env, portopenbao.EnvBaoHSMPIN) {
+		t.Fatalf("expected %s env var to be absent when pin is configured inline", portopenbao.EnvBaoHSMPIN)
 	}
 }
 
@@ -258,7 +276,7 @@ func TestSealWiring_StaticExplicitAndImplicit_StillMountsUnseal(t *testing.T) {
 		name   string
 		unseal *openbaov1alpha1.UnsealConfig
 	}{
-		{name: "explicit-static", unseal: &openbaov1alpha1.UnsealConfig{Type: "static"}},
+		{name: "explicit-static", unseal: &openbaov1alpha1.UnsealConfig{Type: portopenbao.SealTypeStatic}},
 		{name: "implicit-empty-type", unseal: &openbaov1alpha1.UnsealConfig{}},
 	}
 

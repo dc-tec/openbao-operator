@@ -44,17 +44,17 @@ func newSealWiringProvider(cluster *openbaov1alpha1.OpenBaoCluster) sealWiringPr
 	}
 
 	switch cluster.Spec.Unseal.Type {
-	case unsealTypeTransit:
+	case portopenbao.SealTypeTransit:
 		return &transitSealWiringProvider{cluster: cluster}
-	case "gcpckms":
+	case portopenbao.SealTypeGCPCKMS:
 		return &gcpCKMSSealWiringProvider{cluster: cluster}
-	case "awskms":
+	case portopenbao.SealTypeAWSKMS:
 		return &awsKMSSealWiringProvider{cluster: cluster}
-	case "azurekeyvault":
+	case portopenbao.SealTypeAzureKeyVault:
 		return &azureKeyVaultSealWiringProvider{cluster: cluster}
-	case "kmip":
+	case portopenbao.SealTypeKMIP:
 		return &kmipSealWiringProvider{cluster: cluster}
-	case "ocikms":
+	case portopenbao.SealTypeOCIKMS:
 		return &ociKMSSealWiringProvider{cluster: cluster}
 	case portopenbao.SealTypePKCS11:
 		return &pkcs11SealWiringProvider{cluster: cluster}
@@ -143,9 +143,9 @@ func (p *awsKMSSealWiringProvider) EnvVars() []corev1.EnvVar {
 	}
 
 	return []corev1.EnvVar{
-		envVarFromCredentialsSecret(p.cluster, "AWS_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID"),
-		envVarFromCredentialsSecret(p.cluster, "AWS_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"),
-		envVarFromCredentialsSecret(p.cluster, "AWS_SESSION_TOKEN", "AWS_SESSION_TOKEN"),
+		envVarFromCredentialsSecret(p.cluster, envAWSAccessKeyID, envAWSAccessKeyID),
+		envVarFromCredentialsSecret(p.cluster, envAWSSecretAccessKey, envAWSSecretAccessKey),
+		envVarFromCredentialsSecret(p.cluster, envAWSSessionToken, envAWSSessionToken),
 	}
 }
 
@@ -167,11 +167,11 @@ func (p *azureKeyVaultSealWiringProvider) EnvVars() []corev1.EnvVar {
 	}
 
 	return []corev1.EnvVar{
-		envVarFromCredentialsSecret(p.cluster, "AZURE_TENANT_ID", "AZURE_TENANT_ID"),
-		envVarFromCredentialsSecret(p.cluster, "AZURE_CLIENT_ID", "AZURE_CLIENT_ID"),
-		envVarFromCredentialsSecret(p.cluster, "AZURE_CLIENT_SECRET", "AZURE_CLIENT_SECRET"),
-		envVarFromCredentialsSecret(p.cluster, "AZURE_ENVIRONMENT", "AZURE_ENVIRONMENT"),
-		envVarFromCredentialsSecret(p.cluster, "AZURE_AD_RESOURCE", "AZURE_AD_RESOURCE"),
+		envVarFromCredentialsSecret(p.cluster, envAzureTenantID, envAzureTenantID),
+		envVarFromCredentialsSecret(p.cluster, envAzureClientID, envAzureClientID),
+		envVarFromCredentialsSecret(p.cluster, envAzureClientSecret, envAzureClientSecret),
+		envVarFromCredentialsSecret(p.cluster, envAzureEnvironment, envAzureEnvironment),
+		envVarFromCredentialsSecret(p.cluster, envAzureADResource, envAzureADResource),
 	}
 }
 
@@ -211,8 +211,8 @@ func (p *ociKMSSealWiringProvider) EnvVars() []corev1.EnvVar {
 
 	return []corev1.EnvVar{
 		{
-			Name:  "OCI_CONFIG_FILE",
-			Value: sealCredsVolumeMountPath + "/config",
+			Name:  envOCIConfigFile,
+			Value: sealCredsVolumeMountPath + "/" + secretKeyOCIConfig,
 		},
 	}
 }
@@ -329,10 +329,10 @@ func (p *transitSealWiringProvider) EnvVars() []corev1.EnvVar {
 	// avoiding issues with trailing newlines in mounted Secret files.
 	return []corev1.EnvVar{
 		{
-			Name: "VAULT_TOKEN",
+			Name: envVaultToken,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					Key: "token",
+					Key: secretKeyTransitToken,
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: p.cluster.Spec.Unseal.CredentialsSecretRef.Name,
 					},
@@ -364,8 +364,8 @@ func (p *gcpCKMSSealWiringProvider) EnvVars() []corev1.EnvVar {
 	// /etc/bao/seal-creds/credentials.json and referenced by the environment variable.
 	return []corev1.EnvVar{
 		{
-			Name:  "GOOGLE_APPLICATION_CREDENTIALS",
-			Value: sealCredsVolumeMountPath + "/credentials.json",
+			Name:  envGoogleApplicationCreds,
+			Value: sealCredsVolumeMountPath + "/" + secretKeyGoogleCredentials,
 		},
 	}
 }
