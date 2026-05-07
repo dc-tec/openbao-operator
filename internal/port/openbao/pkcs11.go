@@ -78,21 +78,3 @@ func IsPKCS11SealOwnedEnvVar(name string) bool {
 		return false
 	}
 }
-
-// IsValidEnvVarName applies the portable environment variable name pattern used
-// by Kubernetes and POSIX-style shells.
-func IsValidEnvVarName(name string) bool {
-	if name == "" {
-		return false
-	}
-	for i, r := range name {
-		if r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-			continue
-		}
-		if i > 0 && r >= '0' && r <= '9' {
-			continue
-		}
-		return false
-	}
-	return true
-}

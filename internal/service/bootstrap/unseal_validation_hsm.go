@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/validate/content"
+
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
@@ -136,8 +138,8 @@ func validatePKCS11RuntimeEnvMappings(cfg *openbaov1alpha1.PKCS11SealConfig) err
 }
 
 func validatePKCS11RuntimeEnvName(name string) error {
-	if !portopenbao.IsValidEnvVarName(name) {
-		return fmt.Errorf("environment variable name must match ^[A-Za-z_][A-Za-z0-9_]*$")
+	if errs := content.IsCIdentifier(name); len(errs) > 0 {
+		return fmt.Errorf("environment variable name must match ^[A-Za-z_][A-Za-z0-9_]*$: %s", strings.Join(errs, "; "))
 	}
 	if portopenbao.IsPKCS11SealOwnedEnvVar(name) {
 		return fmt.Errorf("environment variable %q is managed by spec.unseal.pkcs11", name)
