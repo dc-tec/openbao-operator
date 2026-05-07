@@ -10,7 +10,7 @@ import (
 )
 
 func runPreflightChecks() error {
-	if !strings.EqualFold(strings.TrimSpace(os.Getenv(portopenbao.EnvBaoSealType)), "pkcs11") {
+	if !strings.EqualFold(strings.TrimSpace(os.Getenv(portopenbao.EnvBaoSealType)), portopenbao.SealTypePKCS11) {
 		return nil
 	}
 	return validatePKCS11Runtime()
@@ -19,7 +19,12 @@ func runPreflightChecks() error {
 func validatePKCS11Runtime() error {
 	lib := strings.TrimSpace(os.Getenv(portopenbao.EnvBaoHSMLib))
 	if lib == "" {
-		return nil
+		return fmt.Errorf(
+			"%s is required when %s=%s",
+			portopenbao.EnvBaoHSMLib,
+			portopenbao.EnvBaoSealType,
+			portopenbao.SealTypePKCS11,
+		)
 	}
 
 	cleanLib := filepath.Clean(lib)

@@ -178,6 +178,19 @@ Use `spec.unseal.pkcs11.runtime` for vendor runtime settings that would otherwis
 
 The operator manages the OpenBao seal-owned environment variables (`BAO_SEAL_TYPE`, `BAO_HSM_LIB`, `BAO_HSM_PIN`, and related `BAO_HSM_*` values) from `spec.unseal.pkcs11`; do not duplicate those names in `runtime.env` or `runtime.fileEnv`.
 
+### HSM deployment checklist
+
+For PKCS#11-backed production clusters, validate the HSM integration outside the operator before creating the `OpenBaoCluster`:
+
+- Use an OpenBao image with HSM support plus the vendor PKCS#11 module and dependent shared libraries.
+- Pre-create the wrapping key in the HSM. OpenBao expects the key to exist and to allow the configured operation.
+- Choose a mechanism that matches the HSM object type. `AES_GCM` uses a secret key; `RSA_PKCS_OAEP` uses an RSA key pair and may require `rsaOAEPHash`.
+- Store the token PIN and vendor runtime material in `credentialsSecretRef`; avoid putting `pin` directly in GitOps-managed manifests.
+- Use `runtime.libraryPath` when the vendor module depends on sibling shared objects.
+- Use `runtime.env` for vendor settings that are literal values and `runtime.fileEnv` for vendor settings that expect file paths.
+
+The wrapper fails fast when `BAO_SEAL_TYPE=pkcs11` but the configured `BAO_HSM_LIB` is missing or points at a directory. Missing Secret keys are rejected during operator prerequisite validation before the workload reaches an opaque OpenBao startup failure.
+
 <CommandBlock
   language="yaml"
   label="example"

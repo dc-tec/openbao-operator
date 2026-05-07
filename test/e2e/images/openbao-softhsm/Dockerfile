@@ -15,6 +15,7 @@ RUN set -eux; \
     printf 'directories.tokendir = /opt/openbao-softhsm/tokens\nobjectstore.backend = file\nlog.level = ERROR\nslots.removable = false\n' > /opt/openbao-softhsm/softhsm2.conf; \
     SOFTHSM2_CONF=/opt/openbao-softhsm/softhsm2.conf \
       softhsm2-util --init-token --free --label OpenBao --so-pin 1234 --pin 1234; \
+    : "SoftHSM reliably exercises OpenBao's PKCS#11 path through RSA OAEP; AES-GCM can abort in the SoftHSM library on some builds."; \
     SOFTHSM2_CONF=/opt/openbao-softhsm/softhsm2.conf \
       pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so \
         --token-label OpenBao \

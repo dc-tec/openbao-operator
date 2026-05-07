@@ -19,6 +19,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestValidateTransitUnsealPrerequisites(t *testing.T) {
@@ -676,7 +677,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 	t.Run("inline pin passes", func(t *testing.T) {
 		cluster := newMinimalCluster("pkcs11-inline-pin", "default")
 		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-			Type: "pkcs11",
+			Type: portopenbao.SealTypePKCS11,
 			PKCS11: &openbaov1alpha1.PKCS11SealConfig{
 				Lib:      "/usr/lib/softhsm/libsofthsm2.so",
 				Slot:     "0",
@@ -694,7 +695,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 	t.Run("missing pin requires secret key", func(t *testing.T) {
 		cluster := newMinimalCluster("pkcs11-secret-pin", "default")
 		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-			Type: "pkcs11",
+			Type: portopenbao.SealTypePKCS11,
 			PKCS11: &openbaov1alpha1.PKCS11SealConfig{
 				Lib:        "/usr/lib/softhsm/libsofthsm2.so",
 				TokenLabel: "bao-token",
@@ -723,7 +724,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 	t.Run("slot and token label are mutually exclusive", func(t *testing.T) {
 		cluster := newMinimalCluster("pkcs11-slot-and-token-label", "default")
 		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-			Type: "pkcs11",
+			Type: portopenbao.SealTypePKCS11,
 			PKCS11: &openbaov1alpha1.PKCS11SealConfig{
 				Lib:        "/usr/lib/softhsm/libsofthsm2.so",
 				Slot:       "0",
@@ -743,7 +744,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 	t.Run("runtime env mappings require credentials secret keys", func(t *testing.T) {
 		cluster := newMinimalCluster("pkcs11-runtime-env", "default")
 		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-			Type: "pkcs11",
+			Type: portopenbao.SealTypePKCS11,
 			CredentialsSecretRef: &corev1.LocalObjectReference{
 				Name: "pkcs11-creds",
 			},
@@ -790,7 +791,7 @@ func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 	t.Run("runtime env mappings cannot override seal-owned env vars", func(t *testing.T) {
 		cluster := newMinimalCluster("pkcs11-runtime-reserved-env", "default")
 		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-			Type: "pkcs11",
+			Type: portopenbao.SealTypePKCS11,
 			PKCS11: &openbaov1alpha1.PKCS11SealConfig{
 				Lib:        "/usr/lib/softhsm/libsofthsm2.so",
 				TokenLabel: "bao-token",

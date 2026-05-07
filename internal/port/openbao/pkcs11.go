@@ -1,6 +1,11 @@
 package openbao
 
+import openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+
 const (
+	// SealTypePKCS11 is the OpenBao PKCS#11 seal type wire value.
+	SealTypePKCS11 = "pkcs11"
+
 	EnvBaoSealType           = "BAO_SEAL_TYPE"
 	EnvBaoHSMLib             = "BAO_HSM_LIB"
 	EnvBaoHSMSlot            = "BAO_HSM_SLOT"
@@ -13,6 +18,48 @@ const (
 	EnvBaoHSMRSAOAEPHash     = "BAO_HSM_RSA_OAEP_HASH"
 	EnvLDLibraryPath         = "LD_LIBRARY_PATH"
 )
+
+// PKCS11RuntimeMappingKind identifies the source list for a PKCS#11 runtime
+// mapping.
+type PKCS11RuntimeMappingKind string
+
+const (
+	PKCS11RuntimeMappingEnv     PKCS11RuntimeMappingKind = "runtime.env"
+	PKCS11RuntimeMappingFileEnv PKCS11RuntimeMappingKind = "runtime.fileEnv"
+)
+
+// PKCS11RuntimeMapping is a normalized runtime env or file-env mapping from
+// spec.unseal.pkcs11.runtime.
+type PKCS11RuntimeMapping struct {
+	Kind      PKCS11RuntimeMappingKind
+	Name      string
+	SecretKey string
+}
+
+// PKCS11RuntimeMappings returns the PKCS#11 runtime env and file-env mappings
+// in declaration order.
+func PKCS11RuntimeMappings(runtime *openbaov1alpha1.PKCS11RuntimeConfig) []PKCS11RuntimeMapping {
+	if runtime == nil {
+		return nil
+	}
+
+	mappings := make([]PKCS11RuntimeMapping, 0, len(runtime.Env)+len(runtime.FileEnv))
+	for _, env := range runtime.Env {
+		mappings = append(mappings, PKCS11RuntimeMapping{
+			Kind:      PKCS11RuntimeMappingEnv,
+			Name:      env.Name,
+			SecretKey: env.SecretKey,
+		})
+	}
+	for _, env := range runtime.FileEnv {
+		mappings = append(mappings, PKCS11RuntimeMapping{
+			Kind:      PKCS11RuntimeMappingFileEnv,
+			Name:      env.Name,
+			SecretKey: env.SecretKey,
+		})
+	}
+	return mappings
+}
 
 // IsPKCS11SealOwnedEnvVar reports whether name is managed by the operator from
 // spec.unseal.pkcs11 and must not be supplied through runtime env mappings.

@@ -84,7 +84,7 @@ func (m *Manager) validatePKCS11UnsealPrerequisites(ctx context.Context, cluster
 		return nil
 	}
 
-	secret, err := m.credentialsSecret(ctx, cluster, "pkcs11")
+	secret, err := m.credentialsSecret(ctx, cluster, portopenbao.SealTypePKCS11)
 	if err != nil {
 		return providerPrerequisitesError(err)
 	}
@@ -108,7 +108,7 @@ func (m *Manager) validatePKCS11UnsealPrerequisites(ctx context.Context, cluster
 }
 
 func pkcs11RuntimeNeedsCredentialsSecret(runtime *openbaov1alpha1.PKCS11RuntimeConfig) bool {
-	return runtime != nil && (len(runtime.Env) > 0 || len(runtime.FileEnv) > 0)
+	return len(portopenbao.PKCS11RuntimeMappings(runtime)) > 0
 }
 
 func validatePKCS11RuntimeEnvMappings(cfg *openbaov1alpha1.PKCS11SealConfig) error {
@@ -116,31 +116,20 @@ func validatePKCS11RuntimeEnvMappings(cfg *openbaov1alpha1.PKCS11SealConfig) err
 		return nil
 	}
 
-	seen := make(map[string]string, len(cfg.Runtime.Env)+len(cfg.Runtime.FileEnv))
-	for _, env := range cfg.Runtime.Env {
+	mappings := portopenbao.PKCS11RuntimeMappings(cfg.Runtime)
+	seen := make(map[string]string, len(mappings))
+	for _, env := range mappings {
+		fieldPath := fmt.Sprintf("spec.unseal.pkcs11.%s[%s]", env.Kind, env.Name)
 		if err := validatePKCS11RuntimeEnvName(env.Name); err != nil {
-			return fmt.Errorf("spec.unseal.pkcs11.runtime.env[%s] is invalid: %w", env.Name, err)
+			return fmt.Errorf("%s is invalid: %w", fieldPath, err)
 		}
 		if strings.TrimSpace(env.SecretKey) == "" {
-			return fmt.Errorf("spec.unseal.pkcs11.runtime.env[%s].secretKey is required", env.Name)
+			return fmt.Errorf("%s.secretKey is required", fieldPath)
 		}
 		if previous, ok := seen[env.Name]; ok {
-			return fmt.Errorf("spec.unseal.pkcs11.runtime.env[%s] duplicates %s", env.Name, previous)
+			return fmt.Errorf("%s duplicates %s", fieldPath, previous)
 		}
-		seen[env.Name] = "runtime.env"
-	}
-
-	for _, env := range cfg.Runtime.FileEnv {
-		if err := validatePKCS11RuntimeEnvName(env.Name); err != nil {
-			return fmt.Errorf("spec.unseal.pkcs11.runtime.fileEnv[%s] is invalid: %w", env.Name, err)
-		}
-		if strings.TrimSpace(env.SecretKey) == "" {
-			return fmt.Errorf("spec.unseal.pkcs11.runtime.fileEnv[%s].secretKey is required", env.Name)
-		}
-		if previous, ok := seen[env.Name]; ok {
-			return fmt.Errorf("spec.unseal.pkcs11.runtime.fileEnv[%s] duplicates %s", env.Name, previous)
-		}
-		seen[env.Name] = "runtime.fileEnv"
+		seen[env.Name] = string(env.Kind)
 	}
 
 	return nil
@@ -161,11 +150,9 @@ func validatePKCS11RuntimeSecretKeys(secretData map[string][]byte, namespace, se
 		return nil
 	}
 
-	required := make([]string, 0, len(runtime.Env)+len(runtime.FileEnv))
-	for _, env := range runtime.Env {
-		required = append(required, env.SecretKey)
-	}
-	for _, env := range runtime.FileEnv {
+	mappings := portopenbao.PKCS11RuntimeMappings(runtime)
+	required := make([]string, 0, len(mappings))
+	for _, env := range mappings {
 		required = append(required, env.SecretKey)
 	}
 	if len(required) == 0 {

@@ -56,7 +56,7 @@ func newSealWiringProvider(cluster *openbaov1alpha1.OpenBaoCluster) sealWiringPr
 		return &kmipSealWiringProvider{cluster: cluster}
 	case "ocikms":
 		return &ociKMSSealWiringProvider{cluster: cluster}
-	case "pkcs11":
+	case portopenbao.SealTypePKCS11:
 		return &pkcs11SealWiringProvider{cluster: cluster}
 	default:
 		// Preserve current behavior: treat unknown non-static seal types as requiring
@@ -236,7 +236,7 @@ func (p *pkcs11SealWiringProvider) EnvVars() []corev1.EnvVar {
 
 	cfg := p.cluster.Spec.Unseal.PKCS11
 	env := []corev1.EnvVar{
-		{Name: portopenbao.EnvBaoSealType, Value: "pkcs11"},
+		{Name: portopenbao.EnvBaoSealType, Value: portopenbao.SealTypePKCS11},
 		{Name: portopenbao.EnvBaoHSMLib, Value: cfg.Lib},
 	}
 	if strings.TrimSpace(cfg.Slot) != "" {
@@ -288,24 +288,26 @@ func pkcs11RuntimeEnvVars(cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvV
 	}
 
 	secretName := cluster.Spec.Unseal.CredentialsSecretRef.Name
-	runtime := cluster.Spec.Unseal.PKCS11.Runtime
-	env := make([]corev1.EnvVar, 0, len(runtime.Env)+len(runtime.FileEnv))
-	for _, item := range runtime.Env {
-		env = append(env, corev1.EnvVar{
-			Name: item.Name,
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
-					Key:                  item.SecretKey,
+	mappings := portopenbao.PKCS11RuntimeMappings(cluster.Spec.Unseal.PKCS11.Runtime)
+	env := make([]corev1.EnvVar, 0, len(mappings))
+	for _, item := range mappings {
+		switch item.Kind {
+		case portopenbao.PKCS11RuntimeMappingEnv:
+			env = append(env, corev1.EnvVar{
+				Name: item.Name,
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
+						Key:                  item.SecretKey,
+					},
 				},
-			},
-		})
-	}
-	for _, item := range runtime.FileEnv {
-		env = append(env, corev1.EnvVar{
-			Name:  item.Name,
-			Value: path.Join(sealCredsVolumeMountPath, item.SecretKey),
-		})
+			})
+		case portopenbao.PKCS11RuntimeMappingFileEnv:
+			env = append(env, corev1.EnvVar{
+				Name:  item.Name,
+				Value: path.Join(sealCredsVolumeMountPath, item.SecretKey),
+			})
+		}
 	}
 	return env
 }

@@ -10,6 +10,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestSealWiring_StaticDefault_MountsUnseal(t *testing.T) {
@@ -53,7 +54,7 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 		{name: "azurekeyvault", unsealType: "azurekeyvault", expectEnvVar: []string{"AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET", "AZURE_ENVIRONMENT", "AZURE_AD_RESOURCE"}},
 		{name: "kmip", unsealType: "kmip"},
 		{name: "ocikms", unsealType: "ocikms"},
-		{name: "pkcs11", unsealType: "pkcs11", expectEnvVar: []string{"BAO_HSM_PIN"}},
+		{name: "pkcs11", unsealType: portopenbao.SealTypePKCS11, expectEnvVar: []string{"BAO_HSM_PIN"}},
 	}
 
 	for _, tc := range cases {
@@ -65,7 +66,7 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 					Name: "provider-creds",
 				},
 			}
-			if tc.unsealType == "pkcs11" {
+			if tc.unsealType == portopenbao.SealTypePKCS11 {
 				cluster.Spec.Unseal.PKCS11 = &openbaov1alpha1.PKCS11SealConfig{
 					Lib:        "/usr/local/lib/libpkcs11.so",
 					TokenLabel: "OpenBao",
@@ -115,7 +116,7 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 }
 
 func TestSealWiring_ExternalTypes_WithoutCredentials_DoesNotMountSealCredsOrEnv(t *testing.T) {
-	types := []string{"transit", "gcpckms", "awskms", "azurekeyvault", "kmip", "ocikms", "pkcs11"}
+	types := []string{"transit", "gcpckms", "awskms", "azurekeyvault", "kmip", "ocikms", portopenbao.SealTypePKCS11}
 
 	for _, unsealType := range types {
 		t.Run(unsealType, func(t *testing.T) {
@@ -179,7 +180,7 @@ func TestSealWiring_OCIKMSAPIKey_WithCredentials_IncludesOCIConfigEnv(t *testing
 func TestSealWiring_PKCS11RuntimeEnv(t *testing.T) {
 	cluster := newMinimalCluster("seal-pkcs11-runtime", "default")
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-		Type: "pkcs11",
+		Type: portopenbao.SealTypePKCS11,
 		CredentialsSecretRef: &corev1.LocalObjectReference{
 			Name: "pkcs11-creds",
 		},
@@ -203,7 +204,7 @@ func TestSealWiring_PKCS11RuntimeEnv(t *testing.T) {
 	env := buildContainerEnv(cluster)
 
 	for name, want := range map[string]string{
-		"BAO_SEAL_TYPE":       "pkcs11",
+		"BAO_SEAL_TYPE":       portopenbao.SealTypePKCS11,
 		"BAO_HSM_LIB":         "/usr/local/lib/libpkcs11.so",
 		"BAO_HSM_TOKEN_LABEL": "OpenBao",
 		"BAO_HSM_KEY_LABEL":   "bao-root-key-aes",
@@ -234,7 +235,7 @@ func TestSealWiring_PKCS11RuntimeEnv(t *testing.T) {
 func TestSealWiring_PKCS11InlinePINDoesNotInjectHSMPINEnv(t *testing.T) {
 	cluster := newMinimalCluster("seal-pkcs11-inline-pin", "default")
 	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
-		Type: "pkcs11",
+		Type: portopenbao.SealTypePKCS11,
 		CredentialsSecretRef: &corev1.LocalObjectReference{
 			Name: "pkcs11-creds",
 		},

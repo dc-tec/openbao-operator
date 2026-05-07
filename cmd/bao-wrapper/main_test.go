@@ -30,7 +30,7 @@ func TestRunPreflightChecks_PKCS11Library(t *testing.T) {
 			t.Fatalf("failed to close temp library: %v", err)
 		}
 
-		t.Setenv(portopenbao.EnvBaoSealType, "pkcs11")
+		t.Setenv(portopenbao.EnvBaoSealType, portopenbao.SealTypePKCS11)
 		t.Setenv(portopenbao.EnvBaoHSMLib, tmpFile.Name())
 
 		if err := runPreflightChecks(); err != nil {
@@ -38,8 +38,20 @@ func TestRunPreflightChecks_PKCS11Library(t *testing.T) {
 		}
 	})
 
+	t.Run("fails clearly when configured library env is missing", func(t *testing.T) {
+		t.Setenv(portopenbao.EnvBaoSealType, portopenbao.SealTypePKCS11)
+
+		err := runPreflightChecks()
+		if err == nil {
+			t.Fatal("runPreflightChecks() error = nil, want missing library env error")
+		}
+		if !strings.Contains(err.Error(), "BAO_HSM_LIB is required when BAO_SEAL_TYPE=pkcs11") {
+			t.Fatalf("error = %v, want clear missing library env message", err)
+		}
+	})
+
 	t.Run("fails clearly when configured library is missing", func(t *testing.T) {
-		t.Setenv(portopenbao.EnvBaoSealType, "pkcs11")
+		t.Setenv(portopenbao.EnvBaoSealType, portopenbao.SealTypePKCS11)
 		t.Setenv(portopenbao.EnvBaoHSMLib, "/missing/pkcs11.so")
 
 		err := runPreflightChecks()
