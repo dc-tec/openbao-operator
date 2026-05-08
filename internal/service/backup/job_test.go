@@ -872,6 +872,9 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 	if cluster.Status.Backup.LastFailureMessage != "" {
 		t.Errorf("processBackupJobResult() LastFailureMessage = %v, want empty", cluster.Status.Backup.LastFailureMessage)
 	}
+	if cluster.Status.Backup.LastFailureTime != nil {
+		t.Errorf("processBackupJobResult() LastFailureTime = %#v, want nil", cluster.Status.Backup.LastFailureTime)
+	}
 }
 
 func TestProcessBackupJobResult_JobFailed(t *testing.T) {
@@ -917,6 +920,9 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 	}
 	if cluster.Status.Backup.LastFailureMessage == "" {
 		t.Fatal("processBackupJobResult() should set LastFailureMessage")
+	}
+	if cluster.Status.Backup.LastFailureTime == nil {
+		t.Fatal("processBackupJobResult() should set LastFailureTime")
 	}
 	if !strings.Contains(cluster.Status.Backup.LastFailureMessage, "kubectl logs job/") {
 		t.Fatalf("LastFailureMessage = %q, want log guidance", cluster.Status.Backup.LastFailureMessage)

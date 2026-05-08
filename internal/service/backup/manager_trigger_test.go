@@ -24,12 +24,12 @@ func TestHandleManualTrigger(t *testing.T) {
 		cluster.Annotations = map[string]string{constants.AnnotationTriggerBackup: "now"}
 
 		manager := newBackupManager(newTestClient(t, cluster))
-		manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
+		triggerToken, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
 		if err != nil {
 			t.Fatalf("handleManualTrigger() error = %v", err)
 		}
-		if !manual {
-			t.Fatal("manual = false, want true")
+		if triggerToken != "now" {
+			t.Fatalf("triggerToken = %q, want now", triggerToken)
 		}
 		if !scheduledTime.Equal(now) {
 			t.Fatalf("scheduledTime = %v, want %v", scheduledTime, now)
@@ -44,12 +44,12 @@ func TestHandleManualTrigger(t *testing.T) {
 		cluster.Annotations = map[string]string{constants.AnnotationTriggerBackup: ""}
 
 		manager := newBackupManager(newTestClient(t, cluster))
-		manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
+		triggerToken, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
 		if err != nil {
 			t.Fatalf("handleManualTrigger() error = %v", err)
 		}
-		if manual {
-			t.Fatal("manual = true, want false")
+		if triggerToken != "" {
+			t.Fatalf("triggerToken = %q, want empty", triggerToken)
 		}
 		if !scheduledTime.IsZero() {
 			t.Fatalf("scheduledTime = %v, want zero", scheduledTime)
@@ -71,12 +71,12 @@ func TestHandleManualTrigger(t *testing.T) {
 			Build()
 
 		manager := newBackupManager(k8sClient)
-		manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
+		triggerToken, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
 		if err != nil {
 			t.Fatalf("handleManualTrigger() error = %v", err)
 		}
-		if manual {
-			t.Fatal("manual = true, want false")
+		if triggerToken != "" {
+			t.Fatalf("triggerToken = %q, want empty", triggerToken)
 		}
 		if !scheduledTime.IsZero() {
 			t.Fatalf("scheduledTime = %v, want zero", scheduledTime)

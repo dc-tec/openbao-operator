@@ -25,8 +25,9 @@ func (m *Manager) executeAndProcessBackup(
 	metrics *Metrics,
 	now time.Time,
 	scheduledTime time.Time,
-	manualTrigger bool,
+	manualTriggerToken string,
 ) (recon.Result, error) {
+	manualTrigger := manualTriggerToken != ""
 	nextScheduled := schedule.Next(scheduledTime)
 	if !nextScheduled.After(now) {
 		nextScheduled = schedule.Next(now)
@@ -66,7 +67,7 @@ func (m *Manager) executeAndProcessBackup(
 		m.clearTriggerAnnotation(ctx, logger, cluster, constants.AnnotationTriggerBackup)
 	}
 
-	if err := m.recordBackupAttempt(ctx, cluster, now, scheduledTime, nextScheduled); err != nil {
+	if err := m.recordBackupAttempt(ctx, cluster, now, scheduledTime, nextScheduled, manualTriggerToken); err != nil {
 		logger.Error(err, "Failed to record backup attempt")
 	}
 

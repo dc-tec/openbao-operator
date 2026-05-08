@@ -59,7 +59,8 @@ func TestHandleManualTrigger_EmitsAcceptedEvent(t *testing.T) {
 
 	now := time.Unix(1700000000, 0).UTC()
 	cluster := newTestClusterWithBackup("manual-events", "backup-ns")
-	cluster.Annotations = map[string]string{"openbao.org/trigger-backup": "now"}
+	const manualTriggerToken = "now"
+	cluster.Annotations = map[string]string{"openbao.org/trigger-backup": manualTriggerToken}
 
 	recorder := events.NewFakeRecorder(10)
 	k8sClient := newTestClient(t, cluster)
@@ -75,12 +76,12 @@ func TestHandleManualTrigger_EmitsAcceptedEvent(t *testing.T) {
 		k8sClient,
 	)
 
-	manual, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
+	triggerToken, scheduledTime, err := manager.handleManualTrigger(context.Background(), logr.Discard(), cluster, now)
 	if err != nil {
 		t.Fatalf("handleManualTrigger() error = %v", err)
 	}
-	if !manual {
-		t.Fatal("manual = false, want true")
+	if triggerToken != manualTriggerToken {
+		t.Fatalf("triggerToken = %q, want %q", triggerToken, manualTriggerToken)
 	}
 	if !scheduledTime.Equal(now) {
 		t.Fatalf("scheduledTime = %v, want %v", scheduledTime, now)

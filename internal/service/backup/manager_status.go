@@ -22,7 +22,14 @@ func (m *Manager) patchStatusSSA(ctx context.Context, cluster *openbaov1alpha1.O
 	}, false)
 }
 
-func (m *Manager) recordBackupAttempt(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, now time.Time, scheduledTime time.Time, nextScheduled time.Time) error {
+func (m *Manager) recordBackupAttempt(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	now time.Time,
+	scheduledTime time.Time,
+	nextScheduled time.Time,
+	manualTriggerToken string,
+) error {
 	if cluster.Status.Backup == nil {
 		cluster.Status.Backup = &openbaov1alpha1.BackupStatus{}
 	}
@@ -32,6 +39,7 @@ func (m *Manager) recordBackupAttempt(ctx context.Context, cluster *openbaov1alp
 
 	scheduledMeta := metav1.NewTime(scheduledTime)
 	cluster.Status.Backup.LastAttemptScheduledTime = &scheduledMeta
+	cluster.Status.Backup.LastHandledManualTrigger = manualTriggerToken
 
 	nextScheduledMeta := metav1.NewTime(nextScheduled)
 	cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta

@@ -53,10 +53,11 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		cluster.Status.Backup.NextScheduledBackup = &next
 	}
 
-	manualTrigger, scheduledTime, err := m.handleManualTrigger(ctx, logger, cluster, now)
+	manualTriggerToken, scheduledTime, err := m.handleManualTrigger(ctx, logger, cluster, now)
 	if err != nil {
 		return recon.Result{}, err
 	}
+	manualTrigger := manualTriggerToken != ""
 	if !manualTrigger {
 		scheduledTime = cluster.Status.Backup.NextScheduledBackup.Time
 	}
@@ -92,7 +93,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return result, err
 	}
 
-	return m.executeAndProcessBackup(ctx, logger, cluster, schedule, metrics, now, scheduledTime, manualTrigger)
+	return m.executeAndProcessBackup(ctx, logger, cluster, schedule, metrics, now, scheduledTime, manualTriggerToken)
 }
 
 func (m *Manager) ensureBackupStatus(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {

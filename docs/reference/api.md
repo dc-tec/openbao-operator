@@ -292,6 +292,7 @@ _Appears in:_
 | `lastBackupTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastBackupTime is the timestamp of the last successful backup. |  | Optional: \{\} <br /> |
 | `lastAttemptTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastAttemptTime is the timestamp of the last backup attempt, regardless of outcome.<br />This is used to avoid retry loops when a scheduled backup fails. |  | Optional: \{\} <br /> |
 | `lastAttemptScheduledTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastAttemptScheduledTime is the scheduled time of the last backup attempt.<br />It is derived from the cron schedule and used to ensure at-most-once execution<br />per scheduled window. |  | Optional: \{\} <br /> |
+| `lastHandledManualTrigger` _string_ | LastHandledManualTrigger is the last observed manual trigger token that<br />has progressed into an actual backup attempt. |  | Optional: \{\} <br /> |
 | `lastBackupSize` _integer_ | LastBackupSize is the size in bytes of the last successful backup. |  | Optional: \{\} <br /> |
 | `lastBackupDuration` _string_ | LastBackupDuration is how long the last backup took (e.g., "45s"). |  | Optional: \{\} <br /> |
 | `lastBackupName` _string_ | LastBackupName is the object key/path of the last successful backup. |  | Optional: \{\} <br /> |
@@ -299,6 +300,7 @@ _Appears in:_
 | `consecutiveFailures` _integer_ | ConsecutiveFailures is the number of consecutive backup failures. |  | Optional: \{\} <br /> |
 | `lastFailureReason` _string_ | LastFailureReason is the low-cardinality reason code for the last backup failure (if applicable). |  | Optional: \{\} <br /> |
 | `lastFailureMessage` _string_ | LastFailureMessage is the detailed message for the last backup failure (if applicable). |  | Optional: \{\} <br /> |
+| `lastFailureTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastFailureTime is when the last backup failure was recorded. |  | Optional: \{\} <br /> |
 
 
 #### BackupTarget

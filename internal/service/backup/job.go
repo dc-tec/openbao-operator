@@ -90,6 +90,8 @@ func setBackupFailure(status *openbaov1alpha1.BackupStatus, reason, message stri
 	}
 	status.LastFailureReason = strings.TrimSpace(reason)
 	status.LastFailureMessage = strings.TrimSpace(message)
+	now := metav1.Now()
+	status.LastFailureTime = &now
 }
 
 func clearBackupFailure(status *openbaov1alpha1.BackupStatus) {
@@ -98,6 +100,7 @@ func clearBackupFailure(status *openbaov1alpha1.BackupStatus) {
 	}
 	status.LastFailureReason = ""
 	status.LastFailureMessage = ""
+	status.LastFailureTime = nil
 }
 
 // ensureBackupJob creates or updates a Kubernetes Job for executing the backup.

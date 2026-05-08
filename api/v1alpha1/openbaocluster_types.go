@@ -2190,6 +2190,10 @@ type BackupStatus struct {
 	// per scheduled window.
 	// +optional
 	LastAttemptScheduledTime *metav1.Time `json:"lastAttemptScheduledTime,omitempty"`
+	// LastHandledManualTrigger is the last observed manual trigger token that
+	// has progressed into an actual backup attempt.
+	// +optional
+	LastHandledManualTrigger string `json:"lastHandledManualTrigger,omitempty"`
 	// LastBackupSize is the size in bytes of the last successful backup.
 	// +optional
 	LastBackupSize int64 `json:"lastBackupSize,omitempty"`
@@ -2211,6 +2215,9 @@ type BackupStatus struct {
 	// LastFailureMessage is the detailed message for the last backup failure (if applicable).
 	// +optional
 	LastFailureMessage string `json:"lastFailureMessage,omitempty"`
+	// LastFailureTime is when the last backup failure was recorded.
+	// +optional
+	LastFailureTime *metav1.Time `json:"lastFailureTime,omitempty"`
 }
 
 // ReadReplicaStorageStatus captures observed storage state for the read-replica
