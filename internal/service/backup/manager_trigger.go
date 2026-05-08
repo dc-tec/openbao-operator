@@ -14,17 +14,17 @@ import (
 )
 
 // handleManualTrigger checks for and handles manual backup trigger annotation.
-// Returns (manualTrigger, scheduledTime, error).
+// Returns (manualTriggerToken, scheduledTime, error).
 func (m *Manager) handleManualTrigger(
 	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	now time.Time,
-) (bool, time.Time, error) {
+) (string, time.Time, error) {
 	triggerAnnotation := constants.AnnotationTriggerBackup
 	val, ok := cluster.Annotations[triggerAnnotation]
 	if !ok || val == "" {
-		return false, time.Time{}, nil
+		return "", time.Time{}, nil
 	}
 
 	logger.Info("Manual backup trigger detected", "annotation", val)
@@ -37,7 +37,7 @@ func (m *Manager) handleManualTrigger(
 	// Check if there's already a backup job in progress.
 	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
 	if err != nil {
-		return false, time.Time{}, fmt.Errorf("failed to check for active backup job: %w", err)
+		return "", time.Time{}, fmt.Errorf("failed to check for active backup job: %w", err)
 	}
 	if hasActiveJob {
 		logger.Info("Manual backup triggered but job already in progress, skipping duplicate")
@@ -48,12 +48,12 @@ func (m *Manager) handleManualTrigger(
 		})
 		m.emitNormalEvent(cluster, ReasonBackupSkipped, "Skipping manual backup because a backup Job is already in progress")
 		m.clearTriggerAnnotation(ctx, logger, cluster, triggerAnnotation)
-		return false, time.Time{}, nil
+		return "", time.Time{}, nil
 	}
 
 	m.emitNormalEvent(cluster, ReasonBackupManualTriggerAccepted, "Accepted manual backup trigger %q", val)
 
-	return true, now, nil
+	return val, now, nil
 }
 
 // clearTriggerAnnotation removes the manual trigger annotation from the cluster.

@@ -46,7 +46,7 @@ func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
 	scheduled := now.Add(5 * time.Minute)
 	nextScheduled := scheduled.Add(24 * time.Hour)
 
-	if err := manager.recordBackupAttempt(context.Background(), cluster, now, scheduled, nextScheduled); err != nil {
+	if err := manager.recordBackupAttempt(context.Background(), cluster, now, scheduled, nextScheduled, "manual-1"); err != nil {
 		t.Fatalf("recordBackupAttempt() error = %v", err)
 	}
 	if cluster.Status.Backup == nil {
@@ -58,6 +58,9 @@ func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
 	if cluster.Status.Backup.LastAttemptScheduledTime == nil || !cluster.Status.Backup.LastAttemptScheduledTime.Time.Equal(scheduled) {
 		t.Fatalf("LastAttemptScheduledTime = %#v, want %v", cluster.Status.Backup.LastAttemptScheduledTime, scheduled)
 	}
+	if cluster.Status.Backup.LastHandledManualTrigger != "manual-1" {
+		t.Fatalf("LastHandledManualTrigger = %q, want manual-1", cluster.Status.Backup.LastHandledManualTrigger)
+	}
 	if cluster.Status.Backup.NextScheduledBackup == nil || !cluster.Status.Backup.NextScheduledBackup.Time.Equal(nextScheduled) {
 		t.Fatalf("NextScheduledBackup = %#v, want %v", cluster.Status.Backup.NextScheduledBackup, nextScheduled)
 	}
@@ -68,6 +71,9 @@ func TestRecordBackupAttemptPersistsStatus(t *testing.T) {
 	}
 	if updated.Status.Backup == nil || updated.Status.Backup.LastAttemptTime == nil || !updated.Status.Backup.LastAttemptTime.Time.Equal(now) {
 		t.Fatalf("persisted LastAttemptTime = %#v, want %v", updated.Status.Backup, now)
+	}
+	if updated.Status.Backup.LastHandledManualTrigger != "manual-1" {
+		t.Fatalf("persisted LastHandledManualTrigger = %q, want manual-1", updated.Status.Backup.LastHandledManualTrigger)
 	}
 	if updated.Status.UpgradeRequests == nil || updated.Status.UpgradeRequests.LastHandledRetry != "persist-me" {
 		t.Fatalf("persisted UpgradeRequests = %#v, want sibling adminops field preserved", updated.Status.UpgradeRequests)
