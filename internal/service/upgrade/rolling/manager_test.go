@@ -454,6 +454,16 @@ func TestValidateUpgrade_ResumeHealthBlocksQuorumLoss(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
+	if !operatorerrors.IsTransientClusterState(err) {
+		t.Fatalf("expected transient cluster state error, got %v", err)
+	}
+	reason, ok := operatorerrors.Reason(err)
+	if !ok {
+		t.Fatalf("expected reasoned error, got %v", err)
+	}
+	if reason != upgrade.ReasonClusterNotReady {
+		t.Fatalf("reason=%q, want %q", reason, upgrade.ReasonClusterNotReady)
+	}
 	if !strings.Contains(err.Error(), "quorum-ready replicas") {
 		t.Fatalf("validateUpgrade() error = %v, want quorum-ready replicas failure", err)
 	}
@@ -641,6 +651,16 @@ func TestValidateUpgrade_ResumeHealthBlocksNonTargetUnavailableReplica(t *testin
 	err := mgr.validateUpgrade(context.Background(), testLogger(), cluster)
 	if err == nil {
 		t.Fatal("expected validation error")
+	}
+	if !operatorerrors.IsTransientClusterState(err) {
+		t.Fatalf("expected transient cluster state error, got %v", err)
+	}
+	reason, ok := operatorerrors.Reason(err)
+	if !ok {
+		t.Fatalf("expected reasoned error, got %v", err)
+	}
+	if reason != upgrade.ReasonPodNotReady {
+		t.Fatalf("reason=%q, want %q", reason, upgrade.ReasonPodNotReady)
 	}
 	if !strings.Contains(err.Error(), "non-target pod test-cluster-0 is not ready") {
 		t.Fatalf("validateUpgrade() error = %v, want non-target readiness failure", err)

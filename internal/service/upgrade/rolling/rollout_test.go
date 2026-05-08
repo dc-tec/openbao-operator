@@ -371,6 +371,56 @@ func TestStepDownLeader_SkipsJobWhenTargetPodIsNotLeader(t *testing.T) {
 	}
 }
 
+func TestEnsureTargetPodLeadershipTransferred_SkipsSingleReplicaStepDown(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = batchv1.AddToScheme(scheme)
+	_ = openbaov1alpha1.AddToScheme(scheme)
+
+	ns := testNamespace
+	name := "c1"
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 1,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Upgrade: &openbaov1alpha1.UpgradeProgress{
+				TargetVersion: "2.5.0",
+				FromVersion:   "2.4.4",
+			},
+		},
+	}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	mgr := newManagerWithClientFactory(c, scheme, backup.NewUpgradeStrategyRuntime(c, scheme), func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+		t.Fatalf("client factory should not be called for single-replica step-down skip")
+		return nil, nil
+	}, nil)
+
+	ok, err := mgr.ensureTargetPodLeadershipTransferred(
+		context.Background(),
+		testr.New(t),
+		cluster,
+		rolloutTargetPod{CurrentPartition: 1, NextPartition: 0, Ordinal: 0, Name: name + "-0"},
+		upgrade.NewMetrics(ns, name),
+	)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected leadership transfer to be skipped")
+	}
+
+	jobs := &batchv1.JobList{}
+	if err := c.List(context.Background(), jobs, client.InNamespace(ns)); err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("jobs = %d, want 0", len(jobs.Items))
+	}
+}
+
 func TestPerformPodByPodUpgrade_ResumesWhenTargetAlreadyRolledOut(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = appsv1.AddToScheme(scheme)

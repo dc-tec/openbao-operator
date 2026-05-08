@@ -137,22 +137,24 @@ func ensureResumeReadyReplicaQuorum(cluster *openbaov1alpha1.OpenBaoCluster, tar
 	if int(readyReplicas) >= quorumRequired {
 		return nil
 	}
-	if err := markResumeUpgradeTimeout(cluster, targetPodName); err != nil {
-		return err
-	}
-	return fmt.Errorf("rolling upgrade cannot continue without quorum-ready replicas (%d/%d ready, need %d)",
+	msg := fmt.Sprintf("rolling upgrade cannot continue without quorum-ready replicas (%d/%d ready, need %d)",
 		readyReplicas, cluster.Spec.Replicas, quorumRequired)
+	if err := markResumeUpgradeTimeout(cluster, targetPodName); err != nil {
+		return fmt.Errorf("%s: %w", msg, err)
+	}
+	return transientClusterStatef(upgrade.ReasonClusterNotReady, "%s", msg)
 }
 
 func ensureResumePodQuorum(cluster *openbaov1alpha1.OpenBaoCluster, targetPodName string, podCount int, quorumRequired int) error {
 	if podCount >= quorumRequired {
 		return nil
 	}
-	if err := markResumeUpgradeTimeout(cluster, targetPodName); err != nil {
-		return err
-	}
-	return fmt.Errorf("rolling upgrade cannot continue with too few cluster pods (%d/%d, need at least %d)",
+	msg := fmt.Sprintf("rolling upgrade cannot continue with too few cluster pods (%d/%d, need at least %d)",
 		podCount, cluster.Spec.Replicas, quorumRequired)
+	if err := markResumeUpgradeTimeout(cluster, targetPodName); err != nil {
+		return fmt.Errorf("%s: %w", msg, err)
+	}
+	return transientClusterStatef(upgrade.ReasonClusterNotReady, "%s", msg)
 }
 
 func (m *Manager) requireHealthyLeaderQuorum(
@@ -251,7 +253,7 @@ func resumePodReadyBlocker(cluster *openbaov1alpha1.OpenBaoCluster, podName stri
 	if timeoutErr := markResumeUpgradeTimeout(cluster, podName); timeoutErr != nil {
 		return fmt.Errorf("%v: %w", err, timeoutErr)
 	}
-	return err
+	return transientClusterState(upgrade.ReasonPodNotReady, err)
 }
 
 func resumePodHealthBlocker(cluster *openbaov1alpha1.OpenBaoCluster, podName string, format string, args ...any) error {
@@ -259,14 +261,18 @@ func resumePodHealthBlocker(cluster *openbaov1alpha1.OpenBaoCluster, podName str
 	if timeoutErr := failUpgradeIfStartedTimeout(cluster, podHealthTimeout(podName)); timeoutErr != nil {
 		return fmt.Errorf("%v: %w", err, timeoutErr)
 	}
-	return err
+	return transientClusterState(upgrade.ReasonHealthCheckFailed, err)
+}
+
+func transientClusterState(reason string, err error) error {
+	return operatorerrors.WithReason(
+		reason,
+		operatorerrors.WrapTransientClusterState(err),
+	)
 }
 
 func transientClusterStatef(reason string, format string, args ...any) error {
-	return operatorerrors.WithReason(
-		reason,
-		operatorerrors.WrapTransientClusterState(fmt.Errorf(format, args...)),
-	)
+	return transientClusterState(reason, fmt.Errorf(format, args...))
 }
 
 // checkPodHealth queries each pod's health status and returns counts.
