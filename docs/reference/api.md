@@ -687,8 +687,48 @@ _Appears in:_
 | `className` _string_ | ClassName is an optional IngressClassName (for example, "nginx", "traefik"). |  | Optional: \{\} <br /> |
 | `host` _string_ | Host is the primary host for external access, for example "bao.example.com". |  | MinLength: 1 <br /> |
 | `path` _string_ | Path is the HTTP path to route to OpenBao, defaulting to "/". |  | Optional: \{\} <br /> |
+| `pathType` _[IngressPathType](#ingresspathtype)_ | PathType identifies how the ingress controller should interpret Path. | Prefix | Enum: [Prefix Exact ImplementationSpecific] <br />Optional: \{\} <br /> |
 | `tlsSecretName` _string_ | TLSSecretName is an optional TLS Secret name; when empty the cluster TLS Secret is used. |  | Optional: \{\} <br /> |
 | `annotations` _object (keys:string, values:string)_ | Annotations are additional annotations to apply to the Ingress. |  | Optional: \{\} <br /> |
+| `readinessMode` _[IngressReadinessMode](#ingressreadinessmode)_ | ReadinessMode identifies when the operator should consider ingress<br />integration ready for endpoint publication. | LoadBalancerPublished | Enum: [Created LoadBalancerPublished] <br />Optional: \{\} <br /> |
+
+
+#### IngressPathType
+
+_Underlying type:_ _string_
+
+IngressPathType identifies how a Kubernetes Ingress path should match requests.
+
+_Validation:_
+- Enum: [Prefix Exact ImplementationSpecific]
+
+_Appears in:_
+- [IngressConfig](#ingressconfig)
+
+| Field | Description |
+| --- | --- |
+| `Prefix` | IngressPathTypePrefix uses prefix path matching.<br /> |
+| `Exact` | IngressPathTypeExact uses exact path matching.<br /> |
+| `ImplementationSpecific` | IngressPathTypeImplementationSpecific defers path matching to the controller.<br /> |
+
+
+#### IngressReadinessMode
+
+_Underlying type:_ _string_
+
+IngressReadinessMode identifies how the operator decides whether ingress
+integration is ready for endpoint publication.
+
+_Validation:_
+- Enum: [Created LoadBalancerPublished]
+
+_Appears in:_
+- [IngressConfig](#ingressconfig)
+
+| Field | Description |
+| --- | --- |
+| `Created` | IngressReadinessModeCreated considers ingress integration ready once the<br />managed Ingress object exists.<br /> |
+| `LoadBalancerPublished` | IngressReadinessModeLoadBalancerPublished considers ingress integration<br />ready only after the managed Ingress reports a published load balancer<br />address in status.<br /> |
 
 
 #### InitContainerConfig

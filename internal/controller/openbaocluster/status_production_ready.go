@@ -104,6 +104,16 @@ func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionR
 			return status, reason, message
 		}
 	}
+	if cluster.Spec.Ingress != nil && cluster.Spec.Ingress.Enabled {
+		if status, reason, message, blocked := requireConditionNotFalse(
+			cluster,
+			openbaov1alpha1.ConditionIngressIntegrationReady,
+			"Ingress integration readiness has not been evaluated",
+			"Ingress integration prerequisites are not ready",
+		); blocked {
+			return status, reason, message
+		}
+	}
 
 	selfInitEnabled := cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled
 	if !selfInitEnabled {

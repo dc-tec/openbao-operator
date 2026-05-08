@@ -48,6 +48,7 @@ const (
 	ReasonACMEIntegrationReady                   = constants.ReasonACMEIntegrationReady
 	ReasonACMECacheReady                         = "ACMECacheReady"
 	ReasonGatewayIntegrationReady                = constants.ReasonGatewayIntegrationReady
+	ReasonIngressIntegrationReady                = constants.ReasonIngressIntegrationReady
 	ReasonAPIServerNetworkReady                  = constants.ReasonAPIServerNetworkReady
 	ReasonAPIServerEndpointIPsRecommended        = constants.ReasonAPIServerEndpointIPsRecommended
 	ReasonGatewayReferenceMissing                = constants.ReasonGatewayReferenceMissing
@@ -60,6 +61,10 @@ const (
 	ReasonGatewayNotProgrammed                   = constants.ReasonGatewayNotProgrammed
 	ReasonGatewayProgrammingPending              = constants.ReasonGatewayProgrammingPending
 	ReasonGatewayListenerIncompatible            = constants.ReasonGatewayListenerIncompatible
+	ReasonIngressClassMissing                    = constants.ReasonIngressClassMissing
+	ReasonIngressCapabilitiesUnknown             = constants.ReasonIngressCapabilitiesUnknown
+	ReasonIngressObjectPending                   = constants.ReasonIngressObjectPending
+	ReasonIngressLoadBalancerPending             = constants.ReasonIngressLoadBalancerPending
 	ReasonACMECacheNotConfigured                 = "ACMECacheNotConfigured"
 	ReasonACMECacheMissing                       = "ACMECacheMissing"
 	ReasonACMECachePending                       = "ACMECachePending"

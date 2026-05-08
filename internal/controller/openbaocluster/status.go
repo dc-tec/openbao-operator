@@ -34,6 +34,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	r.setACMEIntegrationReadyCondition(ctx, cluster)
 	r.setACMECacheReadyCondition(ctx, cluster)
 	r.setGatewayIntegrationReadyCondition(ctx, cluster)
+	r.setIngressIntegrationReadyCondition(ctx, cluster)
 	r.setBackupConfigurationReadyCondition(ctx, cluster)
 	r.setCloudUnsealIdentityReadyCondition(ctx, cluster)
 

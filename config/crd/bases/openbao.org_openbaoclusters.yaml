@@ -856,6 +856,24 @@ spec:
                     description: Path is the HTTP path to route to OpenBao, defaulting
                       to "/".
                     type: string
+                  pathType:
+                    default: Prefix
+                    description: PathType identifies how the ingress controller should
+                      interpret Path.
+                    enum:
+                    - Prefix
+                    - Exact
+                    - ImplementationSpecific
+                    type: string
+                  readinessMode:
+                    default: LoadBalancerPublished
+                    description: |-
+                      ReadinessMode identifies when the operator should consider ingress
+                      integration ready for endpoint publication.
+                    enum:
+                    - Created
+                    - LoadBalancerPublished
+                    type: string
                   tlsSecretName:
                     description: TLSSecretName is an optional TLS Secret name; when
                       empty the cluster TLS Secret is used.

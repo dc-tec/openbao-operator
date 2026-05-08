@@ -11,39 +11,31 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
-func TestSetACMEIntegrationReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(t *testing.T) {
-	t.Parallel()
+type evaluatedConditionCase struct {
+	name   string
+	status metav1.ConditionStatus
+	reason string
+}
 
-	tests := []struct {
-		name   string
-		status metav1.ConditionStatus
-		reason string
-	}{
-		{name: "ready", status: metav1.ConditionTrue, reason: ReasonACMEIntegrationReady},
-		{name: "gateway api missing", status: metav1.ConditionFalse, reason: ReasonGatewayAPIMissing},
-		{name: "gateway passthrough missing", status: metav1.ConditionFalse, reason: ReasonACMEGatewayNotConfiguredForPassthrough},
-		{name: "domain not resolvable", status: metav1.ConditionFalse, reason: ReasonACMEDomainNotResolvable},
-		{name: "prerequisites missing", status: metav1.ConditionFalse, reason: ReasonPrerequisitesMissing},
-		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
-		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
-		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
-	}
+func runEvaluatedConditionContractTest(
+	t *testing.T,
+	conditionType openbaov1alpha1.ConditionType,
+	cases []evaluatedConditionCase,
+	apply func(*openbaov1alpha1.OpenBaoCluster, metav1.ConditionStatus, string),
+) {
+	t.Helper()
 
-	for _, tt := range tests {
+	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			cluster := newOpenBaoClusterStatusTestObject()
 			cluster.Generation = 17
 
-			setACMEIntegrationReadyEvaluatedCondition(cluster, appopenbaocluster.ACMEIntegrationResult{
-				Status:  tt.status,
-				Reason:  tt.reason,
-				Message: "contract message",
-			})
+			apply(cluster, tt.status, tt.reason)
 
 			assertClusterCondition(
 				t,
 				cluster,
-				openbaov1alpha1.ConditionACMEIntegrationReady,
+				conditionType,
 				true,
 				tt.status,
 				tt.reason,
@@ -98,6 +90,66 @@ func TestSetGatewayIntegrationReadyEvaluatedCondition_AllowsKnownReasonStatusPai
 				tt.reason,
 				"contract message",
 			)
+		})
+	}
+}
+
+func TestSetExternalIntegrationReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		conditionType openbaov1alpha1.ConditionType
+		cases         []evaluatedConditionCase
+		apply         func(*openbaov1alpha1.OpenBaoCluster, metav1.ConditionStatus, string)
+	}{
+		{
+			name:          "acme",
+			conditionType: openbaov1alpha1.ConditionACMEIntegrationReady,
+			cases: []evaluatedConditionCase{
+				{name: "ready", status: metav1.ConditionTrue, reason: ReasonACMEIntegrationReady},
+				{name: "gateway api missing", status: metav1.ConditionFalse, reason: ReasonGatewayAPIMissing},
+				{name: "gateway passthrough missing", status: metav1.ConditionFalse, reason: ReasonACMEGatewayNotConfiguredForPassthrough},
+				{name: "domain not resolvable", status: metav1.ConditionFalse, reason: ReasonACMEDomainNotResolvable},
+				{name: "prerequisites missing", status: metav1.ConditionFalse, reason: ReasonPrerequisitesMissing},
+				{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+				{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
+				{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
+			},
+			apply: func(cluster *openbaov1alpha1.OpenBaoCluster, status metav1.ConditionStatus, reason string) {
+				setACMEIntegrationReadyEvaluatedCondition(cluster, appopenbaocluster.ACMEIntegrationResult{
+					Status:  status,
+					Reason:  reason,
+					Message: "contract message",
+				})
+			},
+		},
+		{
+			name:          "ingress",
+			conditionType: openbaov1alpha1.ConditionIngressIntegrationReady,
+			cases: []evaluatedConditionCase{
+				{name: "ready", status: metav1.ConditionTrue, reason: ReasonIngressIntegrationReady},
+				{name: "class missing", status: metav1.ConditionFalse, reason: ReasonIngressClassMissing},
+				{name: "capabilities unknown", status: metav1.ConditionUnknown, reason: ReasonIngressCapabilitiesUnknown},
+				{name: "object pending", status: metav1.ConditionUnknown, reason: ReasonIngressObjectPending},
+				{name: "load balancer pending", status: metav1.ConditionUnknown, reason: ReasonIngressLoadBalancerPending},
+				{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+				{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
+				{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
+			},
+			apply: func(cluster *openbaov1alpha1.OpenBaoCluster, status metav1.ConditionStatus, reason string) {
+				setIngressIntegrationReadyEvaluatedCondition(cluster, appopenbaocluster.IngressIntegrationResult{
+					Status:  status,
+					Reason:  reason,
+					Message: "contract message",
+				})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runEvaluatedConditionContractTest(t, tt.conditionType, tt.cases, tt.apply)
 		})
 	}
 }

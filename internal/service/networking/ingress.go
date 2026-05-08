@@ -62,6 +62,12 @@ func buildIngress(cluster *openbaov1alpha1.OpenBaoCluster) *networkingv1.Ingress
 	}
 
 	pathType := networkingv1.PathTypePrefix
+	switch ing.PathType {
+	case openbaov1alpha1.IngressPathTypeExact:
+		pathType = networkingv1.PathTypeExact
+	case openbaov1alpha1.IngressPathTypeImplementationSpecific:
+		pathType = networkingv1.PathTypeImplementationSpecific
+	}
 	backendServiceName := externalServiceName(cluster)
 
 	rule := networkingv1.IngressRule{
