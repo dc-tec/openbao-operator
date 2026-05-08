@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storageenv"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/workloadidentity"
@@ -43,7 +44,17 @@ func getRestoreExecutorImage(restore *openbaov1alpha1.OpenBaoRestore, cluster *o
 	if cluster.Spec.Backup != nil && cluster.Spec.Backup.Image != "" {
 		return cluster.Spec.Backup.Image, nil
 	}
-	return "", fmt.Errorf("no restore image specified in restore or cluster backup config")
+	image, err := constants.DefaultBackupImage()
+	if err != nil {
+		return "", operatorerrors.WrapPermanentConfig(operatorerrors.WithReason(
+			constants.ReasonHelperImageConfigurationInvalid,
+			fmt.Errorf(
+				"default restore executor image is unavailable; set spec.image on the OpenBaoRestore, set spec.backup.image on the OpenBaoCluster, or configure OPERATOR_VERSION in the operator Deployment: %w",
+				err,
+			),
+		))
+	}
+	return image, nil
 }
 
 // buildRestoreJob creates a Kubernetes Job for executing the restore.
@@ -176,6 +187,10 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 			Value: cluster.Name,
 		},
 		{
+			Name:  constants.EnvStatefulSetName,
+			Value: restoreTargetStatefulSetName(cluster),
+		},
+		{
 			Name:  constants.EnvClusterNamespace,
 			Value: cluster.Namespace,
 		},
@@ -230,6 +245,16 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 	// as the executor reads credentials from the mounted secret.
 
 	return envVars
+}
+
+func restoreTargetStatefulSetName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if cluster == nil {
+		return ""
+	}
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+		return fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.BlueRevision)
+	}
+	return cluster.Name
 }
 
 // buildRestoreVolumes builds volumes for the restore job.
