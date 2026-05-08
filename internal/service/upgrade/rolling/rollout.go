@@ -124,6 +124,11 @@ func (m *Manager) ensureTargetPodLeadershipTransferred(
 	target rolloutTargetPod,
 	metrics *upgrade.Metrics,
 ) (bool, error) {
+	if cluster.Spec.Replicas <= 1 {
+		logger.Info("Skipping leader step-down for single-replica rolling upgrade", "pod", target.Name)
+		return true, nil
+	}
+
 	leaderPodName, err := m.currentLeaderPodByLabel(ctx, cluster)
 	if err != nil {
 		logger.Info("Unable to determine current leader from pod labels; attempting safe step-down", "error", err)
