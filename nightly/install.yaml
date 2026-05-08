@@ -4147,6 +4147,77 @@ spec:
                         - sha384
                         - sha512
                         type: string
+                      runtime:
+                        description: |-
+                          Runtime configures local PKCS#11 vendor runtime wiring such as library
+                          lookup paths and environment variables sourced from credentialsSecretRef.
+                        properties:
+                          env:
+                            description: |-
+                              Env exposes literal environment variables from keys in
+                              spec.unseal.credentialsSecretRef. Use this for vendor runtime settings
+                              such as HSM endpoints or authentication key references.
+                            items:
+                              description: |-
+                                PKCS11RuntimeEnvVar maps a PKCS#11 runtime environment variable to a key in
+                                spec.unseal.credentialsSecretRef.
+                              properties:
+                                name:
+                                  description: |-
+                                    Name is the environment variable name to expose to the OpenBao process.
+                                    Names owned by OpenBao's PKCS#11 seal configuration, such as BAO_HSM_PIN,
+                                    are managed by the operator and must not be configured here.
+                                  pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+                                  type: string
+                                secretKey:
+                                  description: |-
+                                    SecretKey is the key in spec.unseal.credentialsSecretRef to source as the
+                                    environment variable value.
+                                  minLength: 1
+                                  pattern: ^[-._A-Za-z0-9]+$
+                                  type: string
+                              required:
+                              - name
+                              - secretKey
+                              type: object
+                            maxItems: 16
+                            type: array
+                          fileEnv:
+                            description: |-
+                              FileEnv exposes environment variables whose values are paths to files
+                              mounted from keys in spec.unseal.credentialsSecretRef. Use this for vendor
+                              settings that expect a config file path, for example SOFTHSM2_CONF or
+                              vendor-specific PKCS#11 client configuration variables.
+                            items:
+                              description: |-
+                                PKCS11RuntimeFileEnvVar maps a PKCS#11 runtime environment variable to the
+                                mounted file path for a key in spec.unseal.credentialsSecretRef.
+                              properties:
+                                name:
+                                  description: Name is the environment variable name
+                                    to expose to the OpenBao process.
+                                  pattern: ^[A-Za-z_][A-Za-z0-9_]*$
+                                  type: string
+                                secretKey:
+                                  description: |-
+                                    SecretKey is the key in spec.unseal.credentialsSecretRef whose mounted
+                                    file path should become the environment variable value.
+                                  minLength: 1
+                                  pattern: ^[-._A-Za-z0-9]+$
+                                  type: string
+                              required:
+                              - name
+                              - secretKey
+                              type: object
+                            maxItems: 16
+                            type: array
+                          libraryPath:
+                            description: |-
+                              LibraryPath sets LD_LIBRARY_PATH for the OpenBao process. Use this when
+                              the configured PKCS#11 module depends on sibling vendor libraries that
+                              are not in the image's default dynamic linker search path.
+                            type: string
+                        type: object
                       slot:
                         description: Slot is the slot number where the HSM token is
                           located.
@@ -6314,10 +6385,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260507-032e1b7a8ae0
+          value: nightly-20260508-778456829cff
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:3122e206ffac909aada55da4f9877cf9afb0a77a18369d31d051c90e8b3ed02e
+        image: ghcr.io/dc-tec/openbao-operator@sha256:a46794bbfc4129b65f9851d7ba98324eb29c70b4301a1d4114f567d5ebed4343
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6432,8 +6503,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260507-032e1b7a8ae0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:3122e206ffac909aada55da4f9877cf9afb0a77a18369d31d051c90e8b3ed02e
+          value: nightly-20260508-778456829cff
+        image: ghcr.io/dc-tec/openbao-operator@sha256:a46794bbfc4129b65f9851d7ba98324eb29c70b4301a1d4114f567d5ebed4343
         livenessProbe:
           httpGet:
             path: /healthz
