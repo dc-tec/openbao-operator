@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""Small PyKMIP fixture server for OpenBao Operator E2E tests."""
+
+import logging
+import os
+import sys
+import time
+import warnings
+
+from cryptography.utils import CryptographyDeprecationWarning
+from kmip.core import enums
+from kmip.pie import objects
+from kmip.services.server import KmipServer
+from kmip.services.server.engine import KmipEngine
+
+warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
+
+DEFAULT_KEY_ID = 1
+DEFAULT_KEY_OWNER = "openbao-kmip-client"
+DEFAULT_KEY_VALUE = bytes.fromhex(
+    "00112233445566778899aabbccddeeff"
+    "102132435465768798a9bacbdcedfe0f"
+)
+
+
+def env(name, default):
+    return os.environ.get(name, default).strip()
+
+
+def seed_key(database_path):
+    key_id = int(env("KMIP_KEY_ID", str(DEFAULT_KEY_ID)))
+    key_owner = env("KMIP_KEY_OWNER", DEFAULT_KEY_OWNER)
+
+    engine = KmipEngine(database_path=database_path)
+    session = engine._data_store_session_factory()  # noqa: SLF001 - fixture setup.
+    try:
+        existing = (
+            session.query(objects.SymmetricKey)
+            .filter(objects.SymmetricKey.unique_identifier == key_id)
+            .one_or_none()
+        )
+        if existing is not None:
+            existing.state = enums.State.ACTIVE
+            existing.operation_policy_name = "default"
+            existing._owner = key_owner  # noqa: SLF001 - PyKMIP access policy owner.
+            session.commit()
+            logging.info("Using existing KMIP key id=%s owner=%s", key_id, key_owner)
+            return
+
+        key = objects.SymmetricKey(
+            enums.CryptographicAlgorithm.AES,
+            256,
+            DEFAULT_KEY_VALUE,
+            masks=[
+                enums.CryptographicUsageMask.ENCRYPT,
+                enums.CryptographicUsageMask.DECRYPT,
+            ],
+            name="openbao-kmip-key",
+        )
+        key.unique_identifier = key_id
+        key.state = enums.State.ACTIVE
+        key.operation_policy_name = "default"
+        key.initial_date = int(time.time())
+        key._owner = key_owner  # noqa: SLF001 - PyKMIP access policy owner.
+
+        session.add(key)
+        session.commit()
+        logging.info("Seeded KMIP key id=%s owner=%s", key_id, key_owner)
+    finally:
+        session.close()
+
+
+def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        stream=sys.stdout,
+    )
+
+    host = env("PYKMIP_HOST", "0.0.0.0")
+    port = int(env("PYKMIP_PORT", "5696"))
+    database_path = env("PYKMIP_DATABASE_PATH", "/var/lib/pykmip/pykmip.db")
+    cert_path = env("PYKMIP_SERVER_CERT", "/etc/pykmip/tls/server.crt")
+    key_path = env("PYKMIP_SERVER_KEY", "/etc/pykmip/tls/server.key")
+    ca_path = env("PYKMIP_CA_CERT", "/etc/pykmip/tls/ca.crt")
+    cipher_suites = env(
+        "PYKMIP_TLS12_CIPHERS",
+        "TLS_RSA_WITH_AES_128_CBC_SHA256",
+    )
+
+    seed_key(database_path)
+
+    server = KmipServer(
+        hostname=host,
+        port=port,
+        certificate_path=cert_path,
+        key_path=key_path,
+        ca_path=ca_path,
+        auth_suite="TLS1.2",
+        config_path=None,
+        log_path="/tmp/pykmip.log",
+        enable_tls_client_auth=True,
+        tls_cipher_suites=cipher_suites,
+        logging_level="INFO",
+        database_path=database_path,
+    )
+
+    logging.info("Starting PyKMIP fixture on %s:%s", host, port)
+    server.start()
+    try:
+        server.serve()
+    finally:
+        server.stop()
+
+
+if __name__ == "__main__":
+    main()

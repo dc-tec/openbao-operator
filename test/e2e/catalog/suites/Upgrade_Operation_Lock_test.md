@@ -30,5 +30,3 @@ Recorded checkpoints:
 - waiting for the upgrade to complete
 - re-triggering reconcile so the queued backup request is picked up immediately
 - verifying the queued backup starts once the upgrade lock is released
-
-

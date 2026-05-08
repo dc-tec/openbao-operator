@@ -118,5 +118,3 @@ Recorded checkpoints:
 - ensuring public service has ready endpoints
 - allowing verification pod egress to OpenBao cluster (NetworkPolicy)
 - reading autopilot configuration via JWT authenticated request
-
-

@@ -268,5 +268,3 @@ Recorded checkpoints:
 - Waiting for the rollback consensus repair job to fail
 - Verifying secret persists in safe mode
 - Asserting safe mode is set on the cluster
-
-

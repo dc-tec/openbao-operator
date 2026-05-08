@@ -271,5 +271,3 @@ State: `active`
 Covers: _none_
 
 Labels: `security`, `critical`, `tamper`
-
-

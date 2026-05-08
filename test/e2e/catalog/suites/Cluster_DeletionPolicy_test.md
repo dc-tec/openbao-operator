@@ -49,5 +49,3 @@ Generated fallback ID: `cluster-deletionpolicy-retains-pvcs-and-recoverability-s
 Covers: `deletion-policy`, `pvc-retention`, `recoverability-secret-retention`
 
 Labels: `lifecycle`, `cluster`, `deletion`
-
-

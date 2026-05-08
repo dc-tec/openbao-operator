@@ -34,5 +34,3 @@ Recorded checkpoints:
 - verifying the pod receives a new TLS reload hash without restarting
 - reconfirming cluster readiness and stability after server Secret regeneration
 - re-reading the secret over TLS with CA validation after regeneration
-
-
