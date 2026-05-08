@@ -1,7 +1,10 @@
 package restore
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -75,5 +78,14 @@ func restoreJobFailedStatusMessage(job *batchv1.Job, failureHint string) string 
 
 // restoreJobName returns the name for the restore job.
 func restoreJobName(restore *openbaov1alpha1.OpenBaoRestore) string {
-	return fmt.Sprintf("%s%s", RestoreJobNamePrefix, restore.Name)
+	base := strings.ToLower(strings.ReplaceAll(RestoreJobNamePrefix+restore.Name, "_", "-"))
+	if len(base) <= 63 {
+		return base
+	}
+
+	sum := sha256.Sum256([]byte(restore.Name))
+	suffix := hex.EncodeToString(sum[:])[:10]
+	maxBaseLen := 63 - 1 - len(suffix)
+	base = strings.TrimRight(base[:maxBaseLen], "-")
+	return fmt.Sprintf("%s-%s", base, suffix)
 }

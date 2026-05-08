@@ -194,6 +194,7 @@ func TestBuildRestoreEnvVars_S3(t *testing.T) {
 	// Verify common env vars
 	assert.Equal(t, "restore", envMap["EXECUTOR_MODE"])
 	assert.Equal(t, "test-cluster", envMap[constants.EnvClusterName])
+	assert.Equal(t, "test-cluster", envMap[constants.EnvStatefulSetName])
 	assert.Equal(t, "default", envMap[constants.EnvClusterNamespace])
 	assert.Equal(t, "3", envMap[constants.EnvClusterReplicas])
 	assert.Equal(t, constants.StorageProviderS3, envMap[constants.EnvBackupProvider])
@@ -217,6 +218,50 @@ func TestBuildRestoreEnvVars_S3(t *testing.T) {
 	assert.Empty(t, envMap[constants.EnvBackupGCSProject])
 	assert.Empty(t, envMap[constants.EnvBackupAzureStorageAccount])
 	assert.Empty(t, envMap[constants.EnvBackupAzureContainer])
+}
+
+func TestBuildRestoreEnvVars_BlueGreenStatefulSetName(t *testing.T) {
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup.snap",
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: constants.StorageProviderS3,
+					Endpoint: "https://s3.amazonaws.com",
+					Bucket:   "test-bucket",
+				},
+			},
+		},
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				BlueRevision: "abc123",
+			},
+		},
+	}
+
+	envVars := buildRestoreEnvVars(restore, cluster)
+
+	envMap := make(map[string]string)
+	for _, env := range envVars {
+		envMap[env.Name] = env.Value
+	}
+
+	assert.Equal(t, "test-cluster-abc123", envMap[constants.EnvStatefulSetName])
 }
 
 func TestBuildRestoreEnvVars_S3Default(t *testing.T) {

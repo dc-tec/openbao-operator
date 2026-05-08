@@ -68,6 +68,11 @@ func TestRestoreJobName(t *testing.T) {
 			restoreName: "r",
 			wantPrefix:  RestoreJobNamePrefix + "r",
 		},
+		{
+			name:        "long name is truncated with hash suffix",
+			restoreName: "restore-request-e2e-claims-functional-restore-1776963121-462553",
+			wantPrefix:  RestoreJobNamePrefix + "restore-request",
+		},
 	}
 
 	for _, tt := range tests {
@@ -79,7 +84,9 @@ func TestRestoreJobName(t *testing.T) {
 			}
 
 			got := restoreJobName(restore)
-			assert.Equal(t, tt.wantPrefix, got, "restoreJobName() should be deterministic")
+			assert.True(t, strings.HasPrefix(got, tt.wantPrefix), "restoreJobName() should preserve the expected prefix")
+			assert.LessOrEqual(t, len(got), 63, "restoreJobName() must fit Kubernetes label limits")
+			assert.Equal(t, got, restoreJobName(restore), "restoreJobName() should be deterministic")
 		})
 	}
 }
@@ -1234,6 +1241,8 @@ func TestGetRestoreExecutorImage(t *testing.T) {
 		name          string
 		restoreImage  string
 		clusterImage  string
+		operatorRepo  string
+		operatorTag   string
 		expectedImage string
 		expectError   bool
 	}{
@@ -1252,7 +1261,16 @@ func TestGetRestoreExecutorImage(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name:          "no image specified returns error",
+			name:          "fallback to operator default backup image",
+			restoreImage:  "",
+			clusterImage:  "",
+			operatorRepo:  "custom/backup",
+			operatorTag:   "v3",
+			expectedImage: "custom/backup:v3",
+			expectError:   false,
+		},
+		{
+			name:          "no image specified and no operator default returns error",
 			restoreImage:  "",
 			clusterImage:  "",
 			expectedImage: "",
@@ -1262,6 +1280,9 @@ func TestGetRestoreExecutorImage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(constants.EnvOperatorBackupImageRepo, tt.operatorRepo)
+			t.Setenv(constants.EnvOperatorVersion, tt.operatorTag)
+
 			restore := &openbaov1alpha1.OpenBaoRestore{
 				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
 					Image: tt.restoreImage,
