@@ -10,8 +10,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"sort"
 	"time"
@@ -21,6 +23,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	smithy "github.com/aws/smithy-go"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/s3blob"
@@ -33,6 +37,11 @@ import (
 const (
 	// DefaultUploadTimeout is the default timeout for upload operations.
 	DefaultUploadTimeout = 30 * time.Minute
+)
+
+var (
+	s3EnsureExistsMaxAttempts = 12
+	s3EnsureExistsRetryDelay  = 2 * time.Second
 )
 
 // Bucket wraps a Go CDK blob.Bucket with a simplified interface.
@@ -208,17 +217,6 @@ func OpenS3Bucket(ctx context.Context, cfg S3ClientConfig) (blobstore.BlobStore,
 }
 
 func ensureS3Bucket(ctx context.Context, client *s3.Client, bucketName, region string) error {
-	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
-		Bucket: aws.String(bucketName),
-	})
-	if err == nil {
-		return nil // Bucket exists/accessible
-	}
-
-	// Try to create if not found
-	// Note: We don't check specifically for NotFound error because HeadBucket behavior implies
-	// any error means we can't access it, so we try create. If create fails (e.g. permission),
-	// we'll return that error.
 	createInput := &s3.CreateBucketInput{
 		Bucket: aws.String(bucketName),
 	}
@@ -229,15 +227,103 @@ func ensureS3Bucket(ctx context.Context, client *s3.Client, bucketName, region s
 		}
 	}
 
-	_, err = client.CreateBucket(ctx, createInput)
-	if err != nil {
-		// Ignore if it effectively exists now (race condition or owned by us)
-		// Usually BucketAlreadyOwnedByYou or similar
-		// But checking exact error types across AWS SDK v2 can be verbose.
-		// For now we assume if Create fails, it might be a real error.
-		return err
+	var lastErr error
+	for attempt := 1; attempt <= s3EnsureExistsMaxAttempts; attempt++ {
+		_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{
+			Bucket: aws.String(bucketName),
+		})
+		if err == nil {
+			return nil
+		}
+
+		_, err = client.CreateBucket(ctx, createInput)
+		if err == nil {
+			return nil
+		}
+		if s3BucketAlreadyExists(err) {
+			return nil
+		}
+		lastErr = err
+		if !shouldRetryS3EnsureExists(err) {
+			return err
+		}
+
+		if attempt == s3EnsureExistsMaxAttempts {
+			break
+		}
+
+		timer := time.NewTimer(s3EnsureExistsRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
-	return nil
+
+	return lastErr
+}
+
+func shouldRetryS3EnsureExists(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var unknownAuthority x509.UnknownAuthorityError
+	if errors.As(err, &unknownAuthority) {
+		return false
+	}
+
+	var hostnameErr x509.HostnameError
+	if errors.As(err, &hostnameErr) {
+		return false
+	}
+
+	var certInvalidErr x509.CertificateInvalidError
+	if errors.As(err, &certInvalidErr) {
+		return false
+	}
+
+	var sendErr *smithyhttp.RequestSendError
+	if errors.As(err, &sendErr) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	var responseErr *smithyhttp.ResponseError
+	if errors.As(err, &responseErr) {
+		statusCode := responseErr.HTTPStatusCode()
+		return statusCode == http.StatusTooManyRequests || statusCode >= http.StatusInternalServerError
+	}
+
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorFault() == smithy.FaultServer
+	}
+
+	return false
+}
+
+func s3BucketAlreadyExists(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+
+	switch apiErr.ErrorCode() {
+	case "BucketAlreadyExists", "BucketAlreadyOwnedByYou":
+		return true
+	default:
+		return false
+	}
 }
 
 // buildAWSConfig constructs AWS SDK config with credentials and custom TLS settings.

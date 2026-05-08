@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"gocloud.dev/blob/memblob"
 )
@@ -264,5 +266,51 @@ func TestOpenS3Bucket_Features(t *testing.T) {
 				t.Fatalf("OpenS3Bucket() unexpected error = %v", err)
 			}
 		})
+	}
+}
+
+func TestOpenS3Bucket_EnsureExistsRetriesTransientFailure(t *testing.T) {
+	originalAttempts := s3EnsureExistsMaxAttempts
+	originalDelay := s3EnsureExistsRetryDelay
+	s3EnsureExistsMaxAttempts = 3
+	s3EnsureExistsRetryDelay = 10 * time.Millisecond
+	t.Cleanup(func() {
+		s3EnsureExistsMaxAttempts = originalAttempts
+		s3EnsureExistsRetryDelay = originalDelay
+	})
+
+	var requestCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		current := requestCount.Add(1)
+		if current < 3 {
+			http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodHead, http.MethodPut:
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, "unexpected method", http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	bucket, err := OpenS3Bucket(context.Background(), S3ClientConfig{
+		Endpoint:        server.URL,
+		Bucket:          "test-bucket",
+		Region:          "us-east-1",
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+		EnsureExists:    true,
+		UsePathStyle:    true,
+	})
+	if err != nil {
+		t.Fatalf("OpenS3Bucket() unexpected error = %v", err)
+	}
+	_ = bucket.Close()
+
+	if requestCount.Load() < 3 {
+		t.Fatalf("expected transient retries before success, got %d requests", requestCount.Load())
 	}
 }
