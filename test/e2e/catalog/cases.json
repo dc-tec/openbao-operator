@@ -756,6 +756,46 @@
     "suiteTitle": ""
   },
   {
+    "id": "cluster-unseal-kmip-initializes-restarts-and-scales-using-a-d2fcee95",
+    "generatedId": "cluster-unseal-kmip-initializes-restarts-and-scales-using-a-d2fcee95",
+    "file": "test/e2e/Cluster_Unseal_KMIP_test.go",
+    "type": "It",
+    "name": "initializes, restarts, and scales using a PyKMIP-backed KMIP seal",
+    "path": [
+      "Cluster KMIP Unseal",
+      "initializes, restarts, and scales using a PyKMIP-backed KMIP seal"
+    ],
+    "labels": [
+      "cluster",
+      "lifecycle",
+      "unseal",
+      "kmip",
+      "hsm"
+    ],
+    "domainLabels": [
+      "cluster",
+      "lifecycle",
+      "unseal",
+      "kmip",
+      "hsm"
+    ],
+    "steps": [
+      "creating KMIP mTLS material",
+      "starting the PyKMIP fixture server",
+      "creating an OpenBaoCluster configured for KMIP unseal",
+      "waiting for the initial KMIP-sealed pod to become ready",
+      "verifying the rendered OpenBao config contains the KMIP seal stanza",
+      "verifying the StatefulSet projects KMIP credential files",
+      "deleting the pod and validating it auto-unseals after restart",
+      "scaling up to verify new pods can use the seeded KMIP key material",
+      "scaling back down cleanly"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "cluster-unseal-pkcs11-initializes-restarts-and-scales-using-a-50e1c83b",
     "generatedId": "cluster-unseal-pkcs11-initializes-restarts-and-scales-using-a-50e1c83b",
     "file": "test/e2e/Cluster_Unseal_PKCS11_test.go",

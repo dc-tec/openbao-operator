@@ -35,5 +35,3 @@ Generated fallback ID: `anti-tamper-policy-prevents-deletion-of-the-managed-stat
 Covers: `anti-tamper`, `statefulset-protection`
 
 Labels: `security`, `tamper`, `cluster`, `slow`
-
-

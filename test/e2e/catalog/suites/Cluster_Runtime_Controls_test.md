@@ -44,5 +44,3 @@ Recorded checkpoints:
 - setting spec.runtime.restartAt to trigger a rolling restart
 - waiting for the StatefulSet pod template to carry the restart annotation
 - waiting for the original pod to be replaced
-
-

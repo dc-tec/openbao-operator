@@ -29,5 +29,3 @@ Recorded checkpoints:
 - verifying the stale green workload is cleaned up
 - verifying the stale target is abandoned before any rollback
 - verifying no stale workload remains in the namespace
-
-

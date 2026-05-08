@@ -35,5 +35,3 @@ State: `active`
 Covers: _none_
 
 Labels: `openshift`, `platform`
-
-

@@ -139,5 +139,3 @@ Labels: `lifecycle`, `cluster`, `critical`, `tenant`
 
 Recorded checkpoints:
 - verifying OpenBaoTenant is provisioned
-
-

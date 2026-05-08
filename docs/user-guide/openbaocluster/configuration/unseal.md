@@ -152,7 +152,7 @@ For production-oriented clusters, use an external trust source such as cloud KMS
         "KMIP",
         "Needed whenever client cert, key, or CA files are sourced from mounted credentials.",
         "Secret keys matching the filenames referenced by `clientCert`, `clientKey`, and optional `caCert` under `/etc/bao/seal-creds`.",
-        "The client certificate and key must form a valid pair; the CA bundle must be valid PEM when set.",
+        "The client certificate and key must form a valid pair; the CA bundle must be valid PEM when set. The KMIP key must already exist and be usable for encrypt/decrypt before the cluster starts.",
       ],
     },
     {
@@ -165,6 +165,45 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     },
   ]}
 />
+
+## KMIP provider contract
+
+KMIP is a network-backed seal path. The operator renders the OpenBao KMIP seal stanza, projects mTLS files from `credentialsSecretRef`, and validates mounted certificate material before the workload starts. It does not create KMIP key material or configure the KMIP server.
+
+For production clusters, prepare the KMIP side first:
+
+- Create or register the wrapping key in the KMIP service.
+- Activate the key and allow encrypt/decrypt operations for the OpenBao client identity.
+- Issue a client certificate with `clientAuth` extended key usage.
+- Issue or trust a server certificate whose DNS name matches `spec.unseal.kmip.serverName`.
+- Set `tls12Ciphers` when the KMIP appliance requires a constrained TLS 1.2 cipher suite.
+
+<CommandBlock
+  language="yaml"
+  label="example"
+  title="KMIP unseal with Secret-backed mTLS files"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: bao-kmip
+  namespace: openbao
+spec:
+  unseal:
+    type: kmip
+    credentialsSecretRef:
+      name: kmip-client
+    kmip:
+      endpoint: kmip.example.com:5696
+      kmsKeyID: "1"
+      clientCert: /etc/bao/seal-creds/client.crt
+      clientKey: /etc/bao/seal-creds/client.key
+      caCert: /etc/bao/seal-creds/ca.crt
+      serverName: kmip.example.com
+      encryptAlg: AES_GCM
+      tls12Ciphers: TLS_RSA_WITH_AES_128_CBC_SHA256`}
+>
+  The Secret `kmip-client` must contain `client.crt`, `client.key`, and `ca.crt`. The operator validates that the client certificate and key form a valid pair and that the CA bundle parses as PEM before OpenBao starts.
+</CommandBlock>
 
 ## PKCS#11 runtime wiring
 

@@ -11,8 +11,8 @@ Notes:
 
 ## Summary
 
-- Files: `18`
-- Specs: `76`
+- Files: `19`
+- Specs: `77`
 - Explicit case IDs: `31`
 - Coverage tags: `41`
 
@@ -26,6 +26,7 @@ Notes:
 | [Cluster Runtime Controls](suites/Cluster_Runtime_Controls_test.md) | 2 | 2 | 0 | `lifecycle`, `cluster`, `runtime` | `test/e2e/Cluster_Runtime_Controls_test.go` |
 | [ACME TLS (OpenBao native ACME client)](suites/Cluster_TLS_ACME_test.md) | 2 | 1 | 0 | `tls`, `security`, `slow` | `test/e2e/Cluster_TLS_ACME_test.go` |
 | [Cluster TLS Lifecycle](suites/Cluster_TLS_Lifecycle_test.md) | 1 | 1 | 0 | `tls`, `cluster`, `lifecycle` | `test/e2e/Cluster_TLS_Lifecycle_test.go` |
+| [Cluster KMIP Unseal](suites/Cluster_Unseal_KMIP_test.md) | 1 | 0 | 0 | `cluster`, `lifecycle`, `unseal`, `kmip`, `hsm` | `test/e2e/Cluster_Unseal_KMIP_test.go` |
 | [Cluster PKCS#11 Unseal](suites/Cluster_Unseal_PKCS11_test.md) | 1 | 0 | 0 | `cluster`, `lifecycle`, `unseal`, `pkcs11`, `hsm` | `test/e2e/Cluster_Unseal_PKCS11_test.go` |
 | [Manager Resilience](suites/Manager_Resilience_test.md) | 3 | 3 | 0 | `manager`, `cluster`, `e2e-anchor` | `test/e2e/Manager_Resilience_test.go` |
 | [Manager](suites/Operator_Manager_test.md) | 1 | 1 | 0 | `manager`, `critical`, `smoke` | `test/e2e/Operator_Manager_test.go` |
