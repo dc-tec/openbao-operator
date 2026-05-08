@@ -107,6 +107,23 @@ For E2E debugging, prefer structured reports over log-only inspection. Set `E2E_
 
 E2E suites are declared in `test/e2e/suites.yaml`. When adding or changing an E2E file, update the manifest with the suite owner, risk tier, isolation class, labels, coverage tags, CI lane, and nightly policy, then run `make verify-e2e-manifest`.
 
+<CommandBlock
+  language="bash"
+  label="hsm"
+  title="Run the manual HSM/KMIP E2E lane locally"
+  code={`make docker-build-e2e-openbao-softhsm OPENBAO_SOFTHSM_IMG=openbao-softhsm:dev
+make docker-build-e2e-pykmip-server PYKMIP_SERVER_IMG=pykmip-server:dev
+
+E2E_ENABLE_SOFTHSM_SUITE=true \\
+E2E_ENABLE_KMIP_SUITE=true \\
+E2E_OPENBAO_IMAGE=openbao-softhsm:dev \\
+E2E_KMIP_SERVER_IMAGE=pykmip-server:dev \\
+E2E_LABEL_FILTER='hsm && !openshift' \\
+make test-e2e`}
+>
+  The HSM lane is manual because it needs test-only images and provider fixtures. The KMIP suite uses a PyKMIP server fixture with mTLS and a pre-seeded active AES key; the PKCS#11 suite uses a SoftHSM-enabled OpenBao image.
+</CommandBlock>
+
 <DecisionTable
   title="Special validation lanes"
   columns={["Lane", "When to use it", "Primary entry point"]}

@@ -180,8 +180,8 @@ ciLanes:
     preloadStorageEmulators: []
 
   - id: hsm
-    name: "HSM / PKCS#11"
-    labelFilter: "((hsm || pkcs11) && !openshift)"
+    name: "HSM / KMIP / PKCS#11"
+    labelFilter: "((hsm || kmip || pkcs11) && !openshift)"
     prScope: manual
     timeoutMinutes: 45
     e2eTimeout: 40m
@@ -374,6 +374,27 @@ suites:
       - lifecycle
       - unseal
       - pkcs11
+      - hsm
+    coverage: []
+    ci:
+      lanes:
+        - hsm
+      pullRequest: manual
+    nightly:
+      policy: primary-version-full
+
+  - id: cluster-unseal-kmip
+    title: "Cluster KMIP Unseal"
+    owner: core
+    riskTier: high
+    isolation: global-mutator
+    files:
+      - test/e2e/Cluster_Unseal_KMIP_test.go
+    labels:
+      - cluster
+      - lifecycle
+      - unseal
+      - kmip
       - hsm
     coverage: []
     ci:

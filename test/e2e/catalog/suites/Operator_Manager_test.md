@@ -28,5 +28,3 @@ Recorded checkpoints:
 - ensuring the controller pod is ready
 - verifying that the controller manager is serving the metrics server
 - verifying that the controller metrics endpoint returns data
-
-

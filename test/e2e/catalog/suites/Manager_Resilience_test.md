@@ -69,5 +69,3 @@ Recorded checkpoints:
 - scaling the cluster and restarting the controller during the reconcile
 - verifying the scale reconcile finishes without duplicating managed resources
 - reconfirming the cluster returns to an available steady state
-
-

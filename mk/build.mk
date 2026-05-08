@@ -69,6 +69,9 @@ docker-push-upgrade: ## Push docker image with the upgrade helper.
 
 OPENBAO_SOFTHSM_BASE_IMAGE ?= openbao/openbao-hsm:2.5.3
 OPENBAO_SOFTHSM_IMG ?= openbao-softhsm:dev
+PYKMIP_BASE_IMAGE ?= python:3.11-slim
+PYKMIP_VERSION ?= 0.10.0
+PYKMIP_SERVER_IMG ?= pykmip-server:dev
 
 .PHONY: docker-build-e2e-openbao-softhsm
 docker-build-e2e-openbao-softhsm: ## Build the test-only OpenBao image with SoftHSM PKCS#11 support.
@@ -77,6 +80,15 @@ docker-build-e2e-openbao-softhsm: ## Build the test-only OpenBao image with Soft
 		--build-arg OPENBAO_HSM_BASE_IMAGE=$(OPENBAO_SOFTHSM_BASE_IMAGE) \
 		-t $(OPENBAO_SOFTHSM_IMG) \
 		test/e2e/images/openbao-softhsm
+
+.PHONY: docker-build-e2e-pykmip-server
+docker-build-e2e-pykmip-server: ## Build the test-only PyKMIP server image used by KMIP unseal E2E coverage.
+	$(CONTAINER_TOOL) build \
+		-f test/e2e/images/pykmip-server/Dockerfile \
+		--build-arg PYKMIP_BASE_IMAGE=$(PYKMIP_BASE_IMAGE) \
+		--build-arg PYKMIP_VERSION=$(PYKMIP_VERSION) \
+		-t $(PYKMIP_SERVER_IMG) \
+		test/e2e/images/pykmip-server
 
 .PHONY: docker-release
 docker-release: docker-release-build docker-release-push ## Build and push all images to registry with consistent VERSION.

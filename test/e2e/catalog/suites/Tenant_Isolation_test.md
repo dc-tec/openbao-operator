@@ -99,5 +99,3 @@ Recorded checkpoints:
 - creating RoleBinding in target namespace
 - patching controller deployment with WATCH_NAMESPACE
 - waiting for controller to restart with new configuration
-
-

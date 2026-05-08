@@ -52,5 +52,3 @@ Labels: `tls`, `security`, `slow`
 
 Recorded checkpoints:
 - verifying OpenBaoTenant is provisioned
-
-

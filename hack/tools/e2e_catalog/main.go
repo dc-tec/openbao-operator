@@ -411,8 +411,7 @@ func renderSuiteMarkdown(suite suiteCatalog) string {
 			b.WriteString("\n")
 		}
 	}
-	b.WriteString("\n")
-	return b.String()
+	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
 func labelsCell(labels []string) string {

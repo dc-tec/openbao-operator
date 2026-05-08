@@ -145,5 +145,3 @@ Recorded checkpoints:
 - waiting for restore to drain steady read replicas before execution continues
 - Verifying secret persists after restore
 - Verifying restore metrics are emitted
-
-
