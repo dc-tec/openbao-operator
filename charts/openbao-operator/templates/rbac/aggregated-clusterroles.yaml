@@ -4,8 +4,6 @@ kind: ClusterRole
 metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/name: openbao-operator
-    app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-admin
 rules:
   - apiGroups:
@@ -27,8 +25,6 @@ kind: ClusterRole
 metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/name: openbao-operator
-    app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-editor
 rules:
   - apiGroups:
@@ -56,8 +52,6 @@ kind: ClusterRole
 metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/name: openbao-operator
-    app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-viewer
 rules:
   - apiGroups:

@@ -36,9 +36,7 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-controller-openbaocluster
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: controller
-    app.kubernetes.io/managed-by: kustomize
 rules:
   - apiGroups:
       - openbao.org
@@ -75,9 +73,7 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-controller-openbaorestore
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: controller
-    app.kubernetes.io/managed-by: kustomize
 rules:
   - apiGroups:
       - openbao.org
