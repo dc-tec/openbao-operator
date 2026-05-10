@@ -20,6 +20,14 @@ const (
 	helmFullname   = `{{ include "openbao-operator.fullname" . }}`
 )
 
+var helmManagedLabelKeys = map[string]struct{}{
+	"helm.sh/chart":                {},
+	"app.kubernetes.io/name":       {},
+	"app.kubernetes.io/instance":   {},
+	"app.kubernetes.io/managed-by": {},
+	"app.kubernetes.io/version":    {},
+}
+
 type options struct {
 	crdInputDir     string
 	crdOutputDir    string
@@ -674,6 +682,8 @@ func addHelmLabelsToRBAC(content string) string {
 	lines := strings.Split(content, "\n")
 	result := make([]string, 0, len(lines)+4) // Extra space for Helm labels
 	inMetadata := false
+	inMetadataLabels := false
+	metadataLabelsIndent := 0
 	labelsSeen := false
 	labelsInjected := false
 
@@ -707,10 +717,18 @@ func addHelmLabelsToRBAC(content string) string {
 		}
 
 		trimmed := strings.TrimSpace(line)
+		if inMetadataLabels && trimmed != "" && len(leadingWhitespace(line)) <= metadataLabelsIndent {
+			inMetadataLabels = false
+		}
+		if inMetadataLabels && isHelmManagedLabelLine(line) {
+			continue
+		}
 
 		// If there's an existing labels block, inject Helm labels into it as the first entry.
 		if trimmed == "labels:" {
 			labelsSeen = true
+			inMetadataLabels = true
+			metadataLabelsIndent = len(leadingWhitespace(line))
 			result = append(result, line)
 
 			childIndent := leadingWhitespace(line) + "  "
@@ -742,6 +760,17 @@ func addHelmLabelsToRBAC(content string) string {
 	}
 
 	return strings.Join(result, "\n")
+}
+
+func isHelmManagedLabelLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	key, _, ok := strings.Cut(trimmed, ":")
+	if !ok {
+		return false
+	}
+	key = strings.Trim(key, `"'`)
+	_, ok = helmManagedLabelKeys[key]
+	return ok
 }
 
 // wrapGatewayAPIRules wraps Gateway API rules in a conditional.

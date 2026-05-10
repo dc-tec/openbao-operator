@@ -5,9 +5,7 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-provisioner
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/component: provisioner
-    app.kubernetes.io/managed-by: kustomize
 rules:
   - apiGroups:
       - ""
