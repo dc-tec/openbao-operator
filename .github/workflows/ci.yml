@@ -147,13 +147,13 @@ jobs:
             echo "docs=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|api/|config/|test/|docs/reference/api\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|boilerplate\.go\.txt)|\.golangci\.yml|\.github/tools/)'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|test/|docs/reference/api\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|helm(chart|values)/|boilerplate\.go\.txt)|\.golangci\.yml|\.github/tools/)'; then
             echo "go_quality=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_quality=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|api/|config/|go\.(mod|sum)$|vendor/|Makefile|mk/|test/(integration/|unit/))'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/helm(chart|values)/|test/(integration/|unit/))'; then
             echo "go_tests=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_tests=false" >> "${GITHUB_OUTPUT}"
