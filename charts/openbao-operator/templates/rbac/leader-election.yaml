@@ -3,8 +3,6 @@ kind: Role
 metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
-    app.kubernetes.io/name: openbao-operator
-    app.kubernetes.io/managed-by: kustomize
   name: {{ include "openbao-operator.fullname" . }}-leader-election
   namespace: {{ .Release.Namespace }}
 rules:
