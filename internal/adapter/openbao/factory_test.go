@@ -3,12 +3,16 @@ package openbao
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+const testJWTCachedToken = "cached-token"
 
 func newTestClientFactory(template ClientConfig) *ClientFactory {
 	return newClientFactoryWithState(template, newClientState(template))
@@ -162,7 +166,7 @@ func TestClientFactory_LoginJWT_Caching(t *testing.T) {
 			atomic.AddInt32(&loginRequests, 1)
 			w.Header().Set("Content-Type", "application/json")
 			// Return a token with 12s TTL (2s valid cache, given 10s buffer)
-			_, _ = w.Write([]byte(`{"auth":{"client_token":"cached-token","ttl":12}}`))
+			_, _ = w.Write([]byte(`{"auth":{"client_token":"` + testJWTCachedToken + `","ttl":12}}`))
 			return
 		}
 		http.NotFound(w, r)
@@ -176,7 +180,7 @@ func TestClientFactory_LoginJWT_Caching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoginJWT error: %v", err)
 	}
-	if token != "cached-token" {
+	if token != testJWTCachedToken {
 		t.Errorf("unexpected token: %s", token)
 	}
 	if count := atomic.LoadInt32(&loginRequests); count != 1 {
@@ -188,7 +192,7 @@ func TestClientFactory_LoginJWT_Caching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoginJWT 2 error: %v", err)
 	}
-	if token != "cached-token" {
+	if token != testJWTCachedToken {
 		t.Errorf("unexpected token 2: %s", token)
 	}
 	if count := atomic.LoadInt32(&loginRequests); count != 1 {
@@ -205,5 +209,107 @@ func TestClientFactory_LoginJWT_Caching(t *testing.T) {
 	}
 	if count := atomic.LoadInt32(&loginRequests); count != 2 {
 		t.Errorf("expected 2 login requests, got %d (cache not expired?)", count)
+	}
+}
+
+func TestClientManager_LoginJWT_CacheSharedAcrossFactories(t *testing.T) {
+	t.Parallel()
+
+	var loginRequests int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != apiPathAuthJWTLogin {
+			http.NotFound(w, r)
+			return
+		}
+		count := atomic.AddInt32(&loginRequests, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"auth":{"client_token":"token-%d","ttl":3600}}`, count)
+	}))
+	defer server.Close()
+
+	mgr := NewClientManager(ClientConfig{})
+	defer mgr.Close()
+
+	f1 := mgr.FactoryFor("ns/cluster", nil)
+	f2 := mgr.FactoryFor("ns/cluster", nil)
+
+	token, err := f1.LoginJWT(context.Background(), server.URL, "role", "jwt-a")
+	if err != nil {
+		t.Fatalf("LoginJWT() error: %v", err)
+	}
+	if token != "token-1" {
+		t.Fatalf("LoginJWT() token=%q, want token-1", token)
+	}
+
+	token, err = f2.LoginJWT(context.Background(), server.URL, "role", "jwt-a")
+	if err != nil {
+		t.Fatalf("LoginJWT() with second factory error: %v", err)
+	}
+	if token != "token-1" {
+		t.Fatalf("LoginJWT() with second factory token=%q, want token-1", token)
+	}
+	if count := atomic.LoadInt32(&loginRequests); count != 1 {
+		t.Fatalf("expected shared cache to reuse token across factories, got %d login requests", count)
+	}
+
+	token, err = f2.LoginJWT(context.Background(), server.URL, "role", "jwt-b")
+	if err != nil {
+		t.Fatalf("LoginJWT() with rotated JWT error: %v", err)
+	}
+	if token != "token-2" {
+		t.Fatalf("LoginJWT() with rotated JWT token=%q, want token-2", token)
+	}
+	if count := atomic.LoadInt32(&loginRequests); count != 2 {
+		t.Fatalf("expected rotated JWT to get a fresh OpenBao token, got %d login requests", count)
+	}
+}
+
+func TestClientFactory_LoginJWT_CollapsesConcurrentCacheMisses(t *testing.T) {
+	t.Parallel()
+
+	var loginRequests int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != apiPathAuthJWTLogin {
+			http.NotFound(w, r)
+			return
+		}
+		atomic.AddInt32(&loginRequests, 1)
+		time.Sleep(50 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"auth":{"client_token":"` + testJWTCachedToken + `","ttl":3600}}`))
+	}))
+	defer server.Close()
+
+	factory := newTestClientFactory(ClientConfig{})
+	start := make(chan struct{})
+	errs := make(chan error, 16)
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			token, err := factory.LoginJWT(context.Background(), server.URL, "role", "jwt")
+			if err != nil {
+				errs <- err
+				return
+			}
+			if token != testJWTCachedToken {
+				errs <- fmt.Errorf("token=%q, want %s", token, testJWTCachedToken)
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count := atomic.LoadInt32(&loginRequests); count != 1 {
+		t.Fatalf("expected one JWT login for concurrent cache miss, got %d", count)
 	}
 }
