@@ -4675,6 +4675,16 @@ spec:
                     description: LastFailureReason is the low-cardinality reason code
                       for the last backup failure (if applicable).
                     type: string
+                  lastFailureTime:
+                    description: LastFailureTime is when the last backup failure was
+                      recorded.
+                    format: date-time
+                    type: string
+                  lastHandledManualTrigger:
+                    description: |-
+                      LastHandledManualTrigger is the last observed manual trigger token that
+                      has progressed into an actual backup attempt.
+                    type: string
                   nextScheduledBackup:
                     description: NextScheduledBackup is when the next backup is scheduled.
                     format: date-time
@@ -6385,10 +6395,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260508-778456829cff
+          value: nightly-20260511-b72dbddb3cc6
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:a46794bbfc4129b65f9851d7ba98324eb29c70b4301a1d4114f567d5ebed4343
+        image: ghcr.io/dc-tec/openbao-operator@sha256:69a91c773cfc4fd12e85075736845581d0cbc23602043e6dbdf9daaa1a6df549
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6503,8 +6513,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260508-778456829cff
-        image: ghcr.io/dc-tec/openbao-operator@sha256:a46794bbfc4129b65f9851d7ba98324eb29c70b4301a1d4114f567d5ebed4343
+          value: nightly-20260511-b72dbddb3cc6
+        image: ghcr.io/dc-tec/openbao-operator@sha256:69a91c773cfc4fd12e85075736845581d0cbc23602043e6dbdf9daaa1a6df549
         livenessProbe:
           httpGet:
             path: /healthz

@@ -4675,6 +4675,16 @@ spec:
                     description: LastFailureReason is the low-cardinality reason code
                       for the last backup failure (if applicable).
                     type: string
+                  lastFailureTime:
+                    description: LastFailureTime is when the last backup failure was
+                      recorded.
+                    format: date-time
+                    type: string
+                  lastHandledManualTrigger:
+                    description: |-
+                      LastHandledManualTrigger is the last observed manual trigger token that
+                      has progressed into an actual backup attempt.
+                    type: string
                   nextScheduledBackup:
                     description: NextScheduledBackup is when the next backup is scheduled.
                     format: date-time
