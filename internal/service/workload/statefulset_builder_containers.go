@@ -219,6 +219,13 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 		})
 	}
 
+	if usesDeclarativeOCIPluginDownload(cluster) {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      pluginVolumeName,
+			MountPath: openBaoPluginPath,
+		})
+	}
+
 	mounts = append(mounts, newSealWiringProvider(cluster).VolumeMounts()...)
 
 	// Add utils volume mount (Read-Only for security)
