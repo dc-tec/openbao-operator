@@ -145,14 +145,14 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
   configuration:
     plugin:
       autoDownload: true
-      downloadBehavior: "direct"
+      downloadBehavior: "continue"
   plugins:
     - type: secret
       name: aws
       image: "ghcr.io/openbao/openbao-plugin-secrets-aws"
-      version: "v1.0.0"
+      version: "v0.0.1"
       binaryName: "openbao-plugin-secrets-aws"
-      sha256sum: "9fdd8be7947e4a4caf7cce4f0e02695081b6c85178aa912df5d37be97363144c"`}
+      sha256sum: "b98cb1cbfd0f567d7b614efb0621aaba10c4deda865f5e5b3d155609ada2482e"`}
 >
   Use an `image` plugin when OpenBao should download the plugin from an OCI registry as part of server startup. The operator renders `plugin_directory = "/openbao/plugins"` and mounts a writable, pod-local volume at that path for OCI auto-download.
 </CommandBlock>
@@ -203,8 +203,8 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
     {
       cells: [
         "`spec.configuration.plugin.downloadBehavior`",
-        "OpenBao's OCI download mode.",
-        "Use values supported by the OpenBao version in `spec.version`; plugin auto-download settings require OpenBao 2.5.0 or newer.",
+        "Startup behavior when an OCI plugin download fails.",
+        "Use `fail` to stop startup or `continue` to log and keep starting; plugin auto-download settings require OpenBao 2.5.0 or newer.",
       ],
     },
   ]}

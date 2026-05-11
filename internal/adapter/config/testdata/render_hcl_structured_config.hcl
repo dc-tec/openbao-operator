@@ -40,6 +40,6 @@ plugin_file_uid          = 1000
 plugin_file_permissions  = "0755"
 plugin_auto_download     = true
 plugin_auto_register     = false
-plugin_download_behavior = "direct"
+plugin_download_behavior = "continue"
 default_lease_ttl        = "720h"
 max_lease_ttl            = "8760h"
