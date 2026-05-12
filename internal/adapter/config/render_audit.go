@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/zclconf/go-cty/cty"
@@ -10,14 +12,22 @@ import (
 
 func buildAuditDeviceBlocks(devices []openbaov1alpha1.AuditDevice) ([]*hclwrite.Block, error) {
 	blocks := make([]*hclwrite.Block, 0, len(devices))
-	for _, device := range devices {
-		if device.Type == "" || device.Path == "" {
-			continue
+	seenPaths := make(map[string]struct{}, len(devices))
+	for index, device := range devices {
+		auditType, auditPath, err := validateDeclarativeAuditDevice(index, device)
+		if err != nil {
+			return nil, err
 		}
+		if _, ok := seenPaths[auditPath]; ok {
+			return nil, fmt.Errorf("audit device %d: duplicate path %q", index, auditPath)
+		}
+		seenPaths[auditPath] = struct{}{}
+		device.Type = auditType
+		device.Path = auditPath
 
 		block := gohcl.EncodeAsBlock(hclAuditDevice{
-			Type:        device.Type,
-			Path:        device.Path,
+			Type:        auditType,
+			Path:        auditPath,
 			Description: stringPtr(device.Description),
 		}, "audit")
 
@@ -37,50 +47,25 @@ func buildAuditOptionsValue(device openbaov1alpha1.AuditDevice) (cty.Value, bool
 	var options map[string]cty.Value
 
 	switch device.Type {
-	case "file":
+	case auditTypeFile:
 		if device.FileOptions != nil {
-			options = map[string]cty.Value{
-				"file_path": cty.StringVal(device.FileOptions.FilePath),
-			}
-			if device.FileOptions.Mode != "" {
-				options["mode"] = cty.StringVal(device.FileOptions.Mode)
-			}
+			options = buildFileAuditOptions(device.FileOptions)
 		}
-	case "http":
+	case auditTypeHTTP:
 		if device.HTTPOptions != nil {
-			options = map[string]cty.Value{
-				"uri": cty.StringVal(device.HTTPOptions.URI),
+			httpOptions, err := buildHTTPAuditOptions(device.HTTPOptions, auditHTTPHeadersContext)
+			if err != nil {
+				return cty.NilVal, false, err
 			}
-			if device.HTTPOptions.Headers != nil && len(device.HTTPOptions.Headers.Raw) > 0 {
-				headersVal, err := decodeJSONToCty(device.HTTPOptions.Headers.Raw, "HTTP audit device headers")
-				if err != nil {
-					return cty.NilVal, false, err
-				}
-				options["headers"] = headersVal
-			}
+			options = httpOptions
 		}
-	case "syslog":
+	case auditTypeSyslog:
 		if device.SyslogOptions != nil {
-			options = make(map[string]cty.Value)
-			if device.SyslogOptions.Facility != "" {
-				options["facility"] = cty.StringVal(device.SyslogOptions.Facility)
-			}
-			if device.SyslogOptions.Tag != "" {
-				options["tag"] = cty.StringVal(device.SyslogOptions.Tag)
-			}
+			options = buildSyslogAuditOptions(device.SyslogOptions)
 		}
-	case "socket":
+	case auditTypeSocket:
 		if device.SocketOptions != nil {
-			options = make(map[string]cty.Value)
-			if device.SocketOptions.Address != "" {
-				options["address"] = cty.StringVal(device.SocketOptions.Address)
-			}
-			if device.SocketOptions.SocketType != "" {
-				options["socket_type"] = cty.StringVal(device.SocketOptions.SocketType)
-			}
-			if device.SocketOptions.WriteTimeout != "" {
-				options["write_timeout"] = cty.StringVal(device.SocketOptions.WriteTimeout)
-			}
+			options = buildSocketAuditOptions(device.SocketOptions)
 		}
 	}
 
@@ -89,11 +74,14 @@ func buildAuditOptionsValue(device openbaov1alpha1.AuditDevice) (cty.Value, bool
 	}
 
 	if device.Options != nil && len(device.Options.Raw) > 0 {
-		ctyVal, err := decodeJSONToCty(device.Options.Raw, "audit device options")
+		rawOptions, err := decodeAuditStringOptions(device.Options.Raw, auditDeviceOptionsContext)
 		if err != nil {
 			return cty.NilVal, false, err
 		}
-		return ctyVal, true, nil
+		if len(rawOptions) == 0 {
+			return cty.NilVal, false, nil
+		}
+		return cty.ObjectVal(auditOptionsToCty(rawOptions)), true, nil
 	}
 
 	return cty.NilVal, false, nil

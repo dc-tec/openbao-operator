@@ -266,6 +266,163 @@ func TestRenderHCLWithAuditPluginsTelemetry(t *testing.T) {
 	compareGolden(t, "render_hcl_audit_plugins_telemetry", got)
 }
 
+func TestRenderHCLWithHTTPAuditHeaders(t *testing.T) {
+	cluster := newMinimalCluster("http-audit", "default")
+	cluster.Spec.Audit = []openbaov1alpha1.AuditDevice{
+		{
+			Type: "http",
+			Path: "remote",
+			HTTPOptions: &openbaov1alpha1.HTTPAuditOptions{
+				URI:     "https://audit.example.test/ingest",
+				Headers: &apiextensionsv1.JSON{Raw: []byte(`{"X-Audit":["one","two"],"Authorization":["Bearer token"]}`)},
+			},
+		},
+	}
+
+	got, err := RenderHCL(cluster, InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	})
+	if err != nil {
+		t.Fatalf("RenderHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	want := `headers = "{\"X-Audit\":[\"one\",\"two\"],\"Authorization\":[\"Bearer token\"]}"`
+	if !strings.Contains(rendered, want) {
+		t.Fatalf("RenderHCL() headers not rendered as JSON string %q:\n%s", want, rendered)
+	}
+	if strings.Contains(rendered, `X-Audit =`) {
+		t.Fatalf("RenderHCL() rendered HTTP headers as nested HCL instead of a JSON string:\n%s", rendered)
+	}
+}
+
+func TestRenderHCLWithRawAuditOptionsCoercesScalarsToStrings(t *testing.T) {
+	cluster := newMinimalCluster("raw-audit", "default")
+	cluster.Spec.Audit = []openbaov1alpha1.AuditDevice{
+		{
+			Type: "socket",
+			Path: "custom-socket",
+			Options: &apiextensionsv1.JSON{
+				Raw: []byte(`{"address":"127.0.0.1:9000","log_raw":true,"timeout":42}`),
+			},
+		},
+	}
+
+	got, err := RenderHCL(cluster, InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	})
+	if err != nil {
+		t.Fatalf("RenderHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	for _, want := range []string{`log_raw = "true"`, `timeout = "42"`} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("RenderHCL() missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestRenderHCLRejectsInvalidAuditDevices(t *testing.T) {
+	tests := []struct {
+		name    string
+		devices []openbaov1alpha1.AuditDevice
+		wantErr string
+	}{
+		{
+			name: "duplicate path",
+			devices: []openbaov1alpha1.AuditDevice{
+				{
+					Type:        "file",
+					Path:        "stdout",
+					FileOptions: &openbaov1alpha1.FileAuditOptions{FilePath: "stdout"},
+				},
+				{
+					Type: "syslog",
+					Path: "/stdout/",
+					SyslogOptions: &openbaov1alpha1.SyslogAuditOptions{
+						Tag: "openbao",
+					},
+				},
+			},
+			wantErr: `duplicate path "stdout"`,
+		},
+		{
+			name: "file missing required options",
+			devices: []openbaov1alpha1.AuditDevice{
+				{
+					Type: "file",
+					Path: "stdout",
+				},
+			},
+			wantErr: "fileOptions.filePath or options.file_path is required",
+		},
+		{
+			name: "http headers nested in raw options",
+			devices: []openbaov1alpha1.AuditDevice{
+				{
+					Type: "http",
+					Path: "remote",
+					Options: &apiextensionsv1.JSON{
+						Raw: []byte(`{"uri":"https://audit.example.test/ingest","headers":{"X-Audit":["one"]}}`),
+					},
+				},
+			},
+			wantErr: `option "headers" must be a string-compatible scalar`,
+		},
+		{
+			name: "wrong structured option family",
+			devices: []openbaov1alpha1.AuditDevice{
+				{
+					Type:        "http",
+					Path:        "remote",
+					FileOptions: &openbaov1alpha1.FileAuditOptions{FilePath: "stdout"},
+				},
+			},
+			wantErr: "fileOptions is only supported for file audit devices",
+		},
+		{
+			name: "raw options with trailing JSON",
+			devices: []openbaov1alpha1.AuditDevice{
+				{
+					Type: auditTypeSocket,
+					Path: "custom-socket",
+					Options: &apiextensionsv1.JSON{
+						Raw: []byte(`{"address":"127.0.0.1:9000"}{"address":"127.0.0.1:9001"}`),
+					},
+				},
+			},
+			wantErr: "must contain exactly one JSON object",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalCluster("invalid-audit", "default")
+			cluster.Spec.Audit = tt.devices
+
+			_, err := RenderHCL(cluster, InfrastructureDetails{
+				HeadlessServiceName: cluster.Name,
+				Namespace:           cluster.Namespace,
+				APIPort:             8200,
+				ClusterPort:         8201,
+			})
+			if err == nil {
+				t.Fatal("RenderHCL() expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("RenderHCL() error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestRenderHCLWithObservabilityMetricsTelemetry(t *testing.T) {
 	cluster := newMinimalCluster("telemetry-cluster", "default")
 	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
@@ -330,6 +487,41 @@ func TestRenderHCLWithSelfInitRequests(t *testing.T) {
 	}
 
 	compareGolden(t, "render_self_init_requests", got)
+}
+
+func TestRenderSelfInitHCLWithHTTPAuditHeaders(t *testing.T) {
+	cluster := newMinimalCluster("selfinit-http-audit", "default")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "enable-http-audit",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/audit/remote",
+				AuditDevice: &openbaov1alpha1.SelfInitAuditDevice{
+					Type: "http",
+					HTTPOptions: &openbaov1alpha1.HTTPAuditOptions{
+						URI:     "https://audit.example.test/ingest",
+						Headers: &apiextensionsv1.JSON{Raw: []byte(`{"X-Audit":["one"]}`)},
+					},
+				},
+			},
+		},
+	}
+
+	got, err := RenderSelfInitHCL(cluster, nil)
+	if err != nil {
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	want := `headers = "{\"X-Audit\":[\"one\"]}"`
+	if !strings.Contains(rendered, want) {
+		t.Fatalf("RenderSelfInitHCL() headers not rendered as JSON string %q:\n%s", want, rendered)
+	}
+	if strings.Contains(rendered, `X-Audit =`) {
+		t.Fatalf("RenderSelfInitHCL() rendered HTTP headers as nested HCL instead of a JSON string:\n%s", rendered)
+	}
 }
 
 // goldenFile reads the golden file for the given test name.
