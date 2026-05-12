@@ -1050,6 +1050,12 @@ type SelfInitRequest struct {
 // SelfInitAuditDevice provides structured configuration for enabling audit devices
 // via self-init requests. This replaces the need for raw JSON in the Data field.
 // See: https://openbao.org/api-docs/system/audit/
+// +kubebuilder:validation:XValidation:rule="self.type == 'file' || !has(self.fileOptions)",message="fileOptions is only supported when type is file"
+// +kubebuilder:validation:XValidation:rule="self.type != 'file' || has(self.fileOptions)",message="fileOptions is required when type is file"
+// +kubebuilder:validation:XValidation:rule="self.type == 'http' || !has(self.httpOptions)",message="httpOptions is only supported when type is http"
+// +kubebuilder:validation:XValidation:rule="self.type != 'http' || has(self.httpOptions)",message="httpOptions is required when type is http"
+// +kubebuilder:validation:XValidation:rule="self.type == 'syslog' || !has(self.syslogOptions)",message="syslogOptions is only supported when type is syslog"
+// +kubebuilder:validation:XValidation:rule="self.type == 'socket' || !has(self.socketOptions)",message="socketOptions is only supported when type is socket"
 type SelfInitAuditDevice struct {
 	// Type is the type of audit device (e.g., "file", "syslog", "socket", "http").
 	// +kubebuilder:validation:Enum=file;syslog;socket;http
@@ -2006,6 +2012,8 @@ type OpenBaoClusterSpec struct {
 	// Audit configures declarative audit devices for the OpenBao cluster.
 	// See: https://openbao.org/docs/configuration/audit/
 	// +optional
+	// +listType=map
+	// +listMapKey=path
 	Audit []AuditDevice `json:"audit,omitempty"`
 	// Plugins configures declarative plugins for the OpenBao cluster.
 	// See: https://openbao.org/docs/configuration/plugins/
@@ -2481,6 +2489,12 @@ type OpenBaoClusterList struct {
 
 // AuditDevice defines a declarative audit device configuration.
 // See: https://openbao.org/docs/configuration/audit/
+// +kubebuilder:validation:XValidation:rule="self.type == 'file' || !has(self.fileOptions)",message="fileOptions is only supported when type is file"
+// +kubebuilder:validation:XValidation:rule="self.type != 'file' || has(self.fileOptions) || has(self.options)",message="file audit devices require fileOptions or raw options containing file_path"
+// +kubebuilder:validation:XValidation:rule="self.type == 'http' || !has(self.httpOptions)",message="httpOptions is only supported when type is http"
+// +kubebuilder:validation:XValidation:rule="self.type != 'http' || has(self.httpOptions) || has(self.options)",message="http audit devices require httpOptions or raw options containing uri"
+// +kubebuilder:validation:XValidation:rule="self.type == 'syslog' || !has(self.syslogOptions)",message="syslogOptions is only supported when type is syslog"
+// +kubebuilder:validation:XValidation:rule="self.type == 'socket' || !has(self.socketOptions)",message="socketOptions is only supported when type is socket"
 type AuditDevice struct {
 	// Type is the type of audit device (e.g., "file", "syslog", "socket", "http").
 	// +kubebuilder:validation:Enum=file;syslog;socket;http
@@ -2508,10 +2522,11 @@ type AuditDevice struct {
 	// Only used when Type is "socket".
 	// +optional
 	SocketOptions *SocketAuditOptions `json:"socketOptions,omitempty"`
-	// Options contains device-specific configuration options as a map.
+	// Options contains device-specific configuration options as a string map.
 	// This is a fallback for backward compatibility and advanced use cases.
 	// If structured options (FileOptions, HTTPOptions, etc.) are provided, they take precedence.
-	// The structure depends on the audit device type.
+	// OpenBao audit options are string-to-string; scalar JSON values are rendered as strings,
+	// while nested objects and arrays are rejected. For HTTP headers, prefer httpOptions.headers.
 	// +optional
 	Options *apiextensionsv1.JSON `json:"options,omitempty"`
 }
@@ -2537,7 +2552,8 @@ type HTTPAuditOptions struct {
 	URI string `json:"uri"`
 	// Headers is a JSON object describing headers. Must take the shape map[string][]string,
 	// i.e., an object of headers, with each having one or more values.
-	// Headers without values will be ignored.
+	// Headers without values will be ignored. The operator renders this object as OpenBao's
+	// expected JSON-encoded options.headers string.
 	// +optional
 	Headers *apiextensionsv1.JSON `json:"headers,omitempty"`
 }
