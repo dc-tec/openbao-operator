@@ -543,10 +543,13 @@ spec:
                         description: AutoRegister controls automatic plugin registration.
                         type: boolean
                       downloadBehavior:
-                        description: DownloadBehavior specifies how plugins are downloaded.
+                        description: |-
+                          DownloadBehavior controls whether OpenBao startup fails or continues when
+                          declarative OCI plugin downloads fail. Valid values are "fail" and
+                          "continue"; OpenBao defaults to "fail" when unset.
                         enum:
-                        - standard
-                        - direct
+                        - fail
+                        - continue
                         type: string
                       filePermissions:
                         description: FilePermissions are the file permissions for
@@ -6395,10 +6398,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260511-b72dbddb3cc6
+          value: nightly-20260512-fc95717479d0
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:69a91c773cfc4fd12e85075736845581d0cbc23602043e6dbdf9daaa1a6df549
+        image: ghcr.io/dc-tec/openbao-operator@sha256:ced019fe3294b172a8b5b4a9a7d1d7c41a3db817588c734e6417d275e2a416c2
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6513,8 +6516,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260511-b72dbddb3cc6
-        image: ghcr.io/dc-tec/openbao-operator@sha256:69a91c773cfc4fd12e85075736845581d0cbc23602043e6dbdf9daaa1a6df549
+          value: nightly-20260512-fc95717479d0
+        image: ghcr.io/dc-tec/openbao-operator@sha256:ced019fe3294b172a8b5b4a9a7d1d7c41a3db817588c734e6417d275e2a416c2
         livenessProbe:
           httpGet:
             path: /healthz
