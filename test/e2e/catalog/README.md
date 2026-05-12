@@ -12,9 +12,9 @@ Notes:
 ## Summary
 
 - Files: `19`
-- Specs: `77`
-- Explicit case IDs: `31`
-- Coverage tags: `41`
+- Specs: `78`
+- Explicit case IDs: `32`
+- Coverage tags: `43`
 
 ## Suites
 
@@ -23,7 +23,7 @@ Notes:
 | [Cluster Lifecycle: Deletion Policy](suites/Cluster_DeletionPolicy_test.md) | 3 | 3 | 0 | `lifecycle`, `cluster`, `deletion` | `test/e2e/Cluster_DeletionPolicy_test.go` |
 | [Cluster Lifecycle](suites/Cluster_Lifecycle_test.md) | 7 | 0 | 0 | `lifecycle`, `cluster`, `profile-development`, `scaling`, `autopilot`, `smoke`, `critical`, `tenant` | `test/e2e/Cluster_Lifecycle_test.go` |
 | [Hardened profile (External TLS + Transit auto-unseal + SelfInit)](suites/Cluster_Profile_Hardened_test.md) | 5 | 3 | 0 | `profile-hardened`, `security`, `cluster`, `upgrade`, `bluegreen`, `hardened`, `rolling` | `test/e2e/Cluster_Profile_Hardened_test.go` |
-| [Cluster Runtime Controls](suites/Cluster_Runtime_Controls_test.md) | 2 | 2 | 0 | `lifecycle`, `cluster`, `runtime` | `test/e2e/Cluster_Runtime_Controls_test.go` |
+| [Cluster Runtime Controls](suites/Cluster_Runtime_Controls_test.md) | 3 | 3 | 0 | `lifecycle`, `cluster`, `runtime` | `test/e2e/Cluster_Runtime_Controls_test.go` |
 | [ACME TLS (OpenBao native ACME client)](suites/Cluster_TLS_ACME_test.md) | 2 | 1 | 0 | `tls`, `security`, `slow` | `test/e2e/Cluster_TLS_ACME_test.go` |
 | [Cluster TLS Lifecycle](suites/Cluster_TLS_Lifecycle_test.md) | 1 | 1 | 0 | `tls`, `cluster`, `lifecycle` | `test/e2e/Cluster_TLS_Lifecycle_test.go` |
 | [Cluster KMIP Unseal](suites/Cluster_Unseal_KMIP_test.md) | 1 | 0 | 0 | `cluster`, `lifecycle`, `unseal`, `kmip`, `hsm` | `test/e2e/Cluster_Unseal_KMIP_test.go` |
@@ -66,6 +66,8 @@ Notes:
 | `manager-metrics-endpoint` | 1 |
 | `network-isolation` | 1 |
 | `operation-lock` | 1 |
+| `plugin-auto-download` | 1 |
+| `plugin-directory` | 1 |
 | `pod-rollout` | 1 |
 | `pod-stability` | 1 |
 | `post-failover-reconcile` | 1 |

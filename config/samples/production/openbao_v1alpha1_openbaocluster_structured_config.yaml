@@ -56,7 +56,7 @@ spec:
       filePermissions: "0755"
       autoDownload: true
       autoRegister: false
-      downloadBehavior: "direct" # direct or plugin
+      downloadBehavior: "continue" # fail or continue
     # Lease/TTL configuration
     defaultLeaseTTL: "720h" # 30 days
     maxLeaseTTL: "8760h" # 1 year

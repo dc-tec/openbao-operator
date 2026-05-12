@@ -108,7 +108,7 @@ spec:
     plugin:
       autoDownload: true
       autoRegister: false
-      downloadBehavior: "direct"
+      downloadBehavior: "continue"
       fileUID: 1000
       filePermissions: "0755"
     # Lease/TTL configuration

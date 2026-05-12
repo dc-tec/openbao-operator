@@ -190,6 +190,15 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, spec State
 		})
 	}
 
+	if usesDeclarativeOCIPluginDownload(cluster) {
+		volumes = append(volumes, corev1.Volume{
+			Name: pluginVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+	}
+
 	volumes = append(volumes, newSealWiringProvider(cluster).Volumes()...)
 
 	// If self-init is enabled, add the self-init ConfigMap volume, unless disabled (Green pods)
