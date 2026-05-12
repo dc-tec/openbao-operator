@@ -92,6 +92,16 @@ func (r *OpenBaoClusterReconciler) gatewayIntegrationDependencies() appopenbaocl
 	}
 }
 
+func (r *OpenBaoClusterReconciler) ingressIntegrationDependencies() appopenbaocluster.IngressIntegrationDependencies {
+	return appopenbaocluster.IngressIntegrationDependencies{
+		Client:            r.Client,
+		APIReader:         r.APIReader,
+		Scheme:            r.ControllerRuntime.Scheme,
+		OperatorNamespace: r.OperatorNamespace,
+		Platform:          r.Platform,
+	}
+}
+
 func (r *OpenBaoClusterReconciler) apiServerNetworkDependencies() appopenbaocluster.APIServerNetworkDependencies {
 	return appopenbaocluster.APIServerNetworkDependencies{
 		Client:            r.Client,

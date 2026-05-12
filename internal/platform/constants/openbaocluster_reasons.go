@@ -12,6 +12,7 @@ const (
 	ReasonACMEIntegrationReady                   = "ACMEIntegrationReady"
 
 	ReasonGatewayIntegrationReady         = "GatewayIntegrationReady"
+	ReasonIngressIntegrationReady         = "IngressIntegrationReady"
 	ReasonGatewayReferenceMissing         = "GatewayReferenceMissing"
 	ReasonGatewayClassMissing             = "GatewayClassMissing"
 	ReasonGatewayClassPending             = "GatewayClassPending"
@@ -22,6 +23,10 @@ const (
 	ReasonGatewayNotProgrammed            = "GatewayNotProgrammed"
 	ReasonGatewayProgrammingPending       = "GatewayProgrammingPending"
 	ReasonGatewayListenerIncompatible     = "GatewayListenerIncompatible"
+	ReasonIngressClassMissing             = "IngressClassMissing"
+	ReasonIngressCapabilitiesUnknown      = "IngressCapabilitiesUnknown"
+	ReasonIngressObjectPending            = "IngressObjectPending"
+	ReasonIngressLoadBalancerPending      = "IngressLoadBalancerPending"
 	ReasonAPIServerNetworkReady           = "APIServerNetworkReady"
 	ReasonAPIServerEndpointIPsRecommended = "APIServerEndpointIPsRecommended"
 

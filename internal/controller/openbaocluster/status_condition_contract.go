@@ -67,6 +67,17 @@ var gatewayIntegrationReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
 )
 
+var ingressIntegrationReadyConditionContract = newConditionContract(
+	conditionContractEntry{reason: ReasonIngressIntegrationReady, status: metav1.ConditionTrue},
+	conditionContractEntry{reason: ReasonIngressClassMissing, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: ReasonIngressCapabilitiesUnknown, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonIngressObjectPending, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonIngressLoadBalancerPending, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
+)
+
 var apiServerNetworkReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: ReasonAPIServerNetworkReady, status: metav1.ConditionTrue},
 	conditionContractEntry{reason: ReasonAPIServerEndpointIPsRecommended, status: metav1.ConditionUnknown},
@@ -232,6 +243,19 @@ func setGatewayIntegrationReadyEvaluatedCondition(
 		cluster.Generation,
 		statusConditionResult{Status: result.Status, Reason: result.Reason, Message: result.Message},
 		gatewayIntegrationReadyConditionContract,
+	)
+}
+
+func setIngressIntegrationReadyEvaluatedCondition(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	result appopenbaocluster.IngressIntegrationResult,
+) {
+	applyConditionContract(
+		&cluster.Status.Conditions,
+		openbaov1alpha1.ConditionIngressIntegrationReady,
+		cluster.Generation,
+		statusConditionResult{Status: result.Status, Reason: result.Reason, Message: result.Message},
+		ingressIntegrationReadyConditionContract,
 	)
 }
 

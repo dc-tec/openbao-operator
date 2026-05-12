@@ -47,6 +47,20 @@ var ErrGatewayProgrammingPending = errors.New("gateway programming pending")
 // incompatible with the selected HTTPRoute/TLSRoute mode.
 var ErrGatewayListenerIncompatible = errors.New("gateway listener incompatible")
 
+// ErrIngressClassMissing indicates the selected IngressClass does not exist.
+var ErrIngressClassMissing = errors.New("referenced IngressClass not found")
+
+// ErrIngressCapabilitiesUnknown indicates the operator cannot verify the selected
+// ingress integration because required reads are not available.
+var ErrIngressCapabilitiesUnknown = errors.New("ingress capabilities unknown")
+
+// ErrIngressObjectMissing indicates the managed Ingress object does not exist yet.
+var ErrIngressObjectMissing = errors.New("managed ingress missing")
+
+// ErrIngressLoadBalancerPending indicates the managed Ingress has not yet
+// published a load balancer address in status.
+var ErrIngressLoadBalancerPending = errors.New("ingress load balancer pending")
+
 // ErrAPIServerNetworkConfigurationInvalid indicates that the operator could not
 // derive a safe least-privilege Kubernetes API egress allow-list from the
 // cluster spec and runtime environment.

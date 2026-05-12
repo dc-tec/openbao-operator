@@ -73,6 +73,9 @@ const (
 	// the referenced Gateway and GatewayClass integration contract for the chosen
 	// Gateway API mode.
 	ConditionGatewayIntegrationReady ConditionType = "GatewayIntegrationReady"
+	// ConditionIngressIntegrationReady indicates whether the operator can verify
+	// the managed Ingress integration contract for the chosen ingress mode.
+	ConditionIngressIntegrationReady ConditionType = "IngressIntegrationReady"
 	// ConditionAPIServerNetworkReady indicates whether the operator can validate
 	// the Kubernetes API egress contract used by the operator-managed NetworkPolicy.
 	// Unknown means the common service-VIP path is configured, but some CNIs may
@@ -352,6 +355,34 @@ type ReadReplicaConfig struct {
 	Storage *ReadReplicaStorageConfig `json:"storage,omitempty"`
 }
 
+// IngressPathType identifies how a Kubernetes Ingress path should match requests.
+// +kubebuilder:validation:Enum=Prefix;Exact;ImplementationSpecific
+type IngressPathType string
+
+const (
+	// IngressPathTypePrefix uses prefix path matching.
+	IngressPathTypePrefix IngressPathType = "Prefix"
+	// IngressPathTypeExact uses exact path matching.
+	IngressPathTypeExact IngressPathType = "Exact"
+	// IngressPathTypeImplementationSpecific defers path matching to the controller.
+	IngressPathTypeImplementationSpecific IngressPathType = "ImplementationSpecific"
+)
+
+// IngressReadinessMode identifies how the operator decides whether ingress
+// integration is ready for endpoint publication.
+// +kubebuilder:validation:Enum=Created;LoadBalancerPublished
+type IngressReadinessMode string
+
+const (
+	// IngressReadinessModeCreated considers ingress integration ready once the
+	// managed Ingress object exists.
+	IngressReadinessModeCreated IngressReadinessMode = "Created"
+	// IngressReadinessModeLoadBalancerPublished considers ingress integration
+	// ready only after the managed Ingress reports a published load balancer
+	// address in status.
+	IngressReadinessModeLoadBalancerPublished IngressReadinessMode = "LoadBalancerPublished"
+)
+
 // IngressConfig controls optional HTTP(S) ingress in front of the OpenBao Service.
 type IngressConfig struct {
 	// Enabled controls whether the Operator manages an Ingress for external access.
@@ -366,12 +397,21 @@ type IngressConfig struct {
 	// Path is the HTTP path to route to OpenBao, defaulting to "/".
 	// +optional
 	Path string `json:"path,omitempty"`
+	// PathType identifies how the ingress controller should interpret Path.
+	// +kubebuilder:default=Prefix
+	// +optional
+	PathType IngressPathType `json:"pathType,omitempty"`
 	// TLSSecretName is an optional TLS Secret name; when empty the cluster TLS Secret is used.
 	// +optional
 	TLSSecretName string `json:"tlsSecretName,omitempty"`
 	// Annotations are additional annotations to apply to the Ingress.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
+	// ReadinessMode identifies when the operator should consider ingress
+	// integration ready for endpoint publication.
+	// +kubebuilder:default=LoadBalancerPublished
+	// +optional
+	ReadinessMode IngressReadinessMode `json:"readinessMode,omitempty"`
 }
 
 // MaintenanceConfig defines supported maintenance operations.
