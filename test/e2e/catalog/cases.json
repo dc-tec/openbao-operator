@@ -593,6 +593,44 @@
     "suiteTitle": ""
   },
   {
+    "id": "cluster-oci-plugin-install",
+    "generatedId": "cluster-runtime-controls-registers-an-oci-plugin-with-a-b5786be4",
+    "caseLabel": "cluster-oci-plugin-install",
+    "coverage": [
+      "plugin-auto-download",
+      "plugin-directory"
+    ],
+    "file": "test/e2e/Cluster_Runtime_Controls_test.go",
+    "type": "It",
+    "name": "registers an OCI plugin with a writable plugin directory",
+    "path": [
+      "Cluster Runtime Controls",
+      "registers an OCI plugin with a writable plugin directory"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "runtime",
+      "case:cluster-oci-plugin-install",
+      "covers:plugin-auto-download",
+      "covers:plugin-directory"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "runtime"
+    ],
+    "steps": [
+      "waiting for the OpenBao pod to become ready",
+      "verifying the StatefulSet mounts a writable plugin directory",
+      "verifying OpenBao registered the declarative OCI plugin"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "cluster-restart-at-rolls-pod",
     "generatedId": "cluster-runtime-controls-rolls-the-openbao-pod-when-runtime-c0619ab5",
     "caseLabel": "cluster-restart-at-rolls-pod",

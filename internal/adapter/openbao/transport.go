@@ -49,6 +49,8 @@ type clientState struct {
 
 	failureThreshold int
 	openDuration     time.Duration
+
+	jwtTokens *jwtTokenCache
 }
 
 // newClientState creates a new clientState with the given configuration.
@@ -77,6 +79,7 @@ func newClientState(cfg portopenbao.ClientConfig) *clientState {
 		breakers:         make(map[string]*circuitBreaker),
 		failureThreshold: failureThreshold,
 		openDuration:     openDuration,
+		jwtTokens:        newJWTTokenCache(),
 	}
 }
 

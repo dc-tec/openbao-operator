@@ -6,17 +6,17 @@ import (
 	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
 const (
-	configPluginDirectoryPath = "/openbao/plugins"
-	configUnsealKeyPath       = "file:///etc/bao/unseal/key"
-	configUnsealKeyID         = "operator-generated-v1"
-	configMaxRequestDuration  = "90s"
-	configNodeIDTemplate      = "${HOSTNAME}"
+	configUnsealKeyPath      = "file:///etc/bao/unseal/key"
+	configUnsealKeyID        = "operator-generated-v1"
+	configMaxRequestDuration = "90s"
+	configNodeIDTemplate     = "${HOSTNAME}"
 
 	jwtPolicyHealthStepDownAutopilot = `path "sys/health" { capabilities = ["read"] }
 path "sys/step-down" { capabilities = ["sudo", "update"] }
@@ -149,7 +149,7 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		ClusterName:     cluster.Name,
 		APIAddr:         apiAddr,
 		ClusterAddr:     clusterAddr,
-		PluginDirectory: configPluginDirectoryPath,
+		PluginDirectory: constants.PathPlugins,
 	}, body)
 
 	listenerBlock, err := buildListenerBlock(cluster)

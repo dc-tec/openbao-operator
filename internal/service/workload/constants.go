@@ -6,6 +6,7 @@ const (
 	dataVolumeName           = constants.VolumeData
 	tlsVolumeName            = constants.VolumeTLS
 	configVolumeName         = constants.VolumeConfig
+	pluginVolumeName         = constants.VolumePlugins
 	configInitVolumeName     = "config-init"
 	configRenderedVolumeName = "config-rendered"
 	unsealVolumeName         = "unseal"
@@ -21,6 +22,7 @@ const (
 	openBaoTLSMountPath      = constants.PathTLS
 	openBaoUnsealMountPath   = "/etc/bao/unseal"
 	openBaoDataPath          = constants.PathData
+	openBaoPluginPath        = constants.PathPlugins
 	serviceAccountMountPath  = "/var/run/secrets/kubernetes.io/serviceaccount"
 	kubeRootCAConfigMapName  = "kube-root-ca.crt"
 	openBaoBinaryName        = constants.BinaryBao
