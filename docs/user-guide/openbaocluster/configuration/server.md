@@ -145,15 +145,76 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
   configuration:
     plugin:
       autoDownload: true
-      downloadBehavior: "direct"
+      downloadBehavior: "continue"
   plugins:
     - type: secret
       name: aws
       image: "ghcr.io/openbao/openbao-plugin-secrets-aws"
-      version: "v1.0.0"
+      version: "v0.0.1"
       binaryName: "openbao-plugin-secrets-aws"
+      sha256sum: "b98cb1cbfd0f567d7b614efb0621aaba10c4deda865f5e5b3d155609ada2482e"`}
+>
+  Use an `image` plugin when OpenBao should download the plugin from an OCI registry as part of server startup. The operator renders `plugin_directory = "/openbao/plugins"` and mounts a writable, pod-local volume at that path for OCI auto-download.
+</CommandBlock>
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Register preinstalled plugins"
+  code={`spec:
+  plugins:
+    - type: secret
+      name: local-example
+      command: "openbao-plugin-secrets-example"
+      version: "v1.0.0"
+      binaryName: "openbao-plugin-secrets-example"
       sha256sum: "9fdd8be7947e4a4caf7cce4f0e02695081b6c85178aa912df5d37be97363144c"`}
+>
+  Use a `command` plugin when the binary is already available inside the OpenBao runtime image or another explicitly managed runtime path.
+</CommandBlock>
+
+<DecisionTable
+  kind="reference"
+  title="Plugin fields"
+  columns={["Surface", "Use it for", "Operational note"]}
+  rows={[
+    {
+      cells: [
+        "`spec.plugins[].image`",
+        "OCI-based plugin binaries that OpenBao downloads at startup.",
+        "Set `spec.configuration.plugin.autoDownload: true`; OpenBao pods need registry egress or access to a reachable mirror.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`spec.plugins[].command`",
+        "Plugin binaries already present in the OpenBao runtime environment.",
+        "The operator does not create a plugin-download volume for command-only plugins.",
+      ],
+    },
+    {
+      cells: [
+        "`spec.configuration.plugin.autoRegister`",
+        "Automatic plugin catalog registration.",
+        "`args` and `env` on each plugin are only used when auto-register is enabled.",
+      ],
+    },
+    {
+      cells: [
+        "`spec.configuration.plugin.downloadBehavior`",
+        "Startup behavior when an OCI plugin download fails.",
+        "Use `fail` to stop startup or `continue` to log and keep starting; plugin auto-download settings require OpenBao 2.5.0 or newer.",
+      ],
+    },
+  ]}
 />
+
+<Callout type="note" title="Downloaded plugins are runtime cache">
+
+OCI-downloaded plugins are stored under `/openbao/plugins` on an ephemeral pod-local volume. Treat that directory as a writable startup cache, not durable storage. If the cluster runs in a private or disconnected environment, mirror the plugin image and make sure OpenBao's runtime OCI client can authenticate to that registry; Kubernetes `imagePullSecrets` only cover Kubernetes image pulls.
+
+</Callout>
 
   </TabItem>
 </Tabs>

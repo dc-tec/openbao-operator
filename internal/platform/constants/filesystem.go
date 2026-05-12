@@ -2,16 +2,18 @@ package constants
 
 // Common mount paths used by OpenBao pods and helper executables.
 const (
-	PathTLS    = "/etc/bao/tls"
-	PathConfig = "/etc/bao/config"
-	PathData   = "/bao/data"
+	PathTLS     = "/etc/bao/tls"
+	PathConfig  = "/etc/bao/config"
+	PathData    = "/bao/data"
+	PathPlugins = "/openbao/plugins"
 )
 
 // Common volume names used by OpenBao pods.
 const (
-	VolumeTLS    = "tls"
-	VolumeConfig = "config"
-	VolumeData   = "data"
+	VolumeTLS     = "tls"
+	VolumeConfig  = "config"
+	VolumeData    = "data"
+	VolumePlugins = "plugins"
 )
 
 // TLS file paths mounted into OpenBao pods and helper executables.

@@ -5,15 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
-
-type cachedToken struct {
-	token      string
-	expiration time.Time
-}
 
 // ClientFactory centralizes OpenBao client construction for a shared configuration template
 // (e.g., per-cluster CA bundle, client settings, timeouts).
@@ -22,9 +16,9 @@ type cachedToken struct {
 type ClientFactory struct {
 	template portopenbao.ClientConfig
 
-	mu         sync.RWMutex
-	clients    map[string]*http.Client
-	tokenCache map[string]cachedToken
+	mu        sync.RWMutex
+	clients   map[string]*http.Client
+	jwtTokens *jwtTokenCache
 
 	// clientState is the shared client state for this factory.
 	clientState *clientState
@@ -36,10 +30,14 @@ func newClientFactoryWithState(template portopenbao.ClientConfig, state *clientS
 	t := template
 	t.BaseURL = ""
 	t.Token = ""
+	jwtTokens := newJWTTokenCache()
+	if state != nil && state.jwtTokens != nil {
+		jwtTokens = state.jwtTokens
+	}
 	return &ClientFactory{
 		template:    t,
 		clients:     make(map[string]*http.Client),
-		tokenCache:  make(map[string]cachedToken),
+		jwtTokens:   jwtTokens,
 		clientState: state,
 	}
 }
@@ -105,40 +103,24 @@ func (f *ClientFactory) NewWithToken(baseURL, token string) (*Client, error) {
 
 // LoginJWT authenticates via JWT against the provided baseURL and returns the OpenBao client token.
 func (f *ClientFactory) LoginJWT(ctx context.Context, baseURL, role, jwtToken string) (string, error) {
-	// Check token cache
-	f.mu.RLock()
-	cached, ok := f.tokenCache[role]
-	f.mu.RUnlock()
-
-	if ok && time.Now().Before(cached.expiration) {
-		return cached.token, nil
+	if f == nil {
+		return "", fmt.Errorf("client factory is required")
 	}
 
-	client, err := f.New(baseURL)
-	if err != nil {
-		return "", fmt.Errorf("failed to create OpenBao client for JWT login: %w", err)
-	}
-
-	token, ttl, err := client.LoginJWT(ctx, role, jwtToken)
-	if err != nil {
-		return "", fmt.Errorf("failed to authenticate using JWT Auth: %w", err)
-	}
-
-	// Cache the token with some buffer (e.g., 5 seconds or 10% of TTL)
-	// OpenBao TTL is in seconds.
-	if ttl > 0 {
-		f.mu.Lock()
-		// Expire 10 seconds early to be safe
-		expiration := time.Now().Add(time.Duration(ttl)*time.Second - 10*time.Second)
-		if time.Now().Before(expiration) {
-			f.tokenCache[role] = cachedToken{
-				token:      token,
-				expiration: expiration,
-			}
+	token, err := f.jwtTokens.getOrLogin(ctx, baseURL, role, jwtToken, func(ctx context.Context) (string, int, error) {
+		client, err := f.New(baseURL)
+		if err != nil {
+			return "", 0, fmt.Errorf("failed to create OpenBao client for JWT login: %w", err)
 		}
-		f.mu.Unlock()
+		token, ttl, err := client.LoginJWT(ctx, role, jwtToken)
+		if err != nil {
+			return "", 0, fmt.Errorf("failed to authenticate using JWT Auth: %w", err)
+		}
+		return token, ttl, nil
+	})
+	if err != nil {
+		return "", err
 	}
-
 	return token, nil
 }
 

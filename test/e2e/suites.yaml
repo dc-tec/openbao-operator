@@ -418,6 +418,8 @@ suites:
     coverage:
       - external-service
       - ingress
+      - plugin-auto-download
+      - plugin-directory
       - pod-rollout
       - restart-at
       - tls-san

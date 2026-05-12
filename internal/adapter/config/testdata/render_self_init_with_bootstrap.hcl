@@ -26,13 +26,19 @@ initialize "operator-bootstrap" {
     operation = "update"
     path      = "auth/jwt-operator/role/openbao-operator"
     data {
-      role_type       = "jwt"
-      user_claim      = "sub"
-      bound_audiences = ["openbao-internal"]
-      bound_subject   = "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
-      token_policies  = ["openbao-operator"]
-      policies        = ["openbao-operator"]
-      ttl             = "1h"
+      role_type               = "jwt"
+      user_claim              = "sub"
+      bound_audiences         = ["openbao-internal"]
+      bound_subject           = "system:serviceaccount:openbao-operator-system:openbao-operator-controller"
+      token_policies          = ["openbao-operator"]
+      policies                = ["openbao-operator"]
+      ttl                     = "1h"
+      token_ttl               = "1h"
+      token_max_ttl           = "1h"
+      token_no_default_policy = true
+      clock_skew_leeway       = "30s"
+      expiration_leeway       = "30s"
+      not_before_leeway       = "30s"
     }
   }
 }

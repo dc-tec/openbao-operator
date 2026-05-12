@@ -1891,8 +1891,10 @@ type PluginConfig struct {
 	// +optional
 	AutoRegister *bool `json:"autoRegister,omitempty"`
 
-	// DownloadBehavior specifies how plugins are downloaded.
-	// +kubebuilder:validation:Enum=standard;direct
+	// DownloadBehavior controls whether OpenBao startup fails or continues when
+	// declarative OCI plugin downloads fail. Valid values are "fail" and
+	// "continue"; OpenBao defaults to "fail" when unset.
+	// +kubebuilder:validation:Enum=fail;continue
 	// +optional
 	DownloadBehavior string `json:"downloadBehavior,omitempty"`
 }

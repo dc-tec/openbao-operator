@@ -544,10 +544,13 @@ spec:
                         description: AutoRegister controls automatic plugin registration.
                         type: boolean
                       downloadBehavior:
-                        description: DownloadBehavior specifies how plugins are downloaded.
+                        description: |-
+                          DownloadBehavior controls whether OpenBao startup fails or continues when
+                          declarative OCI plugin downloads fail. Valid values are "fail" and
+                          "continue"; OpenBao defaults to "fail" when unset.
                         enum:
-                        - standard
-                        - direct
+                        - fail
+                        - continue
                         type: string
                       filePermissions:
                         description: FilePermissions are the file permissions for
