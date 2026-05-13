@@ -858,6 +858,24 @@ spec:
                     description: Path is the HTTP path to route to OpenBao, defaulting
                       to "/".
                     type: string
+                  pathType:
+                    default: Prefix
+                    description: PathType identifies how the ingress controller should
+                      interpret Path.
+                    enum:
+                    - Prefix
+                    - Exact
+                    - ImplementationSpecific
+                    type: string
+                  readinessMode:
+                    default: LoadBalancerPublished
+                    description: |-
+                      ReadinessMode identifies when the operator should consider ingress
+                      integration ready for endpoint publication.
+                    enum:
+                    - Created
+                    - LoadBalancerPublished
+                    type: string
                   tlsSecretName:
                     description: TLSSecretName is an optional TLS Secret name; when
                       empty the cluster TLS Secret is used.
@@ -6398,10 +6416,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260512-fc95717479d0
+          value: nightly-20260513-945b4a407829
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:ced019fe3294b172a8b5b4a9a7d1d7c41a3db817588c734e6417d275e2a416c2
+        image: ghcr.io/dc-tec/openbao-operator@sha256:56c25305485e4dc5b38abdd8e4c35615fd8f806d578bc9252d6e901cd7146407
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6516,8 +6534,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260512-fc95717479d0
-        image: ghcr.io/dc-tec/openbao-operator@sha256:ced019fe3294b172a8b5b4a9a7d1d7c41a3db817588c734e6417d275e2a416c2
+          value: nightly-20260513-945b4a407829
+        image: ghcr.io/dc-tec/openbao-operator@sha256:56c25305485e4dc5b38abdd8e4c35615fd8f806d578bc9252d6e901cd7146407
         livenessProbe:
           httpGet:
             path: /healthz
