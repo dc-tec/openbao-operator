@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/zclconf/go-cty/cty"
@@ -9,66 +10,42 @@ import (
 
 // buildAuditDeviceData builds the API request data for an audit device from structured config.
 func buildAuditDeviceData(device *openbaov1alpha1.SelfInitAuditDevice) (cty.Value, error) {
-	if device == nil {
-		return cty.NilVal, fmt.Errorf("audit device config is nil")
+	if err := validateSelfInitAuditDevice(device); err != nil {
+		return cty.NilVal, err
 	}
 
 	var optionsMap map[string]cty.Value
 
-	switch device.Type {
-	case "file":
+	auditType := strings.TrimSpace(device.Type)
+	switch auditType {
+	case auditTypeFile:
 		if device.FileOptions == nil {
 			return cty.NilVal, fmt.Errorf("fileOptions is required for file audit device")
 		}
-		optionsMap = map[string]cty.Value{
-			"file_path": cty.StringVal(device.FileOptions.FilePath),
-		}
-		if device.FileOptions.Mode != "" {
-			optionsMap["mode"] = cty.StringVal(device.FileOptions.Mode)
-		}
-	case "http":
+		optionsMap = buildFileAuditOptions(device.FileOptions)
+	case auditTypeHTTP:
 		if device.HTTPOptions == nil {
 			return cty.NilVal, fmt.Errorf("httpOptions is required for http audit device")
 		}
-		optionsMap = map[string]cty.Value{
-			"uri": cty.StringVal(device.HTTPOptions.URI),
+		httpOptions, err := buildHTTPAuditOptions(device.HTTPOptions, selfInitAuditHeadersContext)
+		if err != nil {
+			return cty.NilVal, err
 		}
-		if device.HTTPOptions.Headers != nil && len(device.HTTPOptions.Headers.Raw) > 0 {
-			headersVal, err := decodeJSONToCty(device.HTTPOptions.Headers.Raw, "audit device headers")
-			if err != nil {
-				return cty.NilVal, err
-			}
-			optionsMap["headers"] = headersVal
-		}
-	case "syslog":
+		optionsMap = httpOptions
+	case auditTypeSyslog:
 		if device.SyslogOptions != nil {
-			optionsMap = make(map[string]cty.Value)
-			if device.SyslogOptions.Facility != "" {
-				optionsMap["facility"] = cty.StringVal(device.SyslogOptions.Facility)
-			}
-			if device.SyslogOptions.Tag != "" {
-				optionsMap["tag"] = cty.StringVal(device.SyslogOptions.Tag)
-			}
+			optionsMap = buildSyslogAuditOptions(device.SyslogOptions)
 		}
-	case "socket":
+	case auditTypeSocket:
 		if device.SocketOptions != nil {
-			optionsMap = make(map[string]cty.Value)
-			if device.SocketOptions.Address != "" {
-				optionsMap["address"] = cty.StringVal(device.SocketOptions.Address)
-			}
-			if device.SocketOptions.SocketType != "" {
-				optionsMap["socket_type"] = cty.StringVal(device.SocketOptions.SocketType)
-			}
-			if device.SocketOptions.WriteTimeout != "" {
-				optionsMap["write_timeout"] = cty.StringVal(device.SocketOptions.WriteTimeout)
-			}
+			optionsMap = buildSocketAuditOptions(device.SocketOptions)
 		}
 	default:
-		return cty.NilVal, fmt.Errorf("unsupported audit device type: %s", device.Type)
+		return cty.NilVal, fmt.Errorf("unsupported audit device type: %s", auditType)
 	}
 
 	dataMap := map[string]cty.Value{
-		"type": cty.StringVal(device.Type),
+		"type": cty.StringVal(auditType),
 	}
 	if device.Description != "" {
 		dataMap["description"] = cty.StringVal(device.Description)
