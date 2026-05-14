@@ -160,7 +160,7 @@ _Appears in:_
 | `httpOptions` _[HTTPAuditOptions](#httpauditoptions)_ | HTTPOptions configures options for HTTP audit devices.<br />Only used when Type is "http". |  | Optional: \{\} <br /> |
 | `syslogOptions` _[SyslogAuditOptions](#syslogauditoptions)_ | SyslogOptions configures options for syslog audit devices.<br />Only used when Type is "syslog". |  | Optional: \{\} <br /> |
 | `socketOptions` _[SocketAuditOptions](#socketauditoptions)_ | SocketOptions configures options for socket audit devices.<br />Only used when Type is "socket". |  | Optional: \{\} <br /> |
-| `options` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#json-v1-apiextensions-k8s-io)_ | Options contains device-specific configuration options as a map.<br />This is a fallback for backward compatibility and advanced use cases.<br />If structured options (FileOptions, HTTPOptions, etc.) are provided, they take precedence.<br />The structure depends on the audit device type. |  | Optional: \{\} <br /> |
+| `options` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#json-v1-apiextensions-k8s-io)_ | Options contains device-specific configuration options as a string map.<br />This is a fallback for backward compatibility and advanced use cases.<br />If structured options (FileOptions, HTTPOptions, etc.) are provided, they take precedence.<br />OpenBao audit options are string-to-string; scalar JSON values are rendered as strings,<br />while nested objects and arrays are rejected. For HTTP headers, prefer httpOptions.headers. |  | Optional: \{\} <br /> |
 
 
 #### AutoRollbackConfig
@@ -642,7 +642,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `uri` _string_ | URI is the URI of the remote server where the audit logs will be written. |  | MinLength: 1 <br /> |
-| `headers` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#json-v1-apiextensions-k8s-io)_ | Headers is a JSON object describing headers. Must take the shape map[string][]string,<br />i.e., an object of headers, with each having one or more values.<br />Headers without values will be ignored. |  | Optional: \{\} <br /> |
+| `headers` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#json-v1-apiextensions-k8s-io)_ | Headers is a JSON object describing headers. Must take the shape map[string][]string,<br />i.e., an object of headers, with each having one or more values.<br />Headers without values will be ignored. The operator renders this object as OpenBao's<br />expected JSON-encoded options.headers string. |  | Optional: \{\} <br /> |
 
 
 #### ImageVerificationConfig

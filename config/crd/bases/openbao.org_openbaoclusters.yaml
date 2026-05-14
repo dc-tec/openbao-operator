@@ -96,7 +96,8 @@ spec:
                           description: |-
                             Headers is a JSON object describing headers. Must take the shape map[string][]string,
                             i.e., an object of headers, with each having one or more values.
-                            Headers without values will be ignored.
+                            Headers without values will be ignored. The operator renders this object as OpenBao's
+                            expected JSON-encoded options.headers string.
                           x-kubernetes-preserve-unknown-fields: true
                         uri:
                           description: URI is the URI of the remote server where the
@@ -108,10 +109,11 @@ spec:
                       type: object
                     options:
                       description: |-
-                        Options contains device-specific configuration options as a map.
+                        Options contains device-specific configuration options as a string map.
                         This is a fallback for backward compatibility and advanced use cases.
                         If structured options (FileOptions, HTTPOptions, etc.) are provided, they take precedence.
-                        The structure depends on the audit device type.
+                        OpenBao audit options are string-to-string; scalar JSON values are rendered as strings,
+                        while nested objects and arrays are rejected. For HTTP headers, prefer httpOptions.headers.
                       x-kubernetes-preserve-unknown-fields: true
                     path:
                       description: Path is the path of the audit device in the root
@@ -170,7 +172,19 @@ spec:
                   - path
                   - type
                   type: object
+                  x-kubernetes-validations:
+                  - message: fileOptions is only supported when type is file
+                    rule: self.type == 'file' || !has(self.fileOptions)
+                  - message: httpOptions is only supported when type is http
+                    rule: self.type == 'http' || !has(self.httpOptions)
+                  - message: syslogOptions is only supported when type is syslog
+                    rule: self.type == 'syslog' || !has(self.syslogOptions)
+                  - message: socketOptions is only supported when type is socket
+                    rule: self.type == 'socket' || !has(self.socketOptions)
                 type: array
+                x-kubernetes-list-map-keys:
+                - path
+                x-kubernetes-list-type: map
               backup:
                 description: Backup configures scheduled backups for the cluster.
                 properties:
@@ -3427,7 +3441,8 @@ spec:
                                   description: |-
                                     Headers is a JSON object describing headers. Must take the shape map[string][]string,
                                     i.e., an object of headers, with each having one or more values.
-                                    Headers without values will be ignored.
+                                    Headers without values will be ignored. The operator renders this object as OpenBao's
+                                    expected JSON-encoded options.headers string.
                                   x-kubernetes-preserve-unknown-fields: true
                                 uri:
                                   description: URI is the URI of the remote server
@@ -3488,6 +3503,21 @@ spec:
                           required:
                           - type
                           type: object
+                          x-kubernetes-validations:
+                          - message: fileOptions is only supported when type is file
+                            rule: self.type == 'file' || !has(self.fileOptions)
+                          - message: fileOptions is required when type is file
+                            rule: self.type != 'file' || has(self.fileOptions)
+                          - message: httpOptions is only supported when type is http
+                            rule: self.type == 'http' || !has(self.httpOptions)
+                          - message: httpOptions is required when type is http
+                            rule: self.type != 'http' || has(self.httpOptions)
+                          - message: syslogOptions is only supported when type is
+                              syslog
+                            rule: self.type == 'syslog' || !has(self.syslogOptions)
+                          - message: socketOptions is only supported when type is
+                              socket
+                            rule: self.type == 'socket' || !has(self.socketOptions)
                         authMethod:
                           description: |-
                             AuthMethod configures an auth method when Path starts with "sys/auth/".
