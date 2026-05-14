@@ -176,14 +176,8 @@ spec:
                   x-kubernetes-validations:
                   - message: fileOptions is only supported when type is file
                     rule: self.type == 'file' || !has(self.fileOptions)
-                  - message: file audit devices require fileOptions or raw options
-                      containing file_path
-                    rule: self.type != 'file' || has(self.fileOptions) || has(self.options)
                   - message: httpOptions is only supported when type is http
                     rule: self.type == 'http' || !has(self.httpOptions)
-                  - message: http audit devices require httpOptions or raw options
-                      containing uri
-                    rule: self.type != 'http' || has(self.httpOptions) || has(self.options)
                   - message: syslogOptions is only supported when type is syslog
                     rule: self.type == 'syslog' || !has(self.syslogOptions)
                   - message: socketOptions is only supported when type is socket
