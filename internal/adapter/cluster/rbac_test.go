@@ -236,6 +236,70 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 			},
 		},
 		{
+			name: "Image verification pull secrets are readable",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: objectMeta("verified"),
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeOperatorManaged,
+					},
+					ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+						Enabled: true,
+						ImagePullSecrets: []corev1.LocalObjectReference{
+							{Name: "main-registry-creds"},
+						},
+					},
+					OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+						Enabled: true,
+						ImagePullSecrets: []corev1.LocalObjectReference{
+							{Name: "helper-registry-creds"},
+						},
+					},
+				},
+			},
+			wantWriters: []string{
+				"verified-root-token",
+				"verified-tls-ca",
+				"verified-tls-server",
+				"verified-unseal-key",
+			},
+			wantReaders: []string{
+				"helper-registry-creds",
+				"main-registry-creds",
+			},
+		},
+		{
+			name: "Disabled image verification pull secrets are not readable",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: objectMeta("verification-disabled"),
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeOperatorManaged,
+					},
+					ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+						Enabled: false,
+						ImagePullSecrets: []corev1.LocalObjectReference{
+							{Name: "unused-main-registry-creds"},
+						},
+					},
+					OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+						Enabled: false,
+						ImagePullSecrets: []corev1.LocalObjectReference{
+							{Name: "unused-helper-registry-creds"},
+						},
+					},
+				},
+			},
+			wantWriters: []string{
+				"verification-disabled-root-token",
+				"verification-disabled-tls-ca",
+				"verification-disabled-tls-server",
+				"verification-disabled-unseal-key",
+			},
+		},
+		{
 			name: "Full configuration with all secret types",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: objectMeta("full"),

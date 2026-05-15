@@ -553,6 +553,18 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 					Name: "upgrade-token",
 				},
 			},
+			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+				ImagePullSecrets: []corev1.LocalObjectReference{
+					{Name: "main-registry-creds"},
+				},
+			},
+			OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+				ImagePullSecrets: []corev1.LocalObjectReference{
+					{Name: "helper-registry-creds"},
+				},
+			},
 		},
 	}
 
@@ -579,6 +591,8 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 	expectedReaderNames := []string{
 		"backup-creds",
 		"backup-token",
+		"helper-registry-creds",
+		"main-registry-creds",
 		"unseal-creds",
 		"upgrade-token",
 	}

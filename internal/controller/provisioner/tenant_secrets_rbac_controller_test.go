@@ -152,6 +152,18 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 			Upgrade: &openbaov1alpha1.UpgradeConfig{
 				JWTAuthRole: "upgrade-role",
 			},
+			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+				ImagePullSecrets: []corev1.LocalObjectReference{
+					{Name: "main-registry-creds"},
+				},
+			},
+			OperatorImageVerification: &openbaov1alpha1.ImageVerificationConfig{
+				Enabled: true,
+				ImagePullSecrets: []corev1.LocalObjectReference{
+					{Name: "helper-registry-creds"},
+				},
+			},
 			Unseal: &openbaov1alpha1.UnsealConfig{
 				CredentialsSecretRef: &corev1.LocalObjectReference{Name: "unseal-creds"},
 			},
@@ -200,7 +212,7 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 	}, readerRole); err != nil {
 		t.Fatalf("expected reader role: %v", err)
 	}
-	wantReaderSecrets := []string{"backup-creds", "backup-token", "unseal-creds"}
+	wantReaderSecrets := []string{"backup-creds", "backup-token", "helper-registry-creds", "main-registry-creds", "unseal-creds"}
 	sort.Strings(wantReaderSecrets)
 	if gotReaderSecrets := extractSecretResourceNames(readerRole.Rules); !slices.Equal(gotReaderSecrets, wantReaderSecrets) {
 		t.Fatalf("reader secrets = %v, want %v", gotReaderSecrets, wantReaderSecrets)
