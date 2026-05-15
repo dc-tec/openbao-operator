@@ -27,8 +27,12 @@ func (m *Manager) EnsureTenantRBAC(ctx context.Context, tenant *openbaov1alpha1.
 		return fmt.Errorf("failed to apply tenant RoleBinding %s/%s: %w", namespace, TenantRoleBindingName, err)
 	}
 
-	if err := m.ensureNamespacePodSecurityLabels(ctx, namespace); err != nil {
-		return err
+	if m.namespacePodSecurityLabelsMode == NamespacePodSecurityLabelsModeEnforce {
+		if err := m.ensureNamespacePodSecurityLabels(ctx, namespace); err != nil {
+			return err
+		}
+	} else {
+		m.logger.Info("Skipping tenant namespace Pod Security label enforcement; platform owns namespace Pod Security labels", "namespace", namespace)
 	}
 	if err := m.EnsureTenantSecretRBAC(ctx, namespace); err != nil {
 		return err

@@ -145,8 +145,8 @@ Disabling admission policies is treated as unsafe mode. Even if the cluster othe
     {
       cells: [
         'Namespace mutation',
-        'Provisioner namespace updates are limited to fixed Pod Security label enforcement and blocked in system namespaces.',
-        'Tenant onboarding should not become a generic namespace-mutation channel.',
+        'Provisioner namespace updates are limited to fixed Pod Security label enforcement and blocked in system namespaces. In external Pod Security label mode, provisioner namespace mutations are denied entirely.',
+        'Tenant onboarding should not become a generic namespace-mutation channel, and platform-owned namespace labels should stay owned by platform policy.',
       ],
     },
     {

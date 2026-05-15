@@ -73,6 +73,8 @@ spec:
               value: {{ include "openbao-operator.controllerServiceAccountName" . }}
             - name: OPERATOR_VERSION
               value: {{ include "openbao-operator.operatorVersion" . | quote }}
+            - name: OPENBAO_TENANT_NAMESPACE_POD_SECURITY_LABELS_MODE
+              value: {{ .Values.tenancy.namespacePodSecurityLabels.mode | quote }}
             {{- if not .Values.admissionPolicies.enabled }}
             - name: OPENBAO_UNSAFE_ADMISSION_DISABLED
               value: "true"

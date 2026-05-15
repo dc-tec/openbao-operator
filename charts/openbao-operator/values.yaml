@@ -54,6 +54,14 @@ tenancy:
   # -- If empty, defaults to the release namespace.
   targetNamespace: ""
 
+  # -- Tenant namespace Pod Security label management.
+  # -- mode=enforce lets the provisioner apply restricted Pod Security labels
+  # -- to tenant namespaces during OpenBaoTenant onboarding.
+  # -- mode=external delegates those namespace labels to the platform policy layer
+  # -- and prevents the provisioner from mutating Namespace objects.
+  namespacePodSecurityLabels:
+    mode: enforce
+
 # -- Controller deployment configuration
 controller:
   # -- Number of controller replicas

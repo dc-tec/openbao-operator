@@ -3,12 +3,12 @@ title: Provisioner Manager
 hide_title: true
 pageType: concept
 journey: architecture
-description: Provision tenant namespaces with scoped RBAC, Secret allowlists, Pod Security labels, and quota defaults for OpenBaoTenant.
+description: Provision tenant namespaces with scoped RBAC, Secret allowlists, Pod Security label ownership, and quota defaults for OpenBaoTenant.
 ---
 
 <PageHeader
   title="Provision tenant namespaces with scoped RBAC, Secret allowlists, and policy defaults."
-  lede="The provisioner manager owns the tenant-onboarding contract for `OpenBaoTenant`. It creates namespace-scoped permissions for the operator, applies Pod Security and quota defaults, and keeps Secret access narrowed to explicit allowlists derived from managed clusters."
+  lede="The provisioner manager owns the tenant-onboarding contract for `OpenBaoTenant`. It creates namespace-scoped permissions for the operator, applies quota defaults, applies Pod Security labels when configured to own them, and keeps Secret access narrowed to explicit allowlists derived from managed clusters."
 />
 
 
@@ -28,14 +28,14 @@ description: Provision tenant namespaces with scoped RBAC, Secret allowlists, Po
       items: [
         'tenant-scoped operator Role and RoleBinding resources',
         'reader and writer Secret allowlists derived from tenant clusters',
-        'Pod Security labels plus optional ResourceQuota and LimitRange defaults',
+        'Pod Security labels when configured plus optional ResourceQuota and LimitRange defaults',
       ],
     },
     {
       label: 'Writes',
       items: [
         'tenant Role / RoleBinding and Secret RBAC resources',
-        'namespace labels that enforce Pod Security defaults',
+        'namespace labels that enforce Pod Security defaults unless platform policy owns them',
         'ResourceQuota and LimitRange resources from OpenBaoTenant.spec',
       ],
     },
@@ -78,7 +78,7 @@ The tenant `RoleBinding` is also the explicit handoff marker into the cluster co
       cells: ['Controller handoff', 'When the tenant namespace is actually ready for `OpenBaoCluster` reconciliation.', 'GitOps paths can submit tenant and cluster objects together only if the controller has a deterministic, namespace-scoped readiness marker.'],
     },
     {
-      cells: ['Pod Security labels', 'The baseline namespace policy applied to tenant workloads and operator-managed pods.', 'Tenants need a secure default even before any cluster objects are created.'],
+      cells: ['Pod Security labels', 'The baseline namespace policy applied to tenant workloads and operator-managed pods when the chart is in enforce mode.', 'Tenants need a secure default even before any cluster objects are created, whether owned by the Provisioner or by platform policy.'],
     },
     {
       cells: ['Quota defaults', 'Optional ResourceQuota and LimitRange resources derived from OpenBaoTenant.spec.', 'Tenants need resource guardrails that travel with the namespace onboarding contract.'],
@@ -90,14 +90,14 @@ The tenant `RoleBinding` is also the explicit handoff marker into the cluster co
 
 <DiagramFrame
   title="Tenant onboarding flow"
-  caption="Provisioning applies namespace-scoped guardrails first, then keeps Secret allowlists synchronized as managed clusters appear or disappear in the tenant namespace."
+  caption="Provisioning applies namespace-scoped guardrails first, then keeps Secret allowlists synchronized as managed clusters appear or disappear in the tenant namespace. Pod Security labels can be owned by the Provisioner or by platform policy."
   code={`graph TD
     Tenant["OpenBaoTenant"] --> Ctrl["Provisioner controller"]
     Ctrl --> App["internal/app/provisioner"]
     App --> Manager["Provisioner manager"]
     Manager --> RBAC["Tenant Role / RoleBinding"]
     Manager --> Secrets["Reader / writer Secret allowlists"]
-    Manager --> Labels["Pod Security labels"]
+    Manager -. enforce mode .-> Labels["Pod Security labels"]
     Manager --> Quotas["ResourceQuota / LimitRange"]
     Quotas --> Ready["Tenant namespace ready for OpenBaoCluster"]
 

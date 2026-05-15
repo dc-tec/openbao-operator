@@ -13,8 +13,10 @@ rules:
       - namespaces
     verbs:
       - get
+{{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "enforce" }}
       - update
       - patch
+{{ end }}
 
   - apiGroups:
       - openbao.org

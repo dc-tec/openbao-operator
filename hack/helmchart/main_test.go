@@ -66,6 +66,64 @@ rules:
 	}
 }
 
+func TestAddNamespacePodSecurityLabelRBACMode_ConditionsNamespaceMutationVerbs(t *testing.T) {
+	input := `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: openbao-operator-provisioner
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - update
+      - patch
+`
+
+	got, err := addNamespacePodSecurityLabelRBACMode(input)
+	if err != nil {
+		t.Fatalf("addNamespacePodSecurityLabelRBACMode() failed: %v", err)
+	}
+	if !strings.Contains(got, `{{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "enforce" }}`) {
+		t.Fatalf("transformed RBAC missing namespace Pod Security label mode conditional:\n%s", got)
+	}
+	if !strings.Contains(got, "      - get\n{{ if") {
+		t.Fatalf("transformed RBAC should leave get outside the conditional:\n%s", got)
+	}
+}
+
+func TestAddNamespacePodSecurityLabelPolicyMode_AddsExternalDenyRule(t *testing.T) {
+	input := `apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openbao-restrict-provisioner-namespace-mutations
+spec:
+  validations:
+    # Rule 1: Only enforce Pod Security Standards labels (restricted), and do not change anything else.
+    - expression: >-
+        !variables.is_provisioner
+      message: "The Provisioner may only enforce Pod Security Standards labels (restricted) on Namespaces."
+`
+
+	got, err := addNamespacePodSecurityLabelPolicyMode(input)
+	if err != nil {
+		t.Fatalf("addNamespacePodSecurityLabelPolicyMode() failed: %v", err)
+	}
+	for _, want := range []string{
+		`{{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "external" }}`,
+		"The Provisioner may not mutate Namespaces when tenant namespace Pod Security labels are externally managed.",
+		`{{ else }}`,
+		"The Provisioner may only enforce Pod Security Standards labels (restricted) on Namespaces.",
+		`{{ end }}`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("transformed policy missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestHelmTemplateRendersStrictYAML(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -73,6 +131,10 @@ func TestHelmTemplateRendersStrictYAML(t *testing.T) {
 	}{
 		{name: "default"},
 		{name: "multi", args: []string{"--set", "tenancy.mode=multi"}},
+		{
+			name: "external-namespace-pod-security-labels",
+			args: []string{"--set", "tenancy.namespacePodSecurityLabels.mode=external"},
+		},
 		{name: "single", args: []string{"--set", "tenancy.mode=single", "--set", "tenancy.targetNamespace=openbao-system"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

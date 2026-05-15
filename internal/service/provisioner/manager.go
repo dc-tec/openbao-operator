@@ -4,20 +4,28 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+)
+
+const (
+	NamespacePodSecurityLabelsModeEnforce  = "enforce"
+	NamespacePodSecurityLabelsModeExternal = "external"
 )
 
 // Manager handles the provisioning of RBAC resources for tenant namespaces.
 type Manager struct {
-	client     client.Client
-	operatorSA OperatorServiceAccount
-	logger     logr.Logger
+	client                         client.Client
+	operatorSA                     OperatorServiceAccount
+	logger                         logr.Logger
+	namespacePodSecurityLabelsMode string
 }
 
 // NewManager creates a new provisioner Manager.
@@ -39,14 +47,39 @@ func NewManager(c client.Client, logger logr.Logger) (*Manager, error) {
 	}
 	controllerSANamespace := saNamespace
 
+	namespacePodSecurityLabelsMode, err := resolveNamespacePodSecurityLabelsMode()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Manager{
 		client: c,
 		operatorSA: OperatorServiceAccount{
 			Name:      controllerSAName,
 			Namespace: controllerSANamespace,
 		},
-		logger: logger,
+		logger:                         logger,
+		namespacePodSecurityLabelsMode: namespacePodSecurityLabelsMode,
 	}, nil
+}
+
+func resolveNamespacePodSecurityLabelsMode() (string, error) {
+	mode := strings.TrimSpace(os.Getenv(constants.EnvTenantNamespacePodSecurityLabelsMode))
+	if mode == "" {
+		return NamespacePodSecurityLabelsModeEnforce, nil
+	}
+	mode = strings.ToLower(mode)
+	switch mode {
+	case NamespacePodSecurityLabelsModeEnforce, NamespacePodSecurityLabelsModeExternal:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("%s must be %q or %q, got %q",
+			constants.EnvTenantNamespacePodSecurityLabelsMode,
+			NamespacePodSecurityLabelsModeEnforce,
+			NamespacePodSecurityLabelsModeExternal,
+			mode,
+		)
+	}
 }
 
 // applyResource uses Server-Side Apply.

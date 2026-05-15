@@ -176,8 +176,8 @@ The config-rendering init container inherits the same pod-level hardening contra
     {
       cells: [
         "Tenant namespace PSS labels",
-        "Provisioned namespaces are labeled for Restricted Pod Security enforcement, audit, and warning.",
-        "Insecure sidecars or helper workloads should fail at the namespace boundary rather than weakening the cluster quietly.",
+        "Provisioned namespaces are labeled for Restricted Pod Security enforcement, audit, and warning by the Provisioner unless namespace label ownership is delegated to platform policy.",
+        "Insecure sidecars or helper workloads should fail at the namespace boundary rather than weakening the cluster quietly; external mode keeps that baseline as a platform responsibility.",
       ],
       emphasis: "recommended",
     },

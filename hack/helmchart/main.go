@@ -257,6 +257,12 @@ func syncPolicies(opts options) error {
 				return fmt.Errorf("read %q: %w", inPath, err)
 			}
 			transformed := transformPolicyToHelm(content)
+			if inputFile == "openbao-restrict-provisioner-namespace-mutations.yaml" {
+				transformed, err = addNamespacePodSecurityLabelPolicyMode(transformed)
+				if err != nil {
+					return fmt.Errorf("add namespace Pod Security label mode to %q: %w", inputFile, err)
+				}
+			}
 			parts = append(parts, transformed)
 		}
 
@@ -335,6 +341,34 @@ func transformPolicyToHelm(content string) string {
 		`'{{ include "openbao-operator.provisionerServiceAccountName" . }}'`)
 
 	return content
+}
+
+func addNamespacePodSecurityLabelPolicyMode(content string) (string, error) {
+	const startMarker = "    # Rule 1: Only enforce Pod Security Standards labels (restricted), " +
+		"and do not change anything else."
+	const endMarker = "      message: " +
+		`"The Provisioner may only enforce Pod Security Standards labels (restricted) on Namespaces."`
+
+	start := strings.Index(content, startMarker)
+	if start == -1 {
+		return "", fmt.Errorf("namespace Pod Security label rule start marker not found")
+	}
+	relativeEnd := strings.Index(content[start:], endMarker)
+	if relativeEnd == -1 {
+		return "", fmt.Errorf("namespace Pod Security label rule end marker not found")
+	}
+	end := start + relativeEnd + len(endMarker)
+
+	externalRule := `{{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "external" }}
+    # Rule 1: Namespace Pod Security labels are externally managed, so the Provisioner must not mutate Namespaces.
+    - expression: >-
+        !variables.is_provisioner
+      message: >-
+        The Provisioner may not mutate Namespaces when tenant namespace Pod Security labels are externally managed.
+{{ else }}
+`
+	replacement := externalRule + content[start:end] + "\n{{ end }}"
+	return content[:start] + replacement + content[end:], nil
 }
 
 // addHelmLabels adds standard Helm labels after the metadata block.
@@ -421,6 +455,10 @@ func syncProvisionerRBAC(opts options) error {
 		return fmt.Errorf("read provisioner_minimal_role.yaml: %w", err)
 	}
 	provisionerRole = transformRBACToHelm(provisionerRole, "provisioner", false)
+	provisionerRole, err = addNamespacePodSecurityLabelRBACMode(provisionerRole)
+	if err != nil {
+		return fmt.Errorf("add namespace Pod Security label mode to provisioner RBAC: %w", err)
+	}
 	parts = append(parts, provisionerRole)
 
 	// 2. Provisioner ClusterRoleBindings
@@ -444,6 +482,25 @@ func syncProvisionerRBAC(opts options) error {
 	output := fmt.Sprintf("{{- if eq .Values.tenancy.mode \"multi\" }}\n%s{{- end }}\n", strings.Join(parts, "---\n"))
 	outPath := filepath.Join(opts.rbacOutputDir, "provisioner-clusterroles.yaml")
 	return writeFile(outPath, output)
+}
+
+func addNamespacePodSecurityLabelRBACMode(content string) (string, error) {
+	const namespaceVerbs = `    verbs:
+      - get
+      - update
+      - patch
+`
+	const namespaceVerbsWithMode = `    verbs:
+      - get
+{{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "enforce" }}
+      - update
+      - patch
+{{ end }}
+`
+	if !strings.Contains(content, namespaceVerbs) {
+		return "", fmt.Errorf("namespace get/update/patch verbs block not found")
+	}
+	return strings.Replace(content, namespaceVerbs, namespaceVerbsWithMode, 1), nil
 }
 
 // syncControllerRBAC syncs controller-related RBAC.

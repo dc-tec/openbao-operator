@@ -89,8 +89,9 @@ const (
 	EnvRestoreUsePathStyle = "RESTORE_USE_PATH_STYLE"
 
 	// Operator
-	EnvOperatorVersion    = "OPERATOR_VERSION"
-	EnvOpenBaoJWTAudience = "OPENBAO_JWT_AUDIENCE"
+	EnvOperatorVersion                      = "OPERATOR_VERSION"
+	EnvOpenBaoJWTAudience                   = "OPENBAO_JWT_AUDIENCE"
+	EnvTenantNamespacePodSecurityLabelsMode = "OPENBAO_TENANT_NAMESPACE_POD_SECURITY_LABELS_MODE"
 
 	// Operator-managed image repositories
 	EnvOperatorBackupImageRepo  = "OPERATOR_BACKUP_IMAGE_REPOSITORY"
