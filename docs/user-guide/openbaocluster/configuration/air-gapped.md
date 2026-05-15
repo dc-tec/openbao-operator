@@ -45,9 +45,9 @@ description: Mirror operator, workload, and helper images; set repository defaul
     {
       cells: [
         "Registry authentication",
-        "The operator install uses chart-level `imagePullSecrets`; each cluster uses `spec.imagePullSecrets`.",
+        "The operator install uses chart-level `imagePullSecrets`; each cluster uses `spec.imagePullSecrets`. Image verification uses its own `imagePullSecrets` fields.",
         "Create Docker registry Secrets in the namespace that will pull the images.",
-        "Do not assume the operator namespace and tenant namespaces can share pull secrets implicitly.",
+        "Do not assume the operator namespace and tenant namespaces can share pull secrets implicitly. If verification must contact a private registry, the controller also needs read access to the named tenant Secret.",
       ],
       emphasis: "caution",
     },
@@ -119,6 +119,14 @@ spec:
   image: "my-registry.corp/openbao/openbao:2.5.0"
   imagePullSecrets:
     - name: cluster-registry-creds
+  imageVerification:
+    enabled: true
+    imagePullSecrets:
+      - name: cluster-registry-creds
+  operatorImageVerification:
+    enabled: true
+    imagePullSecrets:
+      - name: cluster-registry-creds
   initContainer:
     image: "my-registry.corp/openbao-init:<operator-version>"
   backup:
@@ -141,6 +149,12 @@ spec:
 >
   The Secret must exist in the same namespace as the OpenBaoCluster that references it.
 </CommandBlock>
+
+<Callout type="note" title="Separate kubelet pulls from verification pulls">
+
+`spec.imagePullSecrets` lets Kubernetes pull the rendered Pods and Jobs. `spec.imageVerification.imagePullSecrets` and `spec.operatorImageVerification.imagePullSecrets` let the controller authenticate to the registry while resolving and verifying signatures. In multi-tenant mode, the provisioner grants the controller `get` only on those named tenant Secrets.
+
+</Callout>
 
 <DecisionTable
   kind="reference"
