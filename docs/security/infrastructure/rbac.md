@@ -157,7 +157,7 @@ The provisioner writes the RBAC that grants the controller access, but it does n
     {
       cells: [
         'Read and write allowlisted Secrets',
-        'Lifecycle workflows need specific Secret names for bootstrap, TLS, and operations.',
+        'Lifecycle workflows need specific Secret names for bootstrap, TLS, operations, and private-registry image verification.',
         'Secret access is fixed-name, non-enumerating, and guarded by dedicated admission policy.',
       ],
     },

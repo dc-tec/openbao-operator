@@ -173,12 +173,22 @@ The Hardened profile is opinionated here. The intent is that image verification 
   imageVerification:
     enabled: true
     failurePolicy: Block
+    imagePullSecrets:
+      - name: cluster-registry-creds
   operatorImageVerification:
     enabled: true
-    failurePolicy: Block`}
+    failurePolicy: Block
+    imagePullSecrets:
+      - name: cluster-registry-creds`}
 >
   Treat the main OpenBao image and operator helper images as separate trust surfaces. They may share policy, but they should not share assumptions blindly.
 </CommandBlock>
+
+<Callout type="note" title="Private-registry verification needs controller Secret read">
+
+Verification pull Secrets are read by the controller, not by the kubelet. In multi-tenant mode, the provisioner keeps that access name-scoped by granting `get` only on the tenant Secrets referenced from enabled `spec.imageVerification.imagePullSecrets` and `spec.operatorImageVerification.imagePullSecrets`.
+
+</Callout>
 
 <CommandBlock
   language="bash"
