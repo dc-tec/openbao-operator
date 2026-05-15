@@ -28,6 +28,17 @@ tenancy:
   mode: multi
 ```
 
+### Multi-tenant mode with platform-managed Pod Security labels
+
+Use this when Rancher or another platform policy layer owns namespace labels. The chart keeps tenant RBAC and quota onboarding in the operator, removes namespace update/patch RBAC from the Provisioner, and configures admission policy to deny Provisioner namespace mutations.
+
+```yaml
+tenancy:
+  mode: multi
+  namespacePodSecurityLabels:
+    mode: external
+```
+
 ### Single-tenant mode
 
 ```yaml

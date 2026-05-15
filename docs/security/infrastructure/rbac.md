@@ -104,9 +104,9 @@ The operator disables default token auto-mounting and uses explicit projected Se
     },
     {
       cells: [
-        'Patch Namespaces for fixed PSS labels',
-        'Tenant namespaces must be hardened as part of onboarding.',
-        'Namespace mutation is limited to the fixed Pod Security label set and blocked in system namespaces.',
+        'Patch Namespaces for fixed PSS labels in default enforce mode',
+        'Tenant namespaces need a Pod Security baseline unless a platform policy layer already owns it.',
+        'Namespace mutation is limited to the fixed Pod Security label set and blocked in system namespaces. In external mode, Helm removes namespace update/patch RBAC from the provisioner.',
       ],
     },
     {

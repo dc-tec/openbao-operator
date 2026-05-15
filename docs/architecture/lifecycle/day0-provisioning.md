@@ -63,7 +63,7 @@ description: Tenant provisioning flow from OpenBaoTenant creation through namesp
       items: [
         'tenant Role and RoleBinding resources',
         'Secret reader and writer allowlist roles',
-        'Pod Security labels plus optional ResourceQuota and LimitRange defaults',
+        'Pod Security labels when configured plus optional ResourceQuota and LimitRange defaults',
       ],
     },
     {
@@ -106,7 +106,7 @@ Day 0 also defines the handoff into Day 1. In multi-tenant mode, `OpenBaoCluster
     Ctrl->>App: Reconcile tenant request
     App->>Manager: Apply tenant provisioning contract
     Manager->>Namespace: Create tenant Role / RoleBinding
-    Manager->>Namespace: Apply Pod Security labels
+    Manager->>Namespace: Apply Pod Security labels when configured to own them
     Manager->>Namespace: Apply optional quota defaults
     Manager->>Namespace: Sync Secret allowlist roles
     Namespace-->>Admin: Namespace ready for OpenBaoCluster
@@ -134,7 +134,7 @@ Day 0 also defines the handoff into Day 1. In multi-tenant mode, `OpenBaoCluster
       cells: ['Secret allowlists', 'Provisioner manager plus tenant Secret RBAC sync.', 'Multi-tenant safety depends on explicit Secret access derived from actual managed cluster references.'],
     },
     {
-      cells: ['Policy defaults', 'Provisioner manager.', 'Pod Security labels and optional quotas give the namespace a safe baseline before a cluster is created.'],
+      cells: ['Policy defaults', 'Provisioner manager plus platform policy when namespace labels are externally managed.', 'Pod Security labels and optional quotas give the namespace a safe baseline before a cluster is created.'],
     },
   ]}
 />

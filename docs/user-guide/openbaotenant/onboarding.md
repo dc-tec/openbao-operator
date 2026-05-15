@@ -25,6 +25,12 @@ Create the Kubernetes namespace through your normal platform workflow first, the
 
 </Callout>
 
+<Callout type="note" title="Platform-managed Pod Security labels">
+
+By default, tenant onboarding applies Restricted Pod Security labels to the target namespace. On Rancher or other clusters where namespace labels are owned by platform admission, install the chart with `tenancy.namespacePodSecurityLabels.mode=external`. In that mode the Provisioner still writes tenant RBAC, quotas, limits, and Secret allowlists, but it does not mutate `Namespace` objects. The platform policy layer must enforce the namespace Pod Security baseline.
+
+</Callout>
+
 <Callout type="note" title="GitOps can submit tenant and cluster together">
 
 If your GitOps pipeline applies `OpenBaoTenant` and `OpenBaoCluster` in the same sync, the cluster controllers pause cleanly until tenant onboarding is finished. The handoff is complete once the Provisioner has written the tenant `RoleBinding` and `OpenBaoTenant` reports `status.provisioned: true`.
@@ -204,6 +210,13 @@ If a namespace owner creates `OpenBaoTenant` in one namespace and targets a diff
         'Provisioning never completes or clusters keep requeueing without creating workload resources',
         'The Provisioner is missing, unhealthy, or cannot write the tenant guardrails and tenant RoleBinding',
         'Operator install health, the Provisioner deployment, and the tenant `RoleBinding` in the target namespace',
+      ],
+    },
+    {
+      cells: [
+        'Provisioning reports an admission or Unauthorized error while updating the target namespace',
+        'A platform policy layer owns namespace labels while the chart is still in default Pod Security label enforcement mode',
+        'Use `tenancy.namespacePodSecurityLabels.mode=external` when platform policy owns those labels',
       ],
     },
     {

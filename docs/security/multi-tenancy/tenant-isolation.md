@@ -43,7 +43,7 @@ description: How namespace introduction, split controller identities, admission 
       cells: [
         "Network and namespace hardening",
         "Cross-tenant traffic and insecure sidecar drift are reduced by default.",
-        "Default-deny `NetworkPolicy` and Restricted Pod Security labels apply at onboarding time.",
+        "Default-deny `NetworkPolicy` applies at onboarding time. Restricted Pod Security labels are applied by the Provisioner unless the chart delegates namespace labels to platform policy.",
       ],
     },
   ]}
@@ -135,7 +135,7 @@ Use <SiteLink docId="user-guide/openbaotenant/onboarding">Onboard the target nam
       cells: [
         "Namespace-level runtime baseline",
         "Tenant namespaces start from Restricted pod-security enforcement and default network isolation.",
-        "Provisioner-owned namespace labels and network-policy defaults.",
+        "Provisioner-owned namespace labels and network-policy defaults, or platform-owned namespace labels when `tenancy.namespacePodSecurityLabels.mode=external` is set.",
       ],
     },
   ]}
