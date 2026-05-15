@@ -2,9 +2,11 @@ package provisioner
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -40,6 +42,52 @@ func newTestClient(t *testing.T, objs ...client.Object) client.Client {
 		builder = builder.WithObjects(objs...)
 	}
 	return builder.Build()
+}
+
+type namespaceUpdateDenyingClient struct {
+	client.Client
+}
+
+func (c namespaceUpdateDenyingClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	if _, ok := obj.(*corev1.Namespace); ok {
+		return apierrors.NewForbidden(
+			corev1.Resource("namespaces"),
+			obj.GetName(),
+			errors.New("namespace updates are managed by platform policy"),
+		)
+	}
+	return c.Client.Update(ctx, obj, opts...)
+}
+
+func newTestTenant(namespace string) *openbaov1alpha1.OpenBaoTenant {
+	return &openbaov1alpha1.OpenBaoTenant{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-tenant",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoTenantSpec{
+			TargetNamespace: namespace,
+		},
+	}
+}
+
+func TestNewManager_InvalidNamespacePodSecurityLabelsMode(t *testing.T) {
+	t.Setenv(constants.EnvTenantNamespacePodSecurityLabelsMode, "unsupported")
+
+	_, err := NewManager(newTestClient(t), logr.Discard())
+	if err == nil {
+		t.Fatal("NewManager() error = nil, want invalid namespace Pod Security labels mode error")
+	}
+	for _, want := range []string{
+		constants.EnvTenantNamespacePodSecurityLabelsMode,
+		NamespacePodSecurityLabelsModeEnforce,
+		NamespacePodSecurityLabelsModeExternal,
+		"unsupported",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("NewManager() error = %q, want it to contain %q", err.Error(), want)
+		}
+	}
 }
 
 func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
@@ -140,6 +188,86 @@ func TestEnsureTenantRBAC_CreatesRoleAndRoleBinding(t *testing.T) {
 			t.Errorf("Namespace missing Pod Security label %q", key)
 		} else if actualValue != expectedValue {
 			t.Errorf("Namespace label %q = %q, want %q", key, actualValue, expectedValue)
+		}
+	}
+}
+
+func TestEnsureTenantRBAC_ExternalNamespacePodSecurityLabelsModeSkipsNamespaceUpdate(t *testing.T) {
+	t.Setenv(constants.EnvTenantNamespacePodSecurityLabelsMode, NamespacePodSecurityLabelsModeExternal)
+
+	namespace := testNamespace
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+			Labels: map[string]string{
+				"existing-label": "value",
+			},
+		},
+	}
+	baseClient := newTestClient(t, ns)
+	k8sClient := namespaceUpdateDenyingClient{Client: baseClient}
+	manager, err := NewManager(k8sClient, logr.Discard())
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := manager.EnsureTenantRBAC(ctx, newTestTenant(namespace)); err != nil {
+		t.Fatalf("EnsureTenantRBAC() error = %v", err)
+	}
+
+	role := &rbacv1.Role{}
+	if err := baseClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantRoleName}, role); err != nil {
+		t.Fatalf("expected Role to exist: %v", err)
+	}
+	roleBinding := &rbacv1.RoleBinding{}
+	if err := baseClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantRoleBindingName}, roleBinding); err != nil {
+		t.Fatalf("expected RoleBinding to exist: %v", err)
+	}
+
+	updatedNS := &corev1.Namespace{}
+	if err := baseClient.Get(ctx, types.NamespacedName{Name: namespace}, updatedNS); err != nil {
+		t.Fatalf("expected Namespace to exist: %v", err)
+	}
+	if updatedNS.Labels["existing-label"] != "value" {
+		t.Errorf("Namespace pre-existing label was not preserved")
+	}
+	for _, key := range []string{
+		"pod-security.kubernetes.io/enforce",
+		"pod-security.kubernetes.io/audit",
+		"pod-security.kubernetes.io/warn",
+	} {
+		if _, exists := updatedNS.Labels[key]; exists {
+			t.Errorf("Namespace has Pod Security label %q in external mode", key)
+		}
+	}
+}
+
+func TestEnsureTenantRBAC_EnforceNamespacePodSecurityLabelsModeTreatsNamespaceUpdateDenialAsFatal(t *testing.T) {
+	t.Setenv(constants.EnvTenantNamespacePodSecurityLabelsMode, NamespacePodSecurityLabelsModeEnforce)
+
+	namespace := testNamespace
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	k8sClient := namespaceUpdateDenyingClient{Client: newTestClient(t, ns)}
+	manager, err := NewManager(k8sClient, logr.Discard())
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	err = manager.EnsureTenantRBAC(context.Background(), newTestTenant(namespace))
+	if err == nil {
+		t.Fatal("EnsureTenantRBAC() error = nil, want namespace update denial")
+	}
+	for _, want := range []string{
+		"failed to update namespace",
+		"namespace updates are managed by platform policy",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("EnsureTenantRBAC() error = %q, want it to contain %q", err.Error(), want)
 		}
 	}
 }

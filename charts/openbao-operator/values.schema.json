@@ -96,6 +96,25 @@
         "targetNamespace": {
           "type": "string",
           "description": "Target namespace for single-tenant mode"
+        },
+        "namespacePodSecurityLabels": {
+          "type": "object",
+          "description": "Tenant namespace Pod Security label management",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "description": "Tenant namespace Pod Security label ownership. enforce lets the provisioner apply restricted labels; external delegates labels to the platform policy layer.",
+              "enum": [
+                "enforce",
+                "external"
+              ],
+              "default": "enforce"
+            }
+          },
+          "required": [
+            "mode"
+          ]
         }
       },
       "required": [

@@ -48,6 +48,13 @@ spec:
         !variables.is_system_namespace
       message: "The Provisioner may not mutate system namespaces."
 
+{{ if eq .Values.tenancy.namespacePodSecurityLabels.mode "external" }}
+    # Rule 1: Namespace Pod Security labels are externally managed, so the Provisioner must not mutate Namespaces.
+    - expression: >-
+        !variables.is_provisioner
+      message: >-
+        The Provisioner may not mutate Namespaces when tenant namespace Pod Security labels are externally managed.
+{{ else }}
     # Rule 1: Only enforce Pod Security Standards labels (restricted), and do not change anything else.
     - expression: >-
         !variables.is_provisioner ||
@@ -86,6 +93,7 @@ spec:
           )
         )
       message: "The Provisioner may only enforce Pod Security Standards labels (restricted) on Namespaces."
+{{ end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
