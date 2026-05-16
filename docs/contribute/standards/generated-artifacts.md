@@ -45,6 +45,13 @@ Edit the source input and rerun the owning command. Manual edits to generated ou
     },
     {
       cells: [
+        "Release or channel installer manifest output",
+        "`make build-installer` and `make build-crds`",
+        "Release, edge, and nightly workflows; not committed",
+      ],
+    },
+    {
+      cells: [
         "`.ast-grep/policy/architecture-boundaries.yml`",
         "`make generate-ast-rules`",
         "`verify-arch-policy`",
@@ -65,6 +72,7 @@ Edit the source input and rerun the owning command. Manual edits to generated ou
 - Kubernetes CRDs and `zz_generated.deepcopy.go` come from `api/v1alpha1/*.go`.
 - API reference docs come from API types and comments.
 - Helm chart sync output comes from CRD, policy, and RBAC source material.
+- Channel installer manifests such as `dist/install.yaml` and `dist/crds.yaml` come from Kustomize targets and are intentionally ignored. Release, edge, and nightly workflows generate and publish them as channel artifacts.
 - Golden HCL files come from renderer behavior in `internal/adapter/config/`.
 - Ast-grep boundary rules come from `.ast-grep/policy/architecture-boundaries.yml`.
 
