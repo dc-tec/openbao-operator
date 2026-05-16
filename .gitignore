@@ -45,6 +45,7 @@ site/*
 website/build/
 
 # Release workflow outputs (generated locally during validation)
+dist/install.yaml
 dist/crds.yaml
 dist/checksums.txt
 dist/sbom-*.spdx.json

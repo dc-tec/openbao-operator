@@ -60,6 +60,12 @@ The project currently treats Artifact Hub plus GHCR Helm OCI publication as the 
 
 </Callout>
 
+<Callout type="note" title="Installer manifests are channel artifacts">
+
+`dist/install.yaml` and `dist/crds.yaml` are local build outputs, not source-controlled distribution assets. Release, edge, and nightly workflows generate fresh manifests from `config/` with the target image and operator version, then publish those generated files through the relevant channel.
+
+</Callout>
+
 <DecisionTable
   title="Artifact Hub metadata expectations"
   columns={["Metadata area", "What must be present"]}
