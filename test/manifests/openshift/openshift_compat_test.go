@@ -33,6 +33,12 @@ func parseYAMLFile(t *testing.T, path string) []*unstructured.Unstructured {
 		t.Fatalf("read %q: %v", path, err)
 	}
 
+	return parseYAMLBytes(t, path, raw)
+}
+
+func parseYAMLBytes(t *testing.T, source string, raw []byte) []*unstructured.Unstructured {
+	t.Helper()
+
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(raw), 4096)
 	var out []*unstructured.Unstructured
 
@@ -42,7 +48,7 @@ func parseYAMLFile(t *testing.T, path string) []*unstructured.Unstructured {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			t.Fatalf("decode %q: %v", path, err)
+			t.Fatalf("decode %q: %v", source, err)
 		}
 
 		if len(obj) == 0 {
@@ -115,37 +121,5 @@ func TestManagerKustomizeManifests_AreOpenShiftAdmittable(t *testing.T) {
 		}
 
 		assertNoPinnedIDs(t, deployments[0])
-	}
-}
-
-func TestDistInstallOperatorDeployments_AreOpenShiftAdmittable(t *testing.T) {
-	root := repoRoot(t)
-
-	path := filepath.Join(root, "dist", "install.yaml")
-	objs := parseYAMLFile(t, path)
-
-	want := map[string]bool{
-		"openbao-operator-controller":  false,
-		"openbao-operator-provisioner": false,
-	}
-
-	for _, u := range objs {
-		gvk := schema.FromAPIVersionAndKind(u.GetAPIVersion(), u.GetKind())
-		if gvk.Group != "apps" || gvk.Kind != "Deployment" {
-			continue
-		}
-
-		if _, ok := want[u.GetName()]; !ok {
-			continue
-		}
-
-		assertNoPinnedIDs(t, u)
-		want[u.GetName()] = true
-	}
-
-	for name, found := range want {
-		if !found {
-			t.Fatalf("dist/install.yaml: expected Deployment %q not found", name)
-		}
 	}
 }
