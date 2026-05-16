@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -23,7 +23,7 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 
 	return reconcileOptionalResource(ctx, optionalResourceOptions{
 		kind:              "TLSRoute",
-		apiVersion:        "gateway.networking.k8s.io/v1alpha2",
+		apiVersion:        "gateway.networking.k8s.io/v1",
 		enabled:           enabled,
 		name:              name,
 		logger:            logger,
@@ -31,7 +31,7 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 		deleteDisabledMsg: "TLSRoute no longer enabled; deleting",
 		deleteInvalidMsg:  "TLSRoute configuration invalid; deleting existing TLSRoute",
 		newEmpty: func() client.Object {
-			return &gatewayv1alpha2.TLSRoute{}
+			return &gatewayv1.TLSRoute{}
 		},
 		buildDesired: func() (client.Object, bool, error) {
 			desired := buildTLSRoute(cluster)
@@ -48,7 +48,7 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 }
 
 // buildTLSRoute constructs a TLSRoute for the given OpenBaoCluster.
-func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha2.TLSRoute {
+func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.TLSRoute {
 	if cluster.Spec.Gateway == nil || !cluster.Spec.Gateway.Enabled || !cluster.Spec.Gateway.TLSPassthrough {
 		return nil
 	}
@@ -64,43 +64,43 @@ func buildTLSRoute(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1alpha2.TLS
 	}
 
 	backendServiceName := externalServiceName(cluster)
-	hostname := gatewayv1alpha2.Hostname(gw.Hostname)
-	port := gatewayv1alpha2.PortNumber(constants.PortAPI)
+	hostname := gatewayv1.Hostname(gw.Hostname)
+	port := gatewayv1.PortNumber(constants.PortAPI)
 	if usesACMEMode(cluster) {
 		backendServiceName = acmeServiceName(cluster)
-		port = gatewayv1alpha2.PortNumber(443)
+		port = gatewayv1.PortNumber(443)
 	}
-	gatewayNS := gatewayv1alpha2.Namespace(gatewayNamespace)
-	var sectionName *gatewayv1alpha2.SectionName
+	gatewayNS := gatewayv1.Namespace(gatewayNamespace)
+	var sectionName *gatewayv1.SectionName
 	if strings.TrimSpace(gw.ListenerName) != "" {
-		sn := gatewayv1alpha2.SectionName(strings.TrimSpace(gw.ListenerName))
+		sn := gatewayv1.SectionName(strings.TrimSpace(gw.ListenerName))
 		sectionName = &sn
 	}
 
-	return &gatewayv1alpha2.TLSRoute{
+	return &gatewayv1.TLSRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        tlsRouteName(cluster),
 			Namespace:   cluster.Namespace,
 			Labels:      resourceidentity.Labels(cluster),
 			Annotations: gw.Annotations,
 		},
-		Spec: gatewayv1alpha2.TLSRouteSpec{
-			CommonRouteSpec: gatewayv1alpha2.CommonRouteSpec{
-				ParentRefs: []gatewayv1alpha2.ParentReference{
+		Spec: gatewayv1.TLSRouteSpec{
+			CommonRouteSpec: gatewayv1.CommonRouteSpec{
+				ParentRefs: []gatewayv1.ParentReference{
 					{
-						Name:        gatewayv1alpha2.ObjectName(gw.GatewayRef.Name),
+						Name:        gatewayv1.ObjectName(gw.GatewayRef.Name),
 						Namespace:   &gatewayNS,
 						SectionName: sectionName,
 					},
 				},
 			},
-			Hostnames: []gatewayv1alpha2.Hostname{hostname},
-			Rules: []gatewayv1alpha2.TLSRouteRule{
+			Hostnames: []gatewayv1.Hostname{hostname},
+			Rules: []gatewayv1.TLSRouteRule{
 				{
-					BackendRefs: []gatewayv1alpha2.BackendRef{
+					BackendRefs: []gatewayv1.BackendRef{
 						{
-							BackendObjectReference: gatewayv1alpha2.BackendObjectReference{
-								Name: gatewayv1alpha2.ObjectName(backendServiceName),
+							BackendObjectReference: gatewayv1.BackendObjectReference{
+								Name: gatewayv1.ObjectName(backendServiceName),
 								Port: &port,
 							},
 						},

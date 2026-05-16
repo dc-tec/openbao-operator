@@ -14,7 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -440,7 +439,7 @@ func TestInfraNetwork_TLSRoute_CreatesAndDeletes(t *testing.T) {
 
 	mainSvcName := cluster.Name + infraPublicServiceSuffix
 	// TLSRoute is created for passthrough mode.
-	tlsRoute := &gatewayv1alpha2.TLSRoute{}
+	tlsRoute := &gatewayv1.TLSRoute{}
 	tlsRouteName := cluster.Name + infraTLSRouteSuffix
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: tlsRouteName}, tlsRoute); err != nil {
 		t.Fatalf("expected TLSRoute to exist: %v", err)

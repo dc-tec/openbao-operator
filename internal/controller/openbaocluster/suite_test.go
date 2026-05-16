@@ -35,7 +35,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
@@ -70,16 +69,13 @@ var _ = BeforeSuite(func() {
 	err = gatewayv1.Install(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = gatewayv1alpha2.Install(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
 	// +kubebuilder:scaffold:scheme
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "..", "config", "crd", "bases"),
-			filepath.Join("..", "..", "..", "test", "manifests", "gateway-api", "v1.4.1", "crds"),
+			filepath.Join("..", "..", "..", "test", "manifests", "gateway-api", "v1.5.1", "crds"),
 		},
 		ErrorIfCRDPathMissing: true,
 	}

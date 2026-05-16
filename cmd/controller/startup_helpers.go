@@ -28,7 +28,6 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 )
 
 func detectPlatform(cfg *rest.Config) string {
@@ -109,7 +108,7 @@ func newManagerOptions(
 		&corev1.PersistentVolumeClaim{},
 		&discoveryv1.EndpointSlice{},
 		&gatewayv1.HTTPRoute{},
-		&gatewayv1alpha2.TLSRoute{},
+		&gatewayv1.TLSRoute{},
 		&gatewayv1.BackendTLSPolicy{},
 	}
 	mgrOpts.Client = client.Options{

@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/test/utils"
@@ -187,9 +186,6 @@ func NewSetup(ctx context.Context, baseName string, operatorNamespace string) (*
 	if err := gatewayv1.Install(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add gateway scheme: %w", err)
 	}
-	if err := gatewayv1alpha2.Install(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add gateway alpha2 scheme: %w", err)
-	}
 
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
@@ -213,7 +209,7 @@ func (f *Framework) RequireGatewayAPI() (func(), error) {
 // InstallGatewayAPI installs the Gateway API CRDs.
 func (f *Framework) InstallGatewayAPI() error {
 	// Re-using the logic from utils, but making it a method of Framework for convenience
-	manifestPath := "test/manifests/gateway-api/v1.4.1/crds"
+	manifestPath := "test/manifests/gateway-api/v1.5.1/crds"
 	// In a real framework, we might want to check env vars or default paths here
 	// For now, we assume the test/manifests path is correct relative to where tests run
 
@@ -237,7 +233,7 @@ func (f *Framework) InstallGatewayAPI() error {
 
 // UninstallGatewayAPI removes the Gateway API CRDs.
 func (f *Framework) UninstallGatewayAPI() error {
-	manifestPath := "test/manifests/gateway-api/v1.4.1/crds"
+	manifestPath := "test/manifests/gateway-api/v1.5.1/crds"
 	cmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found")
 	if _, err := utils.Run(cmd); err != nil {
 		return fmt.Errorf("failed to uninstall Gateway API CRDs: %w", err)

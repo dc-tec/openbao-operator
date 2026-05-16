@@ -91,7 +91,7 @@ This bootstrap path matches the local DR lane that was proven end to end on Marc
 - one infra cluster for shared trust services
 - one source cluster
 - one target cluster
-- the Gateway API experimental bundle in each cluster
+- the Gateway API Standard bundle in each cluster
 - a dedicated passthrough edge in each cluster
 - a shared RustFS instance and bucket
 - a shared external OpenBao trust-services endpoint in the infra cluster

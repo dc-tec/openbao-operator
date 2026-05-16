@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -153,7 +152,6 @@ func startIsolatedEnv(t *testing.T, opts isolatedEnvOptions) (client.Client, *ru
 	_ = corev1.AddToScheme(scheme)
 	_ = openbaov1alpha1.AddToScheme(scheme)
 	_ = gatewayv1.Install(scheme)
-	_ = gatewayv1alpha2.Install(scheme)
 
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths:     opts.crdDirs,
@@ -291,7 +289,7 @@ func boolPtr(v bool) *bool {
 func copyGatewayCRDsExcluding(t *testing.T, excludeSubstrings []string) string {
 	t.Helper()
 
-	srcDir := filepath.Join("..", "manifests", "gateway-api", "v1.4.1", "crds")
+	srcDir := filepath.Join("..", "manifests", "gateway-api", "v1.5.1", "crds")
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
 		t.Fatalf("read gateway CRD dir %q: %v", srcDir, err)
