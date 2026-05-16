@@ -20,7 +20,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
@@ -45,12 +44,11 @@ func TestMain(m *testing.M) {
 	_ = corev1.AddToScheme(k8sScheme)
 	_ = openbaov1alpha1.AddToScheme(k8sScheme)
 	_ = gatewayv1.Install(k8sScheme)
-	_ = gatewayv1alpha2.Install(k8sScheme)
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
-			filepath.Join("..", "manifests", "gateway-api", "v1.4.1", "crds"),
+			filepath.Join("..", "manifests", "gateway-api", "v1.5.1", "crds"),
 		},
 		ErrorIfCRDPathMissing: true,
 	}

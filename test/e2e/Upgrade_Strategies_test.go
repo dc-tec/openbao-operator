@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -3400,22 +3399,22 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 
 				By("verifying a TLSRoute is created for passthrough access")
 				Eventually(func(g Gomega) {
-					tlsRoute := &gatewayv1alpha2.TLSRoute{}
+					tlsRoute := &gatewayv1.TLSRoute{}
 					g.Expect(admin.Get(ctx, types.NamespacedName{
 						Name:      fmt.Sprintf("%s-tlsroute", passthroughCluster.Name),
 						Namespace: tenantNamespace,
 					}, tlsRoute)).To(Succeed())
 
 					g.Expect(tlsRoute.Spec.ParentRefs).To(HaveLen(1))
-					g.Expect(tlsRoute.Spec.ParentRefs[0].Name).To(Equal(gatewayv1alpha2.ObjectName(passthroughGateway)))
+					g.Expect(tlsRoute.Spec.ParentRefs[0].Name).To(Equal(gatewayv1.ObjectName(passthroughGateway)))
 					g.Expect(tlsRoute.Spec.ParentRefs[0].SectionName).NotTo(BeNil())
-					g.Expect(*tlsRoute.Spec.ParentRefs[0].SectionName).To(Equal(gatewayv1alpha2.SectionName(passthroughListener)))
-					g.Expect(tlsRoute.Spec.Hostnames).To(Equal([]gatewayv1alpha2.Hostname{gatewayv1alpha2.Hostname(passthroughHostname)}))
+					g.Expect(*tlsRoute.Spec.ParentRefs[0].SectionName).To(Equal(gatewayv1.SectionName(passthroughListener)))
+					g.Expect(tlsRoute.Spec.Hostnames).To(Equal([]gatewayv1.Hostname{gatewayv1.Hostname(passthroughHostname)}))
 					g.Expect(tlsRoute.Spec.Rules).To(HaveLen(1))
 					g.Expect(tlsRoute.Spec.Rules[0].BackendRefs).To(HaveLen(1))
-					g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Name).To(Equal(gatewayv1alpha2.ObjectName(fmt.Sprintf("%s-public", passthroughCluster.Name))))
+					g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Name).To(Equal(gatewayv1.ObjectName(fmt.Sprintf("%s-public", passthroughCluster.Name))))
 					g.Expect(tlsRoute.Spec.Rules[0].BackendRefs[0].Port).NotTo(BeNil())
-					g.Expect(*tlsRoute.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gatewayv1alpha2.PortNumber(constants.PortAPI)))
+					g.Expect(*tlsRoute.Spec.Rules[0].BackendRefs[0].Port).To(Equal(gatewayv1.PortNumber(constants.PortAPI)))
 				}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 				By("verifying BackendTLSPolicy is not created for passthrough mode")

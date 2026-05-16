@@ -37,11 +37,7 @@ spec:
       - apiGroups: ["gateway.networking.k8s.io"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
-        resources: ["httproutes", "backendtlspolicies"]
-      - apiGroups: ["gateway.networking.k8s.io"]
-        apiVersions: ["v1alpha2"]
-        operations: ["CREATE", "UPDATE", "DELETE"]
-        resources: ["tlsroutes"]
+        resources: ["httproutes", "tlsroutes", "backendtlspolicies"]
   variables:
     - name: operator_namespace
       expression: >-

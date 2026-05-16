@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
@@ -99,7 +98,7 @@ func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant boo
 	testEnv := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "..", "config", "crd", "bases"),
-			filepath.Join("..", "..", "..", "test", "manifests", "gateway-api", "v1.4.1", "crds"),
+			filepath.Join("..", "..", "..", "test", "manifests", "gateway-api", "v1.5.1", "crds"),
 		},
 		ErrorIfCRDPathMissing: true,
 	}
@@ -214,7 +213,6 @@ func newIntegrationScheme(t *testing.T) *runtime.Scheme {
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
 	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
 	require.NoError(t, gatewayv1.Install(scheme))
-	require.NoError(t, gatewayv1alpha2.Install(scheme))
 	return scheme
 }
 

@@ -11,7 +11,11 @@ description: Configure Gateway API as the primary edge path for OpenBao, includi
   lede="Gateway API is the recommended edge model for explicit route ownership, listener mode, and cross-namespace attachment. For most production deployments, start with TLS passthrough so OpenBao remains the TLS endpoint."
 />
 
+<Callout type="note" title="Use the Gateway API Standard channel">
 
+The operator emits Gateway API `v1` resources for `HTTPRoute`, `TLSRoute`, and `BackendTLSPolicy`. Install a Gateway API Standard bundle that serves those versions, such as Gateway API `v1.5.1` or newer. Treat the experimental bundle as a reference-only deviation for clusters that intentionally depend on experimental Gateway API resources outside the operator-managed surface.
+
+</Callout>
 
 <DecisionTable
   title="Choose the Gateway mode"
