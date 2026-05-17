@@ -6446,10 +6446,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260516-08462c9e108d
+          value: nightly-20260517-e90d67a8ca2c
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:03b7dee43d5314d96510b56cd0d186e46a0c29797f59438b4127dc6e74ca00a8
+        image: ghcr.io/dc-tec/openbao-operator@sha256:f4e6e131045410841a968d59c5ba6eb2bb402eeb7ea3ece592650ad8325aa794
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6564,8 +6564,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260516-08462c9e108d
-        image: ghcr.io/dc-tec/openbao-operator@sha256:03b7dee43d5314d96510b56cd0d186e46a0c29797f59438b4127dc6e74ca00a8
+          value: nightly-20260517-e90d67a8ca2c
+        image: ghcr.io/dc-tec/openbao-operator@sha256:f4e6e131045410841a968d59c5ba6eb2bb402eeb7ea3ece592650ad8325aa794
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6826,17 +6826,8 @@ spec:
       - DELETE
       resources:
       - httproutes
-      - backendtlspolicies
-    - apiGroups:
-      - gateway.networking.k8s.io
-      apiVersions:
-      - v1alpha2
-      operations:
-      - CREATE
-      - UPDATE
-      - DELETE
-      resources:
       - tlsroutes
+      - backendtlspolicies
   validations:
   - expression: '!variables.is_managed || variables.is_operator_controller || variables.is_operator_provisioner
       || (variables.is_kube_controller_manager && (request.operation == "DELETE" ||
