@@ -85,7 +85,7 @@ func TestRenderHCLWithStructuredConfiguration(t *testing.T) {
 			FilePermissions:  "0755",
 			AutoDownload:     &autoDownload,
 			AutoRegister:     &autoRegister,
-			DownloadBehavior: "direct",
+			DownloadBehavior: "continue",
 		},
 		DefaultLeaseTTL: "720h",
 		MaxLeaseTTL:     "8760h",

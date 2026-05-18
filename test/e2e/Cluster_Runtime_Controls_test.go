@@ -18,19 +18,26 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
+	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
 
 var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runtime"), Ordered, func() {
 	ctx := context.Background()
 
 	var (
-		f *framework.Framework
-		c client.Client
+		f   *framework.Framework
+		c   client.Client
+		cfg *rest.Config
 	)
 
 	newDevelopmentCluster := func(name string) *openbaov1alpha1.OpenBaoCluster {
@@ -115,8 +122,46 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 		return cert
 	}
 
+	pluginChecksumForClusterArchitecture := func() string {
+		nodes := &corev1.NodeList{}
+		Expect(c.List(ctx, nodes)).To(Succeed())
+		Expect(nodes.Items).NotTo(BeEmpty())
+
+		arch := ""
+		for i := range nodes.Items {
+			node := &nodes.Items[i]
+			nodeArch := node.Labels["kubernetes.io/arch"]
+			if nodeArch == "" {
+				nodeArch = node.Status.NodeInfo.Architecture
+			}
+			if nodeArch == "" {
+				continue
+			}
+			if arch == "" {
+				arch = nodeArch
+				continue
+			}
+			if arch != nodeArch {
+				Skip(fmt.Sprintf("OCI plugin checksum fixture is single-architecture; cluster has both %q and %q nodes", arch, nodeArch))
+			}
+		}
+
+		switch arch {
+		case "amd64":
+			return "c8d23e6d31be2a59d0c269bb7243158c4c61c5073f7ba50ce6f1a0050e023e2d"
+		case "arm64":
+			return "b98cb1cbfd0f567d7b614efb0621aaba10c4deda865f5e5b3d155609ada2482e"
+		default:
+			Skip(fmt.Sprintf("OCI plugin checksum fixture is not defined for node architecture %q", arch))
+			return ""
+		}
+	}
+
 	BeforeAll(func() {
 		var err error
+		cfg, err = ctrlconfig.GetConfig()
+		Expect(err).NotTo(HaveOccurred())
+
 		f, err = framework.NewSetup(ctx, "cluster-runtime", operatorNamespace)
 		Expect(err).NotTo(HaveOccurred())
 		c = f.Client
@@ -237,6 +282,140 @@ var _ = Describe("Cluster Runtime Controls", Label("lifecycle", "cluster", "runt
 			cert := parseServerCertificate(secret)
 			g.Expect(cert.DNSNames).To(ContainElement(host))
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+	})
+
+	It("registers an OCI plugin with a writable plugin directory", Label(
+		"case:cluster-oci-plugin-install",
+		"covers:plugin-auto-download",
+		"covers:plugin-directory",
+	), func() {
+		const (
+			clusterName      = "plugin-cluster"
+			pluginPolicyName = "plugin-admin"
+			pluginRoleName   = "plugin-admin"
+		)
+
+		ok, err := platformsemver.AtLeast(openBaoVersion, 2, 5, 0)
+		Expect(err).NotTo(HaveOccurred())
+		if !ok {
+			Skip(fmt.Sprintf("declarative OCI plugin auto-download requires OpenBao >= 2.5.0; got %s", openBaoVersion))
+		}
+
+		pluginChecksum := pluginChecksumForClusterArchitecture()
+		port443 := intstr.FromInt(443)
+		tcp := corev1.ProtocolTCP
+
+		cluster := newDevelopmentCluster(clusterName)
+		cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+			Plugin: &openbaov1alpha1.PluginConfig{
+				AutoDownload: ptr.To(true),
+				AutoRegister: ptr.To(true),
+			},
+		}
+		cluster.Spec.Network.EgressRules = append(cluster.Spec.Network.EgressRules, networkingv1.NetworkPolicyEgressRule{
+			To: []networkingv1.NetworkPolicyPeer{
+				{
+					IPBlock: &networkingv1.IPBlock{
+						CIDR: "0.0.0.0/0",
+					},
+				},
+			},
+			Ports: []networkingv1.NetworkPolicyPort{
+				{
+					Protocol: &tcp,
+					Port:     &port443,
+				},
+			},
+		})
+		cluster.Spec.Plugins = []openbaov1alpha1.Plugin{
+			{
+				Type:       "secret",
+				Name:       "aws",
+				Image:      "ghcr.io/openbao/openbao-plugin-secrets-aws",
+				Version:    "v0.0.1",
+				BinaryName: "openbao-plugin-secrets-aws",
+				SHA256Sum:  pluginChecksum,
+			},
+		}
+		cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+			Enabled: true,
+			OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+				Enabled: true,
+			},
+			Requests: append(
+				framework.DefaultAdminSelfInitRequests(),
+				e2ehelpers.CreateJWTPolicyRoleRequests(
+					f.Namespace,
+					"default",
+					pluginPolicyName,
+					pluginRoleName,
+					`path "*" {
+  capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+}`,
+				)...,
+			),
+		}
+
+		Expect(c.Create(ctx, cluster)).To(Succeed())
+		DeferCleanup(func() { _ = c.Delete(ctx, cluster) })
+
+		By("waiting for the OpenBao pod to become ready")
+		sts, err := f.WaitForStatefulSetReady(ctx, clusterName, 1, 10*time.Minute, framework.DefaultPollInterval)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("verifying the StatefulSet mounts a writable plugin directory")
+		pluginVolumeFound := false
+		for _, volume := range sts.Spec.Template.Spec.Volumes {
+			if volume.Name == constants.VolumePlugins {
+				pluginVolumeFound = true
+				Expect(volume.EmptyDir).NotTo(BeNil())
+				break
+			}
+		}
+		Expect(pluginVolumeFound).To(BeTrue())
+
+		pluginMountFound := false
+		for _, container := range sts.Spec.Template.Spec.Containers {
+			if container.Name != constants.ContainerBao {
+				continue
+			}
+			for _, mount := range container.VolumeMounts {
+				if mount.Name == constants.VolumePlugins {
+					pluginMountFound = true
+					Expect(mount.MountPath).To(Equal(constants.PathPlugins))
+					Expect(mount.ReadOnly).To(BeFalse())
+					break
+				}
+			}
+		}
+		Expect(pluginMountFound).To(BeTrue())
+
+		waitForClusterAvailable(clusterName)
+
+		By("verifying OpenBao registered the declarative OCI plugin")
+		Eventually(func(g Gomega) {
+			baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, c, f.Namespace, clusterName)
+			g.Expect(err).NotTo(HaveOccurred())
+			_, err = e2ehelpers.RunCommandViaJWT(
+				ctx,
+				cfg,
+				c,
+				f.Namespace,
+				openBaoImage,
+				baoAddr,
+				"default",
+				pluginRoleName,
+				map[string]string{
+					constants.LabelOpenBaoCluster:   clusterName,
+					constants.LabelOpenBaoComponent: constants.ComponentBackup,
+				},
+				fmt.Sprintf(`
+bao plugin list secret | grep -E '^aws[[:space:]]+v0\.0\.1'
+bao plugin info -version=v0.0.1 secret aws | grep %q
+`, pluginChecksum),
+			)
+			g.Expect(err).NotTo(HaveOccurred())
+		}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 	})
 
 })
