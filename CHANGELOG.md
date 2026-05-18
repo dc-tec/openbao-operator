@@ -2,6 +2,13 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.2.1](https://github.com/dc-tec/openbao-operator/compare/0.2.0...0.2.1) (2026-05-18)
+
+
+### Bug Fixes
+
+* **release-0.2:** backport 0.2.1 fixes ([069d9b4](https://github.com/dc-tec/openbao-operator/commit/069d9b454e95dda6c00788cc9878590a30e1146a))
+
 ## [0.2.0](https://github.com/dc-tec/openbao-operator/compare/0.1.0...0.2.0) (2026-05-18)
 
 
