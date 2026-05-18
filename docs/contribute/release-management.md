@@ -36,7 +36,7 @@ journey: contribute
     {
       cells: [
         "Stable release",
-        "Merge the release-please PR so the `Release Tag` workflow can resolve the merged release PR, create the signed stable version tag, and create the draft GitHub Release from `main`.",
+        "Merge the release-please PR so the `Release Tag` workflow can resolve the merged release PR, create the signed stable version tag, and create the draft GitHub Release from `main` or a `release-*` branch.",
         "GitHub Release assets, OCI Helm chart, signed images, stable docs snapshot, docs deployment, and provenance evidence.",
         "Stable releases become permanent release-line docs and own the default `/docs` route.",
       ],
@@ -44,8 +44,16 @@ journey: contribute
     },
     {
       cells: [
+        "Patch release",
+        "Backport the targeted fixes to the relevant `release-*` branch, then use the `Prepare Release-As PR` workflow to create the auditable `Release-As: X.Y.Z` marker PR.",
+        "Same release artifacts as stable releases, built from the patch branch tag.",
+        "Keep the patch branch narrow; patch releases in an existing stable line reuse that line's docs snapshot.",
+      ],
+    },
+    {
+      cells: [
         "Prerelease",
-        "Prefer a tiny PR that carries an empty commit with `Release-As: 0.1.0-rc.6`, then merge the resulting release-please PR so the `Release Tag` workflow creates the signed prerelease tag and draft GitHub Release.",
+        "Prefer the `Prepare Release-As PR` workflow to create a tiny PR that carries an empty commit with `Release-As: 0.1.0-rc.6`, then merge the resulting release-please PR so the `Release Tag` workflow creates the signed prerelease tag and draft GitHub Release.",
         "GitHub Release assets, OCI Helm chart, signed images, docs site deployment, and provenance evidence.",
         "Prereleases use `/docs/next` plus release notes; do not create a permanent versioned docs snapshot.",
       ],
@@ -75,6 +83,12 @@ Before merging the first stable `X.Y.0` release PR for a release line, snapshot 
 
 </Callout>
 
+<Callout type="note" title="Patch branch workflow state">
+
+GitHub Actions runs workflow definitions from the branch that receives the push. Before using release-please on an older `release-*` branch for the first time, make sure the branch contains the current release workflow support, including `Release Please PR`, `Release Tag`, and `Prepare Release-As PR` behavior.
+
+</Callout>
+
 <CommandBlock
   language="bash"
   label="configure"
@@ -87,16 +101,19 @@ Before merging the first stable `X.Y.0` release PR for a release line, snapshot 
 <CommandBlock
   language="bash"
   label="configure"
-  title="Cut an explicit prerelease with a Release-As PR"
-  code={`git switch -c chore/release-as-0.1.0-rc.6
-git commit --allow-empty -m $'chore: release 0.1.0-rc.6\n\nRelease-As: 0.1.0-rc.6\nSigned-off-by: Your Name <you@example.com>'`}
+  title="Cut an explicit release with a Release-As PR"
+  code={`# In GitHub Actions, run:
+# Prepare Release-As PR
+#
+# target_branch: main        # or release-0.2
+# version: 0.1.0-rc.6       # or 0.2.1`}
 >
-  This flow creates an explicit prerelease target on `main` when the inferred Conventional Commit bump is not the intended version.
+  This workflow creates a tiny PR containing an empty `Release-As: <version>` commit. Merge that marker PR first; the branch-aware Release Please workflow then opens or updates the real release PR.
 </CommandBlock>
 
 <Callout type="note" title="`workflow_dispatch` `release_as` path">
 
-`Release Please PR` still exposes a `workflow_dispatch` `release_as` input, and it can produce the expected release PR. The `Release-As:` PR path remains the fallback for release lines where the dispatch path is not yet reliable.
+`Release Please PR` still exposes a `workflow_dispatch` `release_as` input, but maintainers should prefer the `Prepare Release-As PR` workflow. The marker PR leaves the version override in git history and works consistently for `main` and `release-*` branches.
 
 </Callout>
 
