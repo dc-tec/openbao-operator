@@ -4,10 +4,11 @@ on:
   push:
     branches:
       - main
+      - 'release-*'
   workflow_dispatch:
     inputs:
       release_as:
-        description: "Optional semver override for the release PR (for example 0.1.0-rc.6)"
+        description: "Optional semver override for the release PR. Prefer the Prepare Release-As PR workflow for audited overrides."
         required: false
         type: string
 
@@ -15,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-please-pr
+  group: release-please-pr-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -41,6 +42,7 @@ jobs:
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}
+          target-branch: ${{ github.ref_name }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           release-as: ${{ github.event_name == 'workflow_dispatch' && inputs.release_as || '' }}

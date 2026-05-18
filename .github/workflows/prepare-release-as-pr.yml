@@ -1,0 +1,129 @@
+name: Prepare Release-As PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Base branch for the release marker PR, for example release-0.2"
+        required: true
+        type: string
+      version:
+        description: "Exact SemVer version for Release-As, for example 0.2.1"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: prepare-release-as-pr-${{ inputs.target_branch }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release-as-pr:
+    name: Create Release-As Marker PR
+    runs-on: ubuntu-24.04
+    if: ${{ !github.event.repository.fork }}
+    steps:
+      - name: Validate inputs
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if ! [[ "${TARGET_BRANCH}" =~ ^(main|release-[0-9]+(\.[0-9]+)*)$ ]]; then
+            echo "target_branch must be main or release-X[.Y...], got '${TARGET_BRANCH}'" >&2
+            exit 1
+          fi
+
+          if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "version must be SemVer, got '${VERSION}'" >&2
+            exit 1
+          fi
+
+      - name: Mint GitHub App token (openbao-operator-release-pr)
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.OPENBAO_OPERATOR_RELEASE_PR_APP_ID }}
+          private-key: ${{ secrets.OPENBAO_OPERATOR_RELEASE_PR_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Checkout target branch
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.target_branch }}
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Create Release-As marker branch
+        id: marker
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          marker_branch="release-as-${TARGET_BRANCH}-${VERSION}"
+          echo "branch=${marker_branch}" >> "${GITHUB_OUTPUT}"
+
+          if git ls-remote --exit-code --heads origin "${marker_branch}" >/dev/null 2>&1; then
+            git fetch origin "refs/heads/${marker_branch}:refs/remotes/origin/${marker_branch}"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git switch -c "${marker_branch}"
+          git commit --allow-empty -s \
+            -m "chore: release ${VERSION}" \
+            -m "Release-As: ${VERSION}"
+          git push --force-with-lease="refs/heads/${marker_branch}" origin "HEAD:${marker_branch}"
+
+      - name: Open or update marker PR
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          VERSION: ${{ inputs.version }}
+          MARKER_BRANCH: ${{ steps.marker.outputs.branch }}
+        run: |
+          set -euo pipefail
+
+          existing_pr="$(
+            gh pr list \
+              --repo "${REPO}" \
+              --state open \
+              --base "${TARGET_BRANCH}" \
+              --head "${MARKER_BRANCH}" \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+
+          body="$(mktemp)"
+          cat > "${body}" <<EOF
+          This PR adds an empty release marker commit for release-please.
+
+          After this PR merges into \`${TARGET_BRANCH}\`, the Release Please PR workflow should open or update the release PR for \`${VERSION}\`.
+          EOF
+
+          if [[ -n "${existing_pr}" ]]; then
+            gh pr edit "${existing_pr}" \
+              --repo "${REPO}" \
+              --title "chore(${TARGET_BRANCH}): request release ${VERSION}" \
+              --body-file "${body}"
+            echo "Updated existing PR #${existing_pr}."
+          else
+            gh pr create \
+              --repo "${REPO}" \
+              --base "${TARGET_BRANCH}" \
+              --head "${MARKER_BRANCH}" \
+              --title "chore(${TARGET_BRANCH}): request release ${VERSION}" \
+              --body-file "${body}"
+          fi
