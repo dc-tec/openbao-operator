@@ -71,6 +71,7 @@ func assertOperatorSubjectRegExp(t *testing.T, expr string) {
 		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-edge.yml@refs/heads/main",
 		"https://github.com/dc-tec/openbao-operator/.github/workflows/publish-nightly.yml@refs/heads/main",
 		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/heads/main",
+		"https://github.com/dc-tec/openbao-operator/.github/workflows/reusable-build.yml@refs/tags/0.2.1",
 	}
 	for _, subject := range trusted {
 		if !re.MatchString(subject) {
