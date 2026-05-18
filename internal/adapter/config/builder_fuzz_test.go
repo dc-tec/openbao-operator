@@ -8,6 +8,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
 )
 
 func FuzzParseSemVer(f *testing.F) {
@@ -27,7 +28,7 @@ func FuzzParseSemVer(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, version string) {
-		_, _ = parseSemVer(version)
+		_, _ = platformsemver.Parse(version)
 	})
 }
 
@@ -202,7 +203,7 @@ func sanitizeCRToken(v, fallback string) string {
 }
 
 func sanitizeVersion(v string) string {
-	if _, err := parseSemVer(v); err == nil {
+	if _, err := platformsemver.Parse(v); err == nil {
 		return v
 	}
 	return "2.5.0"
@@ -227,7 +228,7 @@ func FuzzRenderHCL(f *testing.F) {
 		telemetryAddr string
 		enableObs     bool
 	}{
-		{"demo", "default", "2.5.0", "demo", "default", 8200, 8201, "info", "3600h", "7200h", "direct", "file", "stdout", `{"file_path":"stdout"}`, "127.0.0.1:8125", true},
+		{"demo", "default", "2.5.0", "demo", "default", 8200, 8201, "info", "3600h", "7200h", "continue", "file", "stdout", `{"file_path":"stdout"}`, "127.0.0.1:8125", true},
 		{"acme", "operators", "2.4.4", "acme", "operators", 8200, 8201, "debug", "", "", "", "socket", "custom-socket", `{"address":"127.0.0.1:9000"}`, "", false},
 		{"broken", "default", "not-a-version", "", "", 0, -1, "", "", "", "", "", "", `{}`, "", false},
 	}

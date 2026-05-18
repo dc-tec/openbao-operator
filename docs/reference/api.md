@@ -1096,7 +1096,7 @@ _Appears in:_
 | `filePermissions` _string_ | FilePermissions are the file permissions for plugin files (e.g., "0755"). |  | Optional: \{\} <br /> |
 | `autoDownload` _boolean_ | AutoDownload controls automatic plugin downloads from OCI registries. |  | Optional: \{\} <br /> |
 | `autoRegister` _boolean_ | AutoRegister controls automatic plugin registration. |  | Optional: \{\} <br /> |
-| `downloadBehavior` _string_ | DownloadBehavior specifies how plugins are downloaded. |  | Enum: [standard direct] <br />Optional: \{\} <br /> |
+| `downloadBehavior` _string_ | DownloadBehavior controls whether OpenBao startup fails or continues when<br />declarative OCI plugin downloads fail. Valid values are "fail" and<br />"continue"; OpenBao defaults to "fail" when unset. |  | Enum: [fail continue] <br />Optional: \{\} <br /> |
 
 
 #### PodMetadataConfig
