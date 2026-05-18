@@ -2,6 +2,15 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.2.1](https://github.com/dc-tec/openbao-operator/compare/0.2.0...0.2.1) (2026-05-18)
+
+
+### Bug Fixes
+
+* **helm:** deduplicate generated RBAC labels ([069d9b4](https://github.com/dc-tec/openbao-operator/commit/069d9b454e95dda6c00788cc9878590a30e1146a))
+* **workload:** mount a writable OCI plugin directory for OpenBao plugin auto-downloads ([069d9b4](https://github.com/dc-tec/openbao-operator/commit/069d9b454e95dda6c00788cc9878590a30e1146a))
+* **api:** align plugin `downloadBehavior` validation with OpenBao supported values, `fail` and `continue` ([069d9b4](https://github.com/dc-tec/openbao-operator/commit/069d9b454e95dda6c00788cc9878590a30e1146a))
+
 ## [0.2.0](https://github.com/dc-tec/openbao-operator/compare/0.1.1...0.2.0) (2026-05-01)
 
 

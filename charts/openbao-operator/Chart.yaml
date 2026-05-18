@@ -4,8 +4,8 @@ description: >-
   OpenBao Operator installs the OpenBao Kubernetes operator and its required
   cluster-scoped resources.
 type: application
-version: 0.2.0
-appVersion: 0.2.0
+version: 0.2.1
+appVersion: 0.2.1
 icon: >-
   https://raw.githubusercontent.com/dc-tec/openbao-operator/main/docs/assets/logo.svg
 home: https://github.com/dc-tec/openbao-operator
@@ -27,55 +27,23 @@ annotations:
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
   artifacthub.io/prerelease: "false"
-  artifacthub.io/containsSecurityUpdates: 'true'
+  artifacthub.io/containsSecurityUpdates: 'false'
   artifacthub.io/changes: |
-    - kind: added
-      description: "admission: authorize maintenance through RBAC"
-    - kind: added
-      description: "api: add runtime restart controls"
-    - kind: added
-      description: "readreplicas: add steady-state read replica topology and status"
-    - kind: added
-      description: "readreplicas: integrate read replicas with upgrade and restore workflows"
     - kind: fixed
-      description: "admission: guard hardened security context overrides"
+      description: "Deduplicate generated Helm RBAC labels"
     - kind: fixed
-      description: "helm: allow global values in chart schema"
+      description: "Mount a writable OCI plugin directory for OpenBao plugin auto-downloads"
     - kind: fixed
-      description: "helm: Helm provisioner admission identity"
-    - kind: fixed
-      description: "infra: delete scaled-down raft PVCs"
-    - kind: fixed
-      description: "multitenancy: gate cluster reconcile on tenant onboarding"
-    - kind: fixed
-      description: "network: Require source-scoped managed Ingress access"
-    - kind: fixed
-      description: "openbao: stage safe raft scale-downs"
-    - kind: fixed
-      description: "probe: stabilize openbao workload probes"
-    - kind: fixed
-      description: "provisioner: reduce release reconciliation log noise"
-    - kind: security
-      description: "security: fail closed for configured trusted roots"
-    - kind: fixed
-      description: "status: mark unsafe admission mode not production-ready"
-    - kind: fixed
-      description: "upgrade: complete SSA ownership migration"
-    - kind: fixed
-      description: "upgrade: harden bluegreen and rolling recovery flakes"
-    - kind: fixed
-      description: "upgrade: set executor job resource requirements"
-    - kind: fixed
-      description: "upgrade: treat raft promote already-voter as no-op"
+      description: "Align plugin downloadBehavior validation with OpenBao supported values, fail and continue"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.2.0
+      image: ghcr.io/dc-tec/openbao-operator:0.2.1
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.2.0
+      image: ghcr.io/dc-tec/openbao-init:0.2.1
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.2.0
+      image: ghcr.io/dc-tec/openbao-backup:0.2.1
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.2.0
+      image: ghcr.io/dc-tec/openbao-upgrade:0.2.1
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
