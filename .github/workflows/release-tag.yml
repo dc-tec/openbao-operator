@@ -11,6 +11,15 @@ on:
       - '.release-please-manifest.json'
       - 'charts/openbao-operator/Chart.yaml'
   workflow_dispatch:
+    inputs:
+      tag_target:
+        description: "Commit to tag. Use branch-head only to retry a failed draft release after a release-branch fix."
+        required: false
+        default: release-pr-merge
+        type: choice
+        options:
+          - release-pr-merge
+          - branch-head
 
 permissions:
   contents: read
@@ -97,6 +106,7 @@ jobs:
         env:
           REPO: ${{ github.repository }}
           BASE_BRANCH: ${{ github.ref_name }}
+          TAG_TARGET: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_target || 'release-pr-merge' }}
           GH_READ_TOKEN: ${{ github.token }}
           GH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
           OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE: ${{ secrets.OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE }}
