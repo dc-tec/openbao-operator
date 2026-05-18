@@ -30,7 +30,11 @@ annotations:
   artifacthub.io/containsSecurityUpdates: 'false'
   artifacthub.io/changes: |
     - kind: fixed
-      description: "release-0.2: backport 0.2.1 fixes"
+      description: "Deduplicate generated Helm RBAC labels"
+    - kind: fixed
+      description: "Mount a writable OCI plugin directory for OpenBao plugin auto-downloads"
+    - kind: fixed
+      description: "Align plugin downloadBehavior validation with OpenBao supported values, fail and continue"
   artifacthub.io/images: |
     - name: openbao-operator
       image: ghcr.io/dc-tec/openbao-operator:0.2.1
