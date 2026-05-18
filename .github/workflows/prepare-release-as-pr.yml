@@ -82,7 +82,7 @@ jobs:
 
           git switch -c "${marker_branch}"
           git commit --allow-empty -s \
-            -m "chore: release ${VERSION}" \
+            -m "Release ${VERSION}" \
             -m "Release-As: ${VERSION}"
           git push --force-with-lease="refs/heads/${marker_branch}" origin "HEAD:${marker_branch}"
 
