@@ -115,6 +115,7 @@ jobs:
       ref: ${{ github.ref }}
       source_date_epoch: ${{ needs.prepare.outputs.source_date_epoch }}
       cache-scope: ${{ needs.prepare.outputs.build_tag }}
+      sign_images: true
     secrets: inherit
 
   rebuild:
