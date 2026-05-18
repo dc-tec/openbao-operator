@@ -14,7 +14,7 @@ journey: contribute
 
 Required tools:
 
-- Go `1.26.2+`
+- Go `1.26.3+`
 - Docker `28.3.3+`
 - `kubectl` `1.33+`
 - Helm `3+`
