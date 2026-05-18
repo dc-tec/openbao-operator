@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'release-*'
+      - '!release-please--branches--*'
   workflow_dispatch:
     inputs:
       release_as:
