@@ -9,6 +9,7 @@ MANIFEST_FILE="${MANIFEST_FILE:-.release-please-manifest.json}"
 CHART_FILE="${CHART_FILE:-charts/openbao-operator/Chart.yaml}"
 RELEASE_NOTES_DIR="${RELEASE_NOTES_DIR:-release-notes}"
 DRY_RUN="${DRY_RUN:-0}"
+TAG_TARGET="${TAG_TARGET:-release-pr-merge}"
 
 GH_READ_TOKEN="${GH_READ_TOKEN:-${GH_TOKEN:-}}"
 GH_WRITE_TOKEN="${GH_WRITE_TOKEN:-${GH_TOKEN:-}}"
@@ -22,6 +23,14 @@ if [[ "${DRY_RUN}" != "1" && -z "${GH_WRITE_TOKEN}" ]]; then
   echo "GH_WRITE_TOKEN (or GH_TOKEN) is required unless DRY_RUN=1" >&2
   exit 1
 fi
+
+case "${TAG_TARGET}" in
+  release-pr-merge | branch-head) ;;
+  *)
+    echo "TAG_TARGET must be either 'release-pr-merge' or 'branch-head', got '${TAG_TARGET}'" >&2
+    exit 1
+    ;;
+esac
 
 require_file() {
   local path="$1"
@@ -203,6 +212,29 @@ if [[ "${manifest_at_merge}" != "${version}" || "${chart_version_at_merge}" != "
   exit 1
 fi
 
+tag_oid="${merge_oid}"
+
+if [[ "${TAG_TARGET}" == "branch-head" ]]; then
+  tag_oid="$(git rev-parse HEAD)"
+
+  if ! git merge-base --is-ancestor "${merge_oid}" "${tag_oid}"; then
+    echo "branch-head tag target ${tag_oid} does not descend from release PR merge commit ${merge_oid}" >&2
+    exit 1
+  fi
+
+  manifest_at_target="$(git show "${tag_oid}:${MANIFEST_FILE}" | jq -er '."."')"
+  chart_version_at_target="$(git show "${tag_oid}:${CHART_FILE}" | chart_value /dev/stdin "version")"
+  chart_app_version_at_target="$(git show "${tag_oid}:${CHART_FILE}" | chart_value /dev/stdin "appVersion")"
+
+  if [[ "${manifest_at_target}" != "${version}" || "${chart_version_at_target}" != "${version}" || "${chart_app_version_at_target}" != "${version}" ]]; then
+    echo "release files at branch-head tag target ${tag_oid} do not match ${version}" >&2
+    echo "  manifest@target:   ${manifest_at_target}" >&2
+    echo "  chart@target:      ${chart_version_at_target}" >&2
+    echo "  appVersion@target: ${chart_app_version_at_target}" >&2
+    exit 1
+  fi
+fi
+
 notes_file="$(mktemp)"
 generated_notes_file="$(mktemp)"
 trap 'rm -f "${notes_file}" "${generated_notes_file}"' EXIT
@@ -231,23 +263,23 @@ fi
 
 if git rev-parse -q --verify "refs/tags/${version}" >/dev/null 2>&1; then
   local_tag_commit="$(git rev-list -n1 "${version}")"
-  if [[ "${local_tag_commit}" != "${merge_oid}" ]]; then
-    echo "local tag ${version} points at ${local_tag_commit}, expected ${merge_oid}" >&2
+  if [[ "${local_tag_commit}" != "${tag_oid}" ]]; then
+    echo "local tag ${version} points at ${local_tag_commit}, expected ${tag_oid}" >&2
     exit 1
   fi
 elif git ls-remote --exit-code --tags origin "refs/tags/${version}" >/dev/null 2>&1; then
   git fetch --no-tags origin "refs/tags/${version}:refs/tags/${version}" >/dev/null 2>&1
   remote_tag_commit="$(git rev-list -n1 "${version}")"
-  if [[ "${remote_tag_commit}" != "${merge_oid}" ]]; then
-    echo "remote tag ${version} points at ${remote_tag_commit}, expected ${merge_oid}" >&2
+  if [[ "${remote_tag_commit}" != "${tag_oid}" ]]; then
+    echo "remote tag ${version} points at ${remote_tag_commit}, expected ${tag_oid}" >&2
     exit 1
   fi
 else
   if [[ "${DRY_RUN}" == "1" ]]; then
-    echo "[dry-run] would create signed annotated tag ${version} at ${merge_oid}"
+    echo "[dry-run] would create signed annotated tag ${version} at ${tag_oid} (${TAG_TARGET})"
   else
     require_git_tag_signing
-    git tag -s "${version}" "${merge_oid}" -m "Release ${version}"
+    git tag -s "${version}" "${tag_oid}" -m "Release ${version}"
     git push origin "refs/tags/${version}"
   fi
 fi

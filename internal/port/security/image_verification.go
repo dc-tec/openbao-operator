@@ -16,7 +16,7 @@ const (
 	defaultGitHubOIDCIssuerRegExp = "^https://token\\.actions\\.githubusercontent\\.com$"
 
 	openBaoReleaseSubjectRegExp = "^https://github\\.com/openbao/openbao/\\.github/workflows/release\\.yml@refs/tags/v?[0-9A-Za-z][0-9A-Za-z._+-]*$"
-	operatorSubjectRegExp       = "^https://github\\.com/dc-tec/openbao-operator/\\.github/workflows/(release\\.yml@refs/tags/.+|publish-edge\\.yml@refs/heads/main|publish-nightly\\.yml@refs/heads/main|reusable-build\\.yml@refs/heads/main)$"
+	operatorSubjectRegExp       = "^https://github\\.com/dc-tec/openbao-operator/\\.github/workflows/(release\\.yml@refs/tags/.+|publish-edge\\.yml@refs/heads/main|publish-nightly\\.yml@refs/heads/main|reusable-build\\.yml@(refs/heads/main|refs/tags/.+))$"
 
 	operatorInitOfficialRepository    = "ghcr.io/dc-tec/openbao-init"
 	operatorBackupOfficialRepository  = "ghcr.io/dc-tec/openbao-backup"
