@@ -26,251 +26,33 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: 'false'
+  artifacthub.io/prerelease: "false"
   artifacthub.io/containsSecurityUpdates: 'true'
   artifacthub.io/changes: |
-    - kind: changed
-      description: "core: Improve OIDC/JWT bootstrap, update strategy configuration and configuration ergonomics"
-    - kind: changed
-      description: "core: remove Sentinel drift detection (VAP hardening)"
-    - kind: changed
-      description: "upgrade: simplify blue/green cutover and split rolling strategy"
-    - kind: changed
-      description: "config: openbaocluster config renderer"
-    - kind: changed
-      description: "upgrade: upgrade manager; blue/green upgrades"
-    - kind: changed
-      description: "controller: openbaocluster refactor; sentinel improvements"
     - kind: added
       description: "admission: authorize maintenance through RBAC"
     - kind: added
-      description: "api: add OpenBaoCluster observedGeneration and printer columns"
-    - kind: added
       description: "api: add runtime restart controls"
-    - kind: added
-      description: "api: improve sentinel observability"
-    - kind: added
-      description: "ast-grep: add policy-driven architecture guardrails with CI enforcement"
-    - kind: added
-      description: "backup;restore: azure blob storage and GCS support as backup provider"
-    - kind: added
-      description: "bluegreen: blue/green traffic switching improvements"
-    - kind: added
-      description: "charts: operator helm chart"
-    - kind: added
-      description: "config: structured config for self-init"
-    - kind: added
-      description: "controller;chart;rbac: controller hardening, Helm sync automation, and RBAC race fix"
-    - kind: added
-      description: "controller: add extra metrics"
-    - kind: added
-      description: "controller: single tenancy support"
-    - kind: added
-      description: "core: add consistent Kubernetes lifecycle events"
-    - kind: added
-      description: "core: add perf baseline harness and gates"
-    - kind: added
-      description: "core: blue/green upgrades"
-    - kind: added
-      description: "core: cluster lifecycle hardening; e2e suite refactor"
-    - kind: added
-      description: "core: enable Raft Autopilot for automatic dead server cleanup"
-    - kind: added
-      description: "core: harden lifecycle contracts and supporting coverage"
-    - kind: added
-      description: "core: helm manifest values and templates"
-    - kind: added
-      description: "core: Improve OIDC/JWT bootstrap, update strategy configuration and configuration ergonomics"
-    - kind: added
-      description: "core: introduce restore CRD"
-    - kind: added
-      description: "core: make JWT audience configurable and plumb JWT bootstrap config across backup/upgrade/restore"
-    - kind: added
-      description: "core: OpenShift compatibility support"
-    - kind: added
-      description: "infra;controller: implement support for online PVC expansion of running OpenBao Clusters"
-    - kind: added
-      description: "infra: add default node and zone spreading for OpenBao StatefulSets"
-    - kind: added
-      description: "infra: add pod metadata hooks for workload identity"
-    - kind: added
-      description: "infra: Expose listenerName field for Gateway API HTTPRoute targeting"
-    - kind: added
-      description: "infra: improve hardened and ACME deployments"
-    - kind: added
-      description: "infra: make DNS namespace configurable in NetworkPolicies"
-    - kind: added
-      description: "manifests: install manifest"
-    - kind: added
-      description: "manifests: optional sentinel deployment for quicker reconcile"
-    - kind: added
-      description: "manifests: self-service tenant onboarding"
-    - kind: added
-      description: "manifests: structured configuration"
-    - kind: added
-      description: "manifests: wire-in image verification for all components"
-    - kind: added
-      description: "observability: add metrics, dashboards, e2e assertions; upgrade stability"
-    - kind: added
-      description: "operator: add supported single-tenant custom identity install paths"
-    - kind: added
-      description: "perf: refresh kind performance baseline"
-    - kind: added
-      description: "policy: enforce Hardened profile requires replicas &gt;= 3 via VAP"
-    - kind: added
-      description: "provisioner: configurable tenant resource quotas"
     - kind: added
       description: "readreplicas: add steady-state read replica topology and status"
     - kind: added
       description: "readreplicas: integrate read replicas with upgrade and restore workflows"
-    - kind: added
-      description: "restore: add RBAC for restore jobs and validate authentication"
-    - kind: security
-      description: "security: Add admission-time protections for SSRF, TLS secrets, and tenant self-service"
-    - kind: security
-      description: "security: add operatorimageVerification field to CRD to allow separate verification of both OpenBao and Operator images"
-    - kind: security
-      description: "security: expand control-plane audit coverage for startup, operations, and RBAC mutations"
-    - kind: security
-      description: "security: harden image verification and align edge/nightly signed manifest streams"
-    - kind: security
-      description: "security: harden image verification defaults and sign edge/nightly images"
-    - kind: security
-      description: "security: harden operator RBAC with ValidatingAdmissionPolicy guardrails"
-    - kind: security
-      description: "security: tighten operator security and authentication contracts"
-    - kind: added
-      description: "upgrade: harden backup and restore flows"
-    - kind: added
-      description: "upgrade: improve upgrade manager stability by using SSA for status updates and make pre-upgrade backup job names deterministic"
-    - kind: added
-      description: "upgrade: unify manual upgrade requests on OpenBaoCluster"
-    - kind: added
-      description: "vap: harden OpenBaoRestore VAP guardrails + allow default backup executor image"
-    - kind: fixed
-      description: "admission: add admission check"
-    - kind: fixed
-      description: "admission: allow hardened image verification defaults"
     - kind: fixed
       description: "admission: guard hardened security context overrides"
     - kind: fixed
-      description: "admission: implement security/rbac improvements"
-    - kind: fixed
-      description: "api,security: harden CRD/admission contracts and guardrails"
-    - kind: fixed
-      description: "api: switch SecretReference to LocalObjectReference"
-    - kind: fixed
-      description: "auth: harden OIDC discovery and add least-privilege RBAC + admission guardrails"
-    - kind: fixed
-      description: "auth: harden operator OIDC bootstrap discovery"
-    - kind: fixed
-      description: "auth: retry kubernetes jwks discovery via api service"
-    - kind: fixed
-      description: "backup: align retention behavior across providers and refactor backup/restore flow"
-    - kind: fixed
-      description: "backup: make sure backup jobs are idempotent"
-    - kind: fixed
-      description: "backup: manual / scheduled backups"
-    - kind: fixed
-      description: "backup: remove unused function"
-    - kind: fixed
-      description: "backup: upgrade paths"
-    - kind: fixed
-      description: "bluegreen: harden deterministic upgrade flow, tests, and docs"
-    - kind: fixed
-      description: "build: stabilize byte reproducibility gates for checksums and sbom outputs"
-    - kind: fixed
-      description: "chart: sync helm chart"
-    - kind: fixed
-      description: "chart: sync helm chart"
-    - kind: fixed
       description: "ci: allow PR label sync to write labels"
     - kind: fixed
-      description: "ci: always run perf weekly issue job after failed schedule check"
-    - kind: fixed
-      description: "ci: create kind cluster in release e2e gate"
-    - kind: fixed
-      description: "ci: handle kind load failures for multi-arch OpenBao images"
-    - kind: fixed
-      description: "ci: harden mainline publish workflows"
-    - kind: fixed
       description: "ci: replace dangerous PR labeling workflow"
-    - kind: fixed
-      description: "ci: restore security and bot PR pipeline stability"
-    - kind: fixed
-      description: "ci: stabilize nightly e2e image refs and matrix check naming"
-    - kind: fixed
-      description: "ci: stabilize release/build reproducibility and align CI documentation"
-    - kind: fixed
-      description: "ci: unblock draft release lookup and run reproducibility post-release"
-    - kind: fixed
-      description: "controller: infer BlueImage from running pods to prevent premature upgrades"
-    - kind: fixed
-      description: "controller: Prevent data loss by orphaning secrets when DeletionPolicy is Retain"
-    - kind: fixed
-      description: "controller: prevent OpenBaoCluster resourceVersion churn"
-    - kind: fixed
-      description: "controller: recheck admission dependencies at runtime"
-    - kind: fixed
-      description: "controller: refresh cluster status on standard cadence"
-    - kind: fixed
-      description: "controller: remove force ownership of status"
-    - kind: fixed
-      description: "controller: timeout for image verification"
-    - kind: fixed
-      description: "core: add temporary transient error"
-    - kind: fixed
-      description: "core: check token existence"
-    - kind: fixed
-      description: "core: harden controller determinism and idempotency"
-    - kind: fixed
-      description: "core: improve container status checking"
-    - kind: fixed
-      description: "core: rbac and admission hardening"
-    - kind: fixed
-      description: "deps: resolve security vulnerabilities in go-tuf/v2 and rekor dependencies"
-    - kind: fixed
-      description: "e2e: sentinel drift detection robustness"
-    - kind: fixed
-      description: "e2e: unused param"
     - kind: fixed
       description: "helm: allow global values in chart schema"
     - kind: fixed
       description: "helm: Helm provisioner admission identity"
     - kind: fixed
-      description: "images: fail-fast on missing OPERATOR_VERSION environment variable"
-    - kind: fixed
-      description: "Implement versioned default images for backup, upgrade, and init container"
-    - kind: fixed
-      description: "infra: add IPv6/dual-stack support for listener binding and development egress rules"
-    - kind: fixed
       description: "infra: delete scaled-down raft PVCs"
-    - kind: fixed
-      description: "infra: exclude job pods from pdb"
-    - kind: fixed
-      description: "infra: fail closed on hostile OIDC bootstrap discovery"
-    - kind: fixed
-      description: "infra: improve initialization robustness by treating transient Secret/RBAC errors as retriable and hardening root-token creation"
-    - kind: fixed
-      description: "infra: resolve BackendTLSPolicy mismatch and cleanup stale services after Blue/Green upgrade"
-    - kind: fixed
-      description: "infra: stop apiserver endpoint autodetection; use service VIP allow-list with optional endpoint IPs"
-    - kind: fixed
-      description: "init: retrty writing root token to secret to handle transient cr\u2026"
-    - kind: fixed
-      description: "kube: add job check"
-    - kind: fixed
-      description: "manifests: make JWT auth bootstrap a opt-in feature"
-    - kind: fixed
-      description: "manifests: secure defaults and profiles"
     - kind: fixed
       description: "multitenancy: gate cluster reconcile on tenant onboarding"
     - kind: fixed
       description: "network: Require source-scoped managed Ingress access"
-    - kind: fixed
-      description: "nightly: harden init token persistence and e2e autopilot reliability"
-    - kind: fixed
-      description: "openbao: handle 403 forbidden gracefully"
     - kind: fixed
       description: "openbao: stage safe raft scale-downs"
     - kind: fixed
@@ -279,105 +61,29 @@ annotations:
       description: "provisioner: reduce release reconciliation log noise"
     - kind: fixed
       description: "release-0.2: backport 0.2.1 fixes"
-    - kind: fixed
-      description: "release: grant tag workflow comment permissions"
-    - kind: fixed
-      description: "release: remove unsupported tag app scope"
-    - kind: fixed
-      description: "release: sign release tags and trim release gates"
-    - kind: fixed
-      description: "rolling: handle retry status conflicts during upgrade resume"
-    - kind: fixed
-      description: "security;e2e: verify signed hardened/acme flows in CI/nightly and support digest-safe keyless defaults"
     - kind: security
       description: "security: fail closed for configured trusted roots"
-    - kind: security
-      description: "security: harden managed image digests and gateway validation reads"
-    - kind: security
-      description: "security: implement image verification LRU cache; docker auth handeling"
-    - kind: security
-      description: "security: performance issue image verification by reording cache lookups"
-    - kind: security
-      description: "security: remove resolved govulncheck ignores"
-    - kind: security
-      description: "security: validate UMASK bounds in bao-wrapper"
-    - kind: security
-      description: "security: wrap bundle fallback verification error"
-    - kind: fixed
-      description: "sentinel: prevent noisy neighbors and thundering herd behavior"
-    - kind: fixed
-      description: "sentinel: rely on uuids instead of timestamps as sentinel triggerid"
-    - kind: fixed
-      description: "status: make lifecycle status guidance more actionable"
     - kind: fixed
       description: "status: mark unsafe admission mode not production-ready"
-    - kind: fixed
-      description: "storage: enforce storage class immutability consistently"
-    - kind: fixed
-      description: "upgrade: add metrics for upgrade"
-    - kind: fixed
-      description: "upgrade: clear rolling retry failure state with merge status patch"
     - kind: fixed
       description: "upgrade: complete SSA ownership migration"
     - kind: fixed
       description: "upgrade: harden bluegreen and rolling recovery flakes"
     - kind: fixed
-      description: "upgrade: harden OpenBaoCluster upgrade validation, recovery, and documentation"
-    - kind: fixed
-      description: "upgrade: improve upgrade manager stability"
-    - kind: fixed
-      description: "upgrade: make rolling upgrades deterministic and harden rolling upgrade coverage"
-    - kind: fixed
-      description: "upgrade: revert partition update to MergeFrom to fix StatefulSet validation"
-    - kind: fixed
       description: "upgrade: set executor job resource requirements"
     - kind: fixed
       description: "upgrade: treat raft promote already-voter as no-op"
     - kind: fixed
-      description: "upgrade: use SSA for upgrade manager"
-    - kind: fixed
       description: "upgrade: verify default helper images for hardened clusters"
-    - kind: fixed
-      description: "validation: block upgrade strategy switches"
-    - kind: fixed
-      description: "vap: require self init requests when self initialization is enabled"
-    - kind: fixed
-      description: "vap: stuck Job deletions by allowing GC Job-finalizer updates in lock-managed-resource-mutations VAP"
-    - kind: changed
-      description: "release: release 0.1.0"
-    - kind: changed
-      description: "release: release 0.1.0-rc.7"
-    - kind: changed
-      description: "release: set release target to 0.1.0-rc.1"
-    - kind: changed
-      description: "release: set release target to 0.1.0-rc.2"
-    - kind: changed
-      description: "release: set release target to 0.1.0-rc.3"
-    - kind: changed
-      description: "release: set release target to 0.1.0-rc.4"
-    - kind: changed
-      description: "release: set release target to 0.1.0-rc.5"
-    - kind: changed
-      description: "trigger release-please for 0.1.0-rc.6"
-    - kind: changed
-      description: "config: openbaocluster config renderer"
-    - kind: changed
-      description: "controller: openbaocluster refactor; sentinel improvements"
-    - kind: changed
-      description: "core: remove Sentinel drift detection (VAP hardening)"
-    - kind: changed
-      description: "upgrade: simplify blue/green cutover and split rolling strategy"
-    - kind: changed
-      description: "upgrade: upgrade manager; blue/green upgrades"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.1.0
+      image: ghcr.io/dc-tec/openbao-operator:0.2.0
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.1.0
+      image: ghcr.io/dc-tec/openbao-init:0.2.0
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.1.0
+      image: ghcr.io/dc-tec/openbao-backup:0.2.0
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.1.0
+      image: ghcr.io/dc-tec/openbao-upgrade:0.2.0
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
