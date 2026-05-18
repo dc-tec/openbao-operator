@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'release-*'
     paths:
       - 'CHANGELOG.md'
       - '.release-please-manifest.json'
@@ -15,7 +16,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: release-please-tag
+  group: release-please-tag-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -94,6 +95,7 @@ jobs:
       - name: Create tag and draft release
         env:
           REPO: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.ref_name }}
           GH_READ_TOKEN: ${{ github.token }}
           GH_WRITE_TOKEN: ${{ steps.app-token.outputs.token }}
           OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE: ${{ secrets.OPENBAO_OPERATOR_RELEASE_TAG_GPG_PASSPHRASE }}
