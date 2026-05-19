@@ -65,6 +65,12 @@ const config: Config = {
               label: 'next',
               path: 'next',
             },
+            '0.2.0': {
+              label: '0.2.x',
+            },
+            '0.1.0': {
+              label: '0.1.x',
+            },
           },
         },
         blog: false,

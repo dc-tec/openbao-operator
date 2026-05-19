@@ -526,6 +526,56 @@ jobs:
       - name: Build docs
         uses: ./.github/actions/docs-build
 
+  release-line-docs:
+    name: Release-line Docs Snapshot
+    needs: changes
+    if: github.event_name == 'pull_request' && startsWith(github.base_ref, 'release-') && needs.changes.outputs.docs == 'true'
+    runs-on: *runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify release-line docs snapshot changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${BASE_REF}" =~ ^release-([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Release-line docs check only supports release-X.Y branches; got ${BASE_REF}" >&2
+            exit 1
+          fi
+
+          docs_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.0"
+          git fetch --no-tags --prune --depth=1 origin "${BASE_SHA}" || true
+
+          changed="$(git diff --name-only "${BASE_SHA}" "${HEAD_SHA}")"
+          docs_changed="$(grep -E '^(docs/|website/sidebars\.ts$)' <<< "${changed}" || true)"
+          if [[ -z "${docs_changed}" ]]; then
+            echo "No source docs changed."
+            exit 0
+          fi
+
+          snapshot_changed="$(
+            grep -E "^website/versioned_docs/version-${docs_version//./\\.}/|^website/versioned_sidebars/version-${docs_version//./\\.}-sidebars\\.json$|^website/versions\\.json$" <<< "${changed}" || true
+          )"
+          if [[ -n "${snapshot_changed}" ]]; then
+            echo "Release-line docs snapshot changed for ${docs_version}."
+            exit 0
+          fi
+
+          {
+            echo "PRs against ${BASE_REF} that change source docs must refresh the ${docs_version} release-line docs snapshot."
+            echo
+            echo "Run from the release branch and commit the generated files:"
+            echo "  make docs-refresh-version DOCS_VERSION=${docs_version}"
+          } >&2
+          exit 1
+
   helm:
     name: Helm Chart
     needs: changes
@@ -1008,6 +1058,7 @@ jobs:
       - fuzz
       - openbao-config-compat
       - docs
+      - release-line-docs
       - helm
       - helm-e2e-smoke
       - build-artifacts
@@ -1032,6 +1083,7 @@ jobs:
           FUZZ: ${{ needs.fuzz.result }}
           OPENBAO_CONFIG_COMPAT: ${{ needs.openbao-config-compat.result }}
           DOCS: ${{ needs.docs.result }}
+          RELEASE_LINE_DOCS: ${{ needs.release-line-docs.result }}
           HELM: ${{ needs.helm.result }}
           HELM_E2E_SMOKE: ${{ needs.helm-e2e-smoke.result }}
           BUILD_ARTIFACTS: ${{ needs.build-artifacts.result }}
@@ -1066,6 +1118,7 @@ jobs:
           fuzz=${FUZZ}
           openbao-config-compat=${OPENBAO_CONFIG_COMPAT}
           docs=${DOCS}
+          release-line-docs=${RELEASE_LINE_DOCS}
           helm=${HELM}
           helm-e2e-smoke=${HELM_E2E_SMOKE}
           build-artifacts=${BUILD_ARTIFACTS}
