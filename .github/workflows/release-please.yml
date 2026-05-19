@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'release-*'
+      - '!release-please--branches--*'
   workflow_dispatch:
     inputs:
       release_as:
@@ -25,8 +26,52 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ !github.event.repository.fork }}
     steps:
+      - name: Checkout for release-only guard
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Detect release artifact-only push
+        id: release-artifact-guard
+        if: ${{ github.event_name == 'push' }}
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${BEFORE_SHA}" =~ ^0+$ ]]; then
+            echo "skip_release_please=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            echo "skip_release_please=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          mapfile -t changed_files < <(git diff --name-only "${BEFORE_SHA}" "${AFTER_SHA}")
+          if (( ${#changed_files[@]} == 0 )); then
+            echo "skip_release_please=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          for file in "${changed_files[@]}"; do
+            case "${file}" in
+              CHANGELOG.md|.release-please-manifest.json|charts/openbao-operator/Chart.yaml) ;;
+              *)
+                echo "skip_release_please=false" >> "${GITHUB_OUTPUT}"
+                exit 0
+                ;;
+            esac
+          done
+
+          echo "Push only changed release artifacts; skipping release-please."
+          echo "skip_release_please=true" >> "${GITHUB_OUTPUT}"
+
       - name: Mint GitHub App token (openbao-operator-release-pr)
         id: app-token
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.OPENBAO_OPERATOR_RELEASE_PR_APP_ID }}
@@ -39,6 +84,7 @@ jobs:
 
       - name: Run release-please (PR only)
         id: release
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' }}
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -49,14 +95,14 @@ jobs:
           skip-github-release: true
 
       - name: Check out release PR branch
-        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release.outputs.prs_created == 'true' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
       - name: Sync Chart metadata and changelog on release PR branch
-        if: ${{ steps.release.outputs.prs_created == 'true' }}
+        if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' && steps.release.outputs.prs_created == 'true' }}
         env:
           OWNER: ${{ github.repository_owner }}
           RELEASE_PR_BRANCH: release-please--branches--${{ github.ref_name }}
