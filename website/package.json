@@ -16,6 +16,7 @@
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
     "version:docs": "node ./scripts/snapshot-version.mjs",
+    "refresh:docs-version": "node ./scripts/refresh-version.mjs",
     "verify:docs-version": "node ./scripts/verify-docs-version.mjs",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test"
