@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - 'release-*'
+      - '!release-please--branches--*'
     paths:
       - 'CHANGELOG.md'
       - '.release-please-manifest.json'
