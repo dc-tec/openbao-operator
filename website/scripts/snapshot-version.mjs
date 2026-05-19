@@ -33,6 +33,18 @@ async function dedupeVersions() {
   await fs.writeFile(versionsPath, `${JSON.stringify(deduped, null, 2)}\n`);
 }
 
+const prepareResult = spawnSync(
+  process.platform === 'win32' ? 'npm.cmd' : 'npm',
+  ['run', 'prepare:contribute'],
+  {
+    stdio: 'inherit',
+  },
+);
+
+if (prepareResult.status !== 0) {
+  process.exit(prepareResult.status ?? 1);
+}
+
 const result = spawnSync(
   process.platform === 'win32' ? 'npx.cmd' : 'npx',
   ['docusaurus', 'docs:version', version],

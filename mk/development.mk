@@ -389,6 +389,11 @@ docs-version: docs-deps ## Snapshot the current docs into a versioned Docusaurus
 	@test -n "$(DOCS_VERSION)" || { echo "DOCS_VERSION is required, for example: make docs-version DOCS_VERSION=1.2.3"; exit 1; }
 	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run version:docs -- "$(DOCS_VERSION)"
 
+.PHONY: docs-refresh-version
+docs-refresh-version: docs-deps ## Refresh an existing release-line docs snapshot from the checked-out docs. Set DOCS_VERSION=<X.Y.0>.
+	@test -n "$(DOCS_VERSION)" || { echo "DOCS_VERSION is required, for example: make docs-refresh-version DOCS_VERSION=1.2.0"; exit 1; }
+	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run refresh:docs-version -- "$(DOCS_VERSION)"
+
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
 # CertManager is installed by default; skip with:

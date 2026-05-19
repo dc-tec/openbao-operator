@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
@@ -11,6 +12,26 @@ const docsPluginDefaultExclude = [
   '**/*.test.{js,jsx,ts,tsx}',
   '**/__tests__/**',
 ];
+const releaseLineVersionLabels = {
+  '0.2.0': '0.2.x',
+  '0.1.0': '0.1.x',
+} as const;
+
+function readDocsVersions(): string[] {
+  try {
+    const versions = JSON.parse(fs.readFileSync(new URL('./versions.json', import.meta.url), 'utf8'));
+    return Array.isArray(versions) ? versions : [];
+  } catch {
+    return [];
+  }
+}
+
+const docsVersions = new Set(readDocsVersions());
+const releaseLineVersions = Object.fromEntries(
+  Object.entries(releaseLineVersionLabels)
+    .filter(([version]) => docsVersions.has(version))
+    .map(([version, label]) => [version, {label}]),
+);
 
 const config: Config = {
   title: 'OpenBao Operator',
@@ -65,12 +86,7 @@ const config: Config = {
               label: 'next',
               path: 'next',
             },
-            '0.2.0': {
-              label: '0.2.x',
-            },
-            '0.1.0': {
-              label: '0.1.x',
-            },
+            ...releaseLineVersions,
           },
         },
         blog: false,
