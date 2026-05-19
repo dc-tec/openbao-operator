@@ -2,6 +2,54 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.2.0](https://github.com/dc-tec/openbao-operator/compare/0.1.0...0.2.0) (2026-05-19)
+
+
+### Features
+
+* **admission:** authorize maintenance through RBAC ([#347](https://github.com/dc-tec/openbao-operator/issues/347)) ([b7c05a7](https://github.com/dc-tec/openbao-operator/commit/b7c05a770bcc97ea1931caf0a3c05919540c38ab))
+* **api:** add runtime restart controls ([#348](https://github.com/dc-tec/openbao-operator/issues/348)) ([b1efd34](https://github.com/dc-tec/openbao-operator/commit/b1efd3442c2c5cd0a58c654b749103ab7cf5ac81))
+* **openbaocluster:** add ingress integration readiness ([#409](https://github.com/dc-tec/openbao-operator/issues/409)) ([945b4a4](https://github.com/dc-tec/openbao-operator/commit/945b4a407829e8bb5f5617309873215ae356fc2d))
+* **openbao:** improve PKCS[#11](https://github.com/dc-tec/openbao-operator/issues/11) runtime ergonomics ([#400](https://github.com/dc-tec/openbao-operator/issues/400)) ([f32a6ec](https://github.com/dc-tec/openbao-operator/commit/f32a6ec0fdc46ab911bc714daa4ec40d0527ef97))
+* **readreplicas:** add steady-state read replica topology and status ([#361](https://github.com/dc-tec/openbao-operator/issues/361)) ([9a74c14](https://github.com/dc-tec/openbao-operator/commit/9a74c143e9061f42f5c7557af7a7e9b767252926))
+* **readreplicas:** integrate read replicas with upgrade and restore workflows ([#362](https://github.com/dc-tec/openbao-operator/issues/362)) ([e8bf8b8](https://github.com/dc-tec/openbao-operator/commit/e8bf8b820c06ccab1fb81a9df25223dfbf4e0666))
+
+
+### Bug Fixes
+
+* **admission:** guard hardened security context overrides ([#390](https://github.com/dc-tec/openbao-operator/issues/390)) ([d0a6533](https://github.com/dc-tec/openbao-operator/commit/d0a6533a4c5dbb7b23e4c0c83abf6ee07a5b491e))
+* **backup:** record manual triggers and failure time ([#407](https://github.com/dc-tec/openbao-operator/issues/407)) ([ff172c6](https://github.com/dc-tec/openbao-operator/commit/ff172c60d6efabb541f9093dca769fb7b354f0ce))
+* **ci:** allow PR label sync to write labels ([#307](https://github.com/dc-tec/openbao-operator/issues/307)) ([51591d8](https://github.com/dc-tec/openbao-operator/commit/51591d8a212019134cb290d3c876385b08745e01))
+* **ci:** replace dangerous PR labeling workflow ([#304](https://github.com/dc-tec/openbao-operator/issues/304)) ([b3740f8](https://github.com/dc-tec/openbao-operator/commit/b3740f89f65379b734ac70e8db5cd5982e479939))
+* **config:** align audit device options with OpenBao ([#423](https://github.com/dc-tec/openbao-operator/issues/423)) ([b1ed4a3](https://github.com/dc-tec/openbao-operator/commit/b1ed4a344e2d9b99fb4ff0efad86107133209bc7))
+* **config:** harden generated JWT roles ([#420](https://github.com/dc-tec/openbao-operator/issues/420)) ([546c6db](https://github.com/dc-tec/openbao-operator/commit/546c6dbc605c97c1dac743c5cefb97e4dc595688))
+* **config:** use SemVer precedence for OpenBao version checks ([#394](https://github.com/dc-tec/openbao-operator/issues/394)) ([173847d](https://github.com/dc-tec/openbao-operator/commit/173847d22397796e4caa7aa41180f60fcc2a6839))
+* **deps:** restore dependency update CI coverage ([#399](https://github.com/dc-tec/openbao-operator/issues/399)) ([032e1b7](https://github.com/dc-tec/openbao-operator/commit/032e1b7a8ae0a008bacc17772bac5d764f410876))
+* **gateway:** emit TLSRoute as Gateway API v1 ([#429](https://github.com/dc-tec/openbao-operator/issues/429)) ([05177d3](https://github.com/dc-tec/openbao-operator/commit/05177d3aae16aa5bbd80151806b75b5842e6ced9))
+* **helm:** allow global values in chart schema ([#378](https://github.com/dc-tec/openbao-operator/issues/378)) ([5dad02e](https://github.com/dc-tec/openbao-operator/commit/5dad02ebc4253ddb366f636e3aea60ffce5f4ffa))
+* **helm:** deduplicate generated RBAC labels ([#414](https://github.com/dc-tec/openbao-operator/issues/414)) ([78f8d73](https://github.com/dc-tec/openbao-operator/commit/78f8d73ed5329c4dfaa7c82926f98ca8933bcb19))
+* **helm:** Helm provisioner admission identity ([#387](https://github.com/dc-tec/openbao-operator/issues/387)) ([f781c70](https://github.com/dc-tec/openbao-operator/commit/f781c70b885973b0d682cc102607d3e0b41f36dd))
+* **infra:** delete scaled-down raft PVCs ([#341](https://github.com/dc-tec/openbao-operator/issues/341)) ([f406e90](https://github.com/dc-tec/openbao-operator/commit/f406e9029d94c8e7984d77b66cf02b8a97f3c339))
+* **multitenancy:** gate cluster reconcile on tenant onboarding ([#359](https://github.com/dc-tec/openbao-operator/issues/359)) ([cfd850f](https://github.com/dc-tec/openbao-operator/commit/cfd850fcf819c4d1562644cc9495143cfee69b27))
+* **network:** Require source-scoped managed Ingress access ([#389](https://github.com/dc-tec/openbao-operator/issues/389)) ([a3cec85](https://github.com/dc-tec/openbao-operator/commit/a3cec85a56230560be8196ac02666ad38b7e136d))
+* **openbao:** share JWT token cache ([#419](https://github.com/dc-tec/openbao-operator/issues/419)) ([a4a0887](https://github.com/dc-tec/openbao-operator/commit/a4a088762c584867932d3f48d47ee5399ceadc9e))
+* **openbao:** stage safe raft scale-downs ([#339](https://github.com/dc-tec/openbao-operator/issues/339)) ([4da1ec7](https://github.com/dc-tec/openbao-operator/commit/4da1ec74f8e4e45e710a0fae51f86bbf44c257c8))
+* **probe:** stabilize openbao workload probes ([#371](https://github.com/dc-tec/openbao-operator/issues/371)) ([260547b](https://github.com/dc-tec/openbao-operator/commit/260547b71d3e12e2ec97ae500f9ed63ab1619804))
+* **provisioner:** reduce release reconciliation log noise ([#370](https://github.com/dc-tec/openbao-operator/issues/370)) ([b2f2bca](https://github.com/dc-tec/openbao-operator/commit/b2f2bcaf18dfef15348aa02b9f3de224c02e38ab))
+* **provisioner:** support external tenant PSS label ownership ([#428](https://github.com/dc-tec/openbao-operator/issues/428)) ([08462c9](https://github.com/dc-tec/openbao-operator/commit/08462c9e108dba154aa9831ce38f9d209b6dbf9e))
+* **rbac:** allow verification pull secret reads ([#427](https://github.com/dc-tec/openbao-operator/issues/427)) ([10d40c0](https://github.com/dc-tec/openbao-operator/commit/10d40c0169bda12ea318f9ab1629b0bf4e8bc312))
+* **restore:** harden restore job rendering ([#405](https://github.com/dc-tec/openbao-operator/issues/405)) ([3e52f5a](https://github.com/dc-tec/openbao-operator/commit/3e52f5a51731562cb61f8cb8e48d2fdf8bd72e09))
+* **security:** fail closed for configured trusted roots ([#393](https://github.com/dc-tec/openbao-operator/issues/393)) ([04cbd64](https://github.com/dc-tec/openbao-operator/commit/04cbd64cf0356f111f0e3c0450b859008e6c5b69))
+* **status:** mark unsafe admission mode not production-ready ([#391](https://github.com/dc-tec/openbao-operator/issues/391)) ([98022a3](https://github.com/dc-tec/openbao-operator/commit/98022a3925742e011dbb8ce1fb55c2c79c5a1496))
+* **storage:** retry transient S3 bucket ensure failures ([#408](https://github.com/dc-tec/openbao-operator/issues/408)) ([9796c2c](https://github.com/dc-tec/openbao-operator/commit/9796c2c174c06f84f8fa645ae29909a774bc6f73))
+* **upgrade:** complete SSA ownership migration ([#345](https://github.com/dc-tec/openbao-operator/issues/345)) ([eafa931](https://github.com/dc-tec/openbao-operator/commit/eafa9317acf33155cc7863924b5cb4a8725f97bc))
+* **upgrade:** harden bluegreen and rolling recovery flakes ([#374](https://github.com/dc-tec/openbao-operator/issues/374)) ([62cf706](https://github.com/dc-tec/openbao-operator/commit/62cf706df50b8ff462e5893166fc61b83749b298))
+* **upgrade:** harden rolling upgrade resume ([#406](https://github.com/dc-tec/openbao-operator/issues/406)) ([33fe59d](https://github.com/dc-tec/openbao-operator/commit/33fe59d148751253d6819070630ebad0ce81d80b))
+* **upgrade:** set executor job resource requirements ([#392](https://github.com/dc-tec/openbao-operator/issues/392)) ([8efb8da](https://github.com/dc-tec/openbao-operator/commit/8efb8da900d378139e35bd32c54489bcc74bec15))
+* **upgrade:** treat raft promote already-voter as no-op ([#382](https://github.com/dc-tec/openbao-operator/issues/382)) ([7d25753](https://github.com/dc-tec/openbao-operator/commit/7d25753b9c5c780e174e8adb5487f48c67128267))
+* **upgrade:** verify default helper images for hardened clusters ([#308](https://github.com/dc-tec/openbao-operator/issues/308)) ([8bfeabb](https://github.com/dc-tec/openbao-operator/commit/8bfeabb6b79a8d897617b0aac63d89be9530ef16))
+* **workload:** mount OCI plugin directory ([#421](https://github.com/dc-tec/openbao-operator/issues/421)) ([fc95717](https://github.com/dc-tec/openbao-operator/commit/fc95717479d010af90550ae7f74d51e999d36990))
+
 ## [0.1.0](https://github.com/dc-tec/openbao-operator/compare/0.3.0...0.1.0) (2026-05-19)
 
 
