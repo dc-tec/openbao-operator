@@ -76,6 +76,42 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 	}
 
+	waitForNetworkPolicy := func(name types.NamespacedName, timeout, pollInterval time.Duration) error {
+		deadline := time.Now().Add(timeout)
+		var lastErr error
+
+		for {
+			np := &networkingv1.NetworkPolicy{}
+			err := c.Get(ctx, name, np)
+			if err == nil {
+				return nil
+			}
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
+			lastErr = err
+
+			if time.Now().After(deadline) {
+				return fmt.Errorf("timed out waiting for NetworkPolicy %s/%s: %w", name.Namespace, name.Name, lastErr)
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(pollInterval):
+			}
+		}
+	}
+
+	dumpNetworkPolicyDiagnostics := func(namespace, clusterName string) {
+		_, _ = fmt.Fprintf(GinkgoWriter, "\n========== NetworkPolicy Diagnostics (%s/%s) ==========\n", namespace, clusterName)
+		dumpKubectlOutput("get", "openbaocluster", clusterName, "-n", namespace, "-o", "yaml")
+		dumpKubectlOutput("get", "networkpolicies", "-n", namespace, "-o", "wide")
+		dumpKubectlOutput("get", "pods", "-n", namespace, "-l", fmt.Sprintf("%s=%s", constants.LabelOpenBaoCluster, clusterName), "-o", "wide")
+		dumpKubectlOutput("get", "events", "-n", namespace, "--sort-by=.lastTimestamp")
+		dumpKubectlOutput("logs", "deployment/openbao-operator-controller", "-n", operatorNamespace, "--tail=400")
+	}
+
 	ensureTransitTokenSecret := func() {
 		By("creating transit token secret with CA certificate for TLS verification")
 		infraBaoCACert, err := e2ehelpers.ReadInfraBaoTLSCACert(ctx, c, f.Namespace, infraBaoName)
@@ -409,11 +445,12 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		_, _ = fmt.Fprintf(GinkgoWriter, "OpenBaoCluster %q observed by API server\n", clusterName)
 
 		By("verifying NetworkPolicy was created")
-		Eventually(func(g Gomega) {
-			np := &networkingv1.NetworkPolicy{}
-			npName := types.NamespacedName{Name: clusterName + "-network-policy", Namespace: f.Namespace}
-			g.Expect(c.Get(ctx, npName, np)).To(Succeed())
-		}, 30*time.Second, 2*time.Second).Should(Succeed())
+		npName := types.NamespacedName{Name: clusterName + "-network-policy", Namespace: f.Namespace}
+		err = waitForNetworkPolicy(npName, framework.DefaultWaitTimeout, framework.DefaultPollInterval)
+		if err != nil {
+			dumpNetworkPolicyDiagnostics(f.Namespace, clusterName)
+		}
+		Expect(err).NotTo(HaveOccurred())
 		_, _ = fmt.Fprintf(GinkgoWriter, "NetworkPolicy created successfully\n")
 
 		By("checking for prerequisite resources (ConfigMap and TLS Secrets)")

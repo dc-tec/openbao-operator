@@ -95,17 +95,39 @@ runs:
       run: |
         set -euo pipefail
 
-        docker pull "${MANAGER_IMAGE}"
-        docker pull "${CONFIG_INIT_IMAGE}"
+        pull_image() {
+          local image="$1"
+          local max_attempts=5
+          local delay_seconds=5
+          local attempt
+
+          for (( attempt = 1; attempt <= max_attempts; attempt++ )); do
+            if docker pull "${image}"; then
+              return 0
+            fi
+
+            if (( attempt == max_attempts )); then
+              echo "docker pull failed for ${image} after ${max_attempts} attempts" >&2
+              return 1
+            fi
+
+            echo "docker pull failed for ${image} (attempt ${attempt}/${max_attempts}); retrying in ${delay_seconds}s" >&2
+            sleep "${delay_seconds}"
+            delay_seconds=$(( delay_seconds * 2 ))
+          done
+        }
+
+        pull_image "${MANAGER_IMAGE}"
+        pull_image "${CONFIG_INIT_IMAGE}"
 
         if [[ "${LOAD_BACKUP_EXECUTOR_IMAGE}" == "true" ]]; then
-          docker pull "${BACKUP_EXECUTOR_IMAGE}"
+          pull_image "${BACKUP_EXECUTOR_IMAGE}"
         fi
 
         if [[ "${LOAD_UPGRADE_EXECUTOR_IMAGE}" == "true" ]] && [[ -n "${HARDENED_UPGRADE_EXECUTOR_IMAGE}" ]]; then
-          docker pull "${HARDENED_UPGRADE_EXECUTOR_IMAGE}"
+          pull_image "${HARDENED_UPGRADE_EXECUTOR_IMAGE}"
         elif [[ "${LOAD_UPGRADE_EXECUTOR_IMAGE}" == "true" ]]; then
-          docker pull "${UPGRADE_EXECUTOR_IMAGE}"
+          pull_image "${UPGRADE_EXECUTOR_IMAGE}"
         fi
 
     - name: Create Kind cluster
@@ -135,6 +157,28 @@ runs:
       run: |
         set -euo pipefail
 
+        pull_image() {
+          local image="$1"
+          local max_attempts=5
+          local delay_seconds=5
+          local attempt
+
+          for (( attempt = 1; attempt <= max_attempts; attempt++ )); do
+            if docker pull "${image}"; then
+              return 0
+            fi
+
+            if (( attempt == max_attempts )); then
+              echo "docker pull failed for ${image} after ${max_attempts} attempts" >&2
+              return 1
+            fi
+
+            echo "docker pull failed for ${image} (attempt ${attempt}/${max_attempts}); retrying in ${delay_seconds}s" >&2
+            sleep "${delay_seconds}"
+            delay_seconds=$(( delay_seconds * 2 ))
+          done
+        }
+
         resolve_image() {
           local output_name="$1"
           local preload="$2"
@@ -147,7 +191,7 @@ runs:
           fi
 
           if [[ "${PRELOAD_STORAGE_EMULATORS}" == "true" ]] && [[ "${preload}" == "true" ]]; then
-            docker pull "${source_image}"
+            pull_image "${source_image}"
             docker tag "${source_image}" "${loaded_image}"
             kind load docker-image "${loaded_image}" --name "${KIND_CLUSTER}"
             echo "${output_name}=${loaded_image}" >> "${GITHUB_OUTPUT}"
