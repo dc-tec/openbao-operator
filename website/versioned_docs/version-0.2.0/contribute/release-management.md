@@ -71,7 +71,7 @@ journey: contribute
 
 <Callout type="important" title="Stable release-line docs snapshots">
 
-Before merging the first stable `X.Y.0` release PR for a release line, snapshot the docs for that release line and commit the generated artifacts. Patch releases in the same line publish release notes and reuse the `X.Y.0` docs snapshot. Prereleases continue to use `/docs/next` and release notes only; do not add patch, `-alpha`, `-beta`, or `-rc` entries to `website/versions.json`.
+Before merging the first stable `X.Y.0` release PR for a release line, snapshot the docs for that release line and commit the generated artifacts. Patch releases in the same line reuse the `X.Y.0` docs version, but user-facing docs fixes for that patch must refresh the existing `X.Y.0` snapshot from the release branch. Prereleases continue to use `/docs/next` and release notes only; do not add patch, `-alpha`, `-beta`, or `-rc` entries to `website/versions.json`.
 
 </Callout>
 
@@ -82,6 +82,16 @@ Before merging the first stable `X.Y.0` release PR for a release line, snapshot 
   code={`make docs-version DOCS_VERSION=X.Y.0`}
 >
   This updates `website/versioned_docs/`, `website/versioned_sidebars/`, and `website/versions.json`.
+</CommandBlock>
+
+<CommandBlock
+  language="bash"
+  label="configure"
+  title="Refresh docs for a patch release line"
+  code={`git switch release-X.Y
+make docs-refresh-version DOCS_VERSION=X.Y.0`}
+>
+  Run this from the release branch after backporting docs that apply to the patch release. This updates the existing release-line docs snapshot without adding a patch version to `website/versions.json`.
 </CommandBlock>
 
 <CommandBlock
