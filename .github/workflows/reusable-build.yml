@@ -21,6 +21,11 @@ on:
         required: false
         default: trusted
         type: string
+      sign_images:
+        description: "Sign pushed image digests with keyless cosign before returning build outputs"
+        required: false
+        default: false
+        type: boolean
     outputs:
       manager_digest:
         description: "Digest of the manager image"
@@ -133,6 +138,20 @@ jobs:
           subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+      - name: Install cosign
+        if: ${{ inputs.sign_images }}
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.4
+
+      - name: Sign image (keyless)
+        if: ${{ inputs.sign_images }}
+        env:
+          IMAGE_REF: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes --new-bundle-format=true "${IMAGE_REF}"
 
   collect-digests:
     name: Collect Image Digests
