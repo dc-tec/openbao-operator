@@ -42,7 +42,7 @@ test('version dropdown switches from next docs to the stable release line', asyn
   await versionDropdown.hover();
 
   const archivedRelease = page.locator('.dropdown__menu').getByRole('link', {
-    name: '0.2.0',
+    name: '0.2.x',
     exact: true,
   });
   await expect(archivedRelease).toBeVisible();
@@ -50,7 +50,7 @@ test('version dropdown switches from next docs to the stable release line', asyn
 
   await expect(page).toHaveURL(/\/openbao-operator\/docs\/get-started\/deployment-decision-guide$/);
   await expect(page.getByText('Published release documentation')).toBeVisible();
-  await expect(page.getByText('Version: 0.2.0')).toBeVisible();
+  await expect(page.getByText('Version: 0.2.x')).toBeVisible();
 });
 
 test.describe('curated legacy redirects stay alive', () => {

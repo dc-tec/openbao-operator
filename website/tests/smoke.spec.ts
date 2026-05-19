@@ -46,7 +46,7 @@ test('stable docs expose the current release banner', async ({page}) => {
 
   await expect(page.getByRole('heading', {name: 'OpenBao Operator documentation'})).toBeVisible();
   await expect(page.getByText('Published release documentation')).toBeVisible();
-  await expect(page.getByText('Version: 0.2.0')).toBeVisible();
+  await expect(page.getByText('Version: 0.2.x')).toBeVisible();
 });
 
 test('architecture section exposes grouped local navigation', async ({page}) => {
