@@ -81,9 +81,27 @@ func TestTenantSecretsRBAC_SetupWithManager_SynchronizesSecretAllowlists(t *test
 		},
 	}
 	require.NoError(t, liveClient.Create(ctx, cluster))
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-a",
+			Namespace: "tenant-a",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "cluster-a",
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Bucket:               "restore-backups",
+					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "restore-creds"},
+				},
+				Key: "snapshots/restore.snap",
+			},
+			TokenSecretRef: &corev1.LocalObjectReference{Name: "restore-token"},
+		},
+	}
+	require.NoError(t, liveClient.Create(ctx, restore))
 
 	wantWriterSecrets := []string{"cluster-a-root-token", "cluster-a-tls-ca", "cluster-a-tls-server", "cluster-a-unseal-key"}
-	wantReaderSecrets := []string{"backup-creds", "backup-token", "unseal-creds"}
+	wantReaderSecrets := []string{"backup-creds", "backup-token", "restore-creds", "restore-token", "unseal-creds"}
 	sort.Strings(wantWriterSecrets)
 	sort.Strings(wantReaderSecrets)
 

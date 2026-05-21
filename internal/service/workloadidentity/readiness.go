@@ -91,6 +91,7 @@ func EvaluateExecutionReadiness(ctx context.Context, reader client.Reader, input
 
 	hasJWTAuth := strings.TrimSpace(input.JWTAuthRole) != ""
 	hasTokenSecret := input.TokenSecretRef != nil && strings.TrimSpace(input.TokenSecretRef.Name) != ""
+	usesStaticTokenAuth := !hasJWTAuth && hasTokenSecret
 	if !hasJWTAuth && !hasTokenSecret {
 		return Readiness{
 			Status:  metav1.ConditionFalse,
@@ -99,7 +100,7 @@ func EvaluateExecutionReadiness(ctx context.Context, reader client.Reader, input
 		}, nil
 	}
 
-	if hasTokenSecret {
+	if usesStaticTokenAuth {
 		secret, err := getSecret(ctx, reader, input.Namespace, input.TokenSecretRef.Name)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -111,7 +112,7 @@ func EvaluateExecutionReadiness(ctx context.Context, reader client.Reader, input
 			}
 			return Readiness{}, fmt.Errorf("failed to read %s token Secret %s/%s: %w", input.Operation, input.Namespace, input.TokenSecretRef.Name, err)
 		}
-		if input.Operation == OperationRestore && !hasJWTAuth {
+		if input.Operation == OperationRestore {
 			if err := validateRestoreTokenSecretIdentity(secret, input.Cluster); err != nil {
 				return Readiness{
 					Status:  metav1.ConditionFalse,

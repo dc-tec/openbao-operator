@@ -169,7 +169,24 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 			},
 		},
 	}
-	k8sClient := newTestClient(t, provisionedBinding, cluster)
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-a",
+			Namespace: "tenant-a",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "cluster-a",
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Bucket:               "restore-backups",
+					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "restore-creds"},
+				},
+				Key: "snapshots/restore.snap",
+			},
+			TokenSecretRef: &corev1.LocalObjectReference{Name: "restore-token"},
+		},
+	}
+	k8sClient := newTestClient(t, provisionedBinding, cluster, restore)
 	recorder := events.NewFakeRecorder(10)
 	reconciler := &TenantSecretsRBACReconciler{
 		Client:      k8sClient,
@@ -212,7 +229,7 @@ func TestTenantSecretsRBACReconcile_ProvisionedNamespaceSyncsAllowlists(t *testi
 	}, readerRole); err != nil {
 		t.Fatalf("expected reader role: %v", err)
 	}
-	wantReaderSecrets := []string{"backup-creds", "backup-token", "helper-registry-creds", "main-registry-creds", "unseal-creds"}
+	wantReaderSecrets := []string{"backup-creds", "backup-token", "helper-registry-creds", "main-registry-creds", "restore-creds", "restore-token", "unseal-creds"}
 	sort.Strings(wantReaderSecrets)
 	if gotReaderSecrets := extractSecretResourceNames(readerRole.Rules); !slices.Equal(gotReaderSecrets, wantReaderSecrets) {
 		t.Fatalf("reader secrets = %v, want %v", gotReaderSecrets, wantReaderSecrets)

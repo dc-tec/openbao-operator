@@ -38,12 +38,13 @@ rules:
       - update
       - patch
 
-  # 2b. OpenBaoCluster read-only access
+  # 2b. OpenBaoCluster/OpenBaoRestore read-only access
   # Required for the tenant secrets RBAC sync controller to build per-namespace Secret allowlists.
   - apiGroups:
       - openbao.org
     resources:
       - openbaoclusters
+      - openbaorestores
     verbs:
       - get
       - list

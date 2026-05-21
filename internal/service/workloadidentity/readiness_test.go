@@ -263,3 +263,42 @@ func TestEvaluateRestoreReadiness_RequiresTokenSecretIdentityLabels(t *testing.T
 		})
 	}
 }
+
+func TestEvaluateRestoreReadiness_IgnoresTokenSecretRefWhenJWTAuthConfigured(t *testing.T) {
+	scheme := testReadinessScheme(t)
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+	}
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:     "demo",
+			JWTAuthRole: "restore-role",
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Bucket:   "backups",
+				},
+			},
+			TokenSecretRef: &corev1.LocalObjectReference{Name: "missing-token"},
+		},
+	}
+	reader := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	readiness, err := EvaluateRestoreReadiness(context.Background(), reader, restore, cluster)
+	if err != nil {
+		t.Fatalf("EvaluateRestoreReadiness() error = %v", err)
+	}
+	if readiness.Status != metav1.ConditionTrue {
+		t.Fatalf("readiness = %#v, want true", readiness)
+	}
+}
