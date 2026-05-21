@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const defaultOpenBaoVersion = "2.5.3"
+const defaultOpenBaoVersion = "2.5.4"
 
 // defaultUpgradeFromVersion is the version to start with for upgrade tests.
 // This should be set to a stable, known-good version.
@@ -18,7 +18,7 @@ const defaultUpgradeFromVersion = "2.4.4"
 // defaultUpgradeToVersion is the target version for upgrade tests.
 // This should be set to a newer version than defaultUpgradeFromVersion.
 // Update this when new OpenBao versions are released.
-const defaultUpgradeToVersion = "2.5.3"
+const defaultUpgradeToVersion = "2.5.4"
 
 var (
 	openBaoVersion string

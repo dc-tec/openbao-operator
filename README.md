@@ -46,7 +46,7 @@ Recommended entry points:
 For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openbao-operator/docs/reference/compatibility).
 
 - **Kubernetes**: requires `v1.33+`; release validation runs on `v1.34`–`v1.35`
-- **OpenBao**: primary validation on `2.5.3`, with config compatibility checks for `2.4.4` and `2.5.3`
+- **OpenBao**: primary validation on `2.5.4`, with config compatibility checks for `2.4.4` and `2.5.4`
 - **Support posture**: best-effort support for the latest stable release line
 
 ## CRDs (API Surface)
@@ -91,7 +91,7 @@ metadata:
   name: my-cluster
   namespace: openbao-demo
 spec:
-  version: "2.5.3"
+  version: "2.5.4"
   replicas: 1
   profile: Development
   tls:

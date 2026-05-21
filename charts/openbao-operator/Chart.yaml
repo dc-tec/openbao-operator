@@ -98,7 +98,7 @@ annotations:
       metadata:
         name: openbaocluster-sample
       spec:
-        version: "2.5.3"
+        version: "2.5.4"
         replicas: 3
         profile: Development
         tls:
