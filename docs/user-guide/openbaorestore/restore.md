@@ -227,11 +227,22 @@ When the target cluster has steady read replicas enabled, restore first drains t
   language="yaml"
   label="configure"
   title="Use a static token Secret for restore"
-  code={`spec:
+  code={`apiVersion: v1
+kind: Secret
+metadata:
+  name: restore-token
+  namespace: security
+  labels:
+    openbao.org/cluster: prod-cluster
+    openbao.org/credential-purpose: restore-token
+stringData:
+  token: <restore-token>
+---
+spec:
   tokenSecretRef:
     name: restore-token`}
 >
-  Use this path if JWT auth is not available. The Secret must be in the same namespace as the restore request.
+  Use this path if JWT auth is not available. The Secret must be in the same namespace as the restore request and must be labeled for the target cluster and restore-token purpose before the operator will launch the restore Job.
 </CommandBlock>
 
 </TabItem>

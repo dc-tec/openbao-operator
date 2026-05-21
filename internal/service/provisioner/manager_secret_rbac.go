@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	clusterpkg "github.com/dc-tec/openbao-operator/internal/adapter/cluster"
+	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
 // EnsureTenantSecretRBAC ensures tenant Secret access is reduced to explicit allowlists.
@@ -31,10 +32,20 @@ func (m *Manager) EnsureTenantSecretRBAC(ctx context.Context, namespace string) 
 		return fmt.Errorf("failed to list OpenBaoClusters in namespace %s: %w", namespace, err)
 	}
 
+	restoreList := &openbaov1alpha1.OpenBaoRestoreList{}
+	if err := m.client.List(ctx, restoreList, client.InNamespace(namespace)); err != nil {
+		return fmt.Errorf("failed to list OpenBaoRestores in namespace %s: %w", namespace, err)
+	}
+
 	writerNames := map[string]struct{}{}
 	readerNames := map[string]struct{}{}
+	clustersByName := map[string]*openbaov1alpha1.OpenBaoCluster{}
 	for i := range clusterList.Items {
 		accumulateTenantSecretNames(&clusterList.Items[i], writerNames, readerNames)
+		clustersByName[clusterList.Items[i].Name] = &clusterList.Items[i]
+	}
+	for i := range restoreList.Items {
+		accumulateRestoreTenantSecretNames(&restoreList.Items[i], clustersByName, readerNames)
 	}
 
 	type secretsRBACSpec struct {
@@ -87,6 +98,30 @@ func accumulateTenantSecretNames(cluster *openbaov1alpha1.OpenBaoCluster, writer
 	}
 }
 
+func accumulateRestoreTenantSecretNames(restore *openbaov1alpha1.OpenBaoRestore, clustersByName map[string]*openbaov1alpha1.OpenBaoCluster, reader map[string]struct{}) {
+	if restore == nil {
+		return
+	}
+	if ref := restore.Spec.Source.Target.CredentialsSecretRef; ref != nil {
+		reader[ref.Name] = struct{}{}
+	}
+	if restoreUsesStaticTokenAuth(restore, clustersByName[restore.Spec.Cluster]) {
+		reader[restore.Spec.TokenSecretRef.Name] = struct{}{}
+	}
+}
+
+func restoreUsesStaticTokenAuth(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if restore == nil || restore.Spec.TokenSecretRef == nil || restore.Spec.TokenSecretRef.Name == "" {
+		return false
+	}
+
+	return portauth.EffectiveJWTRole(
+		restore.Spec.JWTAuthRole,
+		cluster != nil && portauth.OperatorJWTBootstrapEnabled(cluster),
+		portauth.RoleNameRestore,
+	) == ""
+}
+
 func sortedUniqueSecretNames(names map[string]struct{}) []string {
 	if len(names) == 0 {
 		return nil
@@ -118,7 +153,7 @@ func (m *Manager) ensureSecretsRole(ctx context.Context, namespace string, roleN
 			}
 			return fmt.Errorf("failed to get Role %s/%s: %w", namespace, roleName, err)
 		}
-		m.logger.Info("Deleting tenant secrets Role (no clusters reference Secrets)", "namespace", namespace, "role", roleName)
+		m.logger.Info("Deleting tenant secrets Role (no tenant resources reference Secrets)", "namespace", namespace, "role", roleName)
 		if err := m.client.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete Role %s/%s: %w", namespace, roleName, err)
 		}
@@ -155,7 +190,7 @@ func (m *Manager) ensureSecretsRoleBinding(ctx context.Context, namespace string
 			}
 			return fmt.Errorf("failed to get RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 		}
-		m.logger.Info("Deleting tenant secrets RoleBinding (no clusters reference Secrets)", "namespace", namespace, "rolebinding", roleBindingName)
+		m.logger.Info("Deleting tenant secrets RoleBinding (no tenant resources reference Secrets)", "namespace", namespace, "rolebinding", roleBindingName)
 		if err := m.client.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete RoleBinding %s/%s: %w", namespace, roleBindingName, err)
 		}

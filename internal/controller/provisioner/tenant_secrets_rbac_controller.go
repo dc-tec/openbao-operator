@@ -12,7 +12,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	appprovisioner "github.com/dc-tec/openbao-operator/internal/app/provisioner"
@@ -133,6 +135,20 @@ func (r *TenantSecretsRBACReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
+		Watches(
+			&openbaov1alpha1.OpenBaoRestore{},
+			handler.EnqueueRequestsFromMapFunc(func(_ context.Context, restore client.Object) []reconcile.Request {
+				if restore == nil {
+					return nil
+				}
+				return []reconcile.Request{{
+					NamespacedName: client.ObjectKey{
+						Namespace: restore.GetNamespace(),
+						Name:      restore.GetName(),
+					},
+				}}
+			}),
+		).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 3,
 			RateLimiter:             workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),

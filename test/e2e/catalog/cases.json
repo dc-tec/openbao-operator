@@ -1658,6 +1658,44 @@
     "suiteTitle": ""
   },
   {
+    "id": "restore-static-token-secret-labels",
+    "generatedId": "security-guardrails-rejects-an-unlabeled-static-restore-token-191fbffe",
+    "caseLabel": "restore-static-token-secret-labels",
+    "coverage": [
+      "restore-static-token-secret-identity"
+    ],
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "rejects an unlabeled static restore token Secret before creating a restore Job",
+    "path": [
+      "Security Guardrails",
+      "Restore Token Guardrails",
+      "rejects an unlabeled static restore token Secret before creating a restore Job"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "tokens",
+      "pentest",
+      "case:restore-static-token-secret-labels",
+      "covers:restore-static-token-secret-identity"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "tokens",
+      "pentest"
+    ],
+    "steps": [
+      "waiting for restore validation to reject the unlabeled static token Secret",
+      "ensuring no restore Job was created"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "tenant-data-plane-isolation",
     "generatedId": "tenant-data-isolation-isolates-tenant-data-plane-access-across-eb142963",
     "caseLabel": "tenant-data-plane-isolation",

@@ -1152,6 +1152,156 @@ func TestValidatingNoAuthentication(t *testing.T) {
 	assert.Equal(t, constants.ReasonAuthenticationRequired, configuration.Reason)
 }
 
+func TestHandleValidating_RejectsUnlabeledStaticRestoreTokenSecret(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "test-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true,
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:        "test-cluster",
+			TokenSecretRef: &corev1.LocalObjectReference{Name: "restore-token"},
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Bucket:   "backups",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	tokenSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-token",
+			Namespace: "default",
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore, tokenSecret).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseFailed, updated.Status.Phase)
+	assert.Contains(t, updated.Status.Message, constants.LabelOpenBaoCluster)
+	configuration := meta.FindStatusCondition(updated.Status.Conditions, RestoreConfigurationConditionType)
+	if configuration == nil {
+		t.Fatalf("expected %s condition", RestoreConfigurationConditionType)
+	}
+	assert.Equal(t, metav1.ConditionFalse, configuration.Status)
+	assert.Equal(t, constants.ReasonTokenSecretInvalid, configuration.Reason)
+}
+
+func TestHandleValidating_AcceptsLabeledStaticRestoreTokenSecret(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, corev1.AddToScheme(scheme))
+	require.NoError(t, rbacv1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+			UID:       "test-uid",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true,
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:        "test-cluster",
+			TokenSecretRef: &corev1.LocalObjectReference{Name: "restore-token"},
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup-key",
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Bucket:   "backups",
+				},
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	tokenSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-token",
+			Namespace: "default",
+			Labels: map[string]string{
+				constants.LabelOpenBaoCluster:           "test-cluster",
+				constants.LabelOpenBaoCredentialPurpose: constants.LabelValueCredentialPurposeRestoreToken,
+			},
+		},
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore, tokenSecret).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoRestore{}, &openbaov1alpha1.OpenBaoCluster{}).
+		WithReturnManagedFields().
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	_, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+
+	updated := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updated))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseRunning, updated.Status.Phase)
+	configuration := meta.FindStatusCondition(updated.Status.Conditions, RestoreConfigurationConditionType)
+	if configuration == nil {
+		t.Fatalf("expected %s condition", RestoreConfigurationConditionType)
+	}
+	assert.Equal(t, metav1.ConditionTrue, configuration.Status)
+	assert.Contains(t, configuration.Message, "token Secret default/restore-token")
+}
+
 func TestHandleValidating_SetsRestoreConfigurationConditionForAmbientIdentity(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))

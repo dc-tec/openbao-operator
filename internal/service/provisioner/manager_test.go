@@ -695,8 +695,29 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 			},
 		},
 	}
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-a",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: clusterName,
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Bucket: "restore-bucket",
+					CredentialsSecretRef: &corev1.LocalObjectReference{
+						Name: "restore-creds",
+					},
+				},
+				Key: "snapshots/demo.snap",
+			},
+			TokenSecretRef: &corev1.LocalObjectReference{
+				Name: "restore-token",
+			},
+		},
+	}
 
-	k8sClient := newTestClient(t, cluster)
+	k8sClient := newTestClient(t, cluster, restore)
 	logger := logr.Discard()
 	manager, err := NewManager(k8sClient, logger)
 	if err != nil {
@@ -721,6 +742,8 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 		"backup-token",
 		"helper-registry-creds",
 		"main-registry-creds",
+		"restore-creds",
+		"restore-token",
 		"unseal-creds",
 		"upgrade-token",
 	}
@@ -756,6 +779,30 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 	}
 	if readerRoleBinding.RoleRef.Name != TenantSecretsReaderRoleName {
 		t.Errorf("reader RoleBinding RoleRef.Name = %v, want %v", readerRoleBinding.RoleRef.Name, TenantSecretsReaderRoleName)
+	}
+}
+
+func TestAccumulateRestoreTenantSecretNames_SkipsTokenSecretWhenJWTAuthConfigured(t *testing.T) {
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:     "bao",
+			JWTAuthRole: "restore-role",
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "restore-creds"},
+				},
+			},
+			TokenSecretRef: &corev1.LocalObjectReference{Name: "restore-token"},
+		},
+	}
+	readerNames := map[string]struct{}{}
+
+	accumulateRestoreTenantSecretNames(restore, nil, readerNames)
+
+	got := sortedUniqueSecretNames(readerNames)
+	want := []string{"restore-creds"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("restore reader allowlist = %v, want %v", got, want)
 	}
 }
 
