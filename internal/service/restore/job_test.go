@@ -591,3 +591,59 @@ func TestBuildRestoreEnvVars_TokenAuth(t *testing.T) {
 	assert.Empty(t, envMap[constants.EnvBackupJWTAuthRole])
 	assert.Equal(t, constants.BackupAuthMethodToken, envMap[constants.EnvBackupAuthMethod])
 }
+
+func TestBuildRestoreJob_IgnoresTokenSecretRefWhenJWTAuthConfigured(t *testing.T) {
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "test-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "backup.snap",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: "https://s3.amazonaws.com",
+					Bucket:   "test-bucket",
+				},
+			},
+			Image:       "example.com/restore-executor:v1",
+			JWTAuthRole: "restore-role",
+			TokenSecretRef: &corev1.LocalObjectReference{
+				Name: "restore-token",
+			},
+		},
+	}
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Replicas: 1,
+		},
+	}
+
+	mgr := &Manager{Platform: constants.PlatformKubernetes}
+	job, err := mgr.buildRestoreJob(restore, cluster, "")
+	require.NoError(t, err)
+
+	envMap := make(map[string]string)
+	for _, env := range job.Spec.Template.Spec.Containers[0].Env {
+		envMap[env.Name] = env.Value
+	}
+	assert.Equal(t, "restore-role", envMap[constants.EnvBackupJWTAuthRole])
+	assert.Equal(t, constants.BackupAuthMethodJWT, envMap[constants.EnvBackupAuthMethod])
+
+	volumeNames := make([]string, 0, len(job.Spec.Template.Spec.Volumes))
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		volumeNames = append(volumeNames, volume.Name)
+	}
+	assert.NotContains(t, volumeNames, restoreTokenVolumeName)
+
+	mountNames := make([]string, 0, len(job.Spec.Template.Spec.Containers[0].VolumeMounts))
+	for _, mount := range job.Spec.Template.Spec.Containers[0].VolumeMounts {
+		mountNames = append(mountNames, mount.Name)
+	}
+	assert.NotContains(t, mountNames, restoreTokenVolumeName)
+}

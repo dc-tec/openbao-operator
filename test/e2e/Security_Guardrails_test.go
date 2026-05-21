@@ -35,6 +35,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/service/provisioner"
+	restoresvc "github.com/dc-tec/openbao-operator/internal/service/restore"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
@@ -579,6 +580,141 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				Resource: "clusterrolebindings",
 				Verb:     "create",
 			})).To(BeFalse())
+		})
+	})
+
+	// --- Restore Token Guardrails ---
+	Context("Restore Token Guardrails", Label("tokens", "pentest"), func() {
+		var (
+			tenantNamespace string
+			tenantFW        *framework.Framework
+		)
+
+		BeforeAll(func() {
+			var err error
+			tenantFW, err = framework.NewSetup(ctx, "tenant-restore-token-guardrails", operatorNamespace)
+			Expect(err).NotTo(HaveOccurred())
+			tenantNamespace = tenantFW.Namespace
+		})
+
+		AfterAll(func() {
+			if tenantFW != nil {
+				_ = tenantFW.Cleanup(ctx)
+			}
+		})
+
+		It("rejects an unlabeled static restore token Secret before creating a restore Job", Label(
+			"case:restore-static-token-secret-labels",
+			"covers:restore-static-token-secret-identity",
+		), func() {
+			clusterName := "restore-token-guardrail"
+			tokenSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "restore-token-unlabeled",
+					Namespace: tenantNamespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+					"token": []byte("not-a-real-token"),
+				},
+			}
+			Expect(admin.Create(ctx, tokenSecret)).To(Succeed())
+
+			credentialsSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "restore-storage-creds",
+					Namespace: tenantNamespace,
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+					"accessKeyId":     []byte("test"),
+					"secretAccessKey": []byte("test"),
+				},
+			}
+			Expect(admin.Create(ctx, credentialsSecret)).To(Succeed())
+
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Profile:  openbaov1alpha1.ProfileDevelopment,
+					Version:  openBaoVersion,
+					Image:    openBaoImage,
+					Replicas: 1,
+					Paused:   true,
+					InitContainer: &openbaov1alpha1.InitContainerConfig{
+						Enabled: true,
+						Image:   configInitImage,
+					},
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled:        true,
+						Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+						RotationPeriod: "720h",
+					},
+					Storage: openbaov1alpha1.StorageConfig{
+						Size: "1Gi",
+					},
+					Network: &openbaov1alpha1.NetworkConfig{
+						APIServerCIDR: apiServerCIDR,
+					},
+					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+				},
+			}
+			Expect(admin.Create(ctx, cluster)).To(Succeed())
+
+			restore := &openbaov1alpha1.OpenBaoRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "static-token-unlabeled",
+					Namespace: tenantNamespace,
+				},
+				Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+					Cluster: clusterName,
+					Source: openbaov1alpha1.RestoreSource{
+						Target: openbaov1alpha1.BackupTarget{
+							Provider:     constants.StorageProviderS3,
+							Endpoint:     fmt.Sprintf("http://restore-store.%s.svc.cluster.local:9000", tenantNamespace),
+							Bucket:       "openbao-backups",
+							UsePathStyle: true,
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: credentialsSecret.Name,
+							},
+						},
+						Key: "clusters/restore-token-guardrail/snapshot.snap",
+					},
+					TokenSecretRef: &corev1.LocalObjectReference{
+						Name: tokenSecret.Name,
+					},
+					Image: backupExecutorImage,
+					Force: true,
+				},
+			}
+			Expect(admin.Create(ctx, restore)).To(Succeed())
+
+			By("waiting for restore validation to reject the unlabeled static token Secret")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoRestore{}
+				g.Expect(admin.Get(ctx, types.NamespacedName{
+					Name:      restore.Name,
+					Namespace: tenantNamespace,
+				}, updated)).To(Succeed())
+				g.Expect(updated.Status.Phase).To(Equal(openbaov1alpha1.RestorePhaseFailed))
+
+				configuration := meta.FindStatusCondition(updated.Status.Conditions, restoresvc.RestoreConfigurationConditionType)
+				g.Expect(configuration).NotTo(BeNil())
+				g.Expect(configuration.Status).To(Equal(metav1.ConditionFalse))
+				g.Expect(configuration.Reason).To(Equal(constants.ReasonTokenSecretInvalid))
+				g.Expect(configuration.Message).To(ContainSubstring(constants.LabelOpenBaoCluster))
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("ensuring no restore Job was created")
+			job := &batchv1.Job{}
+			err := admin.Get(ctx, types.NamespacedName{
+				Name:      restoresvc.RestoreJobNamePrefix + restore.Name,
+				Namespace: tenantNamespace,
+			}, job)
+			Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected no restore Job, got error: %v", err)
 		})
 	})
 

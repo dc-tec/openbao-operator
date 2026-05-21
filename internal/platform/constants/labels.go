@@ -14,6 +14,7 @@ const (
 	LabelOpenBaoRevision           = "openbao.org/revision"
 	LabelOpenBaoWorkloadPool       = "openbao.org/workload-pool"
 	LabelOpenBaoProfile            = "openbao.org/profile"
+	LabelOpenBaoCredentialPurpose  = "openbao.org/credential-purpose"
 	LabelOpenBaoServiceAccountRole = "openbao.org/service-account-role"
 	// LabelOpenBaoDigestEnforcement indicates whether digest-only image refs are required.
 	LabelOpenBaoDigestEnforcement = "openbao.org/digest-enforcement"
@@ -34,6 +35,7 @@ const (
 
 	LabelValueOpenBaoWorkloadPoolVoter       = "voter"
 	LabelValueOpenBaoWorkloadPoolReadReplica = "read-replica"
+	LabelValueCredentialPurposeRestoreToken  = "restore-token"
 )
 
 // ServiceAccount role label values for operator-managed ServiceAccounts.

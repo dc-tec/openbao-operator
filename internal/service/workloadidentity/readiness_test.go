@@ -164,3 +164,102 @@ func TestEvaluateExecutionReadiness_MissingCredentialsSecret(t *testing.T) {
 		t.Fatalf("message = %q, want missing Secret name", readiness.Message)
 	}
 }
+
+func TestEvaluateRestoreReadiness_RequiresTokenSecretIdentityLabels(t *testing.T) {
+	scheme := testReadinessScheme(t)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+	}
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:        "demo",
+			TokenSecretRef: &corev1.LocalObjectReference{Name: "restore-token"},
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Bucket:   "backups",
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		labels      map[string]string
+		wantReady   bool
+		wantMessage string
+	}{
+		{
+			name:        "unlabeled token secret is rejected",
+			labels:      nil,
+			wantMessage: constants.LabelOpenBaoCluster,
+		},
+		{
+			name: "wrong cluster label is rejected",
+			labels: map[string]string{
+				constants.LabelOpenBaoCluster:           "other",
+				constants.LabelOpenBaoCredentialPurpose: constants.LabelValueCredentialPurposeRestoreToken,
+			},
+			wantMessage: `openbao.org/cluster="demo"`,
+		},
+		{
+			name: "wrong credential purpose is rejected",
+			labels: map[string]string{
+				constants.LabelOpenBaoCluster:           "demo",
+				constants.LabelOpenBaoCredentialPurpose: "backup-token",
+			},
+			wantMessage: `openbao.org/credential-purpose="restore-token"`,
+		},
+		{
+			name: "labeled restore token secret is accepted",
+			labels: map[string]string{
+				constants.LabelOpenBaoCluster:           "demo",
+				constants.LabelOpenBaoCredentialPurpose: constants.LabelValueCredentialPurposeRestoreToken,
+			},
+			wantReady: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "restore-token",
+					Namespace: "default",
+					Labels:    tt.labels,
+				},
+			}
+			reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(secret).Build()
+
+			readiness, err := EvaluateRestoreReadiness(context.Background(), reader, restore, cluster)
+			if err != nil {
+				t.Fatalf("EvaluateRestoreReadiness() error = %v", err)
+			}
+
+			if tt.wantReady {
+				if readiness.Status != metav1.ConditionTrue {
+					t.Fatalf("readiness = %#v, want true", readiness)
+				}
+				return
+			}
+
+			if readiness.Status != metav1.ConditionFalse || readiness.Reason != constants.ReasonTokenSecretInvalid {
+				t.Fatalf("readiness = %#v, want false/%s", readiness, constants.ReasonTokenSecretInvalid)
+			}
+			if !strings.Contains(readiness.Message, tt.wantMessage) {
+				t.Fatalf("message = %q, want %q", readiness.Message, tt.wantMessage)
+			}
+		})
+	}
+}

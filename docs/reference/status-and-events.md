@@ -83,7 +83,7 @@ Condition types defined in `api/v1alpha1`:
 | Type | Meaning | Typical Reasons |
 | :--- | :--- | :--- |
 | `RestoreComplete` | Restore terminal state | `RestoreSucceeded`, `RestoreFailed`, `AuthenticationRequired` |
-| `RestoreConfigurationReady` | Operator-known restore prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired` |
+| `RestoreConfigurationReady` | Operator-known restore prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `TokenSecretInvalid`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired` |
 | `OperationLockOverride` | Break-glass lock override occurred | `OperationLockOverridden` |
 
 <Callout type="note" title="Ambient identity reasons">

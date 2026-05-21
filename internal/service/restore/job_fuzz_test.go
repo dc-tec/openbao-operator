@@ -91,6 +91,12 @@ func FuzzRestoreJWTEnvAndVolumeSelection(f *testing.F) {
 			if !containsRestoreMount(mounts, restoreJWTTokenVolumeName) {
 				t.Fatalf("expected JWT token mount for restore JWT auth")
 			}
+			if containsRestoreVolume(volumes, restoreTokenVolumeName) {
+				t.Fatalf("did not expect static token volume when restore JWT auth is configured")
+			}
+			if containsRestoreMount(mounts, restoreTokenVolumeName) {
+				t.Fatalf("did not expect static token mount when restore JWT auth is configured")
+			}
 		} else if hasTokenSecret {
 			if got[constants.EnvBackupAuthMethod] != constants.BackupAuthMethodToken {
 				t.Fatalf("expected token auth method when restore token secret is present")

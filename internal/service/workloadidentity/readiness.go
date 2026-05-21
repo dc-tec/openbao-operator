@@ -100,7 +100,8 @@ func EvaluateExecutionReadiness(ctx context.Context, reader client.Reader, input
 	}
 
 	if hasTokenSecret {
-		if err := ensureSecretExists(ctx, reader, input.Namespace, input.TokenSecretRef.Name); err != nil {
+		secret, err := getSecret(ctx, reader, input.Namespace, input.TokenSecretRef.Name)
+		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return Readiness{
 					Status:  metav1.ConditionFalse,
@@ -109,6 +110,15 @@ func EvaluateExecutionReadiness(ctx context.Context, reader client.Reader, input
 				}, nil
 			}
 			return Readiness{}, fmt.Errorf("failed to read %s token Secret %s/%s: %w", input.Operation, input.Namespace, input.TokenSecretRef.Name, err)
+		}
+		if input.Operation == OperationRestore && !hasJWTAuth {
+			if err := validateRestoreTokenSecretIdentity(secret, input.Cluster); err != nil {
+				return Readiness{
+					Status:  metav1.ConditionFalse,
+					Reason:  constants.ReasonTokenSecretInvalid,
+					Message: err.Error(),
+				}, nil
+			}
 		}
 	}
 
@@ -142,12 +152,54 @@ func EvaluateExecutionReadiness(ctx context.Context, reader client.Reader, input
 }
 
 func ensureSecretExists(ctx context.Context, reader client.Reader, namespace, name string) error {
+	_, err := getSecret(ctx, reader, namespace, name)
+	return err
+}
+
+func getSecret(ctx context.Context, reader client.Reader, namespace, name string) (*corev1.Secret, error) {
 	if reader == nil {
-		return fmt.Errorf("secret reader is required")
+		return nil, fmt.Errorf("secret reader is required")
 	}
 
 	secret := &corev1.Secret{}
-	return reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, secret)
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, secret); err != nil {
+		return nil, err
+	}
+	return secret, nil
+}
+
+func validateRestoreTokenSecretIdentity(secret *corev1.Secret, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if secret == nil {
+		return fmt.Errorf("restore token Secret is required")
+	}
+	if cluster == nil || strings.TrimSpace(cluster.Name) == "" {
+		return fmt.Errorf("restore token Secret %s/%s cannot be validated because the target cluster identity is unknown", secret.Namespace, secret.Name)
+	}
+
+	clusterLabel := secret.Labels[constants.LabelOpenBaoCluster]
+	if clusterLabel != cluster.Name {
+		return fmt.Errorf(
+			"restore token Secret %s/%s must be labeled %s=%q for target cluster %q",
+			secret.Namespace,
+			secret.Name,
+			constants.LabelOpenBaoCluster,
+			cluster.Name,
+			cluster.Name,
+		)
+	}
+
+	purposeLabel := secret.Labels[constants.LabelOpenBaoCredentialPurpose]
+	if purposeLabel != constants.LabelValueCredentialPurposeRestoreToken {
+		return fmt.Errorf(
+			"restore token Secret %s/%s must be labeled %s=%q",
+			secret.Namespace,
+			secret.Name,
+			constants.LabelOpenBaoCredentialPurpose,
+			constants.LabelValueCredentialPurposeRestoreToken,
+		)
+	}
+
+	return nil
 }
 
 func buildAuthSummary(input Input) string {

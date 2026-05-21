@@ -238,7 +238,7 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 
 	// JWT auth configuration
 	jwtRole := effectiveRestoreJWTRole(restore, cluster)
-	envVars = storageenv.AppendAuthEnvVars(envVars, jwtRole, restore.Spec.TokenSecretRef != nil)
+	envVars = storageenv.AppendAuthEnvVars(envVars, jwtRole, restoreUsesStaticTokenAuth(restore, cluster))
 
 	// Note: Credentials are mounted as a volume and read by the executor based on provider.
 	// S3-specific env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are not needed
@@ -302,7 +302,7 @@ func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 	}
 
 	// Static token volume (if using token auth)
-	if restore.Spec.TokenSecretRef != nil {
+	if restoreUsesStaticTokenAuth(restore, cluster) {
 		volumes = append(volumes, corev1.Volume{
 			Name: restoreTokenVolumeName,
 			VolumeSource: corev1.VolumeSource{
@@ -372,7 +372,7 @@ func buildRestoreVolumeMounts(restore *openbaov1alpha1.OpenBaoRestore, cluster *
 	}
 
 	// Static token mount
-	if restore.Spec.TokenSecretRef != nil {
+	if restoreUsesStaticTokenAuth(restore, cluster) {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      restoreTokenVolumeName,
 			MountPath: restoreTokenMountPath,
@@ -405,4 +405,8 @@ func effectiveRestoreJWTRole(restore *openbaov1alpha1.OpenBaoRestore, cluster *o
 		portauth.OperatorJWTBootstrapEnabled(cluster),
 		portauth.RoleNameRestore,
 	)
+}
+
+func restoreUsesStaticTokenAuth(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return restore.Spec.TokenSecretRef != nil && effectiveRestoreJWTRole(restore, cluster) == ""
 }

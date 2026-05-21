@@ -14,6 +14,9 @@ const (
 	ReasonAuthenticationRequired = "AuthenticationRequired"
 	// ReasonTokenSecretMissing indicates a referenced token Secret is missing.
 	ReasonTokenSecretMissing = "TokenSecretMissing"
+	// ReasonTokenSecretInvalid indicates a referenced token Secret does not satisfy
+	// the identity or purpose contract required for the operation.
+	ReasonTokenSecretInvalid = "TokenSecretInvalid"
 	// ReasonCredentialsSecretMissing indicates a referenced storage credentials Secret is missing.
 	ReasonCredentialsSecretMissing = "CredentialsSecretMissing"
 	// ReasonWorkloadIdentityConfigured indicates the operator can identify an
