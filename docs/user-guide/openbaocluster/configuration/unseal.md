@@ -241,7 +241,7 @@ metadata:
   name: bao-hsm
   namespace: openbao
 spec:
-  image: registry.example.com/openbao-hsm-vendor:2.5.3
+  image: registry.example.com/openbao-hsm-vendor:2.5.4
   unseal:
     type: pkcs11
     credentialsSecretRef:
