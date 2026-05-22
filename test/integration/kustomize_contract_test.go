@@ -302,6 +302,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 	var foundUnsafeURLComponents bool
 	var foundSecretAuthorizer bool
 	var foundBackupSecretAuthorizer bool
+	var foundBackupHelperImageAuthorizer bool
 	var foundSystemSecretBlock bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
@@ -332,6 +333,13 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			strings.Contains(expression, `object.spec.backup.target.credentialsSecretRef`) &&
 			strings.Contains(expression, `object.spec.backup.tokenSecretRef`):
 			foundBackupSecretAuthorizer = true
+		case strings.Contains(message, "custom backup helper images") &&
+			strings.Contains(expression, `authorizer.group("openbao.org")`) &&
+			strings.Contains(expression, `resource("openbaoclusters")`) &&
+			strings.Contains(expression, `object.spec.backup.image`) &&
+			strings.Contains(expression, `oldObject.spec.backup.image`) &&
+			strings.Contains(expression, `check("usehelperimages")`):
+			foundBackupHelperImageAuthorizer = true
 		case strings.Contains(message, "system secrets") &&
 			strings.Contains(expression, "object.spec.unseal.credentialsSecretRef") &&
 			strings.Contains(expression, "root-token"):
@@ -339,13 +347,19 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 		}
 	}
 
-	if !foundHTTPS || !foundUnsafeURLComponents || !foundSecretAuthorizer || !foundBackupSecretAuthorizer || !foundSystemSecretBlock {
+	if !foundHTTPS ||
+		!foundUnsafeURLComponents ||
+		!foundSecretAuthorizer ||
+		!foundBackupSecretAuthorizer ||
+		!foundBackupHelperImageAuthorizer ||
+		!foundSystemSecretBlock {
 		t.Fatalf(
-			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v systemSecret=%v",
+			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v backupHelperImageAuthorizer=%v systemSecret=%v",
 			foundHTTPS,
 			foundUnsafeURLComponents,
 			foundSecretAuthorizer,
 			foundBackupSecretAuthorizer,
+			foundBackupHelperImageAuthorizer,
 			foundSystemSecretBlock,
 		)
 	}
@@ -370,6 +384,7 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 	}
 
 	var foundRestoreSecretAuthorizer bool
+	var foundRestoreHelperImageAuthorizer bool
 	var foundSystemSecretBlock bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
@@ -386,6 +401,14 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 			strings.Contains(expression, `object.spec.source.target.credentialsSecretRef`) &&
 			strings.Contains(expression, `object.spec.tokenSecretRef`):
 			foundRestoreSecretAuthorizer = true
+		case strings.Contains(message, "custom restore helper images") &&
+			strings.Contains(expression, `authorizer.group("openbao.org")`) &&
+			strings.Contains(expression, `resource("openbaoclusters")`) &&
+			strings.Contains(expression, `object.spec.image`) &&
+			strings.Contains(expression, `oldObject.spec.image`) &&
+			strings.Contains(expression, `object.spec.cluster`) &&
+			strings.Contains(expression, `check("usehelperimages")`):
+			foundRestoreHelperImageAuthorizer = true
 		case strings.Contains(message, "system secrets") &&
 			strings.Contains(expression, "object.spec.source.target.credentialsSecretRef") &&
 			strings.Contains(expression, "object.spec.tokenSecretRef") &&
@@ -394,10 +417,11 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 		}
 	}
 
-	if !foundRestoreSecretAuthorizer || !foundSystemSecretBlock {
+	if !foundRestoreSecretAuthorizer || !foundRestoreHelperImageAuthorizer || !foundSystemSecretBlock {
 		t.Fatalf(
-			"openbao-validate-openbaorestore protections missing: authorizer=%v systemSecret=%v",
+			"openbao-validate-openbaorestore protections missing: authorizer=%v helperImageAuthorizer=%v systemSecret=%v",
 			foundRestoreSecretAuthorizer,
+			foundRestoreHelperImageAuthorizer,
 			foundSystemSecretBlock,
 		)
 	}

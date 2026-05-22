@@ -1007,7 +1007,6 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 							APIServerCIDR: apiServerCIDR,
 						},
 						Backup: &openbaov1alpha1.BackupSchedule{
-							Image:          "attacker.example/backup-helper:dev",
 							Schedule:       "0 3 * * *",
 							TokenSecretRef: &corev1.LocalObjectReference{Name: backupTokenSecretName},
 							Target: openbaov1alpha1.BackupTarget{
@@ -1042,7 +1041,6 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 							},
 							Key: "snapshots/test.snap",
 						},
-						Image:          "attacker.example/restore-helper:dev",
 						TokenSecretRef: &corev1.LocalObjectReference{Name: restoreTokenSecretName},
 					},
 				}

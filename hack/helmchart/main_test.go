@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -63,6 +64,58 @@ rules:
 	}
 	if !strings.Contains(got, "app.kubernetes.io/component: controller") {
 		t.Fatalf("transformed RBAC dropped component label:\n%s", got)
+	}
+}
+
+func TestSyncAggregatedRBAC_IncludesHelperImageDelegationRole(t *testing.T) {
+	inputDir := t.TempDir()
+	outputDir := t.TempDir()
+
+	writeRole := func(filename, name string, verbs ...string) {
+		t.Helper()
+
+		var builder strings.Builder
+		builder.WriteString("apiVersion: rbac.authorization.k8s.io/v1\n")
+		builder.WriteString("kind: ClusterRole\n")
+		builder.WriteString("metadata:\n")
+		builder.WriteString("  name: " + name + "\n")
+		builder.WriteString("rules:\n")
+		builder.WriteString("  - apiGroups:\n")
+		builder.WriteString("      - openbao.org\n")
+		builder.WriteString("    resources:\n")
+		builder.WriteString("      - openbaoclusters\n")
+		builder.WriteString("    verbs:\n")
+		for _, verb := range verbs {
+			builder.WriteString("      - " + verb + "\n")
+		}
+
+		if err := os.WriteFile(filepath.Join(inputDir, filename), []byte(builder.String()), 0o600); err != nil {
+			t.Fatalf("write %s: %v", filename, err)
+		}
+	}
+
+	writeRole("openbaocluster_admin_role.yaml", "openbaocluster-admin-role", "*")
+	writeRole("openbaocluster_editor_role.yaml", "openbaocluster-editor-role", "create", "update")
+	writeRole("openbaocluster_helper_image_role.yaml", "openbaocluster-helper-image-role", "get", "usehelperimages")
+	writeRole("openbaocluster_viewer_role.yaml", "openbaocluster-viewer-role", "get", "list")
+	writeRole("openbaotenant_editor_role.yaml", "openbaotenant-editor-role", "create", "update")
+
+	if err := syncAggregatedRBAC(options{rbacInputDir: inputDir, rbacOutputDir: outputDir}); err != nil {
+		t.Fatalf("syncAggregatedRBAC() failed: %v", err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(outputDir, "aggregated-clusterroles.yaml"))
+	if err != nil {
+		t.Fatalf("read generated aggregated roles: %v", err)
+	}
+	output := string(got)
+	for _, want := range []string{
+		`{{ include "openbao-operator.fullname" . }}-openbaocluster-helper-image`,
+		"usehelperimages",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("generated aggregated RBAC missing %q:\n%s", want, output)
+		}
 	}
 }
 
