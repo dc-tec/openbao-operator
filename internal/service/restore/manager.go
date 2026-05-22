@@ -11,6 +11,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -35,17 +36,31 @@ type Manager struct {
 	scheme                *runtime.Scheme
 	recorder              events.EventRecorder
 	operatorImageVerifier imageverify.Verifier
+	clientConfig          portopenbao.ClientConfig
 	Platform              string
 }
 
 // NewManager creates a new restore Manager.
-func NewManager(c client.Client, scheme *runtime.Scheme, recorder events.EventRecorder, operatorImageVerifier imageverify.Verifier, platform string) *Manager {
+func NewManager(
+	c client.Client,
+	scheme *runtime.Scheme,
+	recorder events.EventRecorder,
+	operatorImageVerifier imageverify.Verifier,
+	platform string,
+	clientConfigs ...portopenbao.ClientConfig,
+) *Manager {
+	clientConfig := portopenbao.ClientConfig{}
+	if len(clientConfigs) > 0 {
+		clientConfig = clientConfigs[0]
+	}
+
 	return &Manager{
 		client:                c,
 		reader:                c,
 		scheme:                scheme,
 		recorder:              recorder,
 		operatorImageVerifier: operatorImageVerifier,
+		clientConfig:          clientConfig,
 		Platform:              platform,
 	}
 }

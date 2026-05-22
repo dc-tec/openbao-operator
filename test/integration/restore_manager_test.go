@@ -18,6 +18,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/restore"
 )
 
@@ -100,6 +101,13 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 	jobName := restore.RestoreJobNamePrefix + latest.Name
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: jobName}, job); err != nil {
 		t.Fatalf("expected restore job to exist: %v", err)
+	}
+	jobEnv := envVarMap(job.Spec.Template.Spec.Containers[0].Env)
+	if got := jobEnv[constants.EnvOpenBaoJWTAuthStrategy]; got != portopenbao.JWTAuthStrategyInline {
+		t.Fatalf("%s=%q, want %q", constants.EnvOpenBaoJWTAuthStrategy, got, portopenbao.JWTAuthStrategyInline)
+	}
+	if got := jobEnv[constants.EnvBackupJWTAuthRole]; got != "restore-role" {
+		t.Fatalf("%s=%q, want restore-role", constants.EnvBackupJWTAuthRole, got)
 	}
 
 	// Mark job succeeded.
@@ -223,10 +231,7 @@ func TestRestoreManager_GCSProvider(t *testing.T) {
 
 	// Verify GCS-specific environment variables are set
 	container := job.Spec.Template.Spec.Containers[0]
-	envMap := make(map[string]string)
-	for _, env := range container.Env {
-		envMap[env.Name] = env.Value
-	}
+	envMap := envVarMap(container.Env)
 
 	if envMap[constants.EnvBackupProvider] != "gcs" {
 		t.Errorf("BACKUP_PROVIDER = %v, want gcs", envMap[constants.EnvBackupProvider])
@@ -347,10 +352,7 @@ func TestRestoreManager_AzureProvider(t *testing.T) {
 
 	// Verify Azure-specific environment variables are set
 	container := job.Spec.Template.Spec.Containers[0]
-	envMap := make(map[string]string)
-	for _, env := range container.Env {
-		envMap[env.Name] = env.Value
-	}
+	envMap := envVarMap(container.Env)
 
 	if envMap[constants.EnvBackupProvider] != "azure" {
 		t.Errorf("BACKUP_PROVIDER = %v, want azure", envMap[constants.EnvBackupProvider])

@@ -5,6 +5,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // ExecutorConfig holds the backup executor configuration.
@@ -38,10 +39,11 @@ type ExecutorConfig struct {
 	AzureContainer      string
 
 	// Authentication
-	AuthMethod   string
-	JWTAuthRole  string
-	OpenBaoToken string
-	JWTToken     string
+	AuthMethod      string
+	JWTAuthRole     string
+	JWTAuthStrategy string
+	OpenBaoToken    string
+	JWTToken        string
 
 	// TLS
 	TLSCACert          []byte
@@ -110,6 +112,11 @@ func (c *ExecutorConfig) Validate() error {
 		if c.JWTToken == "" {
 			return fmt.Errorf("JWT token is required when using JWT authentication")
 		}
+		jwtAuthStrategy, err := portopenbao.NormalizeJWTAuthStrategy(c.JWTAuthStrategy)
+		if err != nil {
+			return err
+		}
+		c.JWTAuthStrategy = jwtAuthStrategy
 	case constants.BackupAuthMethodToken:
 		if c.OpenBaoToken == "" {
 			return fmt.Errorf("OpenBao token is required when using token authentication")

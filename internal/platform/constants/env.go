@@ -91,6 +91,7 @@ const (
 	// Operator
 	EnvOperatorVersion                      = "OPERATOR_VERSION"
 	EnvOpenBaoJWTAudience                   = "OPENBAO_JWT_AUDIENCE"
+	EnvOpenBaoJWTAuthStrategy               = "OPENBAO_JWT_AUTH_STRATEGY"
 	EnvTenantNamespacePodSecurityLabelsMode = "OPENBAO_TENANT_NAMESPACE_POD_SECURITY_LABELS_MODE"
 
 	// Operator-managed image repositories

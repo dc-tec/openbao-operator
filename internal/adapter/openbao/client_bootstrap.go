@@ -37,15 +37,17 @@ type JWTAuthLoginResponse struct {
 
 // Snapshot streams the snapshot data directly from OpenBao to the writer.
 func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for snapshot operation")
+	if err := c.requireAuth("snapshot operation"); err != nil {
+		return err
 	}
 
 	req, err := c.newRequest(ctx, http.MethodGet, apiPathRaftSnapshot, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create snapshot request: %w", err)
 	}
-	req.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(req); err != nil {
+		return fmt.Errorf("failed to authorize snapshot request: %w", err)
+	}
 
 	snapshotClient := &http.Client{
 		Transport: c.httpClient.Transport,
@@ -90,15 +92,17 @@ func (c *Client) Snapshot(ctx context.Context, writer io.Writer) error {
 
 // Restore restores a snapshot to the cluster using the force restore API.
 func (c *Client) Restore(ctx context.Context, reader io.Reader) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for restore operation")
+	if err := c.requireAuth("restore operation"); err != nil {
+		return err
 	}
 
 	req, err := c.newRequest(ctx, http.MethodPost, apiPathRaftSnapshotForceRestore, reader)
 	if err != nil {
 		return fmt.Errorf("failed to create restore request: %w", err)
 	}
-	req.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(req); err != nil {
+		return fmt.Errorf("failed to authorize restore request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/octet-stream")
 
 	restoreClient := &http.Client{

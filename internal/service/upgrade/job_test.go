@@ -146,7 +146,7 @@ func TestBuildUpgradeExecutorJob_AllowsOIDCWithoutUpgradeConfig(t *testing.T) {
 		"",
 		"",
 		"",
-		portopenbao.ClientConfig{},
+		portopenbao.ClientConfig{JWTAuthStrategy: portopenbao.JWTAuthStrategyStandard},
 		constants.PlatformKubernetes,
 	)
 	if err != nil {
@@ -158,6 +158,7 @@ func TestBuildUpgradeExecutorJob_AllowsOIDCWithoutUpgradeConfig(t *testing.T) {
 	}
 
 	foundRole := false
+	foundStrategy := false
 	for _, env := range job.Spec.Template.Spec.Containers[0].Env {
 		if env.Name == constants.EnvUpgradeJWTAuthRole {
 			foundRole = true
@@ -165,9 +166,18 @@ func TestBuildUpgradeExecutorJob_AllowsOIDCWithoutUpgradeConfig(t *testing.T) {
 				t.Fatalf("UPGRADE_JWT_AUTH_ROLE = %q, want %q", env.Value, portauth.RoleNameUpgrade)
 			}
 		}
+		if env.Name == constants.EnvOpenBaoJWTAuthStrategy {
+			foundStrategy = true
+			if env.Value != portopenbao.JWTAuthStrategyStandard {
+				t.Fatalf("OPENBAO_JWT_AUTH_STRATEGY = %q, want %q", env.Value, portopenbao.JWTAuthStrategyStandard)
+			}
+		}
 	}
 	if !foundRole {
 		t.Fatalf("missing %s env var", constants.EnvUpgradeJWTAuthRole)
+	}
+	if !foundStrategy {
+		t.Fatalf("missing %s env var", constants.EnvOpenBaoJWTAuthStrategy)
 	}
 }
 

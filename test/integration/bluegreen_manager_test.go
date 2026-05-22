@@ -109,6 +109,13 @@ func TestBlueGreenManager_CreatesJobsAndAdvancesPhases(t *testing.T) {
 		t.Fatalf("expected requeue")
 	}
 	joinJob := findUpgradeJobByAction(t, namespace, string(bluegreen.ActionJoinGreenNonVoters))
+	joinJobEnv := envVarMap(joinJob.Spec.Template.Spec.Containers[0].Env)
+	if got := joinJobEnv[constants.EnvOpenBaoJWTAuthStrategy]; got != portopenbao.JWTAuthStrategyInline {
+		t.Fatalf("%s=%q, want %q", constants.EnvOpenBaoJWTAuthStrategy, got, portopenbao.JWTAuthStrategyInline)
+	}
+	if got := joinJobEnv[constants.EnvUpgradeJWTAuthRole]; got != "upgrade" {
+		t.Fatalf("%s=%q, want upgrade", constants.EnvUpgradeJWTAuthRole, got)
+	}
 	markJobSucceeded(t, joinJob)
 
 	// Advance to Syncing

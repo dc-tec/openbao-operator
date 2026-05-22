@@ -16,6 +16,7 @@ var executorConfigEnvKeys = []string{
 	constants.EnvClusterReplicas,
 	constants.EnvUpgradeAction,
 	constants.EnvUpgradeJWTAuthRole,
+	constants.EnvOpenBaoJWTAuthStrategy,
 	constants.EnvJWTTokenPath,
 	constants.EnvTLSCAPath,
 	constants.EnvUpgradeBlueRevision,
@@ -91,6 +92,13 @@ func TestLoadExecutorConfig(t *testing.T) {
 				env[constants.EnvUpgradeJWTAuthRole] = ""
 			},
 			wantErr: constants.EnvUpgradeJWTAuthRole + " environment variable is required",
+		},
+		{
+			name: "invalid jwt auth strategy",
+			mutate: func(env map[string]string) {
+				env[constants.EnvOpenBaoJWTAuthStrategy] = "legacy"
+			},
+			wantErr: "invalid " + constants.EnvOpenBaoJWTAuthStrategy,
 		},
 		{
 			name: "missing jwt token file",
@@ -181,6 +189,9 @@ func TestLoadExecutorConfig(t *testing.T) {
 				if cfg.JWTToken != "my-token" {
 					t.Fatalf("JWTToken=%q, want %q", cfg.JWTToken, "my-token")
 				}
+				if cfg.JWTAuthStrategy != "inline" {
+					t.Fatalf("JWTAuthStrategy=%q, want inline", cfg.JWTAuthStrategy)
+				}
 				if string(cfg.TLSCACert) != "test-ca-data\n" {
 					t.Fatalf("TLSCACert=%q, want %q", string(cfg.TLSCACert), "test-ca-data\n")
 				}
@@ -199,6 +210,7 @@ func TestLoadExecutorConfig(t *testing.T) {
 				env[constants.EnvClientBurst] = " 15 "
 				env[constants.EnvClientCircuitBreakerFailureThreshold] = " 9 "
 				env[constants.EnvClientCircuitBreakerOpenDuration] = " 1m "
+				env[constants.EnvOpenBaoJWTAuthStrategy] = " standard "
 			},
 			assert: func(t *testing.T, cfg *ExecutorConfig) {
 				t.Helper()
@@ -231,6 +243,9 @@ func TestLoadExecutorConfig(t *testing.T) {
 				}
 				if cfg.ClientCircuitBreakerOpenDuration != time.Minute {
 					t.Fatalf("ClientCircuitBreakerOpenDuration=%s, want 1m0s", cfg.ClientCircuitBreakerOpenDuration)
+				}
+				if cfg.JWTAuthStrategy != "standard" {
+					t.Fatalf("JWTAuthStrategy=%q, want standard", cfg.JWTAuthStrategy)
 				}
 			},
 		},

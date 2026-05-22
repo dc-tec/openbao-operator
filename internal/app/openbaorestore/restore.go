@@ -11,6 +11,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/restore"
 )
 
@@ -27,6 +28,7 @@ type RestoreDependencies struct {
 	Recorder              events.EventRecorder
 	OperatorImageVerifier imageverify.Verifier
 	Platform              string
+	ClientConfig          portopenbao.ClientConfig
 }
 
 type restoreManagerAdapter struct {
@@ -47,6 +49,7 @@ func NewRestoreReconciler(deps RestoreDependencies) RestoreReconciler {
 			deps.Recorder,
 			deps.OperatorImageVerifier,
 			deps.Platform,
+			deps.ClientConfig,
 		).WithReader(deps.APIReader),
 	}
 }

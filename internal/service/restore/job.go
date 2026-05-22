@@ -76,7 +76,7 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 	}
 
 	// Build environment variables
-	envVars := buildRestoreEnvVars(restore, cluster)
+	envVars := buildRestoreEnvVars(restore, cluster, m.clientConfig)
 
 	tlsTrust, err := portopenbao.ResolveClientTrustBundle(cluster)
 	if err != nil {
@@ -172,7 +172,16 @@ func (m *Manager) buildRestoreJob(restore *openbaov1alpha1.OpenBaoRestore, clust
 }
 
 // buildRestoreEnvVars builds environment variables for the restore job.
-func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) []corev1.EnvVar {
+func buildRestoreEnvVars(
+	restore *openbaov1alpha1.OpenBaoRestore,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	clientConfigs ...portopenbao.ClientConfig,
+) []corev1.EnvVar {
+	clientConfig := portopenbao.ClientConfig{}
+	if len(clientConfigs) > 0 {
+		clientConfig = clientConfigs[0]
+	}
+
 	provider := storageenv.EffectiveProvider(restore.Spec.Source.Target.Provider)
 
 	envVars := []corev1.EnvVar{
@@ -239,6 +248,12 @@ func buildRestoreEnvVars(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 	// JWT auth configuration
 	jwtRole := effectiveRestoreJWTRole(restore, cluster)
 	envVars = storageenv.AppendAuthEnvVars(envVars, jwtRole, restoreUsesStaticTokenAuth(restore, cluster))
+	if jwtRole != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  constants.EnvOpenBaoJWTAuthStrategy,
+			Value: portopenbao.NormalizeJWTAuthStrategyOrDefault(clientConfig.JWTAuthStrategy),
+		})
+	}
 
 	// Note: Credentials are mounted as a volume and read by the executor based on provider.
 	// S3-specific env vars (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) are not needed

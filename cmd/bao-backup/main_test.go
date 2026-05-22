@@ -17,6 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
 )
 
@@ -55,14 +56,35 @@ func TestAuthenticate_JWT(t *testing.T) {
 	defer server.Close()
 
 	cfg := &backupconfig.ExecutorConfig{
-		AuthMethod:  constants.BackupAuthMethodJWT,
-		JWTAuthRole: "test-role",
-		JWTToken:    "test-jwt",
+		AuthMethod:      constants.BackupAuthMethodJWT,
+		JWTAuthRole:     "test-role",
+		JWTAuthStrategy: portopenbao.JWTAuthStrategyStandard,
+		JWTToken:        "test-jwt",
 	}
 
 	token, err := authenticate(context.Background(), cfg, server.URL)
 	require.NoError(t, err)
 	assert.Equal(t, "login-token", token)
+}
+
+func TestAuthenticate_JWTInlineDoesNotLogin(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected request for inline auth: %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	cfg := &backupconfig.ExecutorConfig{
+		AuthMethod:      constants.BackupAuthMethodJWT,
+		JWTAuthRole:     "test-role",
+		JWTAuthStrategy: portopenbao.JWTAuthStrategyInline,
+		JWTToken:        "test-jwt",
+	}
+
+	token, err := authenticate(context.Background(), cfg, server.URL)
+	require.NoError(t, err)
+	assert.Empty(t, token)
 }
 
 func TestParseDuration(t *testing.T) {

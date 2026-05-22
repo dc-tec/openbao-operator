@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-http-request-dumps
+message: Avoid httputil request/response dumps in runtime code because they include sensitive auth headers.
+severity: warning
+language: Go
+files:
+  - internal/**/*.go
+  - cmd/**/*.go
+ignores:
+  - '**/*_test.go'
+rule:
+  any:
+    - pattern: httputil.DumpRequest($REQ, $BODY)
+    - pattern: httputil.DumpRequestOut($REQ, $BODY)
+    - pattern: httputil.DumpResponse($RESP, $BODY)
+note: Dumping HTTP messages can expose X-Vault-Token, Authorization, and inline-auth JWT headers. Log method/path/status metadata instead.
