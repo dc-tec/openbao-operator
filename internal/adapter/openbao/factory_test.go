@@ -129,6 +129,14 @@ func TestClientFactory_NewWithJWT(t *testing.T) {
 	}
 }
 
+func TestClientFactory_NewWithJWT_NilReceiver(t *testing.T) {
+	var factory *ClientFactory
+
+	if _, err := factory.NewWithJWT(context.Background(), "http://example", "role", "jwt"); err == nil {
+		t.Fatalf("expected error for nil factory")
+	}
+}
+
 func TestClientFactory_NewWithJWT_StandardStrategy(t *testing.T) {
 	t.Parallel()
 

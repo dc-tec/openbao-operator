@@ -148,6 +148,10 @@ func (f *ClientFactory) LoginJWT(ctx context.Context, baseURL, role, jwtToken st
 
 // NewWithJWT constructs an authenticated client using the configured JWT auth strategy.
 func (f *ClientFactory) NewWithJWT(ctx context.Context, baseURL, role, jwtToken string) (*Client, error) {
+	if f == nil {
+		return nil, fmt.Errorf("client factory is required")
+	}
+
 	strategy, err := portopenbao.NormalizeJWTAuthStrategy(f.template.JWTAuthStrategy)
 	if err != nil {
 		return nil, err

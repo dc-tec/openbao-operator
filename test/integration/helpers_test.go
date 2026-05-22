@@ -244,6 +244,14 @@ func discardLogger() logr.Logger {
 	return logr.Discard()
 }
 
+func envVarMap(envVars []corev1.EnvVar) map[string]string {
+	env := make(map[string]string, len(envVars))
+	for _, envVar := range envVars {
+		env[envVar.Name] = envVar.Value
+	}
+	return env
+}
+
 // newTestStatefulSetSpec creates a minimal StatefulSetSpec for testing.
 func newTestStatefulSetSpec(cluster *openbaov1alpha1.OpenBaoCluster) workloadsvc.StatefulSetSpec {
 	return workloadsvc.StatefulSetSpec{
