@@ -395,7 +395,7 @@ func TestVAP_OpenBaoCluster_RejectsHardenedTransitAddressWithoutHTTPS(t *testing
 
 	err := k8sClient.Create(ctx, cluster)
 	requireAdmissionDenied(t, err)
-	if !strings.Contains(err.Error(), "Hardened profile requires spec.unseal.transit.address to use HTTPS") {
+	if !strings.Contains(err.Error(), "Transit unseal address must use HTTPS") {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
