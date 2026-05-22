@@ -309,21 +309,58 @@ func waitForCRDsEstablished(timeout time.Duration) error {
 		return fmt.Errorf("timeout must be > 0")
 	}
 
-	seconds := int(timeout.Seconds())
-	if seconds < 1 {
-		seconds = 1
+	deadline := time.Now().Add(timeout)
+	for _, crd := range []string{
+		"openbaoclusters.openbao.org",
+		"openbaotenants.openbao.org",
+		"openbaorestores.openbao.org",
+	} {
+		if err := waitForCRDEstablished(crd, deadline); err != nil {
+			return err
+		}
 	}
+	return nil
+}
 
-	cmd := exec.Command("kubectl",
-		"wait",
-		"--for=condition=Established",
-		"crd/openbaoclusters.openbao.org",
-		"crd/openbaotenants.openbao.org",
-		"crd/openbaorestores.openbao.org",
-		"--timeout", fmt.Sprintf("%ds", seconds),
-	) // #nosec G204 -- test harness command
-	_, err := utils.Run(cmd)
-	return err
+func waitForCRDEstablished(crd string, deadline time.Time) error {
+	var lastErr error
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			if lastErr != nil {
+				return fmt.Errorf("timed out waiting for CRD %s to become Established: %w", crd, lastErr)
+			}
+			return fmt.Errorf("timed out waiting for CRD %s to become Established", crd)
+		}
+
+		attemptTimeout := remaining
+		if attemptTimeout > 15*time.Second {
+			attemptTimeout = 15 * time.Second
+		}
+		seconds := int(attemptTimeout.Seconds())
+		if seconds < 1 {
+			seconds = 1
+		}
+
+		cmd := exec.Command("kubectl",
+			"wait",
+			"--for=condition=Established",
+			"crd/"+crd,
+			"--timeout", fmt.Sprintf("%ds", seconds),
+		) // #nosec G204 -- test harness command
+		if _, err := utils.Run(cmd); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+
+		if sleep := time.Until(deadline); sleep > 0 {
+			if sleep > time.Second {
+				sleep = time.Second
+			}
+			time.Sleep(sleep)
+		}
+	}
 }
 
 func waitForCoreDNSAvailable(timeout time.Duration) error {
