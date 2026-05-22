@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestExecutorConfig_Validate(t *testing.T) {
@@ -151,6 +152,22 @@ func TestExecutorConfig_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "JWT auth invalid strategy",
+			config: &ExecutorConfig{
+				ClusterNamespace: "test-ns",
+				ClusterName:      "test-cluster",
+				ClusterReplicas:  3,
+				BackupEndpoint:   "https://s3.example.com",
+				BackupBucket:     "backups",
+				TLSCACert:        []byte("fake-ca-cert"),
+				AuthMethod:       constants.BackupAuthMethodJWT,
+				JWTAuthRole:      "test-role",
+				JWTAuthStrategy:  "legacy",
+				JWTToken:         "fake-jwt-token",
+			},
+			wantErr: true,
+		},
+		{
 			name: "token auth missing token",
 			config: &ExecutorConfig{
 				ClusterNamespace: "test-ns",
@@ -183,6 +200,10 @@ func TestExecutorConfig_Validate(t *testing.T) {
 			err := tt.config.Validate()
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err == nil && tt.config.AuthMethod == constants.BackupAuthMethodJWT &&
+				tt.config.JWTAuthStrategy != portopenbao.DefaultJWTAuthStrategy {
+				t.Fatalf("JWTAuthStrategy=%q, want %q", tt.config.JWTAuthStrategy, portopenbao.DefaultJWTAuthStrategy)
 			}
 		})
 	}

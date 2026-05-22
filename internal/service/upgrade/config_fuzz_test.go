@@ -30,6 +30,7 @@ func FuzzLoadUpgradeExecutorConfig(f *testing.F) {
 		t.Setenv(constants.EnvClusterReplicas, sanitizeUpgradeConfigText(replicas))
 		t.Setenv(constants.EnvUpgradeAction, sanitizeUpgradeConfigText(action))
 		t.Setenv(constants.EnvUpgradeJWTAuthRole, sanitizeUpgradeConfigText(jwtRole))
+		t.Setenv(constants.EnvOpenBaoJWTAuthStrategy, "")
 		t.Setenv(constants.EnvJWTTokenPath, jwtPath)
 		t.Setenv(constants.EnvTLSCAPath, caPath)
 		t.Setenv(constants.EnvUpgradeBlueRevision, sanitizeUpgradeConfigText(blueRevision))

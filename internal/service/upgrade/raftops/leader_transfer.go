@@ -198,12 +198,7 @@ func NormalizeLeaderTransferRetryPolicy(policy RetryPolicy) RetryPolicy {
 }
 
 func clientForLeaderURL(ctx context.Context, cfg *ExecutorConfig, factory *openbao.ClientFactory, leaderURL string) (*openbao.Client, error) {
-	token, err := LoginJWT(ctx, cfg, leaderURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to authenticate: %w", err)
-	}
-
-	client, err := factory.NewWithToken(leaderURL, token)
+	client, err := NewAuthenticatedClient(ctx, cfg, factory, leaderURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenBao client: %w", err)
 	}

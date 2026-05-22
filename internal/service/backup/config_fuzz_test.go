@@ -30,6 +30,7 @@ func FuzzLoadBackupAuthConfig(f *testing.F) {
 
 		t.Setenv(constants.EnvBackupAuthMethod, sanitizeBackupConfigText(authMethod))
 		t.Setenv(constants.EnvBackupJWTAuthRole, sanitizeBackupConfigText(jwtRole))
+		t.Setenv(constants.EnvOpenBaoJWTAuthStrategy, "")
 		t.Setenv(constants.EnvJWTTokenPath, jwtPath)
 		t.Setenv(constants.EnvBackupTokenPath, tokenPath)
 

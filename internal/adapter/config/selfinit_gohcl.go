@@ -125,7 +125,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 		if roleName != "" {
 			{
 				req := buildInitializeRequestBlock(reqCreateBackupPolicy, opUpdate, fmt.Sprintf("%s%s", pathSysPoliciesACLPrefix, authPolicyNameBackup), false)
-				req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: `path "sys/storage/raft/snapshot" { capabilities = ["read"] }`}, "data"))
+				req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyBackupSnapshot}, "data"))
 				initBody.AppendBlock(req)
 			}
 			{
@@ -168,7 +168,7 @@ func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoClust
 	if restoreRoleName != "" {
 		{
 			req := buildInitializeRequestBlock(reqCreateRestorePolicy, opUpdate, fmt.Sprintf("%s%s", pathSysPoliciesACLPrefix, authPolicyNameRestore), false)
-			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: `path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }`}, "data"))
+			req.Body().AppendBlock(gohcl.EncodeAsBlock(hclPolicyData{Policy: jwtPolicyRestoreSnapshotForce}, "data"))
 			initBody.AppendBlock(req)
 		}
 		{

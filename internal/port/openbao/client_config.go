@@ -1,6 +1,10 @@
 package openbao
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 const (
 	// DefaultConnectionTimeout is the default timeout for establishing connections.
@@ -10,6 +14,39 @@ const (
 	// DefaultSnapshotTimeout is the default timeout for snapshot operations.
 	DefaultSnapshotTimeout = 30 * time.Minute
 )
+
+const (
+	// JWTAuthStrategyInline authenticates each JWT-backed request with OpenBao inline auth.
+	JWTAuthStrategyInline = "inline"
+	// JWTAuthStrategyStandard performs the standard JWT login flow and sends X-Vault-Token.
+	JWTAuthStrategyStandard = "standard"
+	// DefaultJWTAuthStrategy is the default strategy for supported OpenBao versions.
+	DefaultJWTAuthStrategy = JWTAuthStrategyInline
+)
+
+// NormalizeJWTAuthStrategy validates and normalizes a JWT auth strategy value.
+func NormalizeJWTAuthStrategy(strategy string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(strategy))
+	switch normalized {
+	case "":
+		return DefaultJWTAuthStrategy, nil
+	case JWTAuthStrategyInline, JWTAuthStrategyStandard:
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("invalid OpenBao JWT auth strategy %q: expected %q or %q", strategy, JWTAuthStrategyInline, JWTAuthStrategyStandard)
+	}
+}
+
+// NormalizeJWTAuthStrategyOrDefault returns a valid strategy, falling back to
+// the default when the provided value is empty or invalid. Callers that accept
+// user input should use NormalizeJWTAuthStrategy and surface validation errors.
+func NormalizeJWTAuthStrategyOrDefault(strategy string) string {
+	normalized, err := NormalizeJWTAuthStrategy(strategy)
+	if err != nil {
+		return DefaultJWTAuthStrategy
+	}
+	return normalized
+}
 
 // ClientConfig describes connectivity and auth options for OpenBao API clients.
 type ClientConfig struct {
@@ -24,6 +61,9 @@ type ClientConfig struct {
 	BaseURL string
 	// Token is the authentication token for OpenBao API calls.
 	Token string
+	// JWTAuthStrategy controls how JWT-backed clients authenticate to OpenBao.
+	// Empty defaults to inline authentication.
+	JWTAuthStrategy string
 	// CACert is the PEM-encoded CA certificate for TLS verification.
 	// If empty, the system certificate pool is used.
 	CACert []byte

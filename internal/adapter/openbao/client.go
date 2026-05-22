@@ -19,6 +19,7 @@ type Client struct {
 	httpClient *http.Client
 
 	state *clientState
+	auth  requestAuthorizer
 }
 
 // NewClient creates a new OpenBao API client with the given configuration.
@@ -92,6 +93,7 @@ func NewClient(config portopenbao.ClientConfig) (*Client, error) {
 		token:      config.Token,
 		httpClient: httpClient,
 		state:      state,
+		auth:       newTokenAuthorizer(config.Token),
 	}, nil
 }
 
@@ -160,5 +162,6 @@ func newClientWithState(config portopenbao.ClientConfig, state *clientState) (*C
 		token:      config.Token,
 		httpClient: httpClient,
 		state:      state,
+		auth:       newTokenAuthorizer(config.Token),
 	}, nil
 }

@@ -39,6 +39,9 @@ path "sys/storage/raft/configuration" { capabilities = ["read", "update"] }
 path "sys/storage/raft/remove-peer" { capabilities = ["update"] }
 path "sys/storage/raft/promote" { capabilities = ["update"] }
 path "sys/storage/raft/demote" { capabilities = ["update"] }`
+
+	jwtPolicyBackupSnapshot       = `path "sys/storage/raft/snapshot" { capabilities = ["read"] }`
+	jwtPolicyRestoreSnapshotForce = `path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }`
 )
 
 // OperatorBootstrapConfig holds configuration for operator bootstrap.

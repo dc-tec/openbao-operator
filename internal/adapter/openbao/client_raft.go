@@ -35,8 +35,8 @@ type UpdateRaftConfigurationRequest struct {
 
 // JoinRaftCluster joins a node to the Raft cluster.
 func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retry bool, nonVoter bool) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for raft join operation")
+	if err := c.requireAuth("raft join operation"); err != nil {
+		return err
 	}
 	if leaderAPIAddr == "" {
 		return fmt.Errorf("leaderAPIAddr is required")
@@ -56,7 +56,9 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 	if err != nil {
 		return fmt.Errorf("failed to create raft join request: %w", err)
 	}
-	httpReq.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(httpReq); err != nil {
+		return fmt.Errorf("failed to authorize raft join request: %w", err)
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft join request")
@@ -87,15 +89,17 @@ func (c *Client) JoinRaftCluster(ctx context.Context, leaderAPIAddr string, retr
 
 // ReadRaftConfiguration reads the current Raft cluster configuration.
 func (c *Client) ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftConfigurationResponse, error) {
-	if c.token == "" {
-		return nil, fmt.Errorf("authentication token required for raft configuration read")
+	if err := c.requireAuth("raft configuration read"); err != nil {
+		return nil, err
 	}
 
 	req, err := c.newRequest(ctx, http.MethodGet, apiPathRaftConfiguration, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create raft configuration request: %w", err)
 	}
-	req.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(req); err != nil {
+		return nil, fmt.Errorf("failed to authorize raft configuration request: %w", err)
+	}
 
 	resp, body, err := c.doAndReadAll(req, nil, "failed to execute raft configuration request")
 	if err != nil {
@@ -122,15 +126,17 @@ func (c *Client) ReadRaftConfiguration(ctx context.Context) (*portopenbao.RaftCo
 
 // ReadRaftAutopilotState reads the Raft Autopilot cluster state.
 func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftAutopilotStateResponse, error) {
-	if c.token == "" {
-		return nil, fmt.Errorf("authentication token required for raft autopilot state read")
+	if err := c.requireAuth("raft autopilot state read"); err != nil {
+		return nil, err
 	}
 
 	req, err := c.newRequest(ctx, http.MethodGet, apiPathRaftAutopilotState, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create raft autopilot state request: %w", err)
 	}
-	req.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(req); err != nil {
+		return nil, fmt.Errorf("failed to authorize raft autopilot state request: %w", err)
+	}
 
 	resp, body, err := c.doAndReadAll(req, nil, "failed to execute raft autopilot state request")
 	if err != nil {
@@ -160,8 +166,8 @@ func (c *Client) ReadRaftAutopilotState(ctx context.Context) (*portopenbao.RaftA
 
 // ConfigureRaftAutopilot sets the Raft Autopilot configuration.
 func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.AutopilotConfig) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for raft autopilot configuration")
+	if err := c.requireAuth("raft autopilot configuration"); err != nil {
+		return err
 	}
 
 	bodyBytes, err := json.Marshal(config)
@@ -173,7 +179,9 @@ func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.
 	if err != nil {
 		return fmt.Errorf("failed to create autopilot config request: %w", err)
 	}
-	httpReq.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(httpReq); err != nil {
+		return fmt.Errorf("failed to authorize autopilot config request: %w", err)
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute autopilot config request")
@@ -188,8 +196,8 @@ func (c *Client) ConfigureRaftAutopilot(ctx context.Context, config portopenbao.
 }
 
 func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, path, action string) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for raft %s operation", action)
+	if err := c.requireAuth(fmt.Sprintf("raft %s operation", action)); err != nil {
+		return err
 	}
 	if serverID == "" {
 		return fmt.Errorf("serverID is required")
@@ -204,7 +212,9 @@ func (c *Client) executeRaftPeerAction(ctx context.Context, serverID string, pat
 	if err != nil {
 		return fmt.Errorf("failed to create raft %s request: %w", action, err)
 	}
-	httpReq.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(httpReq); err != nil {
+		return fmt.Errorf("failed to authorize raft %s request: %w", action, err)
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, fmt.Sprintf("failed to execute raft %s request", action))
@@ -242,8 +252,8 @@ func (c *Client) DemoteRaftPeer(ctx context.Context, serverID string) error {
 
 // UpdateRaftConfiguration updates the Raft cluster configuration.
 func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopenbao.RaftServer) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for raft configuration update")
+	if err := c.requireAuth("raft configuration update"); err != nil {
+		return err
 	}
 	if len(servers) == 0 {
 		return fmt.Errorf("servers list cannot be empty")
@@ -259,7 +269,9 @@ func (c *Client) UpdateRaftConfiguration(ctx context.Context, servers []portopen
 	if err != nil {
 		return fmt.Errorf("failed to create raft configuration update request: %w", err)
 	}
-	httpReq.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(httpReq); err != nil {
+		return fmt.Errorf("failed to authorize raft configuration update request: %w", err)
+	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, body, err := c.doAndReadAll(httpReq, nil, "failed to execute raft configuration update request")

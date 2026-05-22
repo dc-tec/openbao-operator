@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // ExecutorAction selects which upgrade operation the upgrade executor performs.
@@ -33,8 +34,9 @@ type ExecutorConfig struct {
 
 	Action ExecutorAction
 
-	JWTAuthRole string
-	JWTToken    string
+	JWTAuthRole     string
+	JWTAuthStrategy string
+	JWTToken        string
 
 	TLSCACert     []byte
 	TLSServerName string
@@ -71,6 +73,11 @@ func (c *ExecutorConfig) Validate() error {
 	if strings.TrimSpace(c.JWTToken) == "" {
 		return fmt.Errorf("JWT token is required")
 	}
+	jwtAuthStrategy, err := portopenbao.NormalizeJWTAuthStrategy(c.JWTAuthStrategy)
+	if err != nil {
+		return err
+	}
+	c.JWTAuthStrategy = jwtAuthStrategy
 
 	switch c.Action {
 	case ExecutorActionBlueGreenJoinGreenNonVoters,
@@ -137,6 +144,11 @@ func LoadExecutorConfig() (*ExecutorConfig, error) {
 	if cfg.JWTAuthRole == "" {
 		return nil, fmt.Errorf("%s environment variable is required", constants.EnvUpgradeJWTAuthRole)
 	}
+	jwtAuthStrategy, err := portopenbao.NormalizeJWTAuthStrategy(os.Getenv(constants.EnvOpenBaoJWTAuthStrategy))
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s value: %w", constants.EnvOpenBaoJWTAuthStrategy, err)
+	}
+	cfg.JWTAuthStrategy = jwtAuthStrategy
 
 	jwtTokenPath := constants.PathUpgradeJWTToken
 	if envPath := strings.TrimSpace(os.Getenv(constants.EnvJWTTokenPath)); envPath != "" {

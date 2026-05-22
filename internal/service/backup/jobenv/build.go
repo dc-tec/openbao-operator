@@ -90,6 +90,12 @@ func BuildEnvVars(cluster *openbaov1alpha1.OpenBaoCluster, opts Options, tokenFi
 	// JWT Auth configuration (preferred method)
 	jwtRole := EffectiveBackupJWTRole(cluster)
 	env = storageenv.AppendAuthEnvVars(env, jwtRole, false)
+	if jwtRole != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  constants.EnvOpenBaoJWTAuthStrategy,
+			Value: portopenbao.NormalizeJWTAuthStrategyOrDefault(opts.ClientConfig.JWTAuthStrategy),
+		})
+	}
 
 	// Token secret reference (fallback for token-based auth)
 	// SECURITY: Do NOT pass cross-namespace references. Secrets must be in cluster.Namespace.

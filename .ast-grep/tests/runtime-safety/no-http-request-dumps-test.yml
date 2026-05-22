@@ -1,0 +1,21 @@
+id: no-http-request-dumps
+valid:
+  - |
+    package p
+    type Logger interface { Info(string, ...any) }
+    func f(logger Logger, method, path string) {
+      logger.Info("request", "method", method, "path", path)
+    }
+invalid:
+  - |
+    package p
+    import "net/http/httputil"
+    func f(req *http.Request) {
+      _, _ = httputil.DumpRequest(req, true)
+    }
+  - |
+    package p
+    import "net/http/httputil"
+    func f(resp *http.Response) {
+      _, _ = httputil.DumpResponse(resp, true)
+    }

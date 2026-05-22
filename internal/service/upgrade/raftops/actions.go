@@ -20,16 +20,10 @@ func RunRollingStepDownLeader(ctx context.Context, logger logr.Logger, cfg *Exec
 	defer cleanup()
 
 	resolveClient := func(ctx context.Context, leaderURL string) (LeaderTransferClient, error) {
-		token, err := LoginJWT(ctx, cfg, leaderURL)
-		if err != nil {
-			return nil, fmt.Errorf("failed to authenticate: %w", err)
-		}
-
-		client, err := factory.NewWithToken(leaderURL, token)
+		client, err := NewAuthenticatedClient(ctx, cfg, factory, leaderURL)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OpenBao client: %w", err)
 		}
-
 		return client, nil
 	}
 
@@ -100,21 +94,21 @@ func RunBlueGreenJoinGreenNonVoters(ctx context.Context, logger logr.Logger, cfg
 	}
 	logger.Info("Blue leader found", "blue_leader_url", blueLeaderURL)
 
-	token, err := LoginJWT(ctx, cfg, blueLeaderURL)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
-	}
-
 	factory, cleanup, err := NewOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
+	token, err := LoginJWTIfStandard(ctx, cfg, factory, blueLeaderURL)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate: %w", err)
+	}
+
 	for _, i := range ReplicaOrdinals(cfg.ClusterReplicas) {
 		greenPodURL := PodURL(cfg, cfg.GreenRevision, i)
 		logger.V(1).Info("Joining Green pod as non-voter", "green_pod_url", greenPodURL)
-		client, err := factory.NewWithToken(greenPodURL, token)
+		client, err := NewAuthenticatedClientWithToken(ctx, cfg, factory, greenPodURL, token)
 		if err != nil {
 			return fmt.Errorf("failed to create client for Green pod %q: %w", greenPodURL, err)
 		}
@@ -140,18 +134,13 @@ func RunBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 	}
 	logger.Info("Blue leader found", "blue_leader_url", blueLeaderURL)
 
-	token, err := LoginJWT(ctx, cfg, blueLeaderURL)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
-	}
-
 	factory, cleanup, err := NewOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	client, err := factory.NewWithToken(blueLeaderURL, token)
+	client, err := NewAuthenticatedClient(ctx, cfg, factory, blueLeaderURL)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
@@ -265,18 +254,13 @@ func RunBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *E
 	}
 	logger.Info("Leader found for consensus repair", "leader_url", leaderURL)
 
-	token, err := LoginJWT(ctx, cfg, leaderURL)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate for consensus repair: %w", err)
-	}
-
 	factory, cleanup, err := NewOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	client, err := factory.NewWithToken(leaderURL, token)
+	client, err := NewAuthenticatedClient(ctx, cfg, factory, leaderURL)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client for consensus repair: %w", err)
 	}
@@ -345,18 +329,13 @@ func RunBlueGreenPromoteGreenVoters(ctx context.Context, logger logr.Logger, cfg
 	}
 	logger.Info("Blue leader found", "blue_leader_url", blueLeaderURL)
 
-	token, err := LoginJWT(ctx, cfg, blueLeaderURL)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
-	}
-
 	factory, cleanup, err := NewOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	client, err := factory.NewWithToken(blueLeaderURL, token)
+	client, err := NewAuthenticatedClient(ctx, cfg, factory, blueLeaderURL)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
@@ -472,18 +451,13 @@ func RunBlueGreenRemovePeers(
 	}
 	logger.Info("Leader found", "leader_url", leaderURL, "target_revision", revisionToRemove, "target_peers", peerColor)
 
-	token, err := LoginJWT(ctx, cfg, leaderURL)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
-	}
-
 	factory, cleanup, err := NewOpenBaoClientFactory(cfg)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	client, err := factory.NewWithToken(leaderURL, token)
+	client, err := NewAuthenticatedClient(ctx, cfg, factory, leaderURL)
 	if err != nil {
 		return fmt.Errorf("failed to create OpenBao client: %w", err)
 	}

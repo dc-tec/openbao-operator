@@ -139,6 +139,13 @@ func TestBackupManager_ManualTrigger_CreatesJobAndWiring(t *testing.T) {
 	if job.Annotations["openbao.org/backup-key"] == "" {
 		t.Fatalf("expected job to have openbao.org/backup-key annotation")
 	}
+	jobEnv := envVarMap(job.Spec.Template.Spec.Containers[0].Env)
+	if got := jobEnv[constants.EnvOpenBaoJWTAuthStrategy]; got != portopenbao.JWTAuthStrategyInline {
+		t.Fatalf("%s=%q, want %q", constants.EnvOpenBaoJWTAuthStrategy, got, portopenbao.JWTAuthStrategyInline)
+	}
+	if got := jobEnv[constants.EnvBackupJWTAuthRole]; got != "backup" {
+		t.Fatalf("%s=%q, want backup", constants.EnvBackupJWTAuthRole, got)
+	}
 
 	// Manual trigger annotation is cleared (best-effort).
 	var after openbaov1alpha1.OpenBaoCluster

@@ -37,6 +37,99 @@ func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	}
 }
 
+func TestJWTPolicyCapabilityContracts(t *testing.T) {
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{
+			name: "controller maintenance policy",
+			got:  jwtPolicyHealthStepDownAutopilot,
+			want: `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["sudo", "update"] }
+path "sys/storage/raft/configuration" { capabilities = ["read"] }
+path "sys/storage/raft/remove-peer" { capabilities = ["update"] }
+path "sys/storage/raft/autopilot/configuration" { capabilities = ["read", "update"] }
+path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }`,
+		},
+		{
+			name: "rolling upgrade policy",
+			got:  jwtPolicyUpgradeRolling,
+			want: `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["sudo", "update"] }
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }
+path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }`,
+		},
+		{
+			name: "blue green upgrade policy",
+			got:  jwtPolicyUpgradeBlueGreen,
+			want: `path "sys/health" { capabilities = ["read"] }
+path "sys/step-down" { capabilities = ["sudo", "update"] }
+path "sys/storage/raft/snapshot" { capabilities = ["read"] }
+path "sys/storage/raft/autopilot/state" { capabilities = ["read"] }
+path "sys/storage/raft/join" { capabilities = ["update"] }
+path "sys/storage/raft/configuration" { capabilities = ["read", "update"] }
+path "sys/storage/raft/remove-peer" { capabilities = ["update"] }
+path "sys/storage/raft/promote" { capabilities = ["update"] }
+path "sys/storage/raft/demote" { capabilities = ["update"] }`,
+		},
+		{
+			name: "backup policy",
+			got:  jwtPolicyBackupSnapshot,
+			want: `path "sys/storage/raft/snapshot" { capabilities = ["read"] }`,
+		},
+		{
+			name: "restore policy",
+			got:  jwtPolicyRestoreSnapshotForce,
+			want: `path "sys/storage/raft/snapshot-force" { capabilities = ["update"] }`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Fatalf("policy changed:\n got:\n%s\nwant:\n%s", tt.got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOperatorJWTRoleDataHardening(t *testing.T) {
+	subject := "system:serviceaccount:operator-ns:controller"
+	audiences := []string{"openbao-internal"}
+
+	got := operatorJWTRoleData(subject, authPolicyNameOperator, audiences)
+
+	if got.RoleType != authMethodJWT {
+		t.Fatalf("RoleType=%q, want %q", got.RoleType, authMethodJWT)
+	}
+	if got.UserClaim != "sub" {
+		t.Fatalf("UserClaim=%q, want sub", got.UserClaim)
+	}
+	if got.BoundSubject == nil || *got.BoundSubject != subject {
+		t.Fatalf("BoundSubject=%v, want %q", got.BoundSubject, subject)
+	}
+	if len(got.BoundAudiences) != 1 || got.BoundAudiences[0] != audiences[0] {
+		t.Fatalf("BoundAudiences=%v, want %v", got.BoundAudiences, audiences)
+	}
+	if len(got.TokenPolicies) != 1 || got.TokenPolicies[0] != authPolicyNameOperator {
+		t.Fatalf("TokenPolicies=%v, want [%s]", got.TokenPolicies, authPolicyNameOperator)
+	}
+	if got.Policies == nil || len(*got.Policies) != 1 || (*got.Policies)[0] != authPolicyNameOperator {
+		t.Fatalf("Policies=%v, want [%s]", got.Policies, authPolicyNameOperator)
+	}
+	if !got.TokenNoDefaultPolicy {
+		t.Fatal("TokenNoDefaultPolicy=false, want true")
+	}
+	if got.TTL != operatorJWTTokenTTL || got.TokenTTL != operatorJWTTokenTTL || got.TokenMaxTTL != operatorJWTTokenTTL {
+		t.Fatalf("role TTLs = (%q,%q,%q), want %q", got.TTL, got.TokenTTL, got.TokenMaxTTL, operatorJWTTokenTTL)
+	}
+	if got.ClockSkewLeeway != operatorJWTLeeway || got.ExpirationLeeway != operatorJWTLeeway || got.NotBeforeLeeway != operatorJWTLeeway {
+		t.Fatalf("role leeways = (%q,%q,%q), want %q", got.ClockSkewLeeway, got.ExpirationLeeway, got.NotBeforeLeeway, operatorJWTLeeway)
+	}
+}
+
 func TestRenderHCLIncludesCoreStanzas(t *testing.T) {
 	cluster := newMinimalCluster("config-hcl", "security")
 	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
