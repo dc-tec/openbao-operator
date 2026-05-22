@@ -10,9 +10,14 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
-const testJWTCachedToken = "cached-token"
+const (
+	testJWTLoginToken  = "token"
+	testJWTCachedToken = "cached-token"
+)
 
 func newTestClientFactory(template ClientConfig) *ClientFactory {
 	return newClientFactoryWithState(template, newClientState(template))
@@ -83,7 +88,7 @@ func TestClientFactory_LoginJWT(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"auth":{"client_token":"token"}}`))
+		_, _ = fmt.Fprintf(w, `{"auth":{"client_token":%q}}`, testJWTLoginToken)
 	}))
 	defer server.Close()
 
@@ -93,8 +98,8 @@ func TestClientFactory_LoginJWT(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoginJWT() error: %v", err)
 	}
-	if token != "token" {
-		t.Fatalf("LoginJWT()=%q, expected %q", token, "token")
+	if token != testJWTLoginToken {
+		t.Fatalf("LoginJWT()=%q, expected %q", token, testJWTLoginToken)
 	}
 }
 
@@ -107,7 +112,7 @@ func TestClientFactory_NewWithJWT(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"auth":{"client_token":"token"}}`))
+		_, _ = fmt.Fprintf(w, `{"auth":{"client_token":%q}}`, testJWTLoginToken)
 	}))
 	defer server.Close()
 
@@ -116,8 +121,34 @@ func TestClientFactory_NewWithJWT(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWithJWT() error: %v", err)
 	}
-	if got := client.Token(); got != "token" {
-		t.Fatalf("Token()=%q, expected %q", got, "token")
+	if got := client.Token(); got != "" {
+		t.Fatalf("Token()=%q, expected empty token for inline auth", got)
+	}
+	if got := client.auth.kind(); got != "inline-jwt" {
+		t.Fatalf("auth.kind()=%q, expected inline-jwt", got)
+	}
+}
+
+func TestClientFactory_NewWithJWT_StandardStrategy(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != apiPathAuthJWTLogin {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"auth":{"client_token":%q}}`, testJWTLoginToken)
+	}))
+	defer server.Close()
+
+	factory := newTestClientFactory(ClientConfig{JWTAuthStrategy: portopenbao.JWTAuthStrategyStandard})
+	client, err := factory.NewWithJWT(context.Background(), server.URL, "role", "jwt")
+	if err != nil {
+		t.Fatalf("NewWithJWT() error: %v", err)
+	}
+	if got := client.Token(); got != testJWTLoginToken {
+		t.Fatalf("Token()=%q, expected %q", got, testJWTLoginToken)
 	}
 }
 

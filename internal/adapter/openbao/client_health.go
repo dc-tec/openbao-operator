@@ -24,8 +24,10 @@ func (c *Client) Health(ctx context.Context) (*portopenbao.HealthStatus, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create health request: %w", err)
 	}
-	if c.token != "" {
-		req.Header.Set("X-Vault-Token", c.token)
+	if c.hasAuth() {
+		if err := c.authorize(req); err != nil {
+			return nil, fmt.Errorf("failed to authorize health request: %w", err)
+		}
 	}
 
 	resp, body, err := c.doAndReadAll(req, nil, "failed to query health endpoint")
@@ -57,15 +59,17 @@ func (c *Client) IsLeader(ctx context.Context) (bool, error) {
 
 // StepDown requests the leader to step down and trigger a new election.
 func (c *Client) StepDown(ctx context.Context) error {
-	if c.token == "" {
-		return fmt.Errorf("authentication token required for step-down operation")
+	if err := c.requireAuth("step-down operation"); err != nil {
+		return err
 	}
 
 	req, err := c.newRequest(ctx, http.MethodPut, apiPathSysStepDown, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create step-down request: %w", err)
 	}
-	req.Header.Set("X-Vault-Token", c.token)
+	if err := c.authorize(req); err != nil {
+		return fmt.Errorf("failed to authorize step-down request: %w", err)
+	}
 
 	resp, body, err := c.doAndReadAll(req, nil, "failed to execute step-down request")
 	if err != nil {

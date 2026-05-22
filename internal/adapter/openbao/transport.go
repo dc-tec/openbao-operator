@@ -212,6 +212,24 @@ func (c *Client) newRequest(ctx context.Context, method string, path string, bod
 	return http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 }
 
+func (c *Client) hasAuth() bool {
+	return c != nil && c.auth != nil && c.auth.requiresAuth()
+}
+
+func (c *Client) authorize(req *http.Request) error {
+	if c == nil || c.auth == nil {
+		return nil
+	}
+	return c.auth.authorize(req)
+}
+
+func (c *Client) requireAuth(operation string) error {
+	if c.hasAuth() {
+		return nil
+	}
+	return fmt.Errorf("authentication required for %s", operation)
+}
+
 func (c *Client) doRequest(req *http.Request, httpClient *http.Client, op string) (*http.Response, error) {
 	if httpClient == nil {
 		httpClient = c.httpClient

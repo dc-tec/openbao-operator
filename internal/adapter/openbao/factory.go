@@ -98,6 +98,28 @@ func (f *ClientFactory) NewWithToken(baseURL, token string) (*Client, error) {
 		return nil, err
 	}
 	client.token = token
+	client.auth = newTokenAuthorizer(token)
+	return client, nil
+}
+
+// NewWithInlineJWT constructs an authenticated client that sends inline JWT auth
+// headers on each request instead of first acquiring an OpenBao client token.
+func (f *ClientFactory) NewWithInlineJWT(baseURL, role, jwtToken string) (*Client, error) {
+	if f == nil {
+		return nil, fmt.Errorf("client factory is required")
+	}
+
+	auth, err := newInlineJWTAuthorizer(role, jwtToken)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := f.New(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	client.token = ""
+	client.auth = auth
 	return client, nil
 }
 
@@ -124,8 +146,20 @@ func (f *ClientFactory) LoginJWT(ctx context.Context, baseURL, role, jwtToken st
 	return token, nil
 }
 
-// NewWithJWT constructs an authenticated client by performing JWT login against baseURL.
+// NewWithJWT constructs an authenticated client using the configured JWT auth strategy.
 func (f *ClientFactory) NewWithJWT(ctx context.Context, baseURL, role, jwtToken string) (*Client, error) {
+	strategy, err := portopenbao.NormalizeJWTAuthStrategy(f.template.JWTAuthStrategy)
+	if err != nil {
+		return nil, err
+	}
+	if strategy == portopenbao.JWTAuthStrategyInline {
+		return f.NewWithInlineJWT(baseURL, role, jwtToken)
+	}
+	return f.NewWithStandardJWT(ctx, baseURL, role, jwtToken)
+}
+
+// NewWithStandardJWT constructs an authenticated client by performing JWT login against baseURL.
+func (f *ClientFactory) NewWithStandardJWT(ctx context.Context, baseURL, role, jwtToken string) (*Client, error) {
 	token, err := f.LoginJWT(ctx, baseURL, role, jwtToken)
 	if err != nil {
 		return nil, err
