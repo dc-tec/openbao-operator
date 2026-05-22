@@ -67,7 +67,7 @@ func (c *Client) StepDown(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create step-down request: %w", err)
 	}
-	if err := c.authorize(req); err != nil {
+	if err := c.authorizeStepDown(req); err != nil {
 		return fmt.Errorf("failed to authorize step-down request: %w", err)
 	}
 
@@ -79,6 +79,27 @@ func (c *Client) StepDown(ctx context.Context) error {
 		return portopenbao.NewAPIError("step-down request failed", resp.StatusCode, body)
 	}
 
+	return nil
+}
+
+func (c *Client) authorizeStepDown(req *http.Request) error {
+	if req == nil {
+		return fmt.Errorf("request is required")
+	}
+	inlineAuth, ok := c.auth.(inlineJWTAuthorizer)
+	if !ok {
+		return c.authorize(req)
+	}
+
+	token, _, err := c.LoginJWT(req.Context(), inlineAuth.role, inlineAuth.jwt)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate using standard JWT for step-down request: %w", err)
+	}
+	req.Header.Set(headerVaultToken, token)
+	req.Header.Del(headerInlineAuthPath)
+	req.Header.Del(headerInlineAuthOperation)
+	req.Header.Del(headerInlineAuthParameterRole)
+	req.Header.Del(headerInlineAuthParameterJWT)
 	return nil
 }
 

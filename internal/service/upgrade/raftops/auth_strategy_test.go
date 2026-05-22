@@ -19,10 +19,11 @@ const (
 	testUpgradeInlineAuthJWTParameterHeader  = "X-Vault-Inline-Auth-Parameter-jwt"
 	testUpgradeVaultTokenHeader              = "X-Vault-Token"
 
-	testUpgradeInlineAuthJWTPath   = "jwt-operator/login"
+	testUpgradeInlineAuthJWTPath   = "auth/jwt-operator/login"
 	testUpgradeInlineAuthOperation = "update"
 	testUpgradeJWTLoginPath        = "/v1/auth/jwt-operator/login"
 	testUpgradeStepDownPath        = "/v1/sys/step-down"
+	testUpgradeDemotePath          = "/v1/sys/storage/raft/demote"
 	testUpgradeJWTAuthRole         = "upgrade-role"
 	testUpgradeJWTToken            = "upgrade-jwt"
 	testUpgradeStandardAuthToken   = "upgrade-token"
@@ -37,17 +38,17 @@ func TestNewAuthenticatedClient_DefaultInlineUsesInlineAuthHeaders(t *testing.T)
 	t.Parallel()
 
 	var loginRequests int32
-	var stepDownRequests int32
+	var demoteRequests int32
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case testUpgradeJWTLoginPath:
 			atomic.AddInt32(&loginRequests, 1)
 			http.Error(w, "unexpected login", http.StatusInternalServerError)
-		case testUpgradeStepDownPath:
-			atomic.AddInt32(&stepDownRequests, 1)
-			if r.Method != http.MethodPut {
-				t.Errorf("step-down method=%s, want PUT", r.Method)
+		case testUpgradeDemotePath:
+			atomic.AddInt32(&demoteRequests, 1)
+			if r.Method != http.MethodPost {
+				t.Errorf("demote method=%s, want POST", r.Method)
 			}
 			requireUpgradeInlineAuthHeaders(t, r, testUpgradeJWTAuthRole, testUpgradeJWTToken)
 			w.WriteHeader(http.StatusNoContent)
@@ -67,15 +68,15 @@ func TestNewAuthenticatedClient_DefaultInlineUsesInlineAuthHeaders(t *testing.T)
 	if err != nil {
 		t.Fatalf("NewAuthenticatedClient() error: %v", err)
 	}
-	if err := client.StepDown(context.Background()); err != nil {
-		t.Fatalf("StepDown() error: %v", err)
+	if err := client.DemoteRaftPeer(context.Background(), "node-1"); err != nil {
+		t.Fatalf("DemoteRaftPeer() error: %v", err)
 	}
 
 	if got := atomic.LoadInt32(&loginRequests); got != 0 {
 		t.Fatalf("login requests=%d, want 0", got)
 	}
-	if got := atomic.LoadInt32(&stepDownRequests); got != 1 {
-		t.Fatalf("step-down requests=%d, want 1", got)
+	if got := atomic.LoadInt32(&demoteRequests); got != 1 {
+		t.Fatalf("demote requests=%d, want 1", got)
 	}
 }
 

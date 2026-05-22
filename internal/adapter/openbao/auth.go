@@ -15,7 +15,7 @@ const (
 	headerInlineAuthParameterRole = "X-Vault-Inline-Auth-Parameter-role"
 	headerInlineAuthParameterJWT  = "X-Vault-Inline-Auth-Parameter-jwt"
 
-	inlineAuthJWTPath      = "jwt-operator/login"
+	inlineAuthJWTPath      = "auth/jwt-operator/login"
 	inlineAuthOperationPut = "update"
 )
 

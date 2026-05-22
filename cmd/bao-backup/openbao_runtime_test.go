@@ -23,7 +23,7 @@ const (
 	testInlineAuthJWTParameterHeader  = "X-Vault-Inline-Auth-Parameter-jwt"
 	testVaultTokenHeader              = "X-Vault-Token"
 
-	testInlineAuthJWTPath       = "jwt-operator/login"
+	testInlineAuthJWTPath       = "auth/jwt-operator/login"
 	testInlineAuthOperation     = "update"
 	testBackupSnapshotPath      = "/v1/sys/storage/raft/snapshot"
 	testBackupRestorePath       = "/v1/sys/storage/raft/snapshot-force"

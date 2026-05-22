@@ -85,7 +85,9 @@ Relevant code:
 The upgrade executor loads `UPGRADE_JWT_AUTH_ROLE` and the projected JWT token.
 The raft operation helpers call `LoginJWT(...)`, then build token-backed
 clients for leader step-down, join, raft configuration, promote, demote, and
-remove-peer operations.
+remove-peer operations. During the inline-auth migration, `sys/step-down` needs
+a targeted standard JWT fallback because OpenBao performs its sudo/root check
+against a persisted token entry for that path.
 
 Relevant code:
 
@@ -221,7 +223,7 @@ OpenBao API methods then call `c.authorize(req)` instead of setting
 For the operator's existing auth mount, inline JWT auth should generate:
 
 ```text
-X-Vault-Inline-Auth-Path: jwt-operator/login
+X-Vault-Inline-Auth-Path: auth/jwt-operator/login
 X-Vault-Inline-Auth-Operation: update
 X-Vault-Inline-Auth-Parameter-role: <base64url-no-padding({"key":"role","value":"<role>"})>
 X-Vault-Inline-Auth-Parameter-jwt: <base64url-no-padding({"key":"jwt","value":"<jwt>"})>
@@ -386,8 +388,10 @@ Suggested helper:
 func NewAuthenticatedClient(ctx context.Context, cfg *ExecutorConfig, factory *openbao.ClientFactory, baseURL string) (*openbao.Client, error)
 ```
 
-This avoids repeating strategy branches across step-down, join, promote, demote,
-configuration, and leader-transfer paths.
+This avoids repeating strategy branches across join, promote, demote,
+configuration, and leader-transfer paths. Step-down remains centralized, but an
+inline JWT client should perform a one-request standard JWT login fallback for
+that endpoint.
 
 ### Job builders and config loaders
 
@@ -447,7 +451,8 @@ Mocks and tests:
 
 - existing tests that model `/auth/jwt-operator/login` should be kept for the
   standard strategy
-- new tests should assert the inline default path avoids login
+- new tests should assert the inline default path uses
+  `auth/jwt-operator/login` without performing a separate login request
 
 HashiCorp Vault compatibility is not a goal for managed clusters. The operator
 targets OpenBao.
@@ -503,8 +508,11 @@ OpenBao client:
 - inline JWT authorizer does not set `X-Vault-Token`
 - token authorizer only sets `X-Vault-Token`
 - client construction fails on empty role or empty JWT for inline auth
-- request authorizer is applied to snapshot, restore, raft, autopilot, and
-  step-down requests
+- request authorizer is applied to snapshot, restore, raft, and autopilot
+  requests
+- step-down requests from an inline JWT client perform a standard JWT login and
+  send `X-Vault-Token` because OpenBao currently requires a persisted token
+  entry for this sudo/root path
 
 Factory:
 
@@ -517,7 +525,8 @@ Executors:
 - backup JWT default uses inline headers on snapshot request
 - restore JWT default uses inline headers on snapshot-force request
 - token backup/restore keeps `X-Vault-Token`
-- upgrade JWT default uses inline headers for leader step-down and raft actions
+- upgrade JWT default uses inline headers for raft actions, with the targeted
+  standard-JWT fallback for leader step-down
 - `OPENBAO_JWT_AUTH_STRATEGY=standard` preserves current login behavior
 - invalid strategy fails config loading
 

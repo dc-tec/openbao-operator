@@ -412,6 +412,54 @@ func TestClient_StepDown(t *testing.T) {
 	}
 }
 
+func TestClient_StepDownWithInlineJWTUsesStandardJWTFallback(t *testing.T) {
+	var loginRequests int
+	var stepDownRequests int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case apiPathAuthJWTLogin:
+			loginRequests++
+			if r.Method != http.MethodPost {
+				t.Errorf("login method=%s, want POST", r.Method)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"auth":{"client_token":"s.stepdown","ttl":3600}}`))
+		case apiPathSysStepDown:
+			stepDownRequests++
+			if r.Method != http.MethodPut {
+				t.Errorf("step-down method=%s, want PUT", r.Method)
+			}
+			if got := r.Header.Get(headerVaultToken); got != "s.stepdown" {
+				t.Fatalf("%s=%q, want %q", headerVaultToken, got, "s.stepdown")
+			}
+			if got := r.Header.Get(headerInlineAuthPath); got != "" {
+				t.Fatalf("%s=%q, want empty", headerInlineAuthPath, got)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	factory := newTestClientFactory(ClientConfig{})
+	client, err := factory.NewWithInlineJWT(server.URL, "upgrade-role", "jwt-token")
+	if err != nil {
+		t.Fatalf("NewWithInlineJWT() error: %v", err)
+	}
+
+	if err := client.StepDown(context.Background()); err != nil {
+		t.Fatalf("StepDown() error: %v", err)
+	}
+	if loginRequests != 1 {
+		t.Fatalf("login requests=%d, want 1", loginRequests)
+	}
+	if stepDownRequests != 1 {
+		t.Fatalf("step-down requests=%d, want 1", stepDownRequests)
+	}
+}
+
 func TestClient_JoinRaftCluster_AlreadyJoinedStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != apiPathRaftJoin {
