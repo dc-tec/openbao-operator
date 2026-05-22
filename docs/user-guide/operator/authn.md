@@ -16,7 +16,7 @@ journey: get-started
 
 <DiagramFrame
   title="Default operator auth path"
-  caption="Kubernetes issues a projected token for the controller. OpenBao validates that token against the configured JWT auth method and returns a scoped operator token for maintenance work."
+  caption="Kubernetes issues a projected token for the controller. The operator sends that JWT with each OpenBao maintenance request using inline authentication."
   code={`sequenceDiagram
     autonumber
     participant K8s as Kubernetes API
@@ -24,9 +24,9 @@ journey: get-started
     participant Bao as OpenBao cluster
 
     K8s->>Controller: Mount projected token (aud=openbao-internal)
-    Controller->>Bao: Login through auth/jwt-operator
-    Bao-->>Controller: OpenBao token with openbao-operator policy
-    Controller->>Bao: Run health, autopilot, and maintenance requests
+    Controller->>Bao: Maintenance request with inline auth headers
+    Bao->>Bao: Validate auth/jwt-operator role
+    Bao-->>Controller: Maintenance response
 
     Note over Controller,Bao: Human login is a separate bootstrap path`}
 />
@@ -60,12 +60,55 @@ journey: get-started
     {
       cells: [
         'Scoped maintenance policy',
-        'The JWT role returns a token with the operator maintenance policy, not blanket admin privileges.',
+        'The JWT role grants the operator maintenance policy to each authenticated request, not blanket admin privileges.',
         'The controller gets the capabilities it needs for health checks, step-down, and autopilot without widening normal access.',
       ],
     },
   ]}
 />
+
+<Callout type="note" title="Inline authentication is the default">
+
+For supported OpenBao versions, JWT-backed operator requests use OpenBao inline authentication by default.
+The controller, backup jobs, restore jobs, and upgrade jobs still use the same projected ServiceAccount JWTs,
+role names, audiences, and policies. The transport changes from a separate login request plus `X-Vault-Token`
+to inline auth headers on the actual OpenBao request.
+
+</Callout>
+
+<DecisionTable
+  kind="reference"
+  title="JWT transport strategy"
+  columns={['Strategy', 'How it authenticates', 'When to use it']}
+  rows={[
+    {
+      cells: [
+        '`inline`',
+        'Sends the projected ServiceAccount JWT through OpenBao inline auth headers on each operator-owned request.',
+        'Default for supported OpenBao versions. Use this for normal operation.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '`standard`',
+        'Performs the legacy JWT login request and then sends the returned OpenBao token as `X-Vault-Token`.',
+        'Temporary compatibility switch when an intermediary drops custom inline auth headers or enforces header-size limits.',
+      ],
+      emphasis: 'caution',
+    },
+  ]}
+/>
+
+<CommandBlock
+  language="bash"
+  label="configure"
+  title="Use the standard JWT fallback"
+  code={`kubectl -n openbao-operator-system set env deployment/openbao-operator-controller-manager \\
+  OPENBAO_JWT_AUTH_STRATEGY=standard`}
+>
+  Leave the variable unset, or set it to `inline`, for the default inline-auth path. The operator propagates this setting to backup, restore, and upgrade executor jobs.
+</CommandBlock>
 
 <Callout type="note" title="Controller and human authentication are separate">
 
