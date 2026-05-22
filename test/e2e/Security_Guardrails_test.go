@@ -923,7 +923,7 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 				return c.Create(ctx, newTransitCluster("transit-authz-denied", transitSecretName), client.DryRunAll)
 			})
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Users configuring transit credentials"))
+			Expect(err.Error()).To(ContainSubstring("Users configuring unseal credentials"))
 
 			secretReaderRole := &rbacv1.Role{
 				ObjectMeta: metav1.ObjectMeta{
