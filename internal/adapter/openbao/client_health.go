@@ -91,6 +91,8 @@ func (c *Client) authorizeStepDown(req *http.Request) error {
 		return c.authorize(req)
 	}
 
+	// OpenBao checks sys/step-down permissions against a persisted token entry,
+	// so inline auth cannot satisfy this endpoint's sudo/root policy check.
 	token, _, err := c.LoginJWT(req.Context(), inlineAuth.role, inlineAuth.jwt)
 	if err != nil {
 		return fmt.Errorf("failed to authenticate using standard JWT for step-down request: %w", err)

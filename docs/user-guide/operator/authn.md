@@ -93,7 +93,7 @@ to inline auth headers on the actual OpenBao request.
       cells: [
         '`standard`',
         'Performs the legacy JWT login request and then sends the returned OpenBao token as `X-Vault-Token`.',
-        'Temporary compatibility switch when an intermediary drops custom inline auth headers or enforces header-size limits.',
+        'Operational compatibility switch when an intermediary drops custom inline auth headers or enforces header-size limits.',
       ],
       emphasis: 'caution',
     },
@@ -103,7 +103,7 @@ to inline auth headers on the actual OpenBao request.
 <CommandBlock
   language="bash"
   label="configure"
-  title="Use the standard JWT fallback"
+  title="Use the standard JWT strategy"
   code={`kubectl -n openbao-operator-system set env deployment/openbao-operator-controller-manager \\
   OPENBAO_JWT_AUTH_STRATEGY=standard`}
 >

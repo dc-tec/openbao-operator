@@ -140,8 +140,8 @@ token handling is still unnecessary.
   already high enough.
 - Centralize auth header construction so individual OpenBao API methods do not
   hand-roll auth behavior.
-- Keep a temporary standard-JWT fallback for operational compatibility with
-  proxies, gateways, mocks, and debugging.
+- Keep an installation-scoped standard-JWT strategy for operational
+  compatibility with proxies, gateways, mocks, and debugging.
 - Keep all existing role names, policies, ServiceAccounts, and projected-token
   audience behavior unchanged.
 
@@ -240,11 +240,11 @@ Rules:
 - never include JWT values in errors or logs
 - make header construction independently unit tested
 
-## Auth Strategy Fallback
+## Auth Strategy Escape Hatch
 
 Even though OpenBao version compatibility is no longer a blocker, an
-installation-scoped fallback is still useful because inline auth relies on
-custom headers reaching OpenBao intact.
+installation-scoped standard strategy is still useful because inline auth relies
+on custom headers reaching OpenBao intact.
 
 Add an internal auth strategy setting:
 
@@ -261,7 +261,9 @@ Behavior:
 - invalid values fail fast during controller or executor startup/config load
 
 This is intentionally not a CRD field. It is an installation/runtime escape
-hatch, not a per-cluster service contract.
+hatch, not a per-cluster service contract. Keep it through the first inline-auth
+release so operators have a rollback lever if their ingress, proxy, or debugging
+tooling mishandles custom headers.
 
 The controller must propagate the selected strategy into backup, restore, and
 upgrade jobs so executor behavior matches the installed operator posture.
@@ -572,8 +574,9 @@ Use OpenBao 2.4.4 and 2.5.4:
 
 2. Should the fallback env var be documented as stable?
 
-   Initial recommendation: document it as an operational compatibility switch,
-   but do not make it a long-term API promise until after one release.
+   Decision for the first implementation: document it as an operational
+   compatibility switch, but do not make it a long-term API promise until after
+   at least one inline-auth release.
 
 3. Should `NewWithJWT` be renamed in the same PR?
 
