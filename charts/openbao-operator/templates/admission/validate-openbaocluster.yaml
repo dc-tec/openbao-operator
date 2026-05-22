@@ -353,6 +353,14 @@ spec:
         !has(object.spec.unseal.credentialsSecretRef) ||
         authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.unseal.credentialsSecretRef.name).check("get").allowed()
       message: "Users configuring unseal credentials must be authorized to get spec.unseal.credentialsSecretRef."
+    # Confused-deputy protection: users configuring backup Secret credentials must be able to read those Secrets.
+    - expression: >-
+        !has(object.spec.backup) ||
+        ((!has(object.spec.backup.target.credentialsSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.backup.target.credentialsSecretRef.name).check("get").allowed()) &&
+        (!has(object.spec.backup.tokenSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.backup.tokenSecretRef.name).check("get").allowed()))
+      message: "Users configuring backup credentials must be authorized to get referenced backup Secrets."
     # Block references to system secrets in unseal/backup/upgrade
     - expression: >-
         (!has(object.spec.unseal) || !has(object.spec.unseal.credentialsSecretRef) ||

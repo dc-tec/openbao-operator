@@ -47,6 +47,13 @@ spec:
         object.spec.source.target.endpoint.startsWith("s3://") ||
         object.spec.source.target.endpoint.matches("^http://[^/]+\\.svc(\\.|:|/|$).*")
       message: "Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster Service (*.svc)."
+    # Confused-deputy protection: users configuring restore Secret credentials must be able to read those Secrets.
+    - expression: >-
+        (!has(object.spec.source.target.credentialsSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.source.target.credentialsSecretRef.name).check("get").allowed()) &&
+        (!has(object.spec.tokenSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.tokenSecretRef.name).check("get").allowed())
+      message: "Users configuring restore credentials must be authorized to get referenced restore Secrets."
     # Confused-deputy protection: Block references to system secrets (restore auth + object store credentials)
     - expression: >-
         (!has(object.spec.source.target.credentialsSecretRef) ||

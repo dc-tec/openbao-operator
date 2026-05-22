@@ -473,6 +473,36 @@ func TestBuildBackupJob_WithJWTAuth(t *testing.T) {
 	}
 }
 
+func TestBuildBackupJob_DoesNotMountTokenSecretWhenJWTAuthIsEffective(t *testing.T) {
+	cluster := newTestClusterWithBackup("test-cluster", "default")
+	cluster.Spec.Backup.JWTAuthRole = testBackupJWTAuthRole
+	cluster.Spec.Backup.TokenSecretRef = &corev1.LocalObjectReference{
+		Name: "backup-token",
+	}
+
+	job, err := BuildJob(cluster, JobOptions{
+		JobName:   testBackupJobName,
+		JobType:   JobTypeScheduled,
+		BackupKey: "test",
+		Platform:  "",
+	})
+	if err != nil {
+		t.Fatalf("buildBackupJob() error = %v", err)
+	}
+
+	container := job.Spec.Template.Spec.Containers[0]
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == backupTokenVolumeName {
+			t.Fatalf("buildBackupJob() mounted %q even though JWT auth is effective", backupTokenVolumeName)
+		}
+	}
+	for _, volume := range job.Spec.Template.Spec.Volumes {
+		if volume.Name == backupTokenVolumeName {
+			t.Fatalf("buildBackupJob() added %q volume even though JWT auth is effective", backupTokenVolumeName)
+		}
+	}
+}
+
 func TestBuildBackupJob_WithRoleARN(t *testing.T) {
 	cluster := newTestClusterWithBackup("test-cluster", "default")
 	cluster.Spec.Backup.Target.RoleARN = "arn:aws:iam::123456789012:role/backup-role"

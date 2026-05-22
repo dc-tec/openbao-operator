@@ -254,8 +254,8 @@ func BuildBackupJobVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, tlsTrus
 		})
 	}
 
-	// Mount token secret if provided (fallback method when JWT Auth is not used)
-	if cluster.Spec.Backup.TokenSecretRef != nil {
+	// Mount token secret only when static-token auth is effective.
+	if backupUsesStaticTokenAuth(cluster) {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      backupTokenVolumeName,
 			MountPath: backupTokenMountPath,
@@ -344,7 +344,7 @@ func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster, tlsTrust por
 	}
 
 	// Token secret (fallback method when JWT Auth is not used)
-	if cluster.Spec.Backup.TokenSecretRef != nil {
+	if backupUsesStaticTokenAuth(cluster) {
 		secretName := cluster.Spec.Backup.TokenSecretRef.Name
 		tokenFileMode := int32(0400)
 		volumes = append(volumes, corev1.Volume{
@@ -359,6 +359,10 @@ func BuildBackupJobVolumes(cluster *openbaov1alpha1.OpenBaoCluster, tlsTrust por
 	}
 
 	return volumes
+}
+
+func backupUsesStaticTokenAuth(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return cluster.Spec.Backup.TokenSecretRef != nil && jobenv.EffectiveBackupJWTRole(cluster) == ""
 }
 
 // GetBackupExecutorImage returns the backup executor image to use.
