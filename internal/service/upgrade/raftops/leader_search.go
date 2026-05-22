@@ -20,18 +20,6 @@ const (
 	singleLeaderSearchAttempt       = 1
 )
 
-// LoginJWT authenticates the executor against the target OpenBao endpoint using
-// the standard JWT login flow.
-func LoginJWT(ctx context.Context, cfg *ExecutorConfig, baseURL string) (string, error) {
-	factory, cleanup, err := NewOpenBaoClientFactory(cfg)
-	if err != nil {
-		return "", err
-	}
-	defer cleanup()
-
-	return factory.LoginJWT(ctx, baseURL, cfg.JWTAuthRole, cfg.JWTToken)
-}
-
 // NewAuthenticatedClient constructs an OpenBao client using the configured JWT
 // authentication strategy.
 func NewAuthenticatedClient(
