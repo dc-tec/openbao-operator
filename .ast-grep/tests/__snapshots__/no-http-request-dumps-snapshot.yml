@@ -1,0 +1,24 @@
+id: no-http-request-dumps
+snapshots:
+  ? |
+    package p
+    import "net/http/httputil"
+    func f(req *http.Request) {
+      _, _ = httputil.DumpRequest(req, true)
+    }
+  : labels:
+    - source: httputil.DumpRequest(req, true)
+      style: primary
+      start: 74
+      end: 105
+  ? |
+    package p
+    import "net/http/httputil"
+    func f(resp *http.Response) {
+      _, _ = httputil.DumpResponse(resp, true)
+    }
+  : labels:
+    - source: httputil.DumpResponse(resp, true)
+      style: primary
+      start: 76
+      end: 109

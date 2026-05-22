@@ -13,3 +13,16 @@ invalid:
     func f(logger Logger, token string) {
       logger.Info("auth", "token", token)
     }
+  - |
+    package p
+    type Logger interface { Info(string, ...any) }
+    func f(logger Logger, value string) {
+      logger.Info("auth", "X-Vault-Inline-Auth-Parameter-jwt", value)
+    }
+  - |
+    package p
+    import "net/http"
+    type Logger interface { Info(string, ...any) }
+    func f(logger Logger, headers http.Header) {
+      logger.Info("request", "headers", headers)
+    }

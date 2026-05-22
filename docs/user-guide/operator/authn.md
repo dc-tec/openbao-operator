@@ -110,6 +110,16 @@ to inline auth headers on the actual OpenBao request.
   Leave the variable unset, or set it to `inline`, for the default inline-auth path. The operator propagates this setting to backup, restore, and upgrade executor jobs.
 </CommandBlock>
 
+<Callout type="warning" title="Redact inline auth headers">
+
+Inline authentication sends the projected ServiceAccount JWT in
+`X-Vault-Inline-Auth-Parameter-jwt`. Treat this header like `X-Vault-Token` and
+`Authorization`: do not log it in ingress, proxy, service mesh, debug, or audit
+shipping pipelines. Logging request metadata such as method, path, status, and
+duration is safe; logging full HTTP headers is not.
+
+</Callout>
+
 <Callout type="note" title="Controller and human authentication are separate">
 
 `spec.selfInit.oidc.enabled: true` bootstraps the controller auth path only.

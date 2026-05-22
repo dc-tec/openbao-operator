@@ -425,6 +425,7 @@ Security rules:
 - do not log inline auth header values
 - do not include JWTs in wrapped errors
 - do not add request dumps that include headers
+- keep lint guardrails for sensitive structured log keys and HTTP request dumps
 - ensure inline and token auth are mutually exclusive
 - keep projected token volume permissions unchanged
 - preserve audience and bound-subject validation
@@ -521,6 +522,9 @@ Factory:
 - `NewWithInlineJWT` does not call `/auth/jwt-operator/login`
 - `NewWithStandardJWT` still calls `/auth/jwt-operator/login`
 - standard JWT cache behavior remains covered
+- lint guardrails reject sensitive auth header logging and HTTP message dumps
+- self-init policy tests lock the expected JWT role capabilities and
+  `token_no_default_policy` shape
 
 Executors:
 

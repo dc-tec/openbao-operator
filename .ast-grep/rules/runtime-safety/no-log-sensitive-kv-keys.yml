@@ -22,5 +22,5 @@ constraints:
   F:
     regex: '\.(Info|Error)$'
   KEY:
-    regex: '(?i)"(token|root_token|jwt|password|private_key|privatekey|unseal|unseal_key|credential|credentials|secret_data|secret_key|access_key)"'
-note: Structured logs should avoid direct secret-bearing fields; log metadata and object references instead.
+    regex: '(?i)"(token|root_token|jwt|password|private_key|privatekey|unseal|unseal_key|credential|credentials|secret_data|secret_key|access_key|authorization|headers?|request_headers|response_headers|http_headers|x-vault-token|x-vault-inline-auth-parameter-jwt)"'
+note: Structured logs should avoid direct secret-bearing fields or full HTTP headers; log metadata and object references instead.

@@ -228,6 +228,45 @@ func patchOperatorKubeAPITokenAudience(ctx context.Context, namespace string) er
 	return nil
 }
 
+func applyControllerEnvOverrides(namespace string) error {
+	overrides := make([]string, 0, 2)
+	for _, key := range []string{"OPENBAO_REQUEUE_STANDARD", "OPENBAO_JWT_AUTH_STRATEGY"} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			overrides = append(overrides, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+	if len(overrides) == 0 {
+		return nil
+	}
+
+	cmd := exec.Command("kubectl", "get", "deployment",
+		"-l", "app.kubernetes.io/name=openbao-operator,app.kubernetes.io/component=controller",
+		"-n", namespace,
+		"-o", "jsonpath={.items[0].metadata.name}") // #nosec G204 -- test harness command
+	out, err := utils.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to find controller deployment by label: %w", err)
+	}
+	controllerDeploymentName := strings.TrimSpace(out)
+	if controllerDeploymentName == "" {
+		return fmt.Errorf("controller deployment not found in namespace %q", namespace)
+	}
+
+	_, _ = fmt.Fprintf(GinkgoWriter, "Injecting controller env overrides: %s\n", strings.Join(overrides, ", "))
+	args := append([]string{"set", "env", fmt.Sprintf("deployment/%s", controllerDeploymentName), "-n", namespace}, overrides...)
+	cmd = exec.Command("kubectl", args...) // #nosec G204 -- test harness command
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("failed to set controller env overrides: %w", err)
+	}
+
+	cmd = exec.Command("kubectl", "rollout", "status", fmt.Sprintf("deployment/%s", controllerDeploymentName),
+		"-n", namespace, "--timeout=2m") // #nosec G204 -- test harness command
+	if _, err := utils.Run(cmd); err != nil {
+		return fmt.Errorf("failed to wait for controller rollout: %w", err)
+	}
+	return nil
+}
+
 func withEnv(key string, value string, fn func()) {
 	previousValue, hadPrevious := os.LookupEnv(key)
 	if err := os.Setenv(key, value); err != nil {
@@ -457,21 +496,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
 				To(Succeed(), "Operator deployments did not become Available in time")
 
-			if val := os.Getenv("OPENBAO_REQUEUE_STANDARD"); val != "" {
-				By(fmt.Sprintf("injecting OPENBAO_REQUEUE_STANDARD=%s into controller", val))
-				cmd = exec.Command("kubectl", "set", "env", "deployment/openbao-operator-controller",
-					"-n", operatorNamespace,
-					fmt.Sprintf("OPENBAO_REQUEUE_STANDARD=%s", val))
-				_, err = utils.Run(cmd)
-				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to set OPENBAO_REQUEUE_STANDARD env var")
-
-				// Wait for rollout to complete
-				By("waiting for controller rollout to complete")
-				cmd = exec.Command("kubectl", "rollout", "status", "deployment/openbao-operator-controller",
-					"-n", operatorNamespace, "--timeout=2m")
-				_, err = utils.Run(cmd)
-				ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to wait for controller rollout")
-			}
+			By("applying controller env overrides when configured")
+			ExpectWithOffset(1, applyControllerEnvOverrides(operatorNamespace)).
+				To(Succeed(), "Failed to apply controller env overrides")
 		})
 
 		suiteBootstrapState = &bootstrap
@@ -692,30 +719,9 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 			ExpectWithOffset(1, waitForDeploymentsAvailable(operatorNamespace, 5*time.Minute)).
 				To(Succeed(), fmt.Sprintf("Operator deployments did not become Available in time (cluster=%s)", clusterName))
 
-			if val := os.Getenv("OPENBAO_REQUEUE_STANDARD"); val != "" {
-				By(fmt.Sprintf("injecting OPENBAO_REQUEUE_STANDARD=%s into controller (cluster=%s)", val, clusterName))
-				// Find the controller deployment name dynamically (handles kustomize name prefixes)
-				cmd = exec.Command("kubectl", "get", "deployment",
-					"-l", "app.kubernetes.io/name=openbao-operator",
-					"-n", operatorNamespace,
-					"-o", "jsonpath={.items[0].metadata.name}")
-				out, err := utils.Run(cmd)
-				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to find controller deployment by label (cluster=%s)", clusterName))
-				controllerDeploymentName := strings.TrimSpace(out)
-
-				cmd = exec.Command("kubectl", "set", "env", fmt.Sprintf("deployment/%s", controllerDeploymentName),
-					"-n", operatorNamespace,
-					fmt.Sprintf("OPENBAO_REQUEUE_STANDARD=%s", val))
-				_, err = utils.Run(cmd)
-				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to set OPENBAO_REQUEUE_STANDARD env var (cluster=%s)", clusterName))
-
-				// Wait for rollout to complete
-				By(fmt.Sprintf("waiting for controller rollout to complete (cluster=%s)", clusterName))
-				cmd = exec.Command("kubectl", "rollout", "status", fmt.Sprintf("deployment/%s", controllerDeploymentName),
-					"-n", operatorNamespace, "--timeout=2m")
-				_, err = utils.Run(cmd)
-				ExpectWithOffset(1, err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to wait for controller rollout (cluster=%s)", clusterName))
-			}
+			By(fmt.Sprintf("applying controller env overrides when configured (cluster=%s)", clusterName))
+			ExpectWithOffset(1, applyControllerEnvOverrides(operatorNamespace)).
+				To(Succeed(), fmt.Sprintf("Failed to apply controller env overrides (cluster=%s)", clusterName))
 		})
 	})
 
