@@ -1217,7 +1217,7 @@ type GatewayReference struct {
 // TransitSealConfig configures the Transit seal type.
 // See: https://openbao.org/docs/configuration/seal/transit/
 type TransitSealConfig struct {
-	// Address is the full address to the OpenBao cluster.
+	// Address is the full HTTPS address to the OpenBao cluster providing the Transit seal.
 	// +kubebuilder:validation:MinLength=1
 	Address string `json:"address"`
 
