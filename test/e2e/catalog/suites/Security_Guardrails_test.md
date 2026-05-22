@@ -13,6 +13,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `security-guardrails-blocks-cross-namespace-tenant-targeting-self-6a21b1fd` | blocks cross-namespace tenant targeting (self-service mode) | active | _none_ | `security`, `critical`, `admission` |
 | `security-guardrails-enforces-hardened-profile-invariants-446324b0` | enforces Hardened profile invariants | active | _none_ | `security`, `critical`, `admission` |
 | `security-guardrails-enforces-digest-pinned-images-for-managed-a108b1a3` | enforces digest-pinned images for managed workloads when digest enforcement is required | active | _none_ | `security`, `critical`, `admission` |
+| `security-guardrails-requires-transit-credential-secret-read-authorization-abe9d539` | requires transit credential Secret read authorization | active | _none_ | `security`, `critical`, `admission` |
 | `security-guardrails-reports-degraded-when-gateway-api-crds-d5cb95ff` | reports Degraded when Gateway API CRDs are missing | active | _none_ | `security`, `critical`, `config` |
 | `security-guardrails-applies-admission-guardrails-to-controller-rbac-7093e068` | applies admission guardrails to controller RBAC writes | active | _none_ | `security`, `critical`, `pentest`, `tokens`, `rbac` |
 | `security-guardrails-applies-admission-guardrails-to-provisioner-namespace-451d674f` | applies admission guardrails to provisioner Namespace mutations | active | _none_ | `security`, `critical`, `pentest`, `tokens`, `rbac` |
@@ -85,6 +86,17 @@ Labels: `security`, `critical`, `admission`
 ## `security-guardrails-enforces-digest-pinned-images-for-managed-a108b1a3`
 
 Path: `Security Guardrails > Admission Policy Enforcement > enforces digest-pinned images for managed workloads when digest enforcement is required`
+
+State: `active`
+
+Covers: _none_
+
+Labels: `security`, `critical`, `admission`
+
+
+## `security-guardrails-requires-transit-credential-secret-read-authorization-abe9d539`
+
+Path: `Security Guardrails > Admission Policy Enforcement > requires transit credential Secret read authorization`
 
 State: `active`
 
