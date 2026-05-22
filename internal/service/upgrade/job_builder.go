@@ -139,6 +139,10 @@ func buildUpgradeExecutorEnv(
 		{Name: constants.EnvClusterReplicas, Value: fmt.Sprintf("%d", cluster.Spec.Replicas)},
 		{Name: constants.EnvUpgradeAction, Value: string(action)},
 		{Name: constants.EnvUpgradeJWTAuthRole, Value: jwtRole},
+		{
+			Name:  constants.EnvOpenBaoJWTAuthStrategy,
+			Value: portopenbao.NormalizeJWTAuthStrategyOrDefault(clientConfig.JWTAuthStrategy),
+		},
 	}
 	if tlsServerName := portopenbao.ComputeTLSServerName(cluster); tlsServerName != "" {
 		env = append(env, corev1.EnvVar{Name: constants.EnvTLSServerName, Value: tlsServerName})

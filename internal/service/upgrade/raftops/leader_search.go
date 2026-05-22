@@ -20,7 +20,8 @@ const (
 	singleLeaderSearchAttempt       = 1
 )
 
-// LoginJWT authenticates the executor against the target OpenBao endpoint.
+// LoginJWT authenticates the executor against the target OpenBao endpoint using
+// the standard JWT login flow.
 func LoginJWT(ctx context.Context, cfg *ExecutorConfig, baseURL string) (string, error) {
 	factory, cleanup, err := NewOpenBaoClientFactory(cfg)
 	if err != nil {
@@ -29,6 +30,63 @@ func LoginJWT(ctx context.Context, cfg *ExecutorConfig, baseURL string) (string,
 	defer cleanup()
 
 	return factory.LoginJWT(ctx, baseURL, cfg.JWTAuthRole, cfg.JWTToken)
+}
+
+// NewAuthenticatedClient constructs an OpenBao client using the configured JWT
+// authentication strategy.
+func NewAuthenticatedClient(
+	ctx context.Context,
+	cfg *ExecutorConfig,
+	factory *openbao.ClientFactory,
+	baseURL string,
+) (*openbao.Client, error) {
+	return NewAuthenticatedClientWithToken(ctx, cfg, factory, baseURL, "")
+}
+
+// LoginJWTIfStandard returns a client token only when the standard JWT auth
+// strategy is configured. Inline auth does not mint a reusable token.
+func LoginJWTIfStandard(ctx context.Context, cfg *ExecutorConfig, factory *openbao.ClientFactory, baseURL string) (string, error) {
+	if factory == nil {
+		return "", fmt.Errorf("OpenBao client factory is required")
+	}
+	strategy, err := portopenbao.NormalizeJWTAuthStrategy(cfg.JWTAuthStrategy)
+	if err != nil {
+		return "", err
+	}
+	if strategy == portopenbao.JWTAuthStrategyInline {
+		return "", nil
+	}
+	return factory.LoginJWT(ctx, baseURL, cfg.JWTAuthRole, cfg.JWTToken)
+}
+
+// NewAuthenticatedClientWithToken constructs an OpenBao client from the
+// configured strategy, optionally reusing a standard JWT login token.
+func NewAuthenticatedClientWithToken(
+	ctx context.Context,
+	cfg *ExecutorConfig,
+	factory *openbao.ClientFactory,
+	baseURL string,
+	standardToken string,
+) (*openbao.Client, error) {
+	if factory == nil {
+		return nil, fmt.Errorf("OpenBao client factory is required")
+	}
+	strategy, err := portopenbao.NormalizeJWTAuthStrategy(cfg.JWTAuthStrategy)
+	if err != nil {
+		return nil, err
+	}
+	if strategy == portopenbao.JWTAuthStrategyInline {
+		return factory.NewWithInlineJWT(baseURL, cfg.JWTAuthRole, cfg.JWTToken)
+	}
+
+	token := strings.TrimSpace(standardToken)
+	if token == "" {
+		token, err = factory.LoginJWT(ctx, baseURL, cfg.JWTAuthRole, cfg.JWTToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to authenticate: %w", err)
+		}
+	}
+	return factory.NewWithToken(baseURL, token)
 }
 
 // FindLeader finds a leader for the given revision with the default retry
@@ -347,6 +405,7 @@ func NewOpenBaoClientFactory(cfg *ExecutorConfig) (*openbao.ClientFactory, func(
 		RateLimitBurst:                 cfg.ClientBurst,
 		CircuitBreakerFailureThreshold: cfg.ClientCircuitBreakerFailureThreshold,
 		CircuitBreakerOpenDuration:     cfg.ClientCircuitBreakerOpenDuration,
+		JWTAuthStrategy:                cfg.JWTAuthStrategy,
 	})
 
 	factory := mgr.FactoryFor(fmt.Sprintf("%s/%s", cfg.ClusterNamespace, cfg.ClusterName), cfg.TLSCACert)

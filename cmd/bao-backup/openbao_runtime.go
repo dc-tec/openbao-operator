@@ -21,6 +21,7 @@ func newOpenBaoClientConfig(cfg *backupconfig.ExecutorConfig) portopenbao.Client
 		RateLimitBurst:                 cfg.RateLimitBurst,
 		CircuitBreakerFailureThreshold: cfg.CircuitBreakerFailureThreshold,
 		CircuitBreakerOpenDuration:     parseDuration(cfg.CircuitBreakerOpenDuration),
+		JWTAuthStrategy:                cfg.JWTAuthStrategy,
 	}
 }
 
@@ -87,9 +88,13 @@ func findLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, 
 	return "", fmt.Errorf("no leader found among %d pods after %d attempts", cfg.ClusterReplicas, maxRetries)
 }
 
-// authenticate authenticates to OpenBao and returns a token.
+// authenticate prepares OpenBao authentication and returns a reusable token
+// only for static token or standard JWT auth. Inline JWT auth is per request.
 func authenticate(ctx context.Context, cfg *backupconfig.ExecutorConfig, leaderURL string) (string, error) {
 	if cfg.AuthMethod == constants.BackupAuthMethodJWT {
+		if portopenbao.NormalizeJWTAuthStrategyOrDefault(cfg.JWTAuthStrategy) == portopenbao.JWTAuthStrategyInline {
+			return "", nil
+		}
 		mgr := openbao.NewClientManager(newOpenBaoClientConfig(cfg))
 		defer mgr.Close()
 		factory := mgr.FactoryFor("auth", cfg.TLSCACert)
@@ -105,7 +110,14 @@ func openClusterClient(
 ) (portopenbao.ClusterActions, func(), error) {
 	clientMgr := openbao.NewClientManager(newOpenBaoClientConfig(cfg))
 	factory := clientMgr.FactoryFor(purpose, cfg.TLSCACert)
-	baoClient, err := factory.NewWithToken(leaderURL, token)
+	var baoClient *openbao.Client
+	var err error
+	if cfg.AuthMethod == constants.BackupAuthMethodJWT &&
+		portopenbao.NormalizeJWTAuthStrategyOrDefault(cfg.JWTAuthStrategy) == portopenbao.JWTAuthStrategyInline {
+		baoClient, err = factory.NewWithInlineJWT(leaderURL, cfg.JWTAuthRole, cfg.JWTToken)
+	} else {
+		baoClient, err = factory.NewWithToken(leaderURL, token)
+	}
 	if err != nil {
 		clientMgr.Close()
 		return nil, nil, fmt.Errorf("failed to create OpenBao client: %w", err)

@@ -3,6 +3,7 @@ package controller
 import (
 	"crypto/tls"
 	"flag"
+	"os"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/entrypoint"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 type runConfig struct {
@@ -29,6 +31,7 @@ type runConfig struct {
 	clientBurst              int
 	clientCBFailureThreshold int
 	clientCBOpenDuration     time.Duration
+	jwtAuthStrategy          string
 	admissionEnforcement     string
 	admissionStartupTimeout  time.Duration
 }
@@ -76,6 +79,12 @@ func parseRunConfig() (runConfig, error) {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	cfg.platform = strings.ToLower(strings.TrimSpace(cfg.platform))
+
+	jwtAuthStrategy, err := portopenbao.NormalizeJWTAuthStrategy(os.Getenv(constants.EnvOpenBaoJWTAuthStrategy))
+	if err != nil {
+		return runConfig{}, err
+	}
+	cfg.jwtAuthStrategy = jwtAuthStrategy
 
 	admissionEnforcement, err := entrypoint.NormalizeAdmissionEnforcement(cfg.admissionEnforcement)
 	if err != nil {

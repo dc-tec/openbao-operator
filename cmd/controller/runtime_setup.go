@@ -48,6 +48,7 @@ func buildControllerProcessRuntime(
 		RateLimitBurst:                 cfg.clientBurst,
 		CircuitBreakerFailureThreshold: cfg.clientCBFailureThreshold,
 		CircuitBreakerOpenDuration:     cfg.clientCBOpenDuration,
+		JWTAuthStrategy:                cfg.jwtAuthStrategy,
 	}
 
 	clientMgr := openbao.NewClientManager(smartClientConfig)
@@ -133,6 +134,7 @@ func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error 
 			Recorder:              mgr.GetEventRecorder(controllerNameOpenBaoRestore),
 			OperatorImageVerifier: runtime.imageVerificationRuntime.OperatorImageVerifier,
 			Platform:              runtime.platform,
+			ClientConfig:          runtime.openBaoRuntime.SmartClientConfig,
 		}),
 		OperatorImageVerifier: runtime.imageVerificationRuntime.OperatorImageVerifier,
 		Platform:              runtime.platform,

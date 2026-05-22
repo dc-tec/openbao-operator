@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // loadTLSConfig loads the TLS CA certificate from a file.
@@ -64,6 +65,11 @@ func loadAuthConfig(cfg *ExecutorConfig) error {
 		if cfg.JWTToken == "" {
 			return fmt.Errorf("JWT token not found at %q", jwtTokenPath)
 		}
+		jwtAuthStrategy, err := portopenbao.NormalizeJWTAuthStrategy(os.Getenv(constants.EnvOpenBaoJWTAuthStrategy))
+		if err != nil {
+			return fmt.Errorf("invalid %s value: %w", constants.EnvOpenBaoJWTAuthStrategy, err)
+		}
+		cfg.JWTAuthStrategy = jwtAuthStrategy
 		cfg.AuthMethod = constants.BackupAuthMethodJWT
 		return nil
 	}

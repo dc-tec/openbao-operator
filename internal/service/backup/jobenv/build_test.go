@@ -160,7 +160,9 @@ func TestBuildEnvVars_OIDCDefaultsJWTAuthRole(t *testing.T) {
 		},
 	}
 
-	env := BuildEnvVars(cluster, Options{}, "/tmp/token")
+	env := BuildEnvVars(cluster, Options{
+		ClientConfig: portopenbao.ClientConfig{JWTAuthStrategy: portopenbao.JWTAuthStrategyStandard},
+	}, "/tmp/token")
 	got := envMap(env)
 
 	if got[constants.EnvBackupJWTAuthRole] != portauth.RoleNameBackup {
@@ -168,6 +170,9 @@ func TestBuildEnvVars_OIDCDefaultsJWTAuthRole(t *testing.T) {
 	}
 	if got[constants.EnvBackupAuthMethod] != "jwt" {
 		t.Fatalf("EnvBackupAuthMethod=%q, want jwt", got[constants.EnvBackupAuthMethod])
+	}
+	if got[constants.EnvOpenBaoJWTAuthStrategy] != portopenbao.JWTAuthStrategyStandard {
+		t.Fatalf("EnvOpenBaoJWTAuthStrategy=%q, want standard", got[constants.EnvOpenBaoJWTAuthStrategy])
 	}
 	if got[constants.EnvBackupTokenSecretName] != "backup-token" {
 		t.Fatalf("expected token secret name to remain set for fallback path")
