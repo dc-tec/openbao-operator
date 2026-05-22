@@ -280,6 +280,68 @@ func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *t
 	}
 }
 
+func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
+		gvk := u.GroupVersionKind()
+		return gvk.Group == testAdmissionRegistrationGroup &&
+			gvk.Kind == testKindVAP &&
+			strings.HasSuffix(u.GetName(), "openbao-validate-openbaocluster")
+	})
+
+	if len(objs) != 1 {
+		t.Fatalf("expected exactly one openbao-validate-openbaocluster policy, got %d", len(objs))
+	}
+
+	validations, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "validations")
+	if err != nil || !found {
+		t.Fatalf("read policy validations: found=%v err=%v", found, err)
+	}
+
+	var foundHTTPS bool
+	var foundUnsafeURLComponents bool
+	var foundSecretAuthorizer bool
+	var foundSystemSecretBlock bool
+	for _, validation := range validations {
+		validationMap, ok := validation.(map[string]any)
+		if !ok {
+			continue
+		}
+		message, _ := validationMap["message"].(string)
+		expression, _ := validationMap["expression"].(string)
+		switch {
+		case message == "Transit unseal address must use HTTPS." &&
+			strings.Contains(expression, `object.spec.unseal.transit.address.startsWith("https://")`):
+			foundHTTPS = true
+		case strings.Contains(message, "must not include userinfo") &&
+			strings.Contains(expression, `contains("@")`) &&
+			strings.Contains(expression, `169\\.254`) &&
+			strings.Contains(expression, `[fe80:`):
+			foundUnsafeURLComponents = true
+		case strings.Contains(message, "Users configuring unseal credentials") &&
+			strings.Contains(expression, `authorizer.group("")`) &&
+			strings.Contains(expression, `resource("secrets")`) &&
+			strings.Contains(expression, `check("get")`) &&
+			!strings.Contains(expression, `object.spec.unseal.type != "transit"`):
+			foundSecretAuthorizer = true
+		case strings.Contains(message, "system secrets") &&
+			strings.Contains(expression, "object.spec.unseal.credentialsSecretRef") &&
+			strings.Contains(expression, "root-token"):
+			foundSystemSecretBlock = true
+		}
+	}
+
+	if !foundHTTPS || !foundUnsafeURLComponents || !foundSecretAuthorizer || !foundSystemSecretBlock {
+		t.Fatalf(
+			"openbao-validate-openbaocluster transit protections missing: https=%v unsafeURL=%v authorizer=%v systemSecret=%v",
+			foundHTTPS,
+			foundUnsafeURLComponents,
+			foundSecretAuthorizer,
+			foundSystemSecretBlock,
+		)
+	}
+}
+
 func TestKustomizeDefault_OpenBaoClusterCRDRejectsUpgradeStrategySwitches(t *testing.T) {
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {

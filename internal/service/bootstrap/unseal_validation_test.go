@@ -41,6 +41,104 @@ func TestValidateTransitUnsealPrerequisites(t *testing.T) {
 		}
 	})
 
+	t.Run("transit address rejects insecure and ambiguous destinations", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			address string
+			want    string
+		}{
+			{
+				name:    "plain http",
+				address: "http://infra-bao.example",
+				want:    "must use HTTPS",
+			},
+			{
+				name:    "userinfo",
+				address: "https://token@infra-bao.example",
+				want:    "must not include userinfo",
+			},
+			{
+				name:    "localhost",
+				address: "https://localhost:8200",
+				want:    "must not point to localhost",
+			},
+			{
+				name:    "loopback ip",
+				address: "https://127.0.0.1:8200",
+				want:    "must not point to loopback",
+			},
+			{
+				name:    "link local ip",
+				address: "https://169.254.169.254/latest/meta-data",
+				want:    "must not point to loopback",
+			},
+			{
+				name:    "query",
+				address: "https://infra-bao.example?token=leak",
+				want:    "must not include query or fragment",
+			},
+			{
+				name:    "numeric host",
+				address: "https://2130706433:8200",
+				want:    "must not use numeric host forms",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				cluster := newMinimalCluster("transit-address-"+tt.name, "default")
+				cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+					Type: "transit",
+					Transit: &openbaov1alpha1.TransitSealConfig{
+						Address:   tt.address,
+						KeyName:   "autounseal",
+						MountPath: "transit/",
+						Token:     "inline-token",
+					},
+				}
+
+				mgr := NewManager(newTestClient(t), testScheme, "operator-system")
+				err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
+				if err == nil {
+					t.Fatal("validateUnsealPrerequisites() error = nil, want error")
+				}
+				if !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+					t.Fatalf("expected permanent prerequisites missing error, got %v", err)
+				}
+				if !strings.Contains(err.Error(), tt.want) {
+					t.Fatalf("error = %q, want substring %q", err.Error(), tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("transit credentials Secret cannot reference operator managed system Secrets", func(t *testing.T) {
+		cluster := newMinimalCluster("transit-system-secret", "default")
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type: "transit",
+			CredentialsSecretRef: &corev1.LocalObjectReference{
+				Name: "transit-system-secret-root-token",
+			},
+			Transit: &openbaov1alpha1.TransitSealConfig{
+				Address:   "https://infra-bao.example",
+				KeyName:   "autounseal",
+				MountPath: "transit/",
+			},
+		}
+
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
+		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
+		if err == nil {
+			t.Fatal("validateUnsealPrerequisites() error = nil, want error")
+		}
+		if !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "operator-managed system Secret") {
+			t.Fatalf("error = %q, want operator-managed system Secret", err.Error())
+		}
+	})
+
 	t.Run("secret-backed transit files require credentials Secret", func(t *testing.T) {
 		cluster := newMinimalCluster("transit-missing-secret-ref", "default")
 		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
@@ -349,6 +447,30 @@ func TestValidateAWSKMSUnsealPrerequisites(t *testing.T) {
 		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
 		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
 			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("credentials Secret cannot reference operator managed system Secrets", func(t *testing.T) {
+		cluster := newMinimalCluster("awskms-system-secret", "default")
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type:                 "awskms",
+			CredentialsSecretRef: &corev1.LocalObjectReference{Name: "awskms-system-secret-root-token"},
+			AWSKMS: &openbaov1alpha1.AWSKMSSealConfig{
+				Region:   "eu-central-1",
+				KMSKeyID: "alias/openbao",
+			},
+		}
+
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
+		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
+		if err == nil {
+			t.Fatal("validateUnsealPrerequisites() error = nil, want error")
+		}
+		if !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "operator-managed system Secret") {
+			t.Fatalf("error = %q, want operator-managed system Secret", err.Error())
 		}
 	})
 

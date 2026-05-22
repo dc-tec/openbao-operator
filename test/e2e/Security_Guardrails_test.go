@@ -862,6 +862,96 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(err.Error()).To(ContainSubstring("Hardened profile requires"))
 		})
 
+		It("requires transit credential Secret read authorization", func() {
+			const transitSecretName = "transit-creds-authz"
+
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      transitSecretName,
+					Namespace: guardrailsNamespace,
+				},
+				StringData: map[string]string{
+					"token": "s.e2e",
+				},
+			}
+			err := admin.Create(ctx, secret)
+			if err != nil && !apierrors.IsAlreadyExists(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			newTransitCluster := func(name, secretName string) *openbaov1alpha1.OpenBaoCluster {
+				return &openbaov1alpha1.OpenBaoCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: guardrailsNamespace,
+					},
+					Spec: openbaov1alpha1.OpenBaoClusterSpec{
+						Profile:  openbaov1alpha1.ProfileDevelopment,
+						Version:  openBaoVersion,
+						Image:    openBaoImage,
+						Replicas: 1,
+						InitContainer: &openbaov1alpha1.InitContainerConfig{
+							Enabled: true,
+							Image:   configInitImage,
+						},
+						TLS: openbaov1alpha1.TLSConfig{
+							Enabled:        true,
+							RotationPeriod: "720h",
+						},
+						Storage: openbaov1alpha1.StorageConfig{
+							Size: "1Gi",
+						},
+						Network: &openbaov1alpha1.NetworkConfig{
+							APIServerCIDR: apiServerCIDR,
+						},
+						Unseal: &openbaov1alpha1.UnsealConfig{
+							Type: "transit",
+							Transit: &openbaov1alpha1.TransitSealConfig{
+								Address:   "https://transit-provider.example.com:8200",
+								KeyName:   "openbao-unseal",
+								MountPath: "transit",
+							},
+							CredentialsSecretRef: &corev1.LocalObjectReference{
+								Name: secretName,
+							},
+						},
+					},
+				}
+			}
+
+			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Create(ctx, newTransitCluster("transit-authz-denied", transitSecretName), client.DryRunAll)
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Users configuring unseal credentials"))
+
+			secretReaderRole := &rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "e2e-transit-secret-reader",
+					Namespace: guardrailsNamespace,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{""},
+						Resources:     []string{"secrets"},
+						ResourceNames: []string{transitSecretName},
+						Verbs:         []string{"get"},
+					},
+				},
+			}
+			createRoleBindingForGroup(ctx, admin, guardrailsNamespace, secretReaderRole)
+
+			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Create(ctx, newTransitCluster("transit-authz-allowed", transitSecretName), client.DryRunAll)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			systemSecretCluster := newTransitCluster("transit-system-secret-denied", "transit-root-token")
+			err = admin.Create(ctx, systemSecretCluster, client.DryRunAll)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("References to system secrets"))
+		})
+
 		It("enforces digest-pinned images for managed workloads when digest enforcement is required", func() {
 			newManagedJob := func(name, image string) *batchv1.Job {
 				return &batchv1.Job{

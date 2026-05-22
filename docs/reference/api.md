@@ -1830,7 +1830,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `address` _string_ | Address is the full address to the OpenBao cluster. |  | MinLength: 1 <br /> |
+| `address` _string_ | Address is the full HTTPS address to the OpenBao cluster providing the Transit seal. |  | MinLength: 1 <br /> |
 | `token` _string_ | Token is the OpenBao token to use for authentication.<br />Note: It is strongly recommended to use CredentialsSecretRef instead of setting this directly. |  | Optional: \{\} <br /> |
 | `keyName` _string_ | KeyName is the transit key to use for encryption and decryption. |  | MinLength: 1 <br /> |
 | `mountPath` _string_ | MountPath is the mount path to the transit secret engine. |  | MinLength: 1 <br /> |
