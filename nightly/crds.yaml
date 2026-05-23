@@ -4312,7 +4312,8 @@ spec:
                       Required when Type is "transit".
                     properties:
                       address:
-                        description: Address is the full address to the OpenBao cluster.
+                        description: Address is the full HTTPS address to the OpenBao
+                          cluster providing the Transit seal.
                         minLength: 1
                         type: string
                       disableRenewal:

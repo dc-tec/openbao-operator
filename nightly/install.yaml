@@ -4312,7 +4312,8 @@ spec:
                       Required when Type is "transit".
                     properties:
                       address:
-                        description: Address is the full address to the OpenBao cluster.
+                        description: Address is the full HTTPS address to the OpenBao
+                          cluster providing the Transit seal.
                         minLength: 1
                         type: string
                       disableRenewal:
@@ -6145,6 +6146,7 @@ rules:
   - openbao.org
   resources:
   - openbaoclusters
+  - openbaorestores
   verbs:
   - get
   - list
@@ -6446,10 +6448,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260520-2996f1a9f0db
+          value: nightly-20260523-2e4e6c1d428b
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:15aeb82666604b3614e584b7932df892b8cf6bdf301cb6bd362dd8f12b92dac6
+        image: ghcr.io/dc-tec/openbao-operator@sha256:ce2815b985a8a17ef37c7ec8cc03e83fc948e3882c53b0eb91bedcc4dfc4fe96
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6564,8 +6566,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260520-2996f1a9f0db
-        image: ghcr.io/dc-tec/openbao-operator@sha256:15aeb82666604b3614e584b7932df892b8cf6bdf301cb6bd362dd8f12b92dac6
+          value: nightly-20260523-2e4e6c1d428b
+        image: ghcr.io/dc-tec/openbao-operator@sha256:ce2815b985a8a17ef37c7ec8cc03e83fc948e3882c53b0eb91bedcc4dfc4fe96
         livenessProbe:
           httpGet:
             path: /healthz
@@ -8014,10 +8016,24 @@ spec:
       || size(object.spec.unseal.transit.token) == 0'
     message: Hardened profile does not allow spec.unseal.transit.token; use spec.unseal.credentialsSecretRef
       instead.
-  - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
-      !has(object.spec.unseal) || !has(object.spec.unseal.transit) || !has(object.spec.unseal.transit.address)
+  - expression: '!has(object.spec.unseal) || !has(object.spec.unseal.transit) || !has(object.spec.unseal.transit.address)
       || object.spec.unseal.transit.address.startsWith("https://")'
-    message: Hardened profile requires spec.unseal.transit.address to use HTTPS.
+    message: Transit unseal address must use HTTPS.
+  - expression: |-
+      !has(object.spec.unseal) || !has(object.spec.unseal.transit) || !has(object.spec.unseal.transit.address) || !(
+
+        object.spec.unseal.transit.address.contains("@") ||
+        object.spec.unseal.transit.address.contains("?") ||
+        object.spec.unseal.transit.address.contains("#") ||
+        object.spec.unseal.transit.address.matches("^https://([^/?#@]*\\.)?localhost([:/?#].*)?$") ||
+        object.spec.unseal.transit.address.matches("^https://127\\.0\\.0\\.1([:/?#].*)?$") ||
+        object.spec.unseal.transit.address.contains("[::1]") ||
+        object.spec.unseal.transit.address.matches("^https://169\\.254\\..*") ||
+        object.spec.unseal.transit.address.contains("[fe80:") ||
+        object.spec.unseal.transit.address.matches("^https://[0-9]+([:/?#].*)?$")
+      )
+    message: Transit unseal address must not include userinfo, query, fragment, localhost,
+      loopback, link-local, or numeric host forms.
   - expression: |-
       !has(object.spec.unseal) || !has(object.spec.unseal.transit) || ((has(object.spec.unseal.transit.tlsClientCert) && size(object.spec.unseal.transit.tlsClientCert) > 0) ==
 
@@ -8146,7 +8162,13 @@ spec:
       object.spec.replicas >= 3'
     message: Hardened profile requires at least 3 replicas for Raft quorum HA. Use
       Profile=Development for non-HA deployments.
+  - expression: '!has(object.spec.unseal) || !has(object.spec.unseal.credentialsSecretRef)
+      || authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.unseal.credentialsSecretRef.name).check("get").allowed()'
+    message: Users configuring unseal credentials must be authorized to get spec.unseal.credentialsSecretRef.
   - expression: |-
+      (!has(object.spec.unseal) || !has(object.spec.unseal.credentialsSecretRef) ||
+
+        !object.spec.unseal.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
       (!has(object.spec.backup) || !has(object.spec.backup.target.credentialsSecretRef) ||
 
         !object.spec.backup.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
@@ -8154,7 +8176,8 @@ spec:
 
         !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
     message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
-      are prohibited in backup configurations to prevent confused deputy attacks.
+      are prohibited in unseal and backup configurations to prevent confused deputy
+      attacks.
   - expression: 'oldObject == null || (has(object.spec.storage.storageClassName) ?
       object.spec.storage.storageClassName : "") == (has(oldObject.spec.storage.storageClassName)
       ? oldObject.spec.storage.storageClassName : "")'
