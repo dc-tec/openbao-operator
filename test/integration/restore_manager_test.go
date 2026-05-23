@@ -44,7 +44,7 @@ func TestRestoreManager_TransitionsAndCreatesJob(t *testing.T) {
 			Source: openbaov1alpha1.RestoreSource{
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
-					Endpoint: "http://minio.svc",
+					Endpoint: "http://minio." + namespace + ".svc",
 					Bucket:   testBackupBucket,
 				},
 			},
@@ -406,7 +406,7 @@ func TestRestoreManager_ValidatingLockContention_RequeuesWithWaitingMessage(t *t
 			Source: openbaov1alpha1.RestoreSource{
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
-					Endpoint: "http://minio.svc",
+					Endpoint: "http://minio." + namespace + ".svc",
 					Bucket:   testBackupBucket,
 				},
 			},
@@ -485,7 +485,7 @@ func TestRestoreManager_RunningLockTaken_FailsDeterministically(t *testing.T) {
 			Source: openbaov1alpha1.RestoreSource{
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
-					Endpoint: "http://minio.svc",
+					Endpoint: "http://minio." + namespace + ".svc",
 					Bucket:   testBackupBucket,
 				},
 			},
@@ -568,7 +568,7 @@ func TestRestoreManager_FailedJob_RemainsTerminalAcrossReconcileRetries(t *testi
 			Source: openbaov1alpha1.RestoreSource{
 				Key: "backup.enc",
 				Target: openbaov1alpha1.BackupTarget{
-					Endpoint: "http://minio.svc",
+					Endpoint: "http://minio." + namespace + ".svc",
 					Bucket:   testBackupBucket,
 				},
 			},

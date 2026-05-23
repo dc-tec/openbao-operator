@@ -1017,6 +1017,11 @@ func TestVAP_OpenBaoCluster_RejectsBackupEndpointSSRFBypasses(t *testing.T) {
 			wantMessage: "Backup endpoint cannot point to link-local addresses",
 		},
 		{
+			name:        "ipv4-mapped-ipv6-link-local",
+			endpoint:    "HTTP://[::ffff:169.254.169.254]/latest/meta-data",
+			wantMessage: "numeric IP encoding",
+		},
+		{
 			name:        "shorthand-loopback",
 			endpoint:    "http://127.1:9000",
 			wantMessage: "numeric IP encoding",
@@ -1196,6 +1201,11 @@ func TestVAP_OpenBaoRestore_RejectsUnsafeEndpoints(t *testing.T) {
 			wantMessage: "Restore endpoint cannot point to link-local addresses",
 		},
 		{
+			name:        "ipv4-mapped-ipv6-link-local",
+			endpoint:    "HTTPS://[::ffff:169.254.169.254]/latest/meta-data",
+			wantMessage: "numeric IP encoding",
+		},
+		{
 			name:        "shorthand-loopback",
 			endpoint:    "https://127.1:9000",
 			wantMessage: "numeric IP encoding",
@@ -1208,6 +1218,11 @@ func TestVAP_OpenBaoRestore_RejectsUnsafeEndpoints(t *testing.T) {
 		{
 			name:        "plain-http-external",
 			endpoint:    "http://example.com",
+			wantMessage: "Restore endpoint must use HTTPS or S3 scheme",
+		},
+		{
+			name:        "plain-http-fake-svc-external-domain",
+			endpoint:    "http://storage.namespace.svc.evil.example:9000",
 			wantMessage: "Restore endpoint must use HTTPS or S3 scheme",
 		},
 	}

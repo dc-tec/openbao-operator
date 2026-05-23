@@ -42,7 +42,7 @@ spec:
           variables.restore_endpoint_hostname_normalized.contains(":"))
     - name: restore_endpoint_is_in_cluster_service
       expression: >-
-        variables.restore_endpoint_hostname_normalized.matches("^.+\\.svc(\\..*)?$")
+        variables.restore_endpoint_hostname_normalized.matches("^[a-z0-9]([-a-z0-9]*[a-z0-9])?\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?\\.svc(\\.cluster\\.local)?$")
   validations:
     # API contract: restore specs are immutable after creation.
     - expression: >-
