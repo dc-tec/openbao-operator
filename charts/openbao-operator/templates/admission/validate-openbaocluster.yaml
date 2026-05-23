@@ -157,13 +157,27 @@ spec:
         size(object.spec.unseal.transit.token) == 0
       message: Hardened profile does not allow spec.unseal.transit.token; use spec.unseal.credentialsSecretRef instead.
     - expression: >-
-        !has(object.spec.profile) ||
-        object.spec.profile != "Hardened" ||
         !has(object.spec.unseal) ||
         !has(object.spec.unseal.transit) ||
         !has(object.spec.unseal.transit.address) ||
         object.spec.unseal.transit.address.startsWith("https://")
-      message: Hardened profile requires spec.unseal.transit.address to use HTTPS.
+      message: Transit unseal address must use HTTPS.
+    - expression: >-
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.transit) ||
+        !has(object.spec.unseal.transit.address) ||
+        !(
+          object.spec.unseal.transit.address.contains("@") ||
+          object.spec.unseal.transit.address.contains("?") ||
+          object.spec.unseal.transit.address.contains("#") ||
+          object.spec.unseal.transit.address.matches("^https://([^/?#@]*\\.)?localhost([:/?#].*)?$") ||
+          object.spec.unseal.transit.address.matches("^https://127\\.0\\.0\\.1([:/?#].*)?$") ||
+          object.spec.unseal.transit.address.contains("[::1]") ||
+          object.spec.unseal.transit.address.matches("^https://169\\.254\\..*") ||
+          object.spec.unseal.transit.address.contains("[fe80:") ||
+          object.spec.unseal.transit.address.matches("^https://[0-9]+([:/?#].*)?$")
+        )
+      message: Transit unseal address must not include userinfo, query, fragment, localhost, loopback, link-local, or numeric host forms.
     - expression: >-
         !has(object.spec.unseal) ||
         !has(object.spec.unseal.transit) ||
@@ -333,13 +347,41 @@ spec:
         object.spec.profile != "Hardened" ||
         object.spec.replicas >= 3
       message: "Hardened profile requires at least 3 replicas for Raft quorum HA. Use Profile=Development for non-HA deployments."
-    # Block references to system secrets in backup/upgrade
+    # Confused-deputy protection: custom backup helper images run with backup credentials.
     - expression: >-
+        !has(object.spec.backup) ||
+        !has(object.spec.backup.image) ||
+        object.spec.backup.image == "" ||
+        (request.operation == "UPDATE" &&
+          oldObject != null &&
+          has(oldObject.spec.backup) &&
+          has(oldObject.spec.backup.image) &&
+          oldObject.spec.backup.image == object.spec.backup.image) ||
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.metadata.name).check("usehelperimages").allowed()
+      message: "Users configuring custom backup helper images must be authorized to use helper image overrides on this OpenBaoCluster."
+    # Confused-deputy protection: users configuring unseal Secret credentials must be able to read that Secret.
+    - expression: >-
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.credentialsSecretRef) ||
+        authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.unseal.credentialsSecretRef.name).check("get").allowed()
+      message: "Users configuring unseal credentials must be authorized to get spec.unseal.credentialsSecretRef."
+    # Confused-deputy protection: users configuring backup Secret credentials must be able to read those Secrets.
+    - expression: >-
+        !has(object.spec.backup) ||
+        ((!has(object.spec.backup.target.credentialsSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.backup.target.credentialsSecretRef.name).check("get").allowed()) &&
+        (!has(object.spec.backup.tokenSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.backup.tokenSecretRef.name).check("get").allowed()))
+      message: "Users configuring backup credentials must be authorized to get referenced backup Secrets."
+    # Block references to system secrets in unseal/backup/upgrade
+    - expression: >-
+        (!has(object.spec.unseal) || !has(object.spec.unseal.credentialsSecretRef) ||
+          !object.spec.unseal.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
         (!has(object.spec.backup) || !has(object.spec.backup.target.credentialsSecretRef) ||
           !object.spec.backup.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
         (!has(object.spec.backup) || !has(object.spec.backup.tokenSecretRef) ||
           !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
-      message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in backup configurations to prevent confused deputy attacks."
+      message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in unseal and backup configurations to prevent confused deputy attacks."
     # Storage Immutability: Prevent storage class changes (immutable in StatefulSet)
     - expression: >-
         oldObject == null ||

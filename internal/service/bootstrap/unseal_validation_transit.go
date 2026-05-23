@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func (m *Manager) validateTransitUnsealPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -82,14 +84,99 @@ func (m *Manager) validateTransitUnsealPrerequisites(ctx context.Context, cluste
 }
 
 func validateTransitAddress(address string) error {
-	u, err := url.Parse(strings.TrimSpace(address))
+	trimmed := strings.TrimSpace(address)
+	u, err := url.Parse(trimmed)
 	if err != nil {
 		return fmt.Errorf("spec.unseal.transit.address must be a valid absolute URL: %w", err)
 	}
 	if strings.TrimSpace(u.Scheme) == "" || strings.TrimSpace(u.Host) == "" {
 		return fmt.Errorf("spec.unseal.transit.address must be a valid absolute URL")
 	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("spec.unseal.transit.address must use HTTPS")
+	}
+	if u.User != nil {
+		return fmt.Errorf("spec.unseal.transit.address must not include userinfo")
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("spec.unseal.transit.address must not include query or fragment components")
+	}
+
+	host := strings.TrimSpace(u.Hostname())
+	if host == "" {
+		return fmt.Errorf("spec.unseal.transit.address must include a host")
+	}
+	if isLocalhostName(host) {
+		return fmt.Errorf("spec.unseal.transit.address must not point to localhost")
+	}
+	if isNumericHostname(host) {
+		return fmt.Errorf("spec.unseal.transit.address must not use numeric host forms")
+	}
+	if strings.Contains(host, "%") {
+		return fmt.Errorf("spec.unseal.transit.address must not include scoped IP zone identifiers")
+	}
+	if addr, err := netip.ParseAddr(host); err == nil && isForbiddenTransitAddress(addr) {
+		return fmt.Errorf("spec.unseal.transit.address must not point to loopback, link-local, or unspecified addresses")
+	}
 	return nil
+}
+
+func isLocalhostName(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	return host == "localhost" || strings.HasSuffix(host, ".localhost")
+}
+
+func isForbiddenTransitAddress(addr netip.Addr) bool {
+	addr = addr.Unmap()
+	return addr.IsLoopback() ||
+		addr.IsLinkLocalUnicast() ||
+		addr.IsLinkLocalMulticast() ||
+		addr.IsUnspecified()
+}
+
+func isNumericHostname(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	for _, r := range host {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func validateUnsealCredentialsSecretRef(cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil || cluster.Spec.Unseal == nil || cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return nil
+	}
+
+	name := strings.TrimSpace(cluster.Spec.Unseal.CredentialsSecretRef.Name)
+	if name == "" {
+		return fmt.Errorf("spec.unseal.credentialsSecretRef.name must not be empty")
+	}
+	if isOperatorManagedSystemSecretName(name) {
+		return fmt.Errorf(
+			"spec.unseal.credentialsSecretRef must not reference operator-managed system Secret %q",
+			name,
+		)
+	}
+	return nil
+}
+
+func isOperatorManagedSystemSecretName(name string) bool {
+	for _, suffix := range []string{
+		constants.SuffixUnsealKey,
+		constants.SuffixRootToken,
+		constants.SuffixTLSCA,
+		constants.SuffixTLSServer,
+	} {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateTransitClientTLSPair(cfg *openbaov1alpha1.TransitSealConfig) error {

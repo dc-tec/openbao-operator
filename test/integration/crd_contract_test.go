@@ -13,6 +13,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,6 +49,148 @@ func requireInvalidRequest(t *testing.T, err error) {
 	}
 
 	t.Fatalf("expected invalid request error, got %T: %v", err, err)
+}
+
+func grantTenantOpenBaoWriteAccess(t *testing.T, namespace, username string) {
+	t.Helper()
+
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tenant-openbao-writer",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"openbao.org"},
+				Resources: []string{"openbaoclusters", "openbaorestores"},
+				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create tenant writer role: %v", err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "tenant-openbao-writer-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create tenant writer rolebinding: %v", err)
+	}
+}
+
+func grantClusterHelperImageAccess(t *testing.T, namespace, clusterName, username string) {
+	t.Helper()
+
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-helper-image-access",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{"openbao.org"},
+				Resources:     []string{"openbaoclusters"},
+				ResourceNames: []string{clusterName},
+				Verbs:         []string{"get", "usehelperimages"},
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create helper image role: %v", err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-helper-image-access-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create helper image rolebinding: %v", err)
+	}
+}
+
+func waitForOpenBaoRestoreAdmissionPolicies(t *testing.T, namespace string) {
+	t.Helper()
+
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	for attempt := 0; attempt < 25; attempt++ {
+		restore := &openbaov1alpha1.OpenBaoRestore{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("restore-policy-probe-%d", attempt),
+				Namespace: namespace,
+			},
+			Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+				Cluster: "policy-probe",
+				Source: openbaov1alpha1.RestoreSource{
+					Target: openbaov1alpha1.BackupTarget{
+						Provider: "s3",
+						Endpoint: "http://example.com",
+						Bucket:   testBackupBucket,
+					},
+					Key: "clusters/probe/snapshot.snap",
+				},
+				JWTAuthRole: "restore-role",
+			},
+		}
+
+		err := k8sClient.Create(ctx, restore)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, restore)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		return
+	}
+
+	t.Fatalf("expected OpenBaoRestore admission policies to become active after retries")
 }
 
 func TestCRD_OpenBaoRestore_RejectsMissingSpec(t *testing.T) {
@@ -251,6 +394,133 @@ func TestVAP_OpenBaoCluster_RequiresTrustedIngressPeersForManagedIngress(t *test
 	}
 }
 
+func TestVAP_OpenBaoCluster_DeniesCustomBackupImageWithoutHelperImageVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "backup-image-editor"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-custom-backup-image-denied")
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		Schedule:    "0 0 * * *",
+		Image:       "ghcr.io/attacker/backup-exfil:latest",
+		JWTAuthRole: "backup-role",
+		Target: openbaov1alpha1.BackupTarget{
+			Provider: "s3",
+			Endpoint: "https://objectstore.example.com",
+			Bucket:   testBackupBucket,
+		},
+	}
+
+	err := tenantClient.Create(ctx, cluster)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "custom backup helper images") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_DeniesBackupImageChangeWithoutHelperImageVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-custom-backup-image-update-denied")
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create OpenBaoCluster: %v", err)
+	}
+
+	username := "backup-image-update-editor"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	var latest openbaov1alpha1.OpenBaoCluster
+	key := types.NamespacedName{Namespace: namespace, Name: cluster.Name}
+	if err := tenantClient.Get(ctx, key, &latest); err != nil {
+		t.Fatalf("get OpenBaoCluster as tenant editor: %v", err)
+	}
+	original := latest.DeepCopy()
+	latest.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		Schedule:    "0 0 * * *",
+		Image:       "ghcr.io/attacker/backup-exfil:latest",
+		JWTAuthRole: "backup-role",
+		Target: openbaov1alpha1.BackupTarget{
+			Provider: "s3",
+			Endpoint: "https://objectstore.example.com",
+			Bucket:   testBackupBucket,
+		},
+	}
+
+	err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original))
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "custom backup helper images") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_AllowsCustomBackupImageWithHelperImageVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "backup-image-delegate"
+	clusterName := "cluster-custom-backup-image-allowed"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	grantClusterHelperImageAccess(t, namespace, clusterName, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	cluster := newMinimalClusterObj(namespace, clusterName)
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		Schedule:    "0 0 * * *",
+		Image:       "ghcr.io/platform/backup-helper:1.2.3",
+		JWTAuthRole: "backup-role",
+		Target: openbaov1alpha1.BackupTarget{
+			Provider: "s3",
+			Endpoint: "https://objectstore.example.com",
+			Bucket:   testBackupBucket,
+		},
+	}
+
+	if err := tenantClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected helper-image-authorized OpenBaoCluster create to succeed, got: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_AllowsUnchangedCustomBackupImageWithoutHelperImageVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	cluster := newMinimalClusterObj(namespace, "cluster-custom-backup-image-unchanged")
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		Schedule:    "0 0 * * *",
+		Image:       "ghcr.io/platform/backup-helper:1.2.3",
+		JWTAuthRole: "backup-role",
+		Target: openbaov1alpha1.BackupTarget{
+			Provider: "s3",
+			Endpoint: "https://objectstore.example.com",
+			Bucket:   testBackupBucket,
+		},
+	}
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create platform-authored OpenBaoCluster with custom helper image: %v", err)
+	}
+
+	username := "backup-image-standard-editor"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	var latest openbaov1alpha1.OpenBaoCluster
+	key := types.NamespacedName{Namespace: namespace, Name: cluster.Name}
+	if err := tenantClient.Get(ctx, key, &latest); err != nil {
+		t.Fatalf("get OpenBaoCluster as tenant editor: %v", err)
+	}
+	original := latest.DeepCopy()
+	latest.Spec.Backup.Schedule = "0 1 * * *"
+
+	if err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
+		t.Fatalf("expected unchanged custom backup helper image update to succeed, got: %v", err)
+	}
+}
+
 func TestCRD_OpenBaoCluster_RejectsHAACMEWithoutSharedCache(t *testing.T) {
 	namespace := newTestNamespace(t)
 
@@ -395,7 +665,7 @@ func TestVAP_OpenBaoCluster_RejectsHardenedTransitAddressWithoutHTTPS(t *testing
 
 	err := k8sClient.Create(ctx, cluster)
 	requireAdmissionDenied(t, err)
-	if !strings.Contains(err.Error(), "Hardened profile requires spec.unseal.transit.address to use HTTPS") {
+	if !strings.Contains(err.Error(), "Transit unseal address must use HTTPS") {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
@@ -724,6 +994,124 @@ func TestVAP_OpenBaoCluster_RejectsNumericBackupEndpoint(t *testing.T) {
 	requireAdmissionDenied(t, err)
 	if !strings.Contains(err.Error(), "numeric IP encoding") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoRestore_DeniesCustomImageWithoutHelperImageVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
+
+	username := "restore-image-editor"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-custom-image-denied",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "target-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Endpoint: "https://objectstore.example.com",
+					Bucket:   testBackupBucket,
+				},
+				Key: "clusters/prod/snapshot.snap",
+			},
+			JWTAuthRole: "restore-role",
+			Image:       "ghcr.io/attacker/restore-exfil:latest",
+			Force:       true,
+		},
+	}
+
+	err := tenantClient.Create(ctx, restore)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "custom restore helper images") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoRestore_AllowsCustomImageWithHelperImageVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
+
+	username := "restore-image-delegate"
+	clusterName := "target-cluster"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	grantClusterHelperImageAccess(t, namespace, clusterName, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-custom-image-allowed",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: clusterName,
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Endpoint: "https://objectstore.example.com",
+					Bucket:   testBackupBucket,
+				},
+				Key: "clusters/prod/snapshot.snap",
+			},
+			JWTAuthRole: "restore-role",
+			Image:       "ghcr.io/platform/backup-helper:1.2.3",
+			Force:       true,
+		},
+	}
+
+	if err := tenantClient.Create(ctx, restore); err != nil {
+		t.Fatalf("expected helper-image-authorized OpenBaoRestore create to succeed, got: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoRestore_AllowsUnchangedCustomImageUpdateWithoutHelperImageVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
+
+	clusterName := "target-cluster"
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-custom-image-unchanged",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: clusterName,
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Endpoint: "https://objectstore.example.com",
+					Bucket:   testBackupBucket,
+				},
+				Key: "clusters/prod/snapshot.snap",
+			},
+			JWTAuthRole: "restore-role",
+			Image:       "ghcr.io/platform/backup-helper:1.2.3",
+			Force:       true,
+		},
+	}
+	if err := k8sClient.Create(ctx, restore); err != nil {
+		t.Fatalf("create platform-authored OpenBaoRestore with custom helper image: %v", err)
+	}
+
+	username := "restore-image-standard-editor"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	var latest openbaov1alpha1.OpenBaoRestore
+	key := types.NamespacedName{Namespace: namespace, Name: restore.Name}
+	if err := tenantClient.Get(ctx, key, &latest); err != nil {
+		t.Fatalf("get OpenBaoRestore as tenant editor: %v", err)
+	}
+	original := latest.DeepCopy()
+	latest.Annotations = map[string]string{"openbao.org/test": "metadata-update"}
+
+	if err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
+		t.Fatalf("expected unchanged custom restore helper image update to succeed, got: %v", err)
 	}
 }
 

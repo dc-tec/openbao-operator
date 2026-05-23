@@ -15,21 +15,24 @@ func (m *Manager) validateUnsealPrerequisites(ctx context.Context, cluster *open
 	if cluster == nil || cluster.Spec.Unseal == nil {
 		return nil
 	}
+	if err := validateUnsealCredentialsSecretRef(cluster); err != nil {
+		return providerPrerequisitesError(err)
+	}
 
 	switch cluster.Spec.Unseal.Type {
-	case "", "static":
+	case "", portopenbao.SealTypeStatic:
 		return nil
 	case unsealTypeTransit:
 		return m.validateTransitUnsealPrerequisites(ctx, cluster)
-	case "awskms":
+	case portopenbao.SealTypeAWSKMS:
 		return m.validateAWSKMSUnsealPrerequisites(ctx, cluster)
-	case "azurekeyvault":
+	case portopenbao.SealTypeAzureKeyVault:
 		return m.validateAzureKeyVaultUnsealPrerequisites(ctx, cluster)
-	case "gcpckms":
+	case portopenbao.SealTypeGCPCKMS:
 		return m.validateGCPCKMSUnsealPrerequisites(ctx, cluster)
-	case "kmip":
+	case portopenbao.SealTypeKMIP:
 		return m.validateKMIPUnsealPrerequisites(ctx, cluster)
-	case "ocikms":
+	case portopenbao.SealTypeOCIKMS:
 		return m.validateOCIKMSUnsealPrerequisites(ctx, cluster)
 	case portopenbao.SealTypePKCS11:
 		return m.validatePKCS11UnsealPrerequisites(ctx, cluster)

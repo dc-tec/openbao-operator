@@ -63,6 +63,9 @@ For production-oriented clusters, use an external trust source such as cloud KMS
 <Callout type="note" title="What the operator validates before Pods can use Secret-backed credentials">
 
 - `spec.unseal.credentialsSecretRef` must reference a Secret in the same namespace as the `OpenBaoCluster`.
+- Transit unseal addresses must use HTTPS and must not include userinfo, query, fragment, localhost, loopback, link-local, or numeric host forms.
+- Users configuring transit `credentialsSecretRef` must also be authorized to `get` the referenced Secret.
+- Transit unseal credentials cannot reference operator-managed system Secrets such as `<cluster>-root-token`, `<cluster>-unseal-key`, `<cluster>-tls-ca`, or `<cluster>-tls-server`.
 - Any unseal field that points to a mounted credential file must use a path under `/etc/bao/seal-creds`.
 - The Secret key name must match the filename used in the mounted path.
 - When you use private ACME trust rooted under `/etc/bao/seal-creds`, include `pki-ca.crt` in the same Secret so probes and day-2 operations can trust the ACME issuer too.
@@ -111,7 +114,7 @@ For production-oriented clusters, use an external trust source such as cloud KMS
         "Transit",
         "Needed whenever you do not rely only on an inline token and Secret-backed files are referenced.",
         "`token`, plus any mounted files referenced by `tlsCACert`, `tlsClientCert`, and `tlsClientKey`.",
-        "If client cert auth is used, the certificate and key must both be present and form a valid key pair.",
+        "Use an orphan or periodic token with only update permissions on the transit encrypt/decrypt paths. If client cert auth is used, the certificate and key must both be present and form a valid key pair.",
       ],
       emphasis: "recommended",
     },

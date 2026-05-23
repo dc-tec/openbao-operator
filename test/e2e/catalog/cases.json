@@ -1237,6 +1237,60 @@
     "suiteTitle": ""
   },
   {
+    "id": "security-guardrails-requires-backup-and-restore-credential-secret-aa243663",
+    "generatedId": "security-guardrails-requires-backup-and-restore-credential-secret-aa243663",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "requires backup and restore credential Secret read authorization",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "requires backup and restore credential Secret read authorization"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "security-guardrails-requires-transit-credential-secret-read-authorization-abe9d539",
+    "generatedId": "security-guardrails-requires-transit-credential-secret-read-authorization-abe9d539",
+    "file": "test/e2e/Security_Guardrails_test.go",
+    "type": "It",
+    "name": "requires transit credential Secret read authorization",
+    "path": [
+      "Security Guardrails",
+      "Admission Policy Enforcement",
+      "requires transit credential Secret read authorization"
+    ],
+    "labels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "domainLabels": [
+      "security",
+      "critical",
+      "admission"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "security-guardrails-reports-degraded-when-gateway-api-crds-d5cb95ff",
     "generatedId": "security-guardrails-reports-degraded-when-gateway-api-crds-d5cb95ff",
     "file": "test/e2e/Security_Guardrails_test.go",

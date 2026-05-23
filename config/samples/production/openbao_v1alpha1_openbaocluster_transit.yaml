@@ -81,10 +81,9 @@ spec:
 #   namespace: openbaocluster-transit
 # type: Opaque
 # stringData:
-#   VAULT_TOKEN: "s.Qf1s5zigZ4OX6akYjQXJC1jY"
+#   token: "s.Qf1s5zigZ4OX6akYjQXJC1jY"
 #   # Optional: CA certificate for TLS verification
 #   # ca.crt: |
 #   #   -----BEGIN CERTIFICATE-----
 #   #   ...
 #   #   -----END CERTIFICATE-----
-

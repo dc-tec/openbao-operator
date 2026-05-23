@@ -47,6 +47,23 @@ spec:
         object.spec.source.target.endpoint.startsWith("s3://") ||
         object.spec.source.target.endpoint.matches("^http://[^/]+\\.svc(\\.|:|/|$).*")
       message: "Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster Service (*.svc)."
+    # Confused-deputy protection: custom restore helper images run with restore credentials.
+    - expression: >-
+        !has(object.spec.image) ||
+        object.spec.image == "" ||
+        (request.operation == "UPDATE" &&
+          oldObject != null &&
+          has(oldObject.spec.image) &&
+          oldObject.spec.image == object.spec.image) ||
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usehelperimages").allowed()
+      message: "Users configuring custom restore helper images must be authorized to use helper image overrides on the target OpenBaoCluster."
+    # Confused-deputy protection: users configuring restore Secret credentials must be able to read those Secrets.
+    - expression: >-
+        (!has(object.spec.source.target.credentialsSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.source.target.credentialsSecretRef.name).check("get").allowed()) &&
+        (!has(object.spec.tokenSecretRef) ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.tokenSecretRef.name).check("get").allowed())
+      message: "Users configuring restore credentials must be authorized to get referenced restore Secrets."
     # Confused-deputy protection: Block references to system secrets (restore auth + object store credentials)
     - expression: >-
         (!has(object.spec.source.target.credentialsSecretRef) ||

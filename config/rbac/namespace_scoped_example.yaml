@@ -110,6 +110,47 @@ subjects:
     name: team-a-break-glass # Change to actual group name
     apiGroup: rbac.authorization.k8s.io
 ---
+# Example: Grant custom backup/restore helper image selection on one cluster
+#
+# This namespaced Role grants the custom `usehelperimages` verb only for a
+# single OpenBaoCluster object. Grant it only to operators trusted to choose
+# executor images, because those images run with backup/restore credentials.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-helper-image-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - usehelperimages
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-helper-image-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-helper-image-team-a-example
+subjects:
+  - kind: Group
+    name: team-a-platform-operators # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
 # Example: Grant admin permissions to platform team (cluster-wide)
 #
 # This ClusterRoleBinding grants platform administrators full access
