@@ -84,5 +84,9 @@ func openStorageClient(ctx context.Context, cfg *backupconfig.ExecutorConfig) (b
 		return nil, err
 	}
 
+	if err := backupconfig.ValidateStorageEndpointAccess(ctx, storageConfig); err != nil {
+		return nil, err
+	}
+
 	return storage.OpenBlobStore(ctx, storageConfig)
 }

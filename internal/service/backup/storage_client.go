@@ -50,6 +50,10 @@ func (m *Manager) openBackupStorageClient(ctx context.Context, cluster *openbaov
 		return nil, fmt.Errorf("unsupported backup storage provider %q", target.Provider)
 	}
 
+	if err := ValidateStorageEndpointAccess(ctx, storageConfig); err != nil {
+		return nil, err
+	}
+
 	return openBlobStoreFn(ctx, storageConfig)
 }
 

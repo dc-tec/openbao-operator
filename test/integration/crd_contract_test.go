@@ -997,6 +997,67 @@ func TestVAP_OpenBaoCluster_RejectsNumericBackupEndpoint(t *testing.T) {
 	}
 }
 
+func TestVAP_OpenBaoCluster_RejectsBackupEndpointSSRFBypasses(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	tests := []struct {
+		name        string
+		endpoint    string
+		wantMessage string
+	}{
+		{
+			name:        "uppercase-scheme-link-local",
+			endpoint:    "HTTP://169.254.169.254/latest/meta-data",
+			wantMessage: "Backup endpoint cannot point to link-local addresses",
+		},
+		{
+			name:        "userinfo-link-local",
+			endpoint:    "http://storage.example.com@169.254.169.254/latest/meta-data",
+			wantMessage: "Backup endpoint cannot point to link-local addresses",
+		},
+		{
+			name:        "ipv4-mapped-ipv6-link-local",
+			endpoint:    "HTTP://[::ffff:169.254.169.254]/latest/meta-data",
+			wantMessage: "numeric IP encoding",
+		},
+		{
+			name:        "shorthand-loopback",
+			endpoint:    "http://127.1:9000",
+			wantMessage: "numeric IP encoding",
+		},
+		{
+			name:        "hex-loopback",
+			endpoint:    "http://0x7f000001:9000",
+			wantMessage: "numeric IP encoding",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalClusterObj(namespace, "cluster-backup-ssrf-"+tt.name)
+			cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+				Schedule:    "0 0 * * *",
+				Image:       "ghcr.io/dc-tec/openbao-backup:1.0.0",
+				JWTAuthRole: "backup-role",
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint: tt.endpoint,
+					Bucket:   testBackupBucket,
+					CredentialsSecretRef: &corev1.LocalObjectReference{
+						Name: "backup-creds",
+					},
+				},
+			}
+
+			err := k8sClient.Create(ctx, cluster)
+			requireAdmissionDenied(t, err)
+			if !strings.Contains(err.Error(), tt.wantMessage) {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
 func TestVAP_OpenBaoRestore_DeniesCustomImageWithoutHelperImageVerb(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
@@ -1130,8 +1191,38 @@ func TestVAP_OpenBaoRestore_RejectsUnsafeEndpoints(t *testing.T) {
 			wantMessage: "Restore endpoint cannot point to link-local addresses",
 		},
 		{
+			name:        "uppercase-scheme-link-local",
+			endpoint:    "HTTPS://169.254.169.254/latest/meta-data",
+			wantMessage: "Restore endpoint cannot point to link-local addresses",
+		},
+		{
+			name:        "userinfo-link-local",
+			endpoint:    "https://storage.example.com@169.254.169.254/latest/meta-data",
+			wantMessage: "Restore endpoint cannot point to link-local addresses",
+		},
+		{
+			name:        "ipv4-mapped-ipv6-link-local",
+			endpoint:    "HTTPS://[::ffff:169.254.169.254]/latest/meta-data",
+			wantMessage: "numeric IP encoding",
+		},
+		{
+			name:        "shorthand-loopback",
+			endpoint:    "https://127.1:9000",
+			wantMessage: "numeric IP encoding",
+		},
+		{
+			name:        "hex-loopback",
+			endpoint:    "https://0x7f000001:9000",
+			wantMessage: "numeric IP encoding",
+		},
+		{
 			name:        "plain-http-external",
 			endpoint:    "http://example.com",
+			wantMessage: "Restore endpoint must use HTTPS or S3 scheme",
+		},
+		{
+			name:        "plain-http-fake-svc-external-domain",
+			endpoint:    "http://storage.namespace.svc.evil.example:9000",
 			wantMessage: "Restore endpoint must use HTTPS or S3 scheme",
 		},
 	}
@@ -1179,6 +1270,35 @@ func TestVAP_OpenBaoRestore_RejectsUnsafeEndpoints(t *testing.T) {
 
 			t.Fatalf("expected VAP to deny OpenBaoRestore endpoint %q after retries", tt.endpoint)
 		})
+	}
+}
+
+func TestVAP_OpenBaoRestore_AllowsInClusterHTTPServiceEndpoint(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-in-cluster-http-service",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "target-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Endpoint: "http://rustfs-svc.rustfs.svc.cluster.local:9000",
+					Bucket:   testBackupBucket,
+				},
+				Key: "clusters/prod/snapshot.snap",
+			},
+			JWTAuthRole: "restore",
+			Force:       true,
+		},
+	}
+
+	if err := k8sClient.Create(ctx, restore); err != nil {
+		t.Fatalf("expected in-cluster HTTP restore endpoint to be allowed, got: %v", err)
 	}
 }
 

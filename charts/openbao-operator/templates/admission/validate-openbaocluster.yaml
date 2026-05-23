@@ -26,6 +26,32 @@ spec:
       expression: has(object.spec.upgrade) && has(object.spec.upgrade.preUpgradeSnapshot) && object.spec.upgrade.preUpgradeSnapshot == true
     - name: has_bluegreen_pre_upgrade_snapshot
       expression: has(object.spec.upgrade) && has(object.spec.upgrade.blueGreen) && has(object.spec.upgrade.blueGreen.preUpgradeSnapshot) && object.spec.upgrade.blueGreen.preUpgradeSnapshot == true
+    - name: backup_endpoint
+      expression: >-
+        variables.has_backup && has(object.spec.backup.target.endpoint) ? object.spec.backup.target.endpoint.trim() : ""
+    - name: backup_endpoint_is_set
+      expression: variables.backup_endpoint != ""
+    - name: backup_endpoint_is_url
+      expression: >-
+        !variables.backup_endpoint_is_set || isURL(variables.backup_endpoint)
+    - name: backup_endpoint_scheme
+      expression: >-
+        variables.backup_endpoint_is_set && variables.backup_endpoint_is_url ? url(variables.backup_endpoint).getScheme().lowerAscii() : ""
+    - name: backup_endpoint_hostname
+      expression: >-
+        variables.backup_endpoint_is_set && variables.backup_endpoint_is_url ? url(variables.backup_endpoint).getHostname().lowerAscii() : ""
+    - name: backup_endpoint_hostname_normalized
+      expression: >-
+        variables.backup_endpoint_hostname.endsWith(".") ? variables.backup_endpoint_hostname.substring(0, size(variables.backup_endpoint_hostname) - 1) : variables.backup_endpoint_hostname
+    - name: backup_endpoint_host_is_ip
+      expression: >-
+        variables.backup_endpoint_hostname_normalized != "" && isIP(variables.backup_endpoint_hostname_normalized)
+    - name: backup_endpoint_host_is_ambiguous_ip
+      expression: >-
+        variables.backup_endpoint_hostname_normalized != "" &&
+        !variables.backup_endpoint_host_is_ip &&
+        (variables.backup_endpoint_hostname_normalized.matches("^(0x[0-9a-f]+|[0-9]+)(\\.(0x[0-9a-f]+|[0-9]+)){0,3}$") ||
+          variables.backup_endpoint_hostname_normalized.contains(":"))
     - name: spec_version_normalized
       expression: >-
         object.spec.version.startsWith("v") ? object.spec.version.substring(1) : object.spec.version
@@ -312,34 +338,35 @@ spec:
           has(object.spec.network.egressRules) &&
           size(object.spec.network.egressRules) > 0)
       message: Hardened profile requires non-empty spec.network.egressRules when backups or pre-upgrade snapshots are enabled.
+    # SSRF Protection: parse endpoint URL before host checks so userinfo,
+    # uppercase schemes, IPv6 brackets, and encoded numeric hosts cannot bypass
+    # raw string matching.
+    - expression: >-
+        !variables.backup_endpoint_is_set ||
+        (variables.backup_endpoint_is_url && variables.backup_endpoint_hostname_normalized != "")
+      message: "Backup endpoint must be a valid absolute URL with a host."
     # SSRF Protection: Block localhost endpoints (all profiles - localhost is never a valid backup target)
     - expression: >-
-        !variables.has_backup ||
-        !has(object.spec.backup.target.endpoint) ||
-        object.spec.backup.target.endpoint == "" ||
-        !(
-          object.spec.backup.target.endpoint.contains("localhost") ||
-          object.spec.backup.target.endpoint.contains("127.0.0.1") ||
-          object.spec.backup.target.endpoint.contains("::1") ||
-          object.spec.backup.target.endpoint.matches("^https?://[0-9]+[:/].*")
+        !variables.backup_endpoint_is_set ||
+        !variables.backup_endpoint_is_url ||
+        (
+          !variables.backup_endpoint_hostname_normalized.matches("(^|.*\\.)localhost$") &&
+          !variables.backup_endpoint_host_is_ambiguous_ip &&
+          !(variables.backup_endpoint_host_is_ip && ip(variables.backup_endpoint_hostname_normalized).isLoopback())
         )
-      message: "Backup endpoint cannot point to localhost or use numeric IP encoding (SSRF protection)."
+      message: "Backup endpoint cannot point to localhost, loopback, or use ambiguous numeric IP encoding (SSRF protection)."
     # SSRF Protection: Block link-local addresses (all profiles - cloud metadata is always dangerous)
     - expression: >-
-        !variables.has_backup ||
-        !has(object.spec.backup.target.endpoint) ||
-        object.spec.backup.target.endpoint == "" ||
-        !object.spec.backup.target.endpoint.matches("^https?://169\\.254\\..*")
+        !variables.backup_endpoint_is_set ||
+        !variables.backup_endpoint_is_url ||
+        !(variables.backup_endpoint_host_is_ip && ip(variables.backup_endpoint_hostname_normalized).isLinkLocalUnicast())
       message: "Backup endpoint cannot point to link-local addresses (SSRF protection against cloud metadata services)."
     # SSRF Protection: Require HTTPS for Hardened profile
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||
-        !variables.has_backup ||
-        !has(object.spec.backup.target.endpoint) ||
-        object.spec.backup.target.endpoint == "" ||
-        object.spec.backup.target.endpoint.startsWith("https://") ||
-        object.spec.backup.target.endpoint.startsWith("s3://")
+        !variables.backup_endpoint_is_set ||
+        (variables.backup_endpoint_is_url && variables.backup_endpoint_scheme in ["https", "s3"])
       message: "Backup endpoint must use HTTPS or S3 scheme in Hardened profile."
     # HA Enforcement: Hardened profile requires 3+ replicas for Raft quorum
     - expression: >-
