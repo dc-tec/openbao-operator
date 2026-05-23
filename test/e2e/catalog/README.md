@@ -12,7 +12,7 @@ Notes:
 ## Summary
 
 - Files: `19`
-- Specs: `80`
+- Specs: `81`
 - Explicit case IDs: `33`
 - Coverage tags: `44`
 
@@ -31,7 +31,7 @@ Notes:
 | [Manager Resilience](suites/Manager_Resilience_test.md) | 3 | 3 | 0 | `manager`, `cluster`, `e2e-anchor` | `test/e2e/Manager_Resilience_test.go` |
 | [Manager](suites/Operator_Manager_test.md) | 1 | 1 | 0 | `manager`, `critical`, `smoke` | `test/e2e/Operator_Manager_test.go` |
 | [OpenShift Platform](suites/Platform_OpenShift_test.md) | 2 | 0 | 0 | `openshift`, `platform` | `test/e2e/Platform_OpenShift_test.go` |
-| [Security Guardrails](suites/Security_Guardrails_test.md) | 21 | 2 | 0 | `security`, `critical`, `admission`, `pentest`, `config`, `tokens`, `rbac`, `tamper` | `test/e2e/Security_Guardrails_test.go` |
+| [Security Guardrails](suites/Security_Guardrails_test.md) | 22 | 2 | 0 | `security`, `critical`, `admission`, `pentest`, `config`, `tokens`, `rbac`, `tamper` | `test/e2e/Security_Guardrails_test.go` |
 | [Tenant Data Isolation](suites/Tenant_Data_Isolation_test.md) | 1 | 1 | 0 | `security`, `tenant`, `tenancy` | `test/e2e/Tenant_Data_Isolation_test.go` |
 | [Tenant Isolation](suites/Tenant_Isolation_test.md) | 6 | 0 | 0 | `security`, `tenant`, `tenancy`, `critical`, `single-tenant` | `test/e2e/Tenant_Isolation_test.go` |
 | [Upgrade Strategies: Operation Lock Contention](suites/Upgrade_Operation_Lock_test.md) | 1 | 1 | 0 | `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor` | `test/e2e/Upgrade_Operation_Lock_test.go` |

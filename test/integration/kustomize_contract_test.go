@@ -301,6 +301,8 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 	var foundHTTPS bool
 	var foundUnsafeURLComponents bool
 	var foundSecretAuthorizer bool
+	var foundBackupSecretAuthorizer bool
+	var foundBackupHelperImageAuthorizer bool
 	var foundSystemSecretBlock bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
@@ -324,6 +326,20 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			strings.Contains(expression, `check("get")`) &&
 			!strings.Contains(expression, `object.spec.unseal.type != "transit"`):
 			foundSecretAuthorizer = true
+		case strings.Contains(message, "Users configuring backup credentials") &&
+			strings.Contains(expression, `authorizer.group("")`) &&
+			strings.Contains(expression, `resource("secrets")`) &&
+			strings.Contains(expression, `check("get")`) &&
+			strings.Contains(expression, `object.spec.backup.target.credentialsSecretRef`) &&
+			strings.Contains(expression, `object.spec.backup.tokenSecretRef`):
+			foundBackupSecretAuthorizer = true
+		case strings.Contains(message, "custom backup helper images") &&
+			strings.Contains(expression, `authorizer.group("openbao.org")`) &&
+			strings.Contains(expression, `resource("openbaoclusters")`) &&
+			strings.Contains(expression, `object.spec.backup.image`) &&
+			strings.Contains(expression, `oldObject.spec.backup.image`) &&
+			strings.Contains(expression, `check("usehelperimages")`):
+			foundBackupHelperImageAuthorizer = true
 		case strings.Contains(message, "system secrets") &&
 			strings.Contains(expression, "object.spec.unseal.credentialsSecretRef") &&
 			strings.Contains(expression, "root-token"):
@@ -331,12 +347,81 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 		}
 	}
 
-	if !foundHTTPS || !foundUnsafeURLComponents || !foundSecretAuthorizer || !foundSystemSecretBlock {
+	if !foundHTTPS ||
+		!foundUnsafeURLComponents ||
+		!foundSecretAuthorizer ||
+		!foundBackupSecretAuthorizer ||
+		!foundBackupHelperImageAuthorizer ||
+		!foundSystemSecretBlock {
 		t.Fatalf(
-			"openbao-validate-openbaocluster transit protections missing: https=%v unsafeURL=%v authorizer=%v systemSecret=%v",
+			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v backupHelperImageAuthorizer=%v systemSecret=%v",
 			foundHTTPS,
 			foundUnsafeURLComponents,
 			foundSecretAuthorizer,
+			foundBackupSecretAuthorizer,
+			foundBackupHelperImageAuthorizer,
+			foundSystemSecretBlock,
+		)
+	}
+}
+
+func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
+		gvk := u.GroupVersionKind()
+		return gvk.Group == testAdmissionRegistrationGroup &&
+			gvk.Kind == testKindVAP &&
+			strings.HasSuffix(u.GetName(), "openbao-validate-openbaorestore")
+	})
+
+	if len(objs) != 1 {
+		t.Fatalf("expected exactly one openbao-validate-openbaorestore policy, got %d", len(objs))
+	}
+
+	validations, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "validations")
+	if err != nil || !found {
+		t.Fatalf("read policy validations: found=%v err=%v", found, err)
+	}
+
+	var foundRestoreSecretAuthorizer bool
+	var foundRestoreHelperImageAuthorizer bool
+	var foundSystemSecretBlock bool
+	for _, validation := range validations {
+		validationMap, ok := validation.(map[string]any)
+		if !ok {
+			continue
+		}
+		message, _ := validationMap["message"].(string)
+		expression, _ := validationMap["expression"].(string)
+		switch {
+		case strings.Contains(message, "Users configuring restore credentials") &&
+			strings.Contains(expression, `authorizer.group("")`) &&
+			strings.Contains(expression, `resource("secrets")`) &&
+			strings.Contains(expression, `check("get")`) &&
+			strings.Contains(expression, `object.spec.source.target.credentialsSecretRef`) &&
+			strings.Contains(expression, `object.spec.tokenSecretRef`):
+			foundRestoreSecretAuthorizer = true
+		case strings.Contains(message, "custom restore helper images") &&
+			strings.Contains(expression, `authorizer.group("openbao.org")`) &&
+			strings.Contains(expression, `resource("openbaoclusters")`) &&
+			strings.Contains(expression, `object.spec.image`) &&
+			strings.Contains(expression, `oldObject.spec.image`) &&
+			strings.Contains(expression, `object.spec.cluster`) &&
+			strings.Contains(expression, `check("usehelperimages")`):
+			foundRestoreHelperImageAuthorizer = true
+		case strings.Contains(message, "system secrets") &&
+			strings.Contains(expression, "object.spec.source.target.credentialsSecretRef") &&
+			strings.Contains(expression, "object.spec.tokenSecretRef") &&
+			strings.Contains(expression, "root-token"):
+			foundSystemSecretBlock = true
+		}
+	}
+
+	if !foundRestoreSecretAuthorizer || !foundRestoreHelperImageAuthorizer || !foundSystemSecretBlock {
+		t.Fatalf(
+			"openbao-validate-openbaorestore protections missing: authorizer=%v helperImageAuthorizer=%v systemSecret=%v",
+			foundRestoreSecretAuthorizer,
+			foundRestoreHelperImageAuthorizer,
 			foundSystemSecretBlock,
 		)
 	}

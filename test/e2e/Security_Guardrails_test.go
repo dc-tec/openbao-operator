@@ -952,6 +952,144 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(err.Error()).To(ContainSubstring("References to system secrets"))
 		})
 
+		It("requires backup and restore credential Secret read authorization", func() {
+			const (
+				backupCredentialsSecretName  = "backup-creds-authz"
+				backupTokenSecretName        = "backup-token-authz"
+				restoreCredentialsSecretName = "restore-creds-authz"
+				restoreTokenSecretName       = "restore-token-authz"
+			)
+
+			for _, secretName := range []string{
+				backupCredentialsSecretName,
+				backupTokenSecretName,
+				restoreCredentialsSecretName,
+				restoreTokenSecretName,
+			} {
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      secretName,
+						Namespace: guardrailsNamespace,
+					},
+					StringData: map[string]string{
+						"token": "s.e2e",
+					},
+				}
+				err := admin.Create(ctx, secret)
+				if err != nil && !apierrors.IsAlreadyExists(err) {
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
+
+			newBackupCluster := func(name string) *openbaov1alpha1.OpenBaoCluster {
+				return &openbaov1alpha1.OpenBaoCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: guardrailsNamespace,
+					},
+					Spec: openbaov1alpha1.OpenBaoClusterSpec{
+						Profile:  openbaov1alpha1.ProfileDevelopment,
+						Version:  openBaoVersion,
+						Image:    openBaoImage,
+						Replicas: 1,
+						InitContainer: &openbaov1alpha1.InitContainerConfig{
+							Enabled: true,
+							Image:   configInitImage,
+						},
+						TLS: openbaov1alpha1.TLSConfig{
+							Enabled:        true,
+							RotationPeriod: "720h",
+						},
+						Storage: openbaov1alpha1.StorageConfig{
+							Size: "1Gi",
+						},
+						Network: &openbaov1alpha1.NetworkConfig{
+							APIServerCIDR: apiServerCIDR,
+						},
+						Backup: &openbaov1alpha1.BackupSchedule{
+							Schedule:       "0 3 * * *",
+							TokenSecretRef: &corev1.LocalObjectReference{Name: backupTokenSecretName},
+							Target: openbaov1alpha1.BackupTarget{
+								Provider: constants.StorageProviderS3,
+								Endpoint: "https://s3.example.com",
+								Bucket:   "openbao-backups",
+								CredentialsSecretRef: &corev1.LocalObjectReference{
+									Name: backupCredentialsSecretName,
+								},
+							},
+						},
+					},
+				}
+			}
+
+			newRestore := func(name string) *openbaov1alpha1.OpenBaoRestore {
+				return &openbaov1alpha1.OpenBaoRestore{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: guardrailsNamespace,
+					},
+					Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+						Cluster: "valid-structured-config",
+						Source: openbaov1alpha1.RestoreSource{
+							Target: openbaov1alpha1.BackupTarget{
+								Provider: constants.StorageProviderS3,
+								Endpoint: "https://s3.example.com",
+								Bucket:   "openbao-backups",
+								CredentialsSecretRef: &corev1.LocalObjectReference{
+									Name: restoreCredentialsSecretName,
+								},
+							},
+							Key: "snapshots/test.snap",
+						},
+						TokenSecretRef: &corev1.LocalObjectReference{Name: restoreTokenSecretName},
+					},
+				}
+			}
+
+			err := runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Create(ctx, newBackupCluster("backup-authz-denied"), client.DryRunAll)
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Users configuring backup credentials"))
+
+			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Create(ctx, newRestore("restore-authz-denied"), client.DryRunAll)
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("Users configuring restore credentials"))
+
+			secretReaderRole := &rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "e2e-helper-secret-reader",
+					Namespace: guardrailsNamespace,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{""},
+						Resources: []string{"secrets"},
+						ResourceNames: []string{
+							backupCredentialsSecretName,
+							backupTokenSecretName,
+							restoreCredentialsSecretName,
+							restoreTokenSecretName,
+						},
+						Verbs: []string{"get"},
+					},
+				},
+			}
+			createRoleBindingForGroup(ctx, admin, guardrailsNamespace, secretReaderRole)
+
+			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Create(ctx, newBackupCluster("backup-authz-allowed"), client.DryRunAll)
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Create(ctx, newRestore("restore-authz-allowed"), client.DryRunAll)
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("enforces digest-pinned images for managed workloads when digest enforcement is required", func() {
 			newManagedJob := func(name, image string) *batchv1.Job {
 				return &batchv1.Job{
