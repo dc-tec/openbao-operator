@@ -13,6 +13,36 @@ spec:
         apiVersions: ["v1alpha1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["openbaorestores"]
+  variables:
+    - name: restore_endpoint
+      expression: >-
+        has(object.spec.source.target.endpoint) ? object.spec.source.target.endpoint.trim() : ""
+    - name: restore_endpoint_is_set
+      expression: variables.restore_endpoint != ""
+    - name: restore_endpoint_is_url
+      expression: >-
+        !variables.restore_endpoint_is_set || isURL(variables.restore_endpoint)
+    - name: restore_endpoint_scheme
+      expression: >-
+        variables.restore_endpoint_is_set && variables.restore_endpoint_is_url ? url(variables.restore_endpoint).getScheme().lowerAscii() : ""
+    - name: restore_endpoint_hostname
+      expression: >-
+        variables.restore_endpoint_is_set && variables.restore_endpoint_is_url ? url(variables.restore_endpoint).getHostname().lowerAscii() : ""
+    - name: restore_endpoint_hostname_normalized
+      expression: >-
+        variables.restore_endpoint_hostname.endsWith(".") ? variables.restore_endpoint_hostname.substring(0, size(variables.restore_endpoint_hostname) - 1) : variables.restore_endpoint_hostname
+    - name: restore_endpoint_host_is_ip
+      expression: >-
+        variables.restore_endpoint_hostname_normalized != "" && isIP(variables.restore_endpoint_hostname_normalized)
+    - name: restore_endpoint_host_is_ambiguous_ip
+      expression: >-
+        variables.restore_endpoint_hostname_normalized != "" &&
+        !variables.restore_endpoint_host_is_ip &&
+        (variables.restore_endpoint_hostname_normalized.matches("^(0x[0-9a-f]+|[0-9]+)(\\.(0x[0-9a-f]+|[0-9]+)){0,3}$") ||
+          variables.restore_endpoint_hostname_normalized.contains(":"))
+    - name: restore_endpoint_is_in_cluster_service
+      expression: >-
+        variables.restore_endpoint_hostname_normalized.matches("^.+\\.svc(\\..*)?$")
   validations:
     # API contract: restore specs are immutable after creation.
     - expression: >-
@@ -24,31 +54,36 @@ spec:
         object.spec.overrideOperationLock == false ||
         object.spec.force == true
       message: "spec.overrideOperationLock requires spec.force=true."
+    # SSRF Protection: parse endpoint URL before host checks so userinfo,
+    # uppercase schemes, IPv6 brackets, and encoded numeric hosts cannot bypass
+    # raw string matching.
+    - expression: >-
+        !variables.restore_endpoint_is_set ||
+        (variables.restore_endpoint_is_url && variables.restore_endpoint_hostname_normalized != "")
+      message: "Restore endpoint must be a valid absolute URL with a host."
     # SSRF Protection: Block localhost endpoints (all profiles - localhost is never a valid snapshot source)
     - expression: >-
-        !has(object.spec.source.target.endpoint) ||
-        object.spec.source.target.endpoint == "" ||
-        !(
-          object.spec.source.target.endpoint.contains("localhost") ||
-          object.spec.source.target.endpoint.contains("127.0.0.1") ||
-          object.spec.source.target.endpoint.contains("::1") ||
-          object.spec.source.target.endpoint.matches("^https?://[0-9]+[:/].*")
+        !variables.restore_endpoint_is_set ||
+        !variables.restore_endpoint_is_url ||
+        (
+          !variables.restore_endpoint_hostname_normalized.matches("(^|.*\\.)localhost$") &&
+          !variables.restore_endpoint_host_is_ambiguous_ip &&
+          !(variables.restore_endpoint_host_is_ip && ip(variables.restore_endpoint_hostname_normalized).isLoopback())
         )
-      message: "Restore endpoint cannot point to localhost or use numeric IP encoding (SSRF protection)."
+      message: "Restore endpoint cannot point to localhost, loopback, or use ambiguous numeric IP encoding (SSRF protection)."
     # SSRF Protection: Block link-local addresses (all profiles - cloud metadata is always dangerous)
     - expression: >-
-        !has(object.spec.source.target.endpoint) ||
-        object.spec.source.target.endpoint == "" ||
-        !object.spec.source.target.endpoint.matches("^https?://169\\.254\\..*")
+        !variables.restore_endpoint_is_set ||
+        !variables.restore_endpoint_is_url ||
+        !(variables.restore_endpoint_host_is_ip && ip(variables.restore_endpoint_hostname_normalized).isLinkLocalUnicast())
       message: "Restore endpoint cannot point to link-local addresses (SSRF protection against cloud metadata services)."
     # Safety: Require HTTPS for non-cluster endpoints.
     # We allow http:// only for in-cluster Service DNS names (useful for local dev emulators).
     - expression: >-
-        !has(object.spec.source.target.endpoint) ||
-        object.spec.source.target.endpoint == "" ||
-        object.spec.source.target.endpoint.startsWith("https://") ||
-        object.spec.source.target.endpoint.startsWith("s3://") ||
-        object.spec.source.target.endpoint.matches("^http://[^/]+\\.svc(\\.|:|/|$).*")
+        !variables.restore_endpoint_is_set ||
+        (variables.restore_endpoint_is_url &&
+          (variables.restore_endpoint_scheme in ["https", "s3"] ||
+            (variables.restore_endpoint_scheme == "http" && variables.restore_endpoint_is_in_cluster_service)))
       message: "Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster Service (*.svc)."
     # Confused-deputy protection: custom restore helper images run with restore credentials.
     - expression: >-
