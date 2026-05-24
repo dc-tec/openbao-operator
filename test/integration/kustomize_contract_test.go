@@ -147,6 +147,30 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		t.Fatalf("expected exactly one openbao-lock-managed-resource-mutations policy, got %d", len(objs))
 	}
 
+	resourceRules, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "matchConstraints", "resourceRules")
+	if err != nil {
+		t.Fatalf("read spec.matchConstraints.resourceRules: %v", err)
+	}
+	if !found {
+		t.Fatal("openbao-lock-managed-resource-mutations policy missing spec.matchConstraints.resourceRules")
+	}
+	var hasServiceMonitorRule bool
+	for _, rule := range resourceRules {
+		ruleMap, ok := rule.(map[string]any)
+		if !ok {
+			continue
+		}
+		groups, _, _ := unstructured.NestedStringSlice(ruleMap, "apiGroups")
+		resources, _, _ := unstructured.NestedStringSlice(ruleMap, "resources")
+		if containsString(groups, "monitoring.coreos.com") && containsString(resources, "servicemonitors") {
+			hasServiceMonitorRule = true
+			break
+		}
+	}
+	if !hasServiceMonitorRule {
+		t.Fatalf("openbao-lock-managed-resource-mutations policy does not protect monitoring.coreos.com ServiceMonitors")
+	}
+
 	variables, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "variables")
 	if err != nil {
 		t.Fatalf("read spec.variables: %v", err)
@@ -302,6 +326,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 	var foundUnsafeURLComponents bool
 	var foundSecretAuthorizer bool
 	var foundBackupSecretAuthorizer bool
+	var foundServiceMonitorSecretAuthorizer bool
 	var foundBackupHelperImageAuthorizer bool
 	var foundSystemSecretBlock bool
 	for _, validation := range validations {
@@ -333,6 +358,12 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			strings.Contains(expression, `object.spec.backup.target.credentialsSecretRef`) &&
 			strings.Contains(expression, `object.spec.backup.tokenSecretRef`):
 			foundBackupSecretAuthorizer = true
+		case strings.Contains(message, "Users configuring ServiceMonitor authorization") &&
+			strings.Contains(expression, `authorizer.group("")`) &&
+			strings.Contains(expression, `resource("secrets")`) &&
+			strings.Contains(expression, `check("get")`) &&
+			strings.Contains(expression, `object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret`):
+			foundServiceMonitorSecretAuthorizer = true
 		case strings.Contains(message, "custom backup helper images") &&
 			strings.Contains(expression, `authorizer.group("openbao.org")`) &&
 			strings.Contains(expression, `resource("openbaoclusters")`) &&
@@ -342,6 +373,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			foundBackupHelperImageAuthorizer = true
 		case strings.Contains(message, "system secrets") &&
 			strings.Contains(expression, "object.spec.unseal.credentialsSecretRef") &&
+			strings.Contains(expression, "object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret") &&
 			strings.Contains(expression, "root-token"):
 			foundSystemSecretBlock = true
 		}
@@ -351,14 +383,16 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 		!foundUnsafeURLComponents ||
 		!foundSecretAuthorizer ||
 		!foundBackupSecretAuthorizer ||
+		!foundServiceMonitorSecretAuthorizer ||
 		!foundBackupHelperImageAuthorizer ||
 		!foundSystemSecretBlock {
 		t.Fatalf(
-			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v backupHelperImageAuthorizer=%v systemSecret=%v",
+			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v serviceMonitorAuthorizer=%v backupHelperImageAuthorizer=%v systemSecret=%v",
 			foundHTTPS,
 			foundUnsafeURLComponents,
 			foundSecretAuthorizer,
 			foundBackupSecretAuthorizer,
+			foundServiceMonitorSecretAuthorizer,
 			foundBackupHelperImageAuthorizer,
 			foundSystemSecretBlock,
 		)
@@ -819,6 +853,15 @@ func numericYAMLValue(value any) int64 {
 }
 
 func containsAny(values []any, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
 			return true

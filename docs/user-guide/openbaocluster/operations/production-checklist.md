@@ -112,7 +112,7 @@ Include backup success and restore confidence in the launch checklist rather tha
 ## Prove observability and operational response
 
 - Configure metrics scraping through Prometheus Operator (`ServiceMonitor`) or VictoriaMetrics Operator (`VMServiceScrape`).
-- Grant the scraping identity permission to read `/metrics` and keep TLS verification strict in production.
+- Grant the scraping identity permission to read `sys/metrics` and keep TLS verification strict in production.
 - Make sure structured logs including `cluster_name` and `cluster_namespace` reach the log system your operators actually use.
 - Alert on backup staleness, degradation, reconciliation failures, and other conditions that warrant human intervention before tenants feel the failure.
 

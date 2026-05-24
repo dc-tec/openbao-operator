@@ -8,14 +8,31 @@ import (
 	"github.com/hashicorp/hcl/v2/hclwrite"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
+
+func buildListenerBlocks(cluster *openbaov1alpha1.OpenBaoCluster) ([]*hclwrite.Block, error) {
+	primary, err := buildListenerBlock(cluster)
+	if err != nil {
+		return nil, err
+	}
+	blocks := []*hclwrite.Block{primary}
+	if metricsOnlyListenerEnabled(cluster) {
+		metricsListener, err := buildMetricsOnlyListenerBlock(cluster)
+		if err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, metricsListener)
+	}
+	return blocks, nil
+}
 
 func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, error) {
 	listener := hclListenerTCP{
 		Type:               "tcp",
 		Address:            fmt.Sprintf("[::]:%d", openBaoAPIPort),
-		ClusterAddress:     fmt.Sprintf("[::]:%d", openBaoClusterPort),
+		ClusterAddress:     stringPtr(fmt.Sprintf("[::]:%d", openBaoClusterPort)),
 		TLSDisable:         0,
 		MaxRequestDuration: configMaxRequestDuration,
 	}
@@ -58,5 +75,76 @@ func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Bloc
 		listener.TLSClientCAFile = stringPtr(openBaoPathTLSCACert)
 	}
 
-	return gohcl.EncodeAsBlock(listener, "listener"), nil
+	block := gohcl.EncodeAsBlock(listener, "listener")
+	if metricsOnlyListenerEnabled(cluster) {
+		block.Body().AppendBlock(gohcl.EncodeAsBlock(hclListenerTelemetry{
+			DisallowMetrics: boolPtrValue(true),
+		}, "telemetry"))
+	}
+	return block, nil
+}
+
+func buildMetricsOnlyListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, error) {
+	tlsMode := cluster.Spec.TLS.Mode
+	if tlsMode == "" {
+		tlsMode = openbaov1alpha1.TLSModeOperatorManaged
+	}
+	if tlsMode == openbaov1alpha1.TLSModeACME {
+		return nil, fmt.Errorf("observability.metrics.metricsOnlyListener is not supported with ACME TLS mode")
+	}
+
+	listener := hclListenerTCP{
+		Type:               "tcp",
+		Address:            fmt.Sprintf("[::]:%d", metricsOnlyListenerPort(cluster)),
+		TLSDisable:         0,
+		MaxRequestDuration: configMaxRequestDuration,
+		TLSCertFile:        stringPtr(openBaoPathTLSServerCert),
+		TLSKeyFile:         stringPtr(openBaoPathTLSServerKey),
+		TLSClientCAFile:    stringPtr(openBaoPathTLSCACert),
+	}
+
+	block := gohcl.EncodeAsBlock(listener, "listener")
+	block.Body().AppendBlock(gohcl.EncodeAsBlock(hclListenerTelemetry{
+		UnauthenticatedMetricsAccess: boolPtrValue(metricsOnlyListenerUnauthenticatedAccess(cluster)),
+		MetricsOnly:                  boolPtrValue(true),
+	}, "telemetry"))
+	return block, nil
+}
+
+func workloadMetricsEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	return cluster != nil &&
+		cluster.Spec.Observability != nil &&
+		cluster.Spec.Observability.Metrics != nil &&
+		cluster.Spec.Observability.Metrics.Enabled
+}
+
+func metricsOnlyListenerEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if !workloadMetricsEnabled(cluster) {
+		return false
+	}
+	listener := cluster.Spec.Observability.Metrics.MetricsOnlyListener
+	if listener != nil && listener.Enabled != nil {
+		return *listener.Enabled
+	}
+	return cluster.Spec.Observability.Metrics.ScrapeProfile == "AllNodes"
+}
+
+func metricsOnlyListenerPort(cluster *openbaov1alpha1.OpenBaoCluster) int32 {
+	if workloadMetricsEnabled(cluster) && cluster.Spec.Observability.Metrics.MetricsOnlyListener != nil {
+		port := cluster.Spec.Observability.Metrics.MetricsOnlyListener.Port
+		if port > 0 {
+			return port
+		}
+	}
+	return constants.PortMetrics
+}
+
+func metricsOnlyListenerUnauthenticatedAccess(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if workloadMetricsEnabled(cluster) && cluster.Spec.Observability.Metrics.MetricsOnlyListener != nil {
+		enabled := cluster.Spec.Observability.Metrics.MetricsOnlyListener.UnauthenticatedMetricsAccess
+		if enabled != nil {
+			return *enabled
+		}
+	}
+	return cluster.Spec.Observability.Metrics.ScrapeProfile == "AllNodes"
 }

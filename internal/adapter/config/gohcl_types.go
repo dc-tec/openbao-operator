@@ -16,11 +16,11 @@ type hclCoreAttributes struct {
 }
 
 type hclListenerTCP struct {
-	Type               string `hcl:"type,label"`
-	Address            string `hcl:"address"`
-	ClusterAddress     string `hcl:"cluster_address"`
-	TLSDisable         int    `hcl:"tls_disable"`
-	MaxRequestDuration string `hcl:"max_request_duration"`
+	Type               string  `hcl:"type,label"`
+	Address            string  `hcl:"address"`
+	ClusterAddress     *string `hcl:"cluster_address"`
+	TLSDisable         int     `hcl:"tls_disable"`
+	MaxRequestDuration string  `hcl:"max_request_duration"`
 
 	ProxyProtocolBehavior *string `hcl:"proxy_protocol_behavior"`
 
@@ -33,6 +33,12 @@ type hclListenerTCP struct {
 	TLSACMECachePath            *string   `hcl:"tls_acme_cache_path"`
 	TLSACMEDisableHTTPChallenge *bool     `hcl:"tls_acme_disable_http_challenge"`
 	TLSACMECARoot               *string   `hcl:"tls_acme_ca_root"`
+}
+
+type hclListenerTelemetry struct {
+	UnauthenticatedMetricsAccess *bool `hcl:"unauthenticated_metrics_access"`
+	DisallowMetrics              *bool `hcl:"disallow_metrics"`
+	MetricsOnly                  *bool `hcl:"metrics_only"`
 }
 
 type hclStorageRaft struct {

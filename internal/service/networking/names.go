@@ -12,6 +12,14 @@ func acmeServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return cluster.Name + acmeServiceSuffix
 }
 
+func metricsServiceName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return cluster.Name + metricsServiceSuffix
+}
+
+func workloadServiceMonitorName(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	return metricsServiceName(cluster)
+}
+
 func externalServiceNameBlue(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	return externalServiceName(cluster) + "-blue"
 }

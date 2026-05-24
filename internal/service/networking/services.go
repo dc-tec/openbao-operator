@@ -15,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func (m *Manager) ensureHeadlessService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -188,6 +189,74 @@ func (m *Manager) ensureReadReplicaService(ctx context.Context, _ logr.Logger, c
 	}
 
 	return nil
+}
+
+func (m *Manager) ensureMetricsService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	svcName := metricsServiceName(cluster)
+	if !workloadServiceMonitorEnabled(cluster) {
+		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, svcName); err != nil {
+			return fmt.Errorf("failed to delete metrics Service %s/%s: %w", cluster.Namespace, svcName, err)
+		}
+		return nil
+	}
+
+	labels := metricsResourceLabels(cluster)
+	selector := resourceidentity.PodSelectorLabels(cluster)
+	if !workloadMetricsAllNodes(cluster) {
+		selector[portopenbao.LabelActive] = labelValueTrue
+	}
+
+	serviceType := corev1.ServiceTypeClusterIP
+	publishNotReady := false
+	servicePort := int32(constants.PortAPI)
+	targetPort := intstr.FromString("api")
+	if metricsOnlyListenerEnabled(cluster) {
+		servicePort = metricsOnlyListenerPort(cluster)
+		targetPort = intstr.FromString("metrics")
+	}
+	if workloadMetricsAllNodes(cluster) {
+		serviceType = corev1.ServiceTypeClusterIP
+		publishNotReady = true
+	}
+
+	service := &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svcName,
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:                     serviceType,
+			ClusterIP:                clusterIPForMetricsService(cluster),
+			PublishNotReadyAddresses: publishNotReady,
+			Selector:                 selector,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       metricsServicePortName,
+					Port:       servicePort,
+					TargetPort: targetPort,
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+
+	if err := m.applyResource(ctx, service, cluster); err != nil {
+		return fmt.Errorf("failed to ensure metrics Service %s/%s: %w", cluster.Namespace, svcName, err)
+	}
+
+	return nil
+}
+
+func clusterIPForMetricsService(cluster *openbaov1alpha1.OpenBaoCluster) string {
+	if workloadMetricsAllNodes(cluster) {
+		return corev1.ClusterIPNone
+	}
+	return ""
 }
 
 // ensureACMEChallengeService manages a dedicated Service for ACME validation in ACME TLS mode.

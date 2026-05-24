@@ -268,6 +268,17 @@ func TestReconcileOptionalResource_CRDMissingOnApply_DegradesWhenConfigured(t *t
 	}
 }
 
+func TestReconcileOptionalResource_CRDMissingOnApply_CanBeIgnored(t *testing.T) {
+	t.Parallel()
+
+	opts := newGatewayOptionalResourceOptions(false, newHTTPRouteNoKindMatchError())
+	opts.ignoreCRDMissing = true
+
+	if err := reconcileOptionalResource(context.Background(), opts); err != nil {
+		t.Fatalf("expected nil, got %v", err)
+	}
+}
+
 func TestReconcileOptionalResource_CRDMissingOnApply_DoesNotDegradeWhenDisabled(t *testing.T) {
 	t.Parallel()
 

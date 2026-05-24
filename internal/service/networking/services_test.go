@@ -12,6 +12,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func TestEnsureExternalService_UsesSharedClientSelector(t *testing.T) {
@@ -88,7 +89,7 @@ func TestEnsureReadReplicaService_CreatesDedicatedSelector(t *testing.T) {
 		Service: &openbaov1alpha1.ReadReplicaServiceConfig{
 			Enabled: true,
 			Annotations: map[string]string{
-				"example.com/expose": "true",
+				"example.com/expose": labelValueTrue,
 			},
 		},
 	}
@@ -115,8 +116,92 @@ func TestEnsureReadReplicaService_CreatesDedicatedSelector(t *testing.T) {
 	if got := service.Spec.Selector[constants.LabelOpenBaoWorkloadPool]; got != constants.LabelValueOpenBaoWorkloadPoolReadReplica {
 		t.Fatalf("selector workload pool = %q, want %q", got, constants.LabelValueOpenBaoWorkloadPoolReadReplica)
 	}
-	if got := service.Annotations["example.com/expose"]; got != "true" {
-		t.Fatalf("annotation = %q, want %q", got, "true")
+	if got := service.Annotations["example.com/expose"]; got != labelValueTrue {
+		t.Fatalf("annotation = %q, want %q", got, labelValueTrue)
+	}
+}
+
+func TestEnsureMetricsService_CreatesActiveMetricsSelector(t *testing.T) {
+	cluster := newMinimalCluster("svc-metrics", "default")
+	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+		Metrics: &openbaov1alpha1.MetricsConfig{Enabled: true},
+	}
+
+	client := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+
+	if err := manager.ensureMetricsService(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("ensureMetricsService() error = %v", err)
+	}
+
+	service := &corev1.Service{}
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      metricsServiceName(cluster),
+	}, service); err != nil {
+		t.Fatalf("failed to get metrics Service: %v", err)
+	}
+
+	if got := service.Spec.Selector[portopenbao.LabelActive]; got != labelValueTrue {
+		t.Fatalf("selector %s = %q, want true", portopenbao.LabelActive, got)
+	}
+	if _, ok := service.Spec.Selector[constants.LabelOpenBaoWorkloadPool]; ok {
+		t.Fatalf("did not expect metrics Service selector to pin a workload pool")
+	}
+	if got := service.Labels[metricsScrapeProfileLabel]; got != metricsScrapeProfileActive {
+		t.Fatalf("scrape profile label = %q, want %q", got, metricsScrapeProfileActive)
+	}
+	if len(service.Spec.Ports) != 1 || service.Spec.Ports[0].Name != metricsServicePortName {
+		t.Fatalf("unexpected metrics Service ports: %#v", service.Spec.Ports)
+	}
+}
+
+func TestEnsureMetricsService_AllNodesUsesHeadlessMetricsListener(t *testing.T) {
+	cluster := newMinimalCluster("svc-all-nodes", "default")
+	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+		Metrics: &openbaov1alpha1.MetricsConfig{
+			Enabled:       true,
+			ScrapeProfile: metricsScrapeProfileAllNode,
+		},
+	}
+
+	client := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+
+	if err := manager.ensureMetricsService(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("ensureMetricsService() error = %v", err)
+	}
+
+	service := &corev1.Service{}
+	if err := client.Get(context.Background(), types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      metricsServiceName(cluster),
+	}, service); err != nil {
+		t.Fatalf("failed to get metrics Service: %v", err)
+	}
+
+	if _, ok := service.Spec.Selector[portopenbao.LabelActive]; ok {
+		t.Fatalf("did not expect all-node metrics Service selector to require active pod")
+	}
+	if service.Spec.ClusterIP != corev1.ClusterIPNone {
+		t.Fatalf("clusterIP = %q, want headless", service.Spec.ClusterIP)
+	}
+	if !service.Spec.PublishNotReadyAddresses {
+		t.Fatalf("expected all-node metrics Service to publish not-ready addresses")
+	}
+	if got := service.Labels[metricsScrapeProfileLabel]; got != metricsScrapeProfileAllNode {
+		t.Fatalf("scrape profile label = %q, want %q", got, metricsScrapeProfileAllNode)
+	}
+	if len(service.Spec.Ports) != 1 || service.Spec.Ports[0].Port != constants.PortMetrics {
+		t.Fatalf("unexpected metrics Service ports: %#v", service.Spec.Ports)
 	}
 }
 
