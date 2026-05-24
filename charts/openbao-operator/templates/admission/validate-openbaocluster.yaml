@@ -400,15 +400,30 @@ spec:
         (!has(object.spec.backup.tokenSecretRef) ||
           authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.backup.tokenSecretRef.name).check("get").allowed()))
       message: "Users configuring backup credentials must be authorized to get referenced backup Secrets."
-    # Block references to system secrets in unseal/backup/upgrade
+    # Confused-deputy protection: users configuring ServiceMonitor authorization credentials must be able to read that Secret.
+    - expression: >-
+        !has(object.spec.observability) ||
+        !has(object.spec.observability.metrics) ||
+        !has(object.spec.observability.metrics.serviceMonitor) ||
+        !has(object.spec.observability.metrics.serviceMonitor.authorization) ||
+        !has(object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret) ||
+        authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret.name).check("get").allowed()
+      message: "Users configuring ServiceMonitor authorization must be authorized to get spec.observability.metrics.serviceMonitor.authorization.credentialsSecret."
+    # Block references to system secrets in unseal/backup/observability
     - expression: >-
         (!has(object.spec.unseal) || !has(object.spec.unseal.credentialsSecretRef) ||
           !object.spec.unseal.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
         (!has(object.spec.backup) || !has(object.spec.backup.target.credentialsSecretRef) ||
           !object.spec.backup.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
         (!has(object.spec.backup) || !has(object.spec.backup.tokenSecretRef) ||
-          !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
-      message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in unseal and backup configurations to prevent confused deputy attacks."
+          !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+        (!has(object.spec.observability) ||
+          !has(object.spec.observability.metrics) ||
+          !has(object.spec.observability.metrics.serviceMonitor) ||
+          !has(object.spec.observability.metrics.serviceMonitor.authorization) ||
+          !has(object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret) ||
+          !object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
+      message: "References to system secrets (unseal-key, root-token, tls-ca, tls-server) are prohibited in unseal, backup, and observability configurations to prevent confused deputy attacks."
     # Storage Immutability: Prevent storage class changes (immutable in StatefulSet)
     - expression: >-
         oldObject == null ||

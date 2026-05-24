@@ -155,11 +155,13 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 		PluginDirectory: constants.PathPlugins,
 	}, body)
 
-	listenerBlock, err := buildListenerBlock(cluster)
+	listenerBlocks, err := buildListenerBlocks(cluster)
 	if err != nil {
 		return nil, err
 	}
-	body.AppendBlock(listenerBlock)
+	for _, listenerBlock := range listenerBlocks {
+		body.AppendBlock(listenerBlock)
+	}
 
 	sealBlock, err := buildSealBlock(cluster)
 	if err != nil {

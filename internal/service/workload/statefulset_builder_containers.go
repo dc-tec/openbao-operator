@@ -263,6 +263,26 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSp
 	// The actual OpenBao command
 	args = append(args, openBaoBinaryName, "server", fmt.Sprintf("-config=%s", getOpenBaoConfigPath(cluster)))
 
+	ports := []corev1.ContainerPort{
+		{
+			Name:          "api",
+			ContainerPort: int32(constants.PortAPI),
+			Protocol:      corev1.ProtocolTCP,
+		},
+		{
+			Name:          "cluster",
+			ContainerPort: int32(constants.PortCluster),
+			Protocol:      corev1.ProtocolTCP,
+		},
+	}
+	if metricsOnlyListenerEnabled(cluster) {
+		ports = append(ports, corev1.ContainerPort{
+			Name:          "metrics",
+			ContainerPort: metricsOnlyListenerPort(cluster),
+			Protocol:      corev1.ProtocolTCP,
+		})
+	}
+
 	containers := []corev1.Container{
 		{
 			Name:  constants.ContainerBao,
@@ -277,22 +297,11 @@ func buildContainers(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSp
 				// OpenBao writes to mounted volumes (/bao/data, /etc/bao/config, etc.) which are already mounted.
 				ReadOnlyRootFilesystem: ptr.To(true),
 			},
-			Command:   cmd,
-			Args:      args,
-			Env:       buildContainerEnv(cluster),
-			Resources: buildContainerResources(cluster, spec),
-			Ports: []corev1.ContainerPort{
-				{
-					Name:          "api",
-					ContainerPort: int32(constants.PortAPI),
-					Protocol:      corev1.ProtocolTCP,
-				},
-				{
-					Name:          "cluster",
-					ContainerPort: int32(constants.PortCluster),
-					Protocol:      corev1.ProtocolTCP,
-				},
-			},
+			Command:      cmd,
+			Args:         args,
+			Env:          buildContainerEnv(cluster),
+			Resources:    buildContainerResources(cluster, spec),
+			Ports:        ports,
 			VolumeMounts: mainVolumeMounts,
 			StartupProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{

@@ -35,6 +35,7 @@ type optionalResourceOptions struct {
 	apply  func(context.Context, client.Object) error
 
 	degradeOnCRDMissing bool
+	ignoreCRDMissing    bool
 }
 
 func reconcileOptionalResource(ctx context.Context, opts optionalResourceOptions) error {
@@ -89,6 +90,10 @@ func reconcileOptionalResource(ctx context.Context, opts optionalResourceOptions
 	desired.GetObjectKind().SetGroupVersionKind(gvk)
 
 	if err := opts.apply(ctx, desired); err != nil {
+		if opts.ignoreCRDMissing && (operatorerrors.IsCRDMissingError(err) || apierrors.IsNotFound(err)) {
+			opts.logger.V(1).Info("Optional resource CRD missing; skipping reconciliation", "kind", opts.kind, "name", opts.name.Name)
+			return nil
+		}
 		if opts.degradeOnCRDMissing && (operatorerrors.IsCRDMissingError(err) || apierrors.IsNotFound(err)) {
 			return ErrGatewayAPIMissing
 		}

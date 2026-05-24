@@ -38,6 +38,10 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["httproutes", "tlsroutes", "backendtlspolicies"]
+      - apiGroups: ["monitoring.coreos.com"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["servicemonitors"]
   variables:
     - name: operator_namespace
       expression: >-

@@ -2768,9 +2768,43 @@ type MetricsConfig struct {
 	// +kubebuilder:default=false
 	Enabled bool `json:"enabled"`
 
+	// ScrapeProfile selects which OpenBao pods are targeted by generated scrape resources.
+	// Active targets only the active OpenBao pod. AllNodes targets every OpenBao pod and
+	// requires a dedicated metrics-only listener.
+	// +kubebuilder:validation:Enum=Active;AllNodes
+	// +kubebuilder:default=Active
+	// +optional
+	ScrapeProfile string `json:"scrapeProfile,omitempty"`
+
+	// MetricsOnlyListener configures a dedicated listener for metrics scraping.
+	// It is enabled automatically when scrapeProfile is AllNodes.
+	// +optional
+	MetricsOnlyListener *MetricsOnlyListenerConfig `json:"metricsOnlyListener,omitempty"`
+
 	// ServiceMonitor controls whether to create a Prometheus Operator ServiceMonitor.
 	// +optional
 	ServiceMonitor *ServiceMonitorConfig `json:"serviceMonitor,omitempty"`
+}
+
+// MetricsOnlyListenerConfig configures a dedicated metrics-only TCP listener.
+type MetricsOnlyListenerConfig struct {
+	// Enabled controls whether to render the dedicated metrics-only listener.
+	// When omitted, the listener is enabled automatically for the AllNodes scrape profile.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Port is the dedicated metrics listener port.
+	// +kubebuilder:default=8202
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int32 `json:"port,omitempty"`
+
+	// UnauthenticatedMetricsAccess allows unauthenticated access to /v1/sys/metrics
+	// on the metrics-only listener. AllNodes scraping needs this so standby nodes can
+	// expose metrics. Restrict this listener with NetworkPolicy.
+	// +optional
+	UnauthenticatedMetricsAccess *bool `json:"unauthenticatedMetricsAccess,omitempty"`
 }
 
 // ServiceMonitorConfig configures the Prometheus ServiceMonitor.
@@ -2789,6 +2823,75 @@ type ServiceMonitorConfig struct {
 	// +kubebuilder:default="10s"
 	// +optional
 	ScrapeTimeout string `json:"scrapeTimeout,omitempty"`
+
+	// Labels are added to the ServiceMonitor metadata.
+	// Use this for Prometheus selectors, such as release labels used by kube-prometheus-stack.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations are added to the ServiceMonitor metadata.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// JobLabel selects the Service label Prometheus uses as the job label.
+	// Defaults to app.kubernetes.io/name.
+	// +optional
+	JobLabel string `json:"jobLabel,omitempty"`
+
+	// Authorization configures an optional ServiceMonitor authorization block.
+	// Use this for authenticated /v1/sys/metrics scraping.
+	// +optional
+	Authorization *ServiceMonitorAuthorizationConfig `json:"authorization,omitempty"`
+
+	// TLSConfig configures TLS verification for the OpenBao scrape endpoint.
+	// +optional
+	TLSConfig *ServiceMonitorTLSConfig `json:"tlsConfig,omitempty"`
+}
+
+// ServiceMonitorAuthorizationConfig configures Prometheus Operator endpoint authorization.
+type ServiceMonitorAuthorizationConfig struct {
+	// Type is the authorization type.
+	// Defaults to Bearer when credentialsSecret is set.
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// CredentialsSecret references a Secret key containing the authorization credentials.
+	// The Secret must exist in the same namespace as the ServiceMonitor.
+	CredentialsSecret ServiceMonitorKeySelector `json:"credentialsSecret"`
+}
+
+// ServiceMonitorTLSConfig configures TLS settings for the Prometheus Operator endpoint.
+type ServiceMonitorTLSConfig struct {
+	// ServerName verifies the hostname in the OpenBao serving certificate.
+	// +optional
+	ServerName string `json:"serverName,omitempty"`
+
+	// InsecureSkipVerify disables TLS certificate verification.
+	// Use only for temporary non-production environments.
+	// +optional
+	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
+
+	// CAConfigMap references a ConfigMap key containing the CA certificate.
+	// Mutually exclusive with CASecret.
+	// +optional
+	CAConfigMap *ServiceMonitorKeySelector `json:"caConfigMap,omitempty"`
+
+	// CASecret references a Secret key containing the CA certificate.
+	// Mutually exclusive with CAConfigMap.
+	// +optional
+	CASecret *ServiceMonitorKeySelector `json:"caSecret,omitempty"`
+}
+
+// ServiceMonitorKeySelector identifies a key in a Secret or ConfigMap.
+type ServiceMonitorKeySelector struct {
+	// Name is the Secret or ConfigMap name.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Key is the key within the Secret or ConfigMap.
+	// Defaults to token for authorization credentials and ca.crt for CA references.
+	// +optional
+	Key string `json:"key,omitempty"`
 }
 
 // SelfInitOIDCConfig configures OIDC identity for the cluster.

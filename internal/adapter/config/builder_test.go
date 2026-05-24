@@ -555,6 +555,71 @@ func TestRenderHCLWithObservabilityMetricsTelemetry(t *testing.T) {
 	}
 }
 
+func TestRenderHCLWithAllNodeMetricsListener(t *testing.T) {
+	cluster := newMinimalCluster("metrics-listener", "default")
+	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+		Metrics: &openbaov1alpha1.MetricsConfig{
+			Enabled:       true,
+			ScrapeProfile: "AllNodes",
+		},
+	}
+
+	infraDetails := InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	}
+
+	got, err := RenderHCL(cluster, infraDetails)
+	if err != nil {
+		t.Fatalf("RenderHCL() error = %v", err)
+	}
+
+	gotText := string(got)
+	for _, want := range []string{
+		`address              = "[::]:8200"`,
+		"disallow_metrics = true",
+		`address              = "[::]:8202"`,
+		"metrics_only                   = true",
+		"unauthenticated_metrics_access = true",
+		`prometheus_retention_time = "30s"`,
+	} {
+		if !strings.Contains(gotText, want) {
+			t.Fatalf("RenderHCL() output missing %q:\n%s", want, gotText)
+		}
+	}
+}
+
+func TestRenderHCLWithMetricsOnlyListenerRejectsACME(t *testing.T) {
+	cluster := newMinimalCluster("metrics-acme", "default")
+	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
+	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
+		Email:        "platform@example.com",
+		DirectoryURL: "https://acme.example.test/directory",
+		Domain:       "bao.example.test",
+	}
+	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+		Metrics: &openbaov1alpha1.MetricsConfig{
+			Enabled:       true,
+			ScrapeProfile: "AllNodes",
+		},
+	}
+
+	_, err := RenderHCL(cluster, InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "metricsOnlyListener") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestRenderHCLWithSelfInitRequests(t *testing.T) {
 	cluster := newMinimalCluster("selfinit-cluster", "default")
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{

@@ -850,7 +850,27 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled configures the OpenBao telemetry stanza and creates a ServiceMonitor. | false |  |
+| `scrapeProfile` _string_ | ScrapeProfile selects which OpenBao pods are targeted by generated scrape resources.<br />Active targets only the active OpenBao pod. AllNodes targets every OpenBao pod and<br />requires a dedicated metrics-only listener. | Active | Enum: [Active AllNodes] <br />Optional: \{\} <br /> |
+| `metricsOnlyListener` _[MetricsOnlyListenerConfig](#metricsonlylistenerconfig)_ | MetricsOnlyListener configures a dedicated listener for metrics scraping.<br />It is enabled automatically when scrapeProfile is AllNodes. |  | Optional: \{\} <br /> |
 | `serviceMonitor` _[ServiceMonitorConfig](#servicemonitorconfig)_ | ServiceMonitor controls whether to create a Prometheus Operator ServiceMonitor. |  | Optional: \{\} <br /> |
+
+
+#### MetricsOnlyListenerConfig
+
+
+
+MetricsOnlyListenerConfig configures a dedicated metrics-only TCP listener.
+
+
+
+_Appears in:_
+- [MetricsConfig](#metricsconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled controls whether to render the dedicated metrics-only listener.<br />When omitted, the listener is enabled automatically for the AllNodes scrape profile. |  | Optional: \{\} <br /> |
+| `port` _integer_ | Port is the dedicated metrics listener port. | 8202 | Maximum: 65535 <br />Minimum: 1 <br />Optional: \{\} <br /> |
+| `unauthenticatedMetricsAccess` _boolean_ | UnauthenticatedMetricsAccess allows unauthenticated access to /v1/sys/metrics<br />on the metrics-only listener. AllNodes scraping needs this so standby nodes can<br />expose metrics. Restrict this listener with NetworkPolicy. |  | Optional: \{\} <br /> |
 
 
 #### NetworkConfig
@@ -1641,6 +1661,23 @@ _Appears in:_
 | `annotations` _object (keys:string, values:string)_ | Annotations are additional annotations to apply to the Service. |  | Optional: \{\} <br /> |
 
 
+#### ServiceMonitorAuthorizationConfig
+
+
+
+ServiceMonitorAuthorizationConfig configures Prometheus Operator endpoint authorization.
+
+
+
+_Appears in:_
+- [ServiceMonitorConfig](#servicemonitorconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `type` _string_ | Type is the authorization type.<br />Defaults to Bearer when credentialsSecret is set. |  | Optional: \{\} <br /> |
+| `credentialsSecret` _[ServiceMonitorKeySelector](#servicemonitorkeyselector)_ | CredentialsSecret references a Secret key containing the authorization credentials.<br />The Secret must exist in the same namespace as the ServiceMonitor. |  |  |
+
+
 #### ServiceMonitorConfig
 
 
@@ -1657,6 +1694,48 @@ _Appears in:_
 | `enabled` _boolean_ | Enabled controls whether to create the ServiceMonitor.<br />Defaults to true if Metrics are enabled. | true |  |
 | `interval` _string_ | Interval is the scrape interval. | 30s | Optional: \{\} <br /> |
 | `scrapeTimeout` _string_ | ScrapeTimeout is the scrape timeout. | 10s | Optional: \{\} <br /> |
+| `labels` _object (keys:string, values:string)_ | Labels are added to the ServiceMonitor metadata.<br />Use this for Prometheus selectors, such as release labels used by kube-prometheus-stack. |  | Optional: \{\} <br /> |
+| `annotations` _object (keys:string, values:string)_ | Annotations are added to the ServiceMonitor metadata. |  | Optional: \{\} <br /> |
+| `jobLabel` _string_ | JobLabel selects the Service label Prometheus uses as the job label.<br />Defaults to app.kubernetes.io/name. |  | Optional: \{\} <br /> |
+| `authorization` _[ServiceMonitorAuthorizationConfig](#servicemonitorauthorizationconfig)_ | Authorization configures an optional ServiceMonitor authorization block.<br />Use this for authenticated /v1/sys/metrics scraping. |  | Optional: \{\} <br /> |
+| `tlsConfig` _[ServiceMonitorTLSConfig](#servicemonitortlsconfig)_ | TLSConfig configures TLS verification for the OpenBao scrape endpoint. |  | Optional: \{\} <br /> |
+
+
+#### ServiceMonitorKeySelector
+
+
+
+ServiceMonitorKeySelector identifies a key in a Secret or ConfigMap.
+
+
+
+_Appears in:_
+- [ServiceMonitorAuthorizationConfig](#servicemonitorauthorizationconfig)
+- [ServiceMonitorTLSConfig](#servicemonitortlsconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the Secret or ConfigMap name. |  | MinLength: 1 <br /> |
+| `key` _string_ | Key is the key within the Secret or ConfigMap.<br />Defaults to token for authorization credentials and ca.crt for CA references. |  | Optional: \{\} <br /> |
+
+
+#### ServiceMonitorTLSConfig
+
+
+
+ServiceMonitorTLSConfig configures TLS settings for the Prometheus Operator endpoint.
+
+
+
+_Appears in:_
+- [ServiceMonitorConfig](#servicemonitorconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `serverName` _string_ | ServerName verifies the hostname in the OpenBao serving certificate. |  | Optional: \{\} <br /> |
+| `insecureSkipVerify` _boolean_ | InsecureSkipVerify disables TLS certificate verification.<br />Use only for temporary non-production environments. |  | Optional: \{\} <br /> |
+| `caConfigMap` _[ServiceMonitorKeySelector](#servicemonitorkeyselector)_ | CAConfigMap references a ConfigMap key containing the CA certificate.<br />Mutually exclusive with CASecret. |  | Optional: \{\} <br /> |
+| `caSecret` _[ServiceMonitorKeySelector](#servicemonitorkeyselector)_ | CASecret references a Secret key containing the CA certificate.<br />Mutually exclusive with CAConfigMap. |  | Optional: \{\} <br /> |
 
 
 #### SocketAuditOptions

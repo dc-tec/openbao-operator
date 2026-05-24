@@ -164,8 +164,69 @@ spec:
         interval: "30s"
         scrapeTimeout: "10s"`}
 >
-  This enables the OpenBao telemetry stanza with safe defaults and creates a Prometheus Operator ServiceMonitor when that is the scrape model you use. Reach for `spec.telemetry` when you need lower-level OpenBao telemetry tuning.
+  This enables the OpenBao telemetry stanza with safe defaults and creates an active-node metrics Service plus a Prometheus Operator ServiceMonitor when that is the scrape model you use. Reach for `spec.telemetry` when you need lower-level OpenBao telemetry tuning.
 </CommandBlock>
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Configure authenticated workload scraping"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+spec:
+  observability:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+        interval: "30s"
+        scrapeTimeout: "10s"
+        labels:
+          release: kube-prometheus-stack
+        authorization:
+          credentialsSecret:
+            name: openbao-metrics-token
+            key: token
+        tlsConfig:
+          serverName: prod-cluster-metrics.openbao.svc
+          caConfigMap:
+            name: prod-cluster-metrics-ca
+            key: ca.crt`}
+>
+  Use this shape for production Prometheus Operator scraping. The Secret should contain a scoped OpenBao token that can read `sys/metrics`, and the CA reference should validate the OpenBao serving certificate.
+</CommandBlock>
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Scrape every OpenBao node through a metrics-only listener"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+spec:
+  observability:
+    metrics:
+      enabled: true
+      scrapeProfile: AllNodes
+      metricsOnlyListener:
+        port: 8202
+        unauthenticatedMetricsAccess: true
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: kube-prometheus-stack`}
+>
+  Use this profile when you need standby-node and per-node Raft visibility. The operator renders a dedicated metrics listener, a headless metrics Service, and ServiceMonitor relabeling for the pod and node names.
+</CommandBlock>
+
+The default `Active` scrape profile targets the active OpenBao pod on the API
+listener using `/v1/sys/metrics?format=prometheus`. The `AllNodes` profile
+targets every OpenBao pod through the metrics-only listener. Keep the metrics
+Service reachable only from your monitoring namespace with NetworkPolicy when
+unauthenticated metrics access is enabled.
 
 <DecisionTable
   kind="reference"
