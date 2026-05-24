@@ -6047,6 +6047,22 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
+  name: openbao-operator-openbaocluster-helper-image-role
+rules:
+- apiGroups:
+  - openbao.org
+  resources:
+  - openbaoclusters
+  verbs:
+  - get
+  - usehelperimages
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: openbao-operator
   name: openbao-operator-openbaocluster-maintenance-role
 rules:
 - apiGroups:
@@ -6448,10 +6464,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260523-2e4e6c1d428b
+          value: nightly-20260524-98ef67392179
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:ce2815b985a8a17ef37c7ec8cc03e83fc948e3882c53b0eb91bedcc4dfc4fe96
+        image: ghcr.io/dc-tec/openbao-operator@sha256:111c2df6277f1cc5c5169d165ee17ba148973cd758db2f29538f9bb385704da6
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6566,8 +6582,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260523-2e4e6c1d428b
-        image: ghcr.io/dc-tec/openbao-operator@sha256:ce2815b985a8a17ef37c7ec8cc03e83fc948e3882c53b0eb91bedcc4dfc4fe96
+          value: nightly-20260524-98ef67392179
+        image: ghcr.io/dc-tec/openbao-operator@sha256:111c2df6277f1cc5c5169d165ee17ba148973cd758db2f29538f9bb385704da6
         livenessProbe:
           httpGet:
             path: /healthz
@@ -8140,31 +8156,52 @@ spec:
         size(object.spec.network.egressRules) > 0)
     message: Hardened profile requires non-empty spec.network.egressRules when backups
       or pre-upgrade snapshots are enabled.
+  - expression: '!variables.backup_endpoint_is_set || (variables.backup_endpoint_is_url
+      && variables.backup_endpoint_hostname_normalized != "")'
+    message: Backup endpoint must be a valid absolute URL with a host.
   - expression: |-
-      !variables.has_backup || !has(object.spec.backup.target.endpoint) || object.spec.backup.target.endpoint == "" || !(
+      !variables.backup_endpoint_is_set || !variables.backup_endpoint_is_url || (
 
-        object.spec.backup.target.endpoint.contains("localhost") ||
-        object.spec.backup.target.endpoint.contains("127.0.0.1") ||
-        object.spec.backup.target.endpoint.contains("::1") ||
-        object.spec.backup.target.endpoint.matches("^https?://[0-9]+[:/].*")
+        !variables.backup_endpoint_hostname_normalized.matches("(^|.*\\.)localhost$") &&
+        !variables.backup_endpoint_host_is_ambiguous_ip &&
+        !(variables.backup_endpoint_host_is_ip && ip(variables.backup_endpoint_hostname_normalized).isLoopback())
       )
-    message: Backup endpoint cannot point to localhost or use numeric IP encoding
-      (SSRF protection).
-  - expression: '!variables.has_backup || !has(object.spec.backup.target.endpoint)
-      || object.spec.backup.target.endpoint == "" || !object.spec.backup.target.endpoint.matches("^https?://169\\.254\\..*")'
+    message: Backup endpoint cannot point to localhost, loopback, or use ambiguous
+      numeric IP encoding (SSRF protection).
+  - expression: '!variables.backup_endpoint_is_set || !variables.backup_endpoint_is_url
+      || !(variables.backup_endpoint_host_is_ip && ip(variables.backup_endpoint_hostname_normalized).isLinkLocalUnicast())'
     message: Backup endpoint cannot point to link-local addresses (SSRF protection
       against cloud metadata services).
   - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
-      !variables.has_backup || !has(object.spec.backup.target.endpoint) || object.spec.backup.target.endpoint
-      == "" || object.spec.backup.target.endpoint.startsWith("https://") || object.spec.backup.target.endpoint.startsWith("s3://")'
+      !variables.backup_endpoint_is_set || (variables.backup_endpoint_is_url && variables.backup_endpoint_scheme
+      in ["https", "s3"])'
     message: Backup endpoint must use HTTPS or S3 scheme in Hardened profile.
   - expression: '!has(object.spec.profile) || object.spec.profile != "Hardened" ||
       object.spec.replicas >= 3'
     message: Hardened profile requires at least 3 replicas for Raft quorum HA. Use
       Profile=Development for non-HA deployments.
+  - expression: |-
+      !has(object.spec.backup) || !has(object.spec.backup.image) || object.spec.backup.image == "" || (request.operation == "UPDATE" &&
+
+        oldObject != null &&
+        has(oldObject.spec.backup) &&
+        has(oldObject.spec.backup.image) &&
+        oldObject.spec.backup.image == object.spec.backup.image) ||
+      authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.metadata.name).check("usehelperimages").allowed()
+    message: Users configuring custom backup helper images must be authorized to use
+      helper image overrides on this OpenBaoCluster.
   - expression: '!has(object.spec.unseal) || !has(object.spec.unseal.credentialsSecretRef)
       || authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.unseal.credentialsSecretRef.name).check("get").allowed()'
     message: Users configuring unseal credentials must be authorized to get spec.unseal.credentialsSecretRef.
+  - expression: |-
+      !has(object.spec.backup) || ((!has(object.spec.backup.target.credentialsSecretRef) ||
+
+        authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.backup.target.credentialsSecretRef.name).check("get").allowed()) &&
+      (!has(object.spec.backup.tokenSecretRef) ||
+
+        authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.backup.tokenSecretRef.name).check("get").allowed()))
+    message: Users configuring backup credentials must be authorized to get referenced
+      backup Secrets.
   - expression: |-
       (!has(object.spec.unseal) || !has(object.spec.unseal.credentialsSecretRef) ||
 
@@ -8238,6 +8275,29 @@ spec:
       has(object.spec.upgrade.blueGreen.preUpgradeSnapshot) && object.spec.upgrade.blueGreen.preUpgradeSnapshot
       == true
     name: has_bluegreen_pre_upgrade_snapshot
+  - expression: 'variables.has_backup && has(object.spec.backup.target.endpoint) ?
+      object.spec.backup.target.endpoint.trim() : ""'
+    name: backup_endpoint
+  - expression: variables.backup_endpoint != ""
+    name: backup_endpoint_is_set
+  - expression: '!variables.backup_endpoint_is_set || isURL(variables.backup_endpoint)'
+    name: backup_endpoint_is_url
+  - expression: 'variables.backup_endpoint_is_set && variables.backup_endpoint_is_url
+      ? url(variables.backup_endpoint).getScheme().lowerAscii() : ""'
+    name: backup_endpoint_scheme
+  - expression: 'variables.backup_endpoint_is_set && variables.backup_endpoint_is_url
+      ? url(variables.backup_endpoint).getHostname().lowerAscii() : ""'
+    name: backup_endpoint_hostname
+  - expression: 'variables.backup_endpoint_hostname.endsWith(".") ? variables.backup_endpoint_hostname.substring(0,
+      size(variables.backup_endpoint_hostname) - 1) : variables.backup_endpoint_hostname'
+    name: backup_endpoint_hostname_normalized
+  - expression: variables.backup_endpoint_hostname_normalized != "" && isIP(variables.backup_endpoint_hostname_normalized)
+    name: backup_endpoint_host_is_ip
+  - expression: |-
+      variables.backup_endpoint_hostname_normalized != "" && !variables.backup_endpoint_host_is_ip && (variables.backup_endpoint_hostname_normalized.matches("^(0x[0-9a-f]+|[0-9]+)(\\.(0x[0-9a-f]+|[0-9]+)){0,3}$") ||
+
+        variables.backup_endpoint_hostname_normalized.contains(":"))
+    name: backup_endpoint_host_is_ambiguous_ip
   - expression: 'object.spec.version.startsWith("v") ? object.spec.version.substring(1)
       : object.spec.version'
     name: spec_version_normalized
@@ -8366,25 +8426,47 @@ spec:
   - expression: '!has(object.spec.overrideOperationLock) || object.spec.overrideOperationLock
       == false || object.spec.force == true'
     message: spec.overrideOperationLock requires spec.force=true.
+  - expression: '!variables.restore_endpoint_is_set || (variables.restore_endpoint_is_url
+      && variables.restore_endpoint_hostname_normalized != "")'
+    message: Restore endpoint must be a valid absolute URL with a host.
   - expression: |-
-      !has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint == "" || !(
+      !variables.restore_endpoint_is_set || !variables.restore_endpoint_is_url || (
 
-        object.spec.source.target.endpoint.contains("localhost") ||
-        object.spec.source.target.endpoint.contains("127.0.0.1") ||
-        object.spec.source.target.endpoint.contains("::1") ||
-        object.spec.source.target.endpoint.matches("^https?://[0-9]+[:/].*")
+        !variables.restore_endpoint_hostname_normalized.matches("(^|.*\\.)localhost$") &&
+        !variables.restore_endpoint_host_is_ambiguous_ip &&
+        !(variables.restore_endpoint_host_is_ip && ip(variables.restore_endpoint_hostname_normalized).isLoopback())
       )
-    message: Restore endpoint cannot point to localhost or use numeric IP encoding
-      (SSRF protection).
-  - expression: '!has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint
-      == "" || !object.spec.source.target.endpoint.matches("^https?://169\\.254\\..*")'
+    message: Restore endpoint cannot point to localhost, loopback, or use ambiguous
+      numeric IP encoding (SSRF protection).
+  - expression: '!variables.restore_endpoint_is_set || !variables.restore_endpoint_is_url
+      || !(variables.restore_endpoint_host_is_ip && ip(variables.restore_endpoint_hostname_normalized).isLinkLocalUnicast())'
     message: Restore endpoint cannot point to link-local addresses (SSRF protection
       against cloud metadata services).
-  - expression: '!has(object.spec.source.target.endpoint) || object.spec.source.target.endpoint
-      == "" || object.spec.source.target.endpoint.startsWith("https://") || object.spec.source.target.endpoint.startsWith("s3://")
-      || object.spec.source.target.endpoint.matches("^http://[^/]+\\.svc(\\.|:|/|$).*")'
+  - expression: |-
+      !variables.restore_endpoint_is_set || (variables.restore_endpoint_is_url &&
+
+        (variables.restore_endpoint_scheme in ["https", "s3"] ||
+          (variables.restore_endpoint_scheme == "http" && variables.restore_endpoint_is_in_cluster_service)))
     message: Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster
       Service (*.svc).
+  - expression: |-
+      !has(object.spec.image) || object.spec.image == "" || (request.operation == "UPDATE" &&
+
+        oldObject != null &&
+        has(oldObject.spec.image) &&
+        oldObject.spec.image == object.spec.image) ||
+      authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usehelperimages").allowed()
+    message: Users configuring custom restore helper images must be authorized to
+      use helper image overrides on the target OpenBaoCluster.
+  - expression: |-
+      (!has(object.spec.source.target.credentialsSecretRef) ||
+
+        authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.source.target.credentialsSecretRef.name).check("get").allowed()) &&
+      (!has(object.spec.tokenSecretRef) ||
+
+        authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.tokenSecretRef.name).check("get").allowed())
+    message: Users configuring restore credentials must be authorized to get referenced
+      restore Secrets.
   - expression: |-
       (!has(object.spec.source.target.credentialsSecretRef) ||
 
@@ -8394,6 +8476,32 @@ spec:
         !object.spec.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
     message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
       are prohibited in restore configuration to prevent confused deputy attacks.
+  variables:
+  - expression: 'has(object.spec.source.target.endpoint) ? object.spec.source.target.endpoint.trim()
+      : ""'
+    name: restore_endpoint
+  - expression: variables.restore_endpoint != ""
+    name: restore_endpoint_is_set
+  - expression: '!variables.restore_endpoint_is_set || isURL(variables.restore_endpoint)'
+    name: restore_endpoint_is_url
+  - expression: 'variables.restore_endpoint_is_set && variables.restore_endpoint_is_url
+      ? url(variables.restore_endpoint).getScheme().lowerAscii() : ""'
+    name: restore_endpoint_scheme
+  - expression: 'variables.restore_endpoint_is_set && variables.restore_endpoint_is_url
+      ? url(variables.restore_endpoint).getHostname().lowerAscii() : ""'
+    name: restore_endpoint_hostname
+  - expression: 'variables.restore_endpoint_hostname.endsWith(".") ? variables.restore_endpoint_hostname.substring(0,
+      size(variables.restore_endpoint_hostname) - 1) : variables.restore_endpoint_hostname'
+    name: restore_endpoint_hostname_normalized
+  - expression: variables.restore_endpoint_hostname_normalized != "" && isIP(variables.restore_endpoint_hostname_normalized)
+    name: restore_endpoint_host_is_ip
+  - expression: |-
+      variables.restore_endpoint_hostname_normalized != "" && !variables.restore_endpoint_host_is_ip && (variables.restore_endpoint_hostname_normalized.matches("^(0x[0-9a-f]+|[0-9]+)(\\.(0x[0-9a-f]+|[0-9]+)){0,3}$") ||
+
+        variables.restore_endpoint_hostname_normalized.contains(":"))
+    name: restore_endpoint_host_is_ambiguous_ip
+  - expression: variables.restore_endpoint_hostname_normalized.matches("^[a-z0-9]([-a-z0-9]*[a-z0-9])?\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?\\.svc(\\.cluster\\.local)?$")
+    name: restore_endpoint_is_in_cluster_service
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
