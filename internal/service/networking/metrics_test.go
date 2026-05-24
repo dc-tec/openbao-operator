@@ -8,6 +8,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestBuildWorkloadServiceMonitor_IncludesAuthTLSAndSelector(t *testing.T) {
@@ -103,6 +104,42 @@ func TestBuildWorkloadServiceMonitor_IncludesAuthTLSAndSelector(t *testing.T) {
 	}
 	if got := selector[metricsScrapeProfileLabel]; got != metricsScrapeProfileActive {
 		t.Fatalf("selector scrape profile = %q", got)
+	}
+}
+
+func TestBuildWorkloadServiceMonitor_PreservesOperatorIdentityLabels(t *testing.T) {
+	cluster := newMinimalCluster("metrics-cluster", "security")
+	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+		Metrics: &openbaov1alpha1.MetricsConfig{
+			Enabled: true,
+			ServiceMonitor: &openbaov1alpha1.ServiceMonitorConfig{
+				Enabled: true,
+				Labels: map[string]string{
+					constants.LabelAppManagedBy:   "user",
+					constants.LabelOpenBaoCluster: "other-cluster",
+					constants.LabelAppComponent:   "custom",
+					"release":                     "kube-prometheus-stack",
+				},
+			},
+		},
+	}
+
+	monitor, err := buildWorkloadServiceMonitor(cluster)
+	if err != nil {
+		t.Fatalf("buildWorkloadServiceMonitor() error = %v", err)
+	}
+	labels := monitor.GetLabels()
+	if got := labels[constants.LabelAppManagedBy]; got != constants.LabelValueAppManagedByOpenBaoOperator {
+		t.Fatalf("managed-by label = %q, want %q", got, constants.LabelValueAppManagedByOpenBaoOperator)
+	}
+	if got := labels[constants.LabelOpenBaoCluster]; got != cluster.Name {
+		t.Fatalf("cluster label = %q, want %q", got, cluster.Name)
+	}
+	if got := labels[constants.LabelAppComponent]; got != metricsComponentLabelValue {
+		t.Fatalf("component label = %q, want %q", got, metricsComponentLabelValue)
+	}
+	if got := labels["release"]; got != "kube-prometheus-stack" {
+		t.Fatalf("user label = %q", got)
 	}
 }
 

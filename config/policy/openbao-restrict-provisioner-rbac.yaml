@@ -193,6 +193,15 @@ spec:
             ) ||
             (
               rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'monitoring.coreos.com' &&
+              rule.resources != null &&
+              rule.resources.size() == 1 &&
+              rule.resources[0] == 'servicemonitors' &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['create', 'delete', 'get', 'patch'])
+            ) ||
+            (
+              rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'rbac.authorization.k8s.io' &&
               rule.resources != null &&
               rule.resources.size() > 0 &&

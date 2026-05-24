@@ -165,6 +165,15 @@ rules:
       - watch{{- end }}
 
   - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - servicemonitors
+    verbs:
+      - create
+      - delete
+      - get
+      - patch
+  - apiGroups:
       - rbac.authorization.k8s.io
     resources:
       - roles
