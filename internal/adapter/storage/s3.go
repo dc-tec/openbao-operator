@@ -175,6 +175,8 @@ type S3ClientConfig struct {
 	InsecureSkipVerify bool
 	// EnsureExists checks if the bucket exists and tries to create it if not.
 	EnsureExists bool
+	// ValidateEndpointRequests rejects request-time redirects or DNS results to local or metadata-adjacent destinations.
+	ValidateEndpointRequests bool
 }
 
 // OpenS3Bucket opens an S3-compatible bucket using Go CDK.
@@ -346,8 +348,10 @@ func buildAWSConfig(ctx context.Context, cfg S3ClientConfig) (aws.Config, error)
 		opts = append(opts, config.WithCredentialsProvider(staticCreds))
 	}
 
-	// Configure custom HTTP client for TLS
-	httpClient, err := buildHTTPClient(cfg.CACert, cfg.InsecureSkipVerify)
+	// Configure an HTTP client for config loading and credential discovery. This
+	// path must not apply the storage endpoint guard because ambient credential
+	// providers may legitimately use their own metadata or identity endpoints.
+	httpClient, err := buildHTTPClient(cfg.CACert, cfg.InsecureSkipVerify, false)
 	if err != nil {
 		if operatorerrors.IsTransientConnection(err) {
 			return aws.Config{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create HTTP client: %w", err))
@@ -365,11 +369,20 @@ func buildAWSConfig(ctx context.Context, cfg S3ClientConfig) (aws.Config, error)
 		return aws.Config{}, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
+	storageHTTPClient, err := buildHTTPClient(cfg.CACert, cfg.InsecureSkipVerify, cfg.ValidateEndpointRequests)
+	if err != nil {
+		if operatorerrors.IsTransientConnection(err) {
+			return aws.Config{}, operatorerrors.WrapTransientConnection(fmt.Errorf("failed to create storage HTTP client: %w", err))
+		}
+		return aws.Config{}, fmt.Errorf("failed to create storage HTTP client: %w", err)
+	}
+	awsCfg.HTTPClient = storageHTTPClient
+
 	return awsCfg, nil
 }
 
 // buildHTTPClient creates an HTTP client with optional custom CA certificate.
-func buildHTTPClient(caCert []byte, insecureSkipVerify bool) (*http.Client, error) {
+func buildHTTPClient(caCert []byte, insecureSkipVerify, validateEndpointRequests bool) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSHandshakeTimeout: 10 * time.Second,
 		DisableKeepAlives:   false,
@@ -396,8 +409,10 @@ func buildHTTPClient(caCert []byte, insecureSkipVerify bool) (*http.Client, erro
 		MinVersion:         tls.VersionTLS12,
 	}
 
-	return &http.Client{
+	client := &http.Client{
 		Transport: transport,
 		Timeout:   DefaultUploadTimeout,
-	}, nil
+	}
+	applyStorageEndpointRequestGuard(client, transport, validateEndpointRequests)
+	return client, nil
 }
