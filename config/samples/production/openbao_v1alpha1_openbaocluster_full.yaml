@@ -99,10 +99,6 @@ spec:
     # Structured logging configuration
     logging:
       format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
-      rotateBytes: 10485760 # 10MB
-      rotateMaxFiles: 7
       pidFile: "/var/run/openbao/openbao.pid"
     # Plugin configuration
     plugin:

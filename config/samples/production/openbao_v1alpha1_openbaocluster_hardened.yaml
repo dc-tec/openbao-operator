@@ -57,10 +57,6 @@ spec:
     # Structured logging for better log aggregation
     logging:
       format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
-      rotateBytes: 10485760 # 10MB
-      rotateMaxFiles: 7
     # Lease/TTL configuration for production
     defaultLeaseTTL: "720h" # 30 days
     maxLeaseTTL: "8760h" # 1 year

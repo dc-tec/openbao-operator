@@ -30,8 +30,7 @@ spec:
     logLevel: "info"
     ui: true
     logging:
-      format: "standard"
-      file: "/var/log/openbao/openbao.log"
+      format: "json"
   # Self-initialization configuration
   selfInit:
     enabled: true

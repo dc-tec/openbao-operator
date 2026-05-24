@@ -66,10 +66,6 @@ spec:
     # Structured logging
     logging:
       format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
-      rotateBytes: 10485760 # 10MB
-      rotateMaxFiles: 7
     # UI enabled
     ui: true
   # External access for ACME mode must be TLS passthrough.
