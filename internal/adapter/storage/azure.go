@@ -44,6 +44,8 @@ type AzureClientConfig struct {
 	CACert []byte
 	// EnsureExists optionally creates the container if it does not exist.
 	EnsureExists bool
+	// ValidateEndpointRequests rejects request-time redirects or DNS results to local or metadata-adjacent destinations.
+	ValidateEndpointRequests bool
 }
 
 // OpenAzureContainer opens an Azure blob container using Go CDK.
@@ -118,14 +120,24 @@ func OpenAzureContainer(ctx context.Context, cfg AzureClientConfig) (blobstore.B
 		}
 
 		var cred azcore.TokenCredential
+		credentialHTTPClient, err := buildAzureHTTPClient(AzureClientConfig{
+			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			CACert:             cfg.CACert,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to build Azure credential HTTP client: %w", err)
+		}
+		credentialClientOptions := azcore.ClientOptions{
+			Transport: credentialHTTPClient,
+		}
 		if cfg.ManagedIdentityClientID != "" {
 			cred, err = azidentity.NewManagedIdentityCredential(&azidentity.ManagedIdentityCredentialOptions{
 				ID:            azidentity.ClientID(cfg.ManagedIdentityClientID),
-				ClientOptions: clientOpts.ClientOptions,
+				ClientOptions: credentialClientOptions,
 			})
 		} else {
 			cred, err = azidentity.NewDefaultAzureCredential(&azidentity.DefaultAzureCredentialOptions{
-				ClientOptions: clientOpts.ClientOptions,
+				ClientOptions: credentialClientOptions,
 			})
 		}
 		if err != nil {
@@ -185,10 +197,12 @@ func buildAzureHTTPClient(cfg AzureClientConfig) (*http.Client, error) {
 		MinVersion:         tls.VersionTLS12,
 	}
 
-	return &http.Client{
+	client := &http.Client{
 		Transport: transport,
 		Timeout:   DefaultUploadTimeout,
-	}, nil
+	}
+	applyStorageEndpointRequestGuard(client, transport, cfg.ValidateEndpointRequests)
+	return client, nil
 }
 
 func ensureAzureContainer(ctx context.Context, c *container.Client) error {

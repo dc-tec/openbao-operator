@@ -28,10 +28,11 @@ func (m *Manager) openBackupStorageClient(ctx context.Context, cluster *openbaov
 	}
 
 	storageConfig := storage.Config{
-		Provider:     provider,
-		Bucket:       target.Bucket,
-		Endpoint:     target.Endpoint,
-		EnsureExists: ensureExists,
+		Provider:                 provider,
+		Bucket:                   target.Bucket,
+		Endpoint:                 target.Endpoint,
+		EnsureExists:             ensureExists,
+		ValidateEndpointRequests: true,
 	}
 
 	credsSecret, err := m.loadBackupCredentialsSecret(ctx, cluster)

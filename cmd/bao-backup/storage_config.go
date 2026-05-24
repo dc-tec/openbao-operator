@@ -22,9 +22,10 @@ func buildStorageConfig(cfg *backupconfig.ExecutorConfig) (storage.Config, error
 	}
 
 	storageConfig := storage.Config{
-		Provider: storage.ProviderType(provider),
-		Bucket:   cfg.BackupBucket,
-		Endpoint: cfg.BackupEndpoint,
+		Provider:                 storage.ProviderType(provider),
+		Bucket:                   cfg.BackupBucket,
+		Endpoint:                 cfg.BackupEndpoint,
+		ValidateEndpointRequests: true,
 	}
 
 	switch provider {

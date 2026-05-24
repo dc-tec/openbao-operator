@@ -65,6 +65,11 @@ type Config struct {
 
 	// Azure contains Azure-specific configuration.
 	Azure *AzureOptions
+
+	// ValidateEndpointRequests rejects storage HTTP requests and redirects to
+	// local or metadata-adjacent destinations. Backup and restore paths enable
+	// this after admission/preflight endpoint validation.
+	ValidateEndpointRequests bool
 }
 
 // S3Options holds S3-specific options.
@@ -148,25 +153,27 @@ func openS3(ctx context.Context, cfg Config) (blobstore.BlobStore, error) {
 	}
 
 	return OpenS3Bucket(ctx, S3ClientConfig{
-		Endpoint:           cfg.Endpoint,
-		Bucket:             cfg.Bucket,
-		Region:             cfg.Region,
-		AccessKeyID:        accessKeyID,
-		SecretAccessKey:    secretAccessKey,
-		SessionToken:       sessionToken,
-		CACert:             caCert,
-		UsePathStyle:       usePathStyle,
-		InsecureSkipVerify: insecureSkipVerify,
-		EnsureExists:       ensureExists,
+		Endpoint:                 cfg.Endpoint,
+		Bucket:                   cfg.Bucket,
+		Region:                   cfg.Region,
+		AccessKeyID:              accessKeyID,
+		SecretAccessKey:          secretAccessKey,
+		SessionToken:             sessionToken,
+		CACert:                   caCert,
+		UsePathStyle:             usePathStyle,
+		InsecureSkipVerify:       insecureSkipVerify,
+		EnsureExists:             ensureExists,
+		ValidateEndpointRequests: cfg.ValidateEndpointRequests,
 	})
 }
 
 // openGCS opens a GCS bucket using the unified Config.
 func openGCS(ctx context.Context, cfg Config) (blobstore.BlobStore, error) {
 	gcsCfg := GCSClientConfig{
-		Bucket:       cfg.Bucket,
-		Endpoint:     cfg.Endpoint,
-		EnsureExists: cfg.EnsureExists,
+		Bucket:                   cfg.Bucket,
+		Endpoint:                 cfg.Endpoint,
+		EnsureExists:             cfg.EnsureExists,
+		ValidateEndpointRequests: cfg.ValidateEndpointRequests,
 	}
 
 	if cfg.GCS != nil {
@@ -183,9 +190,10 @@ func openGCS(ctx context.Context, cfg Config) (blobstore.BlobStore, error) {
 // openAzure opens an Azure blob container using the unified Config.
 func openAzure(ctx context.Context, cfg Config) (blobstore.BlobStore, error) {
 	azureCfg := AzureClientConfig{
-		Container:    cfg.Bucket,
-		Endpoint:     cfg.Endpoint,
-		EnsureExists: cfg.EnsureExists,
+		Container:                cfg.Bucket,
+		Endpoint:                 cfg.Endpoint,
+		EnsureExists:             cfg.EnsureExists,
+		ValidateEndpointRequests: cfg.ValidateEndpointRequests,
 	}
 
 	if cfg.Azure != nil {

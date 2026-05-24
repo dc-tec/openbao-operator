@@ -43,6 +43,8 @@ type GCSClientConfig struct {
 	CACert []byte
 	// EnsureExists optionally validates/creates the bucket (requires Project for create).
 	EnsureExists bool
+	// ValidateEndpointRequests rejects request-time redirects or DNS results to local or metadata-adjacent destinations.
+	ValidateEndpointRequests bool
 }
 
 // OpenGCSBucket opens a GCS bucket using Go CDK.
@@ -172,10 +174,12 @@ func buildGCSHTTPClient(cfg GCSClientConfig) (*http.Client, error) {
 	}
 	transport.TLSClientConfig = tlsConfig
 
-	return &http.Client{
+	client := &http.Client{
 		Transport: transport,
 		Timeout:   DefaultUploadTimeout,
-	}, nil
+	}
+	applyStorageEndpointRequestGuard(client, transport, cfg.ValidateEndpointRequests)
+	return client, nil
 }
 
 func ensureGCSBucket(ctx context.Context, cfg GCSClientConfig, b *Bucket) error {
