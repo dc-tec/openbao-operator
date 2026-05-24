@@ -144,6 +144,55 @@ spec:
     - name: is_service_request
       expression: >-
         request.kind.group == "" && request.kind.kind == "Service"
+    - name: is_service_monitor_request
+      expression: >-
+        request.kind.group == "monitoring.coreos.com" && request.kind.kind == "ServiceMonitor"
+    - name: current_service_monitor_is_operator_owned
+      expression: >-
+        object != null &&
+        has(object.metadata) &&
+        request.namespace != "" &&
+        object.metadata.name.endsWith("-metrics") &&
+        has(object.metadata.labels) &&
+        ("app.kubernetes.io/managed-by" in object.metadata.labels) &&
+        object.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator" &&
+        ("app.kubernetes.io/component" in object.metadata.labels) &&
+        object.metadata.labels["app.kubernetes.io/component"] == "metrics" &&
+        ("openbao.org/component" in object.metadata.labels) &&
+        object.metadata.labels["openbao.org/component"] == "metrics" &&
+        ("openbao.org/cluster" in object.metadata.labels) &&
+        object.metadata.labels["openbao.org/cluster"] != "" &&
+        object.metadata.name == object.metadata.labels["openbao.org/cluster"] + "-metrics" &&
+        has(object.metadata.ownerReferences) &&
+        object.metadata.ownerReferences.exists(ref,
+          ref.apiVersion == "openbao.org/v1alpha1" &&
+          ref.kind == "OpenBaoCluster" &&
+          ref.name == object.metadata.labels["openbao.org/cluster"] &&
+          has(ref.controller) &&
+          ref.controller == true)
+    - name: old_service_monitor_is_operator_owned
+      expression: >-
+        oldObject != null &&
+        has(oldObject.metadata) &&
+        request.namespace != "" &&
+        oldObject.metadata.name.endsWith("-metrics") &&
+        has(oldObject.metadata.labels) &&
+        ("app.kubernetes.io/managed-by" in oldObject.metadata.labels) &&
+        oldObject.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator" &&
+        ("app.kubernetes.io/component" in oldObject.metadata.labels) &&
+        oldObject.metadata.labels["app.kubernetes.io/component"] == "metrics" &&
+        ("openbao.org/component" in oldObject.metadata.labels) &&
+        oldObject.metadata.labels["openbao.org/component"] == "metrics" &&
+        ("openbao.org/cluster" in oldObject.metadata.labels) &&
+        oldObject.metadata.labels["openbao.org/cluster"] != "" &&
+        oldObject.metadata.name == oldObject.metadata.labels["openbao.org/cluster"] + "-metrics" &&
+        has(oldObject.metadata.ownerReferences) &&
+        oldObject.metadata.ownerReferences.exists(ref,
+          ref.apiVersion == "openbao.org/v1alpha1" &&
+          ref.kind == "OpenBaoCluster" &&
+          ref.name == oldObject.metadata.labels["openbao.org/cluster"] &&
+          has(ref.controller) &&
+          ref.controller == true)
     - name: is_kubelet_node
       expression: >-
         request.userInfo.username.startsWith("system:node:")
@@ -295,6 +344,15 @@ spec:
           check("maintenance").
           allowed()
   validations:
+    - expression: >-
+        !(variables.is_operator_controller || variables.is_operator_provisioner) ||
+        !variables.is_service_monitor_request ||
+        (
+          (request.operation == "CREATE" && variables.current_service_monitor_is_operator_owned) ||
+          (request.operation == "UPDATE" && variables.current_service_monitor_is_operator_owned && variables.old_service_monitor_is_operator_owned) ||
+          (request.operation == "DELETE" && variables.old_service_monitor_is_operator_owned)
+        )
+      message: The operator can only create, update, or delete ServiceMonitors that match the OpenBao metrics ownership shape.
     - expression: >-
         !variables.is_managed ||
         variables.is_operator_controller ||

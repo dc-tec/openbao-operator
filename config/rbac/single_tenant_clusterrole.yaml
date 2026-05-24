@@ -190,6 +190,16 @@ rules:
       - patch
       - update
       - watch
+  # Observability
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - servicemonitors
+    verbs:
+      - create
+      - delete
+      - get
+      - patch
   # RBAC for OpenBao pod discovery
   - apiGroups:
       - rbac.authorization.k8s.io

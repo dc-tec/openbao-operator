@@ -183,6 +183,9 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	var maintenanceAuthorizedExpression string
 	var maintenanceClusterNameExpression string
 	var isManagedExpression string
+	var isServiceMonitorRequestExpression string
+	var currentServiceMonitorOwnedExpression string
+	var oldServiceMonitorOwnedExpression string
 	for _, variable := range variables {
 		variableMap, ok := variable.(map[string]any)
 		if !ok {
@@ -199,6 +202,12 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 			maintenanceClusterNameExpression = expression
 		case "is_managed":
 			isManagedExpression = expression
+		case "is_service_monitor_request":
+			isServiceMonitorRequestExpression = expression
+		case "current_service_monitor_is_operator_owned":
+			currentServiceMonitorOwnedExpression = expression
+		case "old_service_monitor_is_operator_owned":
+			oldServiceMonitorOwnedExpression = expression
 		}
 	}
 
@@ -231,6 +240,48 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 			"maintenance_authorized expression does not check the custom maintenance verb: %q",
 			maintenanceAuthorizedExpression,
 		)
+	}
+	if !strings.Contains(isServiceMonitorRequestExpression, `request.kind.group == "monitoring.coreos.com"`) ||
+		!strings.Contains(isServiceMonitorRequestExpression, `request.kind.kind == "ServiceMonitor"`) {
+		t.Fatalf("is_service_monitor_request expression does not target ServiceMonitors: %q", isServiceMonitorRequestExpression)
+	}
+	if !strings.Contains(currentServiceMonitorOwnedExpression, `object.metadata.name.endsWith("-metrics")`) ||
+		!strings.Contains(currentServiceMonitorOwnedExpression, `"app.kubernetes.io/managed-by"`) ||
+		!strings.Contains(currentServiceMonitorOwnedExpression, `"openbao.org/cluster"`) ||
+		!strings.Contains(currentServiceMonitorOwnedExpression, `ref.kind == "OpenBaoCluster"`) ||
+		!strings.Contains(currentServiceMonitorOwnedExpression, `has(ref.controller)`) {
+		t.Fatalf("current ServiceMonitor ownership expression is incomplete: %q", currentServiceMonitorOwnedExpression)
+	}
+	if !strings.Contains(oldServiceMonitorOwnedExpression, `oldObject.metadata.name.endsWith("-metrics")`) ||
+		!strings.Contains(oldServiceMonitorOwnedExpression, `"app.kubernetes.io/managed-by"`) ||
+		!strings.Contains(oldServiceMonitorOwnedExpression, `"openbao.org/cluster"`) ||
+		!strings.Contains(oldServiceMonitorOwnedExpression, `ref.kind == "OpenBaoCluster"`) ||
+		!strings.Contains(oldServiceMonitorOwnedExpression, `has(ref.controller)`) {
+		t.Fatalf("old ServiceMonitor ownership expression is incomplete: %q", oldServiceMonitorOwnedExpression)
+	}
+
+	validations, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "validations")
+	if err != nil || !found {
+		t.Fatalf("read policy validations: found=%v err=%v", found, err)
+	}
+	var foundServiceMonitorOwnershipGuard bool
+	for _, validation := range validations {
+		validationMap, ok := validation.(map[string]any)
+		if !ok {
+			continue
+		}
+		message, _ := validationMap["message"].(string)
+		expression, _ := validationMap["expression"].(string)
+		if strings.Contains(message, "ServiceMonitors that match the OpenBao metrics ownership shape") &&
+			strings.Contains(expression, "variables.is_operator_controller") &&
+			strings.Contains(expression, "variables.current_service_monitor_is_operator_owned") &&
+			strings.Contains(expression, "variables.old_service_monitor_is_operator_owned") {
+			foundServiceMonitorOwnershipGuard = true
+			break
+		}
+	}
+	if !foundServiceMonitorOwnershipGuard {
+		t.Fatalf("openbao-lock-managed-resource-mutations policy missing ServiceMonitor ownership guard")
 	}
 }
 
@@ -677,6 +728,7 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 	objs := parseYAMLToUnstructured(t, yamlBytes, nil)
 
 	var controller *unstructured.Unstructured
+	var singleTenantRole *unstructured.Unstructured
 	var singleTenantBinding *unstructured.Unstructured
 	var hasOperatorNamespace bool
 
@@ -692,6 +744,10 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 			if obj.GetName() == testControllerSAName {
 				controller = obj
 			}
+		case "ClusterRole":
+			if obj.GetName() == "openbao-operator-single-tenant" {
+				singleTenantRole = obj
+			}
 		case "RoleBinding":
 			if obj.GetName() == "openbao-operator-single-tenant" {
 				singleTenantBinding = obj
@@ -704,6 +760,9 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 	}
 	if controller == nil {
 		t.Fatal("single-tenant overlay missing controller deployment")
+	}
+	if singleTenantRole == nil {
+		t.Fatal("single-tenant overlay missing controller ClusterRole")
 	}
 	if singleTenantBinding == nil {
 		t.Fatal("single-tenant overlay missing target namespace rolebinding")
@@ -719,6 +778,13 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 	if got := kustomizeEnvVarValue(t, controller, "WATCH_NAMESPACE"); got != testSingleTenantTargetNS {
 		t.Fatalf("WATCH_NAMESPACE = %q, want %q", got, testSingleTenantTargetNS)
 	}
+	assertClusterRoleHasResourceRule(
+		t,
+		singleTenantRole,
+		"monitoring.coreos.com",
+		"servicemonitors",
+		[]string{"create", "delete", "get", "patch"},
+	)
 
 	subjects, found, err := unstructured.NestedSlice(singleTenantBinding.Object, "subjects")
 	if err != nil || !found || len(subjects) != 1 {
@@ -734,6 +800,45 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 	if got, _ := subject["namespace"].(string); got != testDefaultOperatorNS {
 		t.Fatalf("rolebinding subject namespace = %q, want %q", got, testDefaultOperatorNS)
 	}
+}
+
+func assertClusterRoleHasResourceRule(
+	t *testing.T,
+	role *unstructured.Unstructured,
+	apiGroup string,
+	resource string,
+	verbs []string,
+) {
+	t.Helper()
+
+	rules, found, err := unstructured.NestedSlice(role.Object, "rules")
+	if err != nil || !found {
+		t.Fatalf("read %s rules: found=%v err=%v", role.GetName(), found, err)
+	}
+
+	for _, rule := range rules {
+		ruleMap, ok := rule.(map[string]any)
+		if !ok {
+			continue
+		}
+		apiGroups, _ := ruleMap["apiGroups"].([]any)
+		resources, _ := ruleMap["resources"].([]any)
+		ruleVerbs, _ := ruleMap["verbs"].([]any)
+		if !containsAny(apiGroups, apiGroup) || !containsAny(resources, resource) {
+			continue
+		}
+		if len(ruleVerbs) != len(verbs) {
+			t.Fatalf("%s rule for %s/%s verbs = %#v, want exactly %#v", role.GetName(), apiGroup, resource, ruleVerbs, verbs)
+		}
+		for _, verb := range verbs {
+			if !containsAny(ruleVerbs, verb) {
+				t.Fatalf("%s rule for %s/%s missing verb %q: %#v", role.GetName(), apiGroup, resource, verb, ruleMap)
+			}
+		}
+		return
+	}
+
+	t.Fatalf("%s missing rule for %s/%s", role.GetName(), apiGroup, resource)
 }
 
 func failIfProvisionerObject(t *testing.T, obj *unstructured.Unstructured) {

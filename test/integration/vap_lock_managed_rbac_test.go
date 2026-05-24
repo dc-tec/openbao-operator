@@ -11,10 +11,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	provisionerpkg "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
@@ -184,6 +186,67 @@ func grantClusterMaintenanceAccess(t *testing.T, namespace, clusterName, usernam
 	}
 }
 
+func createClusterForServiceMonitorGuard(t *testing.T, namespace, clusterName string) *openbaov1alpha1.OpenBaoCluster {
+	t.Helper()
+
+	cluster := newMinimalClusterObj(namespace, clusterName)
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create OpenBaoCluster %s/%s: %v", namespace, clusterName, err)
+	}
+	var persisted openbaov1alpha1.OpenBaoCluster
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: clusterName}, &persisted); err != nil {
+		t.Fatalf("get OpenBaoCluster %s/%s: %v", namespace, clusterName, err)
+	}
+	return &persisted
+}
+
+func newServiceMonitorObject(namespace, name string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("monitoring.coreos.com/v1")
+	obj.SetKind("ServiceMonitor")
+	obj.SetNamespace(namespace)
+	obj.SetName(name)
+	obj.Object["spec"] = map[string]interface{}{
+		"endpoints": []interface{}{
+			map[string]interface{}{
+				"port": "metrics",
+				"path": "/v1/sys/metrics",
+			},
+		},
+		"namespaceSelector": map[string]interface{}{
+			"matchNames": []interface{}{namespace},
+		},
+		"selector": map[string]interface{}{
+			"matchLabels": map[string]interface{}{
+				constants.LabelAppName: constants.LabelValueAppNameOpenBao,
+			},
+		},
+	}
+	return obj
+}
+
+func newOwnedServiceMonitorObject(cluster *openbaov1alpha1.OpenBaoCluster) *unstructured.Unstructured {
+	obj := newServiceMonitorObject(cluster.Namespace, cluster.Name+"-metrics")
+	obj.SetLabels(map[string]string{
+		constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
+		constants.LabelAppManagedBy:     constants.LabelValueAppManagedByOpenBaoOperator,
+		constants.LabelAppComponent:     "metrics",
+		constants.LabelOpenBaoComponent: "metrics",
+		constants.LabelOpenBaoCluster:   cluster.Name,
+	})
+	controller := true
+	obj.SetOwnerReferences([]metav1.OwnerReference{
+		{
+			APIVersion: "openbao.org/v1alpha1",
+			Kind:       "OpenBaoCluster",
+			Name:       cluster.Name,
+			UID:        cluster.UID,
+			Controller: &controller,
+		},
+	})
+	return obj
+}
+
 func createManagedMaintenancePod(t *testing.T, c client.Client, namespace, clusterName, podName string) {
 	t.Helper()
 
@@ -226,6 +289,87 @@ func createManagedMaintenancePod(t *testing.T, c client.Client, namespace, clust
 	}
 	if err := c.Create(ctx, pod); err != nil {
 		t.Fatalf("create managed maintenance pod: %v", err)
+	}
+}
+
+func TestVAP_LockManagedRBAC_RestrictsOperatorServiceMonitorOwnership(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	controllerClient := newPrivilegedImpersonatedClient(t, controllerUsername)
+
+	rogue := newServiceMonitorObject(namespace, "rogue-monitor")
+	var rogueDenied bool
+	for attempt := 0; attempt < 25; attempt++ {
+		err := controllerClient.Create(ctx, rogue.DeepCopy())
+		if err == nil {
+			_ = k8sClient.Delete(ctx, rogue)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "ServiceMonitors that match the OpenBao metrics ownership shape") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		rogueDenied = true
+		break
+	}
+	if !rogueDenied {
+		t.Fatalf("expected VAP to deny operator-created rogue ServiceMonitor after retries")
+	}
+
+	ownedCluster := createClusterForServiceMonitorGuard(t, namespace, "owned")
+	ownedMonitor := newOwnedServiceMonitorObject(ownedCluster)
+	if err := controllerClient.Create(ctx, ownedMonitor); err != nil {
+		t.Fatalf("expected owned ServiceMonitor create to succeed, got: %v", err)
+	}
+
+	var latestOwned unstructured.Unstructured
+	latestOwned.SetAPIVersion("monitoring.coreos.com/v1")
+	latestOwned.SetKind("ServiceMonitor")
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: ownedMonitor.GetName()}, &latestOwned); err != nil {
+		t.Fatalf("get owned ServiceMonitor: %v", err)
+	}
+	originalOwned := latestOwned.DeepCopy()
+	latestOwned.SetAnnotations(map[string]string{"example.com/reconcile": "true"})
+	if err := controllerClient.Patch(ctx, &latestOwned, client.MergeFrom(originalOwned)); err != nil {
+		t.Fatalf("expected owned ServiceMonitor update to succeed, got: %v", err)
+	}
+
+	takeoverCluster := createClusterForServiceMonitorGuard(t, namespace, "takeover")
+	userOwned := newServiceMonitorObject(namespace, "takeover-metrics")
+	userOwned.SetLabels(map[string]string{
+		"release": "kube-prometheus-stack",
+	})
+	if err := k8sClient.Create(ctx, userOwned); err != nil {
+		t.Fatalf("create user-owned ServiceMonitor: %v", err)
+	}
+
+	var latestUserOwned unstructured.Unstructured
+	latestUserOwned.SetAPIVersion("monitoring.coreos.com/v1")
+	latestUserOwned.SetKind("ServiceMonitor")
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: userOwned.GetName()}, &latestUserOwned); err != nil {
+		t.Fatalf("get user-owned ServiceMonitor: %v", err)
+	}
+	originalUserOwned := latestUserOwned.DeepCopy()
+	ownedShape := newOwnedServiceMonitorObject(takeoverCluster)
+	latestUserOwned.SetLabels(ownedShape.GetLabels())
+	latestUserOwned.SetOwnerReferences(ownedShape.GetOwnerReferences())
+	err := controllerClient.Patch(ctx, &latestUserOwned, client.MergeFrom(originalUserOwned))
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "ServiceMonitors that match the OpenBao metrics ownership shape") {
+		t.Fatalf("unexpected takeover error message: %v", err)
+	}
+
+	err = controllerClient.Delete(ctx, userOwned)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "ServiceMonitors that match the OpenBao metrics ownership shape") {
+		t.Fatalf("unexpected delete error message: %v", err)
+	}
+
+	if err := controllerClient.Delete(ctx, ownedMonitor); err != nil {
+		t.Fatalf("expected owned ServiceMonitor delete to succeed, got: %v", err)
 	}
 }
 

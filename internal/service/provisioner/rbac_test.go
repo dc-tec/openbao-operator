@@ -20,19 +20,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 15, // Expected number of PolicyRules
+			wantRules: 16, // Expected number of PolicyRules
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  TenantRoleName,
-			wantRules: 15,
+			wantRules: 16,
 		},
 		{
 			name:      "namespace with special characters",
 			namespace: "my-namespace-123",
 			wantName:  TenantRoleName,
-			wantRules: 15,
+			wantRules: 16,
 		},
 	}
 
@@ -74,6 +74,8 @@ func TestGenerateTenantRole(t *testing.T) {
 			hasStatefulSetRule := false
 			hasPodRule := false
 			hasEventsK8sRule := false
+			hasServiceMonitorRule := false
+			hasPrometheusRuleRule := false
 			hasQuotaOrLimitRangeRule := false
 
 			for _, rule := range role.Rules {
@@ -110,6 +112,25 @@ func TestGenerateTenantRole(t *testing.T) {
 					hasEventsK8sRule = true
 				}
 
+				if slices.Contains(rule.APIGroups, "monitoring.coreos.com") &&
+					slices.Contains(rule.Resources, "servicemonitors") &&
+					slices.Contains(rule.Verbs, "get") &&
+					slices.Contains(rule.Verbs, "create") &&
+					slices.Contains(rule.Verbs, "patch") &&
+					slices.Contains(rule.Verbs, "delete") {
+					for _, forbiddenVerb := range []string{"list", "update", "watch"} {
+						if slices.Contains(rule.Verbs, forbiddenVerb) {
+							t.Errorf("GenerateTenantRole() ServiceMonitor rule unexpectedly grants %q", forbiddenVerb)
+						}
+					}
+					hasServiceMonitorRule = true
+				}
+
+				if slices.Contains(rule.APIGroups, "monitoring.coreos.com") &&
+					slices.Contains(rule.Resources, "prometheusrules") {
+					hasPrometheusRuleRule = true
+				}
+
 				if slices.Contains(rule.Resources, "resourcequotas") || slices.Contains(rule.Resources, "limitranges") {
 					hasQuotaOrLimitRangeRule = true
 				}
@@ -126,6 +147,12 @@ func TestGenerateTenantRole(t *testing.T) {
 			}
 			if !hasEventsK8sRule {
 				t.Error("GenerateTenantRole() missing events.k8s.io Events rule")
+			}
+			if !hasServiceMonitorRule {
+				t.Error("GenerateTenantRole() missing monitoring.coreos.com ServiceMonitor rule")
+			}
+			if hasPrometheusRuleRule {
+				t.Error("GenerateTenantRole() unexpectedly includes PrometheusRule permissions")
 			}
 			if hasQuotaOrLimitRangeRule {
 				t.Error("GenerateTenantRole() unexpectedly includes ResourceQuota/LimitRange permissions")

@@ -8,13 +8,14 @@ import (
 )
 
 var (
-	verbsReadOnly     = []string{"get", "list", "watch"}
-	verbsManage       = []string{"create", "delete", "get", "list", "patch", "update", "watch"}
-	verbsEventWrite   = []string{"create", "patch"}
-	verbsPodManage    = []string{"delete", "get", "list", "patch", "update", "watch"}
-	verbsSecretRead   = []string{"get"}
-	verbsSecretCreate = []string{"create"}
-	verbsSecretMutate = []string{"delete", "get", "patch", "update"}
+	verbsReadOnly             = []string{"get", "list", "watch"}
+	verbsManage               = []string{"create", "delete", "get", "list", "patch", "update", "watch"}
+	verbsEventWrite           = []string{"create", "patch"}
+	verbsPodManage            = []string{"delete", "get", "list", "patch", "update", "watch"}
+	verbsServiceMonitorManage = []string{"create", "delete", "get", "patch"}
+	verbsSecretRead           = []string{"get"}
+	verbsSecretCreate         = []string{"create"}
+	verbsSecretMutate         = []string{"delete", "get", "patch", "update"}
 )
 
 func cloneStrings(in []string) []string {
@@ -109,6 +110,11 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			APIGroups: []string{"gateway.networking.k8s.io"},
 			Resources: []string{"httproutes", "tlsroutes", "backendtlspolicies"},
 			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"monitoring.coreos.com"},
+			Resources: []string{"servicemonitors"},
+			Verbs:     cloneStrings(verbsServiceMonitorManage),
 		},
 		{
 			APIGroups: []string{"rbac.authorization.k8s.io"},

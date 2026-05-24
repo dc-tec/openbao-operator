@@ -303,6 +303,12 @@ spec:
   Keep the first alert set small. Availability, backup freshness, sustained read-pool degradation, and sustained reconcile failure are the highest-value starting signals.
 </CommandBlock>
 
+<Callout type="note" title="Alert rules are not operator-managed">
+
+The OpenBaoCluster controller manages the workload `ServiceMonitor` when `spec.observability.metrics` enables it. `PrometheusRule` resources are user-applied observability objects, so the ServiceAccount or GitOps controller applying the alert rules needs `monitoring.coreos.com` `prometheusrules` permissions in that namespace.
+
+</Callout>
+
 ## Dashboards, logs, and health
 
 <CommandBlock

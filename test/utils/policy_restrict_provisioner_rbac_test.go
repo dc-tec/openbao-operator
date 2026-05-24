@@ -47,6 +47,30 @@ func TestRestrictProvisionerRBACPolicyContainsSecretsRoleGuards(t *testing.T) {
 	}
 }
 
+func TestRestrictProvisionerRBACPolicyAllowsTenantServiceMonitorRule(t *testing.T) {
+	const policyPath = "../../config/policy/openbao-restrict-provisioner-rbac.yaml"
+
+	data, err := os.ReadFile(policyPath)
+	if err != nil {
+		t.Fatalf("failed to read policy %s: %v", policyPath, err)
+	}
+
+	policy := string(data)
+	required := []string{
+		"rule.apiGroups[0] == 'monitoring.coreos.com'",
+		"rule.resources[0] == 'servicemonitors'",
+		"rule.verbs.all(v, v in ['create', 'delete', 'get', 'patch'])",
+	}
+	for _, needle := range required {
+		if !containsString(policy, needle) {
+			t.Fatalf("policy %s does not allow the tenant ServiceMonitor rule; missing %q", policyPath, needle)
+		}
+	}
+	if containsString(policy, "prometheusrules") {
+		t.Fatalf("policy %s unexpectedly allows tenant PrometheusRule management", policyPath)
+	}
+}
+
 // containsString performs a simple substring check without introducing extra
 // dependencies. Kept private and local to avoid over-abstracting.
 func containsString(haystack, needle string) bool {

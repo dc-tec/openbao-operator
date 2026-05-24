@@ -113,10 +113,14 @@ func buildWorkloadServiceMonitor(cluster *openbaov1alpha1.OpenBaoCluster) (*unst
 
 	serviceMonitor := cluster.Spec.Observability.Metrics.ServiceMonitor
 	labels := metricsResourceLabels(cluster)
+	requiredLabels := metricsResourceLabels(cluster)
 	if serviceMonitor != nil {
 		for key, value := range serviceMonitor.Labels {
 			labels[key] = value
 		}
+	}
+	for key, value := range requiredLabels {
+		labels[key] = value
 	}
 
 	endpoint, err := buildServiceMonitorEndpoint(cluster, serviceMonitor)

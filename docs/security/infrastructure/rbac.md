@@ -150,7 +150,7 @@ The provisioner writes the RBAC that grants the controller access, but it does n
     {
       cells: [
         'Manage tenant-scoped workload resources',
-        'StatefulSets, Services, ConfigMaps, Jobs, and related resources are the normal lifecycle surface.',
+        'StatefulSets, Services, ConfigMaps, Jobs, ServiceMonitors, and related resources are the normal lifecycle surface.',
         'This access only exists where the provisioner already introduced the controller via RoleBinding.',
       ],
     },
