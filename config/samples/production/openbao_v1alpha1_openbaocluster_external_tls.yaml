@@ -59,8 +59,6 @@ spec:
     ui: true
     logging:
       format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
 ---
 # Example: Create TLS Secrets using cert-manager
 # The operator expects these Secrets to exist before deployment

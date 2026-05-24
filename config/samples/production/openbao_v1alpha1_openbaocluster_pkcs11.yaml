@@ -34,8 +34,6 @@ spec:
     ui: true
     logging:
       format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
   # PKCS#11 seal configuration
   unseal:
     type: pkcs11

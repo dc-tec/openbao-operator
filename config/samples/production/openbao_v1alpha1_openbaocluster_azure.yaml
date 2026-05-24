@@ -34,8 +34,6 @@ spec:
     ui: true
     logging:
       format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
   # Optional: configure Azure Workload Identity metadata for the OpenBao Pods
   # serviceAccount:
   #   annotations:

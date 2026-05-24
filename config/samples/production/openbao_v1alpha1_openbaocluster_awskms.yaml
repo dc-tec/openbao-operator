@@ -33,8 +33,6 @@ spec:
     ui: true
     logging:
       format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
   # Optional: annotate the OpenBao ServiceAccount for IAM-based workload identity
   # serviceAccount:
   #   annotations:

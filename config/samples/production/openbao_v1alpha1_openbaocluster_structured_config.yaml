@@ -35,10 +35,6 @@ spec:
     # Logging configuration
     logging:
       format: "json" # json or standard
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
-      rotateBytes: 10485760 # 10MB
-      rotateMaxFiles: 7
       pidFile: "/var/run/openbao/openbao.pid"
     # Listener configuration
     listener:

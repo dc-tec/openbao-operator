@@ -32,8 +32,6 @@ spec:
     ui: true
     logging:
       format: "json"
-      file: "/var/log/openbao/openbao.log"
-      rotateDuration: "24h"
   # KMIP seal configuration
   unseal:
     type: kmip
