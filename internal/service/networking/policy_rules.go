@@ -58,8 +58,12 @@ func buildNetworkPolicyIngressRules(
 	}
 
 	if cluster.Spec.Network != nil {
+		trustedIngressPorts := []intstr.IntOrString{apiPort}
+		if metricsOnlyListenerEnabled(cluster) {
+			trustedIngressPorts = append(trustedIngressPorts, intstr.FromInt(int(metricsOnlyListenerPort(cluster))))
+		}
 		for _, peer := range cluster.Spec.Network.TrustedIngressPeers {
-			rules = appendIngressPeerRule(rules, peer, apiPort)
+			rules = appendIngressPeerRule(rules, peer, trustedIngressPorts...)
 		}
 	}
 
@@ -103,16 +107,18 @@ func buildNetworkPolicyIngressRules(
 func appendIngressPeerRule(
 	rules []networkingv1.NetworkPolicyIngressRule,
 	peer networkingv1.NetworkPolicyPeer,
-	apiPort intstr.IntOrString,
+	ports ...intstr.IntOrString,
 ) []networkingv1.NetworkPolicyIngressRule {
+	networkPolicyPorts := make([]networkingv1.NetworkPolicyPort, 0, len(ports))
+	for _, port := range ports {
+		networkPolicyPorts = append(networkPolicyPorts, networkingv1.NetworkPolicyPort{
+			Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
+			Port:     &port,
+		})
+	}
 	return append(rules, networkingv1.NetworkPolicyIngressRule{
-		From: []networkingv1.NetworkPolicyPeer{peer},
-		Ports: []networkingv1.NetworkPolicyPort{
-			{
-				Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
-				Port:     &apiPort,
-			},
-		},
+		From:  []networkingv1.NetworkPolicyPeer{peer},
+		Ports: networkPolicyPorts,
 	})
 }
 

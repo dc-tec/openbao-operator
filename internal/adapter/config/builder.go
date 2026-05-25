@@ -13,10 +13,11 @@ import (
 )
 
 const (
-	configUnsealKeyPath      = "file:///etc/bao/unseal/key"
-	configUnsealKeyID        = "operator-generated-v1"
-	configMaxRequestDuration = "90s"
-	configNodeIDTemplate     = "${HOSTNAME}"
+	configUnsealKeyPath         = "file:///etc/bao/unseal/key"
+	configUnsealKeyID           = "operator-generated-v1"
+	configMaxRequestDuration    = "90s"
+	configNodeIDTemplate        = "${HOSTNAME}"
+	configScrapeProfileAllNodes = "AllNodes"
 
 	jwtPolicyHealthStepDownAutopilot = `path "sys/health" { capabilities = ["read"] }
 path "sys/step-down" { capabilities = ["sudo", "update"] }
@@ -223,6 +224,11 @@ func validateConfigVersionCompatibility(cluster *openbaov1alpha1.OpenBaoCluster)
 	if cluster == nil {
 		return fmt.Errorf("cluster is required")
 	}
+
+	if err := validateMetricsOnlyListenerCompatibility(cluster); err != nil {
+		return err
+	}
+
 	if cluster.Spec.Configuration == nil || cluster.Spec.Configuration.Plugin == nil {
 		return nil
 	}
@@ -241,6 +247,34 @@ func validateConfigVersionCompatibility(cluster *openbaov1alpha1.OpenBaoCluster)
 	}
 
 	return fmt.Errorf("spec.configuration.plugin.{autoDownload,autoRegister,downloadBehavior} requires OpenBao >= 2.5.0 (spec.version=%q)", cluster.Spec.Version)
+}
+
+func validateMetricsOnlyListenerCompatibility(cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if !workloadMetricsEnabled(cluster) {
+		return nil
+	}
+
+	metrics := cluster.Spec.Observability.Metrics
+	allNodes := strings.TrimSpace(metrics.ScrapeProfile) == configScrapeProfileAllNodes
+	listener := metrics.MetricsOnlyListener
+	if allNodes && listener != nil && listener.Enabled != nil && !*listener.Enabled {
+		return fmt.Errorf("spec.observability.metrics.metricsOnlyListener.enabled cannot be false when scrapeProfile is AllNodes")
+	}
+
+	listenerExplicitlyEnabled := listener != nil && listener.Enabled != nil && *listener.Enabled
+	if !allNodes && !listenerExplicitlyEnabled {
+		return nil
+	}
+
+	ok, err := openBaoVersionAtLeast(cluster.Spec.Version, 2, 5, 0)
+	if err != nil {
+		return fmt.Errorf("failed to validate metrics-only listener version compatibility: %w", err)
+	}
+	if ok {
+		return nil
+	}
+
+	return fmt.Errorf("spec.observability.metrics.metricsOnlyListener requires OpenBao >= 2.5.0 (spec.version=%q)", cluster.Spec.Version)
 }
 
 func openBaoVersionAtLeast(version string, wantMajor, wantMinor, wantPatch int) (bool, error) {
