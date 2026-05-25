@@ -13,6 +13,12 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
+const (
+	testOpenBaoVersion250          = "2.5.0"
+	testOpenBaoImage250            = "openbao/openbao:2.5.0"
+	testMetricsListenerVersionHint = "requires OpenBao >= 2.5.0"
+)
+
 func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 	return &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -153,8 +159,8 @@ func TestRenderHCLIncludesCoreStanzas(t *testing.T) {
 
 func TestRenderHCLWithStructuredConfiguration(t *testing.T) {
 	cluster := newMinimalCluster("structured-config", "default")
-	cluster.Spec.Version = "2.5.0"
-	cluster.Spec.Image = "openbao/openbao:2.5.0"
+	cluster.Spec.Version = testOpenBaoVersion250
+	cluster.Spec.Image = testOpenBaoImage250
 	uiEnabled := true
 	autoDownload := true
 	autoRegister := false
@@ -230,7 +236,7 @@ func TestRenderHCLRejectsPluginAutoConfigForUnsupportedVersions(t *testing.T) {
 			if err == nil {
 				t.Fatalf("RenderHCL() expected error, got nil")
 			}
-			if !strings.Contains(err.Error(), "requires OpenBao >= 2.5.0") {
+			if !strings.Contains(err.Error(), testMetricsListenerVersionHint) {
 				t.Fatalf("RenderHCL() error = %v, want version gate error", err)
 			}
 		})
@@ -557,10 +563,12 @@ func TestRenderHCLWithObservabilityMetricsTelemetry(t *testing.T) {
 
 func TestRenderHCLWithAllNodeMetricsListener(t *testing.T) {
 	cluster := newMinimalCluster("metrics-listener", "default")
+	cluster.Spec.Version = testOpenBaoVersion250
+	cluster.Spec.Image = testOpenBaoImage250
 	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
 		Metrics: &openbaov1alpha1.MetricsConfig{
 			Enabled:       true,
-			ScrapeProfile: "AllNodes",
+			ScrapeProfile: configScrapeProfileAllNodes,
 		},
 	}
 
@@ -591,8 +599,69 @@ func TestRenderHCLWithAllNodeMetricsListener(t *testing.T) {
 	}
 }
 
+func TestRenderHCLWithMetricsOnlyListenerRejectsUnsupportedVersions(t *testing.T) {
+	tests := []struct {
+		name          string
+		configure     func(*openbaov1alpha1.MetricsConfig)
+		wantErrSubstr string
+	}{
+		{
+			name: "all nodes",
+			configure: func(metrics *openbaov1alpha1.MetricsConfig) {
+				metrics.ScrapeProfile = configScrapeProfileAllNodes
+			},
+			wantErrSubstr: testMetricsListenerVersionHint,
+		},
+		{
+			name: "explicit listener",
+			configure: func(metrics *openbaov1alpha1.MetricsConfig) {
+				enabled := true
+				metrics.MetricsOnlyListener = &openbaov1alpha1.MetricsOnlyListenerConfig{
+					Enabled: &enabled,
+				}
+			},
+			wantErrSubstr: testMetricsListenerVersionHint,
+		},
+		{
+			name: "all nodes disabled listener",
+			configure: func(metrics *openbaov1alpha1.MetricsConfig) {
+				enabled := false
+				metrics.ScrapeProfile = configScrapeProfileAllNodes
+				metrics.MetricsOnlyListener = &openbaov1alpha1.MetricsOnlyListenerConfig{
+					Enabled: &enabled,
+				}
+			},
+			wantErrSubstr: "cannot be false when scrapeProfile is AllNodes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalCluster("metrics-version", "default")
+			metrics := &openbaov1alpha1.MetricsConfig{Enabled: true}
+			tt.configure(metrics)
+			cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{Metrics: metrics}
+
+			_, err := RenderHCL(cluster, InfrastructureDetails{
+				HeadlessServiceName: cluster.Name,
+				Namespace:           cluster.Namespace,
+				APIPort:             8200,
+				ClusterPort:         8201,
+			})
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantErrSubstr) {
+				t.Fatalf("RenderHCL() error = %v, want containing %q", err, tt.wantErrSubstr)
+			}
+		})
+	}
+}
+
 func TestRenderHCLWithMetricsOnlyListenerRejectsACME(t *testing.T) {
 	cluster := newMinimalCluster("metrics-acme", "default")
+	cluster.Spec.Version = testOpenBaoVersion250
+	cluster.Spec.Image = testOpenBaoImage250
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		Email:        "platform@example.com",
@@ -602,7 +671,7 @@ func TestRenderHCLWithMetricsOnlyListenerRejectsACME(t *testing.T) {
 	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
 		Metrics: &openbaov1alpha1.MetricsConfig{
 			Enabled:       true,
-			ScrapeProfile: "AllNodes",
+			ScrapeProfile: configScrapeProfileAllNodes,
 		},
 	}
 

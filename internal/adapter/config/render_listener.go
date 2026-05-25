@@ -126,7 +126,7 @@ func metricsOnlyListenerEnabled(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	if listener != nil && listener.Enabled != nil {
 		return *listener.Enabled
 	}
-	return cluster.Spec.Observability.Metrics.ScrapeProfile == "AllNodes"
+	return cluster.Spec.Observability.Metrics.ScrapeProfile == configScrapeProfileAllNodes
 }
 
 func metricsOnlyListenerPort(cluster *openbaov1alpha1.OpenBaoCluster) int32 {
@@ -146,5 +146,5 @@ func metricsOnlyListenerUnauthenticatedAccess(cluster *openbaov1alpha1.OpenBaoCl
 			return *enabled
 		}
 	}
-	return cluster.Spec.Observability.Metrics.ScrapeProfile == "AllNodes"
+	return cluster.Spec.Observability.Metrics.ScrapeProfile == configScrapeProfileAllNodes
 }

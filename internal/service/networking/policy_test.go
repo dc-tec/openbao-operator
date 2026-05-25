@@ -609,6 +609,60 @@ func TestBuildNetworkPolicy_TrustedIngressPeers(t *testing.T) {
 	}
 }
 
+func TestBuildNetworkPolicy_TrustedIngressPeersAllowMetricsListenerPort(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "trusted-metrics",
+			Namespace: "openbao",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Observability: &openbaov1alpha1.ObservabilityConfig{
+				Metrics: &openbaov1alpha1.MetricsConfig{
+					Enabled:       true,
+					ScrapeProfile: metricsScrapeProfileAllNode,
+					MetricsOnlyListener: &openbaov1alpha1.MetricsOnlyListenerConfig{
+						Port: 9202,
+					},
+				},
+			},
+			Network: &openbaov1alpha1.NetworkConfig{
+				TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
+					{
+						NamespaceSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								"kubernetes.io/metadata.name": "monitoring",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	policy, err := buildNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.96.0.0/12"}, "openbao-operator-system")
+	if err != nil {
+		t.Fatalf("buildNetworkPolicy() error: %v", err)
+	}
+
+	var foundMonitoringRule bool
+	for _, rule := range policy.Spec.Ingress {
+		if !networkPolicyRuleAllowsPort(rule.Ports, constants.PortAPI) ||
+			!networkPolicyRuleAllowsPort(rule.Ports, 9202) {
+			continue
+		}
+		for _, peer := range rule.From {
+			if peer.NamespaceSelector != nil &&
+				peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] == "monitoring" {
+				foundMonitoringRule = true
+			}
+		}
+	}
+
+	if !foundMonitoringRule {
+		t.Fatal("expected trusted monitoring peer to allow API and metrics listener ports")
+	}
+}
+
 func TestBuildNetworkPolicy_IngressEnabledDoesNotAllowUnrestrictedAPIIngress(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
