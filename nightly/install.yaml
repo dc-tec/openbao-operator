@@ -1563,10 +1563,80 @@ spec:
                         description: Enabled configures the OpenBao telemetry stanza
                           and creates a ServiceMonitor.
                         type: boolean
+                      metricsOnlyListener:
+                        description: |-
+                          MetricsOnlyListener configures a dedicated listener for metrics scraping.
+                          It is enabled automatically when scrapeProfile is AllNodes.
+                        properties:
+                          enabled:
+                            description: |-
+                              Enabled controls whether to render the dedicated metrics-only listener.
+                              When omitted, the listener is enabled automatically for the AllNodes scrape profile.
+                            type: boolean
+                          port:
+                            default: 8202
+                            description: Port is the dedicated metrics listener port.
+                            format: int32
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                          unauthenticatedMetricsAccess:
+                            description: |-
+                              UnauthenticatedMetricsAccess allows unauthenticated access to /v1/sys/metrics
+                              on the metrics-only listener. AllNodes scraping needs this so standby nodes can
+                              expose metrics. Restrict this listener with NetworkPolicy.
+                            type: boolean
+                        type: object
+                      scrapeProfile:
+                        default: Active
+                        description: |-
+                          ScrapeProfile selects which OpenBao pods are targeted by generated scrape resources.
+                          Active targets only the active OpenBao pod. AllNodes targets every OpenBao pod and
+                          requires a dedicated metrics-only listener.
+                        enum:
+                        - Active
+                        - AllNodes
+                        type: string
                       serviceMonitor:
                         description: ServiceMonitor controls whether to create a Prometheus
                           Operator ServiceMonitor.
                         properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations are added to the ServiceMonitor
+                              metadata.
+                            type: object
+                          authorization:
+                            description: |-
+                              Authorization configures an optional ServiceMonitor authorization block.
+                              Use this for authenticated /v1/sys/metrics scraping.
+                            properties:
+                              credentialsSecret:
+                                description: |-
+                                  CredentialsSecret references a Secret key containing the authorization credentials.
+                                  The Secret must exist in the same namespace as the ServiceMonitor.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type:
+                                description: |-
+                                  Type is the authorization type.
+                                  Defaults to Bearer when credentialsSecret is set.
+                                type: string
+                            required:
+                            - credentialsSecret
+                            type: object
                           enabled:
                             default: true
                             description: |-
@@ -1577,10 +1647,70 @@ spec:
                             default: 30s
                             description: Interval is the scrape interval.
                             type: string
+                          jobLabel:
+                            description: |-
+                              JobLabel selects the Service label Prometheus uses as the job label.
+                              Defaults to app.kubernetes.io/name.
+                            type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              Labels are added to the ServiceMonitor metadata.
+                              Use this for Prometheus selectors, such as release labels used by kube-prometheus-stack.
+                            type: object
                           scrapeTimeout:
                             default: 10s
                             description: ScrapeTimeout is the scrape timeout.
                             type: string
+                          tlsConfig:
+                            description: TLSConfig configures TLS verification for
+                              the OpenBao scrape endpoint.
+                            properties:
+                              caConfigMap:
+                                description: |-
+                                  CAConfigMap references a ConfigMap key containing the CA certificate.
+                                  Mutually exclusive with CASecret.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              caSecret:
+                                description: |-
+                                  CASecret references a Secret key containing the CA certificate.
+                                  Mutually exclusive with CAConfigMap.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              insecureSkipVerify:
+                                description: |-
+                                  InsecureSkipVerify disables TLS certificate verification.
+                                  Use only for temporary non-production environments.
+                                type: boolean
+                              serverName:
+                                description: ServerName verifies the hostname in the
+                                  OpenBao serving certificate.
+                                type: string
+                            type: object
                         required:
                         - enabled
                         type: object
@@ -6464,10 +6594,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260524-98ef67392179
+          value: nightly-20260525-693a43cd6f3d
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:111c2df6277f1cc5c5169d165ee17ba148973cd758db2f29538f9bb385704da6
+        image: ghcr.io/dc-tec/openbao-operator@sha256:cd15db6186113cf6622e4c91e9bb3daed5c5bac931d4afa8763f87ecab2b1c10
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6582,8 +6712,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260524-98ef67392179
-        image: ghcr.io/dc-tec/openbao-operator@sha256:111c2df6277f1cc5c5169d165ee17ba148973cd758db2f29538f9bb385704da6
+          value: nightly-20260525-693a43cd6f3d
+        image: ghcr.io/dc-tec/openbao-operator@sha256:cd15db6186113cf6622e4c91e9bb3daed5c5bac931d4afa8763f87ecab2b1c10
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6846,7 +6976,26 @@ spec:
       - httproutes
       - tlsroutes
       - backendtlspolicies
+    - apiGroups:
+      - monitoring.coreos.com
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      - DELETE
+      resources:
+      - servicemonitors
   validations:
+  - expression: |-
+      !(variables.is_operator_controller || variables.is_operator_provisioner) || !variables.is_service_monitor_request || (
+
+        (request.operation == "CREATE" && variables.current_service_monitor_is_operator_owned) ||
+        (request.operation == "UPDATE" && variables.current_service_monitor_is_operator_owned && variables.old_service_monitor_is_operator_owned) ||
+        (request.operation == "DELETE" && variables.old_service_monitor_is_operator_owned)
+      )
+    message: The operator can only create, update, or delete ServiceMonitors that
+      match the OpenBao metrics ownership shape.
   - expression: '!variables.is_managed || variables.is_operator_controller || variables.is_operator_provisioner
       || (variables.is_kube_controller_manager && (request.operation == "DELETE" ||
       request.resource.resource == "pods")) || (variables.is_system_controller &&
@@ -6948,6 +7097,27 @@ spec:
     name: is_job_request
   - expression: request.kind.group == "" && request.kind.kind == "Service"
     name: is_service_request
+  - expression: request.kind.group == "monitoring.coreos.com" && request.kind.kind
+      == "ServiceMonitor"
+    name: is_service_monitor_request
+  - expression: |-
+      object != null && has(object.metadata) && request.namespace != "" && object.metadata.name.endsWith("-metrics") && has(object.metadata.labels) && ("app.kubernetes.io/managed-by" in object.metadata.labels) && object.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator" && ("app.kubernetes.io/component" in object.metadata.labels) && object.metadata.labels["app.kubernetes.io/component"] == "metrics" && ("openbao.org/component" in object.metadata.labels) && object.metadata.labels["openbao.org/component"] == "metrics" && ("openbao.org/cluster" in object.metadata.labels) && object.metadata.labels["openbao.org/cluster"] != "" && object.metadata.name == object.metadata.labels["openbao.org/cluster"] + "-metrics" && has(object.metadata.ownerReferences) && object.metadata.ownerReferences.exists(ref,
+
+        ref.apiVersion == "openbao.org/v1alpha1" &&
+        ref.kind == "OpenBaoCluster" &&
+        ref.name == object.metadata.labels["openbao.org/cluster"] &&
+        has(ref.controller) &&
+        ref.controller == true)
+    name: current_service_monitor_is_operator_owned
+  - expression: |-
+      oldObject != null && has(oldObject.metadata) && request.namespace != "" && oldObject.metadata.name.endsWith("-metrics") && has(oldObject.metadata.labels) && ("app.kubernetes.io/managed-by" in oldObject.metadata.labels) && oldObject.metadata.labels["app.kubernetes.io/managed-by"] == "openbao-operator" && ("app.kubernetes.io/component" in oldObject.metadata.labels) && oldObject.metadata.labels["app.kubernetes.io/component"] == "metrics" && ("openbao.org/component" in oldObject.metadata.labels) && oldObject.metadata.labels["openbao.org/component"] == "metrics" && ("openbao.org/cluster" in oldObject.metadata.labels) && oldObject.metadata.labels["openbao.org/cluster"] != "" && oldObject.metadata.name == oldObject.metadata.labels["openbao.org/cluster"] + "-metrics" && has(oldObject.metadata.ownerReferences) && oldObject.metadata.ownerReferences.exists(ref,
+
+        ref.apiVersion == "openbao.org/v1alpha1" &&
+        ref.kind == "OpenBaoCluster" &&
+        ref.name == oldObject.metadata.labels["openbao.org/cluster"] &&
+        has(ref.controller) &&
+        ref.controller == true)
+    name: old_service_monitor_is_operator_owned
   - expression: request.userInfo.username.startsWith("system:node:")
     name: is_kubelet_node
   - expression: |-
@@ -7652,6 +7822,15 @@ spec:
           ) ||
           (
             rule.apiGroups.size() == 1 &&
+            rule.apiGroups[0] == 'monitoring.coreos.com' &&
+            rule.resources != null &&
+            rule.resources.size() == 1 &&
+            rule.resources[0] == 'servicemonitors' &&
+            rule.verbs != null &&
+            rule.verbs.all(v, v in ['create', 'delete', 'get', 'patch'])
+          ) ||
+          (
+            rule.apiGroups.size() == 1 &&
             rule.apiGroups[0] == 'rbac.authorization.k8s.io' &&
             rule.resources != null &&
             rule.resources.size() > 0 &&
@@ -8202,6 +8381,12 @@ spec:
         authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.backup.tokenSecretRef.name).check("get").allowed()))
     message: Users configuring backup credentials must be authorized to get referenced
       backup Secrets.
+  - expression: '!has(object.spec.observability) || !has(object.spec.observability.metrics)
+      || !has(object.spec.observability.metrics.serviceMonitor) || !has(object.spec.observability.metrics.serviceMonitor.authorization)
+      || !has(object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret)
+      || authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret.name).check("get").allowed()'
+    message: Users configuring ServiceMonitor authorization must be authorized to
+      get spec.observability.metrics.serviceMonitor.authorization.credentialsSecret.
   - expression: |-
       (!has(object.spec.unseal) || !has(object.spec.unseal.credentialsSecretRef) ||
 
@@ -8211,10 +8396,17 @@ spec:
         !object.spec.backup.target.credentialsSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
       (!has(object.spec.backup) || !has(object.spec.backup.tokenSecretRef) ||
 
-        !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
+        !object.spec.backup.tokenSecretRef.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$")) &&
+      (!has(object.spec.observability) ||
+
+        !has(object.spec.observability.metrics) ||
+        !has(object.spec.observability.metrics.serviceMonitor) ||
+        !has(object.spec.observability.metrics.serviceMonitor.authorization) ||
+        !has(object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret) ||
+        !object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret.name.matches("^.*-(unseal-key|root-token|tls-ca|tls-server)$"))
     message: References to system secrets (unseal-key, root-token, tls-ca, tls-server)
-      are prohibited in unseal and backup configurations to prevent confused deputy
-      attacks.
+      are prohibited in unseal, backup, and observability configurations to prevent
+      confused deputy attacks.
   - expression: 'oldObject == null || (has(object.spec.storage.storageClassName) ?
       object.spec.storage.storageClassName : "") == (has(oldObject.spec.storage.storageClassName)
       ? oldObject.spec.storage.storageClassName : "")'

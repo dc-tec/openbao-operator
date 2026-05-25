@@ -1563,10 +1563,80 @@ spec:
                         description: Enabled configures the OpenBao telemetry stanza
                           and creates a ServiceMonitor.
                         type: boolean
+                      metricsOnlyListener:
+                        description: |-
+                          MetricsOnlyListener configures a dedicated listener for metrics scraping.
+                          It is enabled automatically when scrapeProfile is AllNodes.
+                        properties:
+                          enabled:
+                            description: |-
+                              Enabled controls whether to render the dedicated metrics-only listener.
+                              When omitted, the listener is enabled automatically for the AllNodes scrape profile.
+                            type: boolean
+                          port:
+                            default: 8202
+                            description: Port is the dedicated metrics listener port.
+                            format: int32
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                          unauthenticatedMetricsAccess:
+                            description: |-
+                              UnauthenticatedMetricsAccess allows unauthenticated access to /v1/sys/metrics
+                              on the metrics-only listener. AllNodes scraping needs this so standby nodes can
+                              expose metrics. Restrict this listener with NetworkPolicy.
+                            type: boolean
+                        type: object
+                      scrapeProfile:
+                        default: Active
+                        description: |-
+                          ScrapeProfile selects which OpenBao pods are targeted by generated scrape resources.
+                          Active targets only the active OpenBao pod. AllNodes targets every OpenBao pod and
+                          requires a dedicated metrics-only listener.
+                        enum:
+                        - Active
+                        - AllNodes
+                        type: string
                       serviceMonitor:
                         description: ServiceMonitor controls whether to create a Prometheus
                           Operator ServiceMonitor.
                         properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations are added to the ServiceMonitor
+                              metadata.
+                            type: object
+                          authorization:
+                            description: |-
+                              Authorization configures an optional ServiceMonitor authorization block.
+                              Use this for authenticated /v1/sys/metrics scraping.
+                            properties:
+                              credentialsSecret:
+                                description: |-
+                                  CredentialsSecret references a Secret key containing the authorization credentials.
+                                  The Secret must exist in the same namespace as the ServiceMonitor.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type:
+                                description: |-
+                                  Type is the authorization type.
+                                  Defaults to Bearer when credentialsSecret is set.
+                                type: string
+                            required:
+                            - credentialsSecret
+                            type: object
                           enabled:
                             default: true
                             description: |-
@@ -1577,10 +1647,70 @@ spec:
                             default: 30s
                             description: Interval is the scrape interval.
                             type: string
+                          jobLabel:
+                            description: |-
+                              JobLabel selects the Service label Prometheus uses as the job label.
+                              Defaults to app.kubernetes.io/name.
+                            type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: |-
+                              Labels are added to the ServiceMonitor metadata.
+                              Use this for Prometheus selectors, such as release labels used by kube-prometheus-stack.
+                            type: object
                           scrapeTimeout:
                             default: 10s
                             description: ScrapeTimeout is the scrape timeout.
                             type: string
+                          tlsConfig:
+                            description: TLSConfig configures TLS verification for
+                              the OpenBao scrape endpoint.
+                            properties:
+                              caConfigMap:
+                                description: |-
+                                  CAConfigMap references a ConfigMap key containing the CA certificate.
+                                  Mutually exclusive with CASecret.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              caSecret:
+                                description: |-
+                                  CASecret references a Secret key containing the CA certificate.
+                                  Mutually exclusive with CAConfigMap.
+                                properties:
+                                  key:
+                                    description: |-
+                                      Key is the key within the Secret or ConfigMap.
+                                      Defaults to token for authorization credentials and ca.crt for CA references.
+                                    type: string
+                                  name:
+                                    description: Name is the Secret or ConfigMap name.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              insecureSkipVerify:
+                                description: |-
+                                  InsecureSkipVerify disables TLS certificate verification.
+                                  Use only for temporary non-production environments.
+                                type: boolean
+                              serverName:
+                                description: ServerName verifies the hostname in the
+                                  OpenBao serving certificate.
+                                type: string
+                            type: object
                         required:
                         - enabled
                         type: object
