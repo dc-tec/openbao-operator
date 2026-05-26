@@ -184,6 +184,12 @@ The controller does not treat missing tenant RBAC as a normal write failure anym
 
 </Callout>
 
+<Callout type="warning" title="PVC contents are outside Kubernetes object RBAC">
+
+Kubernetes RBAC controls who can read or mutate the PVC object; it does not protect files after another workload can mount the volume. Treat audit file storage as sensitive data. Restrict Pod creation, ephemeral containers, `exec`, collector configuration, and node or storage-admin access around any PVC used by `spec.auditFileStorage`.
+
+</Callout>
+
 ## What the RBAC model guarantees
 
 <DecisionTable

@@ -46,6 +46,9 @@ kubectl -n <ns> get events --sort-by=.lastTimestamp`}
       cells: ['Scheduled backups', '`BackupConfigurationReady`'],
     },
     {
+      cells: ['File audit storage', '`AuditFileStorageReady`, then `Degraded` if StatefulSet recreation is required'],
+    },
+    {
       cells: ['Restore execution', '`RestoreConfigurationReady`, then `RestoreComplete`'],
     },
   ]}
@@ -63,6 +66,7 @@ Condition types defined in `api/v1alpha1`:
 | `UserAccessBootstrap` | Best-effort check that `spec.selfInit.requests` appears to create a human login path in addition to operator bootstrap auth | `UserAccessConfigured`, `UserAccessUnverified`, `Disabled`, `Paused` |
 | `ACMEIntegrationReady` | Operator-known ACME prerequisites such as Gateway passthrough, private ACME trust, and supported self-reachability checks | `ACMEIntegrationReady`, `GatewayAPIMissing`, `ACMEGatewayNotConfiguredForPassthrough`, `ACMEDomainNotResolvable`, `PrerequisitesMissing`, `Unknown`, `Paused` |
 | `ACMECacheReady` | Shared ACME cache readiness for HA or blue/green ACME topologies | `ACMECacheReady`, `ACMECacheNotConfigured`, `ACMECacheMissing`, `ACMECachePending`, `ACMECacheInvalidAccessMode` |
+| `AuditFileStorageReady` | Shared file-audit PVC readiness and StatefulSet mount adoption | `AuditFileStorageReady`, `AuditFileStorageMissing`, `AuditFileStoragePending`, `AuditFileStorageInvalidAccessMode`, `AuditFileStorageStatefulSetRecreateRequired`, `Unknown` |
 | `GatewayIntegrationReady` | Operator-known Gateway API prerequisites and controller support for `spec.gateway` | `GatewayIntegrationReady`, `GatewayAPIMissing`, `GatewayReferenceMissing`, `GatewayClassMissing`, `GatewayClassPending`, `GatewayClassNotAccepted`, `GatewayVersionUnsupported`, `GatewayFeatureUnsupported`, `GatewayCapabilitiesUnknown`, `GatewayNotProgrammed`, `GatewayProgrammingPending`, `GatewayListenerIncompatible`, `Paused` |
 | `BackupConfigurationReady` | Operator-known backup Job prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired`, `Unknown`, `Paused` |
 | `CloudUnsealIdentityReady` | Operator-known authentication path for cloud KMS unseal on the main OpenBao Pods | `Ready`, `CredentialsSecretMissing`, `PrerequisitesMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `Unknown`, `Paused` |

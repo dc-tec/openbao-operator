@@ -190,6 +190,17 @@ func buildStatefulSetVolumes(cluster *openbaov1alpha1.OpenBaoCluster, spec State
 		})
 	}
 
+	if claimName := portopenbao.AuditFileStorageClaimName(cluster); claimName != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: auditFileStorageVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: claimName,
+				},
+			},
+		})
+	}
+
 	if usesDeclarativeOCIPluginDownload(cluster) {
 		volumes = append(volumes, corev1.Volume{
 			Name: pluginVolumeName,

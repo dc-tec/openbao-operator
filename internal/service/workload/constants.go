@@ -50,3 +50,5 @@ const (
 	serviceAccountFileMode               = int32(0440)
 	serviceAccountTokenExpirationSeconds = int64(3600)
 )
+
+const auditFileStorageVolumeName = constants.VolumeAuditFileStorage

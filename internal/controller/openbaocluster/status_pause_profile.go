@@ -43,6 +43,16 @@ func (r *OpenBaoClusterReconciler) updateStatusForPaused(ctx context.Context, lo
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionACMEIntegrationReady))
 	}
 
+	if portopenbao.HasAuditFileStorage(cluster) {
+		setAuditFileStorageReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  reasonPaused,
+			Message: "Audit file storage readiness is not being evaluated while reconciliation is paused",
+		})
+	} else {
+		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionAuditFileStorageReady))
+	}
+
 	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
 		setGatewayIntegrationReadyEvaluatedCondition(cluster, appopenbaocluster.GatewayIntegrationResult{
 			Status:  metav1.ConditionUnknown,
@@ -123,6 +133,16 @@ func (r *OpenBaoClusterReconciler) updateStatusForProfileNotSet(ctx context.Cont
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionACMEIntegrationReady))
+	}
+
+	if portopenbao.HasAuditFileStorage(cluster) {
+		setAuditFileStorageReadyEvaluatedCondition(cluster, statusConditionResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  ReasonProfileNotSet,
+			Message: "Audit file storage readiness is not being evaluated until spec.profile is set",
+		})
+	} else {
+		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionAuditFileStorageReady))
 	}
 
 	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {

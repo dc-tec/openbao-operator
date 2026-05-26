@@ -22,10 +22,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	platformconstants "github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/test/e2e/framework"
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
@@ -35,8 +37,9 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 
 	Context("Tenant + Cluster lifecycle (Self-Init)", Label("critical", "tenant"), func() {
 		var (
-			f *framework.Framework
-			c client.Client
+			f   *framework.Framework
+			c   client.Client
+			cfg *rest.Config
 		)
 
 		const (
@@ -48,6 +51,9 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			f, err = framework.NewSetup(ctx, "smoke", operatorNamespace)
 			Expect(err).NotTo(HaveOccurred())
 			c = f.Client
+
+			cfg, err = ctrlconfig.GetConfig()
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterAll(func() {
@@ -71,6 +77,14 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 
 		It("creates an OpenBaoCluster and converges to Available", func() {
 			By(fmt.Sprintf("creating OpenBaoCluster %q in namespace %q", clusterName, f.Namespace))
+			auditFileStorage := &openbaov1alpha1.AuditFileStorageConfig{
+				Mode: openbaov1alpha1.AuditFileStorageModeManagedPVC,
+				Size: "1Gi",
+			}
+			if sc := strings.TrimSpace(os.Getenv("E2E_STORAGE_CLASS")); sc != "" {
+				auditFileStorage.StorageClassName = &sc
+			}
+
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
@@ -90,7 +104,10 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 						OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
 							Enabled: true,
 						},
-						Requests: framework.DefaultAdminSelfInitRequests(),
+						Requests: append(
+							framework.DefaultAdminSelfInitRequests(),
+							e2ehelpers.CreateE2ERequests(f.Namespace)...,
+						),
 					},
 					TLS: openbaov1alpha1.TLSConfig{
 						Enabled:        true,
@@ -105,6 +122,36 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 					},
 					Network: &openbaov1alpha1.NetworkConfig{
 						APIServerCIDR: apiServerCIDR,
+						IngressRules: []networkingv1.NetworkPolicyIngressRule{
+							{
+								From: []networkingv1.NetworkPolicyPeer{
+									{
+										PodSelector: &metav1.LabelSelector{
+											MatchLabels: map[string]string{
+												"role": "test-verifier",
+											},
+										},
+									},
+								},
+								Ports: []networkingv1.NetworkPolicyPort{
+									{
+										Protocol: ptr.To(corev1.ProtocolTCP),
+										Port:     ptr.To(intstr.FromInt(8200)),
+									},
+								},
+							},
+						},
+					},
+					AuditFileStorage: auditFileStorage,
+					Audit: []openbaov1alpha1.AuditDevice{
+						{
+							Type:        "file",
+							Path:        "file",
+							Description: "E2E file audit log",
+							FileOptions: &openbaov1alpha1.FileAuditOptions{
+								FilePath: "/openbao/audit/audit.jsonl",
+							},
+						},
 					},
 					DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 				},
@@ -153,6 +200,61 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 			// (Simplified verification for smoke test)
 			cm := &corev1.ConfigMap{}
 			Expect(c.Get(ctx, types.NamespacedName{Name: clusterName + "-config", Namespace: f.Namespace}, cm)).To(Succeed())
+		})
+
+		It("writes file audit records to managed audit storage", Label("audit"), func() {
+			auditPVCName := clusterName + "-audit"
+			verifierLabels := map[string]string{"role": "test-verifier"}
+
+			By("waiting for audit file storage readiness")
+			f.WaitForConditionReason(
+				clusterName,
+				openbaov1alpha1.ConditionAuditFileStorageReady,
+				metav1.ConditionTrue,
+				"AuditFileStorageReady",
+			)
+
+			By("verifying the managed audit PVC is Bound and RWX")
+			Eventually(func(g Gomega) {
+				pvc := &corev1.PersistentVolumeClaim{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: auditPVCName, Namespace: f.Namespace}, pvc)).To(Succeed())
+				g.Expect(pvc.Spec.AccessModes).To(ContainElement(corev1.ReadWriteMany))
+				g.Expect(pvc.Status.Phase).To(Equal(corev1.ClaimBound))
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("waiting for SelfInit to create the JWT role used by the audit request")
+			Eventually(func(g Gomega) {
+				updated := &openbaov1alpha1.OpenBaoCluster{}
+				g.Expect(c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: f.Namespace}, updated)).To(Succeed())
+				g.Expect(updated.Status.Initialized).To(BeTrue())
+				g.Expect(updated.Status.SelfInitialized).To(BeTrue())
+			}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+			By("triggering an audited OpenBao API request")
+			Eventually(func(g Gomega) {
+				baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, c, f.Namespace, clusterName)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(e2ehelpers.WriteSecretViaJWT(
+					ctx,
+					cfg,
+					c,
+					f.Namespace,
+					openBaoImage,
+					baoAddr,
+					"default",
+					"e2e-test",
+					"secret/audit-file-storage-smoke",
+					verifierLabels,
+					map[string]string{"value": "audit-file-storage"},
+				)).To(Succeed())
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
+
+			By("reading audit records through a collector-style read-only PVC mount")
+			Eventually(func(g Gomega) {
+				logs, err := readAuditRecordsFromPVC(ctx, cfg, c, f.Namespace, openBaoImage, auditPVCName)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(logs).To(ContainSubstring("total_lines="))
+			}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 		})
 
 		It("expands storage by increasing spec.storage.size (if supported)", func() {
@@ -648,3 +750,96 @@ var _ = Describe("Cluster Lifecycle", Label("lifecycle", "cluster"), Ordered, fu
 		})
 	})
 })
+
+func readAuditRecordsFromPVC(
+	ctx context.Context,
+	cfg *rest.Config,
+	c client.Client,
+	namespace string,
+	image string,
+	claimName string,
+) (string, error) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("audit-reader-%d", time.Now().UnixNano()),
+			Namespace: namespace,
+			Labels: map[string]string{
+				"role": "test-verifier",
+			},
+		},
+		Spec: corev1.PodSpec{
+			RestartPolicy:                 corev1.RestartPolicyNever,
+			AutomountServiceAccountToken:  ptr.To(false),
+			TerminationGracePeriodSeconds: ptr.To(int64(0)),
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot: ptr.To(true),
+				RunAsUser:    ptr.To(platformconstants.UserOpenBao),
+				RunAsGroup:   ptr.To(platformconstants.GroupOpenBao),
+				FSGroup:      ptr.To(platformconstants.GroupOpenBao),
+				SeccompProfile: &corev1.SeccompProfile{
+					Type: corev1.SeccompProfileTypeRuntimeDefault,
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "audit-storage",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: claimName,
+							ReadOnly:  true,
+						},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:    "reader",
+					Image:   image,
+					Command: []string{"/bin/sh", "-ec"},
+					Args: []string{`
+total=0
+found=0
+for file in /audit/*/audit.jsonl; do
+  [ -f "$file" ] || continue
+  found=1
+  lines=$(wc -l < "$file" | tr -d ' ')
+  echo "$file lines=$lines"
+  total=$((total + lines))
+done
+echo "total_lines=$total"
+[ "$found" -eq 1 ]
+[ "$total" -gt 0 ]
+`},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "audit-storage",
+							MountPath: "/audit",
+							ReadOnly:  true,
+						},
+					},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: ptr.To(false),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+						RunAsNonRoot:           ptr.To(true),
+						ReadOnlyRootFilesystem: ptr.To(true),
+						Privileged:             ptr.To(false),
+						RunAsUser:              ptr.To(platformconstants.UserOpenBao),
+						RunAsGroup:             ptr.To(platformconstants.GroupOpenBao),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := e2ehelpers.RunPodUntilCompletion(ctx, cfg, c, pod, time.Minute)
+	_ = e2ehelpers.DeletePodBestEffort(ctx, c, namespace, pod.Name)
+	if err != nil {
+		return "", err
+	}
+	if result.Phase != corev1.PodSucceeded {
+		return result.Logs, fmt.Errorf("audit reader pod failed, logs:\n%s", result.Logs)
+	}
+	return result.Logs, nil
+}

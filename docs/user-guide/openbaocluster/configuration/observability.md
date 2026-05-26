@@ -36,6 +36,14 @@ description: Configure operator metrics, cluster telemetry, dashboards, alerts, 
     },
     {
       cells: [
+        "OpenBao audit logs",
+        "`spec.audit` plus `spec.auditFileStorage`, then a collector that reads the audit PVC.",
+        "Security and compliance event trails from the OpenBao audit device.",
+        "Audit records are sensitive. The PVC is a handoff buffer, not the final retention boundary.",
+      ],
+    },
+    {
+      cells: [
         "Logs and health probes",
         "Operator install values such as log level and health probe settings.",
         "Fast incident triage when the issue is not obvious from metrics alone.",
@@ -227,6 +235,72 @@ listener using `/v1/sys/metrics?format=prometheus`. The `AllNodes` profile
 targets every OpenBao pod through the metrics-only listener. Keep the metrics
 Service reachable only from your monitoring namespace with NetworkPolicy when
 unauthenticated metrics access is enabled.
+
+## Collect OpenBao audit logs
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Write audit records to a collector handoff PVC"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+spec:
+  auditFileStorage:
+    mode: ExistingPVC
+    existingClaimName: prod-cluster-audit-rwx
+  audit:
+    - type: file
+      path: file
+      description: "File audit log for collection"
+      fileOptions:
+        file_path: "/openbao/audit/audit.jsonl"
+        format: "json"`}
+>
+  Use this when a log collector such as Alloy should read OpenBao audit records from a shared filesystem. Each OpenBao Pod writes beneath its own PVC subdirectory while the rendered file path inside the Pod stays stable.
+</CommandBlock>
+
+Mount the audit PVC read-only into the collector and ship records to the log
+system that owns search, retention, and compliance controls. The
+[OpenBao Observability Reference Architecture](https://github.com/dc-tec/openbao-observability)
+shows the intended companion pattern for Alloy, Loki, and Grafana assets.
+
+<DecisionTable
+  kind="reference"
+  title="Audit collection boundaries"
+  columns={["Boundary", "Recommendation", "Why it matters"]}
+  rows={[
+    {
+      cells: [
+        "OpenBao Pods",
+        "Write only to paths under `spec.auditFileStorage.mountPath`.",
+        "The operator validates file audit paths so records land on the mounted audit PVC instead of the read-only container filesystem.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Collector",
+        "Mount the audit PVC read-only and scope the collector to the cluster namespace.",
+        "Audit records can contain sensitive request metadata and must not become writable from the collection path.",
+      ],
+    },
+    {
+      cells: [
+        "Archive",
+        "Move records from the handoff PVC to external retention-controlled storage.",
+        "PVC storage is useful for buffering and replay, but it is not a tamper-proof compliance archive.",
+      ],
+    },
+  ]}
+/>
+
+<Callout type="warning" title="Audit files are sensitive logs">
+
+Restrict who can create Pods that mount the audit PVC, who can `exec` into OpenBao or collector Pods, and who can administer the backing storage. Kubernetes RBAC on the PVC object does not protect file contents once another workload can mount the volume.
+
+</Callout>
 
 <DecisionTable
   kind="reference"

@@ -120,4 +120,12 @@ const (
 	annotationLastUnsafeAdmissionWarning = "openbao.org/last-unsafe-admission-warning"
 )
 
+const (
+	ReasonAuditFileStorageReady                       = "AuditFileStorageReady"
+	ReasonAuditFileStorageMissing                     = "AuditFileStorageMissing"
+	ReasonAuditFileStoragePending                     = "AuditFileStoragePending"
+	ReasonAuditFileStorageInvalidAccessMode           = "AuditFileStorageInvalidAccessMode"
+	ReasonAuditFileStorageStatefulSetRecreateRequired = constants.ReasonAuditFileStorageStatefulSetRecreateRequired
+)
+
 const securityWarningInterval = time.Hour

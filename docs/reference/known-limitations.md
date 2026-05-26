@@ -38,6 +38,9 @@ journey: reference
       cells: ['Built-in upgrade authentication', 'Built-in rolling and blue/green upgrade orchestration do not support `spec.upgrade.tokenSecretRef`; upgrade Jobs use JWT authentication only.', 'Configure `spec.upgrade.jwtAuthRole` or enable `spec.selfInit.oidc.enabled` so the operator can bootstrap the upgrade auth path.'],
     },
     {
+      cells: ['Audit file storage archival', '`spec.auditFileStorage` provides a PVC-backed collector handoff and replay buffer; it does not provide rotation, pruning, tamper-proof retention, or a collector.', 'Mount the audit PVC read-only into a collector and ship records to external retention-controlled storage.'],
+    },
+    {
       cells: ['Upgrade strategy switching', 'Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a supported in-place transition today.', 'Choose the upgrade strategy before the next rollout and keep it stable for that cluster.'],
       emphasis: 'caution',
     },

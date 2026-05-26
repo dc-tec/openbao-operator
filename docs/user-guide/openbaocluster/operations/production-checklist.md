@@ -101,6 +101,7 @@ kubectl get openbaotenant -A`}
 - Choose a low-latency StorageClass and set `spec.storage.storageClassName` explicitly for new clusters. The effective storage class is not something you want to discover by accident after PVC creation.
 - Use at least three replicas for a highly available Raft cluster and verify the Kubernetes nodes span the intended zones or failure domains.
 - Configure scheduled backups and test a restore path before the first risky upgrade.
+- If you use file audit devices, configure `spec.auditFileStorage` on encrypted RWX storage and verify the mounted path is writable by the OpenBao runtime identity.
 - Confirm `spec.network.egressRules` allow the cluster to reach the services it really depends on: cloud KMS, OIDC discovery, backup storage, and any external gateway edges.
 
 <Callout type="note" title="Backups are part of the production gate">
@@ -113,6 +114,7 @@ Include backup success and restore confidence in the launch checklist rather tha
 
 - Configure metrics scraping through Prometheus Operator (`ServiceMonitor`) or VictoriaMetrics Operator (`VMServiceScrape`).
 - Grant the scraping identity permission to read `sys/metrics` and keep TLS verification strict in production.
+- Ship OpenBao audit files from the audit storage PVC into the external log system or immutable archive that owns retention.
 - Make sure structured logs including `cluster_name` and `cluster_namespace` reach the log system your operators actually use.
 - Alert on backup staleness, degradation, reconciliation failures, and other conditions that warrant human intervention before tenants feel the failure.
 
@@ -158,7 +160,7 @@ kubectl get openbaocluster <name> -n <namespace> -o jsonpath='{.status.phase}{"\
     {
       cells: [
         'Integration-specific conditions',
-        'Healthy for the features you enabled, such as CloudUnsealIdentityReady, GatewayIntegrationReady, APIServerNetworkReady, or BackupConfigurationReady.',
+        'Healthy for the features you enabled, such as CloudUnsealIdentityReady, GatewayIntegrationReady, APIServerNetworkReady, AuditFileStorageReady, or BackupConfigurationReady.',
         'These conditions expose dependency problems that may not show up as plain pod readiness failures.',
       ],
     },

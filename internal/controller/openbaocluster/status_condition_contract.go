@@ -106,6 +106,17 @@ var acmeCacheReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
 )
 
+var auditFileStorageReadyConditionContract = newConditionContract(
+	conditionContractEntry{reason: ReasonAuditFileStorageReady, status: metav1.ConditionTrue},
+	conditionContractEntry{reason: ReasonAuditFileStorageMissing, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: ReasonAuditFileStoragePending, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: ReasonAuditFileStorageInvalidAccessMode, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: ReasonAuditFileStorageStatefulSetRecreateRequired, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
+	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},
+)
+
 var backupConfigurationReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: reasonReady, status: metav1.ConditionTrue},
 	conditionContractEntry{reason: constants.ReasonAmbientIdentityAssumed, status: metav1.ConditionTrue},
@@ -295,6 +306,19 @@ func setACMECacheReadyEvaluatedCondition(
 		cluster.Generation,
 		result,
 		acmeCacheReadyConditionContract,
+	)
+}
+
+func setAuditFileStorageReadyEvaluatedCondition(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	result statusConditionResult,
+) {
+	applyConditionContract(
+		&cluster.Status.Conditions,
+		openbaov1alpha1.ConditionAuditFileStorageReady,
+		cluster.Generation,
+		result,
+		auditFileStorageReadyConditionContract,
 	)
 }
 

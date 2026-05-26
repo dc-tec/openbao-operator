@@ -198,6 +198,13 @@ This model assumes the operator manages clusters it created and reconciles; gene
         'They steer runtime behavior and disruptive workflows even when they do not directly store application secrets.',
       ],
     },
+    {
+      cells: [
+        'Audit records',
+        'High',
+        'They can contain sensitive request metadata and are needed for incident reconstruction and compliance evidence.',
+      ],
+    },
   ]}
 />
 
@@ -235,6 +242,13 @@ This model assumes the operator manages clusters it created and reconciles; gene
         'These credentials and identity paths sit at a high-value trust boundary outside the workload itself.',
       ],
     },
+    {
+      cells: [
+        'Audit file storage PVC',
+        '`spec.auditFileStorage` is configured',
+        'This PVC is a local handoff buffer for audit records before the collector ships them to the retention system.',
+      ],
+    },
   ]}
 />
 
@@ -266,6 +280,7 @@ This model assumes the operator manages clusters it created and reconciles; gene
 - A user, GitOps controller, or compromised namespace actor directly mutates operator-managed resources.
 - A compromised provisioner broadens tenant RBAC or tenant guardrails.
 - A tenant or operator steers backup or restore jobs toward unintended endpoints or credentials.
+- A workload with access to the audit PVC alters or deletes audit files before the collector ships them.
 
 <Callout type="success" title="Primary mitigations">
 
@@ -273,6 +288,7 @@ This model assumes the operator manages clusters it created and reconciles; gene
 - Restrict controller writes for RBAC, `ServiceAccount`, and Secret objects.
 - Restrict provisioner namespace mutation and tenant-governance writes.
 - Keep backup and restore credentials name-scoped and separately validated.
+- Mount audit storage read-only into collectors and ship records to retention-controlled storage.
 
 </Callout>
 
@@ -290,12 +306,14 @@ Operator-managed PVCs are intentionally CR-driven and status-observed rather tha
 
 - High-value control-plane actions cannot be attributed later.
 - Break-glass changes happen without a clear audit boundary.
+- Audit files remain only on PVC-backed handoff storage and are rotated or deleted before durable collection.
 
 <Callout type="success" title="Primary mitigations">
 
 - Emit structured operator audit logs for startup gating, upgrades, backups, restore, and operation-lock transitions.
 - Use Kubernetes API audit logs and admission denials as the primary mutation trail.
 - Keep maintenance mode explicit and grant the custom maintenance permission only to trusted operators.
+- Collect OpenBao audit files into an external log system or immutable archive with retention policy.
 
 </Callout>
 
@@ -308,6 +326,7 @@ Operator-managed PVCs are intentionally CR-driven and status-observed rather tha
 - Secrets, credentials, or keys are exposed through logs or broad namespace access.
 - TLS handling leaks sensitive material.
 - Backup and restore credentials leak across workloads.
+- Audit files are read by a workload, user, node operator, or storage administrator outside the intended collection path.
 
 <Callout type="success" title="Primary mitigations">
 
@@ -316,6 +335,7 @@ Operator-managed PVCs are intentionally CR-driven and status-observed rather tha
 - Use separate writer and reader roles for operator-managed Secrets.
 - Keep ACME private keys in the OpenBao process instead of Kubernetes Secrets.
 - Use separate workload identities for backup and restore Jobs.
+- Restrict who can mount audit PVCs, use `exec`, configure collectors, or administer backing storage.
 
 </Callout>
 
@@ -367,6 +387,7 @@ Operator-managed PVCs are intentionally CR-driven and status-observed rather tha
 <Callout type="warning" title="Accepted posture">
 
 - PVCs are intentionally soft-governed rather than fully admission-locked because Kubernetes and CSI controllers also update them.
+- Audit file storage is a handoff and replay buffer. The operator does not provide tamper-proof audit archival or retention controls.
 - `UserAccessBootstrap` is best-effort signaling. The operator does not prove that arbitrary self-init requests create a usable human authentication path.
 - Cloud KMS and external identity integrations are surfaced through conditions and validation, but still depend on systems outside the operator trust boundary.
 - `unsafe mode` intentionally weakens the API-level safety model and is not a supported Hardened production posture.

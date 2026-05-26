@@ -74,6 +74,8 @@ func (r *infraReconciler) mapManagerReconcileError(err error) error {
 		return operatorerrors.WithReason(constants.ReasonAPIServerNetworkConfigurationInvalid, err)
 	case errors.Is(err, workloadsvc.ErrStatefulSetPrerequisitesMissing):
 		return operatorerrors.WithReason(constants.ReasonPrerequisitesMissing, err)
+	case errors.Is(err, workloadsvc.ErrAuditFileStorageStatefulSetRequiresRecreate):
+		return operatorerrors.WithReason(constants.ReasonAuditFileStorageStatefulSetRecreateRequired, err)
 	case errors.Is(err, networkingmanager.ErrACMEDomainNotResolvable):
 		return operatorerrors.WithReason(constants.ReasonACMEDomainNotResolvable, err)
 	case errors.Is(err, networkingmanager.ErrACMEGatewayNotConfiguredForPassthrough):

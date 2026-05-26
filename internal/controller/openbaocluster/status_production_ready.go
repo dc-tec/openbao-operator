@@ -94,6 +94,10 @@ func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionR
 		}
 	}
 
+	if status, reason, message, blocked := requireAuditFileStorageProductionReady(cluster); blocked {
+		return status, reason, message
+	}
+
 	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
 		if status, reason, message, blocked := requireConditionNotFalse(
 			cluster,
@@ -121,6 +125,17 @@ func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionR
 	}
 
 	return metav1.ConditionTrue, ReasonProductionReady, "Cluster meets Hardened profile production-ready requirements"
+}
+
+func requireAuditFileStorageProductionReady(cluster *openbaov1alpha1.OpenBaoCluster) (metav1.ConditionStatus, string, string, bool) {
+	if !portopenbao.HasAuditFileStorage(cluster) {
+		return "", "", "", false
+	}
+	return requireConditionTrue(
+		cluster,
+		openbaov1alpha1.ConditionAuditFileStorageReady,
+		"Audit file storage is not ready for file audit devices",
+	)
 }
 
 func requireConditionTrue(

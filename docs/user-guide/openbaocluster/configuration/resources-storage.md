@@ -41,6 +41,13 @@ description: Choose storage class, PVC size, and workload resource requests for 
     },
     {
       cells: [
+        "Audit file storage PVC",
+        "Creates or mounts one RWX PVC when `spec.auditFileStorage` is configured.",
+        "Choose storage that supports multi-node mounts, encryption at rest, and writable ownership for the OpenBao Pod security context.",
+      ],
+    },
+    {
+      cells: [
         "Default NetworkPolicy",
         "Applies the operator-managed baseline traffic rules for Pods in the cluster.",
         "Add any extra ingress or egress rules your environment requires and validate them against backup, restore, and edge traffic.",
@@ -134,6 +141,71 @@ spec:
   ]}
 />
 
+## Size audit file storage
+
+`spec.auditFileStorage` is separate from the Raft data path. Use it only when
+file audit devices need a filesystem handoff for a collector.
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Create a managed RWX audit PVC"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: prod-cluster
+spec:
+  auditFileStorage:
+    mode: ManagedPVC
+    size: "20Gi"
+    storageClassName: "rwx-encrypted"
+  audit:
+    - type: file
+      path: file
+      fileOptions:
+        file_path: "/openbao/audit/audit.jsonl"
+        format: "json"`}
+>
+  Set the size for expected collector lag, replay needs, and failure recovery. Long-term retention belongs in the downstream log or archive system.
+</CommandBlock>
+
+<DecisionTable
+  kind="reference"
+  title="Audit storage requirements"
+  columns={["Requirement", "What to verify", "Operational note"]}
+  rows={[
+    {
+      cells: [
+        "ReadWriteMany",
+        "The PVC must include `ReadWriteMany` and reach `Bound`.",
+        "`AuditFileStorageReady=False` reports missing, pending, or non-RWX claims before the workload can be considered ready.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Writable ownership",
+        "The mounted path must be writable by the OpenBao runtime user or group.",
+        "On standard Kubernetes the Pods run as UID `100` and GID `1000` with `fsGroup: 1000`. Verify that the CSI driver honors that, or pre-provision ownership for existing claims.",
+      ],
+    },
+    {
+      cells: [
+        "Encryption and node placement",
+        "The backing storage must match the sensitivity of audit records.",
+        "Audit records can contain request metadata. Keep storage encryption, node access, and platform-admin access in the security review.",
+      ],
+    },
+    {
+      cells: [
+        "Capacity and cleanup",
+        "The PVC must absorb collector outages without filling the filesystem.",
+        "Define alerting and cleanup outside the operator. The operator does not rotate, prune, or archive audit files.",
+      ],
+    },
+  ]}
+/>
+
 ## Inspect the rendered storage state
 
 <CommandBlock
@@ -143,6 +215,19 @@ spec:
   code={`kubectl get pvc -n <namespace> -l openbao.org/cluster=<name>`}
 >
   Check the requested size, bound StorageClass, and whether any PVC reports `FileSystemResizePending`.
+</CommandBlock>
+
+<CommandBlock
+  language="bash"
+  label="verify"
+  title="Check audit storage readiness"
+  code={`kubectl get openbaocluster <name> -n <namespace> \\
+  -o jsonpath='{range .status.conditions[?(@.type=="AuditFileStorageReady")]}{.status}{"\\t"}{.reason}{"\\t"}{.message}{"\\n"}{end}'
+
+kubectl get pvc -n <namespace> <audit-pvc-name> \\
+  -o jsonpath='{.status.phase}{"\\t"}{.spec.accessModes}{"\\n"}'`}
+>
+  Use the condition for the operator view and the PVC command for the underlying Kubernetes storage state.
 </CommandBlock>
 
 <CommandBlock

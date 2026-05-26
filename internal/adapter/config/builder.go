@@ -138,6 +138,9 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	if err := validateConfigVersionCompatibility(cluster); err != nil {
 		return nil, err
 	}
+	if err := validateAuditFileStorageConfiguration(cluster); err != nil {
+		return nil, err
+	}
 
 	// General configuration. UI defaults to true, but can be overridden by user configuration.
 	uiEnabled := true
