@@ -325,6 +325,7 @@ suites:
       - smoke
       - critical
       - tenant
+      - audit
     coverage: []
     runtime:
       observed: 4m40.082s

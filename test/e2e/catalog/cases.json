@@ -364,6 +364,43 @@
     "suiteTitle": ""
   },
   {
+    "id": "cluster-lifecycle-writes-file-audit-records-to-managed-fd0d4c2f",
+    "generatedId": "cluster-lifecycle-writes-file-audit-records-to-managed-fd0d4c2f",
+    "file": "test/e2e/Cluster_Lifecycle_test.go",
+    "type": "It",
+    "name": "writes file audit records to managed audit storage",
+    "path": [
+      "Cluster Lifecycle",
+      "Tenant + Cluster lifecycle (Self-Init)",
+      "writes file audit records to managed audit storage"
+    ],
+    "labels": [
+      "lifecycle",
+      "cluster",
+      "critical",
+      "tenant",
+      "audit"
+    ],
+    "domainLabels": [
+      "lifecycle",
+      "cluster",
+      "critical",
+      "tenant",
+      "audit"
+    ],
+    "steps": [
+      "waiting for audit file storage readiness",
+      "verifying the managed audit PVC is Bound and RWX",
+      "waiting for SelfInit to create the JWT role used by the audit request",
+      "triggering an audited OpenBao API request",
+      "reading audit records through a collector-style read-only PVC mount"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "hardened-bluegreen-upgrade",
     "generatedId": "cluster-profile-hardened-performs-a-hardened-blue-green-upgrade-6ad6aecb",
     "caseLabel": "hardened-bluegreen-upgrade",

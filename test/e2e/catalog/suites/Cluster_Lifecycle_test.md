@@ -15,6 +15,7 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | `cluster-lifecycle-creates-an-openbaocluster-and-converges-to-00cd448b` | creates an OpenBaoCluster and converges to Available | active | _none_ | `lifecycle`, `cluster`, `critical`, `tenant` |
 | `cluster-lifecycle-expands-storage-by-increasing-spec-storage-212f934d` | expands storage by increasing spec.storage.size (if supported) | active | _none_ | `lifecycle`, `cluster`, `critical`, `tenant` |
 | `cluster-lifecycle-provisions-tenant-rbac-via-openbaotenant-1798196a` | provisions tenant RBAC via OpenBaoTenant | active | _none_ | `lifecycle`, `cluster`, `critical`, `tenant` |
+| `cluster-lifecycle-writes-file-audit-records-to-managed-fd0d4c2f` | writes file audit records to managed audit storage | active | _none_ | `lifecycle`, `cluster`, `critical`, `tenant`, `audit` |
 
 ## `cluster-lifecycle-creates-a-cluster-with-self-init-19ac290f`
 
@@ -139,3 +140,21 @@ Labels: `lifecycle`, `cluster`, `critical`, `tenant`
 
 Recorded checkpoints:
 - verifying OpenBaoTenant is provisioned
+
+
+## `cluster-lifecycle-writes-file-audit-records-to-managed-fd0d4c2f`
+
+Path: `Cluster Lifecycle > Tenant + Cluster lifecycle (Self-Init) > writes file audit records to managed audit storage`
+
+State: `active`
+
+Covers: _none_
+
+Labels: `lifecycle`, `cluster`, `critical`, `tenant`, `audit`
+
+Recorded checkpoints:
+- waiting for audit file storage readiness
+- verifying the managed audit PVC is Bound and RWX
+- waiting for SelfInit to create the JWT role used by the audit request
+- triggering an audited OpenBao API request
+- reading audit records through a collector-style read-only PVC mount
