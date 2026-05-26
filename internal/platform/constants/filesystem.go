@@ -16,6 +16,8 @@ const (
 	VolumePlugins = "plugins"
 )
 
+const VolumeAuditFileStorage = "audit-file-storage"
+
 // TLS file paths mounted into OpenBao pods and helper executables.
 const (
 	PathTLSCACert     = PathTLS + "/ca.crt"

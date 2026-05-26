@@ -219,6 +219,14 @@ func buildContainerVolumeMounts(cluster *openbaov1alpha1.OpenBaoCluster, rendere
 		})
 	}
 
+	if portopenbao.AuditFileStorageClaimName(cluster) != "" {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:        auditFileStorageVolumeName,
+			MountPath:   portopenbao.AuditFileStorageMountPath(cluster),
+			SubPathExpr: portopenbao.AuditFileStoragePodSubPathExpr,
+		})
+	}
+
 	if usesDeclarativeOCIPluginDownload(cluster) {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      pluginVolumeName,

@@ -275,6 +275,48 @@ func TestSetACMECacheReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(t *tes
 	}
 }
 
+func TestSetAuditFileStorageReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status metav1.ConditionStatus
+		reason string
+	}{
+		{name: "ready", status: metav1.ConditionTrue, reason: ReasonAuditFileStorageReady},
+		{name: "missing", status: metav1.ConditionFalse, reason: ReasonAuditFileStorageMissing},
+		{name: "pending", status: metav1.ConditionFalse, reason: ReasonAuditFileStoragePending},
+		{name: "invalid access mode", status: metav1.ConditionFalse, reason: ReasonAuditFileStorageInvalidAccessMode},
+		{name: "statefulset recreate required", status: metav1.ConditionFalse, reason: ReasonAuditFileStorageStatefulSetRecreateRequired},
+		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
+		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
+		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newOpenBaoClusterStatusTestObject()
+			cluster.Generation = 17
+
+			setAuditFileStorageReadyEvaluatedCondition(cluster, statusConditionResult{
+				Status:  tt.status,
+				Reason:  tt.reason,
+				Message: "contract message",
+			})
+
+			assertClusterCondition(
+				t,
+				cluster,
+				openbaov1alpha1.ConditionAuditFileStorageReady,
+				true,
+				tt.status,
+				tt.reason,
+				"contract message",
+			)
+		})
+	}
+}
+
 func TestSetBackupConfigurationReadyEvaluatedCondition_AllowsKnownReasonStatusPairs(t *testing.T) {
 	t.Parallel()
 

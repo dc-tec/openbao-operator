@@ -35,4 +35,6 @@ const (
 	ReasonStorageResizeNotSupported      = "StorageResizeNotSupported"
 	ReasonStorageClassChangeNotSupported = "StorageClassChangeNotSupported"
 	ReasonStorageRestartRequired         = "StorageRestartRequired"
+
+	ReasonAuditFileStorageStatefulSetRecreateRequired = "AuditFileStorageStatefulSetRecreateRequired"
 )

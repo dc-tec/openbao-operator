@@ -69,6 +69,9 @@ const (
 	// ConditionACMECacheReady indicates whether the shared ACME cache PVC is ready for use
 	// when the configured topology requires or uses a shared ACME cache.
 	ConditionACMECacheReady ConditionType = "ACMECacheReady"
+	// ConditionAuditFileStorageReady indicates whether the shared audit file storage PVC
+	// is ready for file audit devices and mounted by the workload StatefulSets.
+	ConditionAuditFileStorageReady ConditionType = "AuditFileStorageReady"
 	// ConditionGatewayIntegrationReady indicates whether the operator can verify
 	// the referenced Gateway and GatewayClass integration contract for the chosen
 	// Gateway API mode.
@@ -234,6 +237,53 @@ type ACMESharedCacheConfig struct {
 	// StorageClassName is an optional StorageClass for the managed ACME cache PVC.
 	// +optional
 	StorageClassName *string `json:"storageClassName,omitempty"`
+}
+
+// AuditFileStorageMode controls how the operator provides shared filesystem storage for file audit logs.
+// +kubebuilder:validation:Enum=ManagedPVC;ExistingPVC
+type AuditFileStorageMode string
+
+const (
+	// AuditFileStorageModeManagedPVC instructs the operator to create a dedicated RWX PVC.
+	AuditFileStorageModeManagedPVC AuditFileStorageMode = "ManagedPVC"
+	// AuditFileStorageModeExistingPVC instructs the operator to mount an existing RWX PVC.
+	AuditFileStorageModeExistingPVC AuditFileStorageMode = "ExistingPVC"
+)
+
+// AuditFileStorageConfig configures the shared filesystem integration point for file audit devices.
+//
+// The operator mounts the selected PVC into each OpenBao Pod. Each Pod uses a
+// pod-specific subPath under the same PVC so all Pods can render the same audit
+// file path while collectors can mount the PVC read-only and read per-Pod audit
+// files from the backing directories. This storage is intended as a collector
+// handoff and replay buffer, not as the authoritative compliance archive.
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ManagedPVC' || !has(self.existingClaimName) || size(self.existingClaimName) == 0",message="auditFileStorage.existingClaimName is only supported when mode is ExistingPVC"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ExistingPVC' || size(self.existingClaimName) > 0",message="auditFileStorage.existingClaimName is required when mode is ExistingPVC"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ExistingPVC' || !has(self.size) || size(self.size) == 0",message="auditFileStorage.size is only supported when mode is ManagedPVC"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ExistingPVC' || !has(self.storageClassName) || size(self.storageClassName) == 0",message="auditFileStorage.storageClassName is only supported when mode is ManagedPVC"
+// +kubebuilder:validation:XValidation:rule="self.mode != 'ManagedPVC' || size(self.size) > 0",message="auditFileStorage.size is required when mode is ManagedPVC"
+// +kubebuilder:validation:XValidation:rule="!has(self.mountPath) || (self.mountPath.startsWith('/') && self.mountPath != '/')",message="auditFileStorage.mountPath must be an absolute path and must not be /"
+type AuditFileStorageConfig struct {
+	// Mode selects whether the operator creates a dedicated RWX PVC or mounts an existing one.
+	Mode AuditFileStorageMode `json:"mode"`
+	// ExistingClaimName is the name of a pre-created RWX PVC in the same namespace.
+	// Required when Mode is ExistingPVC.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	ExistingClaimName string `json:"existingClaimName,omitempty"`
+	// Size is the requested capacity for the managed audit file storage PVC.
+	// Required when Mode is ManagedPVC.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	Size string `json:"size,omitempty"`
+	// StorageClassName is an optional StorageClass for the managed audit file storage PVC.
+	// +optional
+	StorageClassName *string `json:"storageClassName,omitempty"`
+	// MountPath is where the audit file storage PVC is mounted in OpenBao Pods.
+	// File audit device paths must be under this path when auditFileStorage is configured.
+	// +kubebuilder:default=/openbao/audit
+	// +optional
+	MountPath string `json:"mountPath,omitempty"`
 }
 
 // TLSConfig captures TLS configuration for an OpenBaoCluster.
@@ -2015,6 +2065,10 @@ type OpenBaoClusterSpec struct {
 	// +listType=map
 	// +listMapKey=path
 	Audit []AuditDevice `json:"audit,omitempty"`
+	// AuditFileStorage configures a shared filesystem integration point for file audit devices.
+	// When configured, file audit device paths must be under auditFileStorage.mountPath.
+	// +optional
+	AuditFileStorage *AuditFileStorageConfig `json:"auditFileStorage,omitempty"`
 	// Plugins configures declarative plugins for the OpenBao cluster.
 	// See: https://openbao.org/docs/configuration/plugins/
 	// +optional

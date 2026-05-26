@@ -120,6 +120,9 @@ func (m *Manager) reconcilePreStatefulSet(ctx context.Context, logger logr.Logge
 	if err := m.ensureACMESharedCachePVC(ctx, logger, cluster); err != nil {
 		return err
 	}
+	if err := m.ensureAuditFileStoragePVC(ctx, logger, cluster); err != nil {
+		return err
+	}
 	return nil
 }
 

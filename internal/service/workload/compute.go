@@ -24,6 +24,10 @@ import (
 // and requeue instead of failing reconciliation.
 var ErrStatefulSetPrerequisitesMissing = errors.New("StatefulSet prerequisites missing")
 
+// ErrAuditFileStorageStatefulSetRequiresRecreate indicates that the existing StatefulSet
+// needs an audit storage pod-template change that is blocked by immutable or admission-locked fields.
+var ErrAuditFileStorageStatefulSetRequiresRecreate = errors.New("audit file storage requires StatefulSet recreation")
+
 // checkStatefulSetPrerequisites verifies that all required resources exist before creating or updating the StatefulSet.
 // This prevents pods from failing to start due to missing ConfigMaps or Secrets.
 // Returns ErrStatefulSetPrerequisitesMissing if prerequisites are not found (callers should handle this
@@ -68,6 +72,19 @@ func (m *Manager) checkStatefulSetPrerequisites(ctx context.Context, cluster *op
 				return fmt.Errorf("%w: ACME shared cache PVC %s/%s not found; cannot create StatefulSet", ErrStatefulSetPrerequisitesMissing, cluster.Namespace, claimName)
 			}
 			return fmt.Errorf("failed to get ACME shared cache PVC %s/%s: %w", cluster.Namespace, claimName, err)
+		}
+	}
+
+	if claimName := portopenbao.AuditFileStorageClaimName(cluster); claimName != "" {
+		auditPVC := &corev1.PersistentVolumeClaim{}
+		if err := m.client.Get(ctx, types.NamespacedName{
+			Namespace: cluster.Namespace,
+			Name:      claimName,
+		}, auditPVC); err != nil {
+			if apierrors.IsNotFound(err) {
+				return fmt.Errorf("%w: audit file storage PVC %s/%s not found; cannot create StatefulSet", ErrStatefulSetPrerequisitesMissing, cluster.Namespace, claimName)
+			}
+			return fmt.Errorf("failed to get audit file storage PVC %s/%s: %w", cluster.Namespace, claimName, err)
 		}
 	}
 
@@ -133,6 +150,10 @@ func (m *Manager) EnsureStatefulSet(ctx context.Context, logger logr.Logger, clu
 	existingSTS := &appsv1.StatefulSet{}
 	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: name}, existingSTS); err == nil {
 		desired.Spec.VolumeClaimTemplates = existingSTS.Spec.VolumeClaimTemplates
+
+		if statefulSetAuditFileStorageRequiresRecreate(desired, existingSTS) {
+			return fmt.Errorf("%w: StatefulSet %s/%s does not include the requested audit file storage volume and mount; recreate the StatefulSet or create a new workload revision so the locked pod-template fields can be applied", ErrAuditFileStorageStatefulSetRequiresRecreate, cluster.Namespace, name)
+		}
 
 		// POLICY COMPLIANCE: The operator ships an ValidatingAdmissionPolicy
 		// (e.g. openbao-operator-openbao-lock-controller-statefulset-mutations) that forbid
@@ -271,4 +292,66 @@ func preserveLockedStatefulSetTemplateFields(desired *appsv1.StatefulSet, existi
 		}
 		desired.Spec.Template.Spec.InitContainers = newInit
 	}
+}
+
+func statefulSetAuditFileStorageRequiresRecreate(desired *appsv1.StatefulSet, existing *appsv1.StatefulSet) bool {
+	desiredVolume, ok := statefulSetVolume(desired, auditFileStorageVolumeName)
+	if !ok {
+		return false
+	}
+	existingVolume, ok := statefulSetVolume(existing, auditFileStorageVolumeName)
+	if !ok || !samePVCVolumeSource(desiredVolume, existingVolume) {
+		return true
+	}
+
+	desiredMount, ok := statefulSetContainerVolumeMount(desired, constants.ContainerBao, auditFileStorageVolumeName)
+	if !ok {
+		return false
+	}
+	existingMount, ok := statefulSetContainerVolumeMount(existing, constants.ContainerBao, auditFileStorageVolumeName)
+	if !ok {
+		return true
+	}
+	return existingMount.MountPath != desiredMount.MountPath ||
+		existingMount.SubPath != desiredMount.SubPath ||
+		existingMount.SubPathExpr != desiredMount.SubPathExpr ||
+		existingMount.ReadOnly != desiredMount.ReadOnly
+}
+
+func statefulSetVolume(sts *appsv1.StatefulSet, name string) (corev1.Volume, bool) {
+	if sts == nil {
+		return corev1.Volume{}, false
+	}
+	for _, volume := range sts.Spec.Template.Spec.Volumes {
+		if volume.Name == name {
+			return volume, true
+		}
+	}
+	return corev1.Volume{}, false
+}
+
+func samePVCVolumeSource(a corev1.Volume, b corev1.Volume) bool {
+	if a.PersistentVolumeClaim == nil || b.PersistentVolumeClaim == nil {
+		return a.PersistentVolumeClaim == nil && b.PersistentVolumeClaim == nil
+	}
+	return a.PersistentVolumeClaim.ClaimName == b.PersistentVolumeClaim.ClaimName &&
+		a.PersistentVolumeClaim.ReadOnly == b.PersistentVolumeClaim.ReadOnly
+}
+
+func statefulSetContainerVolumeMount(sts *appsv1.StatefulSet, containerName string, volumeName string) (corev1.VolumeMount, bool) {
+	if sts == nil {
+		return corev1.VolumeMount{}, false
+	}
+	for _, container := range sts.Spec.Template.Spec.Containers {
+		if container.Name != containerName {
+			continue
+		}
+		for _, mount := range container.VolumeMounts {
+			if mount.Name == volumeName {
+				return mount, true
+			}
+		}
+		return corev1.VolumeMount{}, false
+	}
+	return corev1.VolumeMount{}, false
 }

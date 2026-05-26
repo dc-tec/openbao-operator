@@ -61,6 +61,9 @@ func deletePVCs(ctx context.Context, kubeClient client.Client, cluster *openbaov
 		if portopenbao.UsesExistingACMESharedCache(cluster) && pvc.Name == portopenbao.ACMESharedCacheClaimName(cluster) {
 			continue
 		}
+		if portopenbao.UsesExistingAuditFileStorage(cluster) && pvc.Name == portopenbao.AuditFileStorageClaimName(cluster) {
+			continue
+		}
 		if len(pvc.Finalizers) > 0 {
 			original := pvc.DeepCopy()
 			pvc.Finalizers = nil

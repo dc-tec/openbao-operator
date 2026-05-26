@@ -27,6 +27,10 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 	file := hclwrite.NewEmptyFile()
 	body := file.Body()
 
+	if err := validateAuditFileStorageConfiguration(cluster); err != nil {
+		return nil, err
+	}
+
 	// If bootstrap config provided, render it first
 	if bootstrapConfig != nil {
 		if strings.TrimSpace(bootstrapConfig.OIDCIssuerURL) == "" {
