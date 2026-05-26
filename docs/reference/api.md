@@ -163,6 +163,50 @@ _Appears in:_
 | `options` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#json-v1-apiextensions-k8s-io)_ | Options contains device-specific configuration options as a string map.<br />This is a fallback for backward compatibility and advanced use cases.<br />If structured options (FileOptions, HTTPOptions, etc.) are provided, they take precedence.<br />OpenBao audit options are string-to-string; scalar JSON values are rendered as strings,<br />while nested objects and arrays are rejected. For HTTP headers, prefer httpOptions.headers. |  | Optional: \{\} <br /> |
 
 
+#### AuditFileStorageConfig
+
+
+
+AuditFileStorageConfig configures the shared filesystem integration point for file audit devices.
+
+The operator mounts the selected PVC into each OpenBao Pod. Each Pod uses a
+pod-specific subPath under the same PVC so all Pods can render the same audit
+file path while collectors can mount the PVC read-only and read per-Pod audit
+files from the backing directories. This storage is intended as a collector
+handoff and replay buffer, not as the authoritative compliance archive.
+
+
+
+_Appears in:_
+- [OpenBaoClusterSpec](#openbaoclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `mode` _[AuditFileStorageMode](#auditfilestoragemode)_ | Mode selects whether the operator creates a dedicated RWX PVC or mounts an existing one. |  | Enum: [ManagedPVC ExistingPVC] <br /> |
+| `existingClaimName` _string_ | ExistingClaimName is the name of a pre-created RWX PVC in the same namespace.<br />Required when Mode is ExistingPVC. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `size` _string_ | Size is the requested capacity for the managed audit file storage PVC.<br />Required when Mode is ManagedPVC. |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `storageClassName` _string_ | StorageClassName is an optional StorageClass for the managed audit file storage PVC. |  | Optional: \{\} <br /> |
+| `mountPath` _string_ | MountPath is where the audit file storage PVC is mounted in OpenBao Pods.<br />File audit device paths must be under this path when auditFileStorage is configured. | /openbao/audit | Optional: \{\} <br /> |
+
+
+#### AuditFileStorageMode
+
+_Underlying type:_ _string_
+
+AuditFileStorageMode controls how the operator provides shared filesystem storage for file audit logs.
+
+_Validation:_
+- Enum: [ManagedPVC ExistingPVC]
+
+_Appears in:_
+- [AuditFileStorageConfig](#auditfilestorageconfig)
+
+| Field | Description |
+| --- | --- |
+| `ManagedPVC` | AuditFileStorageModeManagedPVC instructs the operator to create a dedicated RWX PVC.<br /> |
+| `ExistingPVC` | AuditFileStorageModeExistingPVC instructs the operator to mount an existing RWX PVC.<br /> |
+
+
 #### AutoRollbackConfig
 
 
@@ -991,6 +1035,7 @@ _Appears in:_
 | `network` _[NetworkConfig](#networkconfig)_ | Network configures network-related settings for the cluster. |  | Optional: \{\} <br /> |
 | `initContainer` _[InitContainerConfig](#initcontainerconfig)_ | InitContainer configures the init container used to render OpenBao configuration.<br />The init container renders the final config.hcl from a template using environment<br />variables such as HOSTNAME and POD_IP. |  | Optional: \{\} <br /> |
 | `audit` _[AuditDevice](#auditdevice) array_ | Audit configures declarative audit devices for the OpenBao cluster.<br />See: https://openbao.org/docs/configuration/audit/ |  | Optional: \{\} <br /> |
+| `auditFileStorage` _[AuditFileStorageConfig](#auditfilestorageconfig)_ | AuditFileStorage configures a shared filesystem integration point for file audit devices.<br />When configured, file audit device paths must be under auditFileStorage.mountPath. |  | Optional: \{\} <br /> |
 | `plugins` _[Plugin](#plugin) array_ | Plugins configures declarative plugins for the OpenBao cluster.<br />See: https://openbao.org/docs/configuration/plugins/ |  | Optional: \{\} <br /> |
 | `telemetry` _[TelemetryConfig](#telemetryconfig)_ | Telemetry configures telemetry reporting for the OpenBao cluster.<br />See: https://openbao.org/docs/configuration/telemetry/ |  | Optional: \{\} <br /> |
 | `upgrade` _[UpgradeConfig](#upgradeconfig)_ | Upgrade configures upgrade operations.<br />Built-in upgrade executor Jobs authenticate with JWT auth using the<br />upgrade ServiceAccount (&lt;cluster-name&gt;-upgrade-serviceaccount). If<br />spec.selfInit.oidc.enabled is true and spec.upgrade.jwtAuthRole is empty,<br />the operator assumes or bootstraps the default "openbao-operator-upgrade"<br />role.<br />Pre-upgrade snapshots use spec.backup configuration and backup<br />authentication rather than spec.upgrade credentials. |  | Optional: \{\} <br /> |

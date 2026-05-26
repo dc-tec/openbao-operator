@@ -34,6 +34,13 @@ description: Pod hardening, projected-token handling, and runtime guardrails for
     },
     {
       cells: [
+        "Explicit audit file storage",
+        "File audit devices write only to the configured audit storage mount when `spec.auditFileStorage` is used.",
+        "Audit records stay on a known writable surface that can be collected and reviewed separately from the container filesystem.",
+      ],
+    },
+    {
+      cells: [
         "Dropped Linux capabilities and seccomp",
         "Capabilities are dropped and `RuntimeDefault` seccomp applies by default.",
         "The process keeps only the syscall and privilege surface needed to run the service.",
@@ -131,6 +138,49 @@ or Windows pod security options for Hardened OpenBao clusters.
 <Callout type="note" title="Init container behavior">
 
 The config-rendering init container inherits the same pod-level hardening contract and does not receive a Kubernetes API token mount by default. Its job is to render dynamic configuration such as Pod IP and hostname into `config.hcl`, not to act as a privileged bootstrap helper.
+
+</Callout>
+
+## Audit file storage mount
+
+When `spec.auditFileStorage` is configured, the operator mounts one RWX PVC into
+each OpenBao Pod and isolates each Pod with a pod-specific `subPathExpr`. The
+default path is `/openbao/audit`; file audit devices must write under the
+effective mount path.
+
+<DecisionTable
+  kind="reference"
+  title="Audit mount security checks"
+  columns={["Check", "Expected posture", "Why it matters"]}
+  rows={[
+    {
+      cells: [
+        "Writable identity",
+        "The storage provider honors `fsGroup` or the existing claim is pre-owned for the OpenBao runtime identity.",
+        "OpenBao cannot enable the file audit device if the mounted directory is not writable by the Pod security context.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Read-only collection",
+        "Collectors mount the audit PVC read-only.",
+        "The collector path ships records onward instead of becoming another writer that can alter audit history.",
+      ],
+    },
+    {
+      cells: [
+        "Runtime hardening",
+        "Keep the OpenBao root filesystem read-only and avoid hostPath exceptions for audit collection.",
+        "Audit storage is a deliberate writable path; do not broaden it into general host or node access.",
+      ],
+    },
+  ]}
+/>
+
+<Callout type="warning" title="Storage permissions are part of the security boundary">
+
+On standard Kubernetes, OpenBao Pods run as UID `100` and GID `1000` with `fsGroup: 1000`. On OpenShift, SCCs may assign IDs dynamically. Verify the RWX provider and any pre-created PVCs make the audit directory writable for the effective runtime identity before enabling the file audit device.
 
 </Callout>
 

@@ -113,7 +113,7 @@ This keeps change-coupling lower: config rendering, service exposure, ServiceAcc
   columns={['Manager', 'Owns', 'Primary writes', 'Why it stays separate']}
   rows={[
     {
-      cells: ['Bootstrap manager', 'Rendered config, self-init surfaces, unseal prerequisites, and related validation.', 'ConfigMap surfaces, static unseal Secret when applicable, self-init ConfigMap, and shared-cache PVC setup.', 'Config and bootstrap prerequisites change for different reasons than networking or StatefulSet lifecycle.'],
+      cells: ['Bootstrap manager', 'Rendered config, self-init surfaces, unseal prerequisites, and related validation.', 'ConfigMap surfaces, static unseal Secret when applicable, self-init ConfigMap, shared-cache PVC setup, and managed audit file storage PVC setup.', 'Config and bootstrap prerequisites change for different reasons than networking or StatefulSet lifecycle.'],
       emphasis: 'recommended',
     },
     {
@@ -139,6 +139,7 @@ The bootstrap manager prepares everything the workload needs before the Stateful
 - generate the static unseal Secret when that seal mode is selected
 - validate unseal prerequisites and related secret references
 - prepare ACME shared-cache storage when that mode requires it
+- prepare managed audit file storage PVCs when file audit handoff storage is configured
 
 ### Networking manager
 
@@ -166,6 +167,7 @@ The workload manager owns the StatefulSet-facing contract:
 - steady-state read-replica StatefulSet lifecycle and safe drain or delete behavior
 - PodDisruptionBudget reconciliation
 - rollout triggers from rendered config or certificate hash changes
+- audit file storage volume and mount wiring for voter and read-replica StatefulSets
 - single-replica bootstrap and later scale-out after initialization
 - revision-scoped workload resources used by blue/green and rollout-safe updates
 - read-first or restore-safe operational ordering delegated by the app layer for rolling upgrades, blue-green, and restore

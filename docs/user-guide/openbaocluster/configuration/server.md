@@ -34,6 +34,13 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
     },
     {
       cells: [
+        "`spec.auditFileStorage`",
+        "Shared filesystem handoff for file audit devices.",
+        "Long-term audit retention, tamper-proof archival, or log collection pipelines.",
+      ],
+    },
+    {
+      cells: [
         "`spec.plugins` and plugin download settings",
         "Explicit OpenBao plugin registration and plugin fetch behavior.",
         "Mirrored base images or disconnected-registry strategy for the whole deployment.",
@@ -121,18 +128,64 @@ description: Configure server-runtime defaults such as UI, listener behavior, au
 <CommandBlock
   language="yaml"
   label="configure"
-  title="Enable declarative audit devices"
+  title="Enable a file audit device with shared storage"
   code={`spec:
+  auditFileStorage:
+    mode: ManagedPVC
+    size: "10Gi"
+    storageClassName: "rwx-storage"
   audit:
     - type: file
       path: secure-audit
       description: "Secure audit logging"
-      options:
-        file_path: "/var/log/openbao/audit.log"
+      fileOptions:
+        file_path: "/openbao/audit/audit.jsonl"
         format: "json"`}
 >
-  Include audit devices in the cluster baseline so the service starts with the expected audit configuration.
+  Use `auditFileStorage` when a collector reads file audit records from Kubernetes storage. The file path must live under the audit storage mount path.
 </CommandBlock>
+
+<DecisionTable
+  kind="reference"
+  title="Audit file storage choices"
+  columns={["Choice", "Use it for", "Operational note"]}
+  rows={[
+    {
+      cells: [
+        "`ManagedPVC`",
+        "Let the operator create one dedicated RWX PVC for the cluster.",
+        "Set `size` and, in production, `storageClassName`. The PVC is labeled as sensitive audit storage.",
+      ],
+      emphasis: "recommended",
+    },
+    {
+      cells: [
+        "`ExistingPVC`",
+        "Mount a platform-managed RWX PVC in the same namespace.",
+        "Use this when the platform team owns storage class, encryption, retention staging, or backup policy for the handoff path.",
+      ],
+    },
+    {
+      cells: [
+        "`mountPath`",
+        "Change the path mounted into each OpenBao Pod.",
+        "The default is `/openbao/audit`. File audit device paths are rejected unless they stay under the effective mount path.",
+      ],
+    },
+  ]}
+/>
+
+<Callout type="warning" title="Adding audit file storage changes locked Pod-template fields">
+
+The operator mounts the PVC into voter and read-replica StatefulSets. If you enable audit file storage on an existing cluster, `AuditFileStorageReady=False` with `AuditFileStorageStatefulSetRecreateRequired` means the existing StatefulSets must be recreated or replaced by a new workload revision so the volume and mount can be applied. Preserve the data PVCs when you perform that maintenance.
+
+</Callout>
+
+<Callout type="note" title="Audit storage is a handoff buffer">
+
+Treat the audit PVC as a local collector handoff and replay buffer. Ship audit records to your external log system or immutable archive for retention, search, and compliance evidence.
+
+</Callout>
 
   </TabItem>
   <TabItem value="plugins" label="Plugins">

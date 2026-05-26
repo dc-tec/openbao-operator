@@ -153,11 +153,18 @@ Related reading: <SiteLink docId="security/fundamentals/profiles">Security Profi
   rows={[
     {
       cells: [
-        'Gateway, ACME, and API-server assumptions surface as explicit conditions.',
+        'Gateway, ACME, audit storage, and API-server assumptions surface as explicit conditions.',
         'Environment and controller dependencies should become visible status contracts before they become runtime failures.',
-        '`GatewayIntegrationReady`, `ACMEIntegrationReady`, `ACMECacheReady`, and `APIServerNetworkReady` conditions.',
+        '`GatewayIntegrationReady`, `ACMEIntegrationReady`, `ACMECacheReady`, `AuditFileStorageReady`, and `APIServerNetworkReady` conditions.',
       ],
       emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Audit file storage stays an explicit integration point.',
+        'The operator can mount and validate the handoff PVC, but retention, tamper resistance, and collection pipelines belong to the surrounding platform.',
+        '`spec.auditFileStorage`, `spec.audit`, status readiness, and workload mount guardrails.',
+      ],
     },
     {
       cells: [
@@ -169,7 +176,7 @@ Related reading: <SiteLink docId="security/fundamentals/profiles">Security Profi
   ]}
 />
 
-Related reading: <SiteLink docId="reference/status-and-events">Status and Events</SiteLink> and <SiteLink docId="user-guide/openbaocluster/operations/backups">Configure Backups</SiteLink>.
+Related reading: <SiteLink docId="reference/status-and-events">Status and Events</SiteLink>, <SiteLink docId="user-guide/openbaocluster/configuration/observability">Observability</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/operations/backups">Configure Backups</SiteLink>.
 
 ## Lifecycle safety invariants
 
