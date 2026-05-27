@@ -7,7 +7,7 @@
 # Example build (from repo root):
 #   docker build -f Dockerfile.upgrade -t openbao-upgrade:dev .
 
-FROM --platform=$BUILDPLATFORM golang:1.26.3@sha256:cc9a5d7a008cfe2cbc7ffc752b0d6636ad30fc16e4a648d2e4aac00fd8b25ca3 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.3@sha256:2d6c80227255c3112a4d08e67ba98e58efd3846daf15d9d7d4c389565d881b1a AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG SOURCE_DATE_EPOCH=0
