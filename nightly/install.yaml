@@ -184,6 +184,65 @@ spec:
                 x-kubernetes-list-map-keys:
                 - path
                 x-kubernetes-list-type: map
+              auditFileStorage:
+                description: |-
+                  AuditFileStorage configures a shared filesystem integration point for file audit devices.
+                  When configured, file audit device paths must be under auditFileStorage.mountPath.
+                properties:
+                  existingClaimName:
+                    description: |-
+                      ExistingClaimName is the name of a pre-created RWX PVC in the same namespace.
+                      Required when Mode is ExistingPVC.
+                    minLength: 1
+                    type: string
+                  mode:
+                    description: Mode selects whether the operator creates a dedicated
+                      RWX PVC or mounts an existing one.
+                    enum:
+                    - ManagedPVC
+                    - ExistingPVC
+                    type: string
+                  mountPath:
+                    default: /openbao/audit
+                    description: |-
+                      MountPath is where the audit file storage PVC is mounted in OpenBao Pods.
+                      File audit device paths must be under this path when auditFileStorage is configured.
+                    type: string
+                  size:
+                    description: |-
+                      Size is the requested capacity for the managed audit file storage PVC.
+                      Required when Mode is ManagedPVC.
+                    minLength: 1
+                    type: string
+                  storageClassName:
+                    description: StorageClassName is an optional StorageClass for
+                      the managed audit file storage PVC.
+                    type: string
+                required:
+                - mode
+                type: object
+                x-kubernetes-validations:
+                - message: auditFileStorage.existingClaimName is only supported when
+                    mode is ExistingPVC
+                  rule: self.mode != 'ManagedPVC' || !has(self.existingClaimName)
+                    || size(self.existingClaimName) == 0
+                - message: auditFileStorage.existingClaimName is required when mode
+                    is ExistingPVC
+                  rule: self.mode != 'ExistingPVC' || size(self.existingClaimName)
+                    > 0
+                - message: auditFileStorage.size is only supported when mode is ManagedPVC
+                  rule: self.mode != 'ExistingPVC' || !has(self.size) || size(self.size)
+                    == 0
+                - message: auditFileStorage.storageClassName is only supported when
+                    mode is ManagedPVC
+                  rule: self.mode != 'ExistingPVC' || !has(self.storageClassName)
+                    || size(self.storageClassName) == 0
+                - message: auditFileStorage.size is required when mode is ManagedPVC
+                  rule: self.mode != 'ManagedPVC' || size(self.size) > 0
+                - message: auditFileStorage.mountPath must be an absolute path and
+                    must not be /
+                  rule: '!has(self.mountPath) || (self.mountPath.startsWith(''/'')
+                    && self.mountPath != ''/'')'
               backup:
                 description: Backup configures scheduled backups for the cluster.
                 properties:
@@ -6594,10 +6653,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260526-8da708b02bbb
+          value: nightly-20260527-f60386981813
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:cd12fa63fe3a407f745aff920bce98ee888907713944fdfc3441ae760e40b9d4
+        image: ghcr.io/dc-tec/openbao-operator@sha256:a2631948e913b462880ee426fdae24df5591fb3346a2ab5284c5a3515ea506f2
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6712,8 +6771,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260526-8da708b02bbb
-        image: ghcr.io/dc-tec/openbao-operator@sha256:cd12fa63fe3a407f745aff920bce98ee888907713944fdfc3441ae760e40b9d4
+          value: nightly-20260527-f60386981813
+        image: ghcr.io/dc-tec/openbao-operator@sha256:a2631948e913b462880ee426fdae24df5591fb3346a2ab5284c5a3515ea506f2
         livenessProbe:
           httpGet:
             path: /healthz
