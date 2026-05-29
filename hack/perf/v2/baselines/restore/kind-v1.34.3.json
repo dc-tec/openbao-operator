@@ -1,0 +1,34 @@
+{
+  "version": "v2",
+  "scenario": "restore",
+  "capturedAt": "2026-02-10T23:02:50Z",
+  "commit": "a6950686fd43dc5384590f7fd22abf410ad082a4",
+  "environment": {
+    "runner": "github-hosted",
+    "runnerImage": "ubuntu-24.04",
+    "nodeImage": "kindest/node:v1.34.3",
+    "commit": "a6950686fd43dc5384590f7fd22abf410ad082a4"
+  },
+  "samples": {
+    "sample_total_seconds": [449.617961341, 430.356385029, 441.057324502, 429.960889462, 433.313731398],
+    "restore_duration_bucket_p95": [30, 30, 30, 30, 30],
+    "reconcile_duration_bucket_p95": [0.5, 0.5, 0.5, 0.5, 0.5],
+    "reconcile_error_ratio": [0.022950819672131147, 0.02181818181818182, 0.022364217252396165, 0.02456140350877193, 0.030821917808219176],
+    "workqueue_retries_delta": [296, 266, 304, 276, 283],
+    "kubernetes_writes": [0, 0, 0, 0, 0],
+    "openbao_auth_logins": [0, 0, 0, 0, 0],
+    "openbao_auth_login_errors": [0, 0, 0, 0, 0],
+    "openbao_api_requests": [0, 0, 0, 0, 0]
+  },
+  "summary": {
+    "sample_total_seconds": {"median": 433.313731398, "upperSample": 449.617961341, "min": 429.960889462, "max": 449.617961341, "count": 5},
+    "restore_duration_bucket_p95": {"median": 30, "upperSample": 30, "min": 30, "max": 30, "count": 5},
+    "reconcile_duration_bucket_p95": {"median": 0.5, "upperSample": 0.5, "min": 0.5, "max": 0.5, "count": 5},
+    "reconcile_error_ratio": {"median": 0.022950819672131147, "upperSample": 0.030821917808219176, "min": 0.02181818181818182, "max": 0.030821917808219176, "count": 5},
+    "workqueue_retries_delta": {"median": 283, "upperSample": 304, "min": 266, "max": 304, "count": 5},
+    "kubernetes_writes": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
+    "openbao_auth_logins": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
+    "openbao_auth_login_errors": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
+    "openbao_api_requests": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5}
+  }
+}

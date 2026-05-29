@@ -1,0 +1,36 @@
+{
+  "version": "v2",
+  "scenario": "rolling-upgrade",
+  "capturedAt": "2026-02-10T23:39:35Z",
+  "commit": "a6950686fd43dc5384590f7fd22abf410ad082a4",
+  "environment": {
+    "runner": "github-hosted",
+    "runnerImage": "ubuntu-24.04",
+    "nodeImage": "kindest/node:v1.34.3",
+    "commit": "a6950686fd43dc5384590f7fd22abf410ad082a4"
+  },
+  "samples": {
+    "sample_total_seconds": [228.001186877, 240.315696588, 225.780209586, 227.083988095, 229.549990944],
+    "upgrade_duration_bucket_p95": [60, 60, 60, 60, 60],
+    "upgrade_pod_duration_bucket_p95": [10, 10, 10, 10, 10],
+    "reconcile_duration_bucket_p95": [0.5, 0.5, 0.5, 0.5, 0.5],
+    "reconcile_error_ratio": [0.24175824175824176, 0.29914529914529914, 0.25773195876288657, 0.24731182795698925, 0.25274725274725274],
+    "workqueue_retries_delta": [87, 113, 93, 89, 87],
+    "kubernetes_writes": [0, 0, 0, 0, 0],
+    "openbao_auth_logins": [0, 0, 0, 0, 0],
+    "openbao_auth_login_errors": [0, 0, 0, 0, 0],
+    "openbao_api_requests": [0, 0, 0, 0, 0]
+  },
+  "summary": {
+    "sample_total_seconds": {"median": 228.001186877, "upperSample": 240.315696588, "min": 225.780209586, "max": 240.315696588, "count": 5},
+    "upgrade_duration_bucket_p95": {"median": 60, "upperSample": 60, "min": 60, "max": 60, "count": 5},
+    "upgrade_pod_duration_bucket_p95": {"median": 10, "upperSample": 10, "min": 10, "max": 10, "count": 5},
+    "reconcile_duration_bucket_p95": {"median": 0.5, "upperSample": 0.5, "min": 0.5, "max": 0.5, "count": 5},
+    "reconcile_error_ratio": {"median": 0.25274725274725274, "upperSample": 0.29914529914529914, "min": 0.24175824175824176, "max": 0.29914529914529914, "count": 5},
+    "workqueue_retries_delta": {"median": 89, "upperSample": 113, "min": 87, "max": 113, "count": 5},
+    "kubernetes_writes": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
+    "openbao_auth_logins": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
+    "openbao_auth_login_errors": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
+    "openbao_api_requests": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5}
+  }
+}

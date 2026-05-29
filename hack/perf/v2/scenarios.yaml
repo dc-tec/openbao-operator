@@ -1,0 +1,84 @@
+version: v2
+defaults:
+  warmups: 1
+  samples: 3
+  sampleTimeout: 30m
+  cleanup: always
+  artifactLevel: standard
+
+scenarios:
+  - name: lifecycle-convergence
+    description: OpenBaoCluster creation to available using the existing lifecycle E2E lane until native phase timing lands.
+    labels: [lifecycle, cluster, critical]
+    executor: e2e-ginkgo
+    labelFilter: lifecycle && critical && tenant && !slow && !openshift && !pentest
+    primaryMeasurements:
+      - sample_total_seconds
+    diagnosticMeasurements:
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_api_requests
+    phases:
+      - name: sample_started
+      - name: scenario_completed
+
+  - name: backup
+    description: Backup orchestration signal, split from restore in the v2 contract.
+    labels: [backup, disaster-recovery]
+    executor: e2e-ginkgo
+    labelFilter: dr && backup && restore && !failure-injection
+    primaryMeasurements:
+      - sample_total_seconds
+      - backup_last_duration_seconds
+    diagnosticMeasurements:
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_api_requests
+    phases:
+      - name: sample_started
+      - name: scenario_completed
+
+  - name: restore
+    description: Restore orchestration signal, split from backup in the v2 contract.
+    labels: [restore, disaster-recovery]
+    executor: e2e-ginkgo
+    labelFilter: dr && backup && restore && !failure-injection
+    primaryMeasurements:
+      - sample_total_seconds
+      - restore_duration_bucket_p95
+    diagnosticMeasurements:
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_api_requests
+    phases:
+      - name: sample_started
+      - name: scenario_completed
+
+  - name: rolling-upgrade
+    description: Rolling upgrade steady path without snapshot-recovery coverage.
+    labels: [upgrade, rolling, critical]
+    executor: e2e-ginkgo
+    labelFilter: upgrade && rolling && !failure && !bluegreen && !snapshot && !recovery
+    primaryMeasurements:
+      - sample_total_seconds
+      - upgrade_duration_bucket_p95
+    diagnosticMeasurements:
+      - upgrade_pod_duration_bucket_p95
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_api_requests
+    phases:
+      - name: sample_started
+      - name: scenario_completed

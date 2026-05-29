@@ -1,0 +1,98 @@
+version: v2
+defaults:
+  role: diagnostic
+  policy: informational
+  severity: info
+  compare: median
+  minimumSamples: 1
+
+measurements:
+  sample_total_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 30
+    minimumSamples: 3
+  backup_last_duration_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 5
+    minimumSamples: 3
+  restore_duration_bucket_p95:
+    role: diagnostic
+    policy: upper_bound
+    severity: info
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    allowedAbsoluteRegressionSeconds: 60
+    minimumSamples: 3
+  upgrade_duration_bucket_p95:
+    role: diagnostic
+    policy: upper_bound
+    severity: info
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    allowedAbsoluteRegressionSeconds: 60
+    minimumSamples: 3
+  upgrade_pod_duration_bucket_p95:
+    role: diagnostic
+    policy: upper_bound
+    severity: info
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    allowedAbsoluteRegressionSeconds: 30
+    minimumSamples: 3
+  reconcile_duration_bucket_p95:
+    role: diagnostic
+    policy: upper_bound
+    severity: info
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    allowedAbsoluteRegressionSeconds: 5
+    minimumSamples: 3
+  reconcile_error_ratio:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
+  workqueue_retries_delta:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
+  kubernetes_writes:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
+  openbao_auth_login_errors:
+    role: primary
+    policy: must_be_zero
+    severity: fail
+    compare: upper_sample
+    minimumSamples: 1
+  openbao_auth_logins:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
+  openbao_api_requests:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
