@@ -15,6 +15,45 @@ measurements:
     allowedRelativeRegression: 0.35
     allowedAbsoluteRegressionSeconds: 30
     minimumSamples: 3
+  cluster_available_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 30
+    minimumSamples: 3
+  statefulset_created_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 10
+    minimumSamples: 3
+  first_pod_ready_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 30
+    minimumSamples: 3
+  all_pods_ready_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 30
+    minimumSamples: 3
+  observed_kubernetes_writes:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
   backup_last_duration_seconds:
     role: primary
     policy: upper_bound
@@ -38,6 +77,43 @@ measurements:
     compare: upper_sample
     allowedRelativeRegression: 0.50
     allowedAbsoluteRegressionSeconds: 60
+    minimumSamples: 3
+  upgrade_total_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 60
+    minimumSamples: 3
+  upgrade_session_start_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 20
+    minimumSamples: 3
+  upgrade_pod_ready_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 60
+    minimumSamples: 3
+  upgrade_availability_probe_failures:
+    role: primary
+    policy: must_be_zero
+    severity: warn
+    compare: upper_sample
+    minimumSamples: 1
+  upgrade_kubernetes_writes:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
     minimumSamples: 3
   upgrade_pod_duration_bucket_p95:
     role: diagnostic

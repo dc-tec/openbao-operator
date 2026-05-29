@@ -20,14 +20,14 @@ func TestLoadScenarioManifest(t *testing.T) {
 	if !ok {
 		t.Fatalf("lifecycle-convergence scenario missing")
 	}
-	if lifecycle.Executor != executorE2EGinkgo {
-		t.Fatalf("lifecycle executor = %q, want %q", lifecycle.Executor, executorE2EGinkgo)
+	if lifecycle.Executor != executorNativeGo {
+		t.Fatalf("lifecycle executor = %q, want %q", lifecycle.Executor, executorNativeGo)
 	}
-	if !strings.Contains(lifecycle.LabelFilter, "lifecycle") {
-		t.Fatalf("lifecycle label filter should select lifecycle coverage: %q", lifecycle.LabelFilter)
+	if lifecycle.LabelFilter != "" {
+		t.Fatalf("native lifecycle should not require a Ginkgo label filter: %q", lifecycle.LabelFilter)
 	}
-	if !containsString(lifecycle.Primary, metricSampleTotalSeconds) {
-		t.Fatalf("lifecycle should include %s as phase-1 primary measurement", metricSampleTotalSeconds)
+	if !containsString(lifecycle.Primary, metricClusterAvailableSeconds) {
+		t.Fatalf("lifecycle should include %s as phase-2 primary measurement", metricClusterAvailableSeconds)
 	}
 }
 

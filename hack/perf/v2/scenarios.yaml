@@ -8,13 +8,17 @@ defaults:
 
 scenarios:
   - name: lifecycle-convergence
-    description: OpenBaoCluster creation to available using the existing lifecycle E2E lane until native phase timing lands.
+    description: OpenBaoCluster creation to available using native Kubernetes phase observation.
     labels: [lifecycle, cluster, critical]
-    executor: e2e-ginkgo
-    labelFilter: lifecycle && critical && tenant && !slow && !openshift && !pentest
+    executor: native-go
     primaryMeasurements:
+      - cluster_available_seconds
+      - statefulset_created_seconds
+      - first_pod_ready_seconds
+      - all_pods_ready_seconds
       - sample_total_seconds
     diagnosticMeasurements:
+      - observed_kubernetes_writes
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
       - workqueue_retries_delta
@@ -23,6 +27,11 @@ scenarios:
       - openbao_api_requests
     phases:
       - name: sample_started
+      - name: resource_created
+      - name: statefulset_created
+      - name: first_pod_ready
+      - name: all_pods_ready
+      - name: cluster_available
       - name: scenario_completed
 
   - name: backup
@@ -64,14 +73,19 @@ scenarios:
       - name: scenario_completed
 
   - name: rolling-upgrade
-    description: Rolling upgrade steady path without snapshot-recovery coverage.
+    description: Rolling upgrade steady path with native phase and availability observation.
     labels: [upgrade, rolling, critical]
-    executor: e2e-ginkgo
-    labelFilter: upgrade && rolling && !failure && !bluegreen && !snapshot && !recovery
+    executor: native-go
     primaryMeasurements:
+      - upgrade_total_seconds
+      - upgrade_session_start_seconds
+      - upgrade_pod_ready_seconds
+      - upgrade_availability_probe_failures
       - sample_total_seconds
-      - upgrade_duration_bucket_p95
     diagnosticMeasurements:
+      - upgrade_kubernetes_writes
+      - observed_kubernetes_writes
+      - upgrade_duration_bucket_p95
       - upgrade_pod_duration_bucket_p95
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
@@ -81,4 +95,7 @@ scenarios:
       - openbao_api_requests
     phases:
       - name: sample_started
+      - name: upgrade_requested
+      - name: upgrade_session_started
+      - name: upgrade_completed
       - name: scenario_completed
