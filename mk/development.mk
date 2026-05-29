@@ -426,6 +426,17 @@ PERF_BASELINE_DIR ?= hack/perf/v2/baselines
 PERF_POLICY_FILE ?= hack/perf/v2/policies/weekly.yaml
 PERF_ARTIFACT_DIR ?= dist/perf
 PERF_ENVIRONMENT ?= kind-v1.34.3
+PERF_OPERATOR_IMAGE ?= example.com/openbao-operator:0.0.1
+PERF_CONFIG_INIT_IMAGE ?= openbao-init:dev
+PERF_UPGRADE_EXECUTOR_IMAGE ?= openbao-upgrade:dev
+PERF_OPENBAO_VERSION ?= 2.5.4
+PERF_OPENBAO_IMAGE ?= openbao/openbao:2.5.4
+PERF_UPGRADE_FROM_VERSION ?= 2.4.4
+PERF_UPGRADE_FROM_IMAGE ?= openbao/openbao:2.4.4
+PERF_UPGRADE_TO_VERSION ?= 2.5.4
+PERF_UPGRADE_TO_IMAGE ?= openbao/openbao:2.5.4
+PERF_API_SERVER_CIDR ?= 10.96.0.0/12
+PERF_STORAGE_CLASS ?=
 
 MUTATION_TARGET_PATH ?= ./internal/service/opslifecycle
 MUTATION_PATHS ?= $(shell find ./internal -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | paste -sd, -)
@@ -674,7 +685,18 @@ perf-v2-capture: ## Capture v2 performance samples and update per-scenario distr
 		--baseline-dir="$(PERF_BASELINE_DIR)" \
 		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
 		--environment="$(PERF_ENVIRONMENT)" \
-		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)"
+		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)" \
+		--operator-image="$(PERF_OPERATOR_IMAGE)" \
+		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
+		--openbao-version="$(PERF_OPENBAO_VERSION)" \
+		--openbao-image="$(PERF_OPENBAO_IMAGE)" \
+		--upgrade-from-version="$(PERF_UPGRADE_FROM_VERSION)" \
+		--upgrade-from-image="$(PERF_UPGRADE_FROM_IMAGE)" \
+		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
+		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
+		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
+		--storage-class="$(PERF_STORAGE_CLASS)"
 
 .PHONY: verify-perf
 verify-perf: perf-v2-verify ## Run v2 performance verification against committed distribution baselines.
@@ -692,7 +714,18 @@ perf-v2-verify: ## Run v2 performance verification against committed distributio
 		--policy="$(PERF_POLICY_FILE)" \
 		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
 		--environment="$(PERF_ENVIRONMENT)" \
-		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)"
+		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)" \
+		--operator-image="$(PERF_OPERATOR_IMAGE)" \
+		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
+		--openbao-version="$(PERF_OPENBAO_VERSION)" \
+		--openbao-image="$(PERF_OPENBAO_IMAGE)" \
+		--upgrade-from-version="$(PERF_UPGRADE_FROM_VERSION)" \
+		--upgrade-from-image="$(PERF_UPGRADE_FROM_IMAGE)" \
+		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
+		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
+		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
+		--storage-class="$(PERF_STORAGE_CLASS)"
 
 .PHONY: verify-perf-smoke
 verify-perf-smoke: perf-v2-smoke ## Run a lightweight v2 performance smoke gate (PR-focused).
@@ -710,7 +743,18 @@ perf-v2-smoke: ## Run a lightweight v2 performance smoke gate (PR-focused).
 		--policy="$(PERF_POLICY_FILE)" \
 		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
 		--environment="$(PERF_ENVIRONMENT)" \
-		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)"
+		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)" \
+		--operator-image="$(PERF_OPERATOR_IMAGE)" \
+		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
+		--openbao-version="$(PERF_OPENBAO_VERSION)" \
+		--openbao-image="$(PERF_OPENBAO_IMAGE)" \
+		--upgrade-from-version="$(PERF_UPGRADE_FROM_VERSION)" \
+		--upgrade-from-image="$(PERF_UPGRADE_FROM_IMAGE)" \
+		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
+		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
+		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
+		--storage-class="$(PERF_STORAGE_CLASS)"
 
 .PHONY: perf-v2-report
 perf-v2-report: ## Render a v2 performance report from existing sample artifacts.
