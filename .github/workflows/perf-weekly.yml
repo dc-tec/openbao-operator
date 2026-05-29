@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   verify-perf:
-    name: Verify Performance Thresholds (kind v1.34.3)
+    name: Verify Performance Baselines (kind v1.34.3)
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
@@ -40,13 +40,24 @@ jobs:
         with:
           install-dir: bin/
 
-      - name: Verify full performance thresholds
+      - name: Verify v2 performance baselines
         env:
           GOFLAGS: -mod=vendor
           PERF_NODE_IMAGE: kindest/node:v1.34.3
           PERF_SCENARIO_TIMEOUT: 90m
-          PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml
+          PERF_BASELINE_DIR: hack/perf/v2/baselines
+          PERF_POLICY_FILE: hack/perf/v2/policies/weekly.yaml
+          PERF_ARTIFACT_DIR: dist/perf
         run: make verify-perf
+
+      - name: Upload performance artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: perf-weekly-kind-v1.34.3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/perf/
+          if-no-files-found: warn
+          retention-days: 14
 
   open-regression-issue:
     name: Open Weekly Regression Issue
@@ -61,16 +72,16 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const title = "Weekly performance regression detected";
+            const title = "Weekly performance finding detected";
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             const body = [
-              "The weekly `verify-perf` run detected a regression.",
+              "The weekly `verify-perf` run produced a v2 performance finding.",
               "",
               `- Workflow run: ${runUrl}`,
               `- Commit: ${context.sha}`,
               `- Trigger time (UTC): ${new Date().toISOString()}`,
               "",
-              "Please inspect metrics and update baseline/thresholds only with justification.",
+              "Please inspect the uploaded perfcheck v2 artifacts and update baselines only with justification.",
             ].join("\n");
 
             const openIssues = await github.paginate(github.rest.issues.listForRepo, {

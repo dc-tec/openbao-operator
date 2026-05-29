@@ -52,22 +52,25 @@ jobs:
         with:
           install-dir: bin/
 
-      - name: Capture baseline and regenerate thresholds
+      - name: Capture v2 baseline samples
         env:
           GOFLAGS: -mod=vendor
-          PERF_RUNS: ${{ inputs.runs }}
+          PERF_SAMPLES: ${{ inputs.runs }}
           PERF_NODE_IMAGE: ${{ inputs.node_image }}
           PERF_SCENARIO_TIMEOUT: ${{ inputs.scenario_timeout }}
-          PERF_BASELINE_OUT: hack/perf/baseline/kind-v1.34.3-baseline.json
-          PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml
+          PERF_BASELINE_DIR: hack/perf/v2/baselines
+          PERF_POLICY_FILE: hack/perf/v2/policies/weekly.yaml
+          PERF_ARTIFACT_DIR: dist/perf
         run: make perf-baseline
 
-      - name: Verify captured thresholds
+      - name: Verify captured baselines
         env:
           GOFLAGS: -mod=vendor
           PERF_NODE_IMAGE: ${{ inputs.node_image }}
           PERF_SCENARIO_TIMEOUT: ${{ inputs.scenario_timeout }}
-          PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml
+          PERF_BASELINE_DIR: hack/perf/v2/baselines
+          PERF_POLICY_FILE: hack/perf/v2/policies/weekly.yaml
+          PERF_ARTIFACT_DIR: dist/perf
         run: make verify-perf
 
       - name: Upload baseline artifacts
@@ -76,7 +79,7 @@ jobs:
         with:
           name: perf-baseline-kind-v1.34.3-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            hack/perf/baseline/kind-v1.34.3-baseline.json
-            hack/perf/thresholds/kind-v1.34.3.yaml
+            hack/perf/v2/baselines/
+            dist/perf/
           if-no-files-found: warn
           retention-days: 14

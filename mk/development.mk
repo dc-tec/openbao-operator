@@ -415,13 +415,17 @@ E2E_LABEL_FILTER ?=
 E2E_SKIP_CLEANUP ?= false
 
 PERF_NODE_IMAGE ?= kindest/node:v1.34.3
-PERF_RUNS ?= 5
+PERF_SAMPLES ?= 3
+PERF_WARMUPS ?= 1
 PERF_SCENARIO_TIMEOUT ?= 90m
 PERF_SMOKE_SCENARIO_TIMEOUT ?= 45m
-PERF_SMOKE_SCENARIOS ?= lifecycle
-PERF_SCENARIOS_FILE ?= hack/perf/scenarios.yaml
-PERF_BASELINE_OUT ?= hack/perf/baseline/kind-v1.34.3-baseline.json
-PERF_THRESHOLDS_OUT ?= hack/perf/thresholds/kind-v1.34.3.yaml
+PERF_SMOKE_SCENARIOS ?= lifecycle-convergence
+PERF_SCENARIOS ?= all
+PERF_SCENARIOS_FILE ?= hack/perf/v2/scenarios.yaml
+PERF_BASELINE_DIR ?= hack/perf/v2/baselines
+PERF_POLICY_FILE ?= hack/perf/v2/policies/weekly.yaml
+PERF_ARTIFACT_DIR ?= dist/perf
+PERF_ENVIRONMENT ?= kind-v1.34.3
 
 MUTATION_TARGET_PATH ?= ./internal/service/opslifecycle
 MUTATION_PATHS ?= $(shell find ./internal -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | paste -sd, -)
@@ -656,36 +660,67 @@ verify-e2e-manifest: e2e-catalog e2e-manifest-validate e2e-ci-matrix-validate e2
 	}
 
 .PHONY: perf-baseline
-perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and regenerate thresholds.
+perf-baseline: perf-v2-capture ## Capture performance baseline samples and write v2 distribution baselines.
+
+.PHONY: perf-v2-capture
+perf-v2-capture: ## Capture v2 performance samples and update per-scenario distribution baselines.
 	go run ./hack/perfcheck capture \
-		--runs="$(PERF_RUNS)" \
-		--scenarios=all \
+		--samples="$(PERF_SAMPLES)" \
+		--warmups="$(PERF_WARMUPS)" \
+		--scenarios="$(PERF_SCENARIOS)" \
 		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
-		--baseline-out="$(PERF_BASELINE_OUT)" \
-		--thresholds-out="$(PERF_THRESHOLDS_OUT)" \
+		--baseline-dir="$(PERF_BASELINE_DIR)" \
+		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
+		--environment="$(PERF_ENVIRONMENT)" \
 		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)"
 
 .PHONY: verify-perf
-verify-perf: ## Run performance regression gate against committed thresholds.
+verify-perf: perf-v2-verify ## Run v2 performance verification against committed distribution baselines.
+
+.PHONY: perf-v2-verify
+perf-v2-verify: ## Run v2 performance verification against committed distribution baselines.
 	go run ./hack/perfcheck verify \
-		--scenarios=all \
+		--samples="$(PERF_SAMPLES)" \
+		--warmups="$(PERF_WARMUPS)" \
+		--scenarios="$(PERF_SCENARIOS)" \
 		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
-		--thresholds="$(PERF_THRESHOLDS_OUT)" \
+		--baseline-dir="$(PERF_BASELINE_DIR)" \
+		--policy="$(PERF_POLICY_FILE)" \
+		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
+		--environment="$(PERF_ENVIRONMENT)" \
 		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)"
 
 .PHONY: verify-perf-smoke
-verify-perf-smoke: ## Run a lightweight performance smoke gate (PR-focused).
+verify-perf-smoke: perf-v2-smoke ## Run a lightweight v2 performance smoke gate (PR-focused).
+
+.PHONY: perf-v2-smoke
+perf-v2-smoke: ## Run a lightweight v2 performance smoke gate (PR-focused).
 	go run ./hack/perfcheck verify \
+		--samples=1 \
+		--warmups=0 \
 		--scenarios="$(PERF_SMOKE_SCENARIOS)" \
 		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
-		--thresholds="$(PERF_THRESHOLDS_OUT)" \
+		--baseline-dir="$(PERF_BASELINE_DIR)" \
+		--policy="$(PERF_POLICY_FILE)" \
+		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
+		--environment="$(PERF_ENVIRONMENT)" \
 		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)"
+
+.PHONY: perf-v2-report
+perf-v2-report: ## Render a v2 performance report from existing sample artifacts.
+	go run ./hack/perfcheck report \
+		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
+		--scenarios="$(PERF_SCENARIOS)" \
+		--baseline-dir="$(PERF_BASELINE_DIR)" \
+		--policy="$(PERF_POLICY_FILE)" \
+		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
+		--environment="$(PERF_ENVIRONMENT)"
 
 .PHONY: mutation-smoke
 mutation-smoke: gomu ## Run a fast mutation smoke check (operation lifecycle package).
