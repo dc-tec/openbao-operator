@@ -123,26 +123,33 @@ func histogramP95UpperBound(cumulative map[float64]float64) float64 {
 	return maxFinite
 }
 
-func computeScenarioMetrics(before, after metricsSnapshot) map[string]float64 {
-	metrics := make(map[string]float64, len(metricKeys))
-	metrics[metricReconcileP95] = histogramP95UpperBound(
+func computeDiagnosticMeasurements(before, after metricsSnapshot) map[string]float64 {
+	metrics := make(map[string]float64, len(diagnosticMetricKeys))
+	metrics[metricReconcileDurationBucketP95] = histogramP95UpperBound(
 		histogramDelta(before, after, "openbao_reconcile_duration_seconds"),
 	)
-	metrics[metricBackupLastMax] = after.GaugeMax["openbao_backup_last_duration_seconds"]
-	metrics[metricRestoreP95] = histogramP95UpperBound(
+	metrics[metricBackupLastDurationSeconds] = after.GaugeMax["openbao_backup_last_duration_seconds"]
+	metrics[metricRestoreDurationBucketP95] = histogramP95UpperBound(
 		histogramDelta(before, after, "openbao_restore_duration_seconds"),
 	)
-	metrics[metricUpgradeP95] = histogramP95UpperBound(
+	metrics[metricUpgradeDurationBucketP95] = histogramP95UpperBound(
 		histogramDelta(before, after, "openbao_upgrade_duration_seconds"),
 	)
-	metrics[metricUpgradePodP95] = histogramP95UpperBound(
+	metrics[metricUpgradePodDurationBucketP95] = histogramP95UpperBound(
 		histogramDelta(before, after, "openbao_upgrade_pod_duration_seconds"),
 	)
-	metrics[metricWorkqueueRetries] = counterDelta(before, after, "workqueue_retries_total")
+	metrics[metricWorkqueueRetriesDelta] = counterDelta(before, after, "workqueue_retries_total")
 
 	errDelta := counterDelta(before, after, "openbao_reconcile_errors_total")
 	reconcileDelta := counterDelta(before, after, "controller_runtime_reconcile_total")
-	metrics[metricReconcileErrRatio] = reconcileErrorRatio(errDelta, reconcileDelta)
+	metrics[metricReconcileErrorRatio] = reconcileErrorRatio(errDelta, reconcileDelta)
+	metrics[metricKubernetesWrites] = counterDelta(before, after, "openbao_kube_client_requests_total")
+	metrics[metricOpenBaoAPIRequests] = counterDelta(before, after, "openbao_client_requests_total")
+	metrics[metricOpenBaoAuthLogins] = counterDelta(before, after, "openbao_client_auth_logins_total")
+	metrics[metricOpenBaoAuthLoginErrors] = counterDelta(before, after, "openbao_client_auth_login_errors_total")
+	metrics[metricOpenBaoClientRetries] = counterDelta(before, after, "openbao_client_retries_total")
+	metrics[metricOpenBaoAuthCacheHits] = counterDelta(before, after, "openbao_client_auth_cache_hits_total")
+	metrics[metricOpenBaoAuthCacheMisses] = counterDelta(before, after, "openbao_client_auth_cache_misses_total")
 
 	return metrics
 }

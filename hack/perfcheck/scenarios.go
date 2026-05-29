@@ -6,11 +6,23 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-const defaultScenarioPath = "hack/perf/scenarios.yaml"
+func (d *yamlDuration) UnmarshalYAML(value *yaml.Node) error {
+	if value == nil || value.Value == "" {
+		return nil
+	}
+	parsed, err := time.ParseDuration(value.Value)
+	if err != nil {
+		return fmt.Errorf("parse duration %q: %w", value.Value, err)
+	}
+	d.Duration = parsed
+	d.set = true
+	return nil
+}
 
 func loadScenarioManifest(path string) (scenarioManifest, error) {
 	if strings.TrimSpace(path) == "" {
@@ -33,8 +45,8 @@ func loadScenarioManifest(path string) (scenarioManifest, error) {
 }
 
 func validateScenarioManifest(manifest scenarioManifest) error {
-	if manifest.Version == "" {
-		return fmt.Errorf("scenario manifest missing version")
+	if manifest.Version != versionV2 {
+		return fmt.Errorf("scenario manifest version = %q, want %q", manifest.Version, versionV2)
 	}
 	if len(manifest.Scenarios) == 0 {
 		return fmt.Errorf("scenario manifest missing scenarios")
@@ -51,85 +63,114 @@ func validateScenarioManifest(manifest scenarioManifest) error {
 		}
 		seen[name] = struct{}{}
 
-		if strings.TrimSpace(scenario.LabelFilter) == "" {
-			return fmt.Errorf("scenario %q missing labelFilter", name)
+		switch scenario.Executor {
+		case executorE2EGinkgo:
+			if strings.TrimSpace(scenario.LabelFilter) == "" {
+				return fmt.Errorf("scenario %q uses %s but has no labelFilter", name, executorE2EGinkgo)
+			}
+		case executorNativeGo:
+		case executorScript:
+			if len(scenario.Command) == 0 {
+				return fmt.Errorf("scenario %q uses %s but has no command", name, executorScript)
+			}
+		default:
+			return fmt.Errorf("scenario %q has unsupported executor %q", name, scenario.Executor)
 		}
-		if len(scenario.MetricPolicies) == 0 {
-			return fmt.Errorf("scenario %q missing metricPolicies", name)
+
+		if len(scenario.Primary)+len(scenario.Diagnostic) == 0 {
+			return fmt.Errorf("scenario %q has no measurements", name)
 		}
-		for metric, policy := range scenario.MetricPolicies {
-			if err := validateMetricPolicy(metric, policy); err != nil {
-				return fmt.Errorf("scenario %q metric %q: %w", name, metric, err)
+		for _, phase := range scenario.Phases {
+			if strings.TrimSpace(phase.Name) == "" {
+				return fmt.Errorf("scenario %q contains phase with empty name", name)
+			}
+		}
+		if scenario.Warmups != nil && *scenario.Warmups < 0 {
+			return fmt.Errorf("scenario %q warmups must be >= 0", name)
+		}
+		if scenario.Samples != nil && *scenario.Samples <= 0 {
+			return fmt.Errorf("scenario %q samples must be > 0", name)
+		}
+		if scenario.Cleanup != "" {
+			switch scenario.Cleanup {
+			case cleanupAlways, cleanupOnSuccess, cleanupNever:
+			default:
+				return fmt.Errorf("scenario %q has unsupported cleanup policy %q", name, scenario.Cleanup)
 			}
 		}
 	}
 	return nil
 }
 
-func validateMetricPolicy(metric string, policy metricPolicySpec) error {
-	if _, ok := metricKeySet()[metric]; !ok {
-		return fmt.Errorf("unknown metric")
+func selectedScenarios(opts options) ([]scenarioSpec, scenarioManifest, error) {
+	manifest, err := loadScenarioManifest(opts.ScenarioPath)
+	if err != nil {
+		return nil, scenarioManifest{}, err
+	}
+	if len(opts.ScenarioNames) == 0 {
+		return append([]scenarioSpec(nil), manifest.Scenarios...), manifest, nil
 	}
 
-	normalized := normalizeMetricPolicy(metric, policy)
-	switch normalized.Policy {
-	case metricPolicyUpperBound, metricPolicyMustBeZero, metricPolicyIgnore:
-	default:
-		return fmt.Errorf("unknown policy %q", policy.Policy)
-	}
-
-	switch normalized.Severity {
-	case metricSeverityFail, metricSeverityWarn:
-	default:
-		return fmt.Errorf("unknown severity %q", policy.Severity)
-	}
-
-	switch normalized.Multiplier {
-	case metricMultiplierP95, metricMultiplierMax:
-	default:
-		return fmt.Errorf("unknown multiplier %q", policy.Multiplier)
-	}
-
-	if normalized.Floor != nil && *normalized.Floor < 0 {
-		return fmt.Errorf("floor must be >= 0")
-	}
-	if normalized.Threshold != nil && *normalized.Threshold < 0 {
-		return fmt.Errorf("threshold must be >= 0")
-	}
-	return nil
-}
-
-func normalizeMetricPolicy(metric string, policy metricPolicySpec) metricPolicySpec {
-	if strings.TrimSpace(policy.Policy) == "" {
-		policy.Policy = metricPolicyUpperBound
-	}
-	if strings.TrimSpace(policy.Severity) == "" {
-		policy.Severity = metricSeverityFail
-	}
-	if strings.TrimSpace(policy.Multiplier) == "" {
-		if _, ok := p95MetricSet[metric]; ok {
-			policy.Multiplier = metricMultiplierP95
-		} else {
-			policy.Multiplier = metricMultiplierMax
+	byName := scenarioMap(manifest.Scenarios)
+	out := make([]scenarioSpec, 0, len(opts.ScenarioNames))
+	for _, name := range opts.ScenarioNames {
+		spec, ok := byName[name]
+		if !ok {
+			available := strings.Join(sortedScenarioNames(manifest.Scenarios), ", ")
+			return nil, scenarioManifest{}, fmt.Errorf("unknown scenario %q (available: %s)", name, available)
 		}
+		out = append(out, spec)
 	}
-	return policy
+	return out, manifest, nil
 }
 
-func metricKeySet() map[string]struct{} {
-	out := make(map[string]struct{}, len(metricKeys))
-	for _, key := range metricKeys {
-		out[key] = struct{}{}
+func effectiveWarmups(opts options, manifest scenarioManifest, scenario scenarioSpec) int {
+	if opts.WarmupsOverride >= 0 {
+		return opts.WarmupsOverride
 	}
-	return out
+	if scenario.Warmups != nil {
+		return *scenario.Warmups
+	}
+	if manifest.Defaults.Warmups != nil {
+		return *manifest.Defaults.Warmups
+	}
+	return 0
 }
 
-func defaultMetricPoliciesForKeys(keys []string) map[string]metricPolicySpec {
-	out := make(map[string]metricPolicySpec, len(keys))
-	for _, key := range keys {
-		out[key] = normalizeMetricPolicy(key, metricPolicySpec{})
+func effectiveSamples(opts options, manifest scenarioManifest, scenario scenarioSpec) int {
+	if opts.SamplesOverride > 0 {
+		return opts.SamplesOverride
 	}
-	return out
+	if scenario.Samples != nil {
+		return *scenario.Samples
+	}
+	if manifest.Defaults.Samples != nil {
+		return *manifest.Defaults.Samples
+	}
+	return 1
+}
+
+func effectiveSampleTimeout(opts options, manifest scenarioManifest, scenario scenarioSpec) time.Duration {
+	if opts.ScenarioTimeout > 0 {
+		return opts.ScenarioTimeout
+	}
+	if scenario.SampleTimeout.set {
+		return scenario.SampleTimeout.Duration
+	}
+	if manifest.Defaults.SampleTimeout.set {
+		return manifest.Defaults.SampleTimeout.Duration
+	}
+	return 30 * time.Minute
+}
+
+func effectiveCleanup(manifest scenarioManifest, scenario scenarioSpec) string {
+	if scenario.Cleanup != "" {
+		return scenario.Cleanup
+	}
+	if manifest.Defaults.Cleanup != "" {
+		return manifest.Defaults.Cleanup
+	}
+	return cleanupAlways
 }
 
 func scenarioMap(scenarios []scenarioSpec) map[string]scenarioSpec {
@@ -147,4 +188,20 @@ func sortedScenarioNames(scenarios []scenarioSpec) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func scenarioRequiresExistingClusterSupport(opts options, scenario scenarioSpec) error {
+	if opts.ExistingClusterContext == "" {
+		return nil
+	}
+	if !scenario.ExistingCluster.Enabled {
+		return fmt.Errorf("scenario %q does not declare existing-cluster support", scenario.Name)
+	}
+	if scenario.ExistingCluster.Destructive {
+		return fmt.Errorf("scenario %q is destructive and cannot run against an existing cluster", scenario.Name)
+	}
+	if strings.TrimSpace(opts.Namespace) == "" && strings.TrimSpace(opts.NamespacePrefix) == "" {
+		return fmt.Errorf("existing-cluster mode requires --namespace or --namespace-prefix")
+	}
+	return nil
 }

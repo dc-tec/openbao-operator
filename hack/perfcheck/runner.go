@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,217 +12,322 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
 )
 
 func runCapture(opts options) error {
-	scenarios, err := selectedScenarios(opts)
+	scenarios, manifest, err := selectedScenarios(opts)
 	if err != nil {
 		return err
 	}
-
-	baseline := baselineDocument{
-		Version:     "v1",
-		CapturedAt:  time.Now().UTC(),
-		NodeImage:   opts.NodeImage,
-		RunsPerCase: opts.Runs,
-		Multipliers: multiplierConfig{
-			P95: opts.P95Multiplier,
-			Max: opts.MaxMultiplier,
-		},
-		MetricSchema: append([]string(nil), metricKeys...),
-		Scenarios:    make(map[string]scenarioBaseline, len(scenarios)),
+	if err := prepareScenarioArtifactDirs(opts, scenarios); err != nil {
+		return err
 	}
 
+	var samples []sampleDocument
 	for _, scenario := range scenarios {
-		base := scenarioBaseline{
-			LabelFilter:    scenario.LabelFilter,
-			MetricPolicies: scenario.MetricPolicies,
-			Runs:           make([]runResult, 0, opts.Runs),
-			MaxMetrics:     make(map[string]float64, len(metricKeys)),
+		if err := scenarioRequiresExistingClusterSupport(opts, scenario); err != nil {
+			return err
 		}
-		for _, key := range metricKeys {
-			base.MaxMetrics[key] = 0
+		scenarioSamples, err := executeScenarioSamples(opts, manifest, scenario)
+		if err != nil {
+			return err
 		}
-
-		for run := 1; run <= opts.Runs; run++ {
-			res, err := executeScenarioRun(opts, scenario, run)
-			if err != nil {
-				return err
-			}
-			base.Runs = append(base.Runs, res)
-			for _, key := range metricKeys {
-				if res.Metrics[key] > base.MaxMetrics[key] {
-					base.MaxMetrics[key] = res.Metrics[key]
-				}
-			}
+		samples = append(samples, scenarioSamples...)
+		if err := writeScenarioBaseline(opts, scenario.Name, scenarioSamples); err != nil {
+			return err
 		}
-
-		baseline.Scenarios[scenario.Name] = base
 	}
 
-	thresholds := buildThresholds(baseline)
-	if err := writeBaseline(opts.BaselinePath, baseline); err != nil {
-		return err
+	for _, sample := range samples {
+		if sample.Status != sampleStatusPass && !sample.Warmup {
+			return fmt.Errorf("capture completed with scenario errors; inspect %s", opts.ArtifactDir)
+		}
 	}
-	if err := writeThresholds(opts.ThresholdsPath, thresholds); err != nil {
-		return err
-	}
-
-	fmt.Printf("wrote baseline: %s\n", opts.BaselinePath)
-	fmt.Printf("wrote thresholds: %s\n", opts.ThresholdsPath)
+	fmt.Printf("wrote v2 baselines under %s\n", opts.BaselineDir)
+	fmt.Printf("wrote v2 sample artifacts under %s\n", opts.ArtifactDir)
 	return nil
 }
 
 func runVerify(opts options) error {
-	scenarios, err := selectedScenarios(opts)
+	scenarios, manifest, err := selectedScenarios(opts)
 	if err != nil {
 		return err
 	}
-
-	thresholds, err := readThresholds(opts.ThresholdsInput)
-	if err != nil {
+	if err := prepareScenarioArtifactDirs(opts, scenarios); err != nil {
 		return err
 	}
 
-	var findings []string
-	var warnings []string
 	for _, scenario := range scenarios {
-		th, ok := thresholds.Scenarios[scenario.Name]
-		if !ok {
-			return fmt.Errorf("thresholds missing scenario %q", scenario.Name)
-		}
-		if err := validateScenarioThresholds(th, scenario); err != nil {
+		if err := scenarioRequiresExistingClusterSupport(opts, scenario); err != nil {
 			return err
 		}
-		th = applyScenarioPolicy(th, scenario)
-		res, runErr := executeScenarioRun(opts, scenario, 1)
-		if runErr != nil {
-			return runErr
-		}
-		scenarioResult := compareScenarioMetricsDetailed(scenario.Name, res.Metrics, th)
-		findings = append(findings, scenarioResult.Findings...)
-		warnings = append(warnings, scenarioResult.Warnings...)
-
-		fmt.Printf("scenario=%s metrics=%s\n", scenario.Name, formatMetrics(res.Metrics))
-	}
-
-	if len(warnings) > 0 {
-		sort.Strings(warnings)
-		fmt.Println("performance diagnostic warnings:")
-		for _, w := range warnings {
-			fmt.Printf("- %s\n", w)
+		if _, err := executeScenarioSamples(opts, manifest, scenario); err != nil {
+			return err
 		}
 	}
 
-	if len(findings) > 0 {
-		sort.Strings(findings)
-		fmt.Println("performance regression findings:")
-		for _, f := range findings {
-			fmt.Printf("- %s\n", f)
-		}
-		return fmt.Errorf("performance thresholds violated (%d findings)", len(findings))
+	summary, err := summarizeRun(opts)
+	if err != nil {
+		return err
 	}
-
-	fmt.Println("performance verification passed")
+	if err := writeSummaryArtifacts(opts, summary); err != nil {
+		return err
+	}
+	printTerminalSummary(summary)
+	if summary.Totals.Fail > 0 {
+		return fmt.Errorf("performance verification failed (%d failing scenarios)", summary.Totals.Fail)
+	}
 	return nil
 }
 
-func selectedScenarios(opts options) ([]scenarioSpec, error) {
-	manifest, err := loadScenarioManifest(opts.ScenarioPath)
-	if err != nil {
-		return nil, err
-	}
-	if len(opts.ScenarioNames) == 0 {
-		return append([]scenarioSpec(nil), manifest.Scenarios...), nil
-	}
-
-	byName := scenarioMap(manifest.Scenarios)
-	out := make([]scenarioSpec, 0, len(opts.ScenarioNames))
-	for _, name := range opts.ScenarioNames {
-		spec, ok := byName[name]
-		if !ok {
-			available := strings.Join(sortedScenarioNames(manifest.Scenarios), ", ")
-			return nil, fmt.Errorf("unknown scenario %q (available: %s)", name, available)
+func prepareScenarioArtifactDirs(opts options, scenarios []scenarioSpec) error {
+	for _, scenario := range scenarios {
+		if err := os.RemoveAll(scenarioArtifactDir(opts, scenario.Name)); err != nil {
+			return fmt.Errorf("clear scenario artifacts for %s: %w", scenario.Name, err)
 		}
-		out = append(out, spec)
+	}
+	return nil
+}
+
+func runReport(opts options) error {
+	summary, err := summarizeRun(opts)
+	if err != nil {
+		return err
+	}
+	if err := writeSummaryArtifacts(opts, summary); err != nil {
+		return err
+	}
+	printTerminalSummary(summary)
+	return nil
+}
+
+func executeScenarioSamples(
+	opts options,
+	manifest scenarioManifest,
+	scenario scenarioSpec,
+) ([]sampleDocument, error) {
+	warmups := effectiveWarmups(opts, manifest, scenario)
+	samples := effectiveSamples(opts, manifest, scenario)
+	timeout := effectiveSampleTimeout(opts, manifest, scenario)
+
+	out := make([]sampleDocument, 0, warmups+samples)
+	for i := 1; i <= warmups+samples; i++ {
+		warmup := i <= warmups
+		var sampleNumber int
+		if warmup {
+			sampleNumber = i
+		} else {
+			sampleNumber = i - warmups
+		}
+		sample, err := executeScenarioSample(opts, manifest, scenario, sampleNumber, warmup, timeout)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sample)
 	}
 	return out, nil
 }
 
-func executeScenarioRun(opts options, scenario scenarioSpec, runIndex int) (runResult, error) {
-	cluster := clusterNameForScenario(scenario.Name, runIndex)
+func executeScenarioSample(
+	opts options,
+	manifest scenarioManifest,
+	scenario scenarioSpec,
+	sampleIndex int,
+	warmup bool,
+	timeout time.Duration,
+) (sampleDocument, error) {
 	started := time.Now().UTC()
-	fmt.Printf("running scenario=%s run=%d cluster=%s\n", scenario.Name, runIndex, cluster)
-
-	if err := setupKindCluster(opts, cluster); err != nil {
-		return runResult{}, err
+	cluster := clusterNameForScenario(scenario.Name, sampleIndex)
+	if opts.ExistingClusterContext != "" {
+		cluster = opts.ExistingClusterContext
 	}
 
-	shouldCleanup := true
-	cleanup := func() {
-		if err := cleanupKindCluster(opts, cluster); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: cleanup failed for cluster %s: %v\n", cluster, err)
+	sample := sampleDocument{
+		Version:      versionV2,
+		Scenario:     scenario.Name,
+		Sample:       sampleIndex,
+		Warmup:       warmup,
+		Cluster:      cluster,
+		Environment:  collectRunEnvironment(opts, cluster),
+		StartedAt:    started,
+		Status:       sampleStatusPass,
+		Phases:       []phaseEvent{{Name: "sample_started", At: started, Source: "harness"}},
+		Measurements: make(map[string]float64),
+		Artifacts:    make(map[string]string),
+	}
+
+	fmt.Printf("running scenario=%s sample=%d warmup=%t cluster=%s\n", scenario.Name, sampleIndex, warmup, cluster)
+	scenarioDir := scenarioArtifactDir(opts, scenario.Name)
+	if err := os.MkdirAll(scenarioDir, 0o755); err != nil {
+		return sampleDocument{}, fmt.Errorf("create scenario artifact directory: %w", err)
+	}
+
+	cleanupPolicy := effectiveCleanup(manifest, scenario)
+	shouldCleanup := opts.ExistingClusterContext == "" && cleanupPolicy == cleanupAlways
+	if opts.ExistingClusterContext == "" {
+		if err := setupKindCluster(opts, cluster); err != nil {
+			sample.Status = sampleStatusScenarioError
+			sample.Error = err.Error()
+			return finishAndWriteSample(opts, sample)
+		}
+		if cleanupPolicy == cleanupOnSuccess {
+			shouldCleanup = true
 		}
 	}
 	defer func() {
 		if shouldCleanup {
-			cleanup()
+			cleanupClusterWithWarning(opts, cluster)
 		}
 	}()
 
 	beforeCtx, cancelBefore := context.WithTimeout(context.Background(), 90*time.Second)
-	before, beforePresent, err := scrapeMetricsSnapshot(beforeCtx, opts, cluster, true)
+	before, beforeText, beforePresent, beforeErr := scrapeMetricsSnapshot(beforeCtx, opts, cluster, true)
 	cancelBefore()
-	if err != nil {
-		if !beforePresent {
-			before = emptySnapshot()
-		} else {
-			return runResult{}, err
+	if beforeErr != nil {
+		sample.Status = sampleStatusMeasurementError
+		sample.Error = beforeErr.Error()
+		before = emptySnapshot()
+	} else if beforeText != "" {
+		path, err := writeTextArtifact(scenarioDir, sampleArtifactName(sample, "metrics-before.prom"), beforeText)
+		if err != nil {
+			return sampleDocument{}, err
 		}
+		sample.Artifacts["metricsBefore"] = path
+	}
+	if !beforePresent {
+		before = emptySnapshot()
 	}
 
-	scenarioCtx, cancelScenario := context.WithTimeout(context.Background(), opts.ScenarioTimeout)
-	err = runScenarioTests(scenarioCtx, opts, cluster, scenario)
-	cancelScenario()
-	if err != nil {
-		if opts.KeepOnFailure {
+	runCtx, cancelRun := context.WithTimeout(context.Background(), timeout)
+	runErr := runScenarioExecutor(runCtx, opts, cluster, scenario)
+	cancelRun()
+	if runErr != nil {
+		sample.Status = sampleStatusScenarioError
+		sample.Error = runErr.Error()
+		if opts.KeepOnFailure && opts.ExistingClusterContext == "" {
 			shouldCleanup = false
 			fmt.Fprintf(os.Stderr, "keeping cluster %s for debugging\n", cluster)
 		}
-		return runResult{}, err
+	} else {
+		completed := time.Now().UTC()
+		sample.Phases = append(sample.Phases, phaseEvent{Name: "scenario_completed", At: completed, Source: "harness"})
 	}
 
 	afterCtx, cancelAfter := context.WithTimeout(context.Background(), 2*time.Minute)
-	after, _, err := scrapeMetricsSnapshot(afterCtx, opts, cluster, false)
+	after, afterText, _, afterErr := scrapeMetricsSnapshot(afterCtx, opts, cluster, false)
 	cancelAfter()
-	if err != nil {
-		return runResult{}, err
+	if afterErr != nil && sample.Status == sampleStatusPass {
+		sample.Status = sampleStatusMeasurementError
+		sample.Error = afterErr.Error()
+		after = emptySnapshot()
+	}
+	if afterText != "" {
+		path, err := writeTextArtifact(scenarioDir, sampleArtifactName(sample, "metrics-after.prom"), afterText)
+		if err != nil {
+			return sampleDocument{}, err
+		}
+		sample.Artifacts["metricsAfter"] = path
 	}
 
-	metrics := computeScenarioMetrics(before, after)
-	return runResult{
-		Scenario:      scenario.Name,
-		LabelFilter:   scenario.LabelFilter,
-		Run:           runIndex,
-		Cluster:       cluster,
-		StartedAt:     started,
-		Duration:      time.Since(started),
-		Metrics:       metrics,
-		BeforePresent: beforePresent,
-	}, nil
+	for key, value := range computeDiagnosticMeasurements(before, after) {
+		sample.Measurements[key] = value
+	}
+	sample.Measurements[metricSampleTotalSeconds] = time.Since(started).Seconds()
+
+	if err := collectKubernetesArtifacts(opts, scenarioDir, cluster, sample); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: collecting Kubernetes artifacts failed: %v\n", err)
+	}
+	if sample.Status != sampleStatusPass && cleanupPolicy == cleanupOnSuccess {
+		shouldCleanup = false
+	}
+	return finishAndWriteSample(opts, sample)
 }
 
-func clusterNameForScenario(name string, run int) string {
+func finishAndWriteSample(opts options, sample sampleDocument) (sampleDocument, error) {
+	sample.CompletedAt = time.Now().UTC()
+	if sample.Measurements == nil {
+		sample.Measurements = make(map[string]float64)
+	}
+	if sample.Artifacts == nil {
+		sample.Artifacts = make(map[string]string)
+	}
+	path := filepath.Join(scenarioArtifactDir(opts, sample.Scenario), sampleFileName(sample))
+	if err := writeJSONFile(path, sample); err != nil {
+		return sampleDocument{}, err
+	}
+	return sample, nil
+}
+
+func runScenarioExecutor(ctx context.Context, opts options, cluster string, scenario scenarioSpec) error {
+	switch scenario.Executor {
+	case executorE2EGinkgo:
+		return runScenarioTests(ctx, opts, cluster, scenario)
+	case executorScript:
+		return runScenarioScript(ctx, scenario)
+	case executorNativeGo:
+		return fmt.Errorf("native-go executor is not implemented in phase 1")
+	default:
+		return fmt.Errorf("unsupported executor %q", scenario.Executor)
+	}
+}
+
+func runScenarioTests(ctx context.Context, opts options, cluster string, scenario scenarioSpec) error {
+	env := map[string]string{
+		"E2E_LABEL_FILTER":   scenario.LabelFilter,
+		"E2E_PARALLEL_NODES": "1",
+		"E2E_SKIP_CLEANUP":   "true",
+	}
+	if opts.SkipImageBuild {
+		env["E2E_SKIP_IMAGE_BUILD"] = "true"
+	}
+	target := "test-e2e-ci"
+	if opts.ExistingClusterContext == "" {
+		env["KIND"] = opts.KindBin
+		env["KIND_CLUSTER"] = cluster
+	} else {
+		env["E2E_USE_EXISTING_CLUSTER"] = "true"
+		env["KUBECONFIG_CONTEXT"] = opts.ExistingClusterContext
+		if opts.Namespace != "" {
+			env["E2E_NAMESPACE"] = opts.Namespace
+		}
+		if opts.NamespacePrefix != "" {
+			env["E2E_NAMESPACE_PREFIX"] = opts.NamespacePrefix
+		}
+		target = "test-e2e-existing"
+	}
+	_, err := runCommand(ctx, env, opts.MakeBin, target)
+	if err != nil {
+		return fmt.Errorf("run e2e scenario %q: %w", scenario.Name, err)
+	}
+	return nil
+}
+
+func runScenarioScript(ctx context.Context, scenario scenarioSpec) error {
+	if len(scenario.Command) == 0 {
+		return fmt.Errorf("script scenario %q has no command", scenario.Name)
+	}
+	name := scenario.Command[0]
+	args := scenario.Command[1:]
+	_, err := runCommand(ctx, nil, name, args...)
+	if err != nil {
+		return fmt.Errorf("run script scenario %q: %w", scenario.Name, err)
+	}
+	return nil
+}
+
+func clusterNameForScenario(name string, sample int) string {
 	replacer := strings.NewReplacer("_", "-", "/", "-", " ", "-", ".", "-")
 	slug := replacer.Replace(strings.ToLower(strings.TrimSpace(name)))
 	slug = strings.Trim(slug, "-")
 	if slug == "" {
 		slug = "scenario"
 	}
-	cluster := fmt.Sprintf("perf-%s-%d", slug, run)
+	cluster := fmt.Sprintf("perf-%s-%d", slug, sample)
 	if len(cluster) > 60 {
 		cluster = cluster[:60]
 	}
@@ -244,6 +350,12 @@ func setupKindCluster(opts options, cluster string) error {
 	return nil
 }
 
+func cleanupClusterWithWarning(opts options, cluster string) {
+	if err := cleanupKindCluster(opts, cluster); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: cleanup failed for cluster %s: %v\n", cluster, err)
+	}
+}
+
 func cleanupKindCluster(opts options, cluster string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), opts.CleanupTimeout)
 	defer cancel()
@@ -254,22 +366,6 @@ func cleanupKindCluster(opts options, cluster string) error {
 	_, err := runCommand(ctx, env, opts.MakeBin, "cleanup-test-e2e")
 	if err != nil {
 		return fmt.Errorf("cleanup kind cluster %q: %w", cluster, err)
-	}
-	return nil
-}
-
-func runScenarioTests(ctx context.Context, opts options, cluster string, scenario scenarioSpec) error {
-	env := map[string]string{
-		"KIND":               opts.KindBin,
-		"KIND_CLUSTER":       cluster,
-		"E2E_LABEL_FILTER":   scenario.LabelFilter,
-		"E2E_PARALLEL_NODES": "1",
-		"E2E_SKIP_CLEANUP":   "true",
-		"E2E_TIMEOUT":        opts.ScenarioTimeout.String(),
-	}
-	_, err := runCommand(ctx, env, opts.MakeBin, "test-e2e-ci")
-	if err != nil {
-		return fmt.Errorf("run e2e scenario %q: %w", scenario.Name, err)
 	}
 	return nil
 }
@@ -312,42 +408,39 @@ func scrapeMetricsSnapshot(
 	opts options,
 	cluster string,
 	allowMissing bool,
-) (metricsSnapshot, bool, error) {
-	clusterContext := fmt.Sprintf("kind-%s", cluster)
+) (metricsSnapshot, string, bool, error) {
+	clusterContext := kubeContext(opts, cluster)
 	if err := ensureMetricsRoleBinding(ctx, opts, clusterContext); err != nil {
-		if allowMissing && looksLikeMissingResource(err) {
-			return emptySnapshot(), false, nil
-		}
 		if allowMissing {
-			return emptySnapshot(), false, nil
+			return emptySnapshot(), "", false, nil
 		}
-		return metricsSnapshot{}, false, err
+		return metricsSnapshot{}, "", false, err
 	}
 
 	token, err := createMetricsToken(ctx, opts, clusterContext)
 	if err != nil {
 		if allowMissing {
-			return emptySnapshot(), false, nil
+			return emptySnapshot(), "", false, nil
 		}
-		return metricsSnapshot{}, false, err
+		return metricsSnapshot{}, "", false, err
 	}
 
 	metricsText, err := fetchMetricsViaPortForward(ctx, opts, clusterContext, token)
 	if err != nil {
 		if allowMissing && looksLikeMissingResource(err) {
-			return emptySnapshot(), false, nil
+			return emptySnapshot(), "", false, nil
 		}
 		if allowMissing {
-			return emptySnapshot(), false, nil
+			return emptySnapshot(), "", false, nil
 		}
-		return metricsSnapshot{}, false, err
+		return metricsSnapshot{}, "", false, err
 	}
 
 	snapshot, err := parseMetricsSnapshot(metricsText)
 	if err != nil {
-		return metricsSnapshot{}, true, err
+		return metricsSnapshot{}, metricsText, true, err
 	}
-	return snapshot, true, nil
+	return snapshot, metricsText, true, nil
 }
 
 func ensureMetricsRoleBinding(ctx context.Context, opts options, clusterContext string) error {
@@ -530,15 +623,103 @@ func looksLikeMissingResource(err error) bool {
 	return errors.Is(err, context.DeadlineExceeded)
 }
 
-func formatMetrics(metrics map[string]float64) string {
-	keys := make([]string, 0, len(metrics))
-	for key := range metrics {
-		keys = append(keys, key)
+func collectRunEnvironment(opts options, cluster string) runEnvironment {
+	env := runEnvironment{
+		NodeImage: opts.NodeImage,
+		GoVersion: runtime.Version(),
+		Commit:    commandOutputOrEmpty(context.Background(), nil, "git", "rev-parse", "HEAD"),
+		Context:   kubeContext(opts, cluster),
 	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%.3f", key, metrics[key]))
+	if opts.ExistingClusterContext != "" {
+		env.Runner = "existing-cluster"
+	} else {
+		env.Runner = "kind"
+		env.KindVersion = commandOutputOrEmpty(context.Background(), nil, opts.KindBin, "version")
 	}
-	return strings.Join(parts, " ")
+	return env
+}
+
+func commandOutputOrEmpty(ctx context.Context, env map[string]string, name string, args ...string) string {
+	commandCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := runCommand(commandCtx, env, name, args...)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+func kubeContext(opts options, cluster string) string {
+	if opts.ExistingClusterContext != "" {
+		return opts.ExistingClusterContext
+	}
+	return fmt.Sprintf("kind-%s", cluster)
+}
+
+func scenarioArtifactDir(opts options, scenario string) string {
+	return filepath.Join(opts.ArtifactDir, "scenarios", scenario)
+}
+
+func sampleFileName(sample sampleDocument) string {
+	if sample.Warmup {
+		return fmt.Sprintf("warmup-%03d.json", sample.Sample)
+	}
+	return fmt.Sprintf("sample-%03d.json", sample.Sample)
+}
+
+func sampleArtifactName(sample sampleDocument, suffix string) string {
+	prefix := strings.TrimSuffix(sampleFileName(sample), ".json")
+	return fmt.Sprintf("%s-%s", prefix, suffix)
+}
+
+func writeTextArtifact(dir, name, body string) (string, error) {
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return "", fmt.Errorf("write artifact %s: %w", path, err)
+	}
+	return path, nil
+}
+
+func writeJSONFile(path string, value any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create directory for %s: %w", path, err)
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func collectKubernetesArtifacts(opts options, scenarioDir, cluster string, sample sampleDocument) error {
+	clusterContext := kubeContext(opts, cluster)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	scopeArgs := []string{"--all-namespaces"}
+	if opts.ExistingClusterContext != "" && opts.Namespace != "" {
+		scopeArgs = []string{"--namespace", opts.Namespace}
+	} else if opts.ExistingClusterContext != "" {
+		return nil
+	}
+	targets := map[string][]string{
+		"pods":   append([]string{"get", "pods"}, scopeArgs...),
+		"jobs":   append([]string{"get", "jobs"}, scopeArgs...),
+		"events": append([]string{"get", "events"}, scopeArgs...),
+	}
+	for name, args := range targets {
+		fullArgs := append([]string{"--context", clusterContext}, args...)
+		fullArgs = append(fullArgs, "-o", "json")
+		out, err := runCommand(ctx, nil, "kubectl", fullArgs...)
+		if err != nil {
+			continue
+		}
+		if _, err := writeTextArtifact(scenarioDir, sampleArtifactName(sample, name+".json"), out); err != nil {
+			return err
+		}
+	}
+	return nil
 }
