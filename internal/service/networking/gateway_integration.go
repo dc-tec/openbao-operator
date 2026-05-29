@@ -178,7 +178,10 @@ func validateGatewayClassAccepted(gatewayClass *gatewayv1.GatewayClass) error {
 
 func validateGatewayClassSupportedVersion(gatewayClass *gatewayv1.GatewayClass) error {
 	supportedVersion := meta.FindStatusCondition(gatewayClass.Status.Conditions, string(gatewayv1.GatewayClassConditionStatusSupportedVersion))
-	if supportedVersion == nil || supportedVersion.Status == metav1.ConditionUnknown {
+	if supportedVersion == nil {
+		return nil
+	}
+	if supportedVersion.Status == metav1.ConditionUnknown {
 		return fmt.Errorf("%w: GatewayClass %q has not yet reported SupportedVersion=True", ErrGatewayClassPending, gatewayClass.Name)
 	}
 	if supportedVersion.Status == metav1.ConditionFalse {

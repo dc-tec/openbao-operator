@@ -103,6 +103,31 @@ func TestValidateGatewayIntegration(t *testing.T) {
 			},
 		},
 		{
+			name: "termination path tolerates class without SupportedVersion condition",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newMinimalCluster("example", "default")
+				cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+					Enabled:  true,
+					Hostname: "bao.example.test",
+					GatewayRef: openbaov1alpha1.GatewayReference{
+						Name:      "shared-gateway",
+						Namespace: "gateway-system",
+					},
+				}
+				disabled := false
+				cluster.Spec.Gateway.BackendTLS = &openbaov1alpha1.BackendTLSConfig{Enabled: &disabled}
+				return cluster
+			}(),
+			objects: []client.Object{
+				newGateway([]gatewayv1.Listener{{
+					Name:     "https",
+					Protocol: gatewayv1.HTTPSProtocolType,
+					Port:     443,
+				}}, programmedTrue),
+				newGatewayClass([]gatewayv1.FeatureName{gatewayFeatureHTTPRoute}, acceptedTrue),
+			},
+		},
+		{
 			name: "listener mismatch is explicit",
 			cluster: func() *openbaov1alpha1.OpenBaoCluster {
 				cluster := newMinimalCluster("example", "default")
