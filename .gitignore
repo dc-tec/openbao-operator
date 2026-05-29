@@ -51,6 +51,7 @@ dist/checksums.txt
 dist/sbom-*.spdx.json
 dist/architecture/
 dist/bench/
+dist/perf/
 dist/test/
 dist/mutation/
 tmp/air/
