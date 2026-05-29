@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 const (
 	versionV2 = "v2"
@@ -54,6 +57,16 @@ const (
 	metricOpenBaoClientRetries        = "openbao_api_retry_total"
 	metricOpenBaoAuthCacheHits        = "openbao_auth_cache_hits_total"
 	metricOpenBaoAuthCacheMisses      = "openbao_auth_cache_misses_total"
+	metricClusterAvailableSeconds     = "cluster_available_seconds"
+	metricStatefulSetCreatedSeconds   = "statefulset_created_seconds"
+	metricFirstPodReadySeconds        = "first_pod_ready_seconds"
+	metricAllPodsReadySeconds         = "all_pods_ready_seconds"
+	metricObservedKubernetesWrites    = "observed_kubernetes_writes"
+	metricUpgradeTotalSeconds         = "upgrade_total_seconds"
+	metricUpgradeSessionStartSeconds  = "upgrade_session_start_seconds"
+	metricUpgradePodReadySeconds      = "upgrade_pod_ready_seconds"
+	metricUpgradeAvailabilityFailures = "upgrade_availability_probe_failures"
+	metricUpgradeKubernetesWrites     = "upgrade_kubernetes_writes"
 )
 
 var diagnosticMetricKeys = []string{
@@ -243,6 +256,17 @@ type options struct {
 	Namespace              string
 	NamespacePrefix        string
 	SkipImageBuild         bool
+	OperatorImage          string
+	ConfigInitImage        string
+	UpgradeExecutorImage   string
+	OpenBaoVersion         string
+	OpenBaoImage           string
+	UpgradeFromVersion     string
+	UpgradeFromImage       string
+	UpgradeToVersion       string
+	UpgradeToImage         string
+	APIServerCIDR          string
+	StorageClass           string
 	OperatorNS             string
 	MetricsService         string
 	ServiceAccount         string
@@ -258,4 +282,11 @@ type metricsSnapshot struct {
 type yamlDuration struct {
 	time.Duration
 	set bool
+}
+
+type scenarioExecutionResult struct {
+	Phases       []phaseEvent
+	Measurements map[string]float64
+	Namespace    string
+	Cleanup      func(context.Context)
 }

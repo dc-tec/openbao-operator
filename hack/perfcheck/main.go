@@ -110,14 +110,28 @@ func defaultOptions(mode string) options {
 		NodeImage:       "kindest/node:v1.34.3",
 		KindBin:         "kind",
 		MakeBin:         "make",
-		ClusterTimeout:  20 * time.Minute,
-		CleanupTimeout:  10 * time.Minute,
-		SamplesOverride: 0,
-		WarmupsOverride: -1,
-		OperatorNS:      "openbao-operator-system",
-		MetricsService:  "openbao-operator-controller-metrics-service",
-		ServiceAccount:  "openbao-operator-controller",
-		BindingName:     "openbao-operator-metrics-binding",
+		OperatorImage:   envOrDefault("PERF_OPERATOR_IMAGE", "example.com/openbao-operator:0.0.1"),
+		ConfigInitImage: envOrDefault("PERF_CONFIG_INIT_IMAGE", "openbao-init:dev"),
+		UpgradeExecutorImage: envOrDefault(
+			"PERF_UPGRADE_EXECUTOR_IMAGE",
+			"openbao-upgrade:dev",
+		),
+		OpenBaoVersion:     envOrDefault("PERF_OPENBAO_VERSION", "2.5.4"),
+		OpenBaoImage:       envOrDefault("PERF_OPENBAO_IMAGE", "openbao/openbao:2.5.4"),
+		UpgradeFromVersion: envOrDefault("PERF_UPGRADE_FROM_VERSION", "2.4.4"),
+		UpgradeFromImage:   envOrDefault("PERF_UPGRADE_FROM_IMAGE", "openbao/openbao:2.4.4"),
+		UpgradeToVersion:   envOrDefault("PERF_UPGRADE_TO_VERSION", "2.5.4"),
+		UpgradeToImage:     envOrDefault("PERF_UPGRADE_TO_IMAGE", "openbao/openbao:2.5.4"),
+		APIServerCIDR:      envOrDefault("PERF_API_SERVER_CIDR", "10.96.0.0/12"),
+		StorageClass:       envOrDefault("PERF_STORAGE_CLASS", ""),
+		ClusterTimeout:     20 * time.Minute,
+		CleanupTimeout:     10 * time.Minute,
+		SamplesOverride:    0,
+		WarmupsOverride:    -1,
+		OperatorNS:         "openbao-operator-system",
+		MetricsService:     "openbao-operator-controller-metrics-service",
+		ServiceAccount:     "openbao-operator-controller",
+		BindingName:        "openbao-operator-metrics-binding",
 	}
 }
 
@@ -131,6 +145,32 @@ func bindExecutionFlags(fs *flag.FlagSet, opts *options) {
 	fs.DurationVar(&opts.CleanupTimeout, "cleanup-timeout", opts.CleanupTimeout, "kind cleanup timeout")
 	fs.BoolVar(&opts.KeepOnFailure, "keep-on-failure", false, "keep kind clusters if a sample fails")
 	fs.BoolVar(&opts.SkipImageBuild, "skip-image-build", false, "skip image build when supported by the executor")
+	fs.StringVar(&opts.OperatorImage, "operator-image", opts.OperatorImage, "operator image for native scenarios")
+	fs.StringVar(&opts.ConfigInitImage, "config-init-image", opts.ConfigInitImage, "config-init image")
+	fs.StringVar(
+		&opts.UpgradeExecutorImage,
+		"upgrade-executor-image",
+		opts.UpgradeExecutorImage,
+		"upgrade executor image",
+	)
+	fs.StringVar(&opts.OpenBaoVersion, "openbao-version", opts.OpenBaoVersion, "OpenBao version")
+	fs.StringVar(&opts.OpenBaoImage, "openbao-image", opts.OpenBaoImage, "OpenBao image")
+	fs.StringVar(
+		&opts.UpgradeFromVersion,
+		"upgrade-from-version",
+		opts.UpgradeFromVersion,
+		"rolling upgrade source OpenBao version",
+	)
+	fs.StringVar(&opts.UpgradeFromImage, "upgrade-from-image", opts.UpgradeFromImage, "rolling upgrade source image")
+	fs.StringVar(
+		&opts.UpgradeToVersion,
+		"upgrade-to-version",
+		opts.UpgradeToVersion,
+		"rolling upgrade target OpenBao version",
+	)
+	fs.StringVar(&opts.UpgradeToImage, "upgrade-to-image", opts.UpgradeToImage, "rolling upgrade target image")
+	fs.StringVar(&opts.APIServerCIDR, "api-server-cidr", opts.APIServerCIDR, "Kubernetes API service CIDR")
+	fs.StringVar(&opts.StorageClass, "storage-class", opts.StorageClass, "storage class for native scenario PVCs")
 	fs.StringVar(
 		&opts.ExistingClusterContext,
 		"existing-cluster-context",
@@ -222,4 +262,12 @@ func printUsage() {
 func exitWithError(err error) {
 	fmt.Fprintf(os.Stderr, "perfcheck: %v\n", err)
 	os.Exit(1)
+}
+
+func envOrDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }

@@ -168,16 +168,11 @@ func executeScenarioSample(
 	}
 
 	cleanupPolicy := effectiveCleanup(manifest, scenario)
-	shouldCleanup := opts.ExistingClusterContext == "" && cleanupPolicy == cleanupAlways
-	if opts.ExistingClusterContext == "" {
-		if err := setupKindCluster(opts, cluster); err != nil {
-			sample.Status = sampleStatusScenarioError
-			sample.Error = err.Error()
-			return finishAndWriteSample(opts, sample)
-		}
-		if cleanupPolicy == cleanupOnSuccess {
-			shouldCleanup = true
-		}
+	shouldCleanup, prepareErr := prepareScenarioSample(opts, scenario, cleanupPolicy, cluster)
+	if prepareErr != nil {
+		sample.Status = sampleStatusScenarioError
+		sample.Error = prepareErr.Error()
+		return finishAndWriteSample(opts, sample)
 	}
 	defer func() {
 		if shouldCleanup {
@@ -204,8 +199,23 @@ func executeScenarioSample(
 	}
 
 	runCtx, cancelRun := context.WithTimeout(context.Background(), timeout)
-	runErr := runScenarioExecutor(runCtx, opts, cluster, scenario)
+	execResult, runErr := runScenarioExecutor(runCtx, opts, cluster, scenario)
 	cancelRun()
+	defer func() {
+		if execResult.Cleanup == nil {
+			return
+		}
+		if runErr != nil && opts.KeepOnFailure {
+			return
+		}
+		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), opts.CleanupTimeout)
+		defer cancelCleanup()
+		execResult.Cleanup(cleanupCtx)
+	}()
+	sample.Phases = append(sample.Phases, execResult.Phases...)
+	for key, value := range execResult.Measurements {
+		sample.Measurements[key] = value
+	}
 	if runErr != nil {
 		sample.Status = sampleStatusScenarioError
 		sample.Error = runErr.Error()
@@ -235,17 +245,48 @@ func executeScenarioSample(
 	}
 
 	for key, value := range computeDiagnosticMeasurements(before, after) {
-		sample.Measurements[key] = value
+		if _, exists := sample.Measurements[key]; !exists {
+			sample.Measurements[key] = value
+		}
 	}
-	sample.Measurements[metricSampleTotalSeconds] = time.Since(started).Seconds()
+	if _, exists := sample.Measurements[metricSampleTotalSeconds]; !exists {
+		sample.Measurements[metricSampleTotalSeconds] = time.Since(started).Seconds()
+	}
 
-	if err := collectKubernetesArtifacts(opts, scenarioDir, cluster, sample); err != nil {
+	if err := collectKubernetesArtifacts(opts, scenarioDir, cluster, sample, execResult.Namespace); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: collecting Kubernetes artifacts failed: %v\n", err)
 	}
 	if sample.Status != sampleStatusPass && cleanupPolicy == cleanupOnSuccess {
 		shouldCleanup = false
 	}
 	return finishAndWriteSample(opts, sample)
+}
+
+func prepareScenarioSample(
+	opts options,
+	scenario scenarioSpec,
+	cleanupPolicy string,
+	cluster string,
+) (bool, error) {
+	shouldCleanup := opts.ExistingClusterContext == "" && cleanupPolicy == cleanupAlways
+	if opts.ExistingClusterContext != "" {
+		if scenario.Executor != executorNativeGo {
+			return shouldCleanup, nil
+		}
+		return shouldCleanup, prepareNativeExistingCluster(opts, cluster)
+	}
+	if err := setupKindCluster(opts, cluster); err != nil {
+		return shouldCleanup, err
+	}
+	if scenario.Executor == executorNativeGo {
+		if err := prepareNativeKindCluster(opts, cluster); err != nil {
+			return shouldCleanup, err
+		}
+	}
+	if cleanupPolicy == cleanupOnSuccess {
+		shouldCleanup = true
+	}
+	return shouldCleanup, nil
 }
 
 func finishAndWriteSample(opts options, sample sampleDocument) (sampleDocument, error) {
@@ -263,16 +304,21 @@ func finishAndWriteSample(opts options, sample sampleDocument) (sampleDocument, 
 	return sample, nil
 }
 
-func runScenarioExecutor(ctx context.Context, opts options, cluster string, scenario scenarioSpec) error {
+func runScenarioExecutor(
+	ctx context.Context,
+	opts options,
+	cluster string,
+	scenario scenarioSpec,
+) (scenarioExecutionResult, error) {
 	switch scenario.Executor {
 	case executorE2EGinkgo:
-		return runScenarioTests(ctx, opts, cluster, scenario)
+		return scenarioExecutionResult{}, runScenarioTests(ctx, opts, cluster, scenario)
 	case executorScript:
-		return runScenarioScript(ctx, scenario)
+		return scenarioExecutionResult{}, runScenarioScript(ctx, scenario)
 	case executorNativeGo:
-		return fmt.Errorf("native-go executor is not implemented in phase 1")
+		return runNativeScenario(ctx, opts, cluster, scenario)
 	default:
-		return fmt.Errorf("unsupported executor %q", scenario.Executor)
+		return scenarioExecutionResult{}, fmt.Errorf("unsupported executor %q", scenario.Executor)
 	}
 }
 
@@ -694,13 +740,21 @@ func writeJSONFile(path string, value any) error {
 	return nil
 }
 
-func collectKubernetesArtifacts(opts options, scenarioDir, cluster string, sample sampleDocument) error {
+func collectKubernetesArtifacts(
+	opts options,
+	scenarioDir string,
+	cluster string,
+	sample sampleDocument,
+	namespace string,
+) error {
 	clusterContext := kubeContext(opts, cluster)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	scopeArgs := []string{"--all-namespaces"}
-	if opts.ExistingClusterContext != "" && opts.Namespace != "" {
+	if opts.ExistingClusterContext != "" && namespace != "" {
+		scopeArgs = []string{"--namespace", namespace}
+	} else if opts.ExistingClusterContext != "" && opts.Namespace != "" {
 		scopeArgs = []string{"--namespace", opts.Namespace}
 	} else if opts.ExistingClusterContext != "" {
 		return nil
