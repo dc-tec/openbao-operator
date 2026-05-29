@@ -117,6 +117,29 @@ measurements:
 	}
 }
 
+func TestIsTimelineSampleFileRejectsArtifacts(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{path: "sample-001.json", want: true},
+		{path: "warmup-001.json", want: true},
+		{path: "sample-001-events.json", want: false},
+		{path: "sample-001-pods.json", want: false},
+		{path: "sample-one.json", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			t.Parallel()
+			if got := isTimelineSampleFile(tt.path); got != tt.want {
+				t.Fatalf("isTimelineSampleFile(%q) = %t, want %t", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func writeTestFile(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

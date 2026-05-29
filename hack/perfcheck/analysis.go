@@ -379,6 +379,9 @@ func readSampleDocuments(artifactDir string) ([]sampleDocument, error) {
 	sort.Strings(paths)
 	samples := make([]sampleDocument, 0, len(paths))
 	for _, path := range paths {
+		if !isTimelineSampleFile(path) {
+			continue
+		}
 		data, err := os.ReadFile(filepath.Clean(path))
 		if err != nil {
 			return nil, fmt.Errorf("read sample %s: %w", path, err)
@@ -393,6 +396,26 @@ func readSampleDocuments(artifactDir string) ([]sampleDocument, error) {
 		samples = append(samples, sample)
 	}
 	return samples, nil
+}
+
+func isTimelineSampleFile(path string) bool {
+	base := filepath.Base(path)
+	for _, prefix := range []string{"sample-", "warmup-"} {
+		if !strings.HasPrefix(base, prefix) || !strings.HasSuffix(base, ".json") {
+			continue
+		}
+		index := strings.TrimSuffix(strings.TrimPrefix(base, prefix), ".json")
+		if len(index) != 3 {
+			return false
+		}
+		for _, r := range index {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func readScenarioBaseline(opts options, scenario string) (baselineDocument, error) {
