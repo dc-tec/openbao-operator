@@ -181,6 +181,23 @@ func scenarioMap(scenarios []scenarioSpec) map[string]scenarioSpec {
 	return out
 }
 
+func scenarioMeasurementSet(scenario scenarioSpec) map[string]struct{} {
+	out := make(map[string]struct{}, len(scenario.Primary)+len(scenario.Diagnostic))
+	for _, measurement := range scenario.Primary {
+		name := strings.TrimSpace(measurement)
+		if name != "" {
+			out[name] = struct{}{}
+		}
+	}
+	for _, measurement := range scenario.Diagnostic {
+		name := strings.TrimSpace(measurement)
+		if name != "" {
+			out[name] = struct{}{}
+		}
+	}
+	return out
+}
+
 func sortedScenarioNames(scenarios []scenarioSpec) []string {
 	names := make([]string, 0, len(scenarios))
 	for _, scenario := range scenarios {

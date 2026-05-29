@@ -38,6 +38,19 @@ func TestNativeResourceNameLeavesRoomForPodSuffixes(t *testing.T) {
 	}
 }
 
+func TestTenantChurnNamespaceNameIsStableAndBounded(t *testing.T) {
+	t.Parallel()
+
+	native := &nativeScenarioContext{runID: strings.Repeat("tenant-run-", 8)}
+	got := native.tenantChurnNamespaceName(8)
+	if len(got) > 40 {
+		t.Fatalf("tenantChurnNamespaceName() length = %d, want <= 40", len(got))
+	}
+	if !strings.HasPrefix(got, "perf-tenant-09-") {
+		t.Fatalf("tenantChurnNamespaceName() = %q, want indexed prefix", got)
+	}
+}
+
 func TestNativeSelfInitRequestsUseJSONPayload(t *testing.T) {
 	t.Parallel()
 
@@ -92,6 +105,21 @@ func TestPhaseMeasurementsClampNegativeDurations(t *testing.T) {
 	})
 
 	assertApproxEqual(t, got["started_seconds"], 0)
+}
+
+func TestDurationPercentileSeconds(t *testing.T) {
+	t.Parallel()
+
+	start := time.Date(2026, 5, 29, 8, 0, 0, 0, time.UTC)
+	values := []time.Time{
+		start.Add(1 * time.Second),
+		start.Add(5 * time.Second),
+		start.Add(9 * time.Second),
+		start.Add(13 * time.Second),
+	}
+
+	assertApproxEqual(t, durationPercentileSeconds(start, values, 0.50), 5)
+	assertApproxEqual(t, durationPercentileSeconds(start, values, 0.95), 13)
 }
 
 func TestResourceWriteTrackerCountsResourceVersionChanges(t *testing.T) {

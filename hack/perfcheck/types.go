@@ -43,6 +43,7 @@ const (
 	compareUpperSample = "upper_sample"
 
 	metricSampleTotalSeconds          = "sample_total_seconds"
+	metricScenarioRunSeconds          = "scenario_run_seconds"
 	metricReconcileDurationBucketP95  = "reconcile_duration_bucket_p95"
 	metricBackupLastDurationSeconds   = "backup_last_duration_seconds"
 	metricRestoreDurationBucketP95    = "restore_duration_bucket_p95"
@@ -67,6 +68,11 @@ const (
 	metricUpgradePodReadySeconds      = "upgrade_pod_ready_seconds"
 	metricUpgradeAvailabilityFailures = "upgrade_availability_probe_failures"
 	metricUpgradeKubernetesWrites     = "upgrade_kubernetes_writes"
+	metricTenantChurnCompleteSeconds  = "tenant_churn_complete_seconds"
+	metricTenantReadyP50Seconds       = "tenant_ready_p50_seconds"
+	metricTenantReadyP95Seconds       = "tenant_ready_p95_seconds"
+	metricTenantKubernetesWrites      = "tenant_kubernetes_writes"
+	metricTenantCount                 = "tenant_count"
 )
 
 var diagnosticMetricKeys = []string{
@@ -267,6 +273,7 @@ type options struct {
 	UpgradeToImage         string
 	APIServerCIDR          string
 	StorageClass           string
+	TenantChurnCount       int
 	OperatorNS             string
 	MetricsService         string
 	ServiceAccount         string
@@ -288,5 +295,6 @@ type scenarioExecutionResult struct {
 	Phases       []phaseEvent
 	Measurements map[string]float64
 	Namespace    string
+	Artifacts    map[string]string
 	Cleanup      func(context.Context)
 }

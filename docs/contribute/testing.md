@@ -152,7 +152,7 @@ make test-e2e`}
   ]}
 />
 
-Performance scenarios are declared in `hack/perf/v2/scenarios.yaml`, with policies under `hack/perf/v2/policies/` and per-scenario baselines under `hack/perf/v2/baselines/`. Each scenario owns its executor, measured artifacts, and metric policy surface. The weekly workflow runs scenarios as separate matrix jobs, uploads per-scenario artifacts, and renders a merged v2 report for triage. Keep policies narrow: primary phase timings should gate only after calibration, while broad counters such as workqueue retries remain warning or diagnostic signals.
+Performance scenarios are declared in `hack/perf/v2/scenarios.yaml`, with policies under `hack/perf/v2/policies/` and per-scenario baselines under `hack/perf/v2/baselines/`. Each scenario owns its executor, measured artifacts, and metric policy surface. Native scenarios now cover lifecycle convergence, tenant churn, and rolling upgrades with direct phase events; Ginkgo-backed DR scenarios also attach `By` step timestamps to their sample phases so backup and restore artifacts expose the slow step when a run fails. The weekly workflow runs scenarios as separate matrix jobs, uploads per-scenario artifacts, and renders a merged v2 report for triage. Keep policies narrow: primary phase timings should gate only after calibration, while broad counters such as workqueue retries remain warning or diagnostic signals.
 
 <NextActions
   title="After test selection"

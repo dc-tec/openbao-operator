@@ -125,33 +125,75 @@ func histogramP95UpperBound(cumulative map[float64]float64) float64 {
 
 func computeDiagnosticMeasurements(before, after metricsSnapshot) map[string]float64 {
 	metrics := make(map[string]float64, len(diagnosticMetricKeys))
-	metrics[metricReconcileDurationBucketP95] = histogramP95UpperBound(
-		histogramDelta(before, after, "openbao_reconcile_duration_seconds"),
-	)
-	metrics[metricBackupLastDurationSeconds] = after.GaugeMax["openbao_backup_last_duration_seconds"]
-	metrics[metricRestoreDurationBucketP95] = histogramP95UpperBound(
-		histogramDelta(before, after, "openbao_restore_duration_seconds"),
-	)
-	metrics[metricUpgradeDurationBucketP95] = histogramP95UpperBound(
-		histogramDelta(before, after, "openbao_upgrade_duration_seconds"),
-	)
-	metrics[metricUpgradePodDurationBucketP95] = histogramP95UpperBound(
-		histogramDelta(before, after, "openbao_upgrade_pod_duration_seconds"),
-	)
-	metrics[metricWorkqueueRetriesDelta] = counterDelta(before, after, "workqueue_retries_total")
 
-	errDelta := counterDelta(before, after, "openbao_reconcile_errors_total")
-	reconcileDelta := counterDelta(before, after, "controller_runtime_reconcile_total")
-	metrics[metricReconcileErrorRatio] = reconcileErrorRatio(errDelta, reconcileDelta)
-	metrics[metricKubernetesWrites] = counterDelta(before, after, "openbao_kube_client_requests_total")
-	metrics[metricOpenBaoAPIRequests] = counterDelta(before, after, "openbao_client_requests_total")
-	metrics[metricOpenBaoAuthLogins] = counterDelta(before, after, "openbao_client_auth_logins_total")
-	metrics[metricOpenBaoAuthLoginErrors] = counterDelta(before, after, "openbao_client_auth_login_errors_total")
-	metrics[metricOpenBaoClientRetries] = counterDelta(before, after, "openbao_client_retries_total")
-	metrics[metricOpenBaoAuthCacheHits] = counterDelta(before, after, "openbao_client_auth_cache_hits_total")
-	metrics[metricOpenBaoAuthCacheMisses] = counterDelta(before, after, "openbao_client_auth_cache_misses_total")
+	addHistogramDiagnostic(metrics, before, after, metricReconcileDurationBucketP95, "openbao_reconcile_duration_seconds")
+	if value, ok := after.GaugeMax["openbao_backup_last_duration_seconds"]; ok {
+		metrics[metricBackupLastDurationSeconds] = value
+	}
+	addHistogramDiagnostic(metrics, before, after, metricRestoreDurationBucketP95, "openbao_restore_duration_seconds")
+	addHistogramDiagnostic(metrics, before, after, metricUpgradeDurationBucketP95, "openbao_upgrade_duration_seconds")
+	addHistogramDiagnostic(
+		metrics,
+		before,
+		after,
+		metricUpgradePodDurationBucketP95,
+		"openbao_upgrade_pod_duration_seconds",
+	)
+	addCounterDiagnostic(metrics, before, after, metricWorkqueueRetriesDelta, "workqueue_retries_total")
+
+	if hasCounterMetric(before, after, "openbao_reconcile_errors_total") ||
+		hasCounterMetric(before, after, "controller_runtime_reconcile_total") {
+		errDelta := counterDelta(before, after, "openbao_reconcile_errors_total")
+		reconcileDelta := counterDelta(before, after, "controller_runtime_reconcile_total")
+		metrics[metricReconcileErrorRatio] = reconcileErrorRatio(errDelta, reconcileDelta)
+	}
+	addCounterDiagnostic(metrics, before, after, metricKubernetesWrites, "openbao_kube_client_requests_total")
+	addCounterDiagnostic(metrics, before, after, metricOpenBaoAPIRequests, "openbao_client_requests_total")
+	addCounterDiagnostic(metrics, before, after, metricOpenBaoAuthLogins, "openbao_client_auth_logins_total")
+	addCounterDiagnostic(metrics, before, after, metricOpenBaoAuthLoginErrors, "openbao_client_auth_login_errors_total")
+	addCounterDiagnostic(metrics, before, after, metricOpenBaoClientRetries, "openbao_client_retries_total")
+	addCounterDiagnostic(metrics, before, after, metricOpenBaoAuthCacheHits, "openbao_client_auth_cache_hits_total")
+	addCounterDiagnostic(metrics, before, after, metricOpenBaoAuthCacheMisses, "openbao_client_auth_cache_misses_total")
 
 	return metrics
+}
+
+func addHistogramDiagnostic(
+	metrics map[string]float64,
+	before metricsSnapshot,
+	after metricsSnapshot,
+	measurement string,
+	source string,
+) {
+	if !hasHistogramMetric(before, after, source) {
+		return
+	}
+	metrics[measurement] = histogramP95UpperBound(histogramDelta(before, after, source))
+}
+
+func addCounterDiagnostic(
+	metrics map[string]float64,
+	before metricsSnapshot,
+	after metricsSnapshot,
+	measurement string,
+	source string,
+) {
+	if !hasCounterMetric(before, after, source) {
+		return
+	}
+	metrics[measurement] = counterDelta(before, after, source)
+}
+
+func hasCounterMetric(before, after metricsSnapshot, metric string) bool {
+	_, beforeOK := before.Counters[metric]
+	_, afterOK := after.Counters[metric]
+	return beforeOK || afterOK
+}
+
+func hasHistogramMetric(before, after metricsSnapshot, metric string) bool {
+	_, beforeOK := before.Histograms[metric]
+	_, afterOK := after.Histograms[metric]
+	return beforeOK || afterOK
 }
 
 func reconcileErrorRatio(errorDelta, reconcileDelta float64) float64 {

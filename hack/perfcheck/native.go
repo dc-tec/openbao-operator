@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"math"
 	"net/http"
 	"sort"
 	"strings"
@@ -42,14 +43,15 @@ const (
 )
 
 type nativeScenarioContext struct {
-	opts      options
-	scenario  scenarioSpec
-	cluster   string
-	runID     string
-	namespace string
-	createdNS bool
-	cfg       *rest.Config
-	client    client.Client
+	opts              options
+	scenario          scenarioSpec
+	cluster           string
+	runID             string
+	namespace         string
+	createdNS         bool
+	createdNamespaces []string
+	cfg               *rest.Config
+	client            client.Client
 }
 
 type resourceWriteTracker struct {
@@ -82,6 +84,8 @@ func runNativeScenario(
 	switch scenario.Name {
 	case "lifecycle-convergence":
 		runResult, err = native.runLifecycleConvergence(ctx)
+	case "tenant-churn":
+		runResult, err = native.runTenantChurn(ctx)
 	case "rolling-upgrade":
 		runResult, err = native.runRollingUpgrade(ctx)
 	default:
@@ -159,68 +163,105 @@ func nativeKubernetesClient(opts options, cluster string) (*rest.Config, client.
 }
 
 func (n *nativeScenarioContext) ensureNamespace(ctx context.Context) error {
+	created, err := n.ensureLabeledNamespace(ctx, n.namespace)
+	if err != nil {
+		return err
+	}
+	if created {
+		n.createdNS = true
+	}
+	return nil
+}
+
+func (n *nativeScenarioContext) ensureLabeledNamespace(ctx context.Context, name string) (bool, error) {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: n.namespace,
-			Labels: map[string]string{
-				"pod-security.kubernetes.io/enforce": "restricted",
-				perfRunIDLabel:                       n.runID,
-				perfScenarioLabel:                    n.scenario.Name,
-			},
+			Name:   name,
+			Labels: n.namespaceLabels(),
 		},
 	}
 	err := n.client.Create(ctx, ns)
 	if err == nil {
-		n.createdNS = true
-		return nil
+		n.createdNamespaces = appendUniqueString(n.createdNamespaces, name)
+		return true, nil
 	}
 	if !apierrors.IsAlreadyExists(err) {
-		return fmt.Errorf("create namespace %q: %w", n.namespace, err)
+		return false, fmt.Errorf("create namespace %q: %w", name, err)
 	}
 	current := &corev1.Namespace{}
-	if getErr := n.client.Get(ctx, types.NamespacedName{Name: n.namespace}, current); getErr != nil {
-		return fmt.Errorf("get existing namespace %q: %w", n.namespace, getErr)
+	if getErr := n.client.Get(ctx, types.NamespacedName{Name: name}, current); getErr != nil {
+		return false, fmt.Errorf("get existing namespace %q: %w", name, getErr)
 	}
 	original := current.DeepCopy()
 	if current.Labels == nil {
 		current.Labels = map[string]string{}
 	}
-	current.Labels["pod-security.kubernetes.io/enforce"] = "restricted"
-	current.Labels[perfRunIDLabel] = n.runID
-	current.Labels[perfScenarioLabel] = n.scenario.Name
-	if patchErr := n.client.Patch(ctx, current, client.MergeFrom(original)); patchErr != nil {
-		return fmt.Errorf("label namespace %q: %w", n.namespace, patchErr)
+	for key, value := range n.namespaceLabels() {
+		current.Labels[key] = value
 	}
-	return nil
+	if patchErr := n.client.Patch(ctx, current, client.MergeFrom(original)); patchErr != nil {
+		return false, fmt.Errorf("label namespace %q: %w", name, patchErr)
+	}
+	return false, nil
 }
 
 func (n *nativeScenarioContext) ensureTenant(ctx context.Context) error {
+	tenantKey, err := n.createTenant(ctx, n.namespace, n.namespace)
+	if err != nil {
+		return err
+	}
+	return pollUntil(ctx, func() (bool, error) {
+		provisioned, _, err := n.getTenantProvisioned(ctx, tenantKey)
+		return provisioned, err
+	})
+}
+
+func (n *nativeScenarioContext) createTenant(
+	ctx context.Context,
+	name string,
+	targetNamespace string,
+) (types.NamespacedName, error) {
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      n.namespace,
+			Name:      name,
 			Namespace: n.opts.OperatorNS,
 			Labels:    n.resourceLabels(),
 		},
 		Spec: openbaov1alpha1.OpenBaoTenantSpec{
-			TargetNamespace: n.namespace,
+			TargetNamespace: targetNamespace,
 		},
 	}
 	if err := n.client.Create(ctx, tenant); err != nil && !apierrors.IsAlreadyExists(err) {
-		return fmt.Errorf("create OpenBaoTenant %s/%s: %w", n.opts.OperatorNS, n.namespace, err)
+		return types.NamespacedName{}, fmt.Errorf(
+			"create OpenBaoTenant %s/%s: %w",
+			n.opts.OperatorNS,
+			name,
+			err,
+		)
 	}
-	return pollUntil(ctx, func() (bool, error) {
-		current := &openbaov1alpha1.OpenBaoTenant{}
-		if err := n.client.Get(ctx, client.ObjectKeyFromObject(tenant), current); err != nil {
-			if apierrors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, fmt.Errorf("get OpenBaoTenant %s/%s: %w", n.opts.OperatorNS, n.namespace, err)
+	return types.NamespacedName{Namespace: n.opts.OperatorNS, Name: name}, nil
+}
+
+func (n *nativeScenarioContext) getTenantProvisioned(
+	ctx context.Context,
+	key types.NamespacedName,
+) (bool, *openbaov1alpha1.OpenBaoTenant, error) {
+	current := &openbaov1alpha1.OpenBaoTenant{}
+	if err := n.client.Get(ctx, key, current); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil, nil
 		}
-		if current.Status.Provisioned && current.Status.LastError == "" {
-			return true, nil
-		}
-		return false, nil
-	})
+		return false, nil, fmt.Errorf("get OpenBaoTenant %s/%s: %w", key.Namespace, key.Name, err)
+	}
+	if current.Status.LastError != "" {
+		return false, current, fmt.Errorf(
+			"OpenBaoTenant %s/%s reported LastError: %s",
+			key.Namespace,
+			key.Name,
+			current.Status.LastError,
+		)
+	}
+	return current.Status.Provisioned, current, nil
 }
 
 func (n *nativeScenarioContext) runLifecycleConvergence(ctx context.Context) (scenarioExecutionResult, error) {
@@ -404,6 +445,79 @@ func (n *nativeScenarioContext) runRollingUpgrade(ctx context.Context) (scenario
 	return n.result(phases, measurements), nil
 }
 
+type tenantChurnTarget struct {
+	namespace string
+	key       types.NamespacedName
+	index     int
+}
+
+func (n *nativeScenarioContext) runTenantChurn(ctx context.Context) (scenarioExecutionResult, error) {
+	tracker := newResourceWriteTracker()
+	startedAt := time.Now().UTC()
+	phases := []phaseEvent{{Name: "tenant_churn_started", At: startedAt, Source: "harness"}}
+	phaseTimes := map[string]time.Time{"tenant_churn_started": startedAt}
+	targets := make([]tenantChurnTarget, 0, n.opts.TenantChurnCount)
+
+	for i := 0; i < n.opts.TenantChurnCount; i++ {
+		namespace := n.tenantChurnNamespaceName(i)
+		if _, err := n.ensureLabeledNamespace(ctx, namespace); err != nil {
+			return n.result(phases, tenantChurnMeasurements(phaseTimes, startedAt, nil, tracker.count, len(targets))), err
+		}
+		key, err := n.createTenant(ctx, namespace, namespace)
+		if err != nil {
+			return n.result(phases, tenantChurnMeasurements(phaseTimes, startedAt, nil, tracker.count, len(targets))), err
+		}
+		targets = append(targets, tenantChurnTarget{namespace: namespace, key: key, index: i})
+	}
+	recordPhaseOnce(&phases, phaseTimes, "tenant_churn_created", time.Now().UTC(), "harness")
+
+	readyTimes := make([]time.Time, 0, len(targets))
+	readyByTenant := make(map[string]time.Time, len(targets))
+	err := pollUntil(ctx, func() (bool, error) {
+		ready := 0
+		for _, target := range targets {
+			provisioned, tenant, err := n.getTenantProvisioned(ctx, target.key)
+			if err != nil {
+				return false, err
+			}
+			if tenant != nil {
+				tracker.track("OpenBaoTenant", tenant)
+			}
+			ns := &corev1.Namespace{}
+			if err := n.client.Get(ctx, types.NamespacedName{Name: target.namespace}, ns); err == nil {
+				tracker.track("Namespace", ns)
+			} else if !apierrors.IsNotFound(err) {
+				return false, fmt.Errorf("get tenant namespace %q: %w", target.namespace, err)
+			}
+			if !provisioned {
+				continue
+			}
+			ready++
+			if _, exists := readyByTenant[target.namespace]; exists {
+				continue
+			}
+			readyAt := tenantProvisionedTransitionTime(tenant)
+			readyByTenant[target.namespace] = readyAt
+			readyTimes = append(readyTimes, readyAt)
+			recordPhaseOnce(
+				&phases,
+				phaseTimes,
+				fmt.Sprintf("tenant_%02d_provisioned", target.index+1),
+				readyAt,
+				"openbaotenant_status",
+			)
+		}
+		if ready == len(targets) {
+			recordPhaseOnce(&phases, phaseTimes, "tenant_churn_complete", time.Now().UTC(), "harness")
+			return true, nil
+		}
+		return false, nil
+	})
+
+	measurements := tenantChurnMeasurements(phaseTimes, startedAt, readyTimes, tracker.count, len(targets))
+	return n.result(phases, measurements), err
+}
+
 func lifecycleMeasurements(phaseTimes map[string]time.Time, writes int) map[string]float64 {
 	measurements := phaseMeasurements(phaseTimes, "resource_created", map[string]string{
 		metricStatefulSetCreatedSeconds: "statefulset_created",
@@ -432,6 +546,25 @@ func rollingUpgradeMeasurements(
 	measurements[metricObservedKubernetesWrites] = float64(writes)
 	measurements[metricKubernetesWrites] = float64(writes)
 	measurements[metricUpgradeKubernetesWrites] = float64(writes)
+	return measurements
+}
+
+func tenantChurnMeasurements(
+	phaseTimes map[string]time.Time,
+	startedAt time.Time,
+	readyTimes []time.Time,
+	writes int,
+	tenantCount int,
+) map[string]float64 {
+	measurements := phaseMeasurements(phaseTimes, "tenant_churn_started", map[string]string{
+		metricTenantChurnCompleteSeconds: "tenant_churn_complete",
+	})
+	measurements[metricTenantReadyP50Seconds] = durationPercentileSeconds(startedAt, readyTimes, 0.50)
+	measurements[metricTenantReadyP95Seconds] = durationPercentileSeconds(startedAt, readyTimes, 0.95)
+	measurements[metricObservedKubernetesWrites] = float64(writes)
+	measurements[metricKubernetesWrites] = float64(writes)
+	measurements[metricTenantKubernetesWrites] = float64(writes)
+	measurements[metricTenantCount] = float64(tenantCount)
 	return measurements
 }
 
@@ -499,6 +632,10 @@ func (n *nativeScenarioContext) nativeStorageClass() string {
 
 func (n *nativeScenarioContext) resourceName(prefix string) string {
 	return nativeResourceName(prefix, n.runID)
+}
+
+func (n *nativeScenarioContext) tenantChurnNamespaceName(index int) string {
+	return n.resourceName(fmt.Sprintf("perf-tenant-%02d", index+1))
 }
 
 func nativeSelfInitRequests(namespace string) []openbaov1alpha1.SelfInitRequest {
@@ -637,13 +774,33 @@ func (n *nativeScenarioContext) probeClusterAvailability(ctx context.Context, cl
 }
 
 func (n *nativeScenarioContext) cleanup(ctx context.Context) {
+	tenantList := &openbaov1alpha1.OpenBaoTenantList{}
+	if err := n.client.List(ctx, tenantList,
+		client.InNamespace(n.opts.OperatorNS),
+		client.MatchingLabels{perfRunIDLabel: n.runID},
+	); err == nil {
+		for i := range tenantList.Items {
+			_ = n.client.Delete(ctx, &tenantList.Items[i])
+		}
+	}
 	tenant := &openbaov1alpha1.OpenBaoTenant{
 		ObjectMeta: metav1.ObjectMeta{Name: n.namespace, Namespace: n.opts.OperatorNS},
 	}
 	_ = n.client.Delete(ctx, tenant)
-	if n.createdNS {
-		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: n.namespace}}
+	deletedNamespaces := make(map[string]struct{}, len(n.createdNamespaces)+1)
+	for _, namespace := range n.createdNamespaces {
+		if _, exists := deletedNamespaces[namespace]; exists {
+			continue
+		}
+		deletedNamespaces[namespace] = struct{}{}
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
 		_ = n.client.Delete(ctx, ns)
+	}
+	if n.createdNS {
+		if _, exists := deletedNamespaces[n.namespace]; !exists {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: n.namespace}}
+			_ = n.client.Delete(ctx, ns)
+		}
 		return
 	}
 	clusterList := &openbaov1alpha1.OpenBaoClusterList{}
@@ -655,6 +812,12 @@ func (n *nativeScenarioContext) cleanup(ctx context.Context) {
 			_ = n.client.Delete(ctx, &clusterList.Items[i])
 		}
 	}
+}
+
+func (n *nativeScenarioContext) namespaceLabels() map[string]string {
+	labels := n.resourceLabels()
+	labels["pod-security.kubernetes.io/enforce"] = "restricted"
+	return labels
 }
 
 func (n *nativeScenarioContext) resourceLabels() map[string]string {
@@ -769,6 +932,17 @@ func conditionTransitionTime(condition *metav1.Condition) time.Time {
 	return condition.LastTransitionTime.Time
 }
 
+func tenantProvisionedTransitionTime(tenant *openbaov1alpha1.OpenBaoTenant) time.Time {
+	if tenant == nil {
+		return time.Now().UTC()
+	}
+	condition := meta.FindStatusCondition(tenant.Status.Conditions, "Provisioned")
+	if condition == nil || condition.Status != metav1.ConditionTrue {
+		return time.Now().UTC()
+	}
+	return conditionTransitionTime(condition)
+}
+
 func firstReadyPodTime(pods []corev1.Pod) time.Time {
 	var first time.Time
 	for i := range pods {
@@ -829,6 +1003,43 @@ func maxDurationSeconds(start time.Time, values []time.Time) float64 {
 		}
 	}
 	return maxSeconds
+}
+
+func durationPercentileSeconds(start time.Time, values []time.Time, quantile float64) float64 {
+	durations := make([]float64, 0, len(values))
+	for _, value := range values {
+		if value.IsZero() {
+			continue
+		}
+		seconds := value.Sub(start).Seconds()
+		if seconds < 0 {
+			seconds = 0
+		}
+		durations = append(durations, seconds)
+	}
+	return percentileValue(durations, quantile)
+}
+
+func percentileValue(values []float64, quantile float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	if quantile < 0 {
+		quantile = 0
+	}
+	if quantile > 1 {
+		quantile = 1
+	}
+	sorted := append([]float64(nil), values...)
+	sort.Float64s(sorted)
+	index := int(math.Ceil(quantile*float64(len(sorted)))) - 1
+	if index < 0 {
+		index = 0
+	}
+	if index >= len(sorted) {
+		index = len(sorted) - 1
+	}
+	return sorted[index]
 }
 
 func pollUntil(ctx context.Context, check func() (bool, error)) error {
@@ -897,4 +1108,13 @@ func nativeResourceName(prefix, runID string) string {
 	hash := fnv.New32a()
 	_, _ = hash.Write([]byte(runID))
 	return boundedDNSLabelMax(fmt.Sprintf("%s-%08x", prefix, hash.Sum32()), 40)
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }

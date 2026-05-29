@@ -29,6 +29,17 @@ func TestLoadScenarioManifest(t *testing.T) {
 	if !containsString(lifecycle.Primary, metricClusterAvailableSeconds) {
 		t.Fatalf("lifecycle should include %s as phase-2 primary measurement", metricClusterAvailableSeconds)
 	}
+
+	tenantChurn, ok := byName["tenant-churn"]
+	if !ok {
+		t.Fatalf("tenant-churn scenario missing")
+	}
+	if tenantChurn.Executor != executorNativeGo {
+		t.Fatalf("tenant-churn executor = %q, want %q", tenantChurn.Executor, executorNativeGo)
+	}
+	if !containsString(tenantChurn.Primary, metricTenantChurnCompleteSeconds) {
+		t.Fatalf("tenant-churn should include %s as primary measurement", metricTenantChurnCompleteSeconds)
+	}
 }
 
 func TestSelectedScenariosRejectsUnknownManifestScenario(t *testing.T) {

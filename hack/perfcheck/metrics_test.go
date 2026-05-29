@@ -31,6 +31,26 @@ func TestCounterDeltaClampsResets(t *testing.T) {
 	}
 }
 
+func TestComputeDiagnosticMeasurementsOmitsMissingMetrics(t *testing.T) {
+	before := emptySnapshot()
+	after := emptySnapshot()
+
+	got := computeDiagnosticMeasurements(before, after)
+	if len(got) != 0 {
+		t.Fatalf("diagnostics for empty snapshots = %+v, want empty", got)
+	}
+
+	before.Counters["openbao_client_requests_total"] = 7
+	after.Counters["openbao_client_requests_total"] = 7
+	got = computeDiagnosticMeasurements(before, after)
+	if _, exists := got[metricOpenBaoAPIRequests]; !exists {
+		t.Fatalf("%s should be present when source counter exists", metricOpenBaoAPIRequests)
+	}
+	if _, exists := got[metricOpenBaoAuthLogins]; exists {
+		t.Fatalf("%s should be omitted when source counter is absent", metricOpenBaoAuthLogins)
+	}
+}
+
 func TestReconcileErrorRatioWhenDenominatorZero(t *testing.T) {
 	if got := reconcileErrorRatio(0, 0); got != 0 {
 		t.Fatalf("reconcileErrorRatio(0,0) = %v, want 0", got)

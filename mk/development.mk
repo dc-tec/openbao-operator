@@ -437,6 +437,7 @@ PERF_UPGRADE_TO_VERSION ?= 2.5.4
 PERF_UPGRADE_TO_IMAGE ?= openbao/openbao:2.5.4
 PERF_API_SERVER_CIDR ?= 10.96.0.0/12
 PERF_STORAGE_CLASS ?=
+PERF_TENANT_CHURN_COUNT ?= 10
 
 MUTATION_TARGET_PATH ?= ./internal/service/opslifecycle
 MUTATION_PATHS ?= $(shell find ./internal -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | paste -sd, -)
@@ -696,7 +697,8 @@ perf-v2-capture: ## Capture v2 performance samples and update per-scenario distr
 		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
 		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
 		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
-		--storage-class="$(PERF_STORAGE_CLASS)"
+		--storage-class="$(PERF_STORAGE_CLASS)" \
+		--tenant-churn-count="$(PERF_TENANT_CHURN_COUNT)"
 
 .PHONY: verify-perf
 verify-perf: perf-v2-verify ## Run v2 performance verification against committed distribution baselines.
@@ -725,7 +727,8 @@ perf-v2-verify: ## Run v2 performance verification against committed distributio
 		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
 		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
 		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
-		--storage-class="$(PERF_STORAGE_CLASS)"
+		--storage-class="$(PERF_STORAGE_CLASS)" \
+		--tenant-churn-count="$(PERF_TENANT_CHURN_COUNT)"
 
 .PHONY: verify-perf-smoke
 verify-perf-smoke: perf-v2-smoke ## Run a lightweight v2 performance smoke gate (PR-focused).
@@ -754,7 +757,8 @@ perf-v2-smoke: ## Run a lightweight v2 performance smoke gate (PR-focused).
 		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
 		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
 		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
-		--storage-class="$(PERF_STORAGE_CLASS)"
+		--storage-class="$(PERF_STORAGE_CLASS)" \
+		--tenant-churn-count="$(PERF_TENANT_CHURN_COUNT)"
 
 .PHONY: perf-v2-report
 perf-v2-report: ## Render a v2 performance report from existing sample artifacts.

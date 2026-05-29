@@ -38,3 +38,14 @@ func TestParseScenarioSelection(t *testing.T) {
 		})
 	}
 }
+
+func TestFinalizeOptionsRejectsInvalidTenantChurnCount(t *testing.T) {
+	t.Parallel()
+
+	opts := defaultOptions("verify")
+	opts.TenantChurnCount = 0
+
+	if _, err := finalizeOptions(opts); err == nil {
+		t.Fatalf("expected tenant-churn-count validation error")
+	}
+}

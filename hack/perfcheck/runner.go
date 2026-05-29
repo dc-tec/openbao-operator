@@ -38,7 +38,7 @@ func runCapture(opts options) error {
 			return err
 		}
 		samples = append(samples, scenarioSamples...)
-		if err := writeScenarioBaseline(opts, scenario.Name, scenarioSamples); err != nil {
+		if err := writeScenarioBaseline(opts, scenario, scenarioSamples); err != nil {
 			return err
 		}
 	}
@@ -198,9 +198,11 @@ func executeScenarioSample(
 		before = emptySnapshot()
 	}
 
+	scenarioStarted := time.Now().UTC()
 	runCtx, cancelRun := context.WithTimeout(context.Background(), timeout)
-	execResult, runErr := runScenarioExecutor(runCtx, opts, cluster, scenario)
+	execResult, runErr := runScenarioExecutor(runCtx, opts, cluster, scenario, sample, scenarioDir)
 	cancelRun()
+	scenarioDuration := time.Since(scenarioStarted).Seconds()
 	defer func() {
 		if execResult.Cleanup == nil {
 			return
@@ -215,6 +217,12 @@ func executeScenarioSample(
 	sample.Phases = append(sample.Phases, execResult.Phases...)
 	for key, value := range execResult.Measurements {
 		sample.Measurements[key] = value
+	}
+	if _, exists := sample.Measurements[metricScenarioRunSeconds]; !exists {
+		sample.Measurements[metricScenarioRunSeconds] = scenarioDuration
+	}
+	for key, value := range execResult.Artifacts {
+		sample.Artifacts[key] = value
 	}
 	if runErr != nil {
 		sample.Status = sampleStatusScenarioError
@@ -309,10 +317,12 @@ func runScenarioExecutor(
 	opts options,
 	cluster string,
 	scenario scenarioSpec,
+	sample sampleDocument,
+	scenarioDir string,
 ) (scenarioExecutionResult, error) {
 	switch scenario.Executor {
 	case executorE2EGinkgo:
-		return scenarioExecutionResult{}, runScenarioTests(ctx, opts, cluster, scenario)
+		return runScenarioTests(ctx, opts, cluster, scenario, sample, scenarioDir)
 	case executorScript:
 		return scenarioExecutionResult{}, runScenarioScript(ctx, scenario)
 	case executorNativeGo:
@@ -322,9 +332,19 @@ func runScenarioExecutor(
 	}
 }
 
-func runScenarioTests(ctx context.Context, opts options, cluster string, scenario scenarioSpec) error {
+func runScenarioTests(
+	ctx context.Context,
+	opts options,
+	cluster string,
+	scenario scenarioSpec,
+	sample sampleDocument,
+	scenarioDir string,
+) (scenarioExecutionResult, error) {
+	result := scenarioExecutionResult{}
+	jsonReport := filepath.Join(scenarioDir, sampleArtifactName(sample, "ginkgo.json"))
 	env := map[string]string{
 		"E2E_LABEL_FILTER":   scenario.LabelFilter,
+		"E2E_JSON_REPORT":    jsonReport,
 		"E2E_PARALLEL_NODES": "1",
 		"E2E_SKIP_CLEANUP":   "true",
 	}
@@ -347,10 +367,16 @@ func runScenarioTests(ctx context.Context, opts options, cluster string, scenari
 		target = "test-e2e-existing"
 	}
 	_, err := runCommand(ctx, env, opts.MakeBin, target)
-	if err != nil {
-		return fmt.Errorf("run e2e scenario %q: %w", scenario.Name, err)
+	if phases, phaseErr := parseGinkgoPhaseEvents(jsonReport); phaseErr == nil {
+		result.Phases = phases
+		result.Artifacts = map[string]string{"ginkgoJSON": jsonReport}
+	} else if !errors.Is(phaseErr, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "warning: parsing Ginkgo phase report failed: %v\n", phaseErr)
 	}
-	return nil
+	if err != nil {
+		return result, fmt.Errorf("run e2e scenario %q: %w", scenario.Name, err)
+	}
+	return result, nil
 }
 
 func runScenarioScript(ctx context.Context, scenario scenarioSpec) error {

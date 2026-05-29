@@ -124,6 +124,7 @@ func defaultOptions(mode string) options {
 		UpgradeToImage:     envOrDefault("PERF_UPGRADE_TO_IMAGE", "openbao/openbao:2.5.4"),
 		APIServerCIDR:      envOrDefault("PERF_API_SERVER_CIDR", "10.96.0.0/12"),
 		StorageClass:       envOrDefault("PERF_STORAGE_CLASS", ""),
+		TenantChurnCount:   10,
 		ClusterTimeout:     20 * time.Minute,
 		CleanupTimeout:     10 * time.Minute,
 		SamplesOverride:    0,
@@ -171,6 +172,12 @@ func bindExecutionFlags(fs *flag.FlagSet, opts *options) {
 	fs.StringVar(&opts.UpgradeToImage, "upgrade-to-image", opts.UpgradeToImage, "rolling upgrade target image")
 	fs.StringVar(&opts.APIServerCIDR, "api-server-cidr", opts.APIServerCIDR, "Kubernetes API service CIDR")
 	fs.StringVar(&opts.StorageClass, "storage-class", opts.StorageClass, "storage class for native scenario PVCs")
+	fs.IntVar(
+		&opts.TenantChurnCount,
+		"tenant-churn-count",
+		opts.TenantChurnCount,
+		"tenant namespaces to create in the tenant-churn scenario",
+	)
 	fs.StringVar(
 		&opts.ExistingClusterContext,
 		"existing-cluster-context",
@@ -218,6 +225,9 @@ func finalizeOptions(opts options) (options, error) {
 	}
 	if strings.TrimSpace(opts.EnvironmentID) == "" {
 		return options{}, fmt.Errorf("environment must not be empty")
+	}
+	if opts.TenantChurnCount < 1 {
+		return options{}, fmt.Errorf("tenant-churn-count must be >= 1")
 	}
 	return opts, nil
 }

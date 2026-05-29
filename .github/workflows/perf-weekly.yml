@@ -23,6 +23,7 @@ jobs:
       matrix:
         scenario:
           - lifecycle-convergence
+          - tenant-churn
           - backup
           - restore
           - rolling-upgrade
@@ -57,6 +58,7 @@ jobs:
           PERF_BASELINE_DIR: hack/perf/v2/baselines
           PERF_POLICY_FILE: hack/perf/v2/policies/weekly.yaml
           PERF_ARTIFACT_DIR: dist/perf
+          PERF_TENANT_CHURN_COUNT: 10
         run: make verify-perf
 
       - name: Upload scenario performance artifacts

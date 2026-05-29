@@ -18,6 +18,11 @@ func summarizeRun(opts options) (runSummaryDocument, error) {
 	if err != nil {
 		return runSummaryDocument{}, err
 	}
+	manifest, err := loadScenarioManifest(opts.ScenarioPath)
+	if err != nil {
+		return runSummaryDocument{}, err
+	}
+	scenariosByName := scenarioMap(manifest.Scenarios)
 	samples, err := readSampleDocuments(opts.ArtifactDir)
 	if err != nil {
 		return runSummaryDocument{}, err
@@ -54,8 +59,12 @@ func summarizeRun(opts options) (runSummaryDocument, error) {
 	sort.Strings(names)
 
 	for _, scenarioName := range names {
+		scenarioSpec, ok := scenariosByName[scenarioName]
+		if !ok {
+			return runSummaryDocument{}, fmt.Errorf("sample artifacts contain unknown scenario %q", scenarioName)
+		}
 		baseline, baselineErr := readScenarioBaseline(opts, scenarioName)
-		scenario := analyzeScenarioSamples(scenarioName, byScenario[scenarioName], baseline, baselineErr, policy)
+		scenario := analyzeScenarioSamples(scenarioSpec, byScenario[scenarioName], baseline, baselineErr, policy)
 		summary.Scenarios[scenarioName] = scenario
 		summary.Totals.Scenarios++
 		summary.Totals.Samples += scenario.Samples
@@ -72,12 +81,13 @@ func summarizeRun(opts options) (runSummaryDocument, error) {
 }
 
 func analyzeScenarioSamples(
-	scenarioName string,
+	scenarioSpec scenarioSpec,
 	samples []sampleDocument,
 	baseline baselineDocument,
 	baselineErr error,
 	policy policyDocument,
 ) scenarioSummary {
+	scenarioName := scenarioSpec.Name
 	sort.Slice(samples, func(i, j int) bool {
 		if samples[i].Warmup != samples[j].Warmup {
 			return samples[i].Warmup
@@ -91,6 +101,7 @@ func analyzeScenarioSamples(
 	}
 	values := make(map[string][]float64)
 	var findings []analysisFinding
+	allowedMeasurements := scenarioMeasurementSet(scenarioSpec)
 
 	for _, sample := range samples {
 		if sample.Warmup {
@@ -113,6 +124,9 @@ func analyzeScenarioSamples(
 			continue
 		}
 		for metric, value := range sample.Measurements {
+			if _, allowed := allowedMeasurements[metric]; !allowed {
+				continue
+			}
 			values[metric] = append(values[metric], value)
 		}
 	}
@@ -125,6 +139,7 @@ func analyzeScenarioSamples(
 	for _, key := range keys {
 		scenario.Measurements[key] = summarizeValues(values[key])
 	}
+	findings = append(findings, missingMeasurementFindings(scenarioSpec, values, scenario.Samples, policy)...)
 
 	if baselineErr != nil {
 		findings = append(findings, analysisFinding{
@@ -149,6 +164,46 @@ func analyzeScenarioSamples(
 	scenario.Findings = findings
 	scenario.Status = statusFromFindings(findings)
 	return scenario
+}
+
+func missingMeasurementFindings(
+	scenario scenarioSpec,
+	values map[string][]float64,
+	measuredSamples int,
+	policy policyDocument,
+) []analysisFinding {
+	if measuredSamples == 0 {
+		return nil
+	}
+	required := scenarioMeasurementSet(scenario)
+	names := make([]string, 0, len(required))
+	for name := range required {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	findings := make([]analysisFinding, 0)
+	for _, metric := range names {
+		if len(values[metric]) > 0 {
+			continue
+		}
+		measurementPolicy := normalizeMeasurementPolicy(policy.Measurements[metric], policy.Defaults)
+		severity := measurementPolicy.Severity
+		if severity == measurementSeverityFail {
+			severity = measurementSeverityWarn
+		}
+		if severity == measurementSeverityInfo {
+			continue
+		}
+		findings = append(findings, analysisFinding{
+			Scenario:       scenario.Name,
+			Measurement:    metric,
+			Severity:       severity,
+			Classification: "measurement_missing",
+			Message:        fmt.Sprintf("%s was not emitted by any measured sample", metric),
+		})
+	}
+	return findings
 }
 
 func compareMeasurements(
@@ -434,9 +489,10 @@ func readScenarioBaseline(opts options, scenario string) (baselineDocument, erro
 	return doc, nil
 }
 
-func writeScenarioBaseline(opts options, scenario string, samples []sampleDocument) error {
+func writeScenarioBaseline(opts options, scenario scenarioSpec, samples []sampleDocument) error {
 	values := make(map[string][]float64)
 	var environment runEnvironment
+	allowedMeasurements := scenarioMeasurementSet(scenario)
 	for _, sample := range samples {
 		if environment == (runEnvironment{}) {
 			environment = sample.Environment
@@ -446,6 +502,9 @@ func writeScenarioBaseline(opts options, scenario string, samples []sampleDocume
 		}
 		for key, value := range sample.Measurements {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
+				continue
+			}
+			if _, allowed := allowedMeasurements[key]; !allowed {
 				continue
 			}
 			values[key] = append(values[key], value)
@@ -458,14 +517,14 @@ func writeScenarioBaseline(opts options, scenario string, samples []sampleDocume
 	}
 	doc := baselineDocument{
 		Version:     versionV2,
-		Scenario:    scenario,
+		Scenario:    scenario.Name,
 		CapturedAt:  time.Now().UTC(),
 		Commit:      environment.Commit,
 		Environment: environment,
 		Samples:     values,
 		Summary:     summary,
 	}
-	return writeJSONFile(scenarioBaselinePath(opts, scenario), doc)
+	return writeJSONFile(scenarioBaselinePath(opts, scenario.Name), doc)
 }
 
 func scenarioBaselinePath(opts options, scenario string) string {

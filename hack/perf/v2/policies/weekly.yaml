@@ -8,13 +8,17 @@ defaults:
 
 measurements:
   sample_total_seconds:
-    role: primary
-    policy: upper_bound
-    severity: warn
+    role: diagnostic
+    policy: informational
+    severity: info
     compare: median
-    allowedRelativeRegression: 0.35
-    allowedAbsoluteRegressionSeconds: 30
-    minimumSamples: 3
+    minimumSamples: 1
+  scenario_run_seconds:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: median
+    minimumSamples: 1
   cluster_available_seconds:
     role: primary
     policy: upper_bound
@@ -54,6 +58,43 @@ measurements:
     compare: upper_sample
     allowedRelativeRegression: 0.50
     minimumSamples: 3
+  tenant_churn_complete_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 20
+    minimumSamples: 3
+  tenant_ready_p50_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 15
+    minimumSamples: 3
+  tenant_ready_p95_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 20
+    minimumSamples: 3
+  tenant_kubernetes_writes:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
+  tenant_count:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: median
+    minimumSamples: 1
   backup_last_duration_seconds:
     role: primary
     policy: upper_bound

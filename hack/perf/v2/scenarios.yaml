@@ -11,13 +11,16 @@ scenarios:
     description: OpenBaoCluster creation to available using native Kubernetes phase observation.
     labels: [lifecycle, cluster, critical]
     executor: native-go
+    existingCluster:
+      enabled: true
     primaryMeasurements:
       - cluster_available_seconds
       - statefulset_created_seconds
       - first_pod_ready_seconds
       - all_pods_ready_seconds
-      - sample_total_seconds
     diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
       - observed_kubernetes_writes
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
@@ -34,15 +37,42 @@ scenarios:
       - name: cluster_available
       - name: scenario_completed
 
+  - name: tenant-churn
+    description: Tenant namespace and OpenBaoTenant provisioning churn using native Kubernetes phase observation.
+    labels: [tenant, churn, critical]
+    executor: native-go
+    existingCluster:
+      enabled: true
+    primaryMeasurements:
+      - tenant_churn_complete_seconds
+      - tenant_ready_p50_seconds
+      - tenant_ready_p95_seconds
+    diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
+      - tenant_kubernetes_writes
+      - observed_kubernetes_writes
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+    phases:
+      - name: sample_started
+      - name: tenant_churn_started
+      - name: tenant_churn_created
+      - name: tenant_churn_complete
+      - name: scenario_completed
+
   - name: backup
     description: Backup orchestration signal, split from restore in the v2 contract.
     labels: [backup, disaster-recovery]
     executor: e2e-ginkgo
     labelFilter: dr && backup && restore && !failure-injection
     primaryMeasurements:
-      - sample_total_seconds
       - backup_last_duration_seconds
     diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
       - workqueue_retries_delta
@@ -58,10 +88,10 @@ scenarios:
     labels: [restore, disaster-recovery]
     executor: e2e-ginkgo
     labelFilter: dr && backup && restore && !failure-injection
-    primaryMeasurements:
+    diagnosticMeasurements:
+      - scenario_run_seconds
       - sample_total_seconds
       - restore_duration_bucket_p95
-    diagnosticMeasurements:
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
       - workqueue_retries_delta
@@ -76,13 +106,16 @@ scenarios:
     description: Rolling upgrade steady path with native phase and availability observation.
     labels: [upgrade, rolling, critical]
     executor: native-go
+    existingCluster:
+      enabled: true
     primaryMeasurements:
       - upgrade_total_seconds
       - upgrade_session_start_seconds
       - upgrade_pod_ready_seconds
       - upgrade_availability_probe_failures
-      - sample_total_seconds
     diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
       - upgrade_kubernetes_writes
       - observed_kubernetes_writes
       - upgrade_duration_bucket_p95

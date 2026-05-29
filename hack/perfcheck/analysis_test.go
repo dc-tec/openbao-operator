@@ -62,7 +62,16 @@ func TestReportSummarizesSyntheticSamples(t *testing.T) {
 	artifactDir := filepath.Join(tmp, "dist", "perf")
 	baselineDir := filepath.Join(tmp, "baselines")
 	policyPath := filepath.Join(tmp, "weekly.yaml")
+	scenarioPath := filepath.Join(tmp, "scenarios.yaml")
 
+	writeTestFile(t, scenarioPath, `
+version: v2
+scenarios:
+  - name: lifecycle-convergence
+    executor: native-go
+    primaryMeasurements:
+      - sample_total_seconds
+`)
 	writeTestFile(t, policyPath, `
 version: v2
 measurements:
@@ -99,6 +108,7 @@ measurements:
 	opts.ArtifactDir = artifactDir
 	opts.BaselineDir = baselineDir
 	opts.PolicyPath = policyPath
+	opts.ScenarioPath = scenarioPath
 	opts.ReportOut = filepath.Join(tmp, "report.md")
 	opts.SummaryOut = filepath.Join(tmp, "summary.json")
 
@@ -114,6 +124,85 @@ measurements:
 	}
 	if !strings.Contains(string(report), metricSampleTotalSeconds) {
 		t.Fatalf("report should mention measurement, got:\n%s", string(report))
+	}
+}
+
+func TestSummarizeRunUsesScenarioMeasurementContract(t *testing.T) {
+	tmp := t.TempDir()
+	artifactDir := filepath.Join(tmp, "dist", "perf")
+	baselineDir := filepath.Join(tmp, "baselines")
+	policyPath := filepath.Join(tmp, "weekly.yaml")
+	scenarioPath := filepath.Join(tmp, "scenarios.yaml")
+
+	writeTestFile(t, scenarioPath, `
+version: v2
+scenarios:
+  - name: contract
+    executor: native-go
+    primaryMeasurements:
+      - expected_metric
+      - missing_metric
+    diagnosticMeasurements:
+      - diagnostic_metric
+`)
+	writeTestFile(t, policyPath, `
+version: v2
+measurements:
+  expected_metric:
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 1.0
+    minimumSamples: 1
+  missing_metric:
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 1.0
+    minimumSamples: 1
+  diagnostic_metric:
+    policy: informational
+    severity: info
+`)
+	writeTestJSON(t, filepath.Join(baselineDir, "contract", "kind-v1.34.3.json"), baselineDocument{
+		Version:    versionV2,
+		Scenario:   "contract",
+		CapturedAt: time.Unix(0, 0).UTC(),
+		Summary: map[string]measurementSummary{
+			"expected_metric": {Median: 100, UpperSample: 100, Min: 100, Max: 100, Count: 3},
+			"missing_metric":  {Median: 10, UpperSample: 10, Min: 10, Max: 10, Count: 3},
+		},
+	})
+	writeTestJSON(t, filepath.Join(artifactDir, "scenarios", "contract", "sample-001.json"), sampleDocument{
+		Version:  versionV2,
+		Scenario: "contract",
+		Sample:   1,
+		Status:   sampleStatusPass,
+		Measurements: map[string]float64{
+			"expected_metric":  100,
+			"unrelated_metric": 999,
+		},
+	})
+
+	opts := defaultOptions("report")
+	opts.ArtifactDir = artifactDir
+	opts.BaselineDir = baselineDir
+	opts.PolicyPath = policyPath
+	opts.ScenarioPath = scenarioPath
+
+	summary, err := summarizeRun(opts)
+	if err != nil {
+		t.Fatalf("summarizeRun() error = %v", err)
+	}
+	scenario := summary.Scenarios["contract"]
+	if _, exists := scenario.Measurements["unrelated_metric"]; exists {
+		t.Fatalf("unexpected unrelated metric in summary: %+v", scenario.Measurements)
+	}
+	if _, exists := scenario.Measurements["expected_metric"]; !exists {
+		t.Fatalf("expected metric missing from summary: %+v", scenario.Measurements)
+	}
+	if !hasFinding(scenario.Findings, "missing_metric", "measurement_missing") {
+		t.Fatalf("missing measurement finding not present: %+v", scenario.Findings)
 	}
 }
 
@@ -138,6 +227,15 @@ func TestIsTimelineSampleFileRejectsArtifacts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func hasFinding(findings []analysisFinding, measurement, classification string) bool {
+	for _, finding := range findings {
+		if finding.Measurement == measurement && finding.Classification == classification {
+			return true
+		}
+	}
+	return false
 }
 
 func writeTestFile(t *testing.T, path, body string) {
