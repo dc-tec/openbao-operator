@@ -115,6 +115,35 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 			wantMessageIn: "prerequisites are satisfied",
 		},
 		{
+			name: "gateway integration ready when class omits SupportedVersion condition",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newOpenBaoClusterStatusTestObject()
+				cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+					Enabled:  true,
+					Hostname: "bao.example.test",
+					GatewayRef: openbaov1alpha1.GatewayReference{
+						Name:      "shared-gateway",
+						Namespace: "gateway-system",
+					},
+				}
+				disabled := false
+				cluster.Spec.Gateway.BackendTLS = &openbaov1alpha1.BackendTLSConfig{Enabled: &disabled}
+				return cluster
+			}(),
+			objects: []client.Object{
+				newGateway([]gatewayv1.Listener{{
+					Name:     "https",
+					Protocol: gatewayv1.HTTPSProtocolType,
+					Port:     443,
+				}}, programmedTrue),
+				newGatewayClass([]string{"HTTPRoute"}, acceptedTrue),
+			},
+			wantPresent:   true,
+			wantStatus:    metav1.ConditionTrue,
+			wantReason:    ReasonGatewayIntegrationReady,
+			wantMessageIn: "prerequisites are satisfied",
+		},
+		{
 			name: "gateway capabilities unknown when class omits features",
 			cluster: func() *openbaov1alpha1.OpenBaoCluster {
 				cluster := newOpenBaoClusterStatusTestObject()
