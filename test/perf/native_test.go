@@ -1,7 +1,8 @@
-package main
+package perf
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -142,5 +143,12 @@ func TestResourceWriteTrackerCountsResourceVersionChanges(t *testing.T) {
 	tracker.track("Pod", pod)
 	if tracker.count != 2 {
 		t.Fatalf("tracker count = %d, want 2 after resource version change", tracker.count)
+	}
+}
+
+func assertApproxEqual(t *testing.T, got, want float64) {
+	t.Helper()
+	if math.Abs(got-want) > 0.0001 {
+		t.Fatalf("got %.6f, want %.6f", got, want)
 	}
 }
