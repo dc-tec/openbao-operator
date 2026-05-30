@@ -76,6 +76,12 @@ func parseVerifyFlags(args []string) (options, error) {
 	bindExecutionFlags(fs, &opts)
 	fs.StringVar(&opts.PolicyPath, "policy", defaultPolicyPath, "v2 measurement policy YAML")
 	fs.StringVar(&opts.BaselineDir, "baseline-dir", defaultBaselineDir, "directory containing v2 baseline JSON")
+	fs.StringVar(
+		&opts.PreviousSummaryPath,
+		"previous-summary",
+		"",
+		"optional previous v2 summary JSON used to escalate consecutive primary regressions",
+	)
 
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
@@ -90,8 +96,20 @@ func parseReportFlags(args []string) (options, error) {
 	bindCommonFlags(fs, &opts)
 	fs.StringVar(&opts.PolicyPath, "policy", defaultPolicyPath, "v2 measurement policy YAML")
 	fs.StringVar(&opts.BaselineDir, "baseline-dir", defaultBaselineDir, "directory containing v2 baseline JSON")
+	fs.StringVar(
+		&opts.PreviousSummaryPath,
+		"previous-summary",
+		"",
+		"optional previous v2 summary JSON used to escalate consecutive primary regressions",
+	)
 	fs.StringVar(&opts.SummaryOut, "summary-out", "", "summary JSON output path")
 	fs.StringVar(&opts.ReportOut, "out", "", "markdown report output path")
+	fs.BoolVar(
+		&opts.FailOnFailures,
+		"fail-on-failures",
+		false,
+		"exit non-zero when the rendered summary contains fail-severity findings",
+	)
 
 	if err := fs.Parse(args); err != nil {
 		return options{}, err

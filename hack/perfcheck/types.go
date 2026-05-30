@@ -35,6 +35,9 @@ const (
 	measurementSeverityWarn = "warn"
 	measurementSeverityInfo = "info"
 
+	findingPerformanceFailure            = "performance_failure"
+	findingPerformanceFailureConsecutive = "performance_failure_consecutive"
+
 	measurementRolePrimary    = "primary"
 	measurementRoleDiagnostic = "diagnostic"
 
@@ -42,37 +45,47 @@ const (
 	compareMax         = "max"
 	compareUpperSample = "upper_sample"
 
-	metricSampleTotalSeconds          = "sample_total_seconds"
-	metricScenarioRunSeconds          = "scenario_run_seconds"
-	metricReconcileDurationBucketP95  = "reconcile_duration_bucket_p95"
-	metricBackupLastDurationSeconds   = "backup_last_duration_seconds"
-	metricRestoreDurationBucketP95    = "restore_duration_bucket_p95"
-	metricUpgradeDurationBucketP95    = "upgrade_duration_bucket_p95"
-	metricUpgradePodDurationBucketP95 = "upgrade_pod_duration_bucket_p95"
-	metricWorkqueueRetriesDelta       = "workqueue_retries_delta"
-	metricReconcileErrorRatio         = "reconcile_error_ratio"
-	metricKubernetesWrites            = "kubernetes_writes"
-	metricOpenBaoAPIRequests          = "openbao_api_requests"
-	metricOpenBaoAuthLogins           = "openbao_auth_logins"
-	metricOpenBaoAuthLoginErrors      = "openbao_auth_login_errors"
-	metricOpenBaoClientRetries        = "openbao_api_retry_total"
-	metricOpenBaoAuthCacheHits        = "openbao_auth_cache_hits_total"
-	metricOpenBaoAuthCacheMisses      = "openbao_auth_cache_misses_total"
-	metricClusterAvailableSeconds     = "cluster_available_seconds"
-	metricStatefulSetCreatedSeconds   = "statefulset_created_seconds"
-	metricFirstPodReadySeconds        = "first_pod_ready_seconds"
-	metricAllPodsReadySeconds         = "all_pods_ready_seconds"
-	metricObservedKubernetesWrites    = "observed_kubernetes_writes"
-	metricUpgradeTotalSeconds         = "upgrade_total_seconds"
-	metricUpgradeSessionStartSeconds  = "upgrade_session_start_seconds"
-	metricUpgradePodReadySeconds      = "upgrade_pod_ready_seconds"
-	metricUpgradeAvailabilityFailures = "upgrade_availability_probe_failures"
-	metricUpgradeKubernetesWrites     = "upgrade_kubernetes_writes"
-	metricTenantChurnCompleteSeconds  = "tenant_churn_complete_seconds"
-	metricTenantReadyP50Seconds       = "tenant_ready_p50_seconds"
-	metricTenantReadyP95Seconds       = "tenant_ready_p95_seconds"
-	metricTenantKubernetesWrites      = "tenant_kubernetes_writes"
-	metricTenantCount                 = "tenant_count"
+	metricSampleTotalSeconds                   = "sample_total_seconds"
+	metricScenarioRunSeconds                   = "scenario_run_seconds"
+	metricReconcileDurationBucketP95           = "reconcile_duration_bucket_p95"
+	metricBackupLastDurationSeconds            = "backup_last_duration_seconds"
+	metricRestoreDurationBucketP95             = "restore_duration_bucket_p95"
+	metricUpgradeDurationBucketP95             = "upgrade_duration_bucket_p95"
+	metricUpgradePodDurationBucketP95          = "upgrade_pod_duration_bucket_p95"
+	metricWorkqueueRetriesDelta                = "workqueue_retries_delta"
+	metricReconcileErrorRatio                  = "reconcile_error_ratio"
+	metricKubernetesWrites                     = "kubernetes_writes"
+	metricOpenBaoAPIRequests                   = "openbao_api_requests"
+	metricOpenBaoAuthLogins                    = "openbao_auth_logins"
+	metricOpenBaoAuthLoginErrors               = "openbao_auth_login_errors"
+	metricOpenBaoClientRetries                 = "openbao_api_retry_total"
+	metricOpenBaoAuthCacheHits                 = "openbao_auth_cache_hits_total"
+	metricOpenBaoAuthCacheMisses               = "openbao_auth_cache_misses_total"
+	metricOpenBaoWorkloadRequests              = "openbao_workload_request_count"
+	metricOpenBaoWorkloadRequestAvg            = "openbao_workload_request_avg_seconds"
+	metricOpenBaoWorkloadLogins                = "openbao_workload_login_request_count"
+	metricOpenBaoWorkloadLoginAvg              = "openbao_workload_login_request_avg_seconds"
+	metricOpenBaoWorkloadTokenChecks           = "openbao_workload_token_check_count"
+	metricOpenBaoWorkloadTokenCheckAvg         = "openbao_workload_token_check_avg_seconds"
+	metricOpenBaoWorkloadInFlightMax           = "openbao_workload_in_flight_requests_max"
+	metricOpenBaoWorkloadTokenCreates          = "openbao_workload_token_creation_count"
+	metricOpenBaoWorkloadAuditRequestFailures  = "openbao_workload_audit_request_failures"
+	metricOpenBaoWorkloadAuditResponseFailures = "openbao_workload_audit_response_failures"
+	metricClusterAvailableSeconds              = "cluster_available_seconds"
+	metricStatefulSetCreatedSeconds            = "statefulset_created_seconds"
+	metricFirstPodReadySeconds                 = "first_pod_ready_seconds"
+	metricAllPodsReadySeconds                  = "all_pods_ready_seconds"
+	metricObservedKubernetesWrites             = "observed_kubernetes_writes"
+	metricUpgradeTotalSeconds                  = "upgrade_total_seconds"
+	metricUpgradeSessionStartSeconds           = "upgrade_session_start_seconds"
+	metricUpgradePodReadySeconds               = "upgrade_pod_ready_seconds"
+	metricUpgradeAvailabilityFailures          = "upgrade_availability_probe_failures"
+	metricUpgradeKubernetesWrites              = "upgrade_kubernetes_writes"
+	metricTenantChurnCompleteSeconds           = "tenant_churn_complete_seconds"
+	metricTenantReadyP50Seconds                = "tenant_ready_p50_seconds"
+	metricTenantReadyP95Seconds                = "tenant_ready_p95_seconds"
+	metricTenantKubernetesWrites               = "tenant_kubernetes_writes"
+	metricTenantCount                          = "tenant_count"
 )
 
 var diagnosticMetricKeys = []string{
@@ -90,6 +103,16 @@ var diagnosticMetricKeys = []string{
 	metricOpenBaoClientRetries,
 	metricOpenBaoAuthCacheHits,
 	metricOpenBaoAuthCacheMisses,
+	metricOpenBaoWorkloadRequests,
+	metricOpenBaoWorkloadRequestAvg,
+	metricOpenBaoWorkloadLogins,
+	metricOpenBaoWorkloadLoginAvg,
+	metricOpenBaoWorkloadTokenChecks,
+	metricOpenBaoWorkloadTokenCheckAvg,
+	metricOpenBaoWorkloadInFlightMax,
+	metricOpenBaoWorkloadTokenCreates,
+	metricOpenBaoWorkloadAuditRequestFailures,
+	metricOpenBaoWorkloadAuditResponseFailures,
 }
 
 type scenarioManifest struct {
@@ -208,6 +231,7 @@ type runSummaryDocument struct {
 	ArtifactDir string                     `json:"artifactDir"`
 	BaselineDir string                     `json:"baselineDir,omitempty"`
 	PolicyPath  string                     `json:"policyPath,omitempty"`
+	PreviousRun string                     `json:"previousRun,omitempty"`
 	Totals      summaryTotals              `json:"totals"`
 	Scenarios   map[string]scenarioSummary `json:"scenarios"`
 }
@@ -245,8 +269,10 @@ type options struct {
 	PolicyPath             string
 	BaselineDir            string
 	ArtifactDir            string
+	PreviousSummaryPath    string
 	SummaryOut             string
 	ReportOut              string
+	FailOnFailures         bool
 	RunID                  string
 	EnvironmentID          string
 	NodeImage              string
@@ -284,6 +310,12 @@ type metricsSnapshot struct {
 	Counters   map[string]float64
 	GaugeMax   map[string]float64
 	Histograms map[string]map[float64]float64
+	Summaries  map[string]summarySnapshot
+}
+
+type summarySnapshot struct {
+	Count float64
+	Sum   float64
 }
 
 type yamlDuration struct {

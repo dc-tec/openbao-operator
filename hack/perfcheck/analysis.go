@@ -51,6 +51,9 @@ func summarizeRun(opts options) (runSummaryDocument, error) {
 		PolicyPath:  opts.PolicyPath,
 		Scenarios:   make(map[string]scenarioSummary, len(byScenario)),
 	}
+	if strings.TrimSpace(opts.PreviousSummaryPath) != "" {
+		summary.PreviousRun = opts.PreviousSummaryPath
+	}
 
 	names := make([]string, 0, len(byScenario))
 	for name := range byScenario {
@@ -76,6 +79,14 @@ func summarizeRun(opts options) (runSummaryDocument, error) {
 		default:
 			summary.Totals.Pass++
 		}
+	}
+
+	if strings.TrimSpace(opts.PreviousSummaryPath) != "" {
+		previous, err := readRunSummary(opts.PreviousSummaryPath)
+		if err != nil {
+			return runSummaryDocument{}, err
+		}
+		applyConsecutivePrimaryRegressionPolicy(&summary, previous, policy)
 	}
 	return summary, nil
 }
@@ -242,7 +253,7 @@ func compareMeasurements(
 					Scenario:       scenarioName,
 					Measurement:    metric,
 					Severity:       measurementPolicy.Severity,
-					Classification: "performance_failure",
+					Classification: findingPerformanceFailure,
 					Message:        fmt.Sprintf("%s must remain zero (current=%.3f)", metric, currentValue),
 					Current:        currentValue,
 				})
@@ -270,7 +281,7 @@ func compareMeasurements(
 			Scenario:       scenarioName,
 			Measurement:    metric,
 			Severity:       measurementPolicy.Severity,
-			Classification: "performance_failure",
+			Classification: findingPerformanceFailure,
 			Message: fmt.Sprintf(
 				"%s regressed (current=%.3f baseline=%.3f compare=%s)",
 				metric,
@@ -283,6 +294,92 @@ func compareMeasurements(
 		})
 	}
 	return findings
+}
+
+func applyConsecutivePrimaryRegressionPolicy(
+	current *runSummaryDocument,
+	previous runSummaryDocument,
+	policy policyDocument,
+) {
+	if current == nil {
+		return
+	}
+	previousFailures := previousPerformanceFindingSet(previous)
+	for name, scenario := range current.Scenarios {
+		changed := false
+		for i := range scenario.Findings {
+			finding := &scenario.Findings[i]
+			if finding.Severity != measurementSeverityWarn ||
+				finding.Classification != findingPerformanceFailure ||
+				finding.Measurement == "" {
+				continue
+			}
+			measurementPolicy := normalizeMeasurementPolicy(policy.Measurements[finding.Measurement], policy.Defaults)
+			if measurementPolicy.Role != measurementRolePrimary {
+				continue
+			}
+			if _, exists := previousFailures[findingKey{
+				Scenario:    name,
+				Measurement: finding.Measurement,
+			}]; !exists {
+				continue
+			}
+			finding.Severity = measurementSeverityFail
+			finding.Classification = findingPerformanceFailureConsecutive
+			finding.Message = finding.Message + " (also regressed in the previous weekly run)"
+			changed = true
+		}
+		if changed {
+			scenario.Status = statusFromFindings(scenario.Findings)
+			current.Scenarios[name] = scenario
+		}
+	}
+	recomputeSummaryTotals(current)
+}
+
+type findingKey struct {
+	Scenario    string
+	Measurement string
+}
+
+func previousPerformanceFindingSet(summary runSummaryDocument) map[findingKey]struct{} {
+	out := make(map[findingKey]struct{})
+	for scenarioName, scenario := range summary.Scenarios {
+		for _, finding := range scenario.Findings {
+			if finding.Measurement == "" {
+				continue
+			}
+			switch finding.Classification {
+			case findingPerformanceFailure, findingPerformanceFailureConsecutive:
+				out[findingKey{
+					Scenario:    scenarioName,
+					Measurement: finding.Measurement,
+				}] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
+func recomputeSummaryTotals(summary *runSummaryDocument) {
+	if summary == nil {
+		return
+	}
+	summary.Totals = summaryTotals{}
+	for name, scenario := range summary.Scenarios {
+		scenario.Status = statusFromFindings(scenario.Findings)
+		summary.Scenarios[name] = scenario
+		summary.Totals.Scenarios++
+		summary.Totals.Samples += scenario.Samples
+		switch scenario.Status {
+		case measurementSeverityFail:
+			summary.Totals.Fail++
+		case measurementSeverityWarn:
+			summary.Totals.Warn++
+		default:
+			summary.Totals.Pass++
+		}
+	}
 }
 
 func violatesPolicy(current, baseline float64, policy measurementPolicy) bool {
@@ -485,6 +582,21 @@ func readScenarioBaseline(opts options, scenario string) (baselineDocument, erro
 	}
 	if doc.Version != versionV2 {
 		return baselineDocument{}, fmt.Errorf("baseline %s version = %q, want %q", path, doc.Version, versionV2)
+	}
+	return doc, nil
+}
+
+func readRunSummary(path string) (runSummaryDocument, error) {
+	data, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		return runSummaryDocument{}, fmt.Errorf("read previous summary %s: %w", path, err)
+	}
+	var doc runSummaryDocument
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return runSummaryDocument{}, fmt.Errorf("parse previous summary %s: %w", path, err)
+	}
+	if doc.Version != versionV2 {
+		return runSummaryDocument{}, fmt.Errorf("previous summary %s version = %q, want %q", path, doc.Version, versionV2)
 	}
 	return doc, nil
 }

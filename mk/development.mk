@@ -426,6 +426,8 @@ PERF_BASELINE_DIR ?= hack/perf/v2/baselines
 PERF_POLICY_FILE ?= hack/perf/v2/policies/weekly.yaml
 PERF_ARTIFACT_DIR ?= dist/perf
 PERF_ENVIRONMENT ?= kind-v1.34.3
+PERF_PREVIOUS_SUMMARY ?=
+PERF_REPORT_FAIL_ON_FAILURES ?= false
 PERF_OPERATOR_IMAGE ?= example.com/openbao-operator:0.0.1
 PERF_CONFIG_INIT_IMAGE ?= openbao-init:dev
 PERF_UPGRADE_EXECUTOR_IMAGE ?= openbao-upgrade:dev
@@ -768,7 +770,9 @@ perf-v2-report: ## Render a v2 performance report from existing sample artifacts
 		--baseline-dir="$(PERF_BASELINE_DIR)" \
 		--policy="$(PERF_POLICY_FILE)" \
 		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
-		--environment="$(PERF_ENVIRONMENT)"
+		--environment="$(PERF_ENVIRONMENT)" \
+		--previous-summary="$(PERF_PREVIOUS_SUMMARY)" \
+		--fail-on-failures="$(PERF_REPORT_FAIL_ON_FAILURES)"
 
 .PHONY: mutation-smoke
 mutation-smoke: gomu ## Run a fast mutation smoke check (operation lifecycle package).

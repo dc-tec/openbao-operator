@@ -206,6 +206,109 @@ measurements:
 	}
 }
 
+func TestSummarizeRunEscalatesConsecutivePrimaryRegression(t *testing.T) {
+	tmp := t.TempDir()
+	artifactDir := filepath.Join(tmp, "dist", "perf")
+	baselineDir := filepath.Join(tmp, "baselines")
+	policyPath := filepath.Join(tmp, "weekly.yaml")
+	scenarioPath := filepath.Join(tmp, "scenarios.yaml")
+	previousSummaryPath := filepath.Join(tmp, "previous-summary.json")
+
+	writeTestFile(t, scenarioPath, `
+version: v2
+scenarios:
+  - name: lifecycle-convergence
+    executor: native-go
+    primaryMeasurements:
+      - cluster_available_seconds
+    diagnosticMeasurements:
+      - observed_kubernetes_writes
+`)
+	writeTestFile(t, policyPath, `
+version: v2
+measurements:
+  cluster_available_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.10
+    minimumSamples: 1
+  observed_kubernetes_writes:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.10
+    minimumSamples: 1
+`)
+	writeTestJSON(t, filepath.Join(baselineDir, "lifecycle-convergence", "kind-v1.34.3.json"), baselineDocument{
+		Version:    versionV2,
+		Scenario:   "lifecycle-convergence",
+		CapturedAt: time.Unix(0, 0).UTC(),
+		Summary: map[string]measurementSummary{
+			"cluster_available_seconds":  {Median: 100, UpperSample: 100, Min: 100, Max: 100, Count: 3},
+			"observed_kubernetes_writes": {Median: 100, UpperSample: 100, Min: 100, Max: 100, Count: 3},
+		},
+	})
+	writeTestJSON(t, filepath.Join(artifactDir, "scenarios", "lifecycle-convergence", "sample-001.json"), sampleDocument{
+		Version:  versionV2,
+		Scenario: "lifecycle-convergence",
+		Sample:   1,
+		Status:   sampleStatusPass,
+		Measurements: map[string]float64{
+			"cluster_available_seconds":  150,
+			"observed_kubernetes_writes": 150,
+		},
+	})
+	writeTestJSON(t, previousSummaryPath, runSummaryDocument{
+		Version: versionV2,
+		Scenarios: map[string]scenarioSummary{
+			"lifecycle-convergence": {
+				Status: measurementSeverityWarn,
+				Findings: []analysisFinding{
+					{
+						Scenario:       "lifecycle-convergence",
+						Measurement:    "cluster_available_seconds",
+						Severity:       measurementSeverityWarn,
+						Classification: findingPerformanceFailure,
+						Message:        "previous primary regression",
+					},
+					{
+						Scenario:       "lifecycle-convergence",
+						Measurement:    "observed_kubernetes_writes",
+						Severity:       measurementSeverityWarn,
+						Classification: findingPerformanceFailure,
+						Message:        "previous diagnostic regression",
+					},
+				},
+			},
+		},
+	})
+
+	opts := defaultOptions("report")
+	opts.ArtifactDir = artifactDir
+	opts.BaselineDir = baselineDir
+	opts.PolicyPath = policyPath
+	opts.ScenarioPath = scenarioPath
+	opts.PreviousSummaryPath = previousSummaryPath
+
+	summary, err := summarizeRun(opts)
+	if err != nil {
+		t.Fatalf("summarizeRun() error = %v", err)
+	}
+	scenario := summary.Scenarios["lifecycle-convergence"]
+	if scenario.Status != measurementSeverityFail {
+		t.Fatalf("scenario status = %q, want %q; findings=%+v", scenario.Status, measurementSeverityFail, scenario.Findings)
+	}
+	if !hasFinding(scenario.Findings, "cluster_available_seconds", findingPerformanceFailureConsecutive) {
+		t.Fatalf("primary consecutive finding not escalated: %+v", scenario.Findings)
+	}
+	if hasFinding(scenario.Findings, "observed_kubernetes_writes", findingPerformanceFailureConsecutive) {
+		t.Fatalf("diagnostic finding should not be escalated: %+v", scenario.Findings)
+	}
+}
+
 func TestIsTimelineSampleFileRejectsArtifacts(t *testing.T) {
 	t.Parallel()
 

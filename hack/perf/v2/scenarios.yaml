@@ -28,6 +28,16 @@ scenarios:
       - kubernetes_writes
       - openbao_auth_logins
       - openbao_api_requests
+      - openbao_workload_request_count
+      - openbao_workload_request_avg_seconds
+      - openbao_workload_login_request_count
+      - openbao_workload_login_request_avg_seconds
+      - openbao_workload_token_check_count
+      - openbao_workload_token_check_avg_seconds
+      - openbao_workload_in_flight_requests_max
+      - openbao_workload_token_creation_count
+      - openbao_workload_audit_request_failures
+      - openbao_workload_audit_response_failures
     phases:
       - name: sample_started
       - name: resource_created
@@ -126,6 +136,16 @@ scenarios:
       - kubernetes_writes
       - openbao_auth_logins
       - openbao_api_requests
+      - openbao_workload_request_count
+      - openbao_workload_request_avg_seconds
+      - openbao_workload_login_request_count
+      - openbao_workload_login_request_avg_seconds
+      - openbao_workload_token_check_count
+      - openbao_workload_token_check_avg_seconds
+      - openbao_workload_in_flight_requests_max
+      - openbao_workload_token_creation_count
+      - openbao_workload_audit_request_failures
+      - openbao_workload_audit_response_failures
     phases:
       - name: sample_started
       - name: upgrade_requested

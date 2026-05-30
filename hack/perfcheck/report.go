@@ -41,6 +41,9 @@ func renderMarkdownReport(summary runSummaryDocument) string {
 	if summary.BaselineDir != "" {
 		b.WriteString(fmt.Sprintf("- Baselines: `%s`\n", summary.BaselineDir))
 	}
+	if summary.PreviousRun != "" {
+		b.WriteString(fmt.Sprintf("- Previous run: `%s`\n", summary.PreviousRun))
+	}
 	b.WriteString(fmt.Sprintf(
 		"- Result: %d pass, %d warn, %d fail\n\n",
 		summary.Totals.Pass,

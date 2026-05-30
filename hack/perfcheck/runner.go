@@ -17,6 +17,10 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func runCapture(opts options) error {
@@ -103,6 +107,9 @@ func runReport(opts options) error {
 		return err
 	}
 	printTerminalSummary(summary)
+	if opts.FailOnFailures && summary.Totals.Fail > 0 {
+		return fmt.Errorf("performance report contains %d failing scenarios", summary.Totals.Fail)
+	}
 	return nil
 }
 
@@ -237,7 +244,12 @@ func executeScenarioSample(
 	}
 
 	afterCtx, cancelAfter := context.WithTimeout(context.Background(), 2*time.Minute)
-	after, afterText, _, afterErr := scrapeMetricsSnapshot(afterCtx, opts, cluster, false)
+	after, afterText, _, afterErr := scrapeMetricsSnapshot(
+		afterCtx,
+		opts,
+		cluster,
+		opts.ExistingClusterContext != "",
+	)
 	cancelAfter()
 	if afterErr != nil && sample.Status == sampleStatusPass {
 		sample.Status = sampleStatusMeasurementError
@@ -257,6 +269,9 @@ func executeScenarioSample(
 			sample.Measurements[key] = value
 		}
 	}
+	if err := collectWorkloadMetrics(opts, cluster, scenarioDir, &sample, execResult.Namespace); err != nil {
+		return sampleDocument{}, err
+	}
 	if _, exists := sample.Measurements[metricSampleTotalSeconds]; !exists {
 		sample.Measurements[metricSampleTotalSeconds] = time.Since(started).Seconds()
 	}
@@ -268,6 +283,49 @@ func executeScenarioSample(
 		shouldCleanup = false
 	}
 	return finishAndWriteSample(opts, sample)
+}
+
+func collectWorkloadMetrics(
+	opts options,
+	cluster string,
+	scenarioDir string,
+	sample *sampleDocument,
+	namespace string,
+) error {
+	workloadCtx, cancelWorkload := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancelWorkload()
+
+	workloadAfter, workloadText, workloadPresent, workloadErr := scrapeWorkloadMetricsSnapshot(
+		workloadCtx,
+		opts,
+		cluster,
+		namespace,
+		true,
+	)
+	if workloadErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: scraping OpenBao workload metrics failed: %v\n", workloadErr)
+		return nil
+	}
+	if !workloadPresent {
+		return nil
+	}
+	if workloadText != "" {
+		path, err := writeTextArtifact(
+			scenarioDir,
+			sampleArtifactName(*sample, "openbao-workload-metrics-after.prom"),
+			workloadText,
+		)
+		if err != nil {
+			return err
+		}
+		sample.Artifacts["openBaoWorkloadMetricsAfter"] = path
+	}
+	for key, value := range computeDiagnosticMeasurements(emptySnapshot(), workloadAfter) {
+		if _, exists := sample.Measurements[key]; !exists {
+			sample.Measurements[key] = value
+		}
+	}
+	return nil
 }
 
 func prepareScenarioSample(
@@ -472,6 +530,7 @@ func emptySnapshot() metricsSnapshot {
 		Counters:   make(map[string]float64),
 		GaugeMax:   make(map[string]float64),
 		Histograms: make(map[string]map[float64]float64),
+		Summaries:  make(map[string]summarySnapshot),
 	}
 }
 
@@ -516,6 +575,9 @@ func scrapeMetricsSnapshot(
 }
 
 func ensureMetricsRoleBinding(ctx context.Context, opts options, clusterContext string) error {
+	if opts.ExistingClusterContext != "" {
+		return nil
+	}
 	roleNames := []string{"openbao-operator-metrics-reader", "metrics-reader"}
 	var lastErr error
 	for _, role := range roleNames {
@@ -643,6 +705,213 @@ func fetchMetricsViaPortForward(ctx context.Context, opts options, clusterContex
 		return "", fmt.Errorf("metrics endpoint status %d: %s", resp.StatusCode, string(body))
 	}
 	return string(body), nil
+}
+
+func scrapeWorkloadMetricsSnapshot(
+	ctx context.Context,
+	opts options,
+	cluster string,
+	namespace string,
+	allowMissing bool,
+) (metricsSnapshot, string, bool, error) {
+	namespace = strings.TrimSpace(namespace)
+	if namespace == "" {
+		return emptySnapshot(), "", false, nil
+	}
+	clusterContext := kubeContext(opts, cluster)
+	services, err := listWorkloadMetricsServices(ctx, clusterContext, namespace)
+	if err != nil {
+		if allowMissing {
+			return emptySnapshot(), "", false, nil
+		}
+		return metricsSnapshot{}, "", false, err
+	}
+	if len(services) == 0 {
+		return emptySnapshot(), "", false, nil
+	}
+
+	merged := emptySnapshot()
+	rawSections := make([]string, 0, len(services))
+	present := false
+	for _, service := range services {
+		port := workloadMetricsServicePort(service)
+		if port == 0 {
+			continue
+		}
+		metricsText, err := fetchWorkloadMetricsViaPortForward(ctx, clusterContext, namespace, service.Name, port)
+		if err != nil {
+			if allowMissing {
+				continue
+			}
+			return metricsSnapshot{}, "", false, err
+		}
+		snapshot, err := parseMetricsSnapshot(metricsText)
+		if err != nil {
+			if allowMissing {
+				continue
+			}
+			return metricsSnapshot{}, metricsText, true, err
+		}
+		mergeMetricsSnapshot(&merged, snapshot)
+		rawSections = append(rawSections, fmt.Sprintf(
+			"# perfcheck_openbao_workload_metrics service=%q namespace=%q\n%s",
+			service.Name,
+			namespace,
+			metricsText,
+		))
+		present = true
+	}
+	if !present {
+		return emptySnapshot(), "", false, nil
+	}
+	return merged, strings.Join(rawSections, "\n"), true, nil
+}
+
+func listWorkloadMetricsServices(ctx context.Context, clusterContext, namespace string) ([]corev1.Service, error) {
+	out, err := runCommand(ctx, nil,
+		"kubectl",
+		"--context", clusterContext,
+		"-n", namespace,
+		"get", "services",
+		"-l", constants.LabelOpenBaoComponent+"=metrics",
+		"-o", "json",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list OpenBao workload metrics services: %w", err)
+	}
+	var services corev1.ServiceList
+	if err := json.Unmarshal([]byte(out), &services); err != nil {
+		return nil, fmt.Errorf("parse OpenBao workload metrics services: %w", err)
+	}
+	sort.Slice(services.Items, func(i, j int) bool {
+		return services.Items[i].Name < services.Items[j].Name
+	})
+	return services.Items, nil
+}
+
+func workloadMetricsServicePort(service corev1.Service) int32 {
+	for _, port := range service.Spec.Ports {
+		if port.Name == "https-metrics" {
+			return port.Port
+		}
+	}
+	if len(service.Spec.Ports) == 1 {
+		return service.Spec.Ports[0].Port
+	}
+	return 0
+}
+
+func fetchWorkloadMetricsViaPortForward(
+	ctx context.Context,
+	clusterContext string,
+	namespace string,
+	serviceName string,
+	servicePort int32,
+) (string, error) {
+	port, err := findFreeLocalPort()
+	if err != nil {
+		return "", err
+	}
+
+	serviceRef := fmt.Sprintf("service/%s", serviceName)
+	portArg := fmt.Sprintf("%d:%d", port, servicePort)
+	cmd := exec.CommandContext(ctx,
+		"kubectl",
+		"--context", clusterContext,
+		"port-forward",
+		"--namespace", namespace,
+		serviceRef,
+		portArg,
+	)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start OpenBao workload metrics port-forward: %w", err)
+	}
+	defer func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		_ = cmd.Wait()
+	}()
+
+	if err := waitForLocalPort(ctx, port, 20*time.Second); err != nil {
+		return "", err
+	}
+
+	metricsURL := fmt.Sprintf("https://127.0.0.1:%d/v1/sys/metrics?format=prometheus", port)
+	httpClient := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			//nolint:gosec // metrics are fetched via localhost port-forward in test infrastructure.
+			TLSClientConfig: &tls.Config{ // nosemgrep
+				MinVersion:         tls.VersionTLS13,
+				InsecureSkipVerify: true, // nosemgrep
+			},
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metricsURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch OpenBao workload metrics: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read OpenBao workload metrics body: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("OpenBao workload metrics endpoint status %d: %s", resp.StatusCode, string(body))
+	}
+	return string(body), nil
+}
+
+func mergeMetricsSnapshot(dst *metricsSnapshot, src metricsSnapshot) {
+	if dst.Counters == nil {
+		dst.Counters = make(map[string]float64)
+	}
+	if dst.GaugeMax == nil {
+		dst.GaugeMax = make(map[string]float64)
+	}
+	if dst.Histograms == nil {
+		dst.Histograms = make(map[string]map[float64]float64)
+	}
+	if dst.Summaries == nil {
+		dst.Summaries = make(map[string]summarySnapshot)
+	}
+
+	for name, value := range src.Counters {
+		dst.Counters[name] += value
+	}
+	for name, value := range src.GaugeMax {
+		current, exists := dst.GaugeMax[name]
+		if !exists || value > current {
+			dst.GaugeMax[name] = value
+		}
+	}
+	for name, buckets := range src.Histograms {
+		if _, exists := dst.Histograms[name]; !exists {
+			dst.Histograms[name] = make(map[float64]float64)
+		}
+		for bucket, value := range buckets {
+			dst.Histograms[name][bucket] += value
+		}
+	}
+	for name, summary := range src.Summaries {
+		current := dst.Summaries[name]
+		current.Count += summary.Count
+		current.Sum += summary.Sum
+		dst.Summaries[name] = current
+	}
 }
 
 func findFreeLocalPort() (int, error) {

@@ -146,7 +146,7 @@ measurements:
   upgrade_availability_probe_failures:
     role: primary
     policy: must_be_zero
-    severity: warn
+    severity: fail
     compare: upper_sample
     minimumSamples: 1
   upgrade_kubernetes_writes:
@@ -213,3 +213,63 @@ measurements:
     compare: upper_sample
     allowedRelativeRegression: 0.50
     minimumSamples: 3
+  openbao_workload_request_count:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
+  openbao_workload_request_avg_seconds:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: median
+    minimumSamples: 1
+  openbao_workload_login_request_count:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
+  openbao_workload_login_request_avg_seconds:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: median
+    minimumSamples: 1
+  openbao_workload_token_check_count:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
+  openbao_workload_token_check_avg_seconds:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: median
+    minimumSamples: 1
+  openbao_workload_in_flight_requests_max:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
+  openbao_workload_token_creation_count:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
+  openbao_workload_audit_request_failures:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
+  openbao_workload_audit_response_failures:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
