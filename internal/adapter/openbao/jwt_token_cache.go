@@ -31,14 +31,17 @@ func (c *jwtTokenCache) getOrLogin(ctx context.Context, baseURL, role, jwtToken 
 
 	key := jwtTokenCacheKey(baseURL, role, jwtToken)
 	if token, ok := c.get(key); ok {
+		recordAuthCacheHit(role)
 		return token, nil
 	}
 
 	value, err, _ := c.group.Do(key, func() (any, error) {
 		if token, ok := c.get(key); ok {
+			recordAuthCacheHit(role)
 			return token, nil
 		}
 
+		recordAuthCacheMiss(role)
 		token, ttlSeconds, err := login(ctx)
 		if err != nil {
 			return "", err
