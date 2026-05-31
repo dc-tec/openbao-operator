@@ -141,14 +141,27 @@ jobs:
           PERF_ARTIFACT_DIR: dist/perf
         run: make perf-v2-report
 
+      - name: Preserve scenario report
+        if: always()
+        run: |
+          mkdir -p "dist/perf/reports/${{ matrix.scenario }}"
+          if [[ -f dist/perf/summary.json ]]; then
+            cp dist/perf/summary.json "dist/perf/reports/${{ matrix.scenario }}/summary.json"
+          fi
+          if [[ -f dist/perf/report.md ]]; then
+            cp dist/perf/report.md "dist/perf/reports/${{ matrix.scenario }}/report.md"
+          fi
+
       - name: Upload scenario baseline artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: perf-baseline-kind-v1.34.3-${{ matrix.scenario }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            hack/perf/v2/baselines/
-            dist/perf/
+            hack/perf/v2/baselines/${{ matrix.scenario }}/
+            dist/perf/scenarios/${{ matrix.scenario }}/
+            dist/perf/kubeconfigs/
+            dist/perf/reports/${{ matrix.scenario }}/
           if-no-files-found: warn
           retention-days: 14
 
