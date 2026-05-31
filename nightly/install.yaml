@@ -6653,7 +6653,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260530-a6950686fd43
+          value: nightly-20260531-a6950686fd43
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
         image: ghcr.io/dc-tec/openbao-operator@sha256:8c0273f670af9b71ac8da57426747df6146794b73ee2de9fe3f3982c6b53ca67
@@ -6771,7 +6771,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260530-a6950686fd43
+          value: nightly-20260531-a6950686fd43
         image: ghcr.io/dc-tec/openbao-operator@sha256:8c0273f670af9b71ac8da57426747df6146794b73ee2de9fe3f3982c6b53ca67
         livenessProbe:
           httpGet:
