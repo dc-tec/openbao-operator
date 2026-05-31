@@ -282,6 +282,7 @@ type options struct {
 	ClusterTimeout         time.Duration
 	CleanupTimeout         time.Duration
 	KeepOnFailure          bool
+	ContinueOnSampleError  bool
 	SamplesOverride        int
 	WarmupsOverride        int
 	ExistingClusterContext string

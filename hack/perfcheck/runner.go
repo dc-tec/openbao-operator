@@ -136,6 +136,16 @@ func executeScenarioSamples(
 			return nil, err
 		}
 		out = append(out, sample)
+		if sample.Status != sampleStatusPass && !opts.ContinueOnSampleError {
+			return out, fmt.Errorf(
+				"scenario %q sample=%d warmup=%t failed with status %q; inspect %s",
+				scenario.Name,
+				sampleNumber,
+				warmup,
+				sample.Status,
+				scenarioArtifactDir(opts, scenario.Name),
+			)
+		}
 	}
 	return out, nil
 }
@@ -1043,7 +1053,7 @@ func collectKubernetesArtifacts(
 	namespace string,
 ) error {
 	clusterContext := kubeContext(opts, cluster)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
 	scopeArgs := []string{"--all-namespaces"}
@@ -1054,19 +1064,96 @@ func collectKubernetesArtifacts(
 	} else if opts.ExistingClusterContext != "" {
 		return nil
 	}
-	targets := map[string][]string{
-		"pods":   append([]string{"get", "pods"}, scopeArgs...),
-		"jobs":   append([]string{"get", "jobs"}, scopeArgs...),
-		"events": append([]string{"get", "events"}, scopeArgs...),
-	}
-	for name, args := range targets {
+
+	writeKubectlArtifact := func(name string, args ...string) error {
 		fullArgs := append([]string{"--context", clusterContext}, args...)
-		fullArgs = append(fullArgs, "-o", "json")
 		out, err := runCommand(ctx, nil, "kubectl", fullArgs...)
 		if err != nil {
-			continue
+			return nil
 		}
-		if _, err := writeTextArtifact(scenarioDir, sampleArtifactName(sample, name+".json"), out); err != nil {
+		_, err = writeTextArtifact(scenarioDir, sampleArtifactName(sample, name), out)
+		return err
+	}
+
+	jsonTargets := []struct {
+		name string
+		args []string
+	}{
+		{"pods.json", append([]string{"get", "pods"}, scopeArgs...)},
+		{"jobs.json", append([]string{"get", "jobs"}, scopeArgs...)},
+		{"events.json", append([]string{"get", "events"}, scopeArgs...)},
+		{"statefulsets.json", append([]string{"get", "statefulsets"}, scopeArgs...)},
+		{"services.json", append([]string{"get", "services"}, scopeArgs...)},
+		{"persistentvolumeclaims.json", append([]string{"get", "persistentvolumeclaims"}, scopeArgs...)},
+		{"openbaoclusters.json", append([]string{"get", "openbaoclusters.openbao.org"}, scopeArgs...)},
+	}
+	for _, target := range jsonTargets {
+		args := append([]string{}, target.args...)
+		args = append(args, "-o", "json")
+		if err := writeKubectlArtifact(target.name, args...); err != nil {
+			return err
+		}
+	}
+
+	if err := writeKubectlArtifact(
+		"openbaotenants.json",
+		"get",
+		"openbaotenants.openbao.org",
+		"--namespace",
+		opts.OperatorNS,
+		"-o",
+		"json",
+	); err != nil {
+		return err
+	}
+
+	describeTargets := []struct {
+		name string
+		args []string
+	}{
+		{"openbaoclusters-describe.txt", append([]string{"describe", "openbaoclusters.openbao.org"}, scopeArgs...)},
+		{
+			"openbaotenants-describe.txt",
+			[]string{"describe", "openbaotenants.openbao.org", "--namespace", opts.OperatorNS},
+		},
+	}
+	for _, target := range describeTargets {
+		if err := writeKubectlArtifact(target.name, target.args...); err != nil {
+			return err
+		}
+	}
+
+	logTargets := []struct {
+		name string
+		args []string
+	}{
+		{
+			"operator-controller-logs.txt",
+			[]string{
+				"logs",
+				"deployment/openbao-operator-controller",
+				"--namespace",
+				opts.OperatorNS,
+				"--all-containers",
+				"--tail=1000",
+				"--prefix",
+			},
+		},
+		{
+			"operator-provisioner-logs.txt",
+			[]string{
+				"logs",
+				"deployment/openbao-operator-provisioner",
+				"--namespace",
+				opts.OperatorNS,
+				"--all-containers",
+				"--tail=1000",
+				"--prefix",
+			},
+		},
+	}
+	for _, target := range logTargets {
+		if err := writeKubectlArtifact(target.name, target.args...); err != nil {
 			return err
 		}
 	}

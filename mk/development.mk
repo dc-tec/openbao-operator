@@ -428,6 +428,7 @@ PERF_ARTIFACT_DIR ?= dist/perf
 PERF_ENVIRONMENT ?= kind-v1.34.3
 PERF_PREVIOUS_SUMMARY ?=
 PERF_REPORT_FAIL_ON_FAILURES ?= false
+PERF_CONTINUE_ON_SAMPLE_ERROR ?= false
 PERF_OPERATOR_IMAGE ?= example.com/openbao-operator:0.0.1
 PERF_CONFIG_INIT_IMAGE ?= openbao-init:dev
 PERF_UPGRADE_EXECUTOR_IMAGE ?= openbao-upgrade:dev
@@ -689,6 +690,7 @@ perf-v2-capture: ## Capture v2 performance samples and update per-scenario distr
 		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
 		--environment="$(PERF_ENVIRONMENT)" \
 		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)" \
+		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
 		--operator-image="$(PERF_OPERATOR_IMAGE)" \
 		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
 		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
@@ -719,6 +721,7 @@ perf-v2-verify: ## Run v2 performance verification against committed distributio
 		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
 		--environment="$(PERF_ENVIRONMENT)" \
 		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)" \
+		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
 		--operator-image="$(PERF_OPERATOR_IMAGE)" \
 		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
 		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
@@ -749,6 +752,7 @@ perf-v2-smoke: ## Run a lightweight v2 performance smoke gate (PR-focused).
 		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
 		--environment="$(PERF_ENVIRONMENT)" \
 		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)" \
+		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
 		--operator-image="$(PERF_OPERATOR_IMAGE)" \
 		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
 		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \

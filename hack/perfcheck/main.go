@@ -163,6 +163,12 @@ func bindExecutionFlags(fs *flag.FlagSet, opts *options) {
 	fs.DurationVar(&opts.ClusterTimeout, "cluster-timeout", opts.ClusterTimeout, "kind setup timeout")
 	fs.DurationVar(&opts.CleanupTimeout, "cleanup-timeout", opts.CleanupTimeout, "kind cleanup timeout")
 	fs.BoolVar(&opts.KeepOnFailure, "keep-on-failure", false, "keep kind clusters if a sample fails")
+	fs.BoolVar(
+		&opts.ContinueOnSampleError,
+		"continue-on-sample-error",
+		false,
+		"continue running remaining samples after a scenario or measurement error",
+	)
 	fs.BoolVar(&opts.SkipImageBuild, "skip-image-build", false, "skip image build when supported by the executor")
 	fs.StringVar(&opts.OperatorImage, "operator-image", opts.OperatorImage, "operator image for native scenarios")
 	fs.StringVar(&opts.ConfigInitImage, "config-init-image", opts.ConfigInitImage, "config-init image")

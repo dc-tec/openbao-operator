@@ -3,10 +3,18 @@ name: Performance Baseline Capture
 on:
   workflow_dispatch:
     inputs:
+      scenarios:
+        description: Comma-separated scenarios to capture, or "all".
+        required: false
+        default: lifecycle-convergence,tenant-churn
       runs:
         description: Number of runs per scenario (baseline capture).
         required: false
         default: "5"
+      warmups:
+        description: Number of warmup runs per scenario.
+        required: false
+        default: "1"
       scenario_timeout:
         description: Timeout per scenario (Go duration, e.g. 90m).
         required: false
@@ -25,10 +33,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  perf-baseline:
-    name: Capture Performance Baseline (kind)
+  plan:
+    name: Plan baseline capture
     runs-on: ubuntu-24.04
-    timeout-minutes: 420
+    outputs:
+      scenarios: ${{ steps.scenarios.outputs.scenarios }}
+    steps:
+      - name: Resolve selected scenarios
+        id: scenarios
+        env:
+          INPUT_SCENARIOS: ${{ inputs.scenarios }}
+        run: |
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          import os
+          import sys
+
+          available = [
+              "lifecycle-convergence",
+              "tenant-churn",
+              "backup",
+              "restore",
+              "rolling-upgrade",
+          ]
+          raw = os.environ.get("INPUT_SCENARIOS", "").strip()
+          if not raw or raw == "all":
+              selected = available
+          else:
+              selected = []
+              seen = set()
+              for part in raw.split(","):
+                  name = part.strip()
+                  if not name:
+                      continue
+                  if name == "all":
+                      selected = available
+                      break
+                  if name not in available:
+                      print(
+                          f"Unknown scenario {name!r}; available: {', '.join(available)}",
+                          file=sys.stderr,
+                      )
+                      sys.exit(1)
+                  if name not in seen:
+                      selected.append(name)
+                      seen.add(name)
+          if not selected:
+              print("No scenarios selected", file=sys.stderr)
+              sys.exit(1)
+          print(f"scenarios={json.dumps(selected)}")
+          PY
+
+  perf-baseline:
+    name: Capture ${{ matrix.scenario }} (kind)
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJson(needs.plan.outputs.scenarios) }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -56,6 +120,8 @@ jobs:
         env:
           GOFLAGS: -mod=vendor
           PERF_SAMPLES: ${{ inputs.runs }}
+          PERF_WARMUPS: ${{ inputs.warmups }}
+          PERF_SCENARIOS: ${{ matrix.scenario }}
           PERF_NODE_IMAGE: ${{ inputs.node_image }}
           PERF_SCENARIO_TIMEOUT: ${{ inputs.scenario_timeout }}
           PERF_BASELINE_DIR: hack/perf/v2/baselines
@@ -63,23 +129,60 @@ jobs:
           PERF_ARTIFACT_DIR: dist/perf
         run: make perf-baseline
 
-      - name: Verify captured baselines
+      - name: Render captured baseline report
+        if: always()
         env:
           GOFLAGS: -mod=vendor
+          PERF_SCENARIOS: ${{ matrix.scenario }}
           PERF_NODE_IMAGE: ${{ inputs.node_image }}
           PERF_SCENARIO_TIMEOUT: ${{ inputs.scenario_timeout }}
           PERF_BASELINE_DIR: hack/perf/v2/baselines
           PERF_POLICY_FILE: hack/perf/v2/policies/weekly.yaml
           PERF_ARTIFACT_DIR: dist/perf
-        run: make verify-perf
+        run: make perf-v2-report
 
-      - name: Upload baseline artifacts
+      - name: Upload scenario baseline artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: perf-baseline-kind-v1.34.3-${{ matrix.scenario }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            hack/perf/v2/baselines/
+            dist/perf/
+          if-no-files-found: warn
+          retention-days: 14
+
+  combine-artifacts:
+    name: Combine baseline artifacts
+    if: always()
+    needs: perf-baseline
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download scenario artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: perf-baseline-kind-v1.34.3-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: combined
+          merge-multiple: true
+
+      - name: Summarize captured baselines
+        run: |
+          {
+            echo "## Captured baselines"
+            echo
+            if [[ -d combined/hack/perf/v2/baselines ]]; then
+              find combined/hack/perf/v2/baselines -type f -name '*.json' | sort | sed 's#^combined/#- #'
+            else
+              echo "- No baseline JSON files were captured."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload combined baseline artifacts
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: perf-baseline-kind-v1.34.3-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            hack/perf/v2/baselines/
-            dist/perf/
+          path: combined/
           if-no-files-found: warn
           retention-days: 14
