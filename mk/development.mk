@@ -415,13 +415,33 @@ E2E_LABEL_FILTER ?=
 E2E_SKIP_CLEANUP ?= false
 
 PERF_NODE_IMAGE ?= kindest/node:v1.34.3
-PERF_RUNS ?= 5
+PERF_SAMPLES ?= 3
+PERF_WARMUPS ?= 1
 PERF_SCENARIO_TIMEOUT ?= 90m
 PERF_SMOKE_SCENARIO_TIMEOUT ?= 45m
-PERF_SMOKE_SCENARIOS ?= lifecycle
-PERF_SCENARIOS_FILE ?= hack/perf/scenarios.yaml
-PERF_BASELINE_OUT ?= hack/perf/baseline/kind-v1.34.3-baseline.json
-PERF_THRESHOLDS_OUT ?= hack/perf/thresholds/kind-v1.34.3.yaml
+PERF_SMOKE_SCENARIOS ?= lifecycle-convergence
+PERF_SCENARIOS ?= all
+PERF_SCENARIOS_FILE ?= hack/perf/v2/scenarios.yaml
+PERF_BASELINE_DIR ?= hack/perf/v2/baselines
+PERF_POLICY_FILE ?= hack/perf/v2/policies/weekly.yaml
+PERF_ARTIFACT_DIR ?= dist/perf
+PERF_ENVIRONMENT ?= kind-v1.34.3
+PERF_PREVIOUS_SUMMARY ?=
+PERF_REPORT_FAIL_ON_FAILURES ?= false
+PERF_CONTINUE_ON_SAMPLE_ERROR ?= false
+PERF_OPERATOR_IMAGE ?= example.com/openbao-operator:0.0.1
+PERF_CONFIG_INIT_IMAGE ?= openbao-init:dev
+PERF_BACKUP_EXECUTOR_IMAGE ?= openbao-backup:dev
+PERF_UPGRADE_EXECUTOR_IMAGE ?= openbao-upgrade:dev
+PERF_OPENBAO_VERSION ?= 2.5.4
+PERF_OPENBAO_IMAGE ?= openbao/openbao:2.5.4
+PERF_UPGRADE_FROM_VERSION ?= 2.4.4
+PERF_UPGRADE_FROM_IMAGE ?= openbao/openbao:2.4.4
+PERF_UPGRADE_TO_VERSION ?= 2.5.4
+PERF_UPGRADE_TO_IMAGE ?= openbao/openbao:2.5.4
+PERF_API_SERVER_CIDR ?= 10.96.0.0/12
+PERF_STORAGE_CLASS ?=
+PERF_TENANT_CHURN_COUNT ?= 10
 
 MUTATION_TARGET_PATH ?= ./internal/service/opslifecycle
 MUTATION_PATHS ?= $(shell find ./internal -mindepth 1 -maxdepth 1 -type d | LC_ALL=C sort | paste -sd, -)
@@ -656,36 +676,111 @@ verify-e2e-manifest: e2e-catalog e2e-manifest-validate e2e-ci-matrix-validate e2
 	}
 
 .PHONY: perf-baseline
-perf-baseline: ## Capture performance baseline (5 runs/scenario by default) and regenerate thresholds.
+perf-baseline: perf-v2-capture ## Capture performance baseline samples and write v2 distribution baselines.
+
+.PHONY: perf-v2-capture
+perf-v2-capture: ## Capture v2 performance samples and update per-scenario distribution baselines.
 	go run ./hack/perfcheck capture \
-		--runs="$(PERF_RUNS)" \
-		--scenarios=all \
+		--samples="$(PERF_SAMPLES)" \
+		--warmups="$(PERF_WARMUPS)" \
+		--scenarios="$(PERF_SCENARIOS)" \
 		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
-		--baseline-out="$(PERF_BASELINE_OUT)" \
-		--thresholds-out="$(PERF_THRESHOLDS_OUT)" \
-		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)"
+		--baseline-dir="$(PERF_BASELINE_DIR)" \
+		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
+		--environment="$(PERF_ENVIRONMENT)" \
+		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)" \
+		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
+		--operator-image="$(PERF_OPERATOR_IMAGE)" \
+		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--backup-executor-image="$(PERF_BACKUP_EXECUTOR_IMAGE)" \
+		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
+		--openbao-version="$(PERF_OPENBAO_VERSION)" \
+		--openbao-image="$(PERF_OPENBAO_IMAGE)" \
+		--upgrade-from-version="$(PERF_UPGRADE_FROM_VERSION)" \
+		--upgrade-from-image="$(PERF_UPGRADE_FROM_IMAGE)" \
+		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
+		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
+		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
+		--storage-class="$(PERF_STORAGE_CLASS)" \
+		--tenant-churn-count="$(PERF_TENANT_CHURN_COUNT)"
 
 .PHONY: verify-perf
-verify-perf: ## Run performance regression gate against committed thresholds.
+verify-perf: perf-v2-verify ## Run v2 performance verification against committed distribution baselines.
+
+.PHONY: perf-v2-verify
+perf-v2-verify: ## Run v2 performance verification against committed distribution baselines.
 	go run ./hack/perfcheck verify \
-		--scenarios=all \
+		--samples="$(PERF_SAMPLES)" \
+		--warmups="$(PERF_WARMUPS)" \
+		--scenarios="$(PERF_SCENARIOS)" \
 		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
-		--thresholds="$(PERF_THRESHOLDS_OUT)" \
-		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)"
+		--baseline-dir="$(PERF_BASELINE_DIR)" \
+		--policy="$(PERF_POLICY_FILE)" \
+		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
+		--environment="$(PERF_ENVIRONMENT)" \
+		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)" \
+		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
+		--operator-image="$(PERF_OPERATOR_IMAGE)" \
+		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--backup-executor-image="$(PERF_BACKUP_EXECUTOR_IMAGE)" \
+		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
+		--openbao-version="$(PERF_OPENBAO_VERSION)" \
+		--openbao-image="$(PERF_OPENBAO_IMAGE)" \
+		--upgrade-from-version="$(PERF_UPGRADE_FROM_VERSION)" \
+		--upgrade-from-image="$(PERF_UPGRADE_FROM_IMAGE)" \
+		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
+		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
+		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
+		--storage-class="$(PERF_STORAGE_CLASS)" \
+		--tenant-churn-count="$(PERF_TENANT_CHURN_COUNT)"
 
 .PHONY: verify-perf-smoke
-verify-perf-smoke: ## Run a lightweight performance smoke gate (PR-focused).
+verify-perf-smoke: perf-v2-smoke ## Run a lightweight v2 performance smoke gate (PR-focused).
+
+.PHONY: perf-v2-smoke
+perf-v2-smoke: ## Run a lightweight v2 performance smoke gate (PR-focused).
 	go run ./hack/perfcheck verify \
+		--samples=1 \
+		--warmups=0 \
 		--scenarios="$(PERF_SMOKE_SCENARIOS)" \
 		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
 		--kind="$(KIND)" \
 		--node-image="$(PERF_NODE_IMAGE)" \
-		--thresholds="$(PERF_THRESHOLDS_OUT)" \
-		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)"
+		--baseline-dir="$(PERF_BASELINE_DIR)" \
+		--policy="$(PERF_POLICY_FILE)" \
+		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
+		--environment="$(PERF_ENVIRONMENT)" \
+		--scenario-timeout="$(PERF_SMOKE_SCENARIO_TIMEOUT)" \
+		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
+		--operator-image="$(PERF_OPERATOR_IMAGE)" \
+		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--backup-executor-image="$(PERF_BACKUP_EXECUTOR_IMAGE)" \
+		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
+		--openbao-version="$(PERF_OPENBAO_VERSION)" \
+		--openbao-image="$(PERF_OPENBAO_IMAGE)" \
+		--upgrade-from-version="$(PERF_UPGRADE_FROM_VERSION)" \
+		--upgrade-from-image="$(PERF_UPGRADE_FROM_IMAGE)" \
+		--upgrade-to-version="$(PERF_UPGRADE_TO_VERSION)" \
+		--upgrade-to-image="$(PERF_UPGRADE_TO_IMAGE)" \
+		--api-server-cidr="$(PERF_API_SERVER_CIDR)" \
+		--storage-class="$(PERF_STORAGE_CLASS)" \
+		--tenant-churn-count="$(PERF_TENANT_CHURN_COUNT)"
+
+.PHONY: perf-v2-report
+perf-v2-report: ## Render a v2 performance report from existing sample artifacts.
+	go run ./hack/perfcheck report \
+		--scenario-manifest="$(PERF_SCENARIOS_FILE)" \
+		--scenarios="$(PERF_SCENARIOS)" \
+		--baseline-dir="$(PERF_BASELINE_DIR)" \
+		--policy="$(PERF_POLICY_FILE)" \
+		--artifact-dir="$(PERF_ARTIFACT_DIR)" \
+		--environment="$(PERF_ENVIRONMENT)" \
+		--previous-summary="$(PERF_PREVIOUS_SUMMARY)" \
+		--fail-on-failures="$(PERF_REPORT_FAIL_ON_FAILURES)"
 
 .PHONY: mutation-smoke
 mutation-smoke: gomu ## Run a fast mutation smoke check (operation lifecycle package).

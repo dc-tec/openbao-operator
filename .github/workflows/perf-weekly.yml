@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
   issues: write
 
@@ -15,9 +16,18 @@ concurrency:
 
 jobs:
   verify-perf:
-    name: Verify Performance Thresholds (kind v1.34.3)
+    name: Verify ${{ matrix.scenario }} (kind v1.34.3)
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - lifecycle-convergence
+          - tenant-churn
+          - backup
+          - restore
+          - rolling-upgrade
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -40,37 +50,172 @@ jobs:
         with:
           install-dir: bin/
 
-      - name: Verify full performance thresholds
+      - name: Verify v2 performance baseline
         env:
           GOFLAGS: -mod=vendor
+          PERF_SCENARIOS: ${{ matrix.scenario }}
           PERF_NODE_IMAGE: kindest/node:v1.34.3
           PERF_SCENARIO_TIMEOUT: 90m
-          PERF_THRESHOLDS_OUT: hack/perf/thresholds/kind-v1.34.3.yaml
+          PERF_BASELINE_DIR: hack/perf/v2/baselines
+          PERF_POLICY_FILE: hack/perf/v2/policies/weekly.yaml
+          PERF_ARTIFACT_DIR: dist/perf
+          PERF_TENANT_CHURN_COUNT: 10
         run: make verify-perf
+
+      - name: Upload scenario performance artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: perf-weekly-kind-v1.34.3-${{ matrix.scenario }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/perf/
+          if-no-files-found: warn
+          retention-days: 14
+
+  summarize-perf:
+    name: Summarize Weekly Performance
+    runs-on: ubuntu-24.04
+    needs: verify-perf
+    if: ${{ always() }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Download scenario artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: perf-weekly-kind-v1.34.3-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/perf
+          merge-multiple: true
+
+      - name: Download previous weekly summary
+        id: previous-summary
+        if: ${{ github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/previous-perf
+          found=""
+          mapfile -t run_ids < <(
+            gh run list \
+              --workflow "perf-weekly.yml" \
+              --branch "${GITHUB_REF_NAME}" \
+              --event schedule \
+              --status completed \
+              --json databaseId \
+              --jq '.[].databaseId' \
+              --limit 20
+          )
+          for run_id in "${run_ids[@]}"; do
+            if [[ "${run_id}" == "${GITHUB_RUN_ID}" ]]; then
+              continue
+            fi
+            rm -rf dist/previous-perf/*
+            if gh run download "${run_id}" \
+              --pattern "perf-weekly-summary-kind-v1.34.3-${run_id}-*" \
+              --dir dist/previous-perf >/dev/null 2>&1; then
+              candidate="$(find dist/previous-perf -name summary.json -type f | sort | head -n 1 || true)"
+              if [[ -n "${candidate}" ]]; then
+                found="${candidate}"
+                break
+              fi
+            fi
+          done
+          echo "summary=${found}" >> "${GITHUB_OUTPUT}"
+
+      - name: Render merged v2 report
+        env:
+          GOFLAGS: -mod=vendor
+          PERF_SCENARIOS: all
+          PERF_BASELINE_DIR: hack/perf/v2/baselines
+          PERF_POLICY_FILE: hack/perf/v2/policies/weekly.yaml
+          PERF_ARTIFACT_DIR: dist/perf
+          PERF_PREVIOUS_SUMMARY: ${{ steps.previous-summary.outputs.summary }}
+          PERF_REPORT_FAIL_ON_FAILURES: true
+        run: make perf-v2-report
+
+      - name: Upload merged performance report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: perf-weekly-summary-kind-v1.34.3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/perf/
+          if-no-files-found: warn
+          retention-days: 14
 
   open-regression-issue:
     name: Open Weekly Regression Issue
     runs-on: ubuntu-24.04
-    needs: verify-perf
-    # `always()` is required so this job still runs after the failed `needs` job.
-    if: ${{ always() && github.event_name == 'schedule' && needs.verify-perf.result == 'failure' }}
+    needs:
+      - verify-perf
+      - summarize-perf
+    # `always()` is required so this job still runs after the failed matrix job.
+    if: ${{ always() && github.event_name == 'schedule' && (needs.verify-perf.result == 'failure' || needs.summarize-perf.result == 'failure') }}
     steps:
+      - name: Download merged performance report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: perf-weekly-summary-kind-v1.34.3-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/perf
+
       - name: Open or update issue
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v8.0.1
         with:
           script: |
+            const fs = require("fs");
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const title = "Weekly performance regression detected";
+            const title = "Weekly performance finding detected";
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const summaryPath = "dist/perf/summary.json";
+            const artifactName = `perf-weekly-summary-kind-v1.34.3-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
+
+            let statusLines = ["- Summary artifact unavailable; inspect workflow logs and scenario artifacts."];
+            let findingLines = ["- Summary artifact unavailable; inspect workflow logs and scenario artifacts."];
+
+            if (fs.existsSync(summaryPath)) {
+              const summary = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
+              statusLines = Object.entries(summary.scenarios || {})
+                .sort(([left], [right]) => left.localeCompare(right))
+                .map(([scenario, data]) => `- \`${scenario}\`: \`${data.status}\` (${data.samples} samples)`);
+
+              const failures = [];
+              for (const [scenario, data] of Object.entries(summary.scenarios || {})) {
+                for (const finding of data.findings || []) {
+                  if (finding.severity !== "fail") {
+                    continue;
+                  }
+                  const measurement = finding.measurement ? ` \`${finding.measurement}\`` : "";
+                  failures.push(`- \`${scenario}\`${measurement}: ${finding.message}`);
+                }
+              }
+              findingLines = failures.length > 0
+                ? failures.sort()
+                : ["- No fail-severity finding was present in the merged summary."];
+            }
+
             const body = [
-              "The weekly `verify-perf` run detected a regression.",
+              "The weekly v2 performance matrix produced a failing finding.",
               "",
               `- Workflow run: ${runUrl}`,
               `- Commit: ${context.sha}`,
               `- Trigger time (UTC): ${new Date().toISOString()}`,
+              `- Merged artifact: \`${artifactName}\``,
               "",
-              "Please inspect metrics and update baseline/thresholds only with justification.",
+              "## Failing Findings",
+              ...findingLines,
+              "",
+              "## Scenario Status",
+              ...statusLines,
+              "",
+              "Inspect the uploaded perfcheck v2 artifacts before updating baselines.",
             ].join("\n");
 
             const openIssues = await github.paginate(github.rest.issues.listForRepo, {

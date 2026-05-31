@@ -85,7 +85,7 @@ func newClientState(cfg portopenbao.ClientConfig) *clientState {
 
 func (s *clientState) requestKey(req *http.Request) string {
 	if req == nil || req.URL == nil {
-		return "unknown"
+		return metricLabelUnknown
 	}
 	host := req.URL.Host
 	if host == "" {
@@ -241,8 +241,10 @@ func (c *Client) doRequest(req *http.Request, httpClient *http.Client, op string
 		}
 	}
 
+	started := time.Now()
 	resp, err := httpClient.Do(req)
 	if err != nil {
+		recordClientRequest(req, 0, "error", time.Since(started))
 		wrapped := fmt.Errorf("%s: %w", op, err)
 		if c.state != nil {
 			c.state.after(req, false)
@@ -252,6 +254,7 @@ func (c *Client) doRequest(req *http.Request, httpClient *http.Client, op string
 		}
 		return nil, wrapped
 	}
+	recordClientRequest(req, resp.StatusCode, clientRequestResult(resp.StatusCode), time.Since(started))
 	return resp, nil
 }
 

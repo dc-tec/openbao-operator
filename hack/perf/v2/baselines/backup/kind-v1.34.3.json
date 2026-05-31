@@ -1,0 +1,256 @@
+{
+  "version": "v2",
+  "scenario": "backup",
+  "capturedAt": "2026-05-31T22:49:37.616225504Z",
+  "commit": "fc9220cc9f69f00add34411f2e44c1c72ba59eef",
+  "environment": {
+    "runner": "kind",
+    "kindVersion": "kind v0.31.0 go1.25.5 linux/amd64",
+    "nodeImage": "kindest/node:v1.34.3",
+    "goVersion": "go1.26.3",
+    "commit": "fc9220cc9f69f00add34411f2e44c1c72ba59eef",
+    "context": "kind-perf-backup-1"
+  },
+  "samples": {
+    "backup_job_duration_seconds": [
+      4,
+      4,
+      3,
+      3,
+      3
+    ],
+    "backup_last_duration_seconds": [
+      4,
+      4,
+      3,
+      3,
+      3
+    ],
+    "backup_request_to_job_seconds": [
+      0,
+      0,
+      0.253150103,
+      0.081495567,
+      0.291564873
+    ],
+    "backup_total_seconds": [
+      5.446968652,
+      4.802991576,
+      5.253150103,
+      5.081495567,
+      5.2915648730000004
+    ],
+    "kubernetes_writes": [
+      23,
+      23,
+      23,
+      23,
+      23
+    ],
+    "observed_kubernetes_writes": [
+      23,
+      23,
+      23,
+      23,
+      23
+    ],
+    "openbao_api_requests": [
+      6,
+      6,
+      5,
+      5,
+      5
+    ],
+    "openbao_auth_cache_hits_total": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_cache_misses_total": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_inline_requests": [
+      6,
+      6,
+      6,
+      6,
+      6
+    ],
+    "openbao_auth_login_errors": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_logins": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "reconcile_duration_bucket_p95": [
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "reconcile_error_ratio": [
+      0.08108108108108109,
+      0.08108108108108109,
+      0.08333333333333333,
+      0.08333333333333333,
+      0.08333333333333333
+    ],
+    "sample_total_seconds": [
+      146.206850663,
+      145.24196879,
+      146.227211822,
+      142.801189238,
+      145.384363866
+    ],
+    "scenario_run_seconds": [
+      68.154514056,
+      68.153533928,
+      68.174598818,
+      68.163040638,
+      68.170619711
+    ],
+    "workqueue_retries_delta": [
+      31,
+      31,
+      31,
+      31,
+      31
+    ]
+  },
+  "summary": {
+    "backup_job_duration_seconds": {
+      "median": 3,
+      "upperSample": 4,
+      "min": 3,
+      "max": 4,
+      "count": 5
+    },
+    "backup_last_duration_seconds": {
+      "median": 3,
+      "upperSample": 4,
+      "min": 3,
+      "max": 4,
+      "count": 5
+    },
+    "backup_request_to_job_seconds": {
+      "median": 0.081495567,
+      "upperSample": 0.291564873,
+      "min": 0,
+      "max": 0.291564873,
+      "count": 5
+    },
+    "backup_total_seconds": {
+      "median": 5.253150103,
+      "upperSample": 5.446968652,
+      "min": 4.802991576,
+      "max": 5.446968652,
+      "count": 5
+    },
+    "kubernetes_writes": {
+      "median": 23,
+      "upperSample": 23,
+      "min": 23,
+      "max": 23,
+      "count": 5
+    },
+    "observed_kubernetes_writes": {
+      "median": 23,
+      "upperSample": 23,
+      "min": 23,
+      "max": 23,
+      "count": 5
+    },
+    "openbao_api_requests": {
+      "median": 5,
+      "upperSample": 6,
+      "min": 5,
+      "max": 6,
+      "count": 5
+    },
+    "openbao_auth_cache_hits_total": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_cache_misses_total": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_inline_requests": {
+      "median": 6,
+      "upperSample": 6,
+      "min": 6,
+      "max": 6,
+      "count": 5
+    },
+    "openbao_auth_login_errors": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_logins": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "reconcile_duration_bucket_p95": {
+      "median": 0.5,
+      "upperSample": 0.5,
+      "min": 0.5,
+      "max": 0.5,
+      "count": 5
+    },
+    "reconcile_error_ratio": {
+      "median": 0.08333333333333333,
+      "upperSample": 0.08333333333333333,
+      "min": 0.08108108108108109,
+      "max": 0.08333333333333333,
+      "count": 5
+    },
+    "sample_total_seconds": {
+      "median": 145.384363866,
+      "upperSample": 146.227211822,
+      "min": 142.801189238,
+      "max": 146.227211822,
+      "count": 5
+    },
+    "scenario_run_seconds": {
+      "median": 68.163040638,
+      "upperSample": 68.174598818,
+      "min": 68.153533928,
+      "max": 68.174598818,
+      "count": 5
+    },
+    "workqueue_retries_delta": {
+      "median": 31,
+      "upperSample": 31,
+      "min": 31,
+      "max": 31,
+      "count": 5
+    }
+  }
+}

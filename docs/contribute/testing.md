@@ -61,7 +61,7 @@ journey: contribute
     },
     {
       cells: [
-        "Disaster recovery, performance thresholds, or compatibility against an existing platform cluster",
+        "Disaster recovery, performance baselines, or compatibility against an existing platform cluster",
         "Focused manual or scheduled workflow validation",
         "Evidence from the environment that production-like assumptions actually hold.",
       ],
@@ -152,7 +152,7 @@ make test-e2e`}
   ]}
 />
 
-Performance scenarios are declared in `hack/perf/scenarios.yaml`. Each scenario owns its Ginkgo label filter and the metric policies that are meaningful for that workflow. Keep those policies narrow: add a metric only when the scenario is expected to exercise that behavior, and use warning severity for broad diagnostic counters such as aggregate workqueue retries.
+Performance scenarios are declared in `hack/perf/v2/scenarios.yaml`, with policies under `hack/perf/v2/policies/` and per-scenario baselines under `hack/perf/v2/baselines/`. Each scenario owns its executor, measured artifacts, and metric policy surface. Native scenarios now cover lifecycle convergence, tenant churn, and rolling upgrades with direct phase events; Ginkgo-backed DR scenarios also attach `By` step timestamps to their sample phases so backup and restore artifacts expose the slow step when a run fails. The weekly workflow runs scenarios as separate matrix jobs, uploads per-scenario artifacts, and renders a merged v2 report for triage. Keep policies narrow: primary phase timings should gate only after calibration, while broad counters such as workqueue retries remain warning or diagnostic signals.
 
 <NextActions
   title="After test selection"

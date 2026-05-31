@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,217 +12,462 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func runCapture(opts options) error {
-	scenarios, err := selectedScenarios(opts)
+	scenarios, manifest, err := selectedScenarios(opts)
 	if err != nil {
 		return err
 	}
-
-	baseline := baselineDocument{
-		Version:     "v1",
-		CapturedAt:  time.Now().UTC(),
-		NodeImage:   opts.NodeImage,
-		RunsPerCase: opts.Runs,
-		Multipliers: multiplierConfig{
-			P95: opts.P95Multiplier,
-			Max: opts.MaxMultiplier,
-		},
-		MetricSchema: append([]string(nil), metricKeys...),
-		Scenarios:    make(map[string]scenarioBaseline, len(scenarios)),
+	if err := prepareScenarioArtifactDirs(opts, scenarios); err != nil {
+		return err
 	}
 
+	var samples []sampleDocument
 	for _, scenario := range scenarios {
-		base := scenarioBaseline{
-			LabelFilter:    scenario.LabelFilter,
-			MetricPolicies: scenario.MetricPolicies,
-			Runs:           make([]runResult, 0, opts.Runs),
-			MaxMetrics:     make(map[string]float64, len(metricKeys)),
+		if err := scenarioRequiresExistingClusterSupport(opts, scenario); err != nil {
+			return err
 		}
-		for _, key := range metricKeys {
-			base.MaxMetrics[key] = 0
+		scenarioSamples, err := executeScenarioSamples(opts, manifest, scenario)
+		if err != nil {
+			return err
 		}
-
-		for run := 1; run <= opts.Runs; run++ {
-			res, err := executeScenarioRun(opts, scenario, run)
-			if err != nil {
-				return err
-			}
-			base.Runs = append(base.Runs, res)
-			for _, key := range metricKeys {
-				if res.Metrics[key] > base.MaxMetrics[key] {
-					base.MaxMetrics[key] = res.Metrics[key]
-				}
-			}
+		samples = append(samples, scenarioSamples...)
+		if err := writeScenarioBaseline(opts, scenario, scenarioSamples); err != nil {
+			return err
 		}
-
-		baseline.Scenarios[scenario.Name] = base
 	}
 
-	thresholds := buildThresholds(baseline)
-	if err := writeBaseline(opts.BaselinePath, baseline); err != nil {
-		return err
+	for _, sample := range samples {
+		if sample.Status != sampleStatusPass && !sample.Warmup {
+			return fmt.Errorf("capture completed with scenario errors; inspect %s", opts.ArtifactDir)
+		}
 	}
-	if err := writeThresholds(opts.ThresholdsPath, thresholds); err != nil {
-		return err
-	}
-
-	fmt.Printf("wrote baseline: %s\n", opts.BaselinePath)
-	fmt.Printf("wrote thresholds: %s\n", opts.ThresholdsPath)
+	fmt.Printf("wrote v2 baselines under %s\n", opts.BaselineDir)
+	fmt.Printf("wrote v2 sample artifacts under %s\n", opts.ArtifactDir)
 	return nil
 }
 
 func runVerify(opts options) error {
-	scenarios, err := selectedScenarios(opts)
+	scenarios, manifest, err := selectedScenarios(opts)
 	if err != nil {
 		return err
 	}
-
-	thresholds, err := readThresholds(opts.ThresholdsInput)
-	if err != nil {
+	if err := prepareScenarioArtifactDirs(opts, scenarios); err != nil {
 		return err
 	}
 
-	var findings []string
-	var warnings []string
 	for _, scenario := range scenarios {
-		th, ok := thresholds.Scenarios[scenario.Name]
-		if !ok {
-			return fmt.Errorf("thresholds missing scenario %q", scenario.Name)
-		}
-		if err := validateScenarioThresholds(th, scenario); err != nil {
+		if err := scenarioRequiresExistingClusterSupport(opts, scenario); err != nil {
 			return err
 		}
-		th = applyScenarioPolicy(th, scenario)
-		res, runErr := executeScenarioRun(opts, scenario, 1)
-		if runErr != nil {
-			return runErr
-		}
-		scenarioResult := compareScenarioMetricsDetailed(scenario.Name, res.Metrics, th)
-		findings = append(findings, scenarioResult.Findings...)
-		warnings = append(warnings, scenarioResult.Warnings...)
-
-		fmt.Printf("scenario=%s metrics=%s\n", scenario.Name, formatMetrics(res.Metrics))
-	}
-
-	if len(warnings) > 0 {
-		sort.Strings(warnings)
-		fmt.Println("performance diagnostic warnings:")
-		for _, w := range warnings {
-			fmt.Printf("- %s\n", w)
+		if _, err := executeScenarioSamples(opts, manifest, scenario); err != nil {
+			return err
 		}
 	}
 
-	if len(findings) > 0 {
-		sort.Strings(findings)
-		fmt.Println("performance regression findings:")
-		for _, f := range findings {
-			fmt.Printf("- %s\n", f)
-		}
-		return fmt.Errorf("performance thresholds violated (%d findings)", len(findings))
+	summary, err := summarizeRun(opts)
+	if err != nil {
+		return err
 	}
-
-	fmt.Println("performance verification passed")
+	if err := writeSummaryArtifacts(opts, summary); err != nil {
+		return err
+	}
+	printTerminalSummary(summary)
+	if summary.Totals.Fail > 0 {
+		return fmt.Errorf("performance verification failed (%d failing scenarios)", summary.Totals.Fail)
+	}
 	return nil
 }
 
-func selectedScenarios(opts options) ([]scenarioSpec, error) {
-	manifest, err := loadScenarioManifest(opts.ScenarioPath)
-	if err != nil {
-		return nil, err
-	}
-	if len(opts.ScenarioNames) == 0 {
-		return append([]scenarioSpec(nil), manifest.Scenarios...), nil
-	}
-
-	byName := scenarioMap(manifest.Scenarios)
-	out := make([]scenarioSpec, 0, len(opts.ScenarioNames))
-	for _, name := range opts.ScenarioNames {
-		spec, ok := byName[name]
-		if !ok {
-			available := strings.Join(sortedScenarioNames(manifest.Scenarios), ", ")
-			return nil, fmt.Errorf("unknown scenario %q (available: %s)", name, available)
+func prepareScenarioArtifactDirs(opts options, scenarios []scenarioSpec) error {
+	for _, scenario := range scenarios {
+		if err := os.RemoveAll(scenarioArtifactDir(opts, scenario.Name)); err != nil {
+			return fmt.Errorf("clear scenario artifacts for %s: %w", scenario.Name, err)
 		}
-		out = append(out, spec)
+	}
+	return nil
+}
+
+func runReport(opts options) error {
+	summary, err := summarizeRun(opts)
+	if err != nil {
+		return err
+	}
+	if err := writeSummaryArtifacts(opts, summary); err != nil {
+		return err
+	}
+	printTerminalSummary(summary)
+	if opts.FailOnFailures && summary.Totals.Fail > 0 {
+		return fmt.Errorf("performance report contains %d failing scenarios", summary.Totals.Fail)
+	}
+	return nil
+}
+
+func executeScenarioSamples(
+	opts options,
+	manifest scenarioManifest,
+	scenario scenarioSpec,
+) ([]sampleDocument, error) {
+	warmups := effectiveWarmups(opts, manifest, scenario)
+	samples := effectiveSamples(opts, manifest, scenario)
+	timeout := effectiveSampleTimeout(opts, manifest, scenario)
+
+	out := make([]sampleDocument, 0, warmups+samples)
+	for i := 1; i <= warmups+samples; i++ {
+		warmup := i <= warmups
+		var sampleNumber int
+		if warmup {
+			sampleNumber = i
+		} else {
+			sampleNumber = i - warmups
+		}
+		sample, err := executeScenarioSample(opts, manifest, scenario, sampleNumber, warmup, timeout)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sample)
+		if sample.Status != sampleStatusPass && !opts.ContinueOnSampleError {
+			return out, fmt.Errorf(
+				"scenario %q sample=%d warmup=%t failed with status %q; inspect %s",
+				scenario.Name,
+				sampleNumber,
+				warmup,
+				sample.Status,
+				scenarioArtifactDir(opts, scenario.Name),
+			)
+		}
 	}
 	return out, nil
 }
 
-func executeScenarioRun(opts options, scenario scenarioSpec, runIndex int) (runResult, error) {
-	cluster := clusterNameForScenario(scenario.Name, runIndex)
+func executeScenarioSample(
+	opts options,
+	manifest scenarioManifest,
+	scenario scenarioSpec,
+	sampleIndex int,
+	warmup bool,
+	timeout time.Duration,
+) (sampleDocument, error) {
 	started := time.Now().UTC()
-	fmt.Printf("running scenario=%s run=%d cluster=%s\n", scenario.Name, runIndex, cluster)
-
-	if err := setupKindCluster(opts, cluster); err != nil {
-		return runResult{}, err
+	cluster := clusterNameForScenario(scenario.Name, sampleIndex)
+	if opts.ExistingClusterContext != "" {
+		cluster = opts.ExistingClusterContext
 	}
 
-	shouldCleanup := true
-	cleanup := func() {
-		if err := cleanupKindCluster(opts, cluster); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: cleanup failed for cluster %s: %v\n", cluster, err)
-		}
+	sample := sampleDocument{
+		Version:      versionV2,
+		Scenario:     scenario.Name,
+		Sample:       sampleIndex,
+		Warmup:       warmup,
+		Cluster:      cluster,
+		Environment:  collectRunEnvironment(opts, cluster),
+		StartedAt:    started,
+		Status:       sampleStatusPass,
+		Phases:       []phaseEvent{{Name: "sample_started", At: started, Source: "harness"}},
+		Measurements: make(map[string]float64),
+		Artifacts:    make(map[string]string),
+	}
+
+	fmt.Printf("running scenario=%s sample=%d warmup=%t cluster=%s\n", scenario.Name, sampleIndex, warmup, cluster)
+	scenarioDir := scenarioArtifactDir(opts, scenario.Name)
+	if err := os.MkdirAll(scenarioDir, 0o755); err != nil {
+		return sampleDocument{}, fmt.Errorf("create scenario artifact directory: %w", err)
+	}
+
+	cleanupPolicy := effectiveCleanup(manifest, scenario)
+	shouldCleanup, prepareErr := prepareScenarioSample(opts, scenario, cleanupPolicy, cluster)
+	if prepareErr != nil {
+		sample.Status = sampleStatusScenarioError
+		sample.Error = prepareErr.Error()
+		return finishAndWriteSample(opts, sample)
 	}
 	defer func() {
 		if shouldCleanup {
-			cleanup()
+			cleanupClusterWithWarning(opts, cluster)
 		}
 	}()
 
 	beforeCtx, cancelBefore := context.WithTimeout(context.Background(), 90*time.Second)
-	before, beforePresent, err := scrapeMetricsSnapshot(beforeCtx, opts, cluster, true)
+	before, beforeText, beforePresent, beforeErr := scrapeMetricsSnapshot(beforeCtx, opts, cluster, true)
 	cancelBefore()
-	if err != nil {
-		if !beforePresent {
-			before = emptySnapshot()
-		} else {
-			return runResult{}, err
+	if beforeErr != nil {
+		sample.Status = sampleStatusMeasurementError
+		sample.Error = beforeErr.Error()
+		before = emptySnapshot()
+	} else if beforeText != "" {
+		path, err := writeTextArtifact(scenarioDir, sampleArtifactName(sample, "metrics-before.prom"), beforeText)
+		if err != nil {
+			return sampleDocument{}, err
 		}
+		sample.Artifacts["metricsBefore"] = path
+	}
+	if !beforePresent {
+		before = emptySnapshot()
 	}
 
-	scenarioCtx, cancelScenario := context.WithTimeout(context.Background(), opts.ScenarioTimeout)
-	err = runScenarioTests(scenarioCtx, opts, cluster, scenario)
-	cancelScenario()
-	if err != nil {
-		if opts.KeepOnFailure {
+	scenarioStarted := time.Now().UTC()
+	runCtx, cancelRun := context.WithTimeout(context.Background(), timeout)
+	execResult, runErr := runScenarioExecutor(runCtx, opts, cluster, scenario, sample, scenarioDir)
+	cancelRun()
+	scenarioDuration := time.Since(scenarioStarted).Seconds()
+	defer func() {
+		if execResult.Cleanup == nil {
+			return
+		}
+		if runErr != nil && opts.KeepOnFailure {
+			return
+		}
+		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), opts.CleanupTimeout)
+		defer cancelCleanup()
+		execResult.Cleanup(cleanupCtx)
+	}()
+	sample.Phases = append(sample.Phases, execResult.Phases...)
+	for key, value := range execResult.Measurements {
+		sample.Measurements[key] = value
+	}
+	if _, exists := sample.Measurements[metricScenarioRunSeconds]; !exists {
+		sample.Measurements[metricScenarioRunSeconds] = scenarioDuration
+	}
+	for key, value := range execResult.Artifacts {
+		sample.Artifacts[key] = value
+	}
+	if runErr != nil {
+		sample.Status = sampleStatusScenarioError
+		sample.Error = runErr.Error()
+		if opts.KeepOnFailure && opts.ExistingClusterContext == "" {
 			shouldCleanup = false
 			fmt.Fprintf(os.Stderr, "keeping cluster %s for debugging\n", cluster)
 		}
-		return runResult{}, err
+	} else {
+		completed := time.Now().UTC()
+		sample.Phases = append(sample.Phases, phaseEvent{Name: "scenario_completed", At: completed, Source: "harness"})
 	}
 
 	afterCtx, cancelAfter := context.WithTimeout(context.Background(), 2*time.Minute)
-	after, _, err := scrapeMetricsSnapshot(afterCtx, opts, cluster, false)
+	after, afterText, _, afterErr := scrapeMetricsSnapshot(
+		afterCtx,
+		opts,
+		cluster,
+		opts.ExistingClusterContext != "",
+	)
 	cancelAfter()
-	if err != nil {
-		return runResult{}, err
+	if afterErr != nil && sample.Status == sampleStatusPass {
+		sample.Status = sampleStatusMeasurementError
+		sample.Error = afterErr.Error()
+		after = emptySnapshot()
+	}
+	if afterText != "" {
+		path, err := writeTextArtifact(scenarioDir, sampleArtifactName(sample, "metrics-after.prom"), afterText)
+		if err != nil {
+			return sampleDocument{}, err
+		}
+		sample.Artifacts["metricsAfter"] = path
 	}
 
-	metrics := computeScenarioMetrics(before, after)
-	return runResult{
-		Scenario:      scenario.Name,
-		LabelFilter:   scenario.LabelFilter,
-		Run:           runIndex,
-		Cluster:       cluster,
-		StartedAt:     started,
-		Duration:      time.Since(started),
-		Metrics:       metrics,
-		BeforePresent: beforePresent,
-	}, nil
+	for key, value := range computeDiagnosticMeasurements(before, after) {
+		if _, exists := sample.Measurements[key]; !exists {
+			sample.Measurements[key] = value
+		}
+	}
+	if err := collectWorkloadMetrics(opts, cluster, scenarioDir, &sample, execResult.Namespace); err != nil {
+		return sampleDocument{}, err
+	}
+	if _, exists := sample.Measurements[metricSampleTotalSeconds]; !exists {
+		sample.Measurements[metricSampleTotalSeconds] = time.Since(started).Seconds()
+	}
+
+	if err := collectKubernetesArtifacts(opts, scenarioDir, cluster, sample, execResult.Namespace); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: collecting Kubernetes artifacts failed: %v\n", err)
+	}
+	if sample.Status != sampleStatusPass && cleanupPolicy == cleanupOnSuccess {
+		shouldCleanup = false
+	}
+	return finishAndWriteSample(opts, sample)
 }
 
-func clusterNameForScenario(name string, run int) string {
+func collectWorkloadMetrics(
+	opts options,
+	cluster string,
+	scenarioDir string,
+	sample *sampleDocument,
+	namespace string,
+) error {
+	workloadCtx, cancelWorkload := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancelWorkload()
+
+	workloadAfter, workloadText, workloadPresent, workloadErr := scrapeWorkloadMetricsSnapshot(
+		workloadCtx,
+		opts,
+		cluster,
+		namespace,
+		true,
+	)
+	if workloadErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: scraping OpenBao workload metrics failed: %v\n", workloadErr)
+		return nil
+	}
+	if !workloadPresent {
+		return nil
+	}
+	if workloadText != "" {
+		path, err := writeTextArtifact(
+			scenarioDir,
+			sampleArtifactName(*sample, "openbao-workload-metrics-after.prom"),
+			workloadText,
+		)
+		if err != nil {
+			return err
+		}
+		sample.Artifacts["openBaoWorkloadMetricsAfter"] = path
+	}
+	for key, value := range computeDiagnosticMeasurements(emptySnapshot(), workloadAfter) {
+		if _, exists := sample.Measurements[key]; !exists {
+			sample.Measurements[key] = value
+		}
+	}
+	return nil
+}
+
+func prepareScenarioSample(
+	opts options,
+	scenario scenarioSpec,
+	cleanupPolicy string,
+	cluster string,
+) (bool, error) {
+	shouldCleanup := opts.ExistingClusterContext == "" && cleanupPolicy == cleanupAlways
+	if opts.ExistingClusterContext != "" {
+		if scenario.Executor != executorNativeGo {
+			return shouldCleanup, nil
+		}
+		return shouldCleanup, prepareNativeExistingCluster(opts, cluster)
+	}
+	if err := setupKindCluster(opts, cluster); err != nil {
+		return shouldCleanup, err
+	}
+	if scenario.Executor == executorNativeGo {
+		if err := prepareNativeKindCluster(opts, cluster, scenario); err != nil {
+			return shouldCleanup, err
+		}
+	}
+	if cleanupPolicy == cleanupOnSuccess {
+		shouldCleanup = true
+	}
+	return shouldCleanup, nil
+}
+
+func finishAndWriteSample(opts options, sample sampleDocument) (sampleDocument, error) {
+	sample.CompletedAt = time.Now().UTC()
+	if sample.Measurements == nil {
+		sample.Measurements = make(map[string]float64)
+	}
+	if sample.Artifacts == nil {
+		sample.Artifacts = make(map[string]string)
+	}
+	path := filepath.Join(scenarioArtifactDir(opts, sample.Scenario), sampleFileName(sample))
+	if err := writeJSONFile(path, sample); err != nil {
+		return sampleDocument{}, err
+	}
+	return sample, nil
+}
+
+func runScenarioExecutor(
+	ctx context.Context,
+	opts options,
+	cluster string,
+	scenario scenarioSpec,
+	sample sampleDocument,
+	scenarioDir string,
+) (scenarioExecutionResult, error) {
+	switch scenario.Executor {
+	case executorE2EGinkgo:
+		return runScenarioTests(ctx, opts, cluster, scenario, sample, scenarioDir)
+	case executorScript:
+		return scenarioExecutionResult{}, runScenarioScript(ctx, scenario)
+	case executorNativeGo:
+		return runNativeScenario(ctx, opts, cluster, scenario)
+	default:
+		return scenarioExecutionResult{}, fmt.Errorf("unsupported executor %q", scenario.Executor)
+	}
+}
+
+func runScenarioTests(
+	ctx context.Context,
+	opts options,
+	cluster string,
+	scenario scenarioSpec,
+	sample sampleDocument,
+	scenarioDir string,
+) (scenarioExecutionResult, error) {
+	result := scenarioExecutionResult{}
+	jsonReport := filepath.Join(scenarioDir, sampleArtifactName(sample, "ginkgo.json"))
+	env := map[string]string{
+		"E2E_LABEL_FILTER":   scenario.LabelFilter,
+		"E2E_JSON_REPORT":    jsonReport,
+		"E2E_PARALLEL_NODES": "1",
+		"E2E_SKIP_CLEANUP":   "true",
+	}
+	if opts.SkipImageBuild {
+		env["E2E_SKIP_IMAGE_BUILD"] = "true"
+	}
+	target := "test-e2e-ci"
+	if opts.ExistingClusterContext == "" {
+		env["KIND"] = opts.KindBin
+		env["KIND_CLUSTER"] = cluster
+	} else {
+		env["E2E_USE_EXISTING_CLUSTER"] = "true"
+		env["KUBECONFIG_CONTEXT"] = opts.ExistingClusterContext
+		if opts.Namespace != "" {
+			env["E2E_NAMESPACE"] = opts.Namespace
+		}
+		if opts.NamespacePrefix != "" {
+			env["E2E_NAMESPACE_PREFIX"] = opts.NamespacePrefix
+		}
+		target = "test-e2e-existing"
+	}
+	_, err := runCommand(ctx, env, opts.MakeBin, target)
+	if phases, phaseErr := parseGinkgoPhaseEvents(jsonReport); phaseErr == nil {
+		result.Phases = phases
+		result.Artifacts = map[string]string{"ginkgoJSON": jsonReport}
+	} else if !errors.Is(phaseErr, os.ErrNotExist) {
+		fmt.Fprintf(os.Stderr, "warning: parsing Ginkgo phase report failed: %v\n", phaseErr)
+	}
+	if err != nil {
+		return result, fmt.Errorf("run e2e scenario %q: %w", scenario.Name, err)
+	}
+	return result, nil
+}
+
+func runScenarioScript(ctx context.Context, scenario scenarioSpec) error {
+	if len(scenario.Command) == 0 {
+		return fmt.Errorf("script scenario %q has no command", scenario.Name)
+	}
+	name := scenario.Command[0]
+	args := scenario.Command[1:]
+	_, err := runCommand(ctx, nil, name, args...)
+	if err != nil {
+		return fmt.Errorf("run script scenario %q: %w", scenario.Name, err)
+	}
+	return nil
+}
+
+func clusterNameForScenario(name string, sample int) string {
 	replacer := strings.NewReplacer("_", "-", "/", "-", " ", "-", ".", "-")
 	slug := replacer.Replace(strings.ToLower(strings.TrimSpace(name)))
 	slug = strings.Trim(slug, "-")
 	if slug == "" {
 		slug = "scenario"
 	}
-	cluster := fmt.Sprintf("perf-%s-%d", slug, run)
+	cluster := fmt.Sprintf("perf-%s-%d", slug, sample)
 	if len(cluster) > 60 {
 		cluster = cluster[:60]
 	}
@@ -244,6 +490,12 @@ func setupKindCluster(opts options, cluster string) error {
 	return nil
 }
 
+func cleanupClusterWithWarning(opts options, cluster string) {
+	if err := cleanupKindCluster(opts, cluster); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: cleanup failed for cluster %s: %v\n", cluster, err)
+	}
+}
+
 func cleanupKindCluster(opts options, cluster string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), opts.CleanupTimeout)
 	defer cancel()
@@ -254,22 +506,6 @@ func cleanupKindCluster(opts options, cluster string) error {
 	_, err := runCommand(ctx, env, opts.MakeBin, "cleanup-test-e2e")
 	if err != nil {
 		return fmt.Errorf("cleanup kind cluster %q: %w", cluster, err)
-	}
-	return nil
-}
-
-func runScenarioTests(ctx context.Context, opts options, cluster string, scenario scenarioSpec) error {
-	env := map[string]string{
-		"KIND":               opts.KindBin,
-		"KIND_CLUSTER":       cluster,
-		"E2E_LABEL_FILTER":   scenario.LabelFilter,
-		"E2E_PARALLEL_NODES": "1",
-		"E2E_SKIP_CLEANUP":   "true",
-		"E2E_TIMEOUT":        opts.ScenarioTimeout.String(),
-	}
-	_, err := runCommand(ctx, env, opts.MakeBin, "test-e2e-ci")
-	if err != nil {
-		return fmt.Errorf("run e2e scenario %q: %w", scenario.Name, err)
 	}
 	return nil
 }
@@ -304,6 +540,7 @@ func emptySnapshot() metricsSnapshot {
 		Counters:   make(map[string]float64),
 		GaugeMax:   make(map[string]float64),
 		Histograms: make(map[string]map[float64]float64),
+		Summaries:  make(map[string]summarySnapshot),
 	}
 }
 
@@ -312,45 +549,45 @@ func scrapeMetricsSnapshot(
 	opts options,
 	cluster string,
 	allowMissing bool,
-) (metricsSnapshot, bool, error) {
-	clusterContext := fmt.Sprintf("kind-%s", cluster)
+) (metricsSnapshot, string, bool, error) {
+	clusterContext := kubeContext(opts, cluster)
 	if err := ensureMetricsRoleBinding(ctx, opts, clusterContext); err != nil {
-		if allowMissing && looksLikeMissingResource(err) {
-			return emptySnapshot(), false, nil
-		}
 		if allowMissing {
-			return emptySnapshot(), false, nil
+			return emptySnapshot(), "", false, nil
 		}
-		return metricsSnapshot{}, false, err
+		return metricsSnapshot{}, "", false, err
 	}
 
 	token, err := createMetricsToken(ctx, opts, clusterContext)
 	if err != nil {
 		if allowMissing {
-			return emptySnapshot(), false, nil
+			return emptySnapshot(), "", false, nil
 		}
-		return metricsSnapshot{}, false, err
+		return metricsSnapshot{}, "", false, err
 	}
 
 	metricsText, err := fetchMetricsViaPortForward(ctx, opts, clusterContext, token)
 	if err != nil {
 		if allowMissing && looksLikeMissingResource(err) {
-			return emptySnapshot(), false, nil
+			return emptySnapshot(), "", false, nil
 		}
 		if allowMissing {
-			return emptySnapshot(), false, nil
+			return emptySnapshot(), "", false, nil
 		}
-		return metricsSnapshot{}, false, err
+		return metricsSnapshot{}, "", false, err
 	}
 
 	snapshot, err := parseMetricsSnapshot(metricsText)
 	if err != nil {
-		return metricsSnapshot{}, true, err
+		return metricsSnapshot{}, metricsText, true, err
 	}
-	return snapshot, true, nil
+	return snapshot, metricsText, true, nil
 }
 
 func ensureMetricsRoleBinding(ctx context.Context, opts options, clusterContext string) error {
+	if opts.ExistingClusterContext != "" {
+		return nil
+	}
 	roleNames := []string{"openbao-operator-metrics-reader", "metrics-reader"}
 	var lastErr error
 	for _, role := range roleNames {
@@ -480,6 +717,213 @@ func fetchMetricsViaPortForward(ctx context.Context, opts options, clusterContex
 	return string(body), nil
 }
 
+func scrapeWorkloadMetricsSnapshot(
+	ctx context.Context,
+	opts options,
+	cluster string,
+	namespace string,
+	allowMissing bool,
+) (metricsSnapshot, string, bool, error) {
+	namespace = strings.TrimSpace(namespace)
+	if namespace == "" {
+		return emptySnapshot(), "", false, nil
+	}
+	clusterContext := kubeContext(opts, cluster)
+	services, err := listWorkloadMetricsServices(ctx, clusterContext, namespace)
+	if err != nil {
+		if allowMissing {
+			return emptySnapshot(), "", false, nil
+		}
+		return metricsSnapshot{}, "", false, err
+	}
+	if len(services) == 0 {
+		return emptySnapshot(), "", false, nil
+	}
+
+	merged := emptySnapshot()
+	rawSections := make([]string, 0, len(services))
+	present := false
+	for _, service := range services {
+		port := workloadMetricsServicePort(service)
+		if port == 0 {
+			continue
+		}
+		metricsText, err := fetchWorkloadMetricsViaPortForward(ctx, clusterContext, namespace, service.Name, port)
+		if err != nil {
+			if allowMissing {
+				continue
+			}
+			return metricsSnapshot{}, "", false, err
+		}
+		snapshot, err := parseMetricsSnapshot(metricsText)
+		if err != nil {
+			if allowMissing {
+				continue
+			}
+			return metricsSnapshot{}, metricsText, true, err
+		}
+		mergeMetricsSnapshot(&merged, snapshot)
+		rawSections = append(rawSections, fmt.Sprintf(
+			"# perfcheck_openbao_workload_metrics service=%q namespace=%q\n%s",
+			service.Name,
+			namespace,
+			metricsText,
+		))
+		present = true
+	}
+	if !present {
+		return emptySnapshot(), "", false, nil
+	}
+	return merged, strings.Join(rawSections, "\n"), true, nil
+}
+
+func listWorkloadMetricsServices(ctx context.Context, clusterContext, namespace string) ([]corev1.Service, error) {
+	out, err := runCommand(ctx, nil,
+		"kubectl",
+		"--context", clusterContext,
+		"-n", namespace,
+		"get", "services",
+		"-l", constants.LabelOpenBaoComponent+"=metrics",
+		"-o", "json",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list OpenBao workload metrics services: %w", err)
+	}
+	var services corev1.ServiceList
+	if err := json.Unmarshal([]byte(out), &services); err != nil {
+		return nil, fmt.Errorf("parse OpenBao workload metrics services: %w", err)
+	}
+	sort.Slice(services.Items, func(i, j int) bool {
+		return services.Items[i].Name < services.Items[j].Name
+	})
+	return services.Items, nil
+}
+
+func workloadMetricsServicePort(service corev1.Service) int32 {
+	for _, port := range service.Spec.Ports {
+		if port.Name == "https-metrics" {
+			return port.Port
+		}
+	}
+	if len(service.Spec.Ports) == 1 {
+		return service.Spec.Ports[0].Port
+	}
+	return 0
+}
+
+func fetchWorkloadMetricsViaPortForward(
+	ctx context.Context,
+	clusterContext string,
+	namespace string,
+	serviceName string,
+	servicePort int32,
+) (string, error) {
+	port, err := findFreeLocalPort()
+	if err != nil {
+		return "", err
+	}
+
+	serviceRef := fmt.Sprintf("service/%s", serviceName)
+	portArg := fmt.Sprintf("%d:%d", port, servicePort)
+	cmd := exec.CommandContext(ctx,
+		"kubectl",
+		"--context", clusterContext,
+		"port-forward",
+		"--namespace", namespace,
+		serviceRef,
+		portArg,
+	)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start OpenBao workload metrics port-forward: %w", err)
+	}
+	defer func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		_ = cmd.Wait()
+	}()
+
+	if err := waitForLocalPort(ctx, port, 20*time.Second); err != nil {
+		return "", err
+	}
+
+	metricsURL := fmt.Sprintf("https://127.0.0.1:%d/v1/sys/metrics?format=prometheus", port)
+	httpClient := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			//nolint:gosec // metrics are fetched via localhost port-forward in test infrastructure.
+			TLSClientConfig: &tls.Config{ // nosemgrep
+				MinVersion:         tls.VersionTLS13,
+				InsecureSkipVerify: true, // nosemgrep
+			},
+		},
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metricsURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch OpenBao workload metrics: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read OpenBao workload metrics body: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("OpenBao workload metrics endpoint status %d: %s", resp.StatusCode, string(body))
+	}
+	return string(body), nil
+}
+
+func mergeMetricsSnapshot(dst *metricsSnapshot, src metricsSnapshot) {
+	if dst.Counters == nil {
+		dst.Counters = make(map[string]float64)
+	}
+	if dst.GaugeMax == nil {
+		dst.GaugeMax = make(map[string]float64)
+	}
+	if dst.Histograms == nil {
+		dst.Histograms = make(map[string]map[float64]float64)
+	}
+	if dst.Summaries == nil {
+		dst.Summaries = make(map[string]summarySnapshot)
+	}
+
+	for name, value := range src.Counters {
+		dst.Counters[name] += value
+	}
+	for name, value := range src.GaugeMax {
+		current, exists := dst.GaugeMax[name]
+		if !exists || value > current {
+			dst.GaugeMax[name] = value
+		}
+	}
+	for name, buckets := range src.Histograms {
+		if _, exists := dst.Histograms[name]; !exists {
+			dst.Histograms[name] = make(map[float64]float64)
+		}
+		for bucket, value := range buckets {
+			dst.Histograms[name][bucket] += value
+		}
+	}
+	for name, summary := range src.Summaries {
+		current := dst.Summaries[name]
+		current.Count += summary.Count
+		current.Sum += summary.Sum
+		dst.Summaries[name] = current
+	}
+}
+
 func findFreeLocalPort() (int, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -530,15 +974,188 @@ func looksLikeMissingResource(err error) bool {
 	return errors.Is(err, context.DeadlineExceeded)
 }
 
-func formatMetrics(metrics map[string]float64) string {
-	keys := make([]string, 0, len(metrics))
-	for key := range metrics {
-		keys = append(keys, key)
+func collectRunEnvironment(opts options, cluster string) runEnvironment {
+	env := runEnvironment{
+		NodeImage: opts.NodeImage,
+		GoVersion: runtime.Version(),
+		Commit:    commandOutputOrEmpty(context.Background(), nil, "git", "rev-parse", "HEAD"),
+		Context:   kubeContext(opts, cluster),
 	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%.3f", key, metrics[key]))
+	if opts.ExistingClusterContext != "" {
+		env.Runner = "existing-cluster"
+	} else {
+		env.Runner = "kind"
+		env.KindVersion = commandOutputOrEmpty(context.Background(), nil, opts.KindBin, "version")
 	}
-	return strings.Join(parts, " ")
+	return env
+}
+
+func commandOutputOrEmpty(ctx context.Context, env map[string]string, name string, args ...string) string {
+	commandCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := runCommand(commandCtx, env, name, args...)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+func kubeContext(opts options, cluster string) string {
+	if opts.ExistingClusterContext != "" {
+		return opts.ExistingClusterContext
+	}
+	return fmt.Sprintf("kind-%s", cluster)
+}
+
+func scenarioArtifactDir(opts options, scenario string) string {
+	return filepath.Join(opts.ArtifactDir, "scenarios", scenario)
+}
+
+func sampleFileName(sample sampleDocument) string {
+	if sample.Warmup {
+		return fmt.Sprintf("warmup-%03d.json", sample.Sample)
+	}
+	return fmt.Sprintf("sample-%03d.json", sample.Sample)
+}
+
+func sampleArtifactName(sample sampleDocument, suffix string) string {
+	prefix := strings.TrimSuffix(sampleFileName(sample), ".json")
+	return fmt.Sprintf("%s-%s", prefix, suffix)
+}
+
+func writeTextArtifact(dir, name, body string) (string, error) {
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		return "", fmt.Errorf("write artifact %s: %w", path, err)
+	}
+	return path, nil
+}
+
+func writeJSONFile(path string, value any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create directory for %s: %w", path, err)
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func collectKubernetesArtifacts(
+	opts options,
+	scenarioDir string,
+	cluster string,
+	sample sampleDocument,
+	namespace string,
+) error {
+	clusterContext := kubeContext(opts, cluster)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	scopeArgs := []string{"--all-namespaces"}
+	if opts.ExistingClusterContext != "" && namespace != "" {
+		scopeArgs = []string{"--namespace", namespace}
+	} else if opts.ExistingClusterContext != "" && opts.Namespace != "" {
+		scopeArgs = []string{"--namespace", opts.Namespace}
+	} else if opts.ExistingClusterContext != "" {
+		return nil
+	}
+
+	writeKubectlArtifact := func(name string, args ...string) error {
+		fullArgs := append([]string{"--context", clusterContext}, args...)
+		out, err := runCommand(ctx, nil, "kubectl", fullArgs...)
+		if err != nil {
+			return nil
+		}
+		_, err = writeTextArtifact(scenarioDir, sampleArtifactName(sample, name), out)
+		return err
+	}
+
+	jsonTargets := []struct {
+		name string
+		args []string
+	}{
+		{"pods.json", append([]string{"get", "pods"}, scopeArgs...)},
+		{"jobs.json", append([]string{"get", "jobs"}, scopeArgs...)},
+		{"events.json", append([]string{"get", "events"}, scopeArgs...)},
+		{"statefulsets.json", append([]string{"get", "statefulsets"}, scopeArgs...)},
+		{"services.json", append([]string{"get", "services"}, scopeArgs...)},
+		{"persistentvolumeclaims.json", append([]string{"get", "persistentvolumeclaims"}, scopeArgs...)},
+		{"openbaoclusters.json", append([]string{"get", "openbaoclusters.openbao.org"}, scopeArgs...)},
+	}
+	for _, target := range jsonTargets {
+		args := append([]string{}, target.args...)
+		args = append(args, "-o", "json")
+		if err := writeKubectlArtifact(target.name, args...); err != nil {
+			return err
+		}
+	}
+
+	if err := writeKubectlArtifact(
+		"openbaotenants.json",
+		"get",
+		"openbaotenants.openbao.org",
+		"--namespace",
+		opts.OperatorNS,
+		"-o",
+		"json",
+	); err != nil {
+		return err
+	}
+
+	describeTargets := []struct {
+		name string
+		args []string
+	}{
+		{"openbaoclusters-describe.txt", append([]string{"describe", "openbaoclusters.openbao.org"}, scopeArgs...)},
+		{
+			"openbaotenants-describe.txt",
+			[]string{"describe", "openbaotenants.openbao.org", "--namespace", opts.OperatorNS},
+		},
+	}
+	for _, target := range describeTargets {
+		if err := writeKubectlArtifact(target.name, target.args...); err != nil {
+			return err
+		}
+	}
+
+	logTargets := []struct {
+		name string
+		args []string
+	}{
+		{
+			"operator-controller-logs.txt",
+			[]string{
+				"logs",
+				"deployment/openbao-operator-controller",
+				"--namespace",
+				opts.OperatorNS,
+				"--all-containers",
+				"--tail=1000",
+				"--prefix",
+			},
+		},
+		{
+			"operator-provisioner-logs.txt",
+			[]string{
+				"logs",
+				"deployment/openbao-operator-provisioner",
+				"--namespace",
+				opts.OperatorNS,
+				"--all-containers",
+				"--tail=1000",
+				"--prefix",
+			},
+		},
+	}
+	for _, target := range logTargets {
+		if err := writeKubectlArtifact(target.name, target.args...); err != nil {
+			return err
+		}
+	}
+	return nil
 }

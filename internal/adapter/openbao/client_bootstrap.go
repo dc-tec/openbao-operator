@@ -186,20 +186,25 @@ func (c *Client) LoginJWT(ctx context.Context, role, jwtToken string) (string, i
 
 	resp, respBody, err := c.doAndReadAll(req, nil, "failed to execute JWT auth request")
 	if err != nil {
+		recordAuthLoginError("request_error")
 		return "", 0, err
 	}
 	if resp.StatusCode != http.StatusOK {
+		recordAuthLoginError(fmt.Sprintf("status_%d", resp.StatusCode))
 		return "", 0, portopenbao.NewAPIError("JWT auth request failed", resp.StatusCode, respBody)
 	}
 
 	var authResp JWTAuthLoginResponse
 	if err := json.Unmarshal(respBody, &authResp); err != nil {
+		recordAuthLoginError("parse_error")
 		return "", 0, fmt.Errorf("failed to parse JWT auth response: %w", err)
 	}
 	if authResp.Auth.ClientToken == "" {
+		recordAuthLoginError("missing_client_token")
 		return "", 0, fmt.Errorf("JWT auth response missing client_token")
 	}
 
+	recordAuthLoginSuccess()
 	return authResp.Auth.ClientToken, authResp.Auth.TTL, nil
 }
 

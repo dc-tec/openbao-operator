@@ -1,0 +1,209 @@
+version: v2
+defaults:
+  warmups: 1
+  samples: 3
+  sampleTimeout: 30m
+  cleanup: always
+  artifactLevel: standard
+
+scenarios:
+  - name: lifecycle-convergence
+    description: OpenBaoCluster creation to available using native Kubernetes phase observation.
+    labels: [lifecycle, cluster, critical]
+    executor: native-go
+    existingCluster:
+      enabled: true
+    primaryMeasurements:
+      - cluster_available_seconds
+      - statefulset_created_seconds
+      - first_pod_ready_seconds
+      - all_pods_ready_seconds
+    diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
+      - observed_kubernetes_writes
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
+      - openbao_api_requests
+      - openbao_workload_request_count
+      - openbao_workload_request_avg_seconds
+      - openbao_workload_login_request_count
+      - openbao_workload_login_request_avg_seconds
+      - openbao_workload_token_check_count
+      - openbao_workload_token_check_avg_seconds
+      - openbao_workload_in_flight_requests_max
+      - openbao_workload_token_creation_count
+      - openbao_workload_audit_request_failures
+      - openbao_workload_audit_response_failures
+    phases:
+      - name: sample_started
+      - name: resource_created
+      - name: statefulset_created
+      - name: first_pod_ready
+      - name: all_pods_ready
+      - name: cluster_available
+      - name: scenario_completed
+
+  - name: tenant-churn
+    description: Tenant namespace and OpenBaoTenant provisioning churn using native Kubernetes phase observation.
+    labels: [tenant, churn, critical]
+    executor: native-go
+    existingCluster:
+      enabled: true
+    primaryMeasurements:
+      - tenant_churn_complete_seconds
+      - tenant_ready_p50_seconds
+      - tenant_ready_p95_seconds
+    diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
+      - tenant_kubernetes_writes
+      - observed_kubernetes_writes
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
+      - openbao_api_requests
+    phases:
+      - name: sample_started
+      - name: tenant_churn_started
+      - name: tenant_churn_created
+      - name: tenant_churn_complete
+      - name: scenario_completed
+
+  - name: backup
+    description: Native S3 backup orchestration with explicit operator-owned phases.
+    labels: [backup, disaster-recovery]
+    executor: native-go
+    existingCluster:
+      enabled: true
+    primaryMeasurements:
+      - backup_total_seconds
+      - backup_job_duration_seconds
+      - backup_request_to_job_seconds
+    diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
+      - backup_last_duration_seconds
+      - observed_kubernetes_writes
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
+      - openbao_api_requests
+    phases:
+      - name: sample_started
+      - name: storage_ready
+      - name: cluster_created
+      - name: cluster_available
+      - name: backup_configuration_ready
+      - name: backup_requested
+      - name: backup_job_created
+      - name: backup_job_succeeded
+      - name: backup_status_recorded
+      - name: scenario_completed
+
+  - name: restore
+    description: Native S3 restore orchestration using a per-sample backup fixture and explicit restore phases.
+    labels: [restore, disaster-recovery]
+    executor: native-go
+    existingCluster:
+      enabled: true
+    primaryMeasurements:
+      - restore_total_seconds
+      - restore_validation_seconds
+      - restore_job_duration_seconds
+    diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
+      - restore_duration_bucket_p95
+      - observed_kubernetes_writes
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
+      - openbao_api_requests
+    phases:
+      - name: sample_started
+      - name: storage_ready
+      - name: cluster_created
+      - name: cluster_available
+      - name: backup_configuration_ready
+      - name: restore_fixture_backup_requested
+      - name: restore_fixture_backup_job_created
+      - name: restore_fixture_backup_job_succeeded
+      - name: restore_fixture_backup_status_recorded
+      - name: restore_fixture_ready
+      - name: restore_requested
+      - name: restore_validation_ready
+      - name: restore_job_created
+      - name: restore_started
+      - name: restore_completed
+      - name: scenario_completed
+
+  - name: rolling-upgrade
+    description: Rolling upgrade steady path with native phase and availability observation.
+    labels: [upgrade, rolling, critical]
+    executor: native-go
+    existingCluster:
+      enabled: true
+    primaryMeasurements:
+      - upgrade_total_seconds
+      - upgrade_session_start_seconds
+      - upgrade_pod_ready_seconds
+      - upgrade_availability_probe_failures
+    diagnosticMeasurements:
+      - scenario_run_seconds
+      - sample_total_seconds
+      - upgrade_kubernetes_writes
+      - observed_kubernetes_writes
+      - upgrade_duration_bucket_p95
+      - upgrade_pod_duration_bucket_p95
+      - reconcile_duration_bucket_p95
+      - reconcile_error_ratio
+      - workqueue_retries_delta
+      - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
+      - openbao_api_requests
+      - openbao_workload_request_count
+      - openbao_workload_request_avg_seconds
+      - openbao_workload_login_request_count
+      - openbao_workload_login_request_avg_seconds
+      - openbao_workload_token_check_count
+      - openbao_workload_token_check_avg_seconds
+      - openbao_workload_in_flight_requests_max
+      - openbao_workload_token_creation_count
+      - openbao_workload_audit_request_failures
+      - openbao_workload_audit_response_failures
+    phases:
+      - name: sample_started
+      - name: upgrade_requested
+      - name: upgrade_session_started
+      - name: upgrade_completed
+      - name: scenario_completed

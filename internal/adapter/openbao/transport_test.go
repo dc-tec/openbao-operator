@@ -9,6 +9,7 @@ import (
 	"time"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 func TestSmartClient_CircuitBreaker_SharedAcrossClients(t *testing.T) {
@@ -65,5 +66,52 @@ func TestSmartClient_CircuitBreaker_SharedAcrossClients(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&requests); got != 2 {
 		t.Fatalf("expected circuit breaker to block without new request; got %d requests", got)
+	}
+}
+
+func TestClient_DoRequestRecordsRequestMetric(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"leader_address":"https://openbao-0.openbao:8200"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("NewClient() error: %v", err)
+	}
+	req, err := client.newRequest(context.Background(), http.MethodGet, apiPathSysLeader, nil)
+	if err != nil {
+		t.Fatalf("newRequest() error: %v", err)
+	}
+
+	counter := clientRequestsTotal.WithLabelValues(http.MethodGet, apiPathSysLeader, "200", "success")
+	before := testutil.ToFloat64(counter)
+	resp, err := client.doRequest(req, nil, "test request")
+	if err != nil {
+		t.Fatalf("doRequest() error: %v", err)
+	}
+	drainAndClose(resp)
+	after := testutil.ToFloat64(counter)
+	if after != before+1 {
+		t.Fatalf("request counter delta = %v, want 1", after-before)
+	}
+}
+
+func TestInlineJWTAuthorizerRecordsAuthPressureMetric(t *testing.T) {
+	auth, err := newInlineJWTAuthorizer("operator-role", "jwt-token")
+	if err != nil {
+		t.Fatalf("newInlineJWTAuthorizer() error: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/sys/leader", nil)
+
+	counter := clientAuthInlineRequestsTotal.WithLabelValues("operator-role")
+	before := testutil.ToFloat64(counter)
+	if err := auth.authorize(req); err != nil {
+		t.Fatalf("authorize() error: %v", err)
+	}
+	after := testutil.ToFloat64(counter)
+	if after != before+1 {
+		t.Fatalf("inline auth counter delta = %v, want 1", after-before)
 	}
 }

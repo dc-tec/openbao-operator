@@ -39,6 +39,17 @@ func main() {
 		if err := runVerify(opts); err != nil {
 			exitWithError(err)
 		}
+	case "report":
+		opts, err := parseReportFlags(os.Args[2:])
+		if err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				os.Exit(0)
+			}
+			exitWithError(err)
+		}
+		if err := runReport(opts); err != nil {
+			exitWithError(err)
+		}
 	default:
 		printUsage()
 		exitWithError(fmt.Errorf("unknown subcommand %q", subcommand))
@@ -46,145 +57,213 @@ func main() {
 }
 
 func parseCaptureFlags(args []string) (options, error) {
+	opts := defaultOptions("capture")
 	fs := flag.NewFlagSet("capture", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-
-	const (
-		defaultBaselinePath   = "hack/perf/baseline/kind-v1.34.3-baseline.json"
-		defaultThresholdsPath = "hack/perf/thresholds/kind-v1.34.3.yaml"
-	)
-
-	var (
-		runs      = fs.Int("runs", 5, "number of runs per scenario")
-		scenarios = fs.String(
-			"scenarios",
-			"all",
-			"comma-separated scenarios from the scenario manifest, or all",
-		)
-		nodeImage       = fs.String("node-image", "kindest/node:v1.34.3", "kind node image")
-		kindBin         = fs.String("kind", "kind", "path to kind binary")
-		makeBin         = fs.String("make", "make", "path to make binary")
-		scenarioPath    = fs.String("scenario-manifest", defaultScenarioPath, "scenario manifest YAML path")
-		baselinePath    = fs.String("baseline-out", defaultBaselinePath, "output path for baseline JSON")
-		thresholdsPath  = fs.String("thresholds-out", defaultThresholdsPath, "output path for thresholds YAML")
-		scenarioTimeout = fs.Duration("scenario-timeout", 90*time.Minute, "per-scenario timeout")
-		clusterTimeout  = fs.Duration("cluster-timeout", 20*time.Minute, "kind setup timeout")
-		cleanupTimeout  = fs.Duration("cleanup-timeout", 10*time.Minute, "kind cleanup timeout")
-		keepOnFailure   = fs.Bool("keep-on-failure", false, "keep kind clusters if a scenario run fails")
-		p95Mult         = fs.Float64("p95-multiplier", 1.25, "multiplier applied to p95 metrics")
-		maxMult         = fs.Float64("max-multiplier", 1.40, "multiplier applied to max/churn metrics")
-	)
+	bindExecutionFlags(fs, &opts)
+	fs.StringVar(&opts.BaselineDir, "baseline-dir", defaultBaselineDir, "output directory for v2 baseline JSON")
 
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
 	}
-	if *runs <= 0 {
-		return options{}, errors.New("runs must be > 0")
-	}
-	if *p95Mult <= 0 || *maxMult <= 0 {
-		return options{}, errors.New("multipliers must be > 0")
-	}
-	selected, err := parseScenarioSelection(*scenarios)
-	if err != nil {
-		return options{}, err
-	}
-
-	return baseOptions(
-		*nodeImage,
-		*kindBin,
-		*makeBin,
-		*scenarioPath,
-		*scenarioTimeout,
-		*clusterTimeout,
-		*cleanupTimeout,
-		*keepOnFailure,
-	).
-		withCapture(*runs, selected, *baselinePath, *thresholdsPath, *p95Mult, *maxMult), nil
+	return finalizeOptions(opts)
 }
 
 func parseVerifyFlags(args []string) (options, error) {
+	opts := defaultOptions("verify")
 	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-
-	const defaultThresholdsPath = "hack/perf/thresholds/kind-v1.34.3.yaml"
-
-	var (
-		scenarios = fs.String(
-			"scenarios",
-			"all",
-			"comma-separated scenarios from the scenario manifest, or all",
-		)
-		nodeImage       = fs.String("node-image", "kindest/node:v1.34.3", "kind node image")
-		kindBin         = fs.String("kind", "kind", "path to kind binary")
-		makeBin         = fs.String("make", "make", "path to make binary")
-		scenarioPath    = fs.String("scenario-manifest", defaultScenarioPath, "scenario manifest YAML path")
-		thresholdsInput = fs.String("thresholds", defaultThresholdsPath, "input thresholds YAML path")
-		scenarioTimeout = fs.Duration("scenario-timeout", 90*time.Minute, "per-scenario timeout")
-		clusterTimeout  = fs.Duration("cluster-timeout", 20*time.Minute, "kind setup timeout")
-		cleanupTimeout  = fs.Duration("cleanup-timeout", 10*time.Minute, "kind cleanup timeout")
-		keepOnFailure   = fs.Bool("keep-on-failure", false, "keep kind clusters if a scenario run fails")
+	bindExecutionFlags(fs, &opts)
+	fs.StringVar(&opts.PolicyPath, "policy", defaultPolicyPath, "v2 measurement policy YAML")
+	fs.StringVar(&opts.BaselineDir, "baseline-dir", defaultBaselineDir, "directory containing v2 baseline JSON")
+	fs.StringVar(
+		&opts.PreviousSummaryPath,
+		"previous-summary",
+		"",
+		"optional previous v2 summary JSON used to escalate consecutive primary regressions",
 	)
 
 	if err := fs.Parse(args); err != nil {
 		return options{}, err
 	}
-	selected, err := parseScenarioSelection(*scenarios)
-	if err != nil {
+	return finalizeOptions(opts)
+}
+
+func parseReportFlags(args []string) (options, error) {
+	opts := defaultOptions("report")
+	fs := flag.NewFlagSet("report", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	bindCommonFlags(fs, &opts)
+	fs.StringVar(&opts.PolicyPath, "policy", defaultPolicyPath, "v2 measurement policy YAML")
+	fs.StringVar(&opts.BaselineDir, "baseline-dir", defaultBaselineDir, "directory containing v2 baseline JSON")
+	fs.StringVar(
+		&opts.PreviousSummaryPath,
+		"previous-summary",
+		"",
+		"optional previous v2 summary JSON used to escalate consecutive primary regressions",
+	)
+	fs.StringVar(&opts.SummaryOut, "summary-out", "", "summary JSON output path")
+	fs.StringVar(&opts.ReportOut, "out", "", "markdown report output path")
+	fs.BoolVar(
+		&opts.FailOnFailures,
+		"fail-on-failures",
+		false,
+		"exit non-zero when the rendered summary contains fail-severity findings",
+	)
+
+	if err := fs.Parse(args); err != nil {
 		return options{}, err
 	}
-
-	base := baseOptions(
-		*nodeImage,
-		*kindBin,
-		*makeBin,
-		*scenarioPath,
-		*scenarioTimeout,
-		*clusterTimeout,
-		*cleanupTimeout,
-		*keepOnFailure,
-	)
-	base.Mode = "verify"
-	base.ScenarioNames = selected
-	base.ThresholdsInput = *thresholdsInput
-	return base, nil
+	return finalizeOptions(opts)
 }
 
-func baseOptions(
-	nodeImage, kindBin, makeBin, scenarioPath string,
-	scenarioTimeout, clusterTimeout, cleanupTimeout time.Duration,
-	keepOnFailure bool,
-) options {
+func defaultOptions(mode string) options {
 	return options{
-		Mode:            "",
-		NodeImage:       nodeImage,
-		KindBin:         kindBin,
-		MakeBin:         makeBin,
-		ScenarioPath:    scenarioPath,
-		ScenarioTimeout: scenarioTimeout,
-		ClusterTimeout:  clusterTimeout,
-		CleanupTimeout:  cleanupTimeout,
-		KeepOnFailure:   keepOnFailure,
-		OperatorNS:      "openbao-operator-system",
-		MetricsService:  "openbao-operator-controller-metrics-service",
-		ServiceAccount:  "openbao-operator-controller",
-		BindingName:     "openbao-operator-metrics-binding",
+		Mode:            mode,
+		ScenarioPath:    defaultScenarioPath,
+		PolicyPath:      defaultPolicyPath,
+		BaselineDir:     defaultBaselineDir,
+		ArtifactDir:     defaultArtifactDir,
+		EnvironmentID:   defaultEnvironment,
+		NodeImage:       "kindest/node:v1.34.3",
+		KindBin:         "kind",
+		MakeBin:         "make",
+		OperatorImage:   envOrDefault("PERF_OPERATOR_IMAGE", "example.com/openbao-operator:0.0.1"),
+		ConfigInitImage: envOrDefault("PERF_CONFIG_INIT_IMAGE", "openbao-init:dev"),
+		BackupExecutorImage: envOrDefault(
+			"PERF_BACKUP_EXECUTOR_IMAGE",
+			"openbao-backup:dev",
+		),
+		UpgradeExecutorImage: envOrDefault(
+			"PERF_UPGRADE_EXECUTOR_IMAGE",
+			"openbao-upgrade:dev",
+		),
+		OpenBaoVersion:     envOrDefault("PERF_OPENBAO_VERSION", "2.5.4"),
+		OpenBaoImage:       envOrDefault("PERF_OPENBAO_IMAGE", "openbao/openbao:2.5.4"),
+		UpgradeFromVersion: envOrDefault("PERF_UPGRADE_FROM_VERSION", "2.4.4"),
+		UpgradeFromImage:   envOrDefault("PERF_UPGRADE_FROM_IMAGE", "openbao/openbao:2.4.4"),
+		UpgradeToVersion:   envOrDefault("PERF_UPGRADE_TO_VERSION", "2.5.4"),
+		UpgradeToImage:     envOrDefault("PERF_UPGRADE_TO_IMAGE", "openbao/openbao:2.5.4"),
+		APIServerCIDR:      envOrDefault("PERF_API_SERVER_CIDR", "10.96.0.0/12"),
+		StorageClass:       envOrDefault("PERF_STORAGE_CLASS", ""),
+		TenantChurnCount:   10,
+		ClusterTimeout:     20 * time.Minute,
+		CleanupTimeout:     10 * time.Minute,
+		SamplesOverride:    0,
+		WarmupsOverride:    -1,
+		OperatorNS:         "openbao-operator-system",
+		MetricsService:     "openbao-operator-controller-metrics-service",
+		ServiceAccount:     "openbao-operator-controller",
+		BindingName:        "openbao-operator-metrics-binding",
 	}
 }
 
-func (o options) withCapture(
-	runs int,
-	scenarios []string,
-	baselinePath, thresholdsPath string,
-	p95Mult, maxMult float64,
-) options {
-	o.Mode = "capture"
-	o.Runs = runs
-	o.ScenarioNames = scenarios
-	o.BaselinePath = baselinePath
-	o.ThresholdsPath = thresholdsPath
-	o.P95Multiplier = p95Mult
-	o.MaxMultiplier = maxMult
-	return o
+func bindExecutionFlags(fs *flag.FlagSet, opts *options) {
+	bindCommonFlags(fs, opts)
+	fs.IntVar(&opts.SamplesOverride, "samples", 0, "measured samples per scenario; 0 uses manifest defaults")
+	fs.IntVar(&opts.WarmupsOverride, "warmups", -1, "warmup samples per scenario; -1 uses manifest defaults")
+	fs.DurationVar(&opts.ScenarioTimeout, "timeout", 0, "per-sample timeout; 0 uses manifest defaults")
+	fs.DurationVar(&opts.ScenarioTimeout, "scenario-timeout", 0, "alias for --timeout")
+	fs.DurationVar(&opts.ClusterTimeout, "cluster-timeout", opts.ClusterTimeout, "kind setup timeout")
+	fs.DurationVar(&opts.CleanupTimeout, "cleanup-timeout", opts.CleanupTimeout, "kind cleanup timeout")
+	fs.BoolVar(&opts.KeepOnFailure, "keep-on-failure", false, "keep kind clusters if a sample fails")
+	fs.BoolVar(
+		&opts.ContinueOnSampleError,
+		"continue-on-sample-error",
+		false,
+		"continue running remaining samples after a scenario or measurement error",
+	)
+	fs.BoolVar(&opts.SkipImageBuild, "skip-image-build", false, "skip image build when supported by the executor")
+	fs.StringVar(&opts.OperatorImage, "operator-image", opts.OperatorImage, "operator image for native scenarios")
+	fs.StringVar(&opts.ConfigInitImage, "config-init-image", opts.ConfigInitImage, "config-init image")
+	fs.StringVar(
+		&opts.BackupExecutorImage,
+		"backup-executor-image",
+		opts.BackupExecutorImage,
+		"backup and restore executor image",
+	)
+	fs.StringVar(
+		&opts.UpgradeExecutorImage,
+		"upgrade-executor-image",
+		opts.UpgradeExecutorImage,
+		"upgrade executor image",
+	)
+	fs.StringVar(&opts.OpenBaoVersion, "openbao-version", opts.OpenBaoVersion, "OpenBao version")
+	fs.StringVar(&opts.OpenBaoImage, "openbao-image", opts.OpenBaoImage, "OpenBao image")
+	fs.StringVar(
+		&opts.UpgradeFromVersion,
+		"upgrade-from-version",
+		opts.UpgradeFromVersion,
+		"rolling upgrade source OpenBao version",
+	)
+	fs.StringVar(&opts.UpgradeFromImage, "upgrade-from-image", opts.UpgradeFromImage, "rolling upgrade source image")
+	fs.StringVar(
+		&opts.UpgradeToVersion,
+		"upgrade-to-version",
+		opts.UpgradeToVersion,
+		"rolling upgrade target OpenBao version",
+	)
+	fs.StringVar(&opts.UpgradeToImage, "upgrade-to-image", opts.UpgradeToImage, "rolling upgrade target image")
+	fs.StringVar(&opts.APIServerCIDR, "api-server-cidr", opts.APIServerCIDR, "Kubernetes API service CIDR")
+	fs.StringVar(&opts.StorageClass, "storage-class", opts.StorageClass, "storage class for native scenario PVCs")
+	fs.IntVar(
+		&opts.TenantChurnCount,
+		"tenant-churn-count",
+		opts.TenantChurnCount,
+		"tenant namespaces to create in the tenant-churn scenario",
+	)
+	fs.StringVar(
+		&opts.ExistingClusterContext,
+		"existing-cluster-context",
+		"",
+		"explicit kubeconfig context for existing-cluster mode",
+	)
+	fs.StringVar(&opts.Namespace, "namespace", "", "namespace used for existing-cluster mode")
+	fs.StringVar(&opts.NamespacePrefix, "namespace-prefix", "", "namespace prefix used for existing-cluster mode")
+	fs.StringVar(&opts.KindBin, "kind", opts.KindBin, "path to kind binary")
+	fs.StringVar(&opts.MakeBin, "make", opts.MakeBin, "path to make binary")
+	fs.StringVar(&opts.NodeImage, "node-image", opts.NodeImage, "kind node image")
+}
+
+func bindCommonFlags(fs *flag.FlagSet, opts *options) {
+	fs.StringVar(&opts.ScenarioPath, "scenario-manifest", opts.ScenarioPath, "v2 scenario manifest YAML path")
+	fs.StringVar(&opts.ArtifactDir, "artifact-dir", opts.ArtifactDir, "perf artifact directory")
+	fs.StringVar(&opts.RunID, "run-id", "", "run identifier recorded in reports and artifacts")
+	fs.StringVar(&opts.EnvironmentID, "environment", opts.EnvironmentID, "baseline environment id")
+	fs.Func("scenario", "scenario to run; may be provided multiple times", func(value string) error {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("scenario must not be empty")
+		}
+		opts.ScenarioNames = append(opts.ScenarioNames, strings.TrimSpace(value))
+		return nil
+	})
+	fs.Func("scenarios", "comma-separated scenarios from the scenario manifest, or all", func(value string) error {
+		selected, err := parseScenarioSelection(value)
+		if err != nil {
+			return err
+		}
+		opts.ScenarioNames = selected
+		return nil
+	})
+}
+
+func finalizeOptions(opts options) (options, error) {
+	if opts.SamplesOverride < 0 {
+		return options{}, fmt.Errorf("samples must be >= 0")
+	}
+	if opts.WarmupsOverride < -1 {
+		return options{}, fmt.Errorf("warmups must be >= -1")
+	}
+	if strings.TrimSpace(opts.ArtifactDir) == "" {
+		return options{}, fmt.Errorf("artifact-dir must not be empty")
+	}
+	if strings.TrimSpace(opts.EnvironmentID) == "" {
+		return options{}, fmt.Errorf("environment must not be empty")
+	}
+	if opts.TenantChurnCount < 1 {
+		return options{}, fmt.Errorf("tenant-churn-count must be >= 1")
+	}
+	return opts, nil
 }
 
 func parseScenarioSelection(input string) ([]string, error) {
@@ -217,13 +296,22 @@ func parseScenarioSelection(input string) ([]string, error) {
 }
 
 func printUsage() {
-	fmt.Fprintln(os.Stderr, "usage: perfcheck <capture|verify> [flags]")
+	fmt.Fprintln(os.Stderr, "usage: perfcheck <capture|verify|report> [flags]")
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "capture: run scenarios and write baseline + thresholds")
-	fmt.Fprintln(os.Stderr, "verify: run scenarios and fail if thresholds are exceeded")
+	fmt.Fprintln(os.Stderr, "capture: run scenarios and write v2 sample artifacts plus distribution baselines")
+	fmt.Fprintln(os.Stderr, "verify: run scenarios, write v2 artifacts, and compare with v2 baselines")
+	fmt.Fprintln(os.Stderr, "report: summarize existing v2 sample artifacts")
 }
 
 func exitWithError(err error) {
 	fmt.Fprintf(os.Stderr, "perfcheck: %v\n", err)
 	os.Exit(1)
+}
+
+func envOrDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }
