@@ -58,6 +58,7 @@ const (
 	metricOpenBaoAPIRequests                   = "openbao_api_requests"
 	metricOpenBaoAuthLogins                    = "openbao_auth_logins"
 	metricOpenBaoAuthLoginErrors               = "openbao_auth_login_errors"
+	metricOpenBaoAuthInlineRequests            = "openbao_auth_inline_requests"
 	metricOpenBaoClientRetries                 = "openbao_api_retry_total"
 	metricOpenBaoAuthCacheHits                 = "openbao_auth_cache_hits_total"
 	metricOpenBaoAuthCacheMisses               = "openbao_auth_cache_misses_total"
@@ -100,6 +101,7 @@ var diagnosticMetricKeys = []string{
 	metricOpenBaoAPIRequests,
 	metricOpenBaoAuthLogins,
 	metricOpenBaoAuthLoginErrors,
+	metricOpenBaoAuthInlineRequests,
 	metricOpenBaoClientRetries,
 	metricOpenBaoAuthCacheHits,
 	metricOpenBaoAuthCacheMisses,

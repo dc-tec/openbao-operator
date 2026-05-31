@@ -90,6 +90,7 @@ func (a inlineJWTAuthorizer) authorize(req *http.Request) error {
 	req.Header.Set(headerInlineAuthOperation, inlineAuthOperationPut)
 	req.Header.Set(headerInlineAuthParameterRole, roleHeader)
 	req.Header.Set(headerInlineAuthParameterJWT, jwtHeader)
+	recordAuthInlineRequest(a.role)
 	return nil
 }
 

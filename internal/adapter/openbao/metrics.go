@@ -49,6 +49,15 @@ var (
 		},
 		[]string{"reason"},
 	)
+	clientAuthInlineRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "openbao",
+			Subsystem: "client",
+			Name:      "auth_inline_requests_total",
+			Help:      "Total number of OpenBao API requests sent with inline JWT auth headers.",
+		},
+		[]string{"role"},
+	)
 	clientAuthCacheHitsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "openbao",
@@ -75,9 +84,17 @@ func init() {
 		clientRequestDurationSeconds,
 		clientAuthLoginsTotal,
 		clientAuthLoginErrorsTotal,
+		clientAuthInlineRequestsTotal,
 		clientAuthCacheHitsTotal,
 		clientAuthCacheMissesTotal,
 	)
+	clientRequestsTotal.WithLabelValues("UNKNOWN", metricLabelUnknown, metricLabelUnknown, metricLabelUnknown).Add(0)
+	clientAuthLoginsTotal.WithLabelValues("success").Add(0)
+	clientAuthLoginsTotal.WithLabelValues("error").Add(0)
+	clientAuthLoginErrorsTotal.WithLabelValues(metricLabelUnknown).Add(0)
+	clientAuthInlineRequestsTotal.WithLabelValues(metricLabelUnknown).Add(0)
+	clientAuthCacheHitsTotal.WithLabelValues(metricLabelUnknown).Add(0)
+	clientAuthCacheMissesTotal.WithLabelValues(metricLabelUnknown).Add(0)
 }
 
 func recordClientRequest(req *http.Request, statusCode int, result string, duration time.Duration) {
@@ -116,6 +133,10 @@ func recordAuthLoginError(reason string) {
 	}
 	clientAuthLoginsTotal.WithLabelValues("error").Inc()
 	clientAuthLoginErrorsTotal.WithLabelValues(reason).Inc()
+}
+
+func recordAuthInlineRequest(role string) {
+	clientAuthInlineRequestsTotal.WithLabelValues(metricRole(role)).Inc()
 }
 
 func recordAuthCacheHit(role string) {

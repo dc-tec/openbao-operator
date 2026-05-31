@@ -27,6 +27,10 @@ scenarios:
       - workqueue_retries_delta
       - kubernetes_writes
       - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
       - openbao_api_requests
       - openbao_workload_request_count
       - openbao_workload_request_avg_seconds
@@ -66,6 +70,12 @@ scenarios:
       - reconcile_error_ratio
       - workqueue_retries_delta
       - kubernetes_writes
+      - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
+      - openbao_api_requests
     phases:
       - name: sample_started
       - name: tenant_churn_started
@@ -86,8 +96,11 @@ scenarios:
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
       - workqueue_retries_delta
-      - kubernetes_writes
       - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
       - openbao_api_requests
     phases:
       - name: sample_started
@@ -105,8 +118,11 @@ scenarios:
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
       - workqueue_retries_delta
-      - kubernetes_writes
       - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
       - openbao_api_requests
     phases:
       - name: sample_started
@@ -135,6 +151,10 @@ scenarios:
       - workqueue_retries_delta
       - kubernetes_writes
       - openbao_auth_logins
+      - openbao_auth_login_errors
+      - openbao_auth_inline_requests
+      - openbao_auth_cache_hits_total
+      - openbao_auth_cache_misses_total
       - openbao_api_requests
       - openbao_workload_request_count
       - openbao_workload_request_avg_seconds

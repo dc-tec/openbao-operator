@@ -206,6 +206,26 @@ measurements:
     compare: upper_sample
     allowedRelativeRegression: 0.50
     minimumSamples: 3
+  openbao_auth_inline_requests:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
+  openbao_auth_cache_hits_total:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
+  openbao_auth_cache_misses_total:
+    role: diagnostic
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.50
+    minimumSamples: 3
   openbao_api_requests:
     role: diagnostic
     policy: upper_bound

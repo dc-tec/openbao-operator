@@ -97,3 +97,21 @@ func TestClient_DoRequestRecordsRequestMetric(t *testing.T) {
 		t.Fatalf("request counter delta = %v, want 1", after-before)
 	}
 }
+
+func TestInlineJWTAuthorizerRecordsAuthPressureMetric(t *testing.T) {
+	auth, err := newInlineJWTAuthorizer("operator-role", "jwt-token")
+	if err != nil {
+		t.Fatalf("newInlineJWTAuthorizer() error: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/v1/sys/leader", nil)
+
+	counter := clientAuthInlineRequestsTotal.WithLabelValues("operator-role")
+	before := testutil.ToFloat64(counter)
+	if err := auth.authorize(req); err != nil {
+		t.Fatalf("authorize() error: %v", err)
+	}
+	after := testutil.ToFloat64(counter)
+	if after != before+1 {
+		t.Fatalf("inline auth counter delta = %v, want 1", after-before)
+	}
+}

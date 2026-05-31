@@ -183,6 +183,13 @@ func computeDiagnosticMeasurements(before, after metricsSnapshot) map[string]flo
 	addCounterDiagnostic(metrics, before, after, metricOpenBaoAPIRequests, "openbao_client_requests_total")
 	addCounterDiagnostic(metrics, before, after, metricOpenBaoAuthLogins, "openbao_client_auth_logins_total")
 	addCounterDiagnostic(metrics, before, after, metricOpenBaoAuthLoginErrors, "openbao_client_auth_login_errors_total")
+	addCounterDiagnostic(
+		metrics,
+		before,
+		after,
+		metricOpenBaoAuthInlineRequests,
+		"openbao_client_auth_inline_requests_total",
+	)
 	addCounterDiagnostic(metrics, before, after, metricOpenBaoClientRetries, "openbao_client_retries_total")
 	addCounterDiagnostic(metrics, before, after, metricOpenBaoAuthCacheHits, "openbao_client_auth_cache_hits_total")
 	addCounterDiagnostic(metrics, before, after, metricOpenBaoAuthCacheMisses, "openbao_client_auth_cache_misses_total")
