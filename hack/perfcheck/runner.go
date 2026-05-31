@@ -355,7 +355,7 @@ func prepareScenarioSample(
 		return shouldCleanup, err
 	}
 	if scenario.Executor == executorNativeGo {
-		if err := prepareNativeKindCluster(opts, cluster); err != nil {
+		if err := prepareNativeKindCluster(opts, cluster, scenario); err != nil {
 			return shouldCleanup, err
 		}
 	}

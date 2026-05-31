@@ -130,6 +130,10 @@ func defaultOptions(mode string) options {
 		MakeBin:         "make",
 		OperatorImage:   envOrDefault("PERF_OPERATOR_IMAGE", "example.com/openbao-operator:0.0.1"),
 		ConfigInitImage: envOrDefault("PERF_CONFIG_INIT_IMAGE", "openbao-init:dev"),
+		BackupExecutorImage: envOrDefault(
+			"PERF_BACKUP_EXECUTOR_IMAGE",
+			"openbao-backup:dev",
+		),
 		UpgradeExecutorImage: envOrDefault(
 			"PERF_UPGRADE_EXECUTOR_IMAGE",
 			"openbao-upgrade:dev",
@@ -172,6 +176,12 @@ func bindExecutionFlags(fs *flag.FlagSet, opts *options) {
 	fs.BoolVar(&opts.SkipImageBuild, "skip-image-build", false, "skip image build when supported by the executor")
 	fs.StringVar(&opts.OperatorImage, "operator-image", opts.OperatorImage, "operator image for native scenarios")
 	fs.StringVar(&opts.ConfigInitImage, "config-init-image", opts.ConfigInitImage, "config-init image")
+	fs.StringVar(
+		&opts.BackupExecutorImage,
+		"backup-executor-image",
+		opts.BackupExecutorImage,
+		"backup and restore executor image",
+	)
 	fs.StringVar(
 		&opts.UpgradeExecutorImage,
 		"upgrade-executor-image",

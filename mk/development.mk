@@ -431,6 +431,7 @@ PERF_REPORT_FAIL_ON_FAILURES ?= false
 PERF_CONTINUE_ON_SAMPLE_ERROR ?= false
 PERF_OPERATOR_IMAGE ?= example.com/openbao-operator:0.0.1
 PERF_CONFIG_INIT_IMAGE ?= openbao-init:dev
+PERF_BACKUP_EXECUTOR_IMAGE ?= openbao-backup:dev
 PERF_UPGRADE_EXECUTOR_IMAGE ?= openbao-upgrade:dev
 PERF_OPENBAO_VERSION ?= 2.5.4
 PERF_OPENBAO_IMAGE ?= openbao/openbao:2.5.4
@@ -693,6 +694,7 @@ perf-v2-capture: ## Capture v2 performance samples and update per-scenario distr
 		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
 		--operator-image="$(PERF_OPERATOR_IMAGE)" \
 		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--backup-executor-image="$(PERF_BACKUP_EXECUTOR_IMAGE)" \
 		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
 		--openbao-version="$(PERF_OPENBAO_VERSION)" \
 		--openbao-image="$(PERF_OPENBAO_IMAGE)" \
@@ -724,6 +726,7 @@ perf-v2-verify: ## Run v2 performance verification against committed distributio
 		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
 		--operator-image="$(PERF_OPERATOR_IMAGE)" \
 		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--backup-executor-image="$(PERF_BACKUP_EXECUTOR_IMAGE)" \
 		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
 		--openbao-version="$(PERF_OPENBAO_VERSION)" \
 		--openbao-image="$(PERF_OPENBAO_IMAGE)" \
@@ -755,6 +758,7 @@ perf-v2-smoke: ## Run a lightweight v2 performance smoke gate (PR-focused).
 		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
 		--operator-image="$(PERF_OPERATOR_IMAGE)" \
 		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
+		--backup-executor-image="$(PERF_BACKUP_EXECUTOR_IMAGE)" \
 		--upgrade-executor-image="$(PERF_UPGRADE_EXECUTOR_IMAGE)" \
 		--openbao-version="$(PERF_OPENBAO_VERSION)" \
 		--openbao-image="$(PERF_OPENBAO_IMAGE)" \

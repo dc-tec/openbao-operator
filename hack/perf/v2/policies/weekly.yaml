@@ -95,13 +95,59 @@ measurements:
     severity: info
     compare: median
     minimumSamples: 1
-  backup_last_duration_seconds:
+  backup_total_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 30
+    minimumSamples: 3
+  backup_job_duration_seconds:
     role: primary
     policy: upper_bound
     severity: warn
     compare: upper_sample
     allowedRelativeRegression: 0.35
     allowedAbsoluteRegressionSeconds: 5
+    minimumSamples: 3
+  backup_request_to_job_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 15
+    minimumSamples: 3
+  backup_last_duration_seconds:
+    role: diagnostic
+    policy: informational
+    severity: info
+    compare: upper_sample
+    minimumSamples: 1
+  restore_total_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: median
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 60
+    minimumSamples: 3
+  restore_validation_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 20
+    minimumSamples: 3
+  restore_job_duration_seconds:
+    role: primary
+    policy: upper_bound
+    severity: warn
+    compare: upper_sample
+    allowedRelativeRegression: 0.35
+    allowedAbsoluteRegressionSeconds: 30
     minimumSamples: 3
   restore_duration_bucket_p95:
     role: diagnostic

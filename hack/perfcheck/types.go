@@ -49,7 +49,13 @@ const (
 	metricScenarioRunSeconds                   = "scenario_run_seconds"
 	metricReconcileDurationBucketP95           = "reconcile_duration_bucket_p95"
 	metricBackupLastDurationSeconds            = "backup_last_duration_seconds"
+	metricBackupTotalSeconds                   = "backup_total_seconds"
+	metricBackupRequestToJobSeconds            = "backup_request_to_job_seconds"
+	metricBackupJobDurationSeconds             = "backup_job_duration_seconds"
 	metricRestoreDurationBucketP95             = "restore_duration_bucket_p95"
+	metricRestoreTotalSeconds                  = "restore_total_seconds"
+	metricRestoreValidationSeconds             = "restore_validation_seconds"
+	metricRestoreJobDurationSeconds            = "restore_job_duration_seconds"
 	metricUpgradeDurationBucketP95             = "upgrade_duration_bucket_p95"
 	metricUpgradePodDurationBucketP95          = "upgrade_pod_duration_bucket_p95"
 	metricWorkqueueRetriesDelta                = "workqueue_retries_delta"
@@ -293,6 +299,7 @@ type options struct {
 	SkipImageBuild         bool
 	OperatorImage          string
 	ConfigInitImage        string
+	BackupExecutorImage    string
 	UpgradeExecutorImage   string
 	OpenBaoVersion         string
 	OpenBaoImage           string

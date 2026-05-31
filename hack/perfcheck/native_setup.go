@@ -12,7 +12,12 @@ import (
 const certManagerManifestURL = "https://github.com/cert-manager/cert-manager/releases/download/" +
 	"v1.19.1/cert-manager.yaml"
 
-func prepareNativeKindCluster(opts options, cluster string) error {
+type nativeImageBuild struct {
+	target string
+	image  string
+}
+
+func prepareNativeKindCluster(opts options, cluster string, scenario scenarioSpec) error {
 	timeout := opts.ClusterTimeout
 	if timeout <= 0 {
 		timeout = 20 * time.Minute
@@ -26,7 +31,7 @@ func prepareNativeKindCluster(opts options, cluster string) error {
 	if err := waitForCoreDNS(setupCtx, opts, cluster); err != nil {
 		return err
 	}
-	if err := prepareNativeImages(setupCtx, opts, cluster); err != nil {
+	if err := prepareNativeImages(setupCtx, opts, cluster, scenario); err != nil {
 		return err
 	}
 	if err := installCertManagerIfNeeded(setupCtx, opts, cluster); err != nil {
@@ -69,17 +74,9 @@ func prepareNativeExistingCluster(opts options, cluster string) error {
 	return nil
 }
 
-func prepareNativeImages(ctx context.Context, opts options, cluster string) error {
+func prepareNativeImages(ctx context.Context, opts options, cluster string, scenario scenarioSpec) error {
 	if !opts.SkipImageBuild {
-		builds := []struct {
-			target string
-			image  string
-		}{
-			{target: "docker-build", image: opts.OperatorImage},
-			{target: "docker-build-init", image: opts.ConfigInitImage},
-			{target: "docker-build-upgrade", image: opts.UpgradeExecutorImage},
-		}
-		for _, build := range builds {
+		for _, build := range nativeImageBuilds(opts, scenario) {
 			if _, err := runCommand(
 				ctx,
 				nativeCommandEnv(opts, cluster),
@@ -92,14 +89,7 @@ func prepareNativeImages(ctx context.Context, opts options, cluster string) erro
 		}
 	}
 
-	images := []string{
-		opts.OperatorImage,
-		opts.ConfigInitImage,
-		opts.UpgradeExecutorImage,
-		opts.OpenBaoImage,
-		opts.UpgradeFromImage,
-		opts.UpgradeToImage,
-	}
+	images := nativeImages(opts, scenario)
 	seen := make(map[string]struct{}, len(images))
 	for _, image := range images {
 		image = strings.TrimSpace(image)
@@ -118,6 +108,35 @@ func prepareNativeImages(ctx context.Context, opts options, cluster string) erro
 		}
 	}
 	return nil
+}
+
+func nativeImageBuilds(opts options, scenario scenarioSpec) []nativeImageBuild {
+	builds := []nativeImageBuild{
+		{target: "docker-build", image: opts.OperatorImage},
+		{target: "docker-build-init", image: opts.ConfigInitImage},
+	}
+	switch scenario.Name {
+	case "backup", "restore":
+		builds = append(builds, nativeImageBuild{target: "docker-build-backup", image: opts.BackupExecutorImage})
+	case "rolling-upgrade":
+		builds = append(builds, nativeImageBuild{target: "docker-build-upgrade", image: opts.UpgradeExecutorImage})
+	}
+	return builds
+}
+
+func nativeImages(opts options, scenario scenarioSpec) []string {
+	images := []string{
+		opts.OperatorImage,
+		opts.ConfigInitImage,
+		opts.OpenBaoImage,
+	}
+	switch scenario.Name {
+	case "backup", "restore":
+		images = append(images, opts.BackupExecutorImage)
+	case "rolling-upgrade":
+		images = append(images, opts.UpgradeExecutorImage, opts.UpgradeFromImage, opts.UpgradeToImage)
+	}
+	return images
 }
 
 func ensureLocalDockerImage(ctx context.Context, image string) error {

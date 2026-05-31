@@ -17,6 +17,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -74,6 +75,7 @@ type Config struct {
 	UpgradeFromImage       string
 	UpgradeToVersion       string
 	UpgradeToImage         string
+	BackupExecutorImage    string
 	UpgradeExecutorImage   string
 	ConfigInitImage        string
 	APIServerCIDR          string
@@ -146,6 +148,10 @@ func RunNativeScenario(
 		runResult, err = native.runLifecycleConvergence(ctx)
 	case "tenant-churn":
 		runResult, err = native.runTenantChurn(ctx)
+	case "backup":
+		runResult, err = native.runBackup(ctx)
+	case "restore":
+		runResult, err = native.runRestore(ctx)
 	case "rolling-upgrade":
 		runResult, err = native.runRollingUpgrade(ctx)
 	default:
@@ -214,6 +220,9 @@ func nativeKubernetesClient(opts Config, cluster string) (*rest.Config, client.C
 	}
 	if err := batchv1.AddToScheme(scheme); err != nil {
 		return nil, nil, fmt.Errorf("add batch scheme: %w", err)
+	}
+	if err := networkingv1.AddToScheme(scheme); err != nil {
+		return nil, nil, fmt.Errorf("add networking scheme: %w", err)
 	}
 	c, err := client.New(cfg, client.Options{Scheme: scheme})
 	if err != nil {
@@ -879,6 +888,33 @@ func (n *nativeScenarioContext) cleanup(ctx context.Context) {
 		ObjectMeta: metav1.ObjectMeta{Name: n.namespace, Namespace: n.opts.OperatorNS},
 	}
 	_ = n.client.Delete(ctx, tenant)
+	restoreList := &openbaov1alpha1.OpenBaoRestoreList{}
+	if err := n.client.List(ctx, restoreList,
+		client.InNamespace(n.namespace),
+		client.MatchingLabels{perfRunIDLabel: n.runID},
+	); err == nil {
+		for i := range restoreList.Items {
+			_ = n.client.Delete(ctx, &restoreList.Items[i])
+		}
+	}
+	secretList := &corev1.SecretList{}
+	if err := n.client.List(ctx, secretList,
+		client.InNamespace(n.namespace),
+		client.MatchingLabels{perfRunIDLabel: n.runID},
+	); err == nil {
+		for i := range secretList.Items {
+			_ = n.client.Delete(ctx, &secretList.Items[i])
+		}
+	}
+	networkPolicyList := &networkingv1.NetworkPolicyList{}
+	if err := n.client.List(ctx, networkPolicyList,
+		client.InNamespace(n.namespace),
+		client.MatchingLabels{perfRunIDLabel: n.runID},
+	); err == nil {
+		for i := range networkPolicyList.Items {
+			_ = n.client.Delete(ctx, &networkPolicyList.Items[i])
+		}
+	}
 	deletedNamespaces := make(map[string]struct{}, len(n.createdNamespaces)+1)
 	for _, namespace := range n.createdNamespaces {
 		if _, exists := deletedNamespaces[namespace]; exists {

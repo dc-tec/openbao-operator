@@ -36,6 +36,7 @@ func nativePerfConfig(opts options) testperf.Config {
 		UpgradeFromImage:       opts.UpgradeFromImage,
 		UpgradeToVersion:       opts.UpgradeToVersion,
 		UpgradeToImage:         opts.UpgradeToImage,
+		BackupExecutorImage:    opts.BackupExecutorImage,
 		UpgradeExecutorImage:   opts.UpgradeExecutorImage,
 		ConfigInitImage:        opts.ConfigInitImage,
 		APIServerCIDR:          opts.APIServerCIDR,

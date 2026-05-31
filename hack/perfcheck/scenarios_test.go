@@ -40,6 +40,34 @@ func TestLoadScenarioManifest(t *testing.T) {
 	if !containsString(tenantChurn.Primary, metricTenantChurnCompleteSeconds) {
 		t.Fatalf("tenant-churn should include %s as primary measurement", metricTenantChurnCompleteSeconds)
 	}
+
+	backup, ok := byName["backup"]
+	if !ok {
+		t.Fatalf("backup scenario missing")
+	}
+	if backup.Executor != executorNativeGo {
+		t.Fatalf("backup executor = %q, want %q", backup.Executor, executorNativeGo)
+	}
+	if backup.LabelFilter != "" {
+		t.Fatalf("native backup should not require a Ginkgo label filter: %q", backup.LabelFilter)
+	}
+	if !containsString(backup.Primary, metricBackupTotalSeconds) {
+		t.Fatalf("backup should include %s as primary measurement", metricBackupTotalSeconds)
+	}
+
+	restore, ok := byName["restore"]
+	if !ok {
+		t.Fatalf("restore scenario missing")
+	}
+	if restore.Executor != executorNativeGo {
+		t.Fatalf("restore executor = %q, want %q", restore.Executor, executorNativeGo)
+	}
+	if restore.LabelFilter != "" {
+		t.Fatalf("native restore should not require a Ginkgo label filter: %q", restore.LabelFilter)
+	}
+	if !containsString(restore.Primary, metricRestoreTotalSeconds) {
+		t.Fatalf("restore should include %s as primary measurement", metricRestoreTotalSeconds)
+	}
 }
 
 func TestSelectedScenariosRejectsUnknownManifestScenario(t *testing.T) {

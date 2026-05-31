@@ -84,18 +84,24 @@ scenarios:
       - name: scenario_completed
 
   - name: backup
-    description: Backup orchestration signal, split from restore in the v2 contract.
+    description: Native S3 backup orchestration with explicit operator-owned phases.
     labels: [backup, disaster-recovery]
-    executor: e2e-ginkgo
-    labelFilter: "case:dr-s3-restorable-backup"
+    executor: native-go
+    existingCluster:
+      enabled: true
     primaryMeasurements:
-      - backup_last_duration_seconds
+      - backup_total_seconds
+      - backup_job_duration_seconds
+      - backup_request_to_job_seconds
     diagnosticMeasurements:
       - scenario_run_seconds
       - sample_total_seconds
+      - backup_last_duration_seconds
+      - observed_kubernetes_writes
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
       - workqueue_retries_delta
+      - kubernetes_writes
       - openbao_auth_logins
       - openbao_auth_login_errors
       - openbao_auth_inline_requests
@@ -104,20 +110,35 @@ scenarios:
       - openbao_api_requests
     phases:
       - name: sample_started
+      - name: storage_ready
+      - name: cluster_created
+      - name: cluster_available
+      - name: backup_configuration_ready
+      - name: backup_requested
+      - name: backup_job_created
+      - name: backup_job_succeeded
+      - name: backup_status_recorded
       - name: scenario_completed
 
   - name: restore
-    description: Restore orchestration signal, split from backup in the v2 contract.
+    description: Native S3 restore orchestration using a per-sample backup fixture and explicit restore phases.
     labels: [restore, disaster-recovery]
-    executor: e2e-ginkgo
-    labelFilter: "case:dr-s3-restorable-backup || case:dr-s3-restore-cr"
+    executor: native-go
+    existingCluster:
+      enabled: true
+    primaryMeasurements:
+      - restore_total_seconds
+      - restore_validation_seconds
+      - restore_job_duration_seconds
     diagnosticMeasurements:
       - scenario_run_seconds
       - sample_total_seconds
       - restore_duration_bucket_p95
+      - observed_kubernetes_writes
       - reconcile_duration_bucket_p95
       - reconcile_error_ratio
       - workqueue_retries_delta
+      - kubernetes_writes
       - openbao_auth_logins
       - openbao_auth_login_errors
       - openbao_auth_inline_requests
@@ -126,6 +147,20 @@ scenarios:
       - openbao_api_requests
     phases:
       - name: sample_started
+      - name: storage_ready
+      - name: cluster_created
+      - name: cluster_available
+      - name: backup_configuration_ready
+      - name: restore_fixture_backup_requested
+      - name: restore_fixture_backup_job_created
+      - name: restore_fixture_backup_job_succeeded
+      - name: restore_fixture_backup_status_recorded
+      - name: restore_fixture_ready
+      - name: restore_requested
+      - name: restore_validation_ready
+      - name: restore_job_created
+      - name: restore_started
+      - name: restore_completed
       - name: scenario_completed
 
   - name: rolling-upgrade
