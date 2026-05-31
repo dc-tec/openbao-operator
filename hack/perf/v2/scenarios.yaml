@@ -87,7 +87,7 @@ scenarios:
     description: Backup orchestration signal, split from restore in the v2 contract.
     labels: [backup, disaster-recovery]
     executor: e2e-ginkgo
-    labelFilter: dr && backup && restore && !failure-injection
+    labelFilter: "case:dr-s3-restorable-backup"
     primaryMeasurements:
       - backup_last_duration_seconds
     diagnosticMeasurements:
@@ -110,7 +110,7 @@ scenarios:
     description: Restore orchestration signal, split from backup in the v2 contract.
     labels: [restore, disaster-recovery]
     executor: e2e-ginkgo
-    labelFilter: dr && backup && restore && !failure-injection
+    labelFilter: "case:dr-s3-restorable-backup || case:dr-s3-restore-cr"
     diagnosticMeasurements:
       - scenario_run_seconds
       - sample_total_seconds
