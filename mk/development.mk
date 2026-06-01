@@ -429,6 +429,7 @@ PERF_ENVIRONMENT ?= kind-v1.34.3
 PERF_PREVIOUS_SUMMARY ?=
 PERF_REPORT_FAIL_ON_FAILURES ?= false
 PERF_CONTINUE_ON_SAMPLE_ERROR ?= false
+PERF_MIN_SUCCESSFUL_SAMPLES ?= 0
 PERF_OPERATOR_IMAGE ?= example.com/openbao-operator:0.0.1
 PERF_CONFIG_INIT_IMAGE ?= openbao-init:dev
 PERF_BACKUP_EXECUTOR_IMAGE ?= openbao-backup:dev
@@ -692,6 +693,7 @@ perf-v2-capture: ## Capture v2 performance samples and update per-scenario distr
 		--environment="$(PERF_ENVIRONMENT)" \
 		--scenario-timeout="$(PERF_SCENARIO_TIMEOUT)" \
 		--continue-on-sample-error="$(PERF_CONTINUE_ON_SAMPLE_ERROR)" \
+		--minimum-successful-samples="$(PERF_MIN_SUCCESSFUL_SAMPLES)" \
 		--operator-image="$(PERF_OPERATOR_IMAGE)" \
 		--config-init-image="$(PERF_CONFIG_INIT_IMAGE)" \
 		--backup-executor-image="$(PERF_BACKUP_EXECUTOR_IMAGE)" \

@@ -194,15 +194,28 @@ func installCertManagerIfNeeded(ctx context.Context, opts options, cluster strin
 	}
 	if _, err := nativeKubectl(ctx, opts, cluster,
 		"wait",
+		"--for",
+		"condition=Established",
+		"crd/certificates.cert-manager.io",
+		"crd/issuers.cert-manager.io",
+		"--timeout",
+		"2m",
+	); err != nil {
+		return fmt.Errorf("wait for cert-manager CRDs: %w", err)
+	}
+	if _, err := nativeKubectl(ctx, opts, cluster,
+		"wait",
+		"deployment.apps/cert-manager",
+		"deployment.apps/cert-manager-cainjector",
 		"deployment.apps/cert-manager-webhook",
 		"--for",
 		"condition=Available",
 		"--namespace",
 		"cert-manager",
 		"--timeout",
-		"5m",
+		"10m",
 	); err != nil {
-		return fmt.Errorf("wait for cert-manager webhook: %w", err)
+		return fmt.Errorf("wait for cert-manager deployments: %w", err)
 	}
 	return nil
 }

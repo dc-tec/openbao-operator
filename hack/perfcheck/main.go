@@ -173,6 +173,12 @@ func bindExecutionFlags(fs *flag.FlagSet, opts *options) {
 		false,
 		"continue running remaining samples after a scenario or measurement error",
 	)
+	fs.IntVar(
+		&opts.MinimumSuccessfulSamples,
+		"minimum-successful-samples",
+		0,
+		"minimum passing measured samples required before writing a scenario baseline; 0 disables the guard",
+	)
 	fs.BoolVar(&opts.SkipImageBuild, "skip-image-build", false, "skip image build when supported by the executor")
 	fs.StringVar(&opts.OperatorImage, "operator-image", opts.OperatorImage, "operator image for native scenarios")
 	fs.StringVar(&opts.ConfigInitImage, "config-init-image", opts.ConfigInitImage, "config-init image")
@@ -262,6 +268,9 @@ func finalizeOptions(opts options) (options, error) {
 	}
 	if opts.TenantChurnCount < 1 {
 		return options{}, fmt.Errorf("tenant-churn-count must be >= 1")
+	}
+	if opts.MinimumSuccessfulSamples < 0 {
+		return options{}, fmt.Errorf("minimum-successful-samples must be >= 0")
 	}
 	return opts, nil
 }

@@ -47,10 +47,22 @@ func runCapture(opts options) error {
 		}
 	}
 
+	failedSamples := 0
 	for _, sample := range samples {
-		if sample.Status != sampleStatusPass && !sample.Warmup {
+		if sample.Status == sampleStatusPass || sample.Warmup {
+			continue
+		}
+		failedSamples++
+	}
+	if failedSamples > 0 {
+		if !opts.ContinueOnSampleError {
 			return fmt.Errorf("capture completed with scenario errors; inspect %s", opts.ArtifactDir)
 		}
+		fmt.Fprintf(
+			os.Stderr,
+			"warning: capture completed with %d failed measured samples; baselines use passing samples only\n",
+			failedSamples,
+		)
 	}
 	fmt.Printf("wrote v2 baselines under %s\n", opts.BaselineDir)
 	fmt.Printf("wrote v2 sample artifacts under %s\n", opts.ArtifactDir)
@@ -189,6 +201,9 @@ func executeScenarioSample(
 	if prepareErr != nil {
 		sample.Status = sampleStatusScenarioError
 		sample.Error = prepareErr.Error()
+		if err := collectKubernetesArtifacts(opts, scenarioDir, cluster, sample, ""); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: collecting Kubernetes setup artifacts failed: %v\n", err)
+		}
 		return finishAndWriteSample(opts, sample)
 	}
 	defer func() {
@@ -1080,6 +1095,8 @@ func collectKubernetesArtifacts(
 		args []string
 	}{
 		{"pods.json", append([]string{"get", "pods"}, scopeArgs...)},
+		{"deployments.json", append([]string{"get", "deployments"}, scopeArgs...)},
+		{"replicasets.json", append([]string{"get", "replicasets"}, scopeArgs...)},
 		{"jobs.json", append([]string{"get", "jobs"}, scopeArgs...)},
 		{"events.json", append([]string{"get", "events"}, scopeArgs...)},
 		{"statefulsets.json", append([]string{"get", "statefulsets"}, scopeArgs...)},

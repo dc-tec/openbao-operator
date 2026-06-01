@@ -50,6 +50,17 @@ func TestFinalizeOptionsRejectsInvalidTenantChurnCount(t *testing.T) {
 	}
 }
 
+func TestFinalizeOptionsRejectsInvalidMinimumSuccessfulSamples(t *testing.T) {
+	t.Parallel()
+
+	opts := defaultOptions("capture")
+	opts.MinimumSuccessfulSamples = -1
+
+	if _, err := finalizeOptions(opts); err == nil {
+		t.Fatalf("expected minimum-successful-samples validation error")
+	}
+}
+
 func TestDefaultRollingUpgradeSourceUsesPatchUpgrade(t *testing.T) {
 	t.Setenv("PERF_UPGRADE_FROM_VERSION", "")
 	t.Setenv("PERF_UPGRADE_FROM_IMAGE", "")
