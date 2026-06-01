@@ -21,6 +21,58 @@ func TestSummarizeValues(t *testing.T) {
 	}
 }
 
+func TestWriteScenarioBaselineRequiresMinimumSuccessfulSamples(t *testing.T) {
+	t.Parallel()
+
+	opts := defaultOptions("capture")
+	opts.BaselineDir = t.TempDir()
+	opts.MinimumSuccessfulSamples = 2
+	scenario := scenarioSpec{
+		Name:    "lifecycle-convergence",
+		Primary: []string{metricClusterAvailableSeconds},
+	}
+	samples := []sampleDocument{
+		{
+			Version:     versionV2,
+			Scenario:    scenario.Name,
+			Sample:      1,
+			Status:      sampleStatusPass,
+			Environment: runEnvironment{Commit: "abc123"},
+			Measurements: map[string]float64{
+				metricClusterAvailableSeconds: 30,
+			},
+		},
+		{
+			Version:      versionV2,
+			Scenario:     scenario.Name,
+			Sample:       2,
+			Status:       sampleStatusScenarioError,
+			Error:        "setup failed",
+			Measurements: map[string]float64{},
+		},
+	}
+
+	err := writeScenarioBaseline(opts, scenario, samples)
+	if err == nil {
+		t.Fatalf("expected minimum successful sample error")
+	}
+	if !strings.Contains(err.Error(), "produced 1 passing measured samples, need at least 2") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	opts.MinimumSuccessfulSamples = 1
+	if err := writeScenarioBaseline(opts, scenario, samples); err != nil {
+		t.Fatalf("write baseline with enough samples: %v", err)
+	}
+	doc, err := readScenarioBaseline(opts, scenario.Name)
+	if err != nil {
+		t.Fatalf("read baseline: %v", err)
+	}
+	if got := len(doc.Samples[metricClusterAvailableSeconds]); got != 1 {
+		t.Fatalf("baseline sample count = %d, want 1", got)
+	}
+}
+
 func TestCompareMeasurementsRequiresAbsoluteAndRelativeRegression(t *testing.T) {
 	current := map[string]measurementSummary{
 		metricSampleTotalSeconds: {Median: 125, UpperSample: 125, Min: 125, Max: 125, Count: 3},

@@ -23,6 +23,14 @@ on:
         description: Kind node image used for capture and verification.
         required: false
         default: kindest/node:v1.34.3
+      continue_on_sample_error:
+        description: Continue collecting remaining samples after a failed setup or scenario sample.
+        required: false
+        default: "true"
+      minimum_successful_samples:
+        description: Minimum passing measured samples required before writing a scenario baseline.
+        required: false
+        default: "3"
 
 permissions:
   contents: read
@@ -116,6 +124,9 @@ jobs:
         with:
           install-dir: bin/
 
+      - name: Remove checked-in scenario baseline
+        run: rm -rf "hack/perf/v2/baselines/${{ matrix.scenario }}"
+
       - name: Capture v2 baseline samples
         env:
           GOFLAGS: -mod=vendor
@@ -127,6 +138,8 @@ jobs:
           PERF_BASELINE_DIR: hack/perf/v2/baselines
           PERF_POLICY_FILE: hack/perf/v2/policies/weekly.yaml
           PERF_ARTIFACT_DIR: dist/perf
+          PERF_CONTINUE_ON_SAMPLE_ERROR: ${{ inputs.continue_on_sample_error }}
+          PERF_MIN_SUCCESSFUL_SAMPLES: ${{ inputs.minimum_successful_samples }}
         run: make perf-baseline
 
       - name: Render captured baseline report

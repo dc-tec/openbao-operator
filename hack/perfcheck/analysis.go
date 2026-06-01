@@ -604,6 +604,7 @@ func readRunSummary(path string) (runSummaryDocument, error) {
 func writeScenarioBaseline(opts options, scenario scenarioSpec, samples []sampleDocument) error {
 	values := make(map[string][]float64)
 	var environment runEnvironment
+	successfulSamples := 0
 	allowedMeasurements := scenarioMeasurementSet(scenario)
 	for _, sample := range samples {
 		if environment == (runEnvironment{}) {
@@ -612,6 +613,7 @@ func writeScenarioBaseline(opts options, scenario scenarioSpec, samples []sample
 		if sample.Warmup || sample.Status != sampleStatusPass {
 			continue
 		}
+		successfulSamples++
 		for key, value := range sample.Measurements {
 			if math.IsNaN(value) || math.IsInf(value, 0) {
 				continue
@@ -621,6 +623,17 @@ func writeScenarioBaseline(opts options, scenario scenarioSpec, samples []sample
 			}
 			values[key] = append(values[key], value)
 		}
+	}
+	if opts.MinimumSuccessfulSamples > 0 && successfulSamples < opts.MinimumSuccessfulSamples {
+		return fmt.Errorf(
+			"scenario %q produced %d passing measured samples, need at least %d",
+			scenario.Name,
+			successfulSamples,
+			opts.MinimumSuccessfulSamples,
+		)
+	}
+	if len(values) == 0 {
+		return fmt.Errorf("scenario %q produced no baseline measurements", scenario.Name)
 	}
 
 	summary := make(map[string]measurementSummary, len(values))
