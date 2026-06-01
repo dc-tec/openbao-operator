@@ -41,7 +41,7 @@ The current stable release line is intended for real deployments, but it remains
       emphasis: 'caution',
     },
     {
-      cells: ['v1.33', 'Not validated for the current release line', 'May work but is not release-gated for 0.2.0', 'Validate in staging before carrying this version into the current pre-GA line'],
+      cells: ['v1.33', 'Not validated for the current release line', 'May work but is not release-gated for the current line', 'Validate in staging before carrying this version into the current pre-GA line'],
       emphasis: 'caution',
     },
     {
