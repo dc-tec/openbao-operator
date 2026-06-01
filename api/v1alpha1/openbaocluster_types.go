@@ -703,8 +703,10 @@ type UpgradeConfig struct {
 	// The role must bind to the upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount),
 	// which is automatically created by the operator.
 	//
-	// If OIDC is enabled in SelfInit and this field is empty, a default role
-	// named "openbao-operator-upgrade" will be assumed/created.
+	// If OIDC is enabled during initial SelfInit bootstrap and this field is
+	// empty, a default role named "openbao-operator-upgrade" will be created.
+	// For already-initialized clusters, configure this role explicitly or keep
+	// the default role created during initial bootstrap.
 	//
 	// This is the supported authentication mechanism for built-in upgrade orchestration.
 	// +optional
@@ -713,9 +715,9 @@ type UpgradeConfig struct {
 	// token for future non-JWT upgrade authentication flows.
 	//
 	// Built-in rolling and blue/green upgrade orchestration does not support
-	// token-based authentication. Configure spec.upgrade.jwtAuthRole or enable
-	// spec.selfInit.oidc.enabled instead.
-	// +kubebuilder:validation:XValidation:rule="self == null",message="spec.upgrade.tokenSecretRef is not supported; configure spec.upgrade.jwtAuthRole or enable spec.selfInit.oidc.enabled"
+	// token-based authentication. Configure spec.upgrade.jwtAuthRole, or use the
+	// default role created during initial spec.selfInit.oidc bootstrap.
+	// +kubebuilder:validation:XValidation:rule="self == null",message="spec.upgrade.tokenSecretRef is not supported; configure spec.upgrade.jwtAuthRole or use the default role created during initial spec.selfInit.oidc bootstrap"
 	// +optional
 	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
 
@@ -2081,9 +2083,10 @@ type OpenBaoClusterSpec struct {
 	//
 	// Built-in upgrade executor Jobs authenticate with JWT auth using the
 	// upgrade ServiceAccount (<cluster-name>-upgrade-serviceaccount). If
-	// spec.selfInit.oidc.enabled is true and spec.upgrade.jwtAuthRole is empty,
-	// the operator assumes or bootstraps the default "openbao-operator-upgrade"
-	// role.
+	// spec.selfInit.oidc.enabled is true during initial SelfInit bootstrap and
+	// spec.upgrade.jwtAuthRole is empty, the operator creates the default
+	// "openbao-operator-upgrade" role. Already-initialized clusters must keep
+	// that role or configure spec.upgrade.jwtAuthRole explicitly.
 	//
 	// Pre-upgrade snapshots use spec.backup configuration and backup
 	// authentication rather than spec.upgrade credentials.

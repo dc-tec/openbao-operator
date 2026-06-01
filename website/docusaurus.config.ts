@@ -13,6 +13,7 @@ const docsPluginDefaultExclude = [
   '**/__tests__/**',
 ];
 const releaseLineVersionLabels = {
+  '0.3.0': '0.3.x',
   '0.2.0': '0.2.x',
   '0.1.0': '0.1.x',
 } as const;
