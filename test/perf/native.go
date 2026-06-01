@@ -31,6 +31,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	platformsemver "github.com/dc-tec/openbao-operator/internal/platform/semver"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -701,26 +702,34 @@ func (n *nativeScenarioContext) buildCluster(
 			Network: &openbaov1alpha1.NetworkConfig{
 				APIServerCIDR: n.opts.APIServerCIDR,
 			},
-			Observability:  n.workloadObservability(),
+			Observability:  n.workloadObservability(version),
 			DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 		},
 	}
 }
 
-func (n *nativeScenarioContext) workloadObservability() *openbaov1alpha1.ObservabilityConfig {
+func (n *nativeScenarioContext) workloadObservability(version string) *openbaov1alpha1.ObservabilityConfig {
 	if n.opts.ExistingClusterContext != "" {
 		return nil
 	}
-	return &openbaov1alpha1.ObservabilityConfig{
-		Metrics: &openbaov1alpha1.MetricsConfig{
-			Enabled:       true,
-			ScrapeProfile: "Active",
-			MetricsOnlyListener: &openbaov1alpha1.MetricsOnlyListenerConfig{
-				Enabled:                      boolPtr(true),
-				UnauthenticatedMetricsAccess: boolPtr(true),
-			},
-		},
+	metrics := &openbaov1alpha1.MetricsConfig{
+		Enabled:       true,
+		ScrapeProfile: "Active",
 	}
+	if metricsOnlyListenerSupported(version) {
+		metrics.MetricsOnlyListener = &openbaov1alpha1.MetricsOnlyListenerConfig{
+			Enabled:                      boolPtr(true),
+			UnauthenticatedMetricsAccess: boolPtr(true),
+		}
+	}
+	return &openbaov1alpha1.ObservabilityConfig{
+		Metrics: metrics,
+	}
+}
+
+func metricsOnlyListenerSupported(version string) bool {
+	ok, err := platformsemver.AtLeast(version, 2, 5, 0)
+	return err == nil && ok
 }
 
 func boolPtr(value bool) *bool {

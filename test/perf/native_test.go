@@ -76,6 +76,89 @@ func TestNativeSelfInitRequestsUseJSONPayload(t *testing.T) {
 	}
 }
 
+func TestWorkloadObservabilityMetricsOnlyListenerIsVersionAware(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		version         string
+		existingContext string
+		wantConfig      bool
+		wantListener    bool
+	}{
+		{
+			name:         "pre 2.5 omits metrics only listener",
+			version:      "2.4.4",
+			wantConfig:   true,
+			wantListener: false,
+		},
+		{
+			name:         "2.5 enables metrics only listener",
+			version:      "2.5.0",
+			wantConfig:   true,
+			wantListener: true,
+		},
+		{
+			name:         "patch upgrade source keeps metrics only listener",
+			version:      "2.5.3",
+			wantConfig:   true,
+			wantListener: true,
+		},
+		{
+			name:         "invalid version omits metrics only listener",
+			version:      "custom",
+			wantConfig:   true,
+			wantListener: false,
+		},
+		{
+			name:            "existing cluster leaves observability unmanaged",
+			version:         "2.5.4",
+			existingContext: "kind-existing",
+			wantConfig:      false,
+			wantListener:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			native := &nativeScenarioContext{
+				opts: Config{ExistingClusterContext: tt.existingContext},
+			}
+			got := native.workloadObservability(tt.version)
+			if !tt.wantConfig {
+				if got != nil {
+					t.Fatalf("workloadObservability(%q) = %#v, want nil", tt.version, got)
+				}
+				return
+			}
+			if got == nil || got.Metrics == nil {
+				t.Fatalf("workloadObservability(%q) missing metrics config: %#v", tt.version, got)
+			}
+			if got.Metrics.Enabled != true {
+				t.Fatalf("metrics enabled = %v, want true", got.Metrics.Enabled)
+			}
+			if got.Metrics.ScrapeProfile != "Active" {
+				t.Fatalf("scrape profile = %q, want Active", got.Metrics.ScrapeProfile)
+			}
+			listener := got.Metrics.MetricsOnlyListener
+			if !tt.wantListener {
+				if listener != nil {
+					t.Fatalf("metrics only listener = %#v, want nil", listener)
+				}
+				return
+			}
+			if listener == nil || listener.Enabled == nil || !*listener.Enabled {
+				t.Fatalf("metrics only listener not enabled: %#v", listener)
+			}
+			if listener.UnauthenticatedMetricsAccess == nil || !*listener.UnauthenticatedMetricsAccess {
+				t.Fatalf("unauthenticated metrics access not enabled: %#v", listener)
+			}
+		})
+	}
+}
+
 func TestPhaseMeasurements(t *testing.T) {
 	t.Parallel()
 
