@@ -1,36 +1,438 @@
 {
   "version": "v2",
   "scenario": "rolling-upgrade",
-  "capturedAt": "2026-02-10T23:39:35Z",
-  "commit": "a6950686fd43dc5384590f7fd22abf410ad082a4",
+  "capturedAt": "2026-06-01T20:13:33.748768541Z",
+  "commit": "9882465fee9588ced8a1bd436707f989af96647f",
   "environment": {
-    "runner": "github-hosted",
-    "runnerImage": "ubuntu-24.04",
+    "runner": "kind",
+    "kindVersion": "kind v0.31.0 go1.25.5 linux/amd64",
     "nodeImage": "kindest/node:v1.34.3",
-    "commit": "a6950686fd43dc5384590f7fd22abf410ad082a4"
+    "goVersion": "go1.26.3",
+    "commit": "9882465fee9588ced8a1bd436707f989af96647f",
+    "context": "kind-perf-rolling-upgrade-1"
   },
   "samples": {
-    "sample_total_seconds": [228.001186877, 240.315696588, 225.780209586, 227.083988095, 229.549990944],
-    "upgrade_duration_bucket_p95": [60, 60, 60, 60, 60],
-    "upgrade_pod_duration_bucket_p95": [10, 10, 10, 10, 10],
-    "reconcile_duration_bucket_p95": [0.5, 0.5, 0.5, 0.5, 0.5],
-    "reconcile_error_ratio": [0.24175824175824176, 0.29914529914529914, 0.25773195876288657, 0.24731182795698925, 0.25274725274725274],
-    "workqueue_retries_delta": [87, 113, 93, 89, 87],
-    "kubernetes_writes": [0, 0, 0, 0, 0],
-    "openbao_auth_logins": [0, 0, 0, 0, 0],
-    "openbao_auth_login_errors": [0, 0, 0, 0, 0],
-    "openbao_api_requests": [0, 0, 0, 0, 0]
+    "kubernetes_writes": [
+      85,
+      81,
+      81,
+      87,
+      80
+    ],
+    "observed_kubernetes_writes": [
+      85,
+      81,
+      81,
+      87,
+      80
+    ],
+    "openbao_api_requests": [
+      171,
+      220,
+      173,
+      165,
+      212
+    ],
+    "openbao_auth_cache_hits_total": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_cache_misses_total": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_inline_requests": [
+      6,
+      6,
+      6,
+      6,
+      7
+    ],
+    "openbao_auth_login_errors": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_logins": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_workload_audit_request_failures": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_workload_audit_response_failures": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_workload_in_flight_requests_max": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_workload_login_request_avg_seconds": [
+      1.3197040259838104,
+      0.8214260339736938,
+      1.3973965346813202,
+      1.513912484049797,
+      0.9382169991731644
+    ],
+    "openbao_workload_login_request_count": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "openbao_workload_request_avg_seconds": [
+      5.233463525772095,
+      2.6857775449752808,
+      3.597060441970825,
+      4.125315546989441,
+      3.0872005224227905
+    ],
+    "openbao_workload_request_count": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "openbao_workload_token_check_avg_seconds": [
+      0.19520974881015718,
+      0.14086399716325104,
+      0.7790377645287663,
+      0.8775262451963499,
+      0.4246357618831098
+    ],
+    "openbao_workload_token_check_count": [
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "openbao_workload_token_creation_count": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "reconcile_duration_bucket_p95": [
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "reconcile_error_ratio": [
+      0.045454545454545456,
+      0.009708737864077669,
+      0.05357142857142857,
+      0.06422018348623854,
+      0
+    ],
+    "sample_total_seconds": [
+      277.507657133,
+      274.560454546,
+      262.848034616,
+      265.980623129,
+      279.58011654
+    ],
+    "scenario_run_seconds": [
+      196.075752827,
+      196.077114735,
+      184.075746729,
+      186.171697201,
+      200.074586105
+    ],
+    "upgrade_availability_probe_failures": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "upgrade_duration_bucket_p95": [
+      120,
+      120,
+      120,
+      120,
+      120
+    ],
+    "upgrade_kubernetes_writes": [
+      85,
+      81,
+      81,
+      87,
+      80
+    ],
+    "upgrade_pod_duration_bucket_p95": [
+      10,
+      10,
+      10,
+      10,
+      10
+    ],
+    "upgrade_pod_ready_seconds": [
+      95.361749481,
+      93.874294704,
+      89.104990516,
+      91.191518846,
+      98.718235274
+    ],
+    "upgrade_session_start_seconds": [
+      0,
+      0,
+      0.104990516,
+      0,
+      0
+    ],
+    "upgrade_total_seconds": [
+      102.034894645,
+      102.036334192,
+      96.034534703,
+      98.037055156,
+      106.033166859
+    ],
+    "workqueue_retries_delta": [
+      81,
+      71,
+      82,
+      78,
+      61
+    ]
   },
   "summary": {
-    "sample_total_seconds": {"median": 228.001186877, "upperSample": 240.315696588, "min": 225.780209586, "max": 240.315696588, "count": 5},
-    "upgrade_duration_bucket_p95": {"median": 60, "upperSample": 60, "min": 60, "max": 60, "count": 5},
-    "upgrade_pod_duration_bucket_p95": {"median": 10, "upperSample": 10, "min": 10, "max": 10, "count": 5},
-    "reconcile_duration_bucket_p95": {"median": 0.5, "upperSample": 0.5, "min": 0.5, "max": 0.5, "count": 5},
-    "reconcile_error_ratio": {"median": 0.25274725274725274, "upperSample": 0.29914529914529914, "min": 0.24175824175824176, "max": 0.29914529914529914, "count": 5},
-    "workqueue_retries_delta": {"median": 89, "upperSample": 113, "min": 87, "max": 113, "count": 5},
-    "kubernetes_writes": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
-    "openbao_auth_logins": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
-    "openbao_auth_login_errors": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
-    "openbao_api_requests": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5}
+    "kubernetes_writes": {
+      "median": 81,
+      "upperSample": 87,
+      "min": 80,
+      "max": 87,
+      "count": 5
+    },
+    "observed_kubernetes_writes": {
+      "median": 81,
+      "upperSample": 87,
+      "min": 80,
+      "max": 87,
+      "count": 5
+    },
+    "openbao_api_requests": {
+      "median": 173,
+      "upperSample": 220,
+      "min": 165,
+      "max": 220,
+      "count": 5
+    },
+    "openbao_auth_cache_hits_total": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_cache_misses_total": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_inline_requests": {
+      "median": 6,
+      "upperSample": 7,
+      "min": 6,
+      "max": 7,
+      "count": 5
+    },
+    "openbao_auth_login_errors": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_logins": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_workload_audit_request_failures": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_workload_audit_response_failures": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_workload_in_flight_requests_max": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_workload_login_request_avg_seconds": {
+      "median": 1.3197040259838104,
+      "upperSample": 1.513912484049797,
+      "min": 0.8214260339736938,
+      "max": 1.513912484049797,
+      "count": 5
+    },
+    "openbao_workload_login_request_count": {
+      "median": 2,
+      "upperSample": 2,
+      "min": 2,
+      "max": 2,
+      "count": 5
+    },
+    "openbao_workload_request_avg_seconds": {
+      "median": 3.597060441970825,
+      "upperSample": 5.233463525772095,
+      "min": 2.6857775449752808,
+      "max": 5.233463525772095,
+      "count": 5
+    },
+    "openbao_workload_request_count": {
+      "median": 2,
+      "upperSample": 2,
+      "min": 2,
+      "max": 2,
+      "count": 5
+    },
+    "openbao_workload_token_check_avg_seconds": {
+      "median": 0.4246357618831098,
+      "upperSample": 0.8775262451963499,
+      "min": 0.14086399716325104,
+      "max": 0.8775262451963499,
+      "count": 5
+    },
+    "openbao_workload_token_check_count": {
+      "median": 4,
+      "upperSample": 4,
+      "min": 4,
+      "max": 4,
+      "count": 5
+    },
+    "openbao_workload_token_creation_count": {
+      "median": 2,
+      "upperSample": 2,
+      "min": 2,
+      "max": 2,
+      "count": 5
+    },
+    "reconcile_duration_bucket_p95": {
+      "median": 0.5,
+      "upperSample": 0.5,
+      "min": 0.5,
+      "max": 0.5,
+      "count": 5
+    },
+    "reconcile_error_ratio": {
+      "median": 0.045454545454545456,
+      "upperSample": 0.06422018348623854,
+      "min": 0,
+      "max": 0.06422018348623854,
+      "count": 5
+    },
+    "sample_total_seconds": {
+      "median": 274.560454546,
+      "upperSample": 279.58011654,
+      "min": 262.848034616,
+      "max": 279.58011654,
+      "count": 5
+    },
+    "scenario_run_seconds": {
+      "median": 196.075752827,
+      "upperSample": 200.074586105,
+      "min": 184.075746729,
+      "max": 200.074586105,
+      "count": 5
+    },
+    "upgrade_availability_probe_failures": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "upgrade_duration_bucket_p95": {
+      "median": 120,
+      "upperSample": 120,
+      "min": 120,
+      "max": 120,
+      "count": 5
+    },
+    "upgrade_kubernetes_writes": {
+      "median": 81,
+      "upperSample": 87,
+      "min": 80,
+      "max": 87,
+      "count": 5
+    },
+    "upgrade_pod_duration_bucket_p95": {
+      "median": 10,
+      "upperSample": 10,
+      "min": 10,
+      "max": 10,
+      "count": 5
+    },
+    "upgrade_pod_ready_seconds": {
+      "median": 93.874294704,
+      "upperSample": 98.718235274,
+      "min": 89.104990516,
+      "max": 98.718235274,
+      "count": 5
+    },
+    "upgrade_session_start_seconds": {
+      "median": 0,
+      "upperSample": 0.104990516,
+      "min": 0,
+      "max": 0.104990516,
+      "count": 5
+    },
+    "upgrade_total_seconds": {
+      "median": 102.034894645,
+      "upperSample": 106.033166859,
+      "min": 96.034534703,
+      "max": 106.033166859,
+      "count": 5
+    },
+    "workqueue_retries_delta": {
+      "median": 78,
+      "upperSample": 82,
+      "min": 61,
+      "max": 82,
+      "count": 5
+    }
   }
 }
