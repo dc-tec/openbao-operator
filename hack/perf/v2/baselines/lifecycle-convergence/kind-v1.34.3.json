@@ -1,32 +1,396 @@
 {
   "version": "v2",
   "scenario": "lifecycle-convergence",
-  "capturedAt": "2026-02-10T22:35:20Z",
-  "commit": "a6950686fd43dc5384590f7fd22abf410ad082a4",
+  "capturedAt": "2026-06-01T13:07:15.027512526Z",
+  "commit": "6975e81fff7b910ea7c95cbc2815809216c8b43e",
   "environment": {
-    "runner": "github-hosted",
-    "runnerImage": "ubuntu-24.04",
+    "runner": "kind",
+    "kindVersion": "kind v0.31.0 go1.25.5 linux/amd64",
     "nodeImage": "kindest/node:v1.34.3",
-    "commit": "a6950686fd43dc5384590f7fd22abf410ad082a4"
+    "goVersion": "go1.26.3",
+    "commit": "6975e81fff7b910ea7c95cbc2815809216c8b43e",
+    "context": "kind-perf-lifecycle-convergence-1"
   },
   "samples": {
-    "sample_total_seconds": [763.960618155, 205.172085171, 223.664860869, 217.768277506, 232.562866534],
-    "reconcile_duration_bucket_p95": [0.5, 0.5, 0.5, 0.5, 0.5],
-    "reconcile_error_ratio": [0.29545454545454547, 0.30434782608695654, 0.32727272727272727, 0.3269230769230769, 0.32142857142857145],
-    "workqueue_retries_delta": [42, 43, 52, 49, 53],
-    "kubernetes_writes": [0, 0, 0, 0, 0],
-    "openbao_auth_logins": [0, 0, 0, 0, 0],
-    "openbao_auth_login_errors": [0, 0, 0, 0, 0],
-    "openbao_api_requests": [0, 0, 0, 0, 0]
+    "all_pods_ready_seconds": [
+      30,
+      29,
+      30,
+      30,
+      30
+    ],
+    "cluster_available_seconds": [
+      30,
+      30,
+      31,
+      31,
+      31
+    ],
+    "first_pod_ready_seconds": [
+      30,
+      29,
+      30,
+      30,
+      30
+    ],
+    "kubernetes_writes": [
+      15,
+      16,
+      16,
+      16,
+      16
+    ],
+    "observed_kubernetes_writes": [
+      15,
+      16,
+      16,
+      16,
+      16
+    ],
+    "openbao_api_requests": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "openbao_auth_cache_hits_total": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_cache_misses_total": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_inline_requests": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "openbao_auth_login_errors": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_logins": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_workload_audit_request_failures": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_workload_audit_response_failures": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_workload_in_flight_requests_max": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_workload_login_request_avg_seconds": [
+      1.4374679625034332,
+      1.4602515548467636,
+      1.5535384714603424,
+      1.4633379578590393,
+      1.433114543557167
+    ],
+    "openbao_workload_login_request_count": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "openbao_workload_request_avg_seconds": [
+      1.5298707740647453,
+      1.4348947618688856,
+      1.378911350454603,
+      1.4917559283120292,
+      1.6498039535113744
+    ],
+    "openbao_workload_request_count": [
+      14,
+      14,
+      14,
+      14,
+      14
+    ],
+    "openbao_workload_token_check_avg_seconds": [
+      0.12535118765663356,
+      0.14357312710490078,
+      0.13154206454055384,
+      0.19619281380437315,
+      0.16881699970690534
+    ],
+    "openbao_workload_token_check_count": [
+      16,
+      16,
+      16,
+      16,
+      16
+    ],
+    "openbao_workload_token_creation_count": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "reconcile_duration_bucket_p95": [
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "reconcile_error_ratio": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "sample_total_seconds": [
+      105.092151689,
+      104.925089618,
+      105.173130553,
+      105.347978254,
+      108.111874086
+    ],
+    "scenario_run_seconds": [
+      34.041181643,
+      34.039624768,
+      34.045337155,
+      34.040726647,
+      34.043384432
+    ],
+    "statefulset_created_seconds": [
+      0,
+      0,
+      1,
+      1,
+      1
+    ],
+    "workqueue_retries_delta": [
+      16,
+      16,
+      16,
+      16,
+      16
+    ]
   },
   "summary": {
-    "sample_total_seconds": {"median": 223.664860869, "upperSample": 763.960618155, "min": 205.172085171, "max": 763.960618155, "count": 5},
-    "reconcile_duration_bucket_p95": {"median": 0.5, "upperSample": 0.5, "min": 0.5, "max": 0.5, "count": 5},
-    "reconcile_error_ratio": {"median": 0.32142857142857145, "upperSample": 0.32727272727272727, "min": 0.29545454545454547, "max": 0.32727272727272727, "count": 5},
-    "workqueue_retries_delta": {"median": 49, "upperSample": 53, "min": 42, "max": 53, "count": 5},
-    "kubernetes_writes": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
-    "openbao_auth_logins": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
-    "openbao_auth_login_errors": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5},
-    "openbao_api_requests": {"median": 0, "upperSample": 0, "min": 0, "max": 0, "count": 5}
+    "all_pods_ready_seconds": {
+      "median": 30,
+      "upperSample": 30,
+      "min": 29,
+      "max": 30,
+      "count": 5
+    },
+    "cluster_available_seconds": {
+      "median": 31,
+      "upperSample": 31,
+      "min": 30,
+      "max": 31,
+      "count": 5
+    },
+    "first_pod_ready_seconds": {
+      "median": 30,
+      "upperSample": 30,
+      "min": 29,
+      "max": 30,
+      "count": 5
+    },
+    "kubernetes_writes": {
+      "median": 16,
+      "upperSample": 16,
+      "min": 15,
+      "max": 16,
+      "count": 5
+    },
+    "observed_kubernetes_writes": {
+      "median": 16,
+      "upperSample": 16,
+      "min": 15,
+      "max": 16,
+      "count": 5
+    },
+    "openbao_api_requests": {
+      "median": 2,
+      "upperSample": 2,
+      "min": 2,
+      "max": 2,
+      "count": 5
+    },
+    "openbao_auth_cache_hits_total": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_cache_misses_total": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_inline_requests": {
+      "median": 2,
+      "upperSample": 2,
+      "min": 2,
+      "max": 2,
+      "count": 5
+    },
+    "openbao_auth_login_errors": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_logins": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_workload_audit_request_failures": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_workload_audit_response_failures": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_workload_in_flight_requests_max": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_workload_login_request_avg_seconds": {
+      "median": 1.4602515548467636,
+      "upperSample": 1.5535384714603424,
+      "min": 1.433114543557167,
+      "max": 1.5535384714603424,
+      "count": 5
+    },
+    "openbao_workload_login_request_count": {
+      "median": 2,
+      "upperSample": 2,
+      "min": 2,
+      "max": 2,
+      "count": 5
+    },
+    "openbao_workload_request_avg_seconds": {
+      "median": 1.4917559283120292,
+      "upperSample": 1.6498039535113744,
+      "min": 1.378911350454603,
+      "max": 1.6498039535113744,
+      "count": 5
+    },
+    "openbao_workload_request_count": {
+      "median": 14,
+      "upperSample": 14,
+      "min": 14,
+      "max": 14,
+      "count": 5
+    },
+    "openbao_workload_token_check_avg_seconds": {
+      "median": 0.14357312710490078,
+      "upperSample": 0.19619281380437315,
+      "min": 0.12535118765663356,
+      "max": 0.19619281380437315,
+      "count": 5
+    },
+    "openbao_workload_token_check_count": {
+      "median": 16,
+      "upperSample": 16,
+      "min": 16,
+      "max": 16,
+      "count": 5
+    },
+    "openbao_workload_token_creation_count": {
+      "median": 2,
+      "upperSample": 2,
+      "min": 2,
+      "max": 2,
+      "count": 5
+    },
+    "reconcile_duration_bucket_p95": {
+      "median": 0.5,
+      "upperSample": 0.5,
+      "min": 0.5,
+      "max": 0.5,
+      "count": 5
+    },
+    "reconcile_error_ratio": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "sample_total_seconds": {
+      "median": 105.173130553,
+      "upperSample": 108.111874086,
+      "min": 104.925089618,
+      "max": 108.111874086,
+      "count": 5
+    },
+    "scenario_run_seconds": {
+      "median": 34.041181643,
+      "upperSample": 34.045337155,
+      "min": 34.039624768,
+      "max": 34.045337155,
+      "count": 5
+    },
+    "statefulset_created_seconds": {
+      "median": 1,
+      "upperSample": 1,
+      "min": 0,
+      "max": 1,
+      "count": 5
+    },
+    "workqueue_retries_delta": {
+      "median": 16,
+      "upperSample": 16,
+      "min": 16,
+      "max": 16,
+      "count": 5
+    }
   }
 }
