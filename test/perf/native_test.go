@@ -159,6 +159,35 @@ func TestWorkloadObservabilityMetricsOnlyListenerIsVersionAware(t *testing.T) {
 	}
 }
 
+func TestRollingUpgradeClusterEnablesPublicService(t *testing.T) {
+	t.Parallel()
+
+	native := &nativeScenarioContext{
+		namespace: "perf-test",
+		runID:     "rolling-probe",
+		opts: Config{
+			UpgradeFromVersion:   "2.5.3",
+			UpgradeFromImage:     "ghcr.io/openbao/openbao:2.5.3",
+			UpgradeExecutorImage: "ghcr.io/dc-tec/openbao-operator-upgrade:dev",
+			ConfigInitImage:      "ghcr.io/dc-tec/openbao-operator-config-init:dev",
+		},
+	}
+
+	cluster := native.buildRollingUpgradeCluster()
+	if cluster.Spec.Service == nil {
+		t.Fatalf("rolling upgrade cluster should enable public service for availability probe")
+	}
+	if cluster.Spec.Service.Type != "" {
+		t.Fatalf("public service type = %q, want operator default", cluster.Spec.Service.Type)
+	}
+	if cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Image != native.opts.UpgradeExecutorImage {
+		t.Fatalf("upgrade config = %#v, want executor image %q", cluster.Spec.Upgrade, native.opts.UpgradeExecutorImage)
+	}
+	if cluster.Spec.Replicas != 3 {
+		t.Fatalf("replicas = %d, want 3", cluster.Spec.Replicas)
+	}
+}
+
 func TestPhaseMeasurements(t *testing.T) {
 	t.Parallel()
 

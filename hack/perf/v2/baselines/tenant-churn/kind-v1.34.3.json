@@ -1,20 +1,18 @@
 {
   "version": "v2",
   "scenario": "tenant-churn",
-  "capturedAt": "2026-05-29T13:33:46.803259Z",
-  "commit": "abeb8ae0da5dc2ae462c409113e87cf899f314fb",
+  "capturedAt": "2026-06-01T13:04:26.802243985Z",
+  "commit": "6975e81fff7b910ea7c95cbc2815809216c8b43e",
   "environment": {
     "runner": "kind",
-    "kindVersion": "kind v0.31.0 go1.26.1 darwin/arm64",
+    "kindVersion": "kind v0.31.0 go1.25.5 linux/amd64",
     "nodeImage": "kindest/node:v1.34.3",
     "goVersion": "go1.26.3",
-    "commit": "abeb8ae0da5dc2ae462c409113e87cf899f314fb",
+    "commit": "6975e81fff7b910ea7c95cbc2815809216c8b43e",
     "context": "kind-perf-tenant-churn-1"
   },
   "samples": {
     "kubernetes_writes": [
-      20,
-      20,
       20,
       20,
       20,
@@ -26,13 +24,51 @@
       20,
       20,
       20,
-      20,
-      20,
       20
     ],
+    "openbao_api_requests": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_cache_hits_total": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_cache_misses_total": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_inline_requests": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_login_errors": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "openbao_auth_logins": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
     "reconcile_error_ratio": [
-      0,
-      0,
       0,
       0,
       0,
@@ -40,35 +76,27 @@
       0
     ],
     "sample_total_seconds": [
-      84.276625,
-      85.661945,
-      89.133417,
-      86.974676,
-      90.473159,
-      79.071795,
-      84.286532
+      77.614400602,
+      76.371074965,
+      74.83896946,
+      77.202904433,
+      73.953908403
     ],
     "scenario_run_seconds": [
-      4.230708,
-      4.229871,
-      4.22459,
-      4.2425180000000005,
-      4.238781,
-      4.227292,
-      4.236788
+      4.223459452,
+      4.221319936,
+      4.223273456,
+      4.222374609,
+      4.223999803
     ],
     "tenant_churn_complete_seconds": [
-      2.20967,
-      2.196297,
-      2.201606,
-      2.209044,
-      2.201308,
-      2.194498,
-      2.207178
+      2.20219617,
+      2.201667133,
+      2.202180179,
+      2.201514448,
+      2.20324104
     ],
     "tenant_kubernetes_writes": [
-      20,
-      20,
       20,
       20,
       20,
@@ -76,26 +104,20 @@
       20
     ],
     "tenant_ready_p50_seconds": [
-      1.209534,
-      1.206938,
-      1.207181,
-      1.403176,
-      1.200399,
-      1.20136,
-      1.217855
+      1.202468805,
+      1.201839359,
+      1.202308735,
+      1.20199211,
+      1.2022632739999999
     ],
     "tenant_ready_p95_seconds": [
-      2.209667,
-      2.19629,
-      2.201604,
-      2.209036,
-      2.201305,
-      2.194495,
-      2.207175
+      2.202193916,
+      2.201661064,
+      2.202177636,
+      2.201511624,
+      2.203238757
     ],
     "workqueue_retries_delta": [
-      0,
-      0,
       0,
       0,
       0,
@@ -109,70 +131,112 @@
       "upperSample": 20,
       "min": 20,
       "max": 20,
-      "count": 7
+      "count": 5
     },
     "observed_kubernetes_writes": {
       "median": 20,
       "upperSample": 20,
       "min": 20,
       "max": 20,
-      "count": 7
+      "count": 5
+    },
+    "openbao_api_requests": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_cache_hits_total": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_cache_misses_total": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_inline_requests": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_login_errors": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
+    },
+    "openbao_auth_logins": {
+      "median": 0,
+      "upperSample": 0,
+      "min": 0,
+      "max": 0,
+      "count": 5
     },
     "reconcile_error_ratio": {
       "median": 0,
       "upperSample": 0,
       "min": 0,
       "max": 0,
-      "count": 7
+      "count": 5
     },
     "sample_total_seconds": {
-      "median": 85.661945,
-      "upperSample": 90.473159,
-      "min": 79.071795,
-      "max": 90.473159,
-      "count": 7
+      "median": 76.371074965,
+      "upperSample": 77.614400602,
+      "min": 73.953908403,
+      "max": 77.614400602,
+      "count": 5
     },
     "scenario_run_seconds": {
-      "median": 4.230708,
-      "upperSample": 4.2425180000000005,
-      "min": 4.22459,
-      "max": 4.2425180000000005,
-      "count": 7
+      "median": 4.223273456,
+      "upperSample": 4.223999803,
+      "min": 4.221319936,
+      "max": 4.223999803,
+      "count": 5
     },
     "tenant_churn_complete_seconds": {
-      "median": 2.201606,
-      "upperSample": 2.20967,
-      "min": 2.194498,
-      "max": 2.20967,
-      "count": 7
+      "median": 2.202180179,
+      "upperSample": 2.20324104,
+      "min": 2.201514448,
+      "max": 2.20324104,
+      "count": 5
     },
     "tenant_kubernetes_writes": {
       "median": 20,
       "upperSample": 20,
       "min": 20,
       "max": 20,
-      "count": 7
+      "count": 5
     },
     "tenant_ready_p50_seconds": {
-      "median": 1.207181,
-      "upperSample": 1.403176,
-      "min": 1.200399,
-      "max": 1.403176,
-      "count": 7
+      "median": 1.2022632739999999,
+      "upperSample": 1.202468805,
+      "min": 1.201839359,
+      "max": 1.202468805,
+      "count": 5
     },
     "tenant_ready_p95_seconds": {
-      "median": 2.201604,
-      "upperSample": 2.209667,
-      "min": 2.194495,
-      "max": 2.209667,
-      "count": 7
+      "median": 2.202177636,
+      "upperSample": 2.203238757,
+      "min": 2.201511624,
+      "max": 2.203238757,
+      "count": 5
     },
     "workqueue_retries_delta": {
       "median": 0,
       "upperSample": 0,
       "min": 0,
       "max": 0,
-      "count": 7
+      "count": 5
     }
   }
 }

@@ -421,13 +421,7 @@ func (n *nativeScenarioContext) runRollingUpgrade(ctx context.Context) (Result, 
 			n.opts.UpgradeFromVersion,
 		)
 	}
-	cluster := n.buildCluster(
-		n.resourceName("perf-up"),
-		n.opts.UpgradeFromVersion,
-		n.opts.UpgradeFromImage,
-		3,
-	)
-	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{Image: n.opts.UpgradeExecutorImage}
+	cluster := n.buildRollingUpgradeCluster()
 	tracker := newResourceWriteTracker()
 	if err := n.client.Create(ctx, cluster); err != nil {
 		return Result{}, fmt.Errorf("create OpenBaoCluster: %w", err)
@@ -706,6 +700,18 @@ func (n *nativeScenarioContext) buildCluster(
 			DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
 		},
 	}
+}
+
+func (n *nativeScenarioContext) buildRollingUpgradeCluster() *openbaov1alpha1.OpenBaoCluster {
+	cluster := n.buildCluster(
+		n.resourceName("perf-up"),
+		n.opts.UpgradeFromVersion,
+		n.opts.UpgradeFromImage,
+		3,
+	)
+	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{}
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{Image: n.opts.UpgradeExecutorImage}
+	return cluster
 }
 
 func (n *nativeScenarioContext) workloadObservability(version string) *openbaov1alpha1.ObservabilityConfig {
