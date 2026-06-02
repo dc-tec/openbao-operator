@@ -4,8 +4,8 @@ description: >-
   OpenBao Operator installs the OpenBao Kubernetes operator and its required
   cluster-scoped resources.
 type: application
-version: 0.2.0
-appVersion: 0.2.0
+version: 0.3.0
+appVersion: 0.3.0
 icon: >-
   https://raw.githubusercontent.com/dc-tec/openbao-operator/main/docs/assets/logo.svg
 home: https://github.com/dc-tec/openbao-operator
@@ -30,52 +30,74 @@ annotations:
   artifacthub.io/containsSecurityUpdates: 'true'
   artifacthub.io/changes: |
     - kind: added
-      description: "admission: authorize maintenance through RBAC"
+      description: "auth: default JWT flows to inline auth"
     - kind: added
-      description: "api: add runtime restart controls"
+      description: "observability: add workload metrics scraping support"
     - kind: added
-      description: "readreplicas: add steady-state read replica topology and status"
+      description: "openbaocluster: add audit file storage"
     - kind: added
-      description: "readreplicas: integrate read replicas with upgrade and restore workflows"
+      description: "openbaocluster: add ingress integration readiness"
+    - kind: added
+      description: "openbao: improve PKCS#11 runtime ergonomics"
+    - kind: added
+      description: "perfcheck: harden v2 weekly performance harness"
     - kind: fixed
-      description: "admission: guard hardened security context overrides"
+      description: "backup: record manual triggers and failure time"
     - kind: fixed
-      description: "helm: allow global values in chart schema"
+      description: "config: align audit device options with OpenBao"
     - kind: fixed
-      description: "helm: Helm provisioner admission identity"
+      description: "config: harden generated JWT roles"
     - kind: fixed
-      description: "infra: delete scaled-down raft PVCs"
+      description: "config: use SemVer precedence for OpenBao version checks"
     - kind: fixed
-      description: "multitenancy: gate cluster reconcile on tenant onboarding"
+      description: "deps: restore dependency update CI coverage"
     - kind: fixed
-      description: "network: Require source-scoped managed Ingress access"
+      description: "deps: update x/crypto for vulncheck"
     - kind: fixed
-      description: "openbao: stage safe raft scale-downs"
+      description: "deps: update x/net for vulncheck"
     - kind: fixed
-      description: "probe: stabilize openbao workload probes"
+      description: "gateway: emit TLSRoute as Gateway API v1"
     - kind: fixed
-      description: "provisioner: reduce release reconciliation log noise"
+      description: "gateway: tolerate missing SupportedVersion condition"
+    - kind: fixed
+      description: "helm: deduplicate generated RBAC labels"
+    - kind: fixed
+      description: "openbao: guard metrics-only listener configuration"
+    - kind: fixed
+      description: "openbao: share JWT token cache"
+    - kind: fixed
+      description: "provisioner: support external tenant PSS label ownership"
+    - kind: fixed
+      description: "rbac: allow verification pull secret reads"
+    - kind: fixed
+      description: "rbac: permit managed ServiceMonitor reconciliation"
+    - kind: fixed
+      description: "restore: harden restore job rendering"
+    - kind: fixed
+      description: "restore: validate static token secret identity"
     - kind: security
-      description: "security: fail closed for configured trusted roots"
+      description: "security: harden backup and restore helper inputs"
+    - kind: security
+      description: "security: harden backup restore endpoint validation"
+    - kind: security
+      description: "security: harden transit unseal credential handling"
     - kind: fixed
-      description: "status: mark unsafe admission mode not production-ready"
+      description: "storage: enforce request-time endpoint guard"
     - kind: fixed
-      description: "upgrade: complete SSA ownership migration"
+      description: "storage: retry transient S3 bucket ensure failures"
     - kind: fixed
-      description: "upgrade: harden bluegreen and rolling recovery flakes"
+      description: "upgrade: harden rolling upgrade resume"
     - kind: fixed
-      description: "upgrade: set executor job resource requirements"
-    - kind: fixed
-      description: "upgrade: treat raft promote already-voter as no-op"
+      description: "workload: mount OCI plugin directory"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.2.0
+      image: ghcr.io/dc-tec/openbao-operator:0.3.0
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.2.0
+      image: ghcr.io/dc-tec/openbao-init:0.3.0
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.2.0
+      image: ghcr.io/dc-tec/openbao-backup:0.3.0
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.2.0
+      image: ghcr.io/dc-tec/openbao-upgrade:0.3.0
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
