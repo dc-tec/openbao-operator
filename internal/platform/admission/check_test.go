@@ -165,8 +165,9 @@ func TestAllDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
 		t.Fatal("expected at least one ValidatingAdmissionPolicy in config/policy")
 	}
 
-	dependencyPolicies := make(map[string]struct{}, len(AllDependencies()))
-	for _, dep := range AllDependencies() {
+	deps := allDependencies()
+	dependencyPolicies := make(map[string]struct{}, len(deps))
+	for _, dep := range deps {
 		dependencyPolicies[dep.PolicyName] = struct{}{}
 	}
 
@@ -188,7 +189,7 @@ func TestAllDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
 
 	if len(missingFromDependencies) > 0 || len(missingFromConfig) > 0 {
 		t.Fatalf(
-			"AllDependencies() and config/policy VAP set drifted: missing_from_dependencies=%v missing_from_config=%v",
+			"allDependencies() and config/policy VAP set drifted: missing_from_dependencies=%v missing_from_config=%v",
 			missingFromDependencies,
 			missingFromConfig,
 		)

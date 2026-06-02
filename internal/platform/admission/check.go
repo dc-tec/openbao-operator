@@ -226,9 +226,9 @@ func DependenciesForFeatures(serviceClaims bool) []Dependency {
 	return deps
 }
 
-// AllDependencies returns the union of all known admission dependency
+// allDependencies returns the union of all known admission dependency
 // inventories shipped with the operator.
-func AllDependencies() []Dependency {
+func allDependencies() []Dependency {
 	deps := append([]Dependency(nil), DefaultDependencies()...)
 	deps = append(deps, ServiceClaimDependencies()...)
 	return deps
