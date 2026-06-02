@@ -22,6 +22,7 @@ files:
     - api/v1alpha1/openbaoobservabilityprofile_types.go
     - api/v1alpha1/openbaoruntimeprofile_types.go
     - api/v1alpha1/openbaoserviceoffering_types.go
+    - api/v1alpha1/openbaoserviceofferingrollout_types.go
     - api/v1alpha1/openbaoserviceprofile_types.go
     - api/v1alpha1/openbaostorageprofile_types.go
     - api/v1alpha1/openbaotransferprofile_types.go

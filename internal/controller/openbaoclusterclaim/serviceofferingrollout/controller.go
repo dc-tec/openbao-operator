@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	approllout "github.com/dc-tec/openbao-operator/internal/app/serviceofferingrollout"
+	approllout "github.com/dc-tec/openbao-operator/internal/app/openbaoclusterclaim/serviceofferingrollout"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	ctrl "sigs.k8s.io/controller-runtime"
 )

@@ -77,6 +77,7 @@ modules:
         - OpenBaoObservabilityProfile
         - OpenBaoRuntimeProfile
         - OpenBaoServiceOffering
+        - OpenBaoServiceOfferingRollout
         - OpenBaoServiceProfile
         - OpenBaoStorageProfile
         - OpenBaoTransferProfile
@@ -86,11 +87,13 @@ modules:
         - openbaoclusterclaim
         - openbaoclusterclaim/backuprequest
         - openbaoclusterclaim/restorerequest
+        - openbaoclusterclaim/serviceofferingrollout
         - openbaoclusterclaim/upgraderequest
       apps:
         - internal/app/openbaoclusterclaim
         - internal/app/openbaoclusterclaim/backuprequest
         - internal/app/openbaoclusterclaim/restorerequest
+        - internal/app/openbaoclusterclaim/serviceofferingrollout
         - internal/app/openbaoclusterclaim/upgraderequest
       services:
         - internal/service/claimcontract
@@ -117,6 +120,7 @@ modules:
       - api/v1alpha1/openbaoobservabilityprofile_types.go
       - api/v1alpha1/openbaoruntimeprofile_types.go
       - api/v1alpha1/openbaoserviceoffering_types.go
+      - api/v1alpha1/openbaoserviceofferingrollout_types.go
       - api/v1alpha1/openbaoserviceprofile_types.go
       - api/v1alpha1/openbaostorageprofile_types.go
       - api/v1alpha1/openbaotransferprofile_types.go
@@ -286,6 +290,7 @@ controllerBoundaries:
       - "**/*_test.go"
       - internal/controller/openbaoclusterclaim/backuprequest/**/*.go
       - internal/controller/openbaoclusterclaim/restorerequest/**/*.go
+      - internal/controller/openbaoclusterclaim/serviceofferingrollout/**/*.go
       - internal/controller/openbaoclusterclaim/upgraderequest/**/*.go
     disallowImports:
       - internal/service/upgrade
@@ -331,6 +336,19 @@ controllerBoundaries:
       - internal/adapter/revision
       - internal/platform/logging
     appFacadeRoot: internal/app/openbaoclusterclaim/upgraderequest
+    allowServiceImports: []
+    allowAdapterImports: []
+  - name: openbaoclusterclaim/serviceofferingrollout
+    displayName: OpenBaoServiceOfferingRollout
+    files:
+      - internal/controller/openbaoclusterclaim/serviceofferingrollout/**/*.go
+    ignores:
+      - "**/*_test.go"
+    disallowImports:
+      - internal/service/upgrade
+      - internal/adapter/revision
+      - internal/platform/logging
+    appFacadeRoot: internal/app/openbaoclusterclaim/serviceofferingrollout
     allowServiceImports: []
     allowAdapterImports: []
 
@@ -595,6 +613,7 @@ appBoundaries:
       - "**/*_test.go"
       - internal/app/openbaoclusterclaim/backuprequest/**/*.go
       - internal/app/openbaoclusterclaim/restorerequest/**/*.go
+      - internal/app/openbaoclusterclaim/serviceofferingrollout/**/*.go
       - internal/app/openbaoclusterclaim/upgraderequest/**/*.go
     allowServiceImports:
       - internal/service/claimcontract
@@ -621,6 +640,13 @@ appBoundaries:
       - "**/*_test.go"
     allowServiceImports:
       - internal/service/claimcontract
+  - name: openbaoserviceofferingrollout-root
+    displayName: OpenBaoServiceOfferingRollout Root
+    files:
+      - internal/app/openbaoclusterclaim/serviceofferingrollout/**/*.go
+    ignores:
+      - "**/*_test.go"
+    allowServiceImports: []
   - name: openbaocluster-root
     displayName: OpenBaoCluster Root
     files:

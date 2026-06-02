@@ -8,8 +8,8 @@ import (
 	openbaoclusterclaimcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim"
 	claimbackuprequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/backuprequest"
 	claimrestorerequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/restorerequest"
+	serviceofferingrolloutcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/serviceofferingrollout"
 	claimupgraderequestcontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaoclusterclaim/upgraderequest"
-	serviceofferingrolloutcontroller "github.com/dc-tec/openbao-operator/internal/controller/serviceofferingrollout"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )

@@ -11,6 +11,7 @@ ignores:
     - '**/*_test.go'
     - internal/controller/openbaoclusterclaim/backuprequest/**/*.go
     - internal/controller/openbaoclusterclaim/restorerequest/**/*.go
+    - internal/controller/openbaoclusterclaim/serviceofferingrollout/**/*.go
     - internal/controller/openbaoclusterclaim/upgraderequest/**/*.go
 rule:
     all:
