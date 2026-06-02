@@ -123,29 +123,34 @@ func TestSyncCRDsFiltersToCoreChartAndPrunesStaleOutputs(t *testing.T) {
 	inputDir := t.TempDir()
 	outputDir := t.TempDir()
 
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobackupauthprofiles.yaml"), sampleCRD("openbaobackupauthprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobackupbackends.yaml"), sampleCRD("openbaobackupbackends.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobackupprofiles.yaml"), sampleCRD("openbaobackupprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobackuptargets.yaml"), sampleCRD("openbaobackuptargets.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaobootstrapprofiles.yaml"), sampleCRD("openbaobootstrapprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoclusters.yaml"), sampleCRD("openbaoclusters.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoclusterclaims.yaml"), sampleCRD("openbaoclusterclaims.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_unrelateds.yaml"), sampleCRD("unrelateds.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoentrypoints.yaml"), sampleCRD("openbaoentrypoints.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoexposureclasses.yaml"), sampleCRD("openbaoexposureclasses.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoingresspolicies.yaml"), sampleCRD("openbaoingresspolicies.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaonetworkprofiles.yaml"), sampleCRD("openbaonetworkprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoobservabilityprofiles.yaml"), sampleCRD("openbaoobservabilityprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaorestores.yaml"), sampleCRD("openbaorestores.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoruntimeprofiles.yaml"), sampleCRD("openbaoruntimeprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoserviceofferings.yaml"), sampleCRD("openbaoserviceofferings.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoserviceofferingrollouts.yaml"), sampleCRD("openbaoserviceofferingrollouts.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoserviceprofiles.yaml"), sampleCRD("openbaoserviceprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaostorageprofiles.yaml"), sampleCRD("openbaostorageprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaotenants.yaml"), sampleCRD("openbaotenants.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaotransferprofiles.yaml"), sampleCRD("openbaotransferprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaounsealprofiles.yaml"), sampleCRD("openbaounsealprofiles.openbao.org"))
-	writeYAML(t, filepath.Join(inputDir, "openbao.org_openbaoupgradepolicies.yaml"), sampleCRD("openbaoupgradepolicies.openbao.org"))
+	for _, crd := range []string{
+		"openbao.org_openbaobackupauthprofiles.yaml",
+		"openbao.org_openbaobackupbackends.yaml",
+		"openbao.org_openbaobackupprofiles.yaml",
+		"openbao.org_openbaobackuptargets.yaml",
+		"openbao.org_openbaobootstrapprofiles.yaml",
+		"openbao.org_openbaoclusters.yaml",
+		"openbao.org_openbaoclusterclaims.yaml",
+		"openbao.org_openbaoentrypoints.yaml",
+		"openbao.org_openbaoexposureclasses.yaml",
+		"openbao.org_openbaoingresspolicies.yaml",
+		"openbao.org_openbaonetworkprofiles.yaml",
+		"openbao.org_openbaoobservabilityprofiles.yaml",
+		"openbao.org_openbaorestores.yaml",
+		"openbao.org_openbaoruntimeprofiles.yaml",
+		"openbao.org_openbaoserviceofferings.yaml",
+		"openbao.org_openbaoserviceofferingrollouts.yaml",
+		"openbao.org_openbaoserviceprofiles.yaml",
+		"openbao.org_openbaostorageprofiles.yaml",
+		"openbao.org_openbaotenants.yaml",
+		"openbao.org_openbaotransferprofiles.yaml",
+		"openbao.org_openbaounsealprofiles.yaml",
+		"openbao.org_openbaoupgradepolicies.yaml",
+		"openbao.org_unrelateds.yaml",
+	} {
+		plural := strings.TrimSuffix(strings.TrimPrefix(crd, "openbao.org_"), ".yaml")
+		writeYAML(t, filepath.Join(inputDir, crd), sampleCRD(plural+".openbao.org"))
+	}
 	writeYAML(t, filepath.Join(outputDir, "openbao.org_unrelateds.yaml"), "stale")
 
 	err := syncCRDs(options{crdInputDir: inputDir, crdOutputDir: outputDir})
@@ -290,13 +295,17 @@ spec:
 }
 
 func TestHelmTemplateRetainsProvisionerNamespaceCreateAndWebhookIngress(t *testing.T) {
-	rendered := string(renderChart(t))
+	renderedBytes := renderChart(t)
+	rendered := string(renderedBytes)
 
-	if !strings.Contains(rendered, "kind: ClusterRole") ||
-		!strings.Contains(rendered, "name: test-openbao-operator-provisioner") ||
-		!strings.Contains(rendered, "resources:\n      - namespaces") ||
-		!strings.Contains(rendered, "verbs:\n      - create\n      - get\n      - update\n      - patch") {
-		t.Fatalf("rendered chart missing provisioner namespace create surface:\n%s", rendered)
+	var provisionerRole struct {
+		Rules []renderedRBACRule `json:"rules"`
+	}
+	if !findRenderedYAMLObject(t, renderedBytes, "ClusterRole", "test-openbao-operator-provisioner", &provisionerRole) {
+		t.Fatalf("rendered chart missing provisioner ClusterRole:\n%s", rendered)
+	}
+	if !hasResourceVerbs(provisionerRole.Rules, "namespaces", "create", "get", "update", "patch") {
+		t.Fatalf("rendered chart missing provisioner namespace create/update surface:\n%s", rendered)
 	}
 
 	if !strings.Contains(rendered, "kind: NetworkPolicy") ||
@@ -387,6 +396,63 @@ func renderChart(t *testing.T, extraArgs ...string) []byte {
 		t.Fatalf("helm template failed: %v\n%s", err, string(output))
 	}
 	return output
+}
+
+func findRenderedYAMLObject(t *testing.T, rendered []byte, kind, name string, out interface{}) bool {
+	t.Helper()
+
+	for _, doc := range bytes.Split(rendered, []byte("\n---")) {
+		doc = bytes.TrimSpace(doc)
+		if len(doc) == 0 {
+			continue
+		}
+		var meta struct {
+			Kind     string `json:"kind"`
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+		}
+		if err := syaml.Unmarshal(doc, &meta); err != nil {
+			t.Fatalf("decode rendered document metadata: %v\n%s", err, string(doc))
+		}
+		if meta.Kind != kind || meta.Metadata.Name != name {
+			continue
+		}
+		if err := syaml.Unmarshal(doc, out); err != nil {
+			t.Fatalf("decode rendered %s/%s: %v\n%s", kind, name, err, string(doc))
+		}
+		return true
+	}
+	return false
+}
+
+type renderedRBACRule struct {
+	Resources []string `json:"resources"`
+	Verbs     []string `json:"verbs"`
+}
+
+func hasResourceVerbs(rules []renderedRBACRule, resource string, verbs ...string) bool {
+	for _, rule := range rules {
+		if !containsString(rule.Resources, resource) {
+			continue
+		}
+		for _, verb := range verbs {
+			if !containsString(rule.Verbs, verb) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func assertStrictYAML(t *testing.T, rendered []byte) {
