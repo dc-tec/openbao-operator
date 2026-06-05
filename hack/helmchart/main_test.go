@@ -67,7 +67,7 @@ rules:
 	}
 }
 
-func TestSyncAggregatedRBAC_IncludesHelperImageDelegationRole(t *testing.T) {
+func TestSyncAggregatedRBAC_IncludesDangerousControlDelegationRoles(t *testing.T) {
 	inputDir := t.TempDir()
 	outputDir := t.TempDir()
 
@@ -96,7 +96,19 @@ func TestSyncAggregatedRBAC_IncludesHelperImageDelegationRole(t *testing.T) {
 
 	writeRole("openbaocluster_admin_role.yaml", "openbaocluster-admin-role", "*")
 	writeRole("openbaocluster_editor_role.yaml", "openbaocluster-editor-role", "create", "update")
-	writeRole("openbaocluster_helper_image_role.yaml", "openbaocluster-helper-image-role", "get", "usehelperimages")
+	writeRole(
+		"openbaocluster_helper_image_role.yaml",
+		"openbaocluster-helper-image-role",
+		"get",
+		"usecustomexecutables",
+		"usehelperimages",
+	)
+	writeRole(
+		"openbaocluster_image_trust_roots_role.yaml",
+		"openbaocluster-image-trust-roots-role",
+		"get",
+		"useimagetrustroots",
+	)
 	writeRole("openbaocluster_viewer_role.yaml", "openbaocluster-viewer-role", "get", "list")
 	writeRole("openbaotenant_editor_role.yaml", "openbaotenant-editor-role", "create", "update")
 
@@ -111,7 +123,10 @@ func TestSyncAggregatedRBAC_IncludesHelperImageDelegationRole(t *testing.T) {
 	output := string(got)
 	for _, want := range []string{
 		`{{ include "openbao-operator.fullname" . }}-openbaocluster-helper-image`,
+		`{{ include "openbao-operator.fullname" . }}-openbaocluster-image-trust-roots`,
+		"usecustomexecutables",
 		"usehelperimages",
+		"useimagetrustroots",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("generated aggregated RBAC missing %q:\n%s", want, output)
