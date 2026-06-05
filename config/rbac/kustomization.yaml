@@ -36,5 +36,6 @@ resources:
   - openbaocluster_admin_role.yaml
   - openbaocluster_editor_role.yaml
   - openbaocluster_helper_image_role.yaml
+  - openbaocluster_image_trust_roots_role.yaml
   - openbaocluster_maintenance_role.yaml
   - openbaocluster_viewer_role.yaml

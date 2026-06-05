@@ -110,15 +110,16 @@ subjects:
     name: team-a-break-glass # Change to actual group name
     apiGroup: rbac.authorization.k8s.io
 ---
-# Example: Grant custom backup/restore helper image selection on one cluster
+# Example: Grant custom executable selection on one cluster
 #
-# This namespaced Role grants the custom `usehelperimages` verb only for a
+# This namespaced Role grants the custom `usecustomexecutables` verb only for a
 # single OpenBaoCluster object. Grant it only to operators trusted to choose
-# executor images, because those images run with backup/restore credentials.
+# helper, executor, hook, or plugin executables because they run with
+# operator-managed identities, OpenBao runtime mounts, or both.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: openbaocluster-helper-image-team-a-example
+  name: openbaocluster-custom-executables-team-a-example
   namespace: team-a-prod # Change to target namespace
   labels:
     app.kubernetes.io/name: openbao-operator
@@ -132,12 +133,12 @@ rules:
       - example-cluster # Change to target OpenBaoCluster name
     verbs:
       - get
-      - usehelperimages
+      - usecustomexecutables
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: openbaocluster-helper-image-team-a-example
+  name: openbaocluster-custom-executables-team-a-example
   namespace: team-a-prod # Change to target namespace
   labels:
     app.kubernetes.io/name: openbao-operator
@@ -145,7 +146,48 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: openbaocluster-helper-image-team-a-example
+  name: openbaocluster-custom-executables-team-a-example
+subjects:
+  - kind: Group
+    name: team-a-platform-operators # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
+# Example: Grant custom Hardened image-verification trust-root selection on one cluster
+#
+# This namespaced Role grants the custom `useimagetrustroots` verb only for a
+# single OpenBaoCluster object. Grant it only to operators trusted to define
+# which image signers are acceptable for Hardened clusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-image-trust-roots-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - useimagetrustroots
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-image-trust-roots-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-image-trust-roots-team-a-example
 subjects:
   - kind: Group
     name: team-a-platform-operators # Change to actual group name
