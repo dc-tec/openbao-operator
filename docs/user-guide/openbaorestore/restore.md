@@ -113,6 +113,12 @@ The `OpenBaoRestore`, the target `OpenBaoCluster`, and any referenced token Secr
 
 </Callout>
 
+<Callout type="warning" title="Custom restore images need delegated RBAC">
+
+If `OpenBaoRestore.spec.image` is set, the identity applying the restore request needs `usecustomexecutables` on the target `OpenBaoCluster`. The admission check is tied to the target cluster because the restore image runs with restore credentials for that cluster.
+
+</Callout>
+
 <Callout type="tip" title="For most first-time restores">
 
 If the target cluster already uses `spec.selfInit.oidc.enabled=true`, start with `jwtAuthRole: openbao-operator-restore` and the same object-storage provider shape you already validated in the backup flow.

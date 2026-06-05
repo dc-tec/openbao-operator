@@ -269,6 +269,12 @@ OCI-downloaded plugins are stored under `/openbao/plugins` on an ephemeral pod-l
 
 </Callout>
 
+<Callout type="warning" title="Plugin executables need delegated RBAC">
+
+`spec.plugins[].image` and `spec.plugins[].command` select custom executables for the OpenBao runtime. The identity applying an `OpenBaoCluster` with either field needs `usecustomexecutables` on that cluster, even when a later update changes only an unrelated field.
+
+</Callout>
+
   </TabItem>
 </Tabs>
 

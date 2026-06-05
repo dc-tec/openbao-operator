@@ -83,6 +83,7 @@ A cluster that initializes successfully still needs security hardening, backup r
   - `openbao-restrict-controller-rbac`
   - `openbao-restrict-controller-secret-writes`
 - Confirm that the operator namespace, tenant onboarding flow, and shared-controller trust boundaries match the tenancy model you chose during `Get Started`.
+- Bind `usecustomexecutables` and `useimagetrustroots` only to the human or GitOps identities trusted to choose custom helper images, hooks, plugin executables, restore images, or Hardened image-verification trust roots.
 
 <CommandBlock
   language="bash"

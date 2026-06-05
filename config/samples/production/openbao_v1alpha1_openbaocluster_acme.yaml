@@ -116,6 +116,7 @@ spec:
               capabilities = ["create", "read", "update", "delete", "list", "sudo"]
             }
   # Image verification for supply chain security
+  # Custom Hardened trust roots require `useimagetrustroots` on this OpenBaoCluster.
   imageVerification:
     enabled: true
     issuer: "https://token.actions.githubusercontent.com"
@@ -130,6 +131,7 @@ spec:
   # Scheduled backups with JWT Auth
   backup:
     schedule: "0 3 * * *" # Daily at 3 AM
+    # Custom backup images require `usecustomexecutables` on this OpenBaoCluster.
     image: "openbao-backup:latest"
     target:
       endpoint: "https://s3.amazonaws.com"

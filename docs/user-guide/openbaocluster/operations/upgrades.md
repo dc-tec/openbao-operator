@@ -84,6 +84,12 @@ The upgrade executor Job uses JWT auth to talk to OpenBao. Pre-upgrade snapshots
 
 </Callout>
 
+<Callout type="warning" title="Custom upgrade executables need delegated RBAC">
+
+Setting `spec.upgrade.image` or a blue-green `prePromotionHook` selects custom executables for the upgrade path. The identity applying that `OpenBaoCluster` needs `usecustomexecutables` on the cluster; existing `usehelperimages` bindings remain accepted for compatibility.
+
+</Callout>
+
 ## Use the default rolling path
 
 Use `RollingUpdate` when you want the lowest operational complexity and you do not need a second revision running in parallel.
