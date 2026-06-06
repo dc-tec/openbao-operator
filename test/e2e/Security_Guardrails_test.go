@@ -1066,6 +1066,28 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 			Expect(err.Error()).To(ContainSubstring("Users configuring backup credentials"))
 
 			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
+				return c.Create(ctx, newRestore("restore-target-authz-denied"), client.DryRunAll)
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("must be authorized to restore the target OpenBaoCluster"))
+
+			restoreRole := &rbacv1.Role{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "e2e-restore-target-access",
+					Namespace: guardrailsNamespace,
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups:     []string{"openbao.org"},
+						Resources:     []string{"openbaoclusters"},
+						ResourceNames: []string{"valid-structured-config"},
+						Verbs:         []string{"get", "restore"},
+					},
+				},
+			}
+			createRoleBindingForGroup(ctx, admin, guardrailsNamespace, restoreRole)
+
+			err = runAsE2EGroupMember(ctx, cfg, scheme, impersonatedUser, func(c client.Client) error {
 				return c.Create(ctx, newRestore("restore-authz-denied"), client.DryRunAll)
 			})
 			Expect(err).To(HaveOccurred())

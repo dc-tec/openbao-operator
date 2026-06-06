@@ -66,6 +66,7 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 		"demo-openbao-operator-openbao-restrict-provisioner-tenant-governance",
 	)
 	tenantPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-validate-openbao-tenant")
+	openBaoClusterPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-validate-openbaocluster")
 
 	if got := envVarValue(t, controller, "OPERATOR_SERVICE_ACCOUNT_NAME"); got != testPrefixedControllerSA {
 		t.Fatalf("controller OPERATOR_SERVICE_ACCOUNT_NAME=%q, want %q", got, testPrefixedControllerSA)
@@ -150,6 +151,20 @@ func TestKustomizeCustomIdentityOverlay_RewritesOperatorIdentityFields(t *testin
 	}
 	if got := policyVariableExpression(t, tenantPolicy, "operator_namespace"); got != testQuotedCustomOperatorNS {
 		t.Fatalf("tenant policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
+	}
+	if got := policyVariableExpression(
+		t,
+		openBaoClusterPolicy,
+		"operator_namespace",
+	); got != testQuotedCustomOperatorNS {
+		t.Fatalf("openbaocluster policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
+	}
+	if got := policyVariableExpression(
+		t,
+		openBaoClusterPolicy,
+		"controller_serviceaccount_name",
+	); got != testQuotedPrefixedCtrlSA {
+		t.Fatalf("openbaocluster policy controller_serviceaccount_name=%q, want %q", got, testQuotedPrefixedCtrlSA)
 	}
 }
 
@@ -291,6 +306,7 @@ func TestKustomizeSingleTenantCustomIdentityOverlay_RewritesControllerIdentityAn
 		objs,
 		"demo-openbao-operator-openbao-restrict-controller-serviceaccounts",
 	)
+	openBaoClusterPolicy := mustFindPolicy(t, objs, "demo-openbao-operator-openbao-validate-openbaocluster")
 	operatorNS := mustFindObject(t, objs, "v1", "Namespace", testCustomOperatorNS)
 
 	if operatorNS == nil {
@@ -332,6 +348,20 @@ func TestKustomizeSingleTenantCustomIdentityOverlay_RewritesControllerIdentityAn
 			got,
 			testQuotedPrefixedCtrlSA,
 		)
+	}
+	if got := policyVariableExpression(
+		t,
+		openBaoClusterPolicy,
+		"operator_namespace",
+	); got != testQuotedCustomOperatorNS {
+		t.Fatalf("openbaocluster policy operator_namespace=%q, want %q", got, testQuotedCustomOperatorNS)
+	}
+	if got := policyVariableExpression(
+		t,
+		openBaoClusterPolicy,
+		"controller_serviceaccount_name",
+	); got != testQuotedPrefixedCtrlSA {
+		t.Fatalf("openbaocluster policy controller_serviceaccount_name=%q, want %q", got, testQuotedPrefixedCtrlSA)
 	}
 
 	subjects, found, err := unstructured.NestedSlice(roleBinding.Object, "subjects")

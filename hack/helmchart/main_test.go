@@ -97,6 +97,12 @@ func TestSyncAggregatedRBAC_IncludesDangerousControlDelegationRoles(t *testing.T
 	writeRole("openbaocluster_admin_role.yaml", "openbaocluster-admin-role", "*")
 	writeRole("openbaocluster_editor_role.yaml", "openbaocluster-editor-role", "create", "update")
 	writeRole(
+		"openbaocluster_cloud_identity_role.yaml",
+		"openbaocluster-cloud-identity-role",
+		"get",
+		"usecloudidentities",
+	)
+	writeRole(
 		"openbaocluster_helper_image_role.yaml",
 		"openbaocluster-helper-image-role",
 		"get",
@@ -108,6 +114,12 @@ func TestSyncAggregatedRBAC_IncludesDangerousControlDelegationRoles(t *testing.T
 		"openbaocluster-image-trust-roots-role",
 		"get",
 		"useimagetrustroots",
+	)
+	writeRole(
+		"openbaocluster_restore_role.yaml",
+		"openbaocluster-restore-role",
+		"get",
+		"restore",
 	)
 	writeRole("openbaocluster_viewer_role.yaml", "openbaocluster-viewer-role", "get", "list")
 	writeRole("openbaotenant_editor_role.yaml", "openbaotenant-editor-role", "create", "update")
@@ -124,9 +136,13 @@ func TestSyncAggregatedRBAC_IncludesDangerousControlDelegationRoles(t *testing.T
 	for _, want := range []string{
 		`{{ include "openbao-operator.fullname" . }}-openbaocluster-helper-image`,
 		`{{ include "openbao-operator.fullname" . }}-openbaocluster-image-trust-roots`,
+		`{{ include "openbao-operator.fullname" . }}-openbaocluster-cloud-identity`,
 		"usecustomexecutables",
+		`{{ include "openbao-operator.fullname" . }}-openbaocluster-restore`,
 		"usehelperimages",
 		"useimagetrustroots",
+		"usecloudidentities",
+		"restore",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("generated aggregated RBAC missing %q:\n%s", want, output)
