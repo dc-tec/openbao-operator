@@ -20,19 +20,19 @@ func TestGenerateTenantRole(t *testing.T) {
 			name:      "default namespace",
 			namespace: "default",
 			wantName:  TenantRoleName,
-			wantRules: 16, // Expected number of PolicyRules
+			wantRules: 17, // Expected number of PolicyRules
 		},
 		{
 			name:      "custom namespace",
 			namespace: "tenant-1",
 			wantName:  TenantRoleName,
-			wantRules: 16,
+			wantRules: 17,
 		},
 		{
 			name:      "namespace with special characters",
 			namespace: "my-namespace-123",
 			wantName:  TenantRoleName,
-			wantRules: 16,
+			wantRules: 17,
 		},
 	}
 
@@ -71,6 +71,7 @@ func TestGenerateTenantRole(t *testing.T) {
 
 			// Verify key rules exist
 			hasOpenBaoClusterRule := false
+			hasOpenBaoClusterDelegationRule := false
 			hasStatefulSetRule := false
 			hasPodRule := false
 			hasEventsK8sRule := false
@@ -85,6 +86,14 @@ func TestGenerateTenantRole(t *testing.T) {
 					slices.Contains(rule.Verbs, "get") &&
 					slices.Contains(rule.Verbs, "create") {
 					hasOpenBaoClusterRule = true
+				}
+
+				if slices.Contains(rule.APIGroups, "openbao.org") &&
+					len(rule.Resources) == 1 &&
+					slices.Contains(rule.Resources, "openbaoclusters") &&
+					slices.Contains(rule.Verbs, "usecustomexecutables") &&
+					slices.Contains(rule.Verbs, "useimagetrustroots") {
+					hasOpenBaoClusterDelegationRule = true
 				}
 
 				// Check for StatefulSet rule (uses commonVerbs, not "*")
@@ -138,6 +147,9 @@ func TestGenerateTenantRole(t *testing.T) {
 
 			if !hasOpenBaoClusterRule {
 				t.Error("GenerateTenantRole() missing OpenBaoCluster rule")
+			}
+			if !hasOpenBaoClusterDelegationRule {
+				t.Error("GenerateTenantRole() missing OpenBaoCluster controller delegation rule")
 			}
 			if !hasStatefulSetRule {
 				t.Error("GenerateTenantRole() missing StatefulSet rule")

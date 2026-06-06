@@ -103,6 +103,12 @@ Install-wide defaults provide the baseline image contract. Use cluster-level ove
 
 </Callout>
 
+<Callout type="warning" title="Per-cluster helper image overrides need delegated RBAC">
+
+Setting `spec.initContainer.image`, `spec.backup.image`, or `spec.upgrade.image` chooses executables that run with operator-managed mounts, credentials, or job identities. The human or GitOps identity applying that `OpenBaoCluster` needs the `usecustomexecutables` verb on the cluster. Existing `usehelperimages` grants continue to work as a compatibility alias.
+
+</Callout>
+
 ## Override images per cluster
 
 <CommandBlock

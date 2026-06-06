@@ -190,6 +190,46 @@ Kubernetes RBAC controls who can read or mutate the PVC object; it does not prot
 
 </Callout>
 
+## CR author delegation
+
+Some `OpenBaoCluster` and `OpenBaoRestore` fields cause the operator to run CR-selected custom executables or accept CR-selected trust roots with operator-managed identities. Tenant editors can still create and update ordinary cluster intent, but these fields need a narrower delegated verb on the target `OpenBaoCluster`.
+
+<DecisionTable
+  kind="reference"
+  title="Delegated CR controls"
+  columns={['Delegated verb', 'Controls', 'Grant it to']}
+  rows={[
+    {
+      cells: [
+        '`usecustomexecutables`',
+        '`spec.initContainer.image`, `spec.backup.image`, `spec.upgrade.image`, blue-green `prePromotionHook`, plugin `image` or `command`, and `OpenBaoRestore.spec.image`.',
+        'Identities trusted to choose helper, hook, restore, or plugin executables that will run with operator-managed mounts, credentials, or job identities.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        '`usehelperimages`',
+        'Compatibility alias for existing delegated helper-image RBAC.',
+        'Existing bindings can remain in place, but new bindings should use `usecustomexecutables`.',
+      ],
+    },
+    {
+      cells: [
+        '`useimagetrustroots`',
+        'Custom `spec.imageVerification` or `spec.operatorImageVerification` trust-root material in the `Hardened` profile.',
+        'Identities trusted to decide which image signers are acceptable for Hardened clusters.',
+      ],
+    },
+  ]}
+/>
+
+<Callout type="warning" title="Authorization is checked while the field is present">
+
+The admission policy checks these delegated verbs on create and update whenever the dangerous field is present, not only when that field changes. For example, a GitOps controller that manages an `OpenBaoCluster` with a custom backup image needs `usecustomexecutables` for future updates to unrelated fields too.
+
+</Callout>
+
 ## What the RBAC model guarantees
 
 <DecisionTable

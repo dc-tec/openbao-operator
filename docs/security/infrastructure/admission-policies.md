@@ -46,7 +46,7 @@ description: How ValidatingAdmissionPolicy guardrails enforce managed-resource o
     {
       cells: [
         'Spec validation',
-        'Rejects invalid `OpenBaoCluster`, `OpenBaoTenant`, and `OpenBaoRestore` objects before they persist.',
+        'Rejects invalid `OpenBaoCluster`, `OpenBaoTenant`, and `OpenBaoRestore` objects before they persist, including CR-selected custom executable and trust-root controls that require delegated RBAC.',
         '`openbao-validate-openbaocluster`, `openbao-validate-openbao-tenant`, `openbao-validate-openbaorestore`.',
       ],
     },
@@ -210,6 +210,7 @@ Admission policy is one of the reasons the operator can separate user intent fro
 
 - user-owned surfaces stay in the CR where customization is supported
 - operator-owned networking, seal, listener identity, and lifecycle wiring stay protected
+- CR-selected helper images, hooks, plugin executables, restore images, and Hardened image-verification trust roots require explicit delegated RBAC before they can be persisted
 - unsafe or drifted changes are rejected before they have to be repaired later
 
 <NextActions

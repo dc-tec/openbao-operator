@@ -378,7 +378,8 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 	var foundSecretAuthorizer bool
 	var foundBackupSecretAuthorizer bool
 	var foundServiceMonitorSecretAuthorizer bool
-	var foundBackupHelperImageAuthorizer bool
+	var foundCustomExecutablesAuthorizer bool
+	var foundImageTrustRootsAuthorizer bool
 	var foundSystemSecretBlock bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
@@ -415,13 +416,19 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			strings.Contains(expression, `check("get")`) &&
 			strings.Contains(expression, `object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret`):
 			foundServiceMonitorSecretAuthorizer = true
-		case strings.Contains(message, "custom backup helper images") &&
-			strings.Contains(expression, `authorizer.group("openbao.org")`) &&
-			strings.Contains(expression, `resource("openbaoclusters")`) &&
+		case strings.Contains(message, "CR-selected custom executables") &&
+			strings.Contains(expression, `variables.custom_executables_authorized`) &&
+			strings.Contains(expression, `object.spec.initContainer.image`) &&
 			strings.Contains(expression, `object.spec.backup.image`) &&
-			strings.Contains(expression, `oldObject.spec.backup.image`) &&
-			strings.Contains(expression, `check("usehelperimages")`):
-			foundBackupHelperImageAuthorizer = true
+			strings.Contains(expression, `object.spec.upgrade.image`) &&
+			strings.Contains(expression, `object.spec.upgrade.blueGreen.verification.prePromotionHook`) &&
+			strings.Contains(expression, `object.spec.plugins.all`):
+			foundCustomExecutablesAuthorizer = true
+		case strings.Contains(message, "custom image verification trust roots") &&
+			strings.Contains(expression, `variables.has_custom_main_image_trust_roots`) &&
+			strings.Contains(expression, `variables.has_custom_operator_image_trust_roots`) &&
+			strings.Contains(expression, `variables.image_trust_roots_authorized`):
+			foundImageTrustRootsAuthorizer = true
 		case strings.Contains(message, "system secrets") &&
 			strings.Contains(expression, "object.spec.unseal.credentialsSecretRef") &&
 			strings.Contains(expression, "object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret") &&
@@ -435,17 +442,48 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 		!foundSecretAuthorizer ||
 		!foundBackupSecretAuthorizer ||
 		!foundServiceMonitorSecretAuthorizer ||
-		!foundBackupHelperImageAuthorizer ||
+		!foundCustomExecutablesAuthorizer ||
+		!foundImageTrustRootsAuthorizer ||
 		!foundSystemSecretBlock {
 		t.Fatalf(
-			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v serviceMonitorAuthorizer=%v backupHelperImageAuthorizer=%v systemSecret=%v",
+			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v serviceMonitorAuthorizer=%v executableCodeAuthorizer=%v imageTrustRootsAuthorizer=%v systemSecret=%v",
 			foundHTTPS,
 			foundUnsafeURLComponents,
 			foundSecretAuthorizer,
 			foundBackupSecretAuthorizer,
 			foundServiceMonitorSecretAuthorizer,
-			foundBackupHelperImageAuthorizer,
+			foundCustomExecutablesAuthorizer,
+			foundImageTrustRootsAuthorizer,
 			foundSystemSecretBlock,
+		)
+	}
+
+	variables, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "variables")
+	if err != nil || !found {
+		t.Fatalf("read policy variables: found=%v err=%v", found, err)
+	}
+	var foundCustomExecutablesVariable bool
+	var foundImageTrustRootsVariable bool
+	for _, variable := range variables {
+		variableMap, ok := variable.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := variableMap["name"].(string)
+		expression, _ := variableMap["expression"].(string)
+		switch name {
+		case "custom_executables_authorized":
+			foundCustomExecutablesVariable = strings.Contains(expression, `check("usecustomexecutables")`) &&
+				strings.Contains(expression, `check("usehelperimages")`)
+		case "image_trust_roots_authorized":
+			foundImageTrustRootsVariable = strings.Contains(expression, `check("useimagetrustroots")`)
+		}
+	}
+	if !foundCustomExecutablesVariable || !foundImageTrustRootsVariable {
+		t.Fatalf(
+			"openbao-validate-openbaocluster delegation variables missing: customExecutables=%v trustRoots=%v",
+			foundCustomExecutablesVariable,
+			foundImageTrustRootsVariable,
 		)
 	}
 }
@@ -487,12 +525,8 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 			strings.Contains(expression, `object.spec.tokenSecretRef`):
 			foundRestoreSecretAuthorizer = true
 		case strings.Contains(message, "custom restore helper images") &&
-			strings.Contains(expression, `authorizer.group("openbao.org")`) &&
-			strings.Contains(expression, `resource("openbaoclusters")`) &&
 			strings.Contains(expression, `object.spec.image`) &&
-			strings.Contains(expression, `oldObject.spec.image`) &&
-			strings.Contains(expression, `object.spec.cluster`) &&
-			strings.Contains(expression, `check("usehelperimages")`):
+			strings.Contains(expression, `variables.custom_executables_authorized`):
 			foundRestoreHelperImageAuthorizer = true
 		case strings.Contains(message, "system secrets") &&
 			strings.Contains(expression, "object.spec.source.target.credentialsSecretRef") &&
@@ -509,6 +543,29 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 			foundRestoreHelperImageAuthorizer,
 			foundSystemSecretBlock,
 		)
+	}
+
+	variables, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "variables")
+	if err != nil || !found {
+		t.Fatalf("read policy variables: found=%v err=%v", found, err)
+	}
+	var foundCustomExecutablesVariable bool
+	for _, variable := range variables {
+		variableMap, ok := variable.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := variableMap["name"].(string)
+		expression, _ := variableMap["expression"].(string)
+		if name == "custom_executables_authorized" {
+			foundCustomExecutablesVariable = strings.Contains(expression, `object.spec.cluster`) &&
+				strings.Contains(expression, `check("usecustomexecutables")`) &&
+				strings.Contains(expression, `check("usehelperimages")`)
+			break
+		}
+	}
+	if !foundCustomExecutablesVariable {
+		t.Fatalf("openbao-validate-openbaorestore custom executables delegation variable missing")
 	}
 }
 
@@ -785,6 +842,13 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 		"servicemonitors",
 		[]string{"create", "delete", "get", "patch"},
 	)
+	assertClusterRoleHasResourceRule(
+		t,
+		singleTenantRole,
+		"openbao.org",
+		"openbaoclusters",
+		[]string{"usecustomexecutables", "useimagetrustroots"},
+	)
 
 	subjects, found, err := unstructured.NestedSlice(singleTenantBinding.Object, "subjects")
 	if err != nil || !found || len(subjects) != 1 {
@@ -816,6 +880,8 @@ func assertClusterRoleHasResourceRule(
 		t.Fatalf("read %s rules: found=%v err=%v", role.GetName(), found, err)
 	}
 
+	foundResource := false
+	var seenVerbs []any
 	for _, rule := range rules {
 		ruleMap, ok := rule.(map[string]any)
 		if !ok {
@@ -827,17 +893,27 @@ func assertClusterRoleHasResourceRule(
 		if !containsAny(apiGroups, apiGroup) || !containsAny(resources, resource) {
 			continue
 		}
+		foundResource = true
+		seenVerbs = ruleVerbs
 		if len(ruleVerbs) != len(verbs) {
-			t.Fatalf("%s rule for %s/%s verbs = %#v, want exactly %#v", role.GetName(), apiGroup, resource, ruleVerbs, verbs)
+			continue
 		}
+		missingVerb := false
 		for _, verb := range verbs {
 			if !containsAny(ruleVerbs, verb) {
-				t.Fatalf("%s rule for %s/%s missing verb %q: %#v", role.GetName(), apiGroup, resource, verb, ruleMap)
+				missingVerb = true
+				break
 			}
+		}
+		if missingVerb {
+			continue
 		}
 		return
 	}
 
+	if foundResource {
+		t.Fatalf("%s rule for %s/%s verbs = %#v, want exactly %#v", role.GetName(), apiGroup, resource, seenVerbs, verbs)
+	}
 	t.Fatalf("%s missing rule for %s/%s", role.GetName(), apiGroup, resource)
 }
 

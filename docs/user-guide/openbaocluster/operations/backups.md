@@ -76,6 +76,12 @@ Check `CloudUnsealIdentityReady` for the main Pods and `BackupConfigurationReady
 
 </Callout>
 
+<Callout type="warning" title="Custom backup images need delegated RBAC">
+
+Setting `spec.backup.image` selects the executable used by backup Jobs. The identity applying that `OpenBaoCluster` needs `usecustomexecutables` on the cluster; existing `usehelperimages` bindings remain accepted for compatibility.
+
+</Callout>
+
 ## First successful backup path
 
 <DecisionTable

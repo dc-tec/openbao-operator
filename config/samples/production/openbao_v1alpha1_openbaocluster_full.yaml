@@ -155,6 +155,7 @@ spec:
     enabled: true
     # For k3d clusters, use the k3d registry path: k3d-registry.localhost:5000/openbao-init:dev
     # For other environments, use a fully qualified image reference
+    # Custom helper images require `usecustomexecutables` on this OpenBaoCluster.
     image: "k3d-registry.localhost:5000/openbao-init:1.2.4"
   network:
     apiServerCIDR: "10.43.0.0/16"
@@ -251,6 +252,7 @@ spec:
     # Backup image built from Dockerfile.backup in this repository.
     # For k3d clusters, push to the local registry; for other environments,
     # use a fully qualified image reference.
+    # Custom backup images require `usecustomexecutables` on this OpenBaoCluster.
     image: "k3d-registry.localhost:5000/openbao-backup:1.1.0"
     target:
       # RustFS S3 API endpoint inside the cluster.

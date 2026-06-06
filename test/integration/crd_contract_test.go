@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	provisionerpkg "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 func requireInvalidRequest(t *testing.T, err error) {
@@ -102,7 +103,7 @@ func grantTenantOpenBaoWriteAccess(t *testing.T, namespace, username string) {
 	}
 }
 
-func grantClusterHelperImageAccess(t *testing.T, namespace, clusterName, username string) {
+func grantClusterOpenBaoVerbs(t *testing.T, namespace, clusterName, username, roleName string, verbs ...string) {
 	t.Helper()
 
 	role := &rbacv1.Role{
@@ -111,7 +112,7 @@ func grantClusterHelperImageAccess(t *testing.T, namespace, clusterName, usernam
 			Kind:       "Role",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cluster-helper-image-access",
+			Name:      roleName,
 			Namespace: namespace,
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -119,12 +120,12 @@ func grantClusterHelperImageAccess(t *testing.T, namespace, clusterName, usernam
 				APIGroups:     []string{"openbao.org"},
 				Resources:     []string{"openbaoclusters"},
 				ResourceNames: []string{clusterName},
-				Verbs:         []string{"get", "usehelperimages"},
+				Verbs:         append([]string{"get"}, verbs...),
 			},
 		},
 	}
 	if err := k8sClient.Create(ctx, role); err != nil {
-		t.Fatalf("create helper image role: %v", err)
+		t.Fatalf("create delegated OpenBao role: %v", err)
 	}
 
 	binding := &rbacv1.RoleBinding{
@@ -133,7 +134,7 @@ func grantClusterHelperImageAccess(t *testing.T, namespace, clusterName, usernam
 			Kind:       "RoleBinding",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cluster-helper-image-access-binding",
+			Name:      roleName + "-binding",
 			Namespace: namespace,
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -150,8 +151,23 @@ func grantClusterHelperImageAccess(t *testing.T, namespace, clusterName, usernam
 		},
 	}
 	if err := k8sClient.Create(ctx, binding); err != nil {
-		t.Fatalf("create helper image rolebinding: %v", err)
+		t.Fatalf("create delegated OpenBao rolebinding: %v", err)
 	}
+}
+
+func grantClusterHelperImageAccess(t *testing.T, namespace, clusterName, username string) {
+	t.Helper()
+	grantClusterOpenBaoVerbs(t, namespace, clusterName, username, "cluster-helper-image-access", "usehelperimages")
+}
+
+func grantClusterCustomExecutablesAccess(t *testing.T, namespace, clusterName, username string) {
+	t.Helper()
+	grantClusterOpenBaoVerbs(t, namespace, clusterName, username, "cluster-custom-executables-access", "usecustomexecutables")
+}
+
+func grantClusterImageTrustRootsAccess(t *testing.T, namespace, clusterName, username string) {
+	t.Helper()
+	grantClusterOpenBaoVerbs(t, namespace, clusterName, username, "cluster-image-trust-roots-access", "useimagetrustroots")
 }
 
 func waitForOpenBaoRestoreAdmissionPolicies(t *testing.T, namespace string) {
@@ -394,7 +410,7 @@ func TestVAP_OpenBaoCluster_RequiresTrustedIngressPeersForManagedIngress(t *test
 	}
 }
 
-func TestVAP_OpenBaoCluster_DeniesCustomBackupImageWithoutHelperImageVerb(t *testing.T) {
+func TestVAP_OpenBaoCluster_DeniesCustomBackupImageWithoutCustomExecutablesVerb(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
 
@@ -403,6 +419,7 @@ func TestVAP_OpenBaoCluster_DeniesCustomBackupImageWithoutHelperImageVerb(t *tes
 	tenantClient := newImpersonatedClient(t, username)
 
 	cluster := newMinimalClusterObj(namespace, "cluster-custom-backup-image-denied")
+	cluster.Spec.InitContainer = nil
 	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
 		Schedule:    "0 0 * * *",
 		Image:       "ghcr.io/attacker/backup-exfil:latest",
@@ -416,16 +433,17 @@ func TestVAP_OpenBaoCluster_DeniesCustomBackupImageWithoutHelperImageVerb(t *tes
 
 	err := tenantClient.Create(ctx, cluster)
 	requireAdmissionDenied(t, err)
-	if !strings.Contains(err.Error(), "custom backup helper images") {
+	if !strings.Contains(err.Error(), "CR-selected custom executables") {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
 
-func TestVAP_OpenBaoCluster_DeniesBackupImageChangeWithoutHelperImageVerb(t *testing.T) {
+func TestVAP_OpenBaoCluster_DeniesBackupImageChangeWithoutCustomExecutablesVerb(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
 
 	cluster := newMinimalClusterObj(namespace, "cluster-custom-backup-image-update-denied")
+	cluster.Spec.InitContainer = nil
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("create OpenBaoCluster: %v", err)
 	}
@@ -453,7 +471,7 @@ func TestVAP_OpenBaoCluster_DeniesBackupImageChangeWithoutHelperImageVerb(t *tes
 
 	err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original))
 	requireAdmissionDenied(t, err)
-	if !strings.Contains(err.Error(), "custom backup helper images") {
+	if !strings.Contains(err.Error(), "CR-selected custom executables") {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
@@ -469,6 +487,7 @@ func TestVAP_OpenBaoCluster_AllowsCustomBackupImageWithHelperImageVerb(t *testin
 	tenantClient := newImpersonatedClient(t, username)
 
 	cluster := newMinimalClusterObj(namespace, clusterName)
+	cluster.Spec.InitContainer = nil
 	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
 		Schedule:    "0 0 * * *",
 		Image:       "ghcr.io/platform/backup-helper:1.2.3",
@@ -485,11 +504,12 @@ func TestVAP_OpenBaoCluster_AllowsCustomBackupImageWithHelperImageVerb(t *testin
 	}
 }
 
-func TestVAP_OpenBaoCluster_AllowsUnchangedCustomBackupImageWithoutHelperImageVerb(t *testing.T) {
+func TestVAP_OpenBaoCluster_DeniesUnchangedCustomBackupImageWithoutCustomExecutablesVerb(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
 
 	cluster := newMinimalClusterObj(namespace, "cluster-custom-backup-image-unchanged")
+	cluster.Spec.InitContainer = nil
 	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
 		Schedule:    "0 0 * * *",
 		Image:       "ghcr.io/platform/backup-helper:1.2.3",
@@ -516,8 +536,194 @@ func TestVAP_OpenBaoCluster_AllowsUnchangedCustomBackupImageWithoutHelperImageVe
 	original := latest.DeepCopy()
 	latest.Spec.Backup.Schedule = "0 1 * * *"
 
-	if err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
-		t.Fatalf("expected unchanged custom backup helper image update to succeed, got: %v", err)
+	err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original))
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "CR-selected custom executables") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_DeniesCustomExecutableFieldsWithoutDelegatedVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "custom-executables-editor"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	tests := []struct {
+		name      string
+		configure func(*openbaov1alpha1.OpenBaoCluster)
+	}{
+		{
+			name: "custom-init-image",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
+					Enabled: true,
+					Image:   "ghcr.io/attacker/openbao-init:latest",
+				}
+			},
+		},
+		{
+			name: "custom-upgrade-image",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+					Image: "ghcr.io/attacker/openbao-upgrade:latest",
+				}
+			},
+		},
+		{
+			name: "bluegreen-hook",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+					Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+					BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+						Verification: &openbaov1alpha1.VerificationConfig{
+							PrePromotionHook: &openbaov1alpha1.ValidationHookConfig{
+								Image: "ghcr.io/attacker/validation-hook:latest",
+							},
+						},
+					},
+				}
+			},
+		},
+		{
+			name: "plugin-image",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Plugins = []openbaov1alpha1.Plugin{
+					newTestPluginWithImage("ghcr.io/attacker/openbao-plugin:latest"),
+				}
+			},
+		},
+		{
+			name: "plugin-command",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				plugin := newTestPluginWithImage("")
+				plugin.Command = "attacker-plugin"
+				cluster.Spec.Plugins = []openbaov1alpha1.Plugin{plugin}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalClusterObj(namespace, "cluster-custom-executables-"+tt.name)
+			cluster.Spec.InitContainer = nil
+			tt.configure(cluster)
+
+			err := tenantClient.Create(ctx, cluster)
+			requireAdmissionDenied(t, err)
+			if !strings.Contains(err.Error(), "CR-selected custom executables") {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+func TestVAP_OpenBaoCluster_AllowsCustomExecutableFieldsWithDelegatedVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "custom-executables-delegate"
+	clusterName := "cluster-custom-executables-allowed"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	grantClusterCustomExecutablesAccess(t, namespace, clusterName, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	cluster := newMinimalClusterObj(namespace, clusterName)
+	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
+		Enabled: true,
+		Image:   "ghcr.io/platform/openbao-init:1.2.3",
+	}
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		Schedule:    "0 0 * * *",
+		Image:       "ghcr.io/platform/openbao-backup:1.2.3",
+		JWTAuthRole: "backup-role",
+		Target: openbaov1alpha1.BackupTarget{
+			Provider: "s3",
+			Endpoint: "https://objectstore.example.com",
+			Bucket:   testBackupBucket,
+		},
+	}
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Image:    "ghcr.io/platform/openbao-upgrade:1.2.3",
+		Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+		BlueGreen: &openbaov1alpha1.BlueGreenConfig{
+			Verification: &openbaov1alpha1.VerificationConfig{
+				PrePromotionHook: &openbaov1alpha1.ValidationHookConfig{
+					Image: "ghcr.io/platform/openbao-validation-hook:1.2.3",
+				},
+			},
+		},
+	}
+	cluster.Spec.Plugins = []openbaov1alpha1.Plugin{
+		newTestPluginWithImage("ghcr.io/platform/openbao-plugin:1.2.3"),
+	}
+
+	if err := tenantClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected custom-executables-authorized OpenBaoCluster create to succeed, got: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_AllowsControllerMetadataPatchWithTenantDelegation(t *testing.T) {
+	namespace := newTestNamespace(t)
+	ensureProvisionerRBACApplied(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	provisionerClient := newImpersonatedClient(t, provisionerUsername)
+	applyClientObject(t, provisionerClient, provisionerpkg.GenerateTenantRole(namespace))
+	applyClientObject(t, provisionerClient, provisionerpkg.GenerateTenantRoleBinding(
+		namespace,
+		provisionerpkg.OperatorServiceAccount{
+			Name:      testControllerSAName,
+			Namespace: testDefaultOperatorNS,
+		},
+	))
+
+	clusterName := "cluster-controller-metadata-patch"
+	setupUsername := "controller-metadata-setup"
+	grantTenantOpenBaoWriteAccess(t, namespace, setupUsername)
+	grantClusterCustomExecutablesAccess(t, namespace, clusterName, setupUsername)
+	grantClusterImageTrustRootsAccess(t, namespace, clusterName, setupUsername)
+	setupClient := newImpersonatedClient(t, setupUsername)
+
+	cluster := newValidHardenedAdmissionCluster(namespace, clusterName)
+	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
+		Enabled: true,
+		Image:   "ghcr.io/platform/openbao-init:1.2.3",
+	}
+	cluster.Spec.ImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+		Enabled:       true,
+		FailurePolicy: "Block",
+		IssuerRegExp:  "^https://issuer.example.com$",
+		SubjectRegExp: "^https://github.com/example/repo/.github/workflows/release.yml@refs/tags/.+$",
+	}
+
+	if err := setupClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create setup OpenBaoCluster: %v", err)
+	}
+
+	controllerClient := newImpersonatedClient(t, controllerUsername)
+	var latest openbaov1alpha1.OpenBaoCluster
+	if err := controllerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: clusterName}, &latest); err != nil {
+		t.Fatalf("controller get OpenBaoCluster: %v", err)
+	}
+	original := latest.DeepCopy()
+	latest.Finalizers = append(latest.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)
+
+	if err := controllerClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
+		t.Fatalf("controller metadata patch with generated tenant delegation should succeed, got: %v", err)
+	}
+}
+
+func newTestPluginWithImage(image string) openbaov1alpha1.Plugin {
+	return openbaov1alpha1.Plugin{
+		Type:       "secret",
+		Name:       "test-plugin",
+		Image:      image,
+		Version:    "1.2.3",
+		BinaryName: "test-plugin",
+		SHA256Sum:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
 }
 
@@ -712,6 +918,54 @@ func TestVAP_OpenBaoCluster_AllowsHardenedOfficialImageVerificationDefaults(t *t
 			"expected Hardened OpenBaoCluster with enabled official image verification defaults to succeed, got: %v",
 			err,
 		)
+	}
+}
+
+func TestVAP_OpenBaoCluster_DeniesHardenedCustomImageTrustRootsWithoutDelegatedVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "image-trust-root-editor"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	cluster := newValidHardenedAdmissionCluster(namespace, "cluster-hardened-custom-trust-root-denied")
+	cluster.Spec.InitContainer = nil
+	cluster.Spec.ImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+		Enabled:       true,
+		FailurePolicy: "Block",
+		IssuerRegExp:  "^https://issuer.example.com$",
+		SubjectRegExp: "^https://github.com/example/repo/.github/workflows/release.yml@refs/tags/.+$",
+		IgnoreTlog:    true,
+	}
+
+	err := tenantClient.Create(ctx, cluster)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "custom image verification trust roots") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_AllowsHardenedCustomImageTrustRootsWithDelegatedVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "image-trust-root-delegate"
+	clusterName := "cluster-hardened-custom-trust-root-allowed"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	grantClusterImageTrustRootsAccess(t, namespace, clusterName, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	cluster := newValidHardenedAdmissionCluster(namespace, clusterName)
+	cluster.Spec.InitContainer = nil
+	cluster.Spec.OperatorImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+		Enabled:       true,
+		FailurePolicy: "Block",
+		PublicKey:     "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\n-----END PUBLIC KEY-----",
+	}
+
+	if err := tenantClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected image-trust-root-authorized OpenBaoCluster create to succeed, got: %v", err)
 	}
 }
 
@@ -1130,7 +1384,7 @@ func TestVAP_OpenBaoRestore_AllowsCustomImageWithHelperImageVerb(t *testing.T) {
 	}
 }
 
-func TestVAP_OpenBaoRestore_AllowsUnchangedCustomImageUpdateWithoutHelperImageVerb(t *testing.T) {
+func TestVAP_OpenBaoRestore_DeniesUnchangedCustomImageUpdateWithoutCustomExecutablesVerb(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
 
@@ -1171,8 +1425,10 @@ func TestVAP_OpenBaoRestore_AllowsUnchangedCustomImageUpdateWithoutHelperImageVe
 	original := latest.DeepCopy()
 	latest.Annotations = map[string]string{"openbao.org/test": "metadata-update"}
 
-	if err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
-		t.Fatalf("expected unchanged custom restore helper image update to succeed, got: %v", err)
+	err := tenantClient.Patch(ctx, &latest, client.MergeFrom(original))
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "custom restore helper images") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
 }
 

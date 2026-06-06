@@ -762,6 +762,19 @@ var _ = Describe("Security Guardrails", Label("security", "critical"), Ordered, 
 						Resources: []string{"openbaoclusters", "openbaorestores"},
 						Verbs:     []string{"create"},
 					},
+					{
+						APIGroups: []string{"openbao.org"},
+						Resources: []string{"openbaoclusters"},
+						ResourceNames: []string{
+							"valid-structured-config",
+							"invalid-hardened",
+							"transit-authz-denied",
+							"transit-authz-allowed",
+							"backup-authz-denied",
+							"backup-authz-allowed",
+						},
+						Verbs: []string{"usecustomexecutables"},
+					},
 				},
 			}
 
