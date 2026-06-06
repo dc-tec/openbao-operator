@@ -192,20 +192,109 @@ Kubernetes RBAC controls who can read or mutate the PVC object; it does not prot
 
 ## CR author delegation
 
-Editing an `OpenBaoCluster` or `OpenBaoRestore` is not enough when the manifest asks another
-identity or controller to use an external object. Admission checks the requester against every
-referenced authority while the field is present.
+Editing an `OpenBaoCluster` or `OpenBaoRestore` grants control over operator intent. It does not
+automatically grant control over every Kubernetes object, cloud identity, image trust root, or restore
+target that the manifest references.
+
+That makes tenant onboarding stricter than a plain CRD editor role. A user or GitOps identity can
+create ordinary cluster intent with the editor role, but feature-specific references need matching
+RBAC before admission accepts the manifest. This is deliberate: the API boundary should distinguish
+"may edit this OpenBao resource" from "may cause another identity or controller to consume that
+external authority."
 
 The verbs follow common Kubernetes RBAC patterns:
 
 - `get` means the requester may read object payload, especially Secret data.
-- `use` means the requester may cause another workload or controller to consume the object.
+- `use` means the requester may cause another workload or controller to consume the object. OpenBao
+  Operator checks this verb in admission; Kubernetes does not enforce it for these references by
+  itself.
 - `usecloudidentities` means the requester may attach cloud identity metadata to OpenBao-managed workloads.
+- `usecustomexecutables` means the requester may choose helper, hook, plugin, backup, upgrade, or
+  restore executables that run with operator-managed identities or mounted data.
+- `useimagetrustroots` means the requester may choose custom image-verification trust roots in the
+  `Hardened` profile.
 - `restore` means the requester may run a destructive restore against the target `OpenBaoCluster`.
 
 <DecisionTable
   kind="reference"
-  title="CR reference authorization matrix"
+  title="Common onboarding paths"
+  columns={['Identity', 'Starting grant', 'Add when the manifest uses']}
+  rows={[
+    {
+      cells: [
+        'Single-tenant platform operator',
+        'Single-tenant role or admin-style binding for the managed namespace.',
+        'No extra onboarding step for normal single-tenant administration, because this path intentionally grants broad cluster-management authority.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Namespace-scoped tenant editor',
+        '`openbaocluster-editor-role` bound into the tenant namespace.',
+        'Per-feature `use`, `get`, `usecloudidentities`, `usecustomexecutables`, `useimagetrustroots`, or `restore` grants for the exact referenced objects and cluster names.',
+      ],
+    },
+    {
+      cells: [
+        'GitOps reconciler',
+        'The same editor and feature grants that a human author would need.',
+        'All references present in the rendered manifest, because admission checks the field while it exists, including unrelated future updates.',
+      ],
+    },
+    {
+      cells: [
+        'Restore operator',
+        'Write access to `OpenBaoRestore` plus `restore` on the target `OpenBaoCluster`.',
+        '`get` for restore credential or token Secrets, `usecloudidentities` for restore workload identity metadata, and `usecustomexecutables` for a custom restore image.',
+      ],
+      emphasis: 'caution',
+    },
+  ]}
+/>
+
+<Callout type="note" title="Admission errors are onboarding hints">
+
+The validation messages name the missing authority. For example, an error mentioning
+`spec.gateway.gatewayRef` points to `use` on the referenced Gateway, and an error mentioning
+cloud identities points to `usecloudidentities` on the target `OpenBaoCluster`.
+
+</Callout>
+
+<DecisionTable
+  kind="reference"
+  title="Feature-to-grant recipes"
+  columns={['If the manifest configures', 'Grant this to the applying identity']}
+  rows={[
+    {
+      cells: ['Credential or token Secret refs', '`get` on the named Secret.'],
+      emphasis: 'recommended',
+    },
+    {
+      cells: ['Image pull, ingress TLS, or ServiceMonitor TLS references', '`use` on the named Secret or ConfigMap; some Secret paths also accept `get`.'],
+    },
+    {
+      cells: ['Custom ServiceAccount, existing PVC, Gateway, IngressClass, or StorageClass', '`use` on the referenced object.'],
+    },
+    {
+      cells: ['ServiceAccount annotations or known workload identity pod metadata', '`usecloudidentities` on the target `OpenBaoCluster`.'],
+    },
+    {
+      cells: ['Custom helper, hook, plugin, backup, upgrade, or restore executable', '`usecustomexecutables` on the target `OpenBaoCluster`.'],
+    },
+    {
+      cells: ['Custom Hardened image-verification trust roots', '`useimagetrustroots` on the target `OpenBaoCluster`.'],
+    },
+    {
+      cells: ['An `OpenBaoRestore` target cluster', '`restore` on the target `OpenBaoCluster`.'],
+      emphasis: 'caution',
+    },
+  ]}
+/>
+
+<DecisionTable
+  kind="reference"
+  title="Full CR reference authorization matrix"
   columns={['CR field', 'Referenced object or authority', 'Required authorization']}
   rows={[
     {
