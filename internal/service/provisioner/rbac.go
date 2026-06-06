@@ -10,7 +10,7 @@ import (
 var (
 	verbsReadOnly             = []string{"get", "list", "watch"}
 	verbsManage               = []string{"create", "delete", "get", "list", "patch", "update", "watch"}
-	verbsClusterDelegation    = []string{"usecustomexecutables", "useimagetrustroots"}
+	verbsClusterDelegation    = []string{"restore", "usecloudidentities", "usecustomexecutables", "useimagetrustroots"}
 	verbsEventWrite           = []string{"create", "patch"}
 	verbsPodManage            = []string{"delete", "get", "list", "patch", "update", "watch"}
 	verbsServiceMonitorManage = []string{"create", "delete", "get", "patch"}

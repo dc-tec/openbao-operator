@@ -52,6 +52,22 @@ kind: ClusterRole
 metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
+  name: {{ include "openbao-operator.fullname" . }}-openbaocluster-cloud-identity
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - get
+      - usecloudidentities
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-helper-image
 rules:
   - apiGroups:
@@ -78,6 +94,22 @@ rules:
     verbs:
       - get
       - useimagetrustroots
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
+  name: {{ include "openbao-operator.fullname" . }}-openbaocluster-restore
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - get
+      - restore
 ---
 
 apiVersion: rbac.authorization.k8s.io/v1

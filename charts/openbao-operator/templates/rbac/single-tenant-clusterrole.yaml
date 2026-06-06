@@ -26,6 +26,8 @@ rules:
     resources:
       - openbaoclusters
     verbs:
+      - restore
+      - usecloudidentities
       - usecustomexecutables
       - useimagetrustroots
   - apiGroups:

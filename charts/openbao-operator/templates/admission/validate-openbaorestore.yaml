@@ -47,11 +47,37 @@ spec:
       expression: >-
         authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usecustomexecutables").allowed() ||
         authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usehelperimages").allowed()
+    - name: cloud_identities_authorized
+      expression: >-
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usecloudidentities").allowed()
+    - name: restore_authorized
+      expression: >-
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("restore").allowed()
+    - name: has_restore_cloud_identity_metadata
+      expression: >-
+        (has(object.spec.source.target.roleArn) && object.spec.source.target.roleArn.trim() != "") ||
+        (has(object.spec.source.target.workloadIdentity) &&
+          (
+            (has(object.spec.source.target.workloadIdentity.serviceAccountAnnotations) &&
+              size(object.spec.source.target.workloadIdentity.serviceAccountAnnotations) > 0) ||
+            (has(object.spec.source.target.workloadIdentity.podLabels) &&
+              size(object.spec.source.target.workloadIdentity.podLabels) > 0)
+          ))
   validations:
     # API contract: restore specs are immutable after creation.
     - expression: >-
         oldObject == null || object.spec == oldObject.spec
       message: "spec is immutable; create a new OpenBaoRestore for changed restore parameters."
+    # Destructive restore target authorization: restore can replace data, policies, and keys.
+    - expression: >-
+        variables.restore_authorized
+      message: "Users creating or updating an OpenBaoRestore must be authorized to restore the target OpenBaoCluster."
+    # Reference authorization: restore cloud identity metadata delegates cloud authority
+    # to the generated restore ServiceAccount or Job pod.
+    - expression: >-
+        !variables.has_restore_cloud_identity_metadata ||
+        variables.cloud_identities_authorized
+      message: "Users configuring restore roleArn or workloadIdentity metadata must be authorized to use cloud identities on the target OpenBaoCluster."
     # Safety: overrideOperationLock requires force=true (break-glass is explicit).
     - expression: >-
         !has(object.spec.overrideOperationLock) ||
