@@ -27,6 +27,13 @@ rules:
   - apiGroups:
       - openbao.org
     resources:
+      - openbaoclusters
+    verbs:
+      - usecustomexecutables
+      - useimagetrustroots
+  - apiGroups:
+      - openbao.org
+    resources:
       - openbaorestores
       - openbaorestores/status
       - openbaorestores/finalizers

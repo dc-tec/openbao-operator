@@ -842,6 +842,13 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 		"servicemonitors",
 		[]string{"create", "delete", "get", "patch"},
 	)
+	assertClusterRoleHasResourceRule(
+		t,
+		singleTenantRole,
+		"openbao.org",
+		"openbaoclusters",
+		[]string{"usecustomexecutables", "useimagetrustroots"},
+	)
 
 	subjects, found, err := unstructured.NestedSlice(singleTenantBinding.Object, "subjects")
 	if err != nil || !found || len(subjects) != 1 {
@@ -873,6 +880,8 @@ func assertClusterRoleHasResourceRule(
 		t.Fatalf("read %s rules: found=%v err=%v", role.GetName(), found, err)
 	}
 
+	foundResource := false
+	var seenVerbs []any
 	for _, rule := range rules {
 		ruleMap, ok := rule.(map[string]any)
 		if !ok {
@@ -884,17 +893,27 @@ func assertClusterRoleHasResourceRule(
 		if !containsAny(apiGroups, apiGroup) || !containsAny(resources, resource) {
 			continue
 		}
+		foundResource = true
+		seenVerbs = ruleVerbs
 		if len(ruleVerbs) != len(verbs) {
-			t.Fatalf("%s rule for %s/%s verbs = %#v, want exactly %#v", role.GetName(), apiGroup, resource, ruleVerbs, verbs)
+			continue
 		}
+		missingVerb := false
 		for _, verb := range verbs {
 			if !containsAny(ruleVerbs, verb) {
-				t.Fatalf("%s rule for %s/%s missing verb %q: %#v", role.GetName(), apiGroup, resource, verb, ruleMap)
+				missingVerb = true
+				break
 			}
+		}
+		if missingVerb {
+			continue
 		}
 		return
 	}
 
+	if foundResource {
+		t.Fatalf("%s rule for %s/%s verbs = %#v, want exactly %#v", role.GetName(), apiGroup, resource, seenVerbs, verbs)
+	}
 	t.Fatalf("%s missing rule for %s/%s", role.GetName(), apiGroup, resource)
 }
 

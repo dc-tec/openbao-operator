@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	provisionerpkg "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
 func requireInvalidRequest(t *testing.T, err error) {
@@ -661,6 +662,57 @@ func TestVAP_OpenBaoCluster_AllowsCustomExecutableFieldsWithDelegatedVerb(t *tes
 
 	if err := tenantClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("expected custom-executables-authorized OpenBaoCluster create to succeed, got: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_AllowsControllerMetadataPatchWithTenantDelegation(t *testing.T) {
+	namespace := newTestNamespace(t)
+	ensureProvisionerRBACApplied(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	provisionerClient := newImpersonatedClient(t, provisionerUsername)
+	applyClientObject(t, provisionerClient, provisionerpkg.GenerateTenantRole(namespace))
+	applyClientObject(t, provisionerClient, provisionerpkg.GenerateTenantRoleBinding(
+		namespace,
+		provisionerpkg.OperatorServiceAccount{
+			Name:      testControllerSAName,
+			Namespace: testDefaultOperatorNS,
+		},
+	))
+
+	clusterName := "cluster-controller-metadata-patch"
+	setupUsername := "controller-metadata-setup"
+	grantTenantOpenBaoWriteAccess(t, namespace, setupUsername)
+	grantClusterCustomExecutablesAccess(t, namespace, clusterName, setupUsername)
+	grantClusterImageTrustRootsAccess(t, namespace, clusterName, setupUsername)
+	setupClient := newImpersonatedClient(t, setupUsername)
+
+	cluster := newValidHardenedAdmissionCluster(namespace, clusterName)
+	cluster.Spec.InitContainer = &openbaov1alpha1.InitContainerConfig{
+		Enabled: true,
+		Image:   "ghcr.io/platform/openbao-init:1.2.3",
+	}
+	cluster.Spec.ImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+		Enabled:       true,
+		FailurePolicy: "Block",
+		IssuerRegExp:  "^https://issuer.example.com$",
+		SubjectRegExp: "^https://github.com/example/repo/.github/workflows/release.yml@refs/tags/.+$",
+	}
+
+	if err := setupClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create setup OpenBaoCluster: %v", err)
+	}
+
+	controllerClient := newImpersonatedClient(t, controllerUsername)
+	var latest openbaov1alpha1.OpenBaoCluster
+	if err := controllerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: clusterName}, &latest); err != nil {
+		t.Fatalf("controller get OpenBaoCluster: %v", err)
+	}
+	original := latest.DeepCopy()
+	latest.Finalizers = append(latest.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)
+
+	if err := controllerClient.Patch(ctx, &latest, client.MergeFrom(original)); err != nil {
+		t.Fatalf("controller metadata patch with generated tenant delegation should succeed, got: %v", err)
 	}
 }
 

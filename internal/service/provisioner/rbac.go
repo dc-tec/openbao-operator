@@ -10,6 +10,7 @@ import (
 var (
 	verbsReadOnly             = []string{"get", "list", "watch"}
 	verbsManage               = []string{"create", "delete", "get", "list", "patch", "update", "watch"}
+	verbsClusterDelegation    = []string{"usecustomexecutables", "useimagetrustroots"}
 	verbsEventWrite           = []string{"create", "patch"}
 	verbsPodManage            = []string{"delete", "get", "list", "patch", "update", "watch"}
 	verbsServiceMonitorManage = []string{"create", "delete", "get", "patch"}
@@ -55,6 +56,11 @@ func GenerateTenantRole(namespace string) *rbacv1.Role {
 			APIGroups: []string{"openbao.org"},
 			Resources: []string{"openbaoclusters", "openbaoclusters/status", "openbaoclusters/finalizers"},
 			Verbs:     cloneStrings(verbsManage),
+		},
+		{
+			APIGroups: []string{"openbao.org"},
+			Resources: []string{"openbaoclusters"},
+			Verbs:     cloneStrings(verbsClusterDelegation),
 		},
 		{
 			APIGroups: []string{"openbao.org"},
