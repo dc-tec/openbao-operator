@@ -192,43 +192,97 @@ Kubernetes RBAC controls who can read or mutate the PVC object; it does not prot
 
 ## CR author delegation
 
-Some `OpenBaoCluster` and `OpenBaoRestore` fields cause the operator to run CR-selected custom executables or accept CR-selected trust roots with operator-managed identities. Tenant editors can still create and update ordinary cluster intent, but these fields need a narrower delegated verb on the target `OpenBaoCluster`.
+Editing an `OpenBaoCluster` or `OpenBaoRestore` is not enough when the manifest asks another
+identity or controller to use an external object. Admission checks the requester against every
+referenced authority while the field is present.
+
+The verbs follow common Kubernetes RBAC patterns:
+
+- `get` means the requester may read object payload, especially Secret data.
+- `use` means the requester may cause another workload or controller to consume the object.
+- `usecloudidentities` means the requester may attach cloud identity metadata to OpenBao-managed workloads.
+- `restore` means the requester may run a destructive restore against the target `OpenBaoCluster`.
 
 <DecisionTable
   kind="reference"
-  title="Delegated CR controls"
-  columns={['Delegated verb', 'Controls', 'Grant it to']}
+  title="CR reference authorization matrix"
+  columns={['CR field', 'Referenced object or authority', 'Required authorization']}
   rows={[
     {
-      cells: [
-        '`usecustomexecutables`',
-        '`spec.initContainer.image`, `spec.backup.image`, `spec.upgrade.image`, blue-green `prePromotionHook`, plugin `image` or `command`, and `OpenBaoRestore.spec.image`.',
-        'Identities trusted to choose helper, hook, restore, or plugin executables that will run with operator-managed mounts, credentials, or job identities.',
-      ],
+      cells: ['`spec.unseal.credentialsSecretRef`', 'Same-namespace Secret payload', '`get` on `secrets/<name>`'],
       emphasis: 'recommended',
     },
     {
-      cells: [
-        '`usehelperimages`',
-        'Compatibility alias for existing delegated helper-image RBAC.',
-        'Existing bindings can remain in place, but new bindings should use `usecustomexecutables`.',
-      ],
+      cells: ['`spec.backup.target.credentialsSecretRef`, `spec.backup.tokenSecretRef`', 'Same-namespace Secret payload', '`get` on `secrets/<name>`'],
     },
     {
-      cells: [
-        '`useimagetrustroots`',
-        'Custom `spec.imageVerification` or `spec.operatorImageVerification` trust-root material in the `Hardened` profile.',
-        'Identities trusted to decide which image signers are acceptable for Hardened clusters.',
-      ],
+      cells: ['`OpenBaoRestore.spec.source.target.credentialsSecretRef`, `spec.tokenSecretRef`', 'Same-namespace Secret payload', '`get` on `secrets/<name>`'],
+    },
+    {
+      cells: ['`spec.observability.metrics.serviceMonitor.authorization.credentialsSecret`', 'Same-namespace Secret payload', '`get` on `secrets/<name>`'],
+    },
+    {
+      cells: ['`spec.imagePullSecrets[]`', 'Same-namespace image pull Secret consumed by kubelet', '`use` on `secrets/<name>`; `get` is also accepted'],
+    },
+    {
+      cells: ['`spec.imageVerification.imagePullSecrets[]`, `spec.operatorImageVerification.imagePullSecrets[]`', 'Registry Secret payload read by image verification', '`get` on `secrets/<name>` when verification is enabled'],
+    },
+    {
+      cells: ['`spec.ingress.tlsSecretName`', 'Same-namespace TLS Secret consumed by the ingress controller', '`use` on `secrets/<name>`; `get` is also accepted'],
+    },
+    {
+      cells: ['`spec.observability.metrics.serviceMonitor.tlsConfig.caSecret`', 'Same-namespace Secret consumed by Prometheus', '`use` on `secrets/<name>`; `get` is also accepted'],
+    },
+    {
+      cells: ['`spec.observability.metrics.serviceMonitor.tlsConfig.caConfigMap`', 'Same-namespace ConfigMap consumed by Prometheus', '`use` on `configmaps/<name>`; `get` is also accepted'],
+    },
+    {
+      cells: ['`spec.serviceAccount.name`', 'Same-namespace ServiceAccount selected for OpenBao pods', '`use` on `serviceaccounts/<name>`'],
+    },
+    {
+      cells: ['`spec.tls.acme.sharedCache.existingClaimName`, `spec.auditFileStorage.existingClaimName`', 'Same-namespace PersistentVolumeClaim mounted into OpenBao pods', '`use` on `persistentvolumeclaims/<name>`'],
+    },
+    {
+      cells: ['`spec.storage.storageClassName`, read-replica storage, ACME cache storage, and audit-file storage class fields', 'Cluster-scoped StorageClass', '`use` on `storageclasses/<name>`'],
+    },
+    {
+      cells: ['`spec.ingress.className`', 'Cluster-scoped IngressClass', '`use` on `ingressclasses/<name>`'],
+    },
+    {
+      cells: ['`spec.gateway.gatewayRef`', 'Referenced Gateway in `gatewayRef.namespace` or the cluster namespace', '`use` on `gateways/<name>` in the Gateway namespace'],
+    },
+    {
+      cells: ['Any `spec.serviceAccount.annotations`, plus identity-selector keys in `spec.podMetadata.annotations` or `spec.podMetadata.labels`', 'Main workload cloud identity metadata', '`usecloudidentities` on `openbaoclusters/<cluster>`'],
+    },
+    {
+      cells: ['`spec.backup.target.roleArn`, `spec.backup.target.workloadIdentity.*`', 'Backup Job cloud identity metadata', '`usecloudidentities` on `openbaoclusters/<cluster>`'],
+    },
+    {
+      cells: ['`OpenBaoRestore.spec.source.target.roleArn`, `spec.source.target.workloadIdentity.*`', 'Restore Job cloud identity metadata', '`usecloudidentities` on `openbaoclusters/<spec.cluster>`'],
+    },
+    {
+      cells: ['`OpenBaoRestore.spec.cluster`', 'Destructive restore target OpenBaoCluster', '`restore` on `openbaoclusters/<spec.cluster>`'],
+      emphasis: 'caution',
+    },
+    {
+      cells: ['Custom executables', '`spec.initContainer.image`, backup, upgrade, restore, blue-green hook, or plugin executable fields', '`usecustomexecutables`; `usehelperimages` remains a compatibility alias'],
+    },
+    {
+      cells: ['Custom Hardened image-verification trust roots', '`spec.imageVerification` or `spec.operatorImageVerification` trust-root fields', '`useimagetrustroots` on `openbaoclusters/<cluster>`'],
     },
   ]}
 />
 
-<Callout type="warning" title="Authorization is checked while the field is present">
+<Callout type="warning" title="GitOps identities need the reference grants">
 
-The admission policy checks these delegated verbs on create and update whenever the dangerous field is present, not only when that field changes. For example, a GitOps controller that manages an `OpenBaoCluster` with a custom backup image needs `usecustomexecutables` for future updates to unrelated fields too.
+Admission checks these permissions on create and update whenever the field is present, not only when
+that field changes. A Flux or Argo ServiceAccount that manages an `OpenBaoCluster` with a Gateway,
+custom StorageClass, image pull Secret, cloud identity annotation, or restore request needs the
+matching `use`, `get`, `usecloudidentities`, or `restore` grants before unrelated GitOps updates will
+continue to apply.
 
 </Callout>
+
 
 ## What the RBAC model guarantees
 
