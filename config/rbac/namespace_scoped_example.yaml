@@ -193,6 +193,88 @@ subjects:
     name: team-a-platform-operators # Change to actual group name
     apiGroup: rbac.authorization.k8s.io
 ---
+# Example: Grant cloud workload identity selection on one cluster
+#
+# This namespaced Role grants the custom `usecloudidentities` verb only for a
+# single OpenBaoCluster object. Grant it only to operators trusted to attach
+# cloud role or workload identity metadata to OpenBao-managed workloads.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-cloud-identities-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - usecloudidentities
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-cloud-identities-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-cloud-identities-team-a-example
+subjects:
+  - kind: Group
+    name: team-a-platform-operators # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
+# Example: Grant destructive restore authorization on one cluster
+#
+# This namespaced Role grants the custom `restore` verb only for a single
+# OpenBaoCluster object. Grant it only to operators trusted to replace cluster
+# data, policies, and keys from an OpenBaoRestore snapshot source.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-restore-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - restore
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-restore-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-restore-team-a-example
+subjects:
+  - kind: Group
+    name: team-a-restore-operators # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
 # Example: Grant admin permissions to platform team (cluster-wide)
 #
 # This ClusterRoleBinding grants platform administrators full access

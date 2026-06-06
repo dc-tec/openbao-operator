@@ -91,6 +91,8 @@ func TestGenerateTenantRole(t *testing.T) {
 				if slices.Contains(rule.APIGroups, "openbao.org") &&
 					len(rule.Resources) == 1 &&
 					slices.Contains(rule.Resources, "openbaoclusters") &&
+					slices.Contains(rule.Verbs, "restore") &&
+					slices.Contains(rule.Verbs, "usecloudidentities") &&
 					slices.Contains(rule.Verbs, "usecustomexecutables") &&
 					slices.Contains(rule.Verbs, "useimagetrustroots") {
 					hasOpenBaoClusterDelegationRule = true

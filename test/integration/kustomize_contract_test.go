@@ -380,6 +380,15 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 	var foundServiceMonitorSecretAuthorizer bool
 	var foundCustomExecutablesAuthorizer bool
 	var foundImageTrustRootsAuthorizer bool
+	var foundCloudIdentityAuthorizer bool
+	var foundServiceAccountUseAuthorizer bool
+	var foundImagePullSecretUseAuthorizer bool
+	var foundIngressTLSSecretAuthorizer bool
+	var foundGatewayUseAuthorizer bool
+	var foundPVCUseAuthorizer bool
+	var foundStorageClassUseAuthorizer bool
+	var foundImageVerificationPullSecretAuthorizer bool
+	var foundServiceMonitorTLSReferenceAuthorizer bool
 	var foundSystemSecretBlock bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
@@ -429,6 +438,46 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			strings.Contains(expression, `variables.has_custom_operator_image_trust_roots`) &&
 			strings.Contains(expression, `variables.image_trust_roots_authorized`):
 			foundImageTrustRootsAuthorizer = true
+		case strings.Contains(message, "use cloud identities") &&
+			strings.Contains(expression, `variables.has_cloud_identity_metadata`) &&
+			strings.Contains(expression, `variables.cloud_identities_authorized`):
+			foundCloudIdentityAuthorizer = true
+		case strings.Contains(message, "spec.serviceAccount.name") &&
+			strings.Contains(expression, `resource("serviceaccounts")`) &&
+			strings.Contains(expression, `check("use")`):
+			foundServiceAccountUseAuthorizer = true
+		case strings.Contains(message, "spec.imagePullSecrets") &&
+			strings.Contains(expression, `resource("secrets")`) &&
+			strings.Contains(expression, `check("use")`) &&
+			strings.Contains(expression, `check("get")`):
+			foundImagePullSecretUseAuthorizer = true
+		case strings.Contains(message, "spec.ingress.tlsSecretName") &&
+			strings.Contains(expression, `resource("secrets")`) &&
+			strings.Contains(expression, `check("use")`) &&
+			strings.Contains(expression, `check("get")`):
+			foundIngressTLSSecretAuthorizer = true
+		case strings.Contains(message, "spec.gateway.gatewayRef") &&
+			strings.Contains(expression, `resource("gateways")`) &&
+			strings.Contains(expression, `check("use")`):
+			foundGatewayUseAuthorizer = true
+		case strings.Contains(message, "existing PVC references") &&
+			strings.Contains(expression, `resource("persistentvolumeclaims")`) &&
+			strings.Contains(expression, `check("use")`):
+			foundPVCUseAuthorizer = true
+		case strings.Contains(message, "StorageClass references") &&
+			strings.Contains(expression, `resource("storageclasses")`) &&
+			strings.Contains(expression, `check("use")`):
+			foundStorageClassUseAuthorizer = true
+		case strings.Contains(message, "image verification pull Secrets") &&
+			strings.Contains(expression, `resource("secrets")`) &&
+			strings.Contains(expression, `check("get")`):
+			foundImageVerificationPullSecretAuthorizer = true
+		case strings.Contains(message, "ServiceMonitor TLS references") &&
+			strings.Contains(expression, `resource("secrets")`) &&
+			strings.Contains(expression, `resource("configmaps")`) &&
+			strings.Contains(expression, `check("use")`) &&
+			strings.Contains(expression, `check("get")`):
+			foundServiceMonitorTLSReferenceAuthorizer = true
 		case strings.Contains(message, "system secrets") &&
 			strings.Contains(expression, "object.spec.unseal.credentialsSecretRef") &&
 			strings.Contains(expression, "object.spec.observability.metrics.serviceMonitor.authorization.credentialsSecret") &&
@@ -444,9 +493,18 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 		!foundServiceMonitorSecretAuthorizer ||
 		!foundCustomExecutablesAuthorizer ||
 		!foundImageTrustRootsAuthorizer ||
+		!foundCloudIdentityAuthorizer ||
+		!foundServiceAccountUseAuthorizer ||
+		!foundImagePullSecretUseAuthorizer ||
+		!foundIngressTLSSecretAuthorizer ||
+		!foundGatewayUseAuthorizer ||
+		!foundPVCUseAuthorizer ||
+		!foundStorageClassUseAuthorizer ||
+		!foundImageVerificationPullSecretAuthorizer ||
+		!foundServiceMonitorTLSReferenceAuthorizer ||
 		!foundSystemSecretBlock {
 		t.Fatalf(
-			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v serviceMonitorAuthorizer=%v executableCodeAuthorizer=%v imageTrustRootsAuthorizer=%v systemSecret=%v",
+			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v serviceMonitorAuthorizer=%v executableCodeAuthorizer=%v imageTrustRootsAuthorizer=%v cloudIdentityAuthorizer=%v serviceAccountUseAuthorizer=%v imagePullSecretUseAuthorizer=%v ingressTLSSecretAuthorizer=%v gatewayUseAuthorizer=%v pvcUseAuthorizer=%v storageClassUseAuthorizer=%v imageVerificationPullSecretAuthorizer=%v serviceMonitorTLSReferenceAuthorizer=%v systemSecret=%v",
 			foundHTTPS,
 			foundUnsafeURLComponents,
 			foundSecretAuthorizer,
@@ -454,6 +512,15 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			foundServiceMonitorSecretAuthorizer,
 			foundCustomExecutablesAuthorizer,
 			foundImageTrustRootsAuthorizer,
+			foundCloudIdentityAuthorizer,
+			foundServiceAccountUseAuthorizer,
+			foundImagePullSecretUseAuthorizer,
+			foundIngressTLSSecretAuthorizer,
+			foundGatewayUseAuthorizer,
+			foundPVCUseAuthorizer,
+			foundStorageClassUseAuthorizer,
+			foundImageVerificationPullSecretAuthorizer,
+			foundServiceMonitorTLSReferenceAuthorizer,
 			foundSystemSecretBlock,
 		)
 	}
@@ -464,6 +531,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 	}
 	var foundCustomExecutablesVariable bool
 	var foundImageTrustRootsVariable bool
+	var foundCloudIdentitiesVariable bool
 	for _, variable := range variables {
 		variableMap, ok := variable.(map[string]any)
 		if !ok {
@@ -477,13 +545,16 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 				strings.Contains(expression, `check("usehelperimages")`)
 		case "image_trust_roots_authorized":
 			foundImageTrustRootsVariable = strings.Contains(expression, `check("useimagetrustroots")`)
+		case "cloud_identities_authorized":
+			foundCloudIdentitiesVariable = strings.Contains(expression, `check("usecloudidentities")`)
 		}
 	}
-	if !foundCustomExecutablesVariable || !foundImageTrustRootsVariable {
+	if !foundCustomExecutablesVariable || !foundImageTrustRootsVariable || !foundCloudIdentitiesVariable {
 		t.Fatalf(
-			"openbao-validate-openbaocluster delegation variables missing: customExecutables=%v trustRoots=%v",
+			"openbao-validate-openbaocluster delegation variables missing: customExecutables=%v trustRoots=%v cloudIdentities=%v",
 			foundCustomExecutablesVariable,
 			foundImageTrustRootsVariable,
+			foundCloudIdentitiesVariable,
 		)
 	}
 }
@@ -508,6 +579,8 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 
 	var foundRestoreSecretAuthorizer bool
 	var foundRestoreHelperImageAuthorizer bool
+	var foundRestoreTargetAuthorizer bool
+	var foundRestoreCloudIdentityAuthorizer bool
 	var foundSystemSecretBlock bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
@@ -528,6 +601,13 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 			strings.Contains(expression, `object.spec.image`) &&
 			strings.Contains(expression, `variables.custom_executables_authorized`):
 			foundRestoreHelperImageAuthorizer = true
+		case strings.Contains(message, "must be authorized to restore the target OpenBaoCluster") &&
+			strings.Contains(expression, `variables.restore_authorized`):
+			foundRestoreTargetAuthorizer = true
+		case strings.Contains(message, "restore roleArn or workloadIdentity metadata") &&
+			strings.Contains(expression, `variables.has_restore_cloud_identity_metadata`) &&
+			strings.Contains(expression, `variables.cloud_identities_authorized`):
+			foundRestoreCloudIdentityAuthorizer = true
 		case strings.Contains(message, "system secrets") &&
 			strings.Contains(expression, "object.spec.source.target.credentialsSecretRef") &&
 			strings.Contains(expression, "object.spec.tokenSecretRef") &&
@@ -536,11 +616,17 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 		}
 	}
 
-	if !foundRestoreSecretAuthorizer || !foundRestoreHelperImageAuthorizer || !foundSystemSecretBlock {
+	if !foundRestoreSecretAuthorizer ||
+		!foundRestoreHelperImageAuthorizer ||
+		!foundRestoreTargetAuthorizer ||
+		!foundRestoreCloudIdentityAuthorizer ||
+		!foundSystemSecretBlock {
 		t.Fatalf(
-			"openbao-validate-openbaorestore protections missing: authorizer=%v helperImageAuthorizer=%v systemSecret=%v",
+			"openbao-validate-openbaorestore protections missing: authorizer=%v helperImageAuthorizer=%v restoreTargetAuthorizer=%v restoreCloudIdentityAuthorizer=%v systemSecret=%v",
 			foundRestoreSecretAuthorizer,
 			foundRestoreHelperImageAuthorizer,
+			foundRestoreTargetAuthorizer,
+			foundRestoreCloudIdentityAuthorizer,
 			foundSystemSecretBlock,
 		)
 	}
@@ -550,6 +636,8 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 		t.Fatalf("read policy variables: found=%v err=%v", found, err)
 	}
 	var foundCustomExecutablesVariable bool
+	var foundCloudIdentitiesVariable bool
+	var foundRestoreVariable bool
 	for _, variable := range variables {
 		variableMap, ok := variable.(map[string]any)
 		if !ok {
@@ -561,11 +649,23 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 			foundCustomExecutablesVariable = strings.Contains(expression, `object.spec.cluster`) &&
 				strings.Contains(expression, `check("usecustomexecutables")`) &&
 				strings.Contains(expression, `check("usehelperimages")`)
-			break
+		}
+		if name == "cloud_identities_authorized" {
+			foundCloudIdentitiesVariable = strings.Contains(expression, `object.spec.cluster`) &&
+				strings.Contains(expression, `check("usecloudidentities")`)
+		}
+		if name == "restore_authorized" {
+			foundRestoreVariable = strings.Contains(expression, `object.spec.cluster`) &&
+				strings.Contains(expression, `check("restore")`)
 		}
 	}
-	if !foundCustomExecutablesVariable {
-		t.Fatalf("openbao-validate-openbaorestore custom executables delegation variable missing")
+	if !foundCustomExecutablesVariable || !foundCloudIdentitiesVariable || !foundRestoreVariable {
+		t.Fatalf(
+			"openbao-validate-openbaorestore delegation variables missing: customExecutables=%v cloudIdentities=%v restore=%v",
+			foundCustomExecutablesVariable,
+			foundCloudIdentitiesVariable,
+			foundRestoreVariable,
+		)
 	}
 }
 
@@ -847,7 +947,7 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 		singleTenantRole,
 		"openbao.org",
 		"openbaoclusters",
-		[]string{"usecustomexecutables", "useimagetrustroots"},
+		[]string{"restore", "usecloudidentities", "usecustomexecutables", "useimagetrustroots"},
 	)
 
 	subjects, found, err := unstructured.NestedSlice(singleTenantBinding.Object, "subjects")

@@ -170,6 +170,118 @@ func grantClusterImageTrustRootsAccess(t *testing.T, namespace, clusterName, use
 	grantClusterOpenBaoVerbs(t, namespace, clusterName, username, "cluster-image-trust-roots-access", "useimagetrustroots")
 }
 
+func grantClusterRestoreAccess(t *testing.T, namespace, clusterName, username string) {
+	t.Helper()
+	grantClusterOpenBaoVerbs(t, namespace, clusterName, username, "cluster-restore-access", "restore")
+}
+
+func grantClusterCloudIdentitiesAccess(t *testing.T, namespace, clusterName, username string) {
+	t.Helper()
+	grantClusterOpenBaoVerbs(t, namespace, clusterName, username, "cluster-cloud-identities-access", "usecloudidentities")
+}
+
+func grantNamespacedResourceVerbs(t *testing.T, namespace, username, roleName, apiGroup, resourceName string, resourceNames []string, verbs ...string) {
+	t.Helper()
+
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      roleName,
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{apiGroup},
+				Resources:     []string{resourceName},
+				ResourceNames: resourceNames,
+				Verbs:         verbs,
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create delegated reference role: %v", err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      roleName + "-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create delegated reference rolebinding: %v", err)
+	}
+}
+
+func grantClusterScopedResourceVerbs(t *testing.T, username, roleName, apiGroup, resourceName string, resourceNames []string, verbs ...string) {
+	t.Helper()
+
+	role := &rbacv1.ClusterRole{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "ClusterRole",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: roleName,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{apiGroup},
+				Resources:     []string{resourceName},
+				ResourceNames: resourceNames,
+				Verbs:         verbs,
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create delegated cluster reference role: %v", err)
+	}
+
+	binding := &rbacv1.ClusterRoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "ClusterRoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: roleName + "-binding",
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create delegated cluster reference rolebinding: %v", err)
+	}
+}
+
 func waitForOpenBaoRestoreAdmissionPolicies(t *testing.T, namespace string) {
 	t.Helper()
 
@@ -349,6 +461,466 @@ func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
 
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("expected OpenBaoCluster create without spec.initContainer to succeed, got: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_RequiresReferenceUseAuthorization(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "reference-use-editor"
+	tenantClient := newImpersonatedClient(t, username)
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+
+	configureTrustedIngressPeers := func(cluster *openbaov1alpha1.OpenBaoCluster) {
+		cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+			TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"kubernetes.io/metadata.name": "ingress-system",
+						},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("service-account-use", func(t *testing.T) {
+		const serviceAccountName = "custom-openbao-sa"
+
+		denied := newMinimalClusterObj(namespace, "cluster-serviceaccount-use-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.ServiceAccount = &openbaov1alpha1.ServiceAccountConfig{Name: serviceAccountName}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec.serviceAccount.name") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"serviceaccount-use-access",
+			"",
+			"serviceaccounts",
+			[]string{serviceAccountName},
+			"use",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-serviceaccount-use-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.ServiceAccount = &openbaov1alpha1.ServiceAccountConfig{Name: serviceAccountName}
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected service-account-use-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("image-pull-secret-use", func(t *testing.T) {
+		const secretName = "tenant-pull-secret"
+
+		denied := newMinimalClusterObj(namespace, "cluster-image-pull-secret-use-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: secretName}}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec.imagePullSecrets") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"image-pull-secret-use-access",
+			"",
+			"secrets",
+			[]string{secretName},
+			"use",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-image-pull-secret-use-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.ImagePullSecrets = []corev1.LocalObjectReference{{Name: secretName}}
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected image-pull-secret-use-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("ingress-class-use", func(t *testing.T) {
+		const className = "tenant-ingress-class"
+
+		denied := newMinimalClusterObj(namespace, "cluster-ingress-class-use-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Ingress = &openbaov1alpha1.IngressConfig{
+			Enabled:   true,
+			ClassName: ptr.To(className),
+			Host:      "bao.example.com",
+		}
+		configureTrustedIngressPeers(denied)
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec.ingress.className") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantClusterScopedResourceVerbs(
+			t,
+			username,
+			"ingressclass-use-"+username,
+			"networking.k8s.io",
+			"ingressclasses",
+			[]string{className},
+			"use",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-ingress-class-use-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Ingress = &openbaov1alpha1.IngressConfig{
+			Enabled:   true,
+			ClassName: ptr.To(className),
+			Host:      "bao.example.com",
+		}
+		configureTrustedIngressPeers(allowed)
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected ingress-class-use-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("ingress-tls-secret-use", func(t *testing.T) {
+		const secretName = "tenant-ingress-tls"
+
+		denied := newMinimalClusterObj(namespace, "cluster-ingress-tls-secret-use-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Ingress = &openbaov1alpha1.IngressConfig{
+			Enabled:       true,
+			Host:          "bao.example.com",
+			TLSSecretName: secretName,
+		}
+		configureTrustedIngressPeers(denied)
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec.ingress.tlsSecretName") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"ingress-tls-secret-use-access",
+			"",
+			"secrets",
+			[]string{secretName},
+			"use",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-ingress-tls-secret-use-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Ingress = &openbaov1alpha1.IngressConfig{
+			Enabled:       true,
+			Host:          "bao.example.com",
+			TLSSecretName: secretName,
+		}
+		configureTrustedIngressPeers(allowed)
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected ingress-tls-secret-use-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("gateway-use", func(t *testing.T) {
+		const gatewayName = "tenant-gateway"
+
+		denied := newMinimalClusterObj(namespace, "cluster-gateway-use-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+			Enabled: true,
+			GatewayRef: openbaov1alpha1.GatewayReference{
+				Name: gatewayName,
+			},
+			Hostname: "bao.example.com",
+		}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "spec.gateway.gatewayRef") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"gateway-use-access",
+			"gateway.networking.k8s.io",
+			"gateways",
+			[]string{gatewayName},
+			"use",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-gateway-use-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+			Enabled: true,
+			GatewayRef: openbaov1alpha1.GatewayReference{
+				Name: gatewayName,
+			},
+			Hostname: "bao.example.com",
+		}
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected gateway-use-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("existing-pvc-use", func(t *testing.T) {
+		const pvcName = "tenant-audit-pvc"
+
+		denied := newMinimalClusterObj(namespace, "cluster-existing-pvc-use-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.AuditFileStorage = &openbaov1alpha1.AuditFileStorageConfig{
+			Mode:              openbaov1alpha1.AuditFileStorageModeExistingPVC,
+			ExistingClaimName: pvcName,
+		}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "existing PVC references") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"existing-pvc-use-access",
+			"",
+			"persistentvolumeclaims",
+			[]string{pvcName},
+			"use",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-existing-pvc-use-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.AuditFileStorage = &openbaov1alpha1.AuditFileStorageConfig{
+			Mode:              openbaov1alpha1.AuditFileStorageModeExistingPVC,
+			ExistingClaimName: pvcName,
+		}
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected existing-pvc-use-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("storage-class-use", func(t *testing.T) {
+		const storageClassName = "tenant-fast-storage"
+
+		denied := newMinimalClusterObj(namespace, "cluster-storageclass-use-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Storage.StorageClassName = ptr.To(storageClassName)
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "StorageClass references") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantClusterScopedResourceVerbs(
+			t,
+			username,
+			"storageclass-use-"+username,
+			"storage.k8s.io",
+			"storageclasses",
+			[]string{storageClassName},
+			"use",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-storageclass-use-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Storage.StorageClassName = ptr.To(storageClassName)
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected storage-class-use-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("image-verification-pull-secret-get", func(t *testing.T) {
+		const secretName = "tenant-verification-pull-secret"
+
+		denied := newMinimalClusterObj(namespace, "cluster-image-verification-pull-secret-get-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.ImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+			Enabled:          true,
+			FailurePolicy:    "Block",
+			ImagePullSecrets: []corev1.LocalObjectReference{{Name: secretName}},
+		}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "image verification pull Secrets") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"image-verification-pull-secret-get-access",
+			"",
+			"secrets",
+			[]string{secretName},
+			"get",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-image-verification-pull-secret-get-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.ImageVerification = &openbaov1alpha1.ImageVerificationConfig{
+			Enabled:          true,
+			FailurePolicy:    "Block",
+			ImagePullSecrets: []corev1.LocalObjectReference{{Name: secretName}},
+		}
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected image-verification-pull-secret-get-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("servicemonitor-tls-secret-use", func(t *testing.T) {
+		const secretName = "tenant-servicemonitor-ca"
+
+		denied := newMinimalClusterObj(namespace, "cluster-servicemonitor-tls-secret-use-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+			Metrics: &openbaov1alpha1.MetricsConfig{
+				Enabled: true,
+				ServiceMonitor: &openbaov1alpha1.ServiceMonitorConfig{
+					Enabled: true,
+					TLSConfig: &openbaov1alpha1.ServiceMonitorTLSConfig{
+						CASecret: &openbaov1alpha1.ServiceMonitorKeySelector{
+							Name: secretName,
+							Key:  "ca.crt",
+						},
+					},
+				},
+			},
+		}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "ServiceMonitor TLS references") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"servicemonitor-tls-secret-use-access",
+			"",
+			"secrets",
+			[]string{secretName},
+			"use",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-servicemonitor-tls-secret-use-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+			Metrics: &openbaov1alpha1.MetricsConfig{
+				Enabled: true,
+				ServiceMonitor: &openbaov1alpha1.ServiceMonitorConfig{
+					Enabled: true,
+					TLSConfig: &openbaov1alpha1.ServiceMonitorTLSConfig{
+						CASecret: &openbaov1alpha1.ServiceMonitorKeySelector{
+							Name: secretName,
+							Key:  "ca.crt",
+						},
+					},
+				},
+			},
+		}
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected servicemonitor-tls-secret-use-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("backup-credentials-secret-get", func(t *testing.T) {
+		const secretName = "tenant-backup-creds"
+
+		denied := newMinimalClusterObj(namespace, "cluster-backup-credentials-secret-get-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+			Schedule:    "0 0 * * *",
+			JWTAuthRole: "backup-role",
+			Target: openbaov1alpha1.BackupTarget{
+				Provider: "s3",
+				Endpoint: "https://objectstore.example.com",
+				Bucket:   testBackupBucket,
+				CredentialsSecretRef: &corev1.LocalObjectReference{
+					Name: secretName,
+				},
+			},
+		}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "backup credentials") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"backup-credentials-secret-get-access",
+			"",
+			"secrets",
+			[]string{secretName},
+			"get",
+		)
+
+		allowed := newMinimalClusterObj(namespace, "cluster-backup-credentials-secret-get-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+			Schedule:    "0 0 * * *",
+			JWTAuthRole: "backup-role",
+			Target: openbaov1alpha1.BackupTarget{
+				Provider: "s3",
+				Endpoint: "https://objectstore.example.com",
+				Bucket:   testBackupBucket,
+				CredentialsSecretRef: &corev1.LocalObjectReference{
+					Name: secretName,
+				},
+			},
+		}
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected backup-credentials-secret-get-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+}
+
+func TestVAP_OpenBaoCluster_RequiresCloudIdentityAuthorization(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "cloud-identity-editor"
+	tenantClient := newImpersonatedClient(t, username)
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+
+	denied := newMinimalClusterObj(namespace, "cluster-cloud-identity-denied")
+	denied.Spec.InitContainer = nil
+	denied.Spec.ServiceAccount = &openbaov1alpha1.ServiceAccountConfig{
+		Annotations: map[string]string{
+			"iam.amazonaws.com/role": "openbao-runtime",
+		},
+	}
+	err := tenantClient.Create(ctx, denied, client.DryRunAll)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "use cloud identities") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+
+	clusterName := "cluster-cloud-identity-allowed"
+	grantClusterCloudIdentitiesAccess(t, namespace, clusterName, username)
+	allowed := newMinimalClusterObj(namespace, clusterName)
+	allowed.Spec.InitContainer = nil
+	allowed.Spec.ServiceAccount = &openbaov1alpha1.ServiceAccountConfig{
+		Annotations: map[string]string{
+			"iam.amazonaws.com/role": "openbao-runtime",
+		},
+	}
+	if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+		t.Fatalf("expected cloud-identity-authorized OpenBaoCluster create to succeed, got: %v", err)
 	}
 }
 
@@ -1312,12 +1884,149 @@ func TestVAP_OpenBaoCluster_RejectsBackupEndpointSSRFBypasses(t *testing.T) {
 	}
 }
 
+func TestVAP_OpenBaoRestore_DeniesRestoreWithoutTargetClusterRestoreVerb(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
+
+	username := "restore-target-editor"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "restore-target-denied",
+			Namespace: namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster: "target-cluster",
+			Source: openbaov1alpha1.RestoreSource{
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Endpoint: "https://objectstore.example.com",
+					Bucket:   testBackupBucket,
+				},
+				Key: "clusters/prod/snapshot.snap",
+			},
+			JWTAuthRole: "restore-role",
+			Force:       true,
+		},
+	}
+
+	err := tenantClient.Create(ctx, restore)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "must be authorized to restore the target OpenBaoCluster") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoRestore_RequiresReferenceAuthorization(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
+
+	username := "restore-reference-editor"
+	clusterName := "target-cluster"
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	grantClusterRestoreAccess(t, namespace, clusterName, username)
+	tenantClient := newImpersonatedClient(t, username)
+
+	t.Run("restore-credentials-secret-get", func(t *testing.T) {
+		const credentialsSecretName = "tenant-restore-creds"
+		const tokenSecretName = "tenant-restore-token"
+
+		denied := &openbaov1alpha1.OpenBaoRestore{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "restore-credentials-secret-get-denied",
+				Namespace: namespace,
+			},
+			Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+				Cluster: clusterName,
+				Source: openbaov1alpha1.RestoreSource{
+					Target: openbaov1alpha1.BackupTarget{
+						Provider: "s3",
+						Endpoint: "https://objectstore.example.com",
+						Bucket:   testBackupBucket,
+						CredentialsSecretRef: &corev1.LocalObjectReference{
+							Name: credentialsSecretName,
+						},
+					},
+					Key: "clusters/prod/snapshot.snap",
+				},
+				TokenSecretRef: &corev1.LocalObjectReference{
+					Name: tokenSecretName,
+				},
+				Force: true,
+			},
+		}
+
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "restore credentials") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"restore-credentials-secret-get-access",
+			"",
+			"secrets",
+			[]string{credentialsSecretName, tokenSecretName},
+			"get",
+		)
+
+		allowed := denied.DeepCopy()
+		allowed.Name = "restore-credentials-secret-get-allowed"
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected restore-credentials-secret-get-authorized OpenBaoRestore create to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("restore-cloud-identity", func(t *testing.T) {
+		restore := &openbaov1alpha1.OpenBaoRestore{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "restore-cloud-identity-denied",
+				Namespace: namespace,
+			},
+			Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+				Cluster: clusterName,
+				Source: openbaov1alpha1.RestoreSource{
+					Target: openbaov1alpha1.BackupTarget{
+						Provider: "s3",
+						Endpoint: "https://objectstore.example.com",
+						Bucket:   testBackupBucket,
+						RoleARN:  "arn:aws:iam::123456789012:role/openbao-restore",
+					},
+					Key: "clusters/prod/snapshot.snap",
+				},
+				JWTAuthRole: "restore-role",
+				Force:       true,
+			},
+		}
+
+		err := tenantClient.Create(ctx, restore, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "use cloud identities") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		grantClusterCloudIdentitiesAccess(t, namespace, clusterName, username)
+
+		allowed := restore.DeepCopy()
+		allowed.Name = "restore-cloud-identity-allowed"
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected restore-cloud-identity-authorized OpenBaoRestore create to succeed, got: %v", err)
+		}
+	})
+}
+
 func TestVAP_OpenBaoRestore_DeniesCustomImageWithoutHelperImageVerb(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoRestoreAdmissionPolicies(t, namespace)
 
 	username := "restore-image-editor"
 	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	grantClusterRestoreAccess(t, namespace, "target-cluster", username)
 	tenantClient := newImpersonatedClient(t, username)
 
 	restore := &openbaov1alpha1.OpenBaoRestore{
@@ -1356,6 +2065,7 @@ func TestVAP_OpenBaoRestore_AllowsCustomImageWithHelperImageVerb(t *testing.T) {
 	clusterName := "target-cluster"
 	grantTenantOpenBaoWriteAccess(t, namespace, username)
 	grantClusterHelperImageAccess(t, namespace, clusterName, username)
+	grantClusterRestoreAccess(t, namespace, clusterName, username)
 	tenantClient := newImpersonatedClient(t, username)
 
 	restore := &openbaov1alpha1.OpenBaoRestore{
@@ -1415,6 +2125,7 @@ func TestVAP_OpenBaoRestore_DeniesUnchangedCustomImageUpdateWithoutCustomExecuta
 
 	username := "restore-image-standard-editor"
 	grantTenantOpenBaoWriteAccess(t, namespace, username)
+	grantClusterRestoreAccess(t, namespace, clusterName, username)
 	tenantClient := newImpersonatedClient(t, username)
 
 	var latest openbaov1alpha1.OpenBaoRestore

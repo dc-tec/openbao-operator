@@ -113,10 +113,12 @@ The `OpenBaoRestore`, the target `OpenBaoCluster`, and any referenced token Secr
 
 </Callout>
 
-<Callout type="warning" title="Custom restore images need delegated RBAC">
+<Callout type="warning" title="Restore requests need delegated Kubernetes RBAC">
 
-If `OpenBaoRestore.spec.image` is set, the identity applying the restore request needs `usecustomexecutables` on the target `OpenBaoCluster`. The admission check is tied to the target cluster because the restore image runs with restore credentials for that cluster.
-
+The identity applying an `OpenBaoRestore` needs `restore` on the target `OpenBaoCluster`; this is the
+Kubernetes-side authorization for a destructive restore target. If `OpenBaoRestore.spec.image` is set,
+the same identity also needs `usecustomexecutables`. If the restore source sets `roleArn` or
+`workloadIdentity`, it needs `usecloudidentities`.
 </Callout>
 
 <Callout type="tip" title="For most first-time restores">

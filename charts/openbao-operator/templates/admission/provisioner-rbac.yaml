@@ -107,7 +107,7 @@ spec:
               rule.resources.size() == 1 &&
               rule.resources[0] == 'openbaoclusters' &&
               rule.verbs != null &&
-              rule.verbs.all(v, v in ['usecustomexecutables', 'useimagetrustroots'])
+              rule.verbs.all(v, v in ['restore', 'usecloudidentities', 'usecustomexecutables', 'useimagetrustroots'])
             ) ||
             (
               rule.apiGroups.size() == 1 &&

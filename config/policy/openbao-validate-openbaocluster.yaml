@@ -13,6 +13,18 @@ spec:
   variables:
     - name: has_backup
       expression: has(object.spec.backup)
+    - name: operator_namespace
+      expression: >-
+        'openbao-operator-system'
+    - name: controller_serviceaccount_name
+      expression: >-
+        'openbao-operator-controller'
+    - name: controller_principal
+      expression: >-
+        'system:serviceaccount:' + variables.operator_namespace + ':' + variables.controller_serviceaccount_name
+    - name: is_operator_controller
+      expression: >-
+        request.userInfo.username == variables.controller_principal
     - name: requested_upgrade_strategy
       expression: >-
         has(object.spec.upgrade) && has(object.spec.upgrade.strategy) && object.spec.upgrade.strategy != "" ? object.spec.upgrade.strategy : "RollingUpdate"
@@ -113,6 +125,44 @@ spec:
     - name: image_trust_roots_authorized
       expression: >-
         authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.metadata.name).check("useimagetrustroots").allowed()
+    - name: cloud_identities_authorized
+      expression: >-
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.metadata.name).check("usecloudidentities").allowed()
+    - name: has_main_workload_cloud_identity_metadata
+      expression: >-
+        (has(object.spec.serviceAccount) &&
+          has(object.spec.serviceAccount.annotations) &&
+          size(object.spec.serviceAccount.annotations) > 0) ||
+        (has(object.spec.podMetadata) &&
+          (
+            (has(object.spec.podMetadata.annotations) &&
+              object.spec.podMetadata.annotations.exists(key,
+                key.startsWith("eks.amazonaws.com/") ||
+                key.startsWith("iam.amazonaws.com/") ||
+                key.startsWith("iam.gke.io/") ||
+                key.startsWith("azure.workload.identity/"))) ||
+            (has(object.spec.podMetadata.labels) &&
+              object.spec.podMetadata.labels.exists(key,
+                key.startsWith("azure.workload.identity/") ||
+                key == "aadpodidbinding"))
+          ))
+    - name: has_backup_cloud_identity_metadata
+      expression: >-
+        has(object.spec.backup) &&
+        (
+          (has(object.spec.backup.target.roleArn) && object.spec.backup.target.roleArn.trim() != "") ||
+          (has(object.spec.backup.target.workloadIdentity) &&
+            (
+              (has(object.spec.backup.target.workloadIdentity.serviceAccountAnnotations) &&
+                size(object.spec.backup.target.workloadIdentity.serviceAccountAnnotations) > 0) ||
+              (has(object.spec.backup.target.workloadIdentity.podLabels) &&
+                size(object.spec.backup.target.workloadIdentity.podLabels) > 0)
+            ))
+        )
+    - name: has_cloud_identity_metadata
+      expression: >-
+        variables.has_main_workload_cloud_identity_metadata ||
+        variables.has_backup_cloud_identity_metadata
     - name: has_custom_main_image_trust_roots
       expression: >-
         has(object.spec.imageVerification) &&
@@ -420,6 +470,119 @@ spec:
         !(variables.has_custom_main_image_trust_roots || variables.has_custom_operator_image_trust_roots) ||
         variables.image_trust_roots_authorized
       message: "Users configuring custom image verification trust roots in Hardened profile must be authorized to use image trust roots on this OpenBaoCluster."
+    # Reference authorization: CR authors must be authorized for every external authority
+    # their manifest asks the operator, kubelet, ingress, gateway, or monitoring stack to use.
+    - expression: >-
+        variables.is_operator_controller ||
+        !variables.has_cloud_identity_metadata ||
+        variables.cloud_identities_authorized
+      message: "Users configuring workload identity annotations, labels, roleArn, or workloadIdentity metadata must be authorized to use cloud identities on this OpenBaoCluster."
+    - expression: >-
+        variables.is_operator_controller ||
+        !has(object.spec.serviceAccount) ||
+        !has(object.spec.serviceAccount.name) ||
+        object.spec.serviceAccount.name.trim() == "" ||
+        authorizer.group("").resource("serviceaccounts").namespace(request.namespace).name(object.spec.serviceAccount.name).check("use").allowed()
+      message: "Users configuring spec.serviceAccount.name must be authorized to use that ServiceAccount."
+    - expression: >-
+        variables.is_operator_controller ||
+        !has(object.spec.imagePullSecrets) ||
+        object.spec.imagePullSecrets.all(secretRef,
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(secretRef.name).check("use").allowed() ||
+          authorizer.group("").resource("secrets").namespace(request.namespace).name(secretRef.name).check("get").allowed())
+      message: "Users configuring spec.imagePullSecrets must be authorized to use referenced image pull Secrets, or get those Secrets."
+    - expression: >-
+        variables.is_operator_controller ||
+        !has(object.spec.ingress) ||
+        object.spec.ingress.enabled != true ||
+        !has(object.spec.ingress.className) ||
+        object.spec.ingress.className.trim() == "" ||
+        authorizer.group("networking.k8s.io").resource("ingressclasses").name(object.spec.ingress.className).check("use").allowed()
+      message: "Users configuring spec.ingress.className must be authorized to use that IngressClass."
+    - expression: >-
+        variables.is_operator_controller ||
+        !has(object.spec.ingress) ||
+        object.spec.ingress.enabled != true ||
+        !has(object.spec.ingress.tlsSecretName) ||
+        object.spec.ingress.tlsSecretName.trim() == "" ||
+        authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.ingress.tlsSecretName).check("use").allowed() ||
+        authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.ingress.tlsSecretName).check("get").allowed()
+      message: "Users configuring spec.ingress.tlsSecretName must be authorized to use the referenced TLS Secret, or get that Secret."
+    - expression: >-
+        variables.is_operator_controller ||
+        !has(object.spec.gateway) ||
+        object.spec.gateway.enabled != true ||
+        object.spec.gateway.gatewayRef.name.trim() == "" ||
+        authorizer.group("gateway.networking.k8s.io").resource("gateways").
+          namespace(has(object.spec.gateway.gatewayRef.namespace) && object.spec.gateway.gatewayRef.namespace.trim() != "" ? object.spec.gateway.gatewayRef.namespace : request.namespace).
+          name(object.spec.gateway.gatewayRef.name).check("use").allowed()
+      message: "Users configuring spec.gateway.gatewayRef must be authorized to use the referenced Gateway."
+    - expression: >-
+        variables.is_operator_controller ||
+        (
+          (!has(object.spec.tls.acme) ||
+            !has(object.spec.tls.acme.sharedCache) ||
+            !has(object.spec.tls.acme.sharedCache.existingClaimName) ||
+            object.spec.tls.acme.sharedCache.existingClaimName.trim() == "" ||
+            authorizer.group("").resource("persistentvolumeclaims").namespace(request.namespace).name(object.spec.tls.acme.sharedCache.existingClaimName).check("use").allowed()) &&
+          (!has(object.spec.auditFileStorage) ||
+            !has(object.spec.auditFileStorage.existingClaimName) ||
+            object.spec.auditFileStorage.existingClaimName.trim() == "" ||
+            authorizer.group("").resource("persistentvolumeclaims").namespace(request.namespace).name(object.spec.auditFileStorage.existingClaimName).check("use").allowed())
+        )
+      message: "Users configuring existing PVC references must be authorized to use the referenced PersistentVolumeClaims."
+    - expression: >-
+        variables.is_operator_controller ||
+        (
+          (!has(object.spec.storage.storageClassName) ||
+            object.spec.storage.storageClassName.trim() == "" ||
+            authorizer.group("storage.k8s.io").resource("storageclasses").name(object.spec.storage.storageClassName).check("use").allowed()) &&
+          (!has(object.spec.readReplicas) ||
+            !has(object.spec.readReplicas.storage) ||
+            !has(object.spec.readReplicas.storage.storageClassName) ||
+            object.spec.readReplicas.storage.storageClassName.trim() == "" ||
+            authorizer.group("storage.k8s.io").resource("storageclasses").name(object.spec.readReplicas.storage.storageClassName).check("use").allowed()) &&
+          (!has(object.spec.tls.acme) ||
+            !has(object.spec.tls.acme.sharedCache) ||
+            !has(object.spec.tls.acme.sharedCache.storageClassName) ||
+            object.spec.tls.acme.sharedCache.storageClassName.trim() == "" ||
+            authorizer.group("storage.k8s.io").resource("storageclasses").name(object.spec.tls.acme.sharedCache.storageClassName).check("use").allowed()) &&
+          (!has(object.spec.auditFileStorage) ||
+            !has(object.spec.auditFileStorage.storageClassName) ||
+            object.spec.auditFileStorage.storageClassName.trim() == "" ||
+            authorizer.group("storage.k8s.io").resource("storageclasses").name(object.spec.auditFileStorage.storageClassName).check("use").allowed())
+        )
+      message: "Users configuring StorageClass references must be authorized to use the referenced StorageClasses."
+    - expression: >-
+        variables.is_operator_controller ||
+        (
+          (!has(object.spec.imageVerification) ||
+            object.spec.imageVerification.enabled != true ||
+            !has(object.spec.imageVerification.imagePullSecrets) ||
+            object.spec.imageVerification.imagePullSecrets.all(secretRef,
+              authorizer.group("").resource("secrets").namespace(request.namespace).name(secretRef.name).check("get").allowed())) &&
+          (!has(object.spec.operatorImageVerification) ||
+            object.spec.operatorImageVerification.enabled != true ||
+            !has(object.spec.operatorImageVerification.imagePullSecrets) ||
+            object.spec.operatorImageVerification.imagePullSecrets.all(secretRef,
+              authorizer.group("").resource("secrets").namespace(request.namespace).name(secretRef.name).check("get").allowed()))
+        )
+      message: "Users configuring image verification pull Secrets must be authorized to get those Secrets."
+    - expression: >-
+        variables.is_operator_controller ||
+        !has(object.spec.observability) ||
+        !has(object.spec.observability.metrics) ||
+        !has(object.spec.observability.metrics.serviceMonitor) ||
+        !has(object.spec.observability.metrics.serviceMonitor.tlsConfig) ||
+        (
+          (!has(object.spec.observability.metrics.serviceMonitor.tlsConfig.caSecret) ||
+            authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.observability.metrics.serviceMonitor.tlsConfig.caSecret.name).check("use").allowed() ||
+            authorizer.group("").resource("secrets").namespace(request.namespace).name(object.spec.observability.metrics.serviceMonitor.tlsConfig.caSecret.name).check("get").allowed()) &&
+          (!has(object.spec.observability.metrics.serviceMonitor.tlsConfig.caConfigMap) ||
+            authorizer.group("").resource("configmaps").namespace(request.namespace).name(object.spec.observability.metrics.serviceMonitor.tlsConfig.caConfigMap.name).check("use").allowed() ||
+            authorizer.group("").resource("configmaps").namespace(request.namespace).name(object.spec.observability.metrics.serviceMonitor.tlsConfig.caConfigMap.name).check("get").allowed())
+        )
+      message: "Users configuring ServiceMonitor TLS references must be authorized to use the referenced Secret or ConfigMap, or get it."
     # Confused-deputy protection: users configuring unseal Secret credentials must be able to read that Secret.
     - expression: >-
         !has(object.spec.unseal) ||

@@ -82,6 +82,15 @@ Setting `spec.backup.image` selects the executable used by backup Jobs. The iden
 
 </Callout>
 
+<Callout type="warning" title="Backup references need Kubernetes RBAC">
+
+If the backup target uses `credentialsSecretRef` or `tokenSecretRef`, the identity applying the
+`OpenBaoCluster` needs `get` on those Secrets. If the backup target sets `roleArn` or
+`workloadIdentity`, that identity needs `usecloudidentities` on the `OpenBaoCluster`. These checks
+also apply to GitOps updates while the fields remain present.
+
+</Callout>
+
 ## First successful backup path
 
 <DecisionTable
