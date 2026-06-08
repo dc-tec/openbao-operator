@@ -124,10 +124,16 @@ description: Default-deny network posture for OpenBao Pods and lifecycle jobs, p
 
 If you need additional ingress, use:
 
-- `spec.network.ingressRules` for additive peer rules
-- `spec.network.trustedIngressPeers` for user-managed ingress or passthrough proxies
+- `spec.network.trustedIngressPeers` for user-managed ingress, passthrough proxies, and Hardened application access paths
+- `spec.network.ingressRules` only outside Hardened when the supported peer fields cannot model the source
 
 Managed `spec.ingress.enabled: true` configurations must declare at least one trusted ingress peer so the OpenBao API listener is not opened to every pod that can reach the namespace.
+
+<Callout type="important" title="Hardened ingress is explicit">
+
+Hardened clusters reject raw `spec.network.ingressRules`. Model application access through managed Gateway/Ingress integration or `spec.network.trustedIngressPeers`, and keep those peers scoped to concrete namespace and pod selectors.
+
+</Callout>
 
 <Callout type="note" title="Read replicas are client-serving Pods">
 
@@ -179,6 +185,12 @@ When steady read replicas are enabled, the main client Service can route to both
 <Callout type="note" title="Lifecycle jobs use separate egress assumptions">
 
 Backup and restore do not rely on the main workload policy alone. They use separate job identities and separate network assumptions, which is why `BackupConfigurationReady` and `RestoreConfigurationReady` exist as distinct status signals.
+
+</Callout>
+
+<Callout type="important" title="Hardened egress is port-scoped">
+
+Hardened clusters require user-provided `spec.network.egressRules` to target explicit non-wildcard peers and explicit ports. Broad, portless, loopback, or link-local egress additions are rejected.
 
 </Callout>
 

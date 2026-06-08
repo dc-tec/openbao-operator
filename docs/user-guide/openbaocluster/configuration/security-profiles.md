@@ -103,12 +103,18 @@ description: Choose the cluster posture first, including bootstrap, unseal, TLS,
     {
       cells: [
         "Networking and jobs",
-        "You can tolerate more permissive local defaults while standing up the cluster.",
-        "Backup and other lifecycle paths should assume explicit egress and identity wiring before go-live.",
+        "You can tolerate more permissive local defaults, raw ingress rules, and ambient object-storage identity while standing up the cluster.",
+        "Use explicit ingress peers, port-scoped egress, and explicit job identity. Raw ingress rules, broad egress, ambient backup credentials, TLS skip-verify, TLS disablement, backend HTTP, and dangerous runtime flags are rejected.",
       ],
     },
   ]}
 />
+
+<Callout type="important" title="Hardened is an enforced contract">
+
+For Hardened clusters, unsafe escape hatches are blocked during admission and reported in status for already-existing specs. Application access should be modeled with managed Gateway/Ingress integration or `spec.network.trustedIngressPeers`, while object-storage access should use `credentialsSecretRef`, `workloadIdentity` metadata, or `roleArn` for S3 targets instead of relying on provider-default credentials.
+
+</Callout>
 
 ## Representative starting points
 
