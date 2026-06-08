@@ -6,6 +6,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
 )
 
 // applyAllConditions computes and sets all status conditions from cluster state.
@@ -115,6 +116,15 @@ func applyAllConditions(
 			LastTransitionTime: now,
 			Reason:             ReasonDevelopmentProfile,
 			Message:            "Cluster is using Development profile with relaxed security. Not suitable for production.",
+		})
+	} else if violation := hardenedcontract.EvaluateOpenBaoCluster(cluster); violation != nil {
+		meta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+			Type:               string(openbaov1alpha1.ConditionSecurityRisk),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: gen,
+			LastTransitionTime: now,
+			Reason:             violation.Reason,
+			Message:            violation.Message,
 		})
 	} else {
 		meta.RemoveStatusCondition(&cluster.Status.Conditions, string(openbaov1alpha1.ConditionSecurityRisk))

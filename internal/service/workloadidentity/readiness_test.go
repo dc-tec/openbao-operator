@@ -6,9 +6,12 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -97,6 +100,164 @@ func TestEvaluateBackupReadiness_ExplicitWorkloadIdentityIsNotAmbient(t *testing
 	}
 }
 
+func TestEvaluateBackupReadiness_HardenedRejectsAmbientStorageIdentity(t *testing.T) {
+	scheme := testReadinessScheme(t)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+			Network: &openbaov1alpha1.NetworkConfig{
+				EgressRules: []networkingv1.NetworkPolicyEgressRule{testExplicitEgressRule()},
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				JWTAuthRole: "backup-role",
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Bucket:   "backups",
+				},
+			},
+		},
+	}
+
+	reader := fake.NewClientBuilder().WithScheme(scheme).Build()
+	readiness, err := EvaluateBackupReadiness(context.Background(), reader, cluster)
+	if err != nil {
+		t.Fatalf("EvaluateBackupReadiness() error = %v", err)
+	}
+	if readiness.Status != metav1.ConditionFalse || readiness.Reason != constants.ReasonSecurityViolation {
+		t.Fatalf("readiness = %#v, want false/%s", readiness, constants.ReasonSecurityViolation)
+	}
+	if !strings.Contains(readiness.Message, "ambient credentials") {
+		t.Fatalf("message = %q, want ambient credential rejection", readiness.Message)
+	}
+}
+
+func TestEvaluateBackupReadiness_HardenedRejectsNonS3RoleARNAsAmbientStorageIdentity(t *testing.T) {
+	scheme := testReadinessScheme(t)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+			Network: &openbaov1alpha1.NetworkConfig{
+				EgressRules: []networkingv1.NetworkPolicyEgressRule{testExplicitEgressRule()},
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				JWTAuthRole: "backup-role",
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "gcs",
+					Bucket:   "backups",
+					RoleARN:  "arn:aws:iam::123456789012:role/openbao-backup",
+				},
+			},
+		},
+	}
+
+	reader := fake.NewClientBuilder().WithScheme(scheme).Build()
+	readiness, err := EvaluateBackupReadiness(context.Background(), reader, cluster)
+	if err != nil {
+		t.Fatalf("EvaluateBackupReadiness() error = %v", err)
+	}
+	if readiness.Status != metav1.ConditionFalse || readiness.Reason != constants.ReasonSecurityViolation {
+		t.Fatalf("readiness = %#v, want false/%s", readiness, constants.ReasonSecurityViolation)
+	}
+	if !strings.Contains(readiness.Message, "ambient credentials") {
+		t.Fatalf("message = %q, want ambient credential rejection", readiness.Message)
+	}
+}
+
+func TestEvaluateBackupReadiness_HardenedRejectsBroadEgressRules(t *testing.T) {
+	scheme := testReadinessScheme(t)
+	port := intstr.FromInt32(443)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+			Network: &openbaov1alpha1.NetworkConfig{
+				EgressRules: []networkingv1.NetworkPolicyEgressRule{
+					{
+						To: []networkingv1.NetworkPolicyPeer{
+							{IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0"}},
+						},
+						Ports: []networkingv1.NetworkPolicyPort{
+							{Protocol: ptr.To(corev1.ProtocolTCP), Port: &port},
+						},
+					},
+				},
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				JWTAuthRole: "backup-role",
+				Target: openbaov1alpha1.BackupTarget{
+					Provider: "s3",
+					Bucket:   "backups",
+					RoleARN:  "arn:aws:iam::123456789012:role/openbao-backup",
+				},
+			},
+		},
+	}
+
+	reader := fake.NewClientBuilder().WithScheme(scheme).Build()
+	readiness, err := EvaluateBackupReadiness(context.Background(), reader, cluster)
+	if err != nil {
+		t.Fatalf("EvaluateBackupReadiness() error = %v", err)
+	}
+	if readiness.Status != metav1.ConditionFalse || readiness.Reason != constants.ReasonSecurityViolation {
+		t.Fatalf("readiness = %#v, want false/%s", readiness, constants.ReasonSecurityViolation)
+	}
+	if !strings.Contains(readiness.Message, "spec.network.egressRules") {
+		t.Fatalf("message = %q, want egress rule rejection", readiness.Message)
+	}
+}
+
+func TestEvaluateBackupReadiness_HardenedRejectsStorageSkipVerify(t *testing.T) {
+	scheme := testReadinessScheme(t)
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "demo",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+			Network: &openbaov1alpha1.NetworkConfig{
+				EgressRules: []networkingv1.NetworkPolicyEgressRule{testExplicitEgressRule()},
+			},
+			Backup: &openbaov1alpha1.BackupSchedule{
+				JWTAuthRole: "backup-role",
+				Target: openbaov1alpha1.BackupTarget{
+					Provider:           "s3",
+					Bucket:             "backups",
+					RoleARN:            "arn:aws:iam::123456789012:role/openbao-backup",
+					InsecureSkipVerify: true,
+				},
+			},
+		},
+	}
+
+	reader := fake.NewClientBuilder().WithScheme(scheme).Build()
+	readiness, err := EvaluateBackupReadiness(context.Background(), reader, cluster)
+	if err != nil {
+		t.Fatalf("EvaluateBackupReadiness() error = %v", err)
+	}
+	if readiness.Status != metav1.ConditionFalse || readiness.Reason != constants.ReasonSecurityViolation {
+		t.Fatalf("readiness = %#v, want false/%s", readiness, constants.ReasonSecurityViolation)
+	}
+	if !strings.Contains(readiness.Message, "TLS verification") {
+		t.Fatalf("message = %q, want TLS verification rejection", readiness.Message)
+	}
+}
+
 func TestEvaluateBackupReadiness_CrossSurfaceIdentityHint(t *testing.T) {
 	scheme := testReadinessScheme(t)
 
@@ -136,6 +297,27 @@ func TestEvaluateBackupReadiness_CrossSurfaceIdentityHint(t *testing.T) {
 	}
 	if !strings.Contains(readiness.Message, "do not inherit that identity automatically") {
 		t.Fatalf("message = %q, want split identity guidance", readiness.Message)
+	}
+}
+
+func testExplicitEgressRule() networkingv1.NetworkPolicyEgressRule {
+	port := intstr.FromInt32(443)
+	return networkingv1.NetworkPolicyEgressRule{
+		To: []networkingv1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": "objectstore",
+					},
+				},
+			},
+		},
+		Ports: []networkingv1.NetworkPolicyPort{
+			{
+				Protocol: ptr.To(corev1.ProtocolTCP),
+				Port:     &port,
+			},
+		},
 	}
 }
 

@@ -125,6 +125,7 @@ var backupConfigurationReadyConditionContract = newConditionContract(
 	conditionContractEntry{reason: constants.ReasonTokenSecretMissing, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: constants.ReasonCredentialsSecretMissing, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: constants.ReasonNetworkEgressRulesRequired, status: metav1.ConditionFalse},
+	conditionContractEntry{reason: constants.ReasonSecurityViolation, status: metav1.ConditionFalse},
 	conditionContractEntry{reason: reasonPaused, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: ReasonProfileNotSet, status: metav1.ConditionUnknown},
 	conditionContractEntry{reason: reasonUnknown, status: metav1.ConditionUnknown},

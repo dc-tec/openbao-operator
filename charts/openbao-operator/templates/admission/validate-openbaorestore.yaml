@@ -17,6 +17,11 @@ spec:
     - name: restore_endpoint
       expression: >-
         has(object.spec.source.target.endpoint) ? object.spec.source.target.endpoint.trim() : ""
+    - name: restore_target_provider
+      expression: >-
+        has(object.spec.source.target.provider) && object.spec.source.target.provider.trim() != "" ? object.spec.source.target.provider.trim().lowerAscii() : "s3"
+    - name: restore_target_uses_s3
+      expression: variables.restore_target_provider == "s3"
     - name: restore_endpoint_is_set
       expression: variables.restore_endpoint != ""
     - name: restore_endpoint_is_url
@@ -55,7 +60,9 @@ spec:
         authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("restore").allowed()
     - name: has_restore_cloud_identity_metadata
       expression: >-
-        (has(object.spec.source.target.roleArn) && object.spec.source.target.roleArn.trim() != "") ||
+        (variables.restore_target_uses_s3 &&
+          has(object.spec.source.target.roleArn) &&
+          object.spec.source.target.roleArn.trim() != "") ||
         (has(object.spec.source.target.workloadIdentity) &&
           (
             (has(object.spec.source.target.workloadIdentity.serviceAccountAnnotations) &&
@@ -77,7 +84,7 @@ spec:
     - expression: >-
         !variables.has_restore_cloud_identity_metadata ||
         variables.cloud_identities_authorized
-      message: "Users configuring restore roleArn or workloadIdentity metadata must be authorized to use cloud identities on the target OpenBaoCluster."
+      message: "Users configuring restore S3 roleArn or workloadIdentity metadata must be authorized to use cloud identities on the target OpenBaoCluster."
     # Safety: overrideOperationLock requires force=true (break-glass is explicit).
     - expression: >-
         !has(object.spec.overrideOperationLock) ||

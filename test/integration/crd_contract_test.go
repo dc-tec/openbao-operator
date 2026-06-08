@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -1650,6 +1651,213 @@ func TestVAP_OpenBaoCluster_AllowsHardenedSafeSecurityContextOverrides(t *testin
 	}
 }
 
+func TestVAP_OpenBaoCluster_RejectsUnsafeHardenedContractFields(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	tests := []struct {
+		name        string
+		configure   func(*openbaov1alpha1.OpenBaoCluster)
+		wantMessage string
+	}{
+		{
+			name: "tls disabled",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.TLS.Enabled = false
+			},
+			wantMessage: "Hardened profile requires TLS enabled",
+		},
+		{
+			name: "listener tls disabled",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+					Listener: &openbaov1alpha1.ListenerConfig{
+						TLSDisable: ptr.To(true),
+					},
+				}
+			},
+			wantMessage: "spec.configuration.listener.tlsDisable=true",
+		},
+		{
+			name: "backup skip verify",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				configureHardenedBackup(cluster)
+				cluster.Spec.Backup.Target.InsecureSkipVerify = true
+			},
+			wantMessage: "spec.backup.target.insecureSkipVerify=true",
+		},
+		{
+			name: "backup ambient identity",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				configureHardenedBackup(cluster)
+				cluster.Spec.Backup.Target.RoleARN = ""
+			},
+			wantMessage: "ambient credentials",
+		},
+		{
+			name: "backup gcs role arn ambient identity",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				configureHardenedBackup(cluster)
+				cluster.Spec.Backup.Target.Provider = "gcs"
+			},
+			wantMessage: "ambient credentials",
+		},
+		{
+			name: "servicemonitor skip verify",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
+					Metrics: &openbaov1alpha1.MetricsConfig{
+						Enabled: true,
+						ServiceMonitor: &openbaov1alpha1.ServiceMonitorConfig{
+							Enabled: true,
+							TLSConfig: &openbaov1alpha1.ServiceMonitorTLSConfig{
+								InsecureSkipVerify: ptr.To(true),
+							},
+						},
+					},
+				}
+			},
+			wantMessage: "ServiceMonitor TLS insecureSkipVerify",
+		},
+		{
+			name: "gateway backend tls disabled",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+					Enabled:  true,
+					Hostname: "bao.example.com",
+					GatewayRef: openbaov1alpha1.GatewayReference{
+						Name: "shared-gateway",
+					},
+					BackendTLS: &openbaov1alpha1.BackendTLSConfig{
+						Enabled: ptr.To(false),
+					},
+				}
+			},
+			wantMessage: "Gateway backend TLS",
+		},
+		{
+			name: "dangerous runtime flag",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
+					RawStorageEndpoint: ptr.To(true),
+				}
+			},
+			wantMessage: "dangerous runtime flags",
+		},
+		{
+			name: "raw ingress rules",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				}
+			},
+			wantMessage: "spec.network.ingressRules",
+		},
+		{
+			name: "empty trusted ingress peer",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+					TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{{}},
+				}
+			},
+			wantMessage: "trustedIngressPeers",
+		},
+		{
+			name: "trusted ingress cidr containing loopback",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+					TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
+						{
+							IPBlock: &networkingv1.IPBlock{
+								CIDR: "126.0.0.0/7",
+							},
+						},
+					},
+				}
+			},
+			wantMessage: "trustedIngressPeers",
+		},
+		{
+			name: "egress missing ports",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{explicitNamespacePeer("objectstore")},
+						},
+					},
+				}
+			},
+			wantMessage: "spec.network.egressRules",
+		},
+		{
+			name: "egress wildcard ipblock",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				port := intstr.FromInt32(443)
+				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									IPBlock: &networkingv1.IPBlock{
+										CIDR: "0.0.0.0/0",
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: ptr.To(corev1.ProtocolTCP),
+									Port:     &port,
+								},
+							},
+						},
+					},
+				}
+			},
+			wantMessage: "spec.network.egressRules",
+		},
+		{
+			name: "egress cidr containing link-local",
+			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				port := intstr.FromInt32(443)
+				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									IPBlock: &networkingv1.IPBlock{
+										CIDR: "169.0.0.0/8",
+									},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: ptr.To(corev1.ProtocolTCP),
+									Port:     &port,
+								},
+							},
+						},
+					},
+				}
+			},
+			wantMessage: "spec.network.egressRules",
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newValidHardenedAdmissionCluster(namespace, fmt.Sprintf("cluster-hardened-contract-%d", i))
+			tt.configure(cluster)
+
+			err := k8sClient.Create(ctx, cluster)
+			requireAdmissionDenied(t, err)
+			if !strings.Contains(err.Error(), tt.wantMessage) {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
 func newValidHardenedAdmissionCluster(namespace, name string) *openbaov1alpha1.OpenBaoCluster {
 	cluster := newMinimalClusterObj(namespace, name)
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
@@ -1673,6 +1881,45 @@ func newValidHardenedAdmissionCluster(namespace, name string) *openbaov1alpha1.O
 	}
 
 	return cluster
+}
+
+func configureHardenedBackup(cluster *openbaov1alpha1.OpenBaoCluster) {
+	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+		Schedule:    "0 0 * * *",
+		JWTAuthRole: "backup-role",
+		Target: openbaov1alpha1.BackupTarget{
+			Provider: "s3",
+			Endpoint: "https://objectstore.example.com",
+			Bucket:   testBackupBucket,
+			RoleARN:  "arn:aws:iam::123456789012:role/openbao-backup",
+		},
+	}
+	cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+		EgressRules: []networkingv1.NetworkPolicyEgressRule{safeHardenedEgressRule()},
+	}
+}
+
+func safeHardenedEgressRule() networkingv1.NetworkPolicyEgressRule {
+	port := intstr.FromInt32(443)
+	return networkingv1.NetworkPolicyEgressRule{
+		To: []networkingv1.NetworkPolicyPeer{explicitNamespacePeer("objectstore")},
+		Ports: []networkingv1.NetworkPolicyPort{
+			{
+				Protocol: ptr.To(corev1.ProtocolTCP),
+				Port:     &port,
+			},
+		},
+	}
+}
+
+func explicitNamespacePeer(namespace string) networkingv1.NetworkPolicyPeer {
+	return networkingv1.NetworkPolicyPeer{
+		NamespaceSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"kubernetes.io/metadata.name": namespace,
+			},
+		},
+	}
 }
 
 func TestVAP_OpenBaoCluster_RejectsDisabledInitContainerOverride(t *testing.T) {

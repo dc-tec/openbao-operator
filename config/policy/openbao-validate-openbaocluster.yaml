@@ -13,6 +13,11 @@ spec:
   variables:
     - name: has_backup
       expression: has(object.spec.backup)
+    - name: backup_target_provider
+      expression: >-
+        variables.has_backup && has(object.spec.backup.target.provider) && object.spec.backup.target.provider.trim() != "" ? object.spec.backup.target.provider.trim().lowerAscii() : "s3"
+    - name: backup_target_uses_s3
+      expression: variables.backup_target_provider == "s3"
     - name: operator_namespace
       expression: >-
         'openbao-operator-system'
@@ -150,7 +155,9 @@ spec:
       expression: >-
         has(object.spec.backup) &&
         (
-          (has(object.spec.backup.target.roleArn) && object.spec.backup.target.roleArn.trim() != "") ||
+          (variables.backup_target_uses_s3 &&
+            has(object.spec.backup.target.roleArn) &&
+            object.spec.backup.target.roleArn.trim() != "") ||
           (has(object.spec.backup.target.workloadIdentity) &&
             (
               (has(object.spec.backup.target.workloadIdentity.serviceAccountAnnotations) &&
@@ -243,13 +250,14 @@ spec:
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||
-        (object.spec.tls.mode in ["External", "ACME"] &&
+        (object.spec.tls.enabled == true &&
+          object.spec.tls.mode in ["External", "ACME"] &&
           has(object.spec.unseal) &&
           object.spec.unseal.type != "static" &&
           has(object.spec.selfInit) &&
           object.spec.selfInit.enabled == true &&
           !(has(object.spec.unseal.transit) && has(object.spec.unseal.transit.tlsSkipVerify) && object.spec.unseal.transit.tlsSkipVerify == true))
-      message: Hardened profile requires TLS mode External or ACME, an external unseal (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
+      message: Hardened profile requires TLS enabled with mode External or ACME, an external unseal (non-static), self-init enabled, and disallows tlsSkipVerify=true in seal configuration.
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||
@@ -356,6 +364,151 @@ spec:
         !has(object.spec.securityContext.windowsOptions)
       message: Hardened profile does not allow Windows pod security options in spec.securityContext.
     - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.configuration) ||
+        !has(object.spec.configuration.listener) ||
+        !has(object.spec.configuration.listener.tlsDisable) ||
+        object.spec.configuration.listener.tlsDisable != true
+      message: Hardened profile does not allow spec.configuration.listener.tlsDisable=true.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !variables.has_backup ||
+        !has(object.spec.backup.target.insecureSkipVerify) ||
+        object.spec.backup.target.insecureSkipVerify != true
+      message: Hardened profile does not allow spec.backup.target.insecureSkipVerify=true.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !variables.has_backup ||
+        (has(object.spec.backup.target.credentialsSecretRef) && object.spec.backup.target.credentialsSecretRef.name.trim() != "") ||
+        (variables.backup_target_uses_s3 &&
+          has(object.spec.backup.target.roleArn) &&
+          object.spec.backup.target.roleArn.trim() != "") ||
+        (has(object.spec.backup.target.workloadIdentity) &&
+          (
+            (has(object.spec.backup.target.workloadIdentity.serviceAccountAnnotations) &&
+              size(object.spec.backup.target.workloadIdentity.serviceAccountAnnotations) > 0) ||
+            (has(object.spec.backup.target.workloadIdentity.podLabels) &&
+              size(object.spec.backup.target.workloadIdentity.podLabels) > 0)
+          ))
+      message: Hardened profile does not allow backup storage to rely on ambient credentials; configure target.credentialsSecretRef, target.workloadIdentity, or target.roleArn for S3 targets.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.observability) ||
+        !has(object.spec.observability.metrics) ||
+        !has(object.spec.observability.metrics.serviceMonitor) ||
+        !has(object.spec.observability.metrics.serviceMonitor.tlsConfig) ||
+        !has(object.spec.observability.metrics.serviceMonitor.tlsConfig.insecureSkipVerify) ||
+        object.spec.observability.metrics.serviceMonitor.tlsConfig.insecureSkipVerify != true
+      message: Hardened profile does not allow ServiceMonitor TLS insecureSkipVerify.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.gateway) ||
+        object.spec.gateway.enabled != true ||
+        (has(object.spec.gateway.tlsPassthrough) && object.spec.gateway.tlsPassthrough == true) ||
+        !has(object.spec.gateway.backendTLS) ||
+        !has(object.spec.gateway.backendTLS.enabled) ||
+        object.spec.gateway.backendTLS.enabled == true
+      message: Hardened profile requires Gateway backend TLS unless spec.gateway.tlsPassthrough=true.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.configuration) ||
+        ((!has(object.spec.configuration.detectDeadlocks) || object.spec.configuration.detectDeadlocks != true) &&
+          (!has(object.spec.configuration.rawStorageEndpoint) || object.spec.configuration.rawStorageEndpoint != true) &&
+          (!has(object.spec.configuration.introspectionEndpoint) || object.spec.configuration.introspectionEndpoint != true) &&
+          (!has(object.spec.configuration.unsafeAllowAPIAuditCreation) || object.spec.configuration.unsafeAllowAPIAuditCreation != true))
+      message: "Hardened profile does not allow dangerous runtime flags: detectDeadlocks, rawStorageEndpoint, introspectionEndpoint, or unsafeAllowAPIAuditCreation."
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.network) ||
+        !has(object.spec.network.ingressRules) ||
+        size(object.spec.network.ingressRules) == 0
+      message: Hardened profile does not allow spec.network.ingressRules; use spec.network.trustedIngressPeers.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.network) ||
+        !has(object.spec.network.trustedIngressPeers) ||
+        object.spec.network.trustedIngressPeers.all(peer,
+          (
+            (has(peer.namespaceSelector) &&
+              ((has(peer.namespaceSelector.matchLabels) && size(peer.namespaceSelector.matchLabels) > 0) ||
+                (has(peer.namespaceSelector.matchExpressions) && size(peer.namespaceSelector.matchExpressions) > 0))) ||
+            (has(peer.podSelector) &&
+              ((has(peer.podSelector.matchLabels) && size(peer.podSelector.matchLabels) > 0) ||
+                (has(peer.podSelector.matchExpressions) && size(peer.podSelector.matchExpressions) > 0))) ||
+            has(peer.ipBlock)
+          ) &&
+          (!has(peer.namespaceSelector) ||
+            (has(peer.namespaceSelector.matchLabels) && size(peer.namespaceSelector.matchLabels) > 0) ||
+            (has(peer.namespaceSelector.matchExpressions) && size(peer.namespaceSelector.matchExpressions) > 0)) &&
+          (!has(peer.podSelector) ||
+            (has(peer.podSelector.matchLabels) && size(peer.podSelector.matchLabels) > 0) ||
+            (has(peer.podSelector.matchExpressions) && size(peer.podSelector.matchExpressions) > 0) ||
+            (has(peer.namespaceSelector) &&
+              ((has(peer.namespaceSelector.matchLabels) && size(peer.namespaceSelector.matchLabels) > 0) ||
+                (has(peer.namespaceSelector.matchExpressions) && size(peer.namespaceSelector.matchExpressions) > 0)))) &&
+          (!has(peer.ipBlock) ||
+            (isCIDR(peer.ipBlock.cidr) &&
+              cidr(peer.ipBlock.cidr).prefixLength() != 0 &&
+              !(cidr(peer.ipBlock.cidr).containsCIDR("127.0.0.0/8") ||
+                cidr("127.0.0.0/8").containsCIDR(cidr(peer.ipBlock.cidr)) ||
+                cidr(peer.ipBlock.cidr).containsCIDR("169.254.0.0/16") ||
+                cidr("169.254.0.0/16").containsCIDR(cidr(peer.ipBlock.cidr)) ||
+                cidr(peer.ipBlock.cidr).containsCIDR("::1/128") ||
+                cidr("::1/128").containsCIDR(cidr(peer.ipBlock.cidr)) ||
+                cidr(peer.ipBlock.cidr).containsCIDR("fe80::/10") ||
+                cidr("fe80::/10").containsCIDR(cidr(peer.ipBlock.cidr))))))
+      message: Hardened profile requires spec.network.trustedIngressPeers entries to select explicit non-wildcard sources.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.network) ||
+        !has(object.spec.network.egressRules) ||
+        object.spec.network.egressRules.all(rule,
+          has(rule.to) &&
+          size(rule.to) > 0 &&
+          has(rule.ports) &&
+          size(rule.ports) > 0 &&
+          rule.ports.all(port, has(port.port)) &&
+          rule.to.all(peer,
+            (
+              (has(peer.namespaceSelector) &&
+                ((has(peer.namespaceSelector.matchLabels) && size(peer.namespaceSelector.matchLabels) > 0) ||
+                  (has(peer.namespaceSelector.matchExpressions) && size(peer.namespaceSelector.matchExpressions) > 0))) ||
+              (has(peer.podSelector) &&
+                ((has(peer.podSelector.matchLabels) && size(peer.podSelector.matchLabels) > 0) ||
+                  (has(peer.podSelector.matchExpressions) && size(peer.podSelector.matchExpressions) > 0))) ||
+              has(peer.ipBlock)
+            ) &&
+            (!has(peer.namespaceSelector) ||
+              (has(peer.namespaceSelector.matchLabels) && size(peer.namespaceSelector.matchLabels) > 0) ||
+              (has(peer.namespaceSelector.matchExpressions) && size(peer.namespaceSelector.matchExpressions) > 0)) &&
+            (!has(peer.podSelector) ||
+              (has(peer.podSelector.matchLabels) && size(peer.podSelector.matchLabels) > 0) ||
+              (has(peer.podSelector.matchExpressions) && size(peer.podSelector.matchExpressions) > 0) ||
+              (has(peer.namespaceSelector) &&
+                ((has(peer.namespaceSelector.matchLabels) && size(peer.namespaceSelector.matchLabels) > 0) ||
+                  (has(peer.namespaceSelector.matchExpressions) && size(peer.namespaceSelector.matchExpressions) > 0)))) &&
+            (!has(peer.ipBlock) ||
+              (isCIDR(peer.ipBlock.cidr) &&
+                cidr(peer.ipBlock.cidr).prefixLength() != 0 &&
+                !(cidr(peer.ipBlock.cidr).containsCIDR("127.0.0.0/8") ||
+                  cidr("127.0.0.0/8").containsCIDR(cidr(peer.ipBlock.cidr)) ||
+                  cidr(peer.ipBlock.cidr).containsCIDR("169.254.0.0/16") ||
+                  cidr("169.254.0.0/16").containsCIDR(cidr(peer.ipBlock.cidr)) ||
+                  cidr(peer.ipBlock.cidr).containsCIDR("::1/128") ||
+                  cidr("::1/128").containsCIDR(cidr(peer.ipBlock.cidr)) ||
+                  cidr(peer.ipBlock.cidr).containsCIDR("fe80::/10") ||
+                  cidr("fe80::/10").containsCIDR(cidr(peer.ipBlock.cidr)))))))
+      message: Hardened profile requires spec.network.egressRules entries to be port-scoped and target explicit non-wildcard peers.
+    - expression: >-
         !has(object.spec.initContainer) ||
         object.spec.initContainer.enabled == true
       message: spec.initContainer is optional; when set, spec.initContainer.enabled must be true.
@@ -401,7 +554,7 @@ spec:
         (object.spec.backup.schedule != "" &&
           ((has(object.spec.backup.jwtAuthRole) && object.spec.backup.jwtAuthRole != "") || has(object.spec.backup.tokenSecretRef) || ((!has(object.spec.backup.jwtAuthRole) || object.spec.backup.jwtAuthRole == "") && has(object.spec.selfInit) && object.spec.selfInit.enabled == true && has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled == true)) &&
           object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
-      message: spec.backup requires schedule, OpenBao auth (jwtAuthRole or tokenSecretRef, or self-init OIDC bootstrap enabled when jwtAuthRole is empty/unset for auto-creation of "openbao-operator-backup" role), and a 5-field cron expression. Storage credentials may come from target.credentialsSecretRef, target.roleArn, or the pod's ambient workload identity/default credential chain.
+      message: spec.backup requires schedule, OpenBao auth (jwtAuthRole or tokenSecretRef, or self-init OIDC bootstrap enabled when jwtAuthRole is empty/unset for auto-creation of "openbao-operator-backup" role), and a 5-field cron expression. Hardened profile requires explicit storage credentials via target.credentialsSecretRef, target.workloadIdentity, or target.roleArn for S3 targets.
     - expression: >-
         oldObject == null ||
         variables.requested_upgrade_strategy == variables.previous_upgrade_strategy
@@ -476,7 +629,7 @@ spec:
         variables.is_operator_controller ||
         !variables.has_cloud_identity_metadata ||
         variables.cloud_identities_authorized
-      message: "Users configuring workload identity annotations, labels, roleArn, or workloadIdentity metadata must be authorized to use cloud identities on this OpenBaoCluster."
+      message: "Users configuring workload identity annotations, labels, S3 roleArn, or workloadIdentity metadata must be authorized to use cloud identities on this OpenBaoCluster."
     - expression: >-
         variables.is_operator_controller ||
         !has(object.spec.serviceAccount) ||

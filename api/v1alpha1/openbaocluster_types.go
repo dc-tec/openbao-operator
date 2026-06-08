@@ -167,7 +167,7 @@ const (
 type Profile string
 
 const (
-	// ProfileHardened enforces strict security requirements (production-ready).
+	// ProfileHardened enforces strict security requirements and rejects unsafe escape hatches.
 	ProfileHardened Profile = "Hardened"
 	// ProfileDevelopment allows relaxed security for development/testing.
 	ProfileDevelopment Profile = "Development"
@@ -812,6 +812,8 @@ type NetworkConfig struct {
 	//
 	// The operator's default egress rules (DNS, API server, cluster pods) are always included
 	// and cannot be overridden. User-provided rules are appended to the operator-managed rules.
+	// Hardened clusters require every user-provided egress rule to be port-scoped and to target
+	// explicit non-wildcard peers.
 	//
 	// Example: Allow egress to a transit seal backend in another namespace:
 	//   egressRules:
@@ -832,6 +834,8 @@ type NetworkConfig struct {
 	// The operator's default ingress rules (cluster pods, kube-system, operator, gateway)
 	// are always included and cannot be overridden. User-provided rules are appended to
 	// the operator-managed rules.
+	// Hardened clusters reject raw ingress rules; use trustedIngressPeers or managed
+	// Gateway/Ingress integration for application access.
 	//
 	// Example: Allow ingress from a monitoring namespace:
 	//   ingressRules:
@@ -852,6 +856,7 @@ type NetworkConfig struct {
 	// This is useful for user-managed TCP passthrough or external ingress components that the
 	// operator does not manage directly. The operator adds least-privilege ingress rules for
 	// port 8200 using these peers.
+	// Hardened clusters require trusted ingress peers to select explicit non-wildcard sources.
 	//
 	// Example: Allow a Traefik namespace to reach OpenBao on port 8200:
 	//   trustedIngressPeers:
@@ -897,12 +902,16 @@ type BackupTarget struct {
 	// For S3: Expected keys are "accessKeyId" and "secretAccessKey" (optional: "sessionToken", "region", "caCert").
 	// For GCS: Expected key is "credentials.json" containing a service account JSON key.
 	// For Azure: Expected keys are "accountKey" or "connectionString".
-	// Omit this field when relying on ambient workload identity or another default credential chain.
+	// Hardened clusters require an explicit storage identity path: credentialsSecretRef,
+	// workloadIdentity metadata, or roleArn for S3 targets. Omitting those paths relies
+	// on ambient/default credentials and is rejected for Hardened clusters.
 	// +optional
 	CredentialsSecretRef *corev1.LocalObjectReference `json:"credentialsSecretRef,omitempty"`
 	// WorkloadIdentity optionally applies provider-specific metadata required by cloud workload identity integrations.
 	// Use this for ambient identity setups such as EKS Pod Identity or IRSA, GKE Workload Identity, or Azure Workload Identity.
 	// When omitted, backup and restore workloads can still use any credentials exposed through the pod's default provider chain.
+	// Hardened clusters reject that ambient/default path unless credentialsSecretRef is set,
+	// workloadIdentity metadata is present, or an S3 target uses roleArn.
 	// +optional
 	WorkloadIdentity *WorkloadIdentityConfig `json:"workloadIdentity,omitempty"`
 	// PartSize is the size of each part in multipart uploads (in bytes).
@@ -933,8 +942,11 @@ type BackupTarget struct {
 	// RoleARN is the IAM role ARN (or S3-compatible equivalent) to assume via Web Identity.
 	// When set, backup and restore Jobs mount a projected ServiceAccount token and set the
 	// AWS Web Identity environment variables explicitly.
-	// Leave this empty when relying on ambient workload identity or provider-managed default credentials instead.
 	// Only used when Provider is "s3".
+	// Outside Hardened S3 targets, leave this empty when relying on ambient workload identity
+	// or provider-managed default credentials instead. For Hardened S3 targets, roleArn is
+	// one accepted explicit identity path. It does not satisfy Hardened identity requirements
+	// for GCS or Azure.
 	// +optional
 	RoleARN string `json:"roleArn,omitempty"`
 	// UsePathStyle controls whether to use path-style addressing (bucket.s3.amazonaws.com/object)
@@ -960,6 +972,7 @@ type BackupTarget struct {
 
 	// InsecureSkipVerify allows skipping TLS verification (useful for MinIO/LocalStack/Azurite with self-signed certs).
 	// This applies to all providers that support TLS.
+	// Hardened clusters reject insecureSkipVerify.
 	// +optional
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
 }
@@ -1227,6 +1240,7 @@ type BackendTLSConfig struct {
 	// that enables HTTPS and certificate validation for backend connections.
 	// When false, no BackendTLSPolicy is created and the Gateway will use HTTP (or rely on
 	// external configuration for TLS).
+	// Hardened clusters reject backendTLS.enabled=false.
 	// +kubebuilder:default=true
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
@@ -1792,16 +1806,19 @@ type OpenBaoConfiguration struct {
 
 	// DetectDeadlocks enables deadlock detection in OpenBao.
 	// This is an experimental feature for debugging.
+	// Hardened clusters reject detectDeadlocks=true.
 	// +optional
 	DetectDeadlocks *bool `json:"detectDeadlocks,omitempty"`
 
 	// RawStorageEndpoint enables the raw storage endpoint.
 	// This is an experimental feature that exposes raw storage operations.
+	// Hardened clusters reject rawStorageEndpoint=true.
 	// +optional
 	RawStorageEndpoint *bool `json:"rawStorageEndpoint,omitempty"`
 
 	// IntrospectionEndpoint enables the introspection endpoint.
 	// This is an experimental feature for debugging and introspection.
+	// Hardened clusters reject introspectionEndpoint=true.
 	// +optional
 	IntrospectionEndpoint *bool `json:"introspectionEndpoint,omitempty"`
 
@@ -1813,6 +1830,7 @@ type OpenBaoConfiguration struct {
 	// UnsafeAllowAPIAuditCreation allows API-based audit device creation.
 	// This bypasses the normal audit device configuration validation.
 	// Use with caution.
+	// Hardened clusters reject unsafeAllowAPIAuditCreation=true.
 	// +optional
 	UnsafeAllowAPIAuditCreation *bool `json:"unsafeAllowAPIAuditCreation,omitempty"`
 
@@ -1836,6 +1854,7 @@ type OpenBaoConfiguration struct {
 type ListenerConfig struct {
 	// TLSDisable controls TLS on the listener.
 	// Note: This is typically managed by the operator based on spec.tls.enabled.
+	// Hardened clusters reject tlsDisable=true.
 	// +optional
 	TLSDisable *bool `json:"tlsDisable,omitempty"`
 
@@ -2116,9 +2135,12 @@ type OpenBaoClusterSpec struct {
 	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
 	// Profile defines the security posture for this cluster.
 	// When set to "Hardened", the operator enforces strict security requirements:
-	// - TLS must be External (cert-manager/CSI managed)
+	// - TLS must use External or ACME trust, with no TLS disablement or skip-verify paths
 	// - Unseal must use external KMS (no static unseal)
 	// - SelfInit must be enabled (no root token)
+	// - Network additions must be explicit and least-privilege
+	// - Backup/restore storage identity must be explicit
+	// - Dangerous runtime flags and backend HTTP are rejected
 	// When set to "Development", relaxed security is allowed but a security warning
 	// condition is set.
 	// +kubebuilder:validation:Enum=Hardened;Development
@@ -2925,6 +2947,7 @@ type ServiceMonitorTLSConfig struct {
 
 	// InsecureSkipVerify disables TLS certificate verification.
 	// Use only for temporary non-production environments.
+	// Hardened clusters reject insecureSkipVerify=true.
 	// +optional
 	InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 

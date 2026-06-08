@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -40,6 +41,10 @@ func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionR
 		return status, reason, message
 	}
 
+	if violation := hardenedcontract.EvaluateOpenBaoCluster(cluster); violation != nil {
+		return metav1.ConditionFalse, violation.Reason, violation.Message
+	}
+
 	if cluster.Spec.TLS.Mode == "" || cluster.Spec.TLS.Mode == openbaov1alpha1.TLSModeOperatorManaged {
 		return metav1.ConditionFalse, ReasonOperatorManagedTLS, "Hardened profile requires TLS mode External or ACME; OperatorManaged TLS is not considered production-ready"
 	}
@@ -60,7 +65,7 @@ func evaluateProductionReady(cluster *openbaov1alpha1.OpenBaoCluster, admissionR
 		return metav1.ConditionFalse, ReasonTransitAddressNotHTTPS, "Hardened profile requires spec.unseal.transit.address to use a valid HTTPS URL"
 	}
 
-	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened && hardenedSecurityContextWeakensPodSecurity(cluster) {
+	if hardenedSecurityContextWeakensPodSecurity(cluster) {
 		return metav1.ConditionFalse, ReasonSecurityContextWeakening, "Hardened profile does not allow spec.securityContext overrides that weaken non-root, seccomp, sysctl, or OS constraints"
 	}
 

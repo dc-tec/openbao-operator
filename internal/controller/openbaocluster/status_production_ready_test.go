@@ -5,7 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -227,6 +229,70 @@ func TestEvaluateProductionReady(t *testing.T) {
 			wantReason: ReasonSecurityContextWeakening,
 		},
 		{
+			name: "hardened with tls disabled",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newProductionReadyHardenedCluster()
+				cluster.Spec.TLS.Enabled = false
+				return cluster
+			}(),
+			wantStatus: metav1.ConditionFalse,
+			wantReason: constants.ReasonSecurityViolation,
+		},
+		{
+			name: "hardened with backup ambient storage identity",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newProductionReadyHardenedCluster()
+				cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+					Target: openbaov1alpha1.BackupTarget{
+						Provider: "s3",
+						Bucket:   "backups",
+					},
+				}
+				return cluster
+			}(),
+			wantStatus: metav1.ConditionFalse,
+			wantReason: constants.ReasonSecurityViolation,
+		},
+		{
+			name: "hardened with raw ingress rules",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newProductionReadyHardenedCluster()
+				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+					IngressRules: []networkingv1.NetworkPolicyIngressRule{{}},
+				}
+				return cluster
+			}(),
+			wantStatus: metav1.ConditionFalse,
+			wantReason: constants.ReasonSecurityViolation,
+		},
+		{
+			name: "hardened with wildcard egress rule",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newProductionReadyHardenedCluster()
+				port := intstr.FromInt32(443)
+				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+					EgressRules: []networkingv1.NetworkPolicyEgressRule{
+						{
+							To: []networkingv1.NetworkPolicyPeer{
+								{
+									IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0"},
+								},
+							},
+							Ports: []networkingv1.NetworkPolicyPort{
+								{
+									Protocol: ptr.To(corev1.ProtocolTCP),
+									Port:     &port,
+								},
+							},
+						},
+					},
+				}
+				return cluster
+			}(),
+			wantStatus: metav1.ConditionFalse,
+			wantReason: constants.ReasonSecurityViolation,
+		},
+		{
 			name: "hardened cloud kms without ready unseal identity condition",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
@@ -415,6 +481,27 @@ func TestEvaluateProductionReady(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, status)
 			assert.Equal(t, tt.wantReason, reason)
 		})
+	}
+}
+
+func newProductionReadyHardenedCluster() *openbaov1alpha1.OpenBaoCluster {
+	return &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileHardened,
+			SelfInit: &openbaov1alpha1.SelfInitConfig{Enabled: true},
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled: true,
+				Mode:    openbaov1alpha1.TLSModeExternal,
+			},
+			Unseal: &openbaov1alpha1.UnsealConfig{
+				Type: "transit",
+				Transit: &openbaov1alpha1.TransitSealConfig{
+					Address:   "https://infra-bao.example",
+					KeyName:   "autounseal",
+					MountPath: "transit/",
+				},
+			},
+		},
 	}
 }
 
