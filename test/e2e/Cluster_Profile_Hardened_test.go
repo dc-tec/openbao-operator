@@ -411,21 +411,11 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 							},
 						},
 					},
-					IngressRules: []networkingv1.NetworkPolicyIngressRule{
+					TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
 						{
-							From: []networkingv1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"role": "test-verifier",
-										},
-									},
-								},
-							},
-							Ports: []networkingv1.NetworkPolicyPort{
-								{
-									Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
-									Port:     &[]intstr.IntOrString{intstr.FromInt(8200)}[0],
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"role": "test-verifier",
 								},
 							},
 						},
@@ -786,21 +776,11 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 								},
 							},
 						},
-						IngressRules: []networkingv1.NetworkPolicyIngressRule{
+						TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
 							{
-								From: []networkingv1.NetworkPolicyPeer{
-									{
-										PodSelector: &metav1.LabelSelector{
-											MatchLabels: map[string]string{
-												"role": "test-verifier",
-											},
-										},
-									},
-								},
-								Ports: []networkingv1.NetworkPolicyPort{
-									{
-										Protocol: &tcpProto,
-										Port:     &port8200,
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"role": "test-verifier",
 									},
 								},
 							},
@@ -1031,21 +1011,11 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 								},
 							},
 						},
-						IngressRules: []networkingv1.NetworkPolicyIngressRule{
+						TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
 							{
-								From: []networkingv1.NetworkPolicyPeer{
-									{
-										PodSelector: &metav1.LabelSelector{
-											MatchLabels: map[string]string{
-												"role": "test-verifier",
-											},
-										},
-									},
-								},
-								Ports: []networkingv1.NetworkPolicyPort{
-									{
-										Protocol: &tcpProto,
-										Port:     &port8200,
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"role": "test-verifier",
 									},
 								},
 							},

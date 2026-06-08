@@ -206,6 +206,12 @@ spec:
   Use this shape for production Prometheus Operator scraping. The Secret should contain a scoped OpenBao token that can read `sys/metrics`, and the CA reference should validate the OpenBao serving certificate.
 </CommandBlock>
 
+<Callout type="important" title="Hardened ServiceMonitor TLS">
+
+Hardened clusters reject `spec.observability.metrics.serviceMonitor.tlsConfig.insecureSkipVerify: true`. Configure `serverName` and a CA reference instead of disabling certificate verification.
+
+</Callout>
+
 <CommandBlock
   language="yaml"
   label="configure"

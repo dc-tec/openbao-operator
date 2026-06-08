@@ -68,15 +68,15 @@ Condition types defined in `api/v1alpha1`:
 | `ACMECacheReady` | Shared ACME cache readiness for HA or blue/green ACME topologies | `ACMECacheReady`, `ACMECacheNotConfigured`, `ACMECacheMissing`, `ACMECachePending`, `ACMECacheInvalidAccessMode` |
 | `AuditFileStorageReady` | Shared file-audit PVC readiness and StatefulSet mount adoption | `AuditFileStorageReady`, `AuditFileStorageMissing`, `AuditFileStoragePending`, `AuditFileStorageInvalidAccessMode`, `AuditFileStorageStatefulSetRecreateRequired`, `Unknown` |
 | `GatewayIntegrationReady` | Operator-known Gateway API prerequisites and controller support for `spec.gateway` | `GatewayIntegrationReady`, `GatewayAPIMissing`, `GatewayReferenceMissing`, `GatewayClassMissing`, `GatewayClassPending`, `GatewayClassNotAccepted`, `GatewayVersionUnsupported`, `GatewayFeatureUnsupported`, `GatewayCapabilitiesUnknown`, `GatewayNotProgrammed`, `GatewayProgrammingPending`, `GatewayListenerIncompatible`, `Paused` |
-| `BackupConfigurationReady` | Operator-known backup Job prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired`, `Unknown`, `Paused` |
+| `BackupConfigurationReady` | Operator-known backup Job prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired`, `SecurityViolation`, `Unknown`, `Paused` |
 | `CloudUnsealIdentityReady` | Operator-known authentication path for cloud KMS unseal on the main OpenBao Pods | `Ready`, `CredentialsSecretMissing`, `PrerequisitesMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `Unknown`, `Paused` |
-| `ProductionReady` | Indicates whether the cluster currently meets the operator's Hardened production posture checks. This condition does not represent API stability or project support level. | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `UnsafeAdmissionDisabled`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored`, Gateway or ACME readiness reasons such as `GatewayFeatureUnsupported` or `ACMEGatewayNotConfiguredForPassthrough` |
+| `ProductionReady` | Indicates whether the cluster currently meets the operator's Hardened production posture checks. This condition does not represent API stability or project support level. | `ProductionReady`, `ProfileNotSet`, `DevelopmentProfile`, `AdmissionPoliciesNotReady`, `UnsafeAdmissionDisabled`, `OperatorManagedTLS`, `StaticUnsealInUse`, `RootTokenStored`, `SecurityViolation`, Gateway or ACME readiness reasons such as `GatewayFeatureUnsupported` or `ACMEGatewayNotConfiguredForPassthrough` |
 | `Upgrading` | Upgrade state | `InProgress`, `Idle`, or upgrade failure reason |
 | `BackingUp` | Backup job state | `InProgress`, `Idle` |
 | `StorageConfigured` | Persistent storage class selection visibility | `StorageClassConfigured`, `StorageClassPending`, `StorageClassDefaulted`, `StorageClassUnset`, `StorageClassMismatch`, `StorageClassInconsistent` |
 | `Degraded` | Problem requiring attention | `BreakGlassRequired`, upgrade failure reason, workload or adminops error reason, `OIDCBootstrapConfigurationInvalid`, `APIServerNetworkConfigurationInvalid`, `RootTokenStored`, `Reconciling`, `Paused` |
 | `EtcdEncryptionWarning` | etcd encryption verification warning | `EtcdEncryptionUnknown` |
-| `SecurityRisk` | Relaxed security mode indicator | `DevelopmentProfile`, `UnsafeAdmissionDisabled` |
+| `SecurityRisk` | Relaxed security mode indicator | `DevelopmentProfile`, `UnsafeAdmissionDisabled`, `SecurityViolation` |
 | `OpenBaoInitialized` | OpenBao initialization observed from registration labels | `Initialized`, `NotInitialized`, `Unknown` |
 | `OpenBaoSealed` | OpenBao seal state observed from registration labels | `Sealed`, `Unsealed`, `Unknown` |
 | `OpenBaoLeader` | Leader discovery from registration labels | `LeaderFound`, `LeaderUnknown`, `MultipleLeaders` |
@@ -87,7 +87,7 @@ Condition types defined in `api/v1alpha1`:
 | Type | Meaning | Typical Reasons |
 | :--- | :--- | :--- |
 | `RestoreComplete` | Restore terminal state | `RestoreSucceeded`, `RestoreFailed`, `AuthenticationRequired` |
-| `RestoreConfigurationReady` | Operator-known restore prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `TokenSecretInvalid`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired` |
+| `RestoreConfigurationReady` | Operator-known restore prerequisites such as auth references, storage credential references, hardened-profile egress rules, and job-specific identity assumptions | `Ready`, `AuthenticationRequired`, `TokenSecretMissing`, `TokenSecretInvalid`, `CredentialsSecretMissing`, `WorkloadIdentityConfigured`, `AmbientIdentityAssumed`, `NetworkEgressRulesRequired`, `SecurityViolation` |
 | `OperationLockOverride` | Break-glass lock override occurred | `OperationLockOverridden` |
 
 <Callout type="note" title="Ambient identity reasons">

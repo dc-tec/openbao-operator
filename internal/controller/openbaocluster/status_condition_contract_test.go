@@ -332,6 +332,7 @@ func TestSetBackupConfigurationReadyEvaluatedCondition_AllowsKnownReasonStatusPa
 		{name: "token secret missing", status: metav1.ConditionFalse, reason: constants.ReasonTokenSecretMissing},
 		{name: "credentials secret missing", status: metav1.ConditionFalse, reason: constants.ReasonCredentialsSecretMissing},
 		{name: "network egress rules required", status: metav1.ConditionFalse, reason: constants.ReasonNetworkEgressRulesRequired},
+		{name: "security violation", status: metav1.ConditionFalse, reason: constants.ReasonSecurityViolation},
 		{name: "paused", status: metav1.ConditionUnknown, reason: reasonPaused},
 		{name: "profile not set", status: metav1.ConditionUnknown, reason: ReasonProfileNotSet},
 		{name: "unknown", status: metav1.ConditionUnknown, reason: reasonUnknown},

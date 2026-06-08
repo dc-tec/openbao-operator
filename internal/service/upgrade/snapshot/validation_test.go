@@ -9,6 +9,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -152,10 +153,58 @@ func TestValidateHardenedNetwork(t *testing.T) {
 	}
 
 	cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
-		EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+		EgressRules: []networkingv1.NetworkPolicyEgressRule{testExplicitSnapshotEgressRule()},
 	}
 	if err := ValidateHardenedNetwork(cluster, "egress rules required"); err != nil {
 		t.Fatalf("ValidateHardenedNetwork() unexpected error with explicit rules: %v", err)
+	}
+}
+
+func TestValidateHardenedBackupTarget(t *testing.T) {
+	t.Parallel()
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileHardened,
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Target: openbaov1alpha1.BackupTarget{
+					Bucket: "backups",
+				},
+			},
+		},
+	}
+
+	if err := ValidateHardenedBackupTarget(cluster); err == nil || !strings.Contains(err.Error(), "ambient credentials") {
+		t.Fatalf("ValidateHardenedBackupTarget() error = %v, want ambient credential rejection", err)
+	}
+
+	cluster.Spec.Backup.Target.RoleARN = "arn:aws:iam::123456789012:role/openbao-backup"
+	if err := ValidateHardenedBackupTarget(cluster); err != nil {
+		t.Fatalf("ValidateHardenedBackupTarget() unexpected error with explicit identity: %v", err)
+	}
+}
+
+func testExplicitSnapshotEgressRule() networkingv1.NetworkPolicyEgressRule {
+	port := intstr.FromInt32(443)
+	return networkingv1.NetworkPolicyEgressRule{
+		To: []networkingv1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": "objectstore",
+					},
+				},
+			},
+		},
+		Ports: []networkingv1.NetworkPolicyPort{
+			{
+				Protocol: func() *corev1.Protocol {
+					protocol := corev1.ProtocolTCP
+					return &protocol
+				}(),
+				Port: &port,
+			},
+		},
 	}
 }
 

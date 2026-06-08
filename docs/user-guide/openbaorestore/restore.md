@@ -105,11 +105,17 @@ Restore replaces the target cluster state with the contents of the selected snap
 - Make sure the snapshot you want already exists in object storage and has been validated as usable.
 - Create or keep the target `OpenBaoCluster` in the same namespace as the restore request. The target cluster must exist and be initialized, even if it is otherwise empty.
 - Verify the restore Job can reach the object storage endpoint. In hardened environments, this usually means explicit `spec.network.egressRules`.
-- Choose the restore auth path before the incident starts. The restore Job does not automatically inherit the cloud identity or auth material from the main OpenBao Pods.
+- Choose the restore auth path before the incident starts. The restore Job does not automatically inherit the cloud identity or auth material from the main OpenBao Pods. Hardened target clusters require an explicit source identity path such as `credentialsSecretRef`, `workloadIdentity` metadata, or `roleArn` for S3 targets.
 
 <Callout type="note" title="Same-namespace requirement">
 
 The `OpenBaoRestore`, the target `OpenBaoCluster`, and any referenced token Secrets all live in the same namespace. Cross-namespace references are intentionally blocked for security reasons.
+
+</Callout>
+
+<Callout type="important" title="Hardened restore source identity">
+
+For Hardened target clusters, the restore source must make object-storage identity explicit in the request. Provider-default credentials exposed to the restore Job pod are a Development and compatibility path unless the request also sets `credentialsSecretRef`, `workloadIdentity` metadata, or `roleArn` for S3 targets.
 
 </Callout>
 
@@ -180,7 +186,7 @@ When the target cluster has steady read replicas enabled, restore first drains t
         name: gcs-credentials
     key: clusters/prod/backup-2026-03-20.snap`}
 >
-  The Secret typically contains `credentials.json`. You can also use a provider-default identity path when your environment already supports it.
+  The Secret typically contains `credentials.json`. Outside Hardened, you can also use a provider-default identity path when your environment already supports it.
 </CommandBlock>
 
 </TabItem>

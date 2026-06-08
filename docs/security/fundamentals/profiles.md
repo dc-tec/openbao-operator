@@ -76,6 +76,13 @@ description: What Development and Hardened mean as security contracts, and why H
         'Verification can be relaxed for testing.',
       ],
     },
+    {
+      cells: [
+        'Unsafe escape hatches',
+        'Rejects TLS disablement, TLS skip-verify, backend HTTP, raw ingress rules, broad egress, ambient backup credentials, and dangerous runtime flags.',
+        'Allows compatibility and debugging paths when the caller is otherwise authorized.',
+      ],
+    },
   ]}
 />
 
@@ -122,6 +129,13 @@ description: What Development and Hardened mean as security contracts, and why H
         'Managed workloads keep digest and verification enforcement even when omitted from config.',
       ],
     },
+    {
+      cells: [
+        'No implicit unsafe exceptions',
+        'Production posture must be enforced at admission and in status, not documented as warning-only behavior.',
+        'Use verified TLS, explicit ingress peers, port-scoped egress, explicit backup storage identity, and supported runtime defaults.',
+      ],
+    },
   ]}
 />
 
@@ -143,7 +157,6 @@ Development intentionally relaxes the production contract:
 
 <Callout type="warning" title="Trust-root migrations">
 
-Teams often start in Development for exploration. When moving to staging or production, create a new Hardened cluster rather than assuming a Development trust path can be promoted safely.
 Teams often start in Development for exploration. For staging or production, create a new Hardened cluster instead of promoting a Development trust path in place.
 
 </Callout>

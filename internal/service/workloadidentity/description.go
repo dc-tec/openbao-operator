@@ -6,6 +6,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
 )
 
 type StorageIdentityMode string
@@ -42,7 +43,7 @@ func DescribeStorageIdentity(target openbaov1alpha1.BackupTarget, serviceAccount
 		}
 	}
 
-	if usesExplicitStorageIdentity(target) {
+	if hardenedcontract.HasExplicitStorageIdentity(target) {
 		return StorageIdentityDescription{
 			Mode:        StorageIdentityModeWorkloadIdentity,
 			Reason:      constants.ReasonWorkloadIdentityConfigured,
@@ -81,16 +82,6 @@ func IdentityConfigurationEventMessage(target openbaov1alpha1.BackupTarget, serv
 // failure messages when cloud identity is part of the storage auth path.
 func FailureHint(target openbaov1alpha1.BackupTarget, serviceAccountName string) string {
 	return DescribeStorageIdentity(target, serviceAccountName).FailureHint
-}
-
-func usesExplicitStorageIdentity(target openbaov1alpha1.BackupTarget) bool {
-	if strings.TrimSpace(target.RoleARN) != "" {
-		return true
-	}
-	if target.WorkloadIdentity == nil {
-		return false
-	}
-	return len(target.WorkloadIdentity.ServiceAccountAnnotations) > 0 || len(target.WorkloadIdentity.PodLabels) > 0
 }
 
 func normalizeStorageProvider(provider string) string {
@@ -193,7 +184,7 @@ func explicitIdentityDetails(provider string, target openbaov1alpha1.BackupTarge
 }
 
 func workloadIdentityFailureHint(target openbaov1alpha1.BackupTarget, serviceAccountName string) string {
-	if !usesExplicitStorageIdentity(target) && (target.CredentialsSecretRef != nil && strings.TrimSpace(target.CredentialsSecretRef.Name) != "") {
+	if !hardenedcontract.HasExplicitStorageIdentity(target) && (target.CredentialsSecretRef != nil && strings.TrimSpace(target.CredentialsSecretRef.Name) != "") {
 		return ""
 	}
 

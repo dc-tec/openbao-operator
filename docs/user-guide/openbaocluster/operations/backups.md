@@ -66,13 +66,19 @@ journey: operate
   - Azure Blob Storage
 - Grant the backup identity write access to that storage location.
 - Allow egress to the storage endpoint. This is required for the `Hardened` profile.
-- Decide whether the backup and restore Jobs will use a Secret, explicit workload identity metadata, or provider-default credentials.
+- Decide whether the backup and restore Jobs will use a Secret, explicit workload identity metadata, S3 `roleArn`, or provider-default credentials. Hardened clusters require one of the explicit CR-backed identity paths.
 
 <Callout type="note" title="Separate identity surfaces">
 
 The main OpenBao Pods and backup Jobs use different ServiceAccounts.
 Cloud KMS unseal identity on the main workload does not automatically apply to backup or restore Jobs.
 Check `CloudUnsealIdentityReady` for the main Pods and `BackupConfigurationReady` for the generated backup Job identity path.
+
+</Callout>
+
+<Callout type="important" title="Hardened backup storage identity">
+
+For Hardened clusters, backup and restore storage identity must be explicit in the CR. Use `target.credentialsSecretRef`, `target.workloadIdentity` metadata, or `target.roleArn` for S3 targets. Relying only on provider-default credentials exposed to the Job pod is a Development and compatibility path.
 
 </Callout>
 
@@ -214,7 +220,7 @@ spec:
 
 <Callout type="note" title="S3 credentials">
 
-Create a Secret with these keys when you are not using provider-default identity:
+Create a Secret with these keys when you are using static S3 credentials:
 
 - `accessKeyId`
 - `secretAccessKey`
@@ -225,8 +231,8 @@ Create a Secret with these keys when you are not using provider-default identity
 You can also omit `credentialsSecretRef` and rely on:
 
 - `roleArn` for the operator-managed web identity flow
-- ambient workload identity or default credentials
 - `workloadIdentity.serviceAccountAnnotations` when your platform integration is driven by ServiceAccount metadata
+- ambient workload identity or default credentials outside Hardened
 
 </Callout>
 

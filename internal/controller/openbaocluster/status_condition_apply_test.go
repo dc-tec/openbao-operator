@@ -9,6 +9,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/admission"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func TestBuildSealedConditionAndApplyHelpers(t *testing.T) {
@@ -139,6 +140,31 @@ func TestBuildSealedConditionAndApplyHelpers(t *testing.T) {
 		productionReady := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionProductionReady))
 		if productionReady == nil || productionReady.Status != metav1.ConditionFalse || productionReady.Reason != ReasonUnsafeAdmissionDisabled {
 			t.Fatalf("ProductionReady condition = %#v, want false %s", productionReady, ReasonUnsafeAdmissionDisabled)
+		}
+	})
+
+	t.Run("applyAllConditions surfaces hardened contract violation", func(t *testing.T) {
+		cluster := newOpenBaoClusterStatusTestObject()
+		cluster.Spec.TLS.Enabled = false
+		cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeExternal
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type: "transit",
+			Transit: &openbaov1alpha1.TransitSealConfig{
+				Address:   "https://infra-bao.example",
+				KeyName:   "autounseal",
+				MountPath: "transit/",
+			},
+		}
+
+		applyAllConditions(cluster, &clusterState{}, &admission.Status{OverallReady: true}, metav1.Now())
+
+		securityRisk := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionSecurityRisk))
+		if securityRisk == nil || securityRisk.Status != metav1.ConditionTrue || securityRisk.Reason != constants.ReasonSecurityViolation {
+			t.Fatalf("SecurityRisk condition = %#v, want true %s", securityRisk, constants.ReasonSecurityViolation)
+		}
+		productionReady := meta.FindStatusCondition(cluster.Status.Conditions, string(openbaov1alpha1.ConditionProductionReady))
+		if productionReady == nil || productionReady.Status != metav1.ConditionFalse || productionReady.Reason != constants.ReasonSecurityViolation {
+			t.Fatalf("ProductionReady condition = %#v, want false %s", productionReady, constants.ReasonSecurityViolation)
 		}
 	})
 

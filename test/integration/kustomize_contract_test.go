@@ -604,7 +604,7 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 		case strings.Contains(message, "must be authorized to restore the target OpenBaoCluster") &&
 			strings.Contains(expression, `variables.restore_authorized`):
 			foundRestoreTargetAuthorizer = true
-		case strings.Contains(message, "restore roleArn or workloadIdentity metadata") &&
+		case strings.Contains(message, "restore S3 roleArn or workloadIdentity metadata") &&
 			strings.Contains(expression, `variables.has_restore_cloud_identity_metadata`) &&
 			strings.Contains(expression, `variables.cloud_identities_authorized`):
 			foundRestoreCloudIdentityAuthorizer = true

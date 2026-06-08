@@ -46,7 +46,7 @@ description: How ValidatingAdmissionPolicy guardrails enforce managed-resource o
     {
       cells: [
         'Spec validation',
-        'Rejects invalid `OpenBaoCluster`, `OpenBaoTenant`, and `OpenBaoRestore` objects before they persist, including CR-selected custom executable and trust-root controls that require delegated RBAC.',
+        'Rejects invalid `OpenBaoCluster`, `OpenBaoTenant`, and `OpenBaoRestore` objects before they persist, including CR-selected custom executable controls, trust-root controls, and Hardened escape hatches that require delegated RBAC or explicit configuration.',
         '`openbao-validate-openbaocluster`, `openbao-validate-openbao-tenant`, `openbao-validate-openbaorestore`.',
       ],
     },
@@ -124,6 +124,12 @@ The required fail-closed dependency set includes:
 <Callout type="warning" title="Unsafe mode is not a production posture">
 
 Disabling admission policies is treated as unsafe mode. Even if the cluster otherwise uses Hardened settings, turning off API-level guardrails weakens the operator’s defense-in-depth model substantially.
+
+</Callout>
+
+<Callout type="important" title="Hardened unsafe configuration is rejected">
+
+For Hardened clusters, admission rejects TLS disablement, TLS skip-verify, backend HTTP, raw ingress rules, broad egress, ambient backup storage credentials, and dangerous runtime flags instead of accepting them with warning-only status.
 
 </Callout>
 

@@ -42,7 +42,6 @@ const (
 	ReasonRootTokenStored                        = "RootTokenStored"
 	ReasonStaticUnsealInUse                      = "StaticUnsealInUse"
 	ReasonOperatorManagedTLS                     = "OperatorManagedTLS"
-	ReasonSecurityViolation                      = constants.ReasonSecurityViolation
 	ReasonTLSSecretMissing                       = "TLSSecretMissing"
 	ReasonTLSSecretInvalid                       = "TLSSecretInvalid"
 	ReasonACMEIntegrationReady                   = constants.ReasonACMEIntegrationReady

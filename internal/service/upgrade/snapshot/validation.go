@@ -14,6 +14,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
 )
 
 // ValidateHardenedNetwork ensures hardened clusters explicitly allow snapshot
@@ -22,14 +23,19 @@ func ValidateHardenedNetwork(cluster *openbaov1alpha1.OpenBaoCluster, message st
 	if cluster == nil || cluster.Spec.Profile != openbaov1alpha1.ProfileHardened {
 		return nil
 	}
-	if cluster.Spec.Network != nil && len(cluster.Spec.Network.EgressRules) > 0 {
-		return nil
+	if cluster.Spec.Network == nil || len(cluster.Spec.Network.EgressRules) == 0 {
+		return operatorerrors.WithReason(
+			constants.ReasonNetworkEgressRulesRequired,
+			operatorerrors.WrapPermanentConfig(errors.New(message)),
+		)
 	}
-
-	return operatorerrors.WithReason(
-		constants.ReasonNetworkEgressRulesRequired,
-		operatorerrors.WrapPermanentConfig(errors.New(message)),
-	)
+	if !hardenedcontract.EgressRulesExplicit(cluster.Spec.Network.EgressRules) {
+		return operatorerrors.WithReason(
+			constants.ReasonSecurityViolation,
+			operatorerrors.WrapPermanentConfig(errors.New("hardened profile requires spec.network.egressRules entries to be port-scoped and target explicit non-wildcard peers")),
+		)
+	}
+	return nil
 }
 
 // RequireBackupConfig ensures backup config exists and, when required, that the
@@ -67,6 +73,21 @@ func ValidateBackupAuth(cluster *openbaov1alpha1.OpenBaoCluster, message string)
 	}
 
 	return errors.New(message)
+}
+
+// ValidateHardenedBackupTarget ensures pre-upgrade snapshot Jobs do not use
+// backup target escape hatches on existing Hardened specs.
+func ValidateHardenedBackupTarget(cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil || cluster.Spec.Profile != openbaov1alpha1.ProfileHardened || cluster.Spec.Backup == nil {
+		return nil
+	}
+	if violation := hardenedcontract.EvaluateStorageTarget("Backup", cluster.Spec.Backup.Target); violation != nil {
+		return operatorerrors.WithReason(
+			violation.Reason,
+			operatorerrors.WrapPermanentConfig(errors.New(violation.Message)),
+		)
+	}
+	return nil
 }
 
 // BackupTokenSecretName returns the configured backup token secret name when present.

@@ -14,6 +14,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -212,10 +213,11 @@ func TestEnsurePreUpgradeSnapshotJob_VerifiesDefaultBackupExecutorImageForHarden
 				Target: openbaov1alpha1.BackupTarget{
 					Endpoint: "http://test-endpoint",
 					Bucket:   "test-bucket",
+					RoleARN:  "arn:aws:iam::123456789012:role/openbao-backup",
 				},
 			},
 			Network: &openbaov1alpha1.NetworkConfig{
-				EgressRules: []networkingv1.NetworkPolicyEgressRule{{}},
+				EgressRules: []networkingv1.NetworkPolicyEgressRule{testExplicitEgressRule()},
 			},
 		},
 	}
@@ -533,5 +535,26 @@ func TestPreUpgradeSnapshotJobName(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func testExplicitEgressRule() networkingv1.NetworkPolicyEgressRule {
+	port := intstr.FromInt32(443)
+	return networkingv1.NetworkPolicyEgressRule{
+		To: []networkingv1.NetworkPolicyPeer{
+			{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"kubernetes.io/metadata.name": "objectstore",
+					},
+				},
+			},
+		},
+		Ports: []networkingv1.NetworkPolicyPort{
+			{
+				Protocol: ptr.To(corev1.ProtocolTCP),
+				Port:     &port,
+			},
+		},
 	}
 }
