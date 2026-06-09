@@ -83,6 +83,12 @@ A cluster that initializes successfully still needs security hardening, backup r
   - `openbao-restrict-controller-rbac`
   - `openbao-restrict-controller-secret-writes`
 - Confirm that the operator namespace, tenant onboarding flow, and shared-controller trust boundaries match the tenancy model you chose during `Get Started`.
+- Bind delegated CR verbs only to the human or GitOps identities trusted for that authority:
+  - `usecustomexecutables` for custom helper images, hooks, plugin executables, backup images, upgrade images, and restore images.
+  - `useimagetrustroots` for custom Hardened image-verification trust roots.
+  - `usecloudidentities` for cloud workload identity metadata on main, backup, or restore workloads.
+  - `restore` for identities trusted to run destructive restores against a target `OpenBaoCluster`.
+- Grant `use` or `get` on referenced Secrets, PVCs, ServiceAccounts, Gateways, IngressClasses, StorageClasses, and monitoring TLS objects before handing the manifest to GitOps.
 
 <CommandBlock
   language="bash"

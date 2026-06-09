@@ -81,3 +81,87 @@ subjects:
   - kind: Group
     name: platform-team # Change to actual group name
     apiGroup: rbac.authorization.k8s.io
+---
+# Example: Grant custom executable selection on one cluster
+#
+# This Role grants the custom `usecustomexecutables` verb only for one
+# OpenBaoCluster object. Grant it only to human or GitOps identities trusted to
+# choose helper images, upgrade hooks, plugin executables, or restore images.
+# Existing `usehelperimages` grants remain accepted as a compatibility alias,
+# but new delegated bindings should use `usecustomexecutables`.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-custom-executables-team-a
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - usecustomexecutables
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-custom-executables-team-a
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-custom-executables-team-a
+subjects:
+  - kind: Group
+    name: team-a-platform-operators # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
+# Example: Grant Hardened image-verification trust-root selection on one cluster
+#
+# This Role grants the custom `useimagetrustroots` verb only for one
+# OpenBaoCluster object. Grant it only to identities trusted to decide which
+# image signers are acceptable for Hardened clusters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-image-trust-roots-team-a
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - useimagetrustroots
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-image-trust-roots-team-a
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-image-trust-roots-team-a
+subjects:
+  - kind: Group
+    name: team-a-supply-chain-approvers # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io

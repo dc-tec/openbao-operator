@@ -323,36 +323,24 @@ var _ = Describe("ACME TLS (OpenBao native ACME client)", Label("tls", "security
 				},
 				Network: &openbaov1alpha1.NetworkConfig{
 					APIServerCIDR: apiServerCIDR,
-					IngressRules: []networkingv1.NetworkPolicyIngressRule{
+					TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
 						{
-							// Allow ingress from same namespace for ACME validation.
+							// Allow ingress from infra-bao for ACME validation.
 							// The ACME server (infra-bao) needs to connect for both:
 							// - HTTP-01 challenge: service port 80 -> pod port 8200
 							// - TLS-ALPN-01 challenge: service port 443 -> pod port 8200
 							// The test verifier pod also needs access so the suite can prove the issued
 							// certificate is trusted over the Service hostname.
-							// NetworkPolicy is evaluated at the pod level, so we need to allow port 8200.
-							// Since infra-bao is in the same namespace, we can use a pod selector or allow all in namespace.
-							From: []networkingv1.NetworkPolicyPeer{
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"app": infraBaoName,
-										},
-									},
-								},
-								{
-									PodSelector: &metav1.LabelSelector{
-										MatchLabels: map[string]string{
-											"role": "test-verifier",
-										},
-									},
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"app": infraBaoName,
 								},
 							},
-							Ports: []networkingv1.NetworkPolicyPort{
-								{
-									Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
-									Port:     &[]intstr.IntOrString{intstr.FromInt(8200)}[0],
+						},
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{
+									"role": "test-verifier",
 								},
 							},
 						},

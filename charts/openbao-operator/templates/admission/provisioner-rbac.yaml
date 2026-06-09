@@ -102,6 +102,15 @@ spec:
             ) ||
             (
               rule.apiGroups.size() == 1 &&
+              rule.apiGroups[0] == 'openbao.org' &&
+              rule.resources != null &&
+              rule.resources.size() == 1 &&
+              rule.resources[0] == 'openbaoclusters' &&
+              rule.verbs != null &&
+              rule.verbs.all(v, v in ['restore', 'usecloudidentities', 'usecustomexecutables', 'useimagetrustroots'])
+            ) ||
+            (
+              rule.apiGroups.size() == 1 &&
               rule.apiGroups[0] == 'apps' &&
               rule.resources != null &&
               rule.resources.size() == 1 &&

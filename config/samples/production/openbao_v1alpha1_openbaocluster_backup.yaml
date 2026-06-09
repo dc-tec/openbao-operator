@@ -85,6 +85,7 @@ spec:
   # Scheduled backups configuration
   backup:
     schedule: "0 3 * * *" # Daily at 3 AM
+    # Custom backup images require `usecustomexecutables` on this OpenBaoCluster.
     image: "openbao-backup:0.1.0" # Default, can be omitted
     target:
       # Storage provider: s3 (default), gcs, or azure

@@ -181,7 +181,7 @@ description: Configure the operator-managed NetworkPolicy contract, including DN
           matchLabels:
             app.kubernetes.io/name: traefik`}
 >
-  Use this when the source is a user-managed ingress controller or Gateway data plane. It is usually clearer than writing a raw `ingressRules` block for the same case. Managed `spec.ingress.enabled: true` configurations require at least one trusted ingress peer.
+  Use this when the source is a user-managed ingress controller, Gateway data plane, or another explicit application access path. Hardened clusters require these peers to select concrete sources; empty or wildcard peer selectors are rejected.
 </CommandBlock>
 
   </TabItem>
@@ -208,7 +208,7 @@ description: Configure the operator-managed NetworkPolicy contract, including DN
           - protocol: TCP
             port: 443`}
 >
-  Use this for transit unseal, object storage, private PKI, or any other external dependency that should not be reachable through a broad allow-all rule.
+  Use this for transit unseal, object storage, private PKI, or any other external dependency that should not be reachable through a broad allow-all rule. Hardened clusters require every user-provided egress rule to have explicit peers and ports.
 </CommandBlock>
 
   </TabItem>
@@ -217,7 +217,7 @@ description: Configure the operator-managed NetworkPolicy contract, including DN
 <CommandBlock
   language="yaml"
   label="configure"
-  title="Add a raw ingress rule when you need full control"
+  title="Add a raw ingress rule outside Hardened"
   code={`spec:
   network:
     ingressRules:
@@ -229,7 +229,7 @@ description: Configure the operator-managed NetworkPolicy contract, including DN
           - protocol: TCP
             port: 8200`}
 >
-  Reach for raw `ingressRules` when the source is not a normal ingress-controller path and you need exact port or peer matching.
+  Raw `ingressRules` are a compatibility path for non-Hardened clusters. Hardened clusters reject this field; use managed Gateway/Ingress integration or `trustedIngressPeers` to allow applications to reach OpenBao.
 </CommandBlock>
 
   </TabItem>

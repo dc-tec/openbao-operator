@@ -23,7 +23,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return recon.Result{}, nil
 	}
 
-	if err := validateBackupEgressConfiguration(cluster); err != nil {
+	if err := validateBackupHardenedConfiguration(cluster); err != nil {
 		return recon.Result{}, err
 	}
 

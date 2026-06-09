@@ -163,6 +163,12 @@ The Hardened profile is opinionated here. The intent is that image verification 
 
 </Callout>
 
+<Callout type="note" title="Custom Hardened trust roots are delegated">
+
+In the `Hardened` profile, official image-verification defaults can be used without extra RBAC. If a CR author sets custom trust material such as `publicKey`, issuer or subject matchers, regexp matchers, or `ignoreTlog`, that identity also needs the `useimagetrustroots` verb on the target `OpenBaoCluster`.
+
+</Callout>
+
 ## Verify published release artifacts
 
 <CommandBlock

@@ -38,6 +38,9 @@ func ValidatePreUpgradeSnapshotPrerequisites(
 	if err := ValidateHardenedNetwork(cluster, opts.NetworkErrorMessage); err != nil {
 		return err
 	}
+	if err := ValidateHardenedBackupTarget(cluster); err != nil {
+		return err
+	}
 	if err := ValidateBackupAuth(cluster, opts.AuthenticationMessage); err != nil {
 		return err
 	}

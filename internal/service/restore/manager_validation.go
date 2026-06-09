@@ -15,6 +15,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	"github.com/dc-tec/openbao-operator/internal/service/opslifecycle"
@@ -41,6 +42,17 @@ func (m *Manager) validateCluster(ctx context.Context, logger logr.Logger, resto
 		result, err := m.failRestore(ctx, logger, restore,
 			"Hardened profile requires explicit spec.network.egressRules so restore Jobs can reach the object storage endpoint")
 		return nil, &result, err
+	}
+	if cluster.Spec.Profile == openbaov1alpha1.ProfileHardened {
+		if cluster.Spec.Network != nil && !hardenedcontract.EgressRulesExplicit(cluster.Spec.Network.EgressRules) {
+			result, err := m.failRestore(ctx, logger, restore,
+				"Hardened profile requires spec.network.egressRules entries to be port-scoped and target explicit non-wildcard peers")
+			return nil, &result, err
+		}
+		if violation := hardenedcontract.EvaluateStorageTarget("Restore", restore.Spec.Source.Target); violation != nil {
+			result, err := m.failRestore(ctx, logger, restore, violation.Message)
+			return nil, &result, err
+		}
 	}
 
 	return cluster, nil, nil

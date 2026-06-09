@@ -71,6 +71,26 @@ func TestRestrictProvisionerRBACPolicyAllowsTenantServiceMonitorRule(t *testing.
 	}
 }
 
+func TestRestrictProvisionerRBACPolicyAllowsControllerDelegationRule(t *testing.T) {
+	const policyPath = "../../config/policy/openbao-restrict-provisioner-rbac.yaml"
+
+	data, err := os.ReadFile(policyPath)
+	if err != nil {
+		t.Fatalf("failed to read policy %s: %v", policyPath, err)
+	}
+
+	policy := string(data)
+	required := []string{
+		"rule.resources[0] == 'openbaoclusters'",
+		"rule.verbs.all(v, v in ['restore', 'usecloudidentities', 'usecustomexecutables', 'useimagetrustroots'])",
+	}
+	for _, needle := range required {
+		if !containsString(policy, needle) {
+			t.Fatalf("policy %s does not allow the controller delegation rule; missing %q", policyPath, needle)
+		}
+	}
+}
+
 // containsString performs a simple substring check without introducing extra
 // dependencies. Kept private and local to avoid over-abstracting.
 func containsString(haystack, needle string) bool {

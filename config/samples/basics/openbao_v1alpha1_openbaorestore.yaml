@@ -18,4 +18,5 @@ spec:
   # jwtAuthRole: restore
   # tokenSecretRef:
   #   name: restore-token
+  # Custom restore images require `usecustomexecutables` on the target OpenBaoCluster.
   # image: openbao-backup:0.1.0

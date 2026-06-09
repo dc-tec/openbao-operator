@@ -40,6 +40,7 @@ layerCoverage:
       - platform/constants
       - platform/entrypoint
       - platform/errors
+      - platform/hardenedcontract
       - platform/logging
       - platform/observability
       - platform/openbaotls

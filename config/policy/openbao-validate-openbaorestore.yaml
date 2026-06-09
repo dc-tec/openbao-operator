@@ -14,6 +14,11 @@ spec:
     - name: restore_endpoint
       expression: >-
         has(object.spec.source.target.endpoint) ? object.spec.source.target.endpoint.trim() : ""
+    - name: restore_target_provider
+      expression: >-
+        has(object.spec.source.target.provider) && object.spec.source.target.provider.trim() != "" ? object.spec.source.target.provider.trim().lowerAscii() : "s3"
+    - name: restore_target_uses_s3
+      expression: variables.restore_target_provider == "s3"
     - name: restore_endpoint_is_set
       expression: variables.restore_endpoint != ""
     - name: restore_endpoint_is_url
@@ -40,11 +45,43 @@ spec:
     - name: restore_endpoint_is_in_cluster_service
       expression: >-
         variables.restore_endpoint_hostname_normalized.matches("^[a-z0-9]([-a-z0-9]*[a-z0-9])?\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?\\.svc(\\.cluster\\.local)?$")
+    - name: custom_executables_authorized
+      expression: >-
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usecustomexecutables").allowed() ||
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usehelperimages").allowed()
+    - name: cloud_identities_authorized
+      expression: >-
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usecloudidentities").allowed()
+    - name: restore_authorized
+      expression: >-
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("restore").allowed()
+    - name: has_restore_cloud_identity_metadata
+      expression: >-
+        (variables.restore_target_uses_s3 &&
+          has(object.spec.source.target.roleArn) &&
+          object.spec.source.target.roleArn.trim() != "") ||
+        (has(object.spec.source.target.workloadIdentity) &&
+          (
+            (has(object.spec.source.target.workloadIdentity.serviceAccountAnnotations) &&
+              size(object.spec.source.target.workloadIdentity.serviceAccountAnnotations) > 0) ||
+            (has(object.spec.source.target.workloadIdentity.podLabels) &&
+              size(object.spec.source.target.workloadIdentity.podLabels) > 0)
+          ))
   validations:
     # API contract: restore specs are immutable after creation.
     - expression: >-
         oldObject == null || object.spec == oldObject.spec
       message: "spec is immutable; create a new OpenBaoRestore for changed restore parameters."
+    # Destructive restore target authorization: restore can replace data, policies, and keys.
+    - expression: >-
+        variables.restore_authorized
+      message: "Users creating or updating an OpenBaoRestore must be authorized to restore the target OpenBaoCluster."
+    # Reference authorization: restore cloud identity metadata delegates cloud authority
+    # to the generated restore ServiceAccount or Job pod.
+    - expression: >-
+        !variables.has_restore_cloud_identity_metadata ||
+        variables.cloud_identities_authorized
+      message: "Users configuring restore S3 roleArn or workloadIdentity metadata must be authorized to use cloud identities on the target OpenBaoCluster."
     # Safety: overrideOperationLock requires force=true (break-glass is explicit).
     - expression: >-
         !has(object.spec.overrideOperationLock) ||
@@ -83,15 +120,12 @@ spec:
             (variables.restore_endpoint_scheme == "http" && variables.restore_endpoint_is_in_cluster_service)))
       message: "Restore endpoint must use HTTPS or S3 scheme, unless it targets an in-cluster Service (*.svc)."
     # Confused-deputy protection: custom restore helper images run with restore credentials.
+    # Existing usehelperimages grants are accepted as a compatibility alias.
     - expression: >-
         !has(object.spec.image) ||
         object.spec.image == "" ||
-        (request.operation == "UPDATE" &&
-          oldObject != null &&
-          has(oldObject.spec.image) &&
-          oldObject.spec.image == object.spec.image) ||
-        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.spec.cluster).check("usehelperimages").allowed()
-      message: "Users configuring custom restore helper images must be authorized to use helper image overrides on the target OpenBaoCluster."
+        variables.custom_executables_authorized
+      message: "Users configuring custom restore helper images must be authorized to use custom executables on the target OpenBaoCluster."
     # Confused-deputy protection: users configuring restore Secret credentials must be able to read those Secrets.
     - expression: >-
         (!has(object.spec.source.target.credentialsSecretRef) ||

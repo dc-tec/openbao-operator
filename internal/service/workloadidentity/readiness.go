@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -14,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storageenv"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
@@ -42,7 +44,7 @@ type Input struct {
 	TokenSecretRef     *corev1.LocalObjectReference
 	Target             openbaov1alpha1.BackupTarget
 	RequireEgressRules bool
-	HasEgressRules     bool
+	EgressRules        []networkingv1.NetworkPolicyEgressRule
 }
 
 func EvaluateBackupReadiness(ctx context.Context, reader client.Reader, cluster *openbaov1alpha1.OpenBaoCluster) (Readiness, error) {
@@ -57,7 +59,7 @@ func EvaluateBackupReadiness(ctx context.Context, reader client.Reader, cluster 
 		TokenSecretRef:     backupCfg.TokenSecretRef,
 		Target:             backupCfg.Target,
 		RequireEgressRules: cluster.Spec.Profile == openbaov1alpha1.ProfileHardened,
-		HasEgressRules:     cluster.Spec.Network != nil && len(cluster.Spec.Network.EgressRules) > 0,
+		EgressRules:        clusterEgressRules(cluster),
 	})
 }
 
@@ -71,22 +73,41 @@ func EvaluateRestoreReadiness(ctx context.Context, reader client.Reader, restore
 		TokenSecretRef:     restore.Spec.TokenSecretRef,
 		Target:             restore.Spec.Source.Target,
 		RequireEgressRules: cluster.Spec.Profile == openbaov1alpha1.ProfileHardened,
-		HasEgressRules:     cluster.Spec.Network != nil && len(cluster.Spec.Network.EgressRules) > 0,
+		EgressRules:        clusterEgressRules(cluster),
 	})
 }
 
 func EvaluateExecutionReadiness(ctx context.Context, reader client.Reader, input Input) (Readiness, error) {
 	title := input.operationTitle()
 
-	if input.RequireEgressRules && !input.HasEgressRules {
-		return Readiness{
-			Status: metav1.ConditionFalse,
-			Reason: constants.ReasonNetworkEgressRulesRequired,
-			Message: fmt.Sprintf(
-				"%s Jobs require explicit spec.network.egressRules in Hardened profile so they can reach the object storage endpoint",
-				title,
-			),
-		}, nil
+	if input.RequireEgressRules {
+		if len(input.EgressRules) == 0 {
+			return Readiness{
+				Status: metav1.ConditionFalse,
+				Reason: constants.ReasonNetworkEgressRulesRequired,
+				Message: fmt.Sprintf(
+					"%s Jobs require explicit spec.network.egressRules in Hardened profile so they can reach the object storage endpoint",
+					title,
+				),
+			}, nil
+		}
+		if !hardenedcontract.EgressRulesExplicit(input.EgressRules) {
+			return Readiness{
+				Status:  metav1.ConditionFalse,
+				Reason:  constants.ReasonSecurityViolation,
+				Message: "Hardened profile requires spec.network.egressRules entries to be port-scoped and target explicit non-wildcard peers.",
+			}, nil
+		}
+	}
+
+	if input.Cluster != nil && input.Cluster.Spec.Profile == openbaov1alpha1.ProfileHardened {
+		if violation := hardenedcontract.EvaluateStorageTarget(input.operationTitle(), input.Target); violation != nil {
+			return Readiness{
+				Status:  metav1.ConditionFalse,
+				Reason:  violation.Reason,
+				Message: violation.Message,
+			}, nil
+		}
 	}
 
 	hasJWTAuth := strings.TrimSpace(input.JWTAuthRole) != ""
@@ -150,6 +171,13 @@ func EvaluateExecutionReadiness(ctx context.Context, reader client.Reader, input
 		Message:     message,
 		FailureHint: FailureHint(input.Target, input.ServiceAccountName),
 	}, nil
+}
+
+func clusterEgressRules(cluster *openbaov1alpha1.OpenBaoCluster) []networkingv1.NetworkPolicyEgressRule {
+	if cluster == nil || cluster.Spec.Network == nil {
+		return nil
+	}
+	return cluster.Spec.Network.EgressRules
 }
 
 func ensureSecretExists(ctx context.Context, reader client.Reader, namespace, name string) error {

@@ -1,14 +1,10 @@
 # This rule is not used by the project openbao-operator itself.
-# It is provided to allow cluster administrators to delegate custom
-# custom executable selection without granting full
-# OpenBaoCluster admin permissions.
+# It is provided to allow cluster administrators to delegate cloud workload
+# identity selection without granting full OpenBaoCluster admin permissions.
 #
 # Multi-tenancy: This ClusterRole can be bound via RoleBinding for
-# namespace-scoped helper image permissions, or copied into a namespaced
+# namespace-scoped cloud identity permissions, or copied into a namespaced
 # Role with resourceNames for one explicitly trusted OpenBaoCluster.
-#
-# usehelperimages is retained as a compatibility alias for older Role copies.
-# New delegations should use usecustomexecutables.
 
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -16,7 +12,7 @@ metadata:
   labels:
     app.kubernetes.io/name: openbao-operator
     app.kubernetes.io/managed-by: kustomize
-  name: openbaocluster-helper-image-role
+  name: openbaocluster-cloud-identity-role
 rules:
   - apiGroups:
       - openbao.org
@@ -24,5 +20,4 @@ rules:
       - openbaoclusters
     verbs:
       - get
-      - usecustomexecutables
-      - usehelperimages
+      - usecloudidentities

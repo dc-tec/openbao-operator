@@ -664,16 +664,19 @@ subjects:
 
 // syncAggregatedRBAC syncs aggregated ClusterRoles.
 func syncAggregatedRBAC(opts options) error {
-	parts := make([]string, 0, 5) // 4 cluster roles + 1 tenant role
+	parts := make([]string, 0, 8) // 7 cluster roles + 1 tenant role
 
-	// OpenBaoCluster admin/editor/viewer and helper-image delegation roles.
+	// OpenBaoCluster admin/editor/viewer and delegated dangerous-control roles.
 	for _, role := range []struct {
 		filename   string
 		nameSuffix string
 	}{
 		{filename: "openbaocluster_admin_role.yaml", nameSuffix: "openbaocluster-admin"},
 		{filename: "openbaocluster_editor_role.yaml", nameSuffix: "openbaocluster-editor"},
+		{filename: "openbaocluster_cloud_identity_role.yaml", nameSuffix: "openbaocluster-cloud-identity"},
 		{filename: "openbaocluster_helper_image_role.yaml", nameSuffix: "openbaocluster-helper-image"},
+		{filename: "openbaocluster_image_trust_roots_role.yaml", nameSuffix: "openbaocluster-image-trust-roots"},
+		{filename: "openbaocluster_restore_role.yaml", nameSuffix: "openbaocluster-restore"},
 		{filename: "openbaocluster_viewer_role.yaml", nameSuffix: "openbaocluster-viewer"},
 	} {
 		filename := role.filename
