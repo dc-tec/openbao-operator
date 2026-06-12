@@ -26,6 +26,7 @@ func (m *Manager) ensureTLSRoute(ctx context.Context, logger logr.Logger, cluste
 		apiVersion:        "gateway.networking.k8s.io/v1",
 		enabled:           enabled,
 		name:              name,
+		owner:             cluster,
 		logger:            logger,
 		logKey:            "tlsroute",
 		deleteDisabledMsg: "TLSRoute no longer enabled; deleting",

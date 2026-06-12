@@ -292,6 +292,8 @@ func TestBuildStatefulSet_PodMetadata(t *testing.T) {
 		Labels: map[string]string{
 			"azure.workload.identity/use": "true",
 			constants.LabelOpenBaoCluster: "should-not-override",
+			"openbao-active":              "true",
+			"openbao-sealed":              "false",
 		},
 		Annotations: map[string]string{
 			"example.com/custom":          "enabled",
@@ -313,6 +315,12 @@ func TestBuildStatefulSet_PodMetadata(t *testing.T) {
 	}
 	if got := statefulSet.Spec.Template.Labels[constants.LabelOpenBaoCluster]; got != cluster.Name {
 		t.Fatalf("expected operator-managed pod label %q=%q, got %q", constants.LabelOpenBaoCluster, cluster.Name, got)
+	}
+	if _, ok := statefulSet.Spec.Template.Labels["openbao-active"]; ok {
+		t.Fatalf("did not expect CR podMetadata to set OpenBao service-registration label")
+	}
+	if _, ok := statefulSet.Spec.Template.Labels["openbao-sealed"]; ok {
+		t.Fatalf("did not expect CR podMetadata to set OpenBao service-registration label")
 	}
 
 	if got := statefulSet.Spec.Template.Annotations["example.com/custom"]; got != "enabled" {

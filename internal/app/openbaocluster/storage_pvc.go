@@ -16,6 +16,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 )
 
 func desiredStorageSpec(cluster *openbaov1alpha1.OpenBaoCluster) (resource.Quantity, string, error) {
@@ -88,6 +89,9 @@ func listClusterPVCs(ctx context.Context, c client.Client, cluster *openbaov1alp
 	}
 	for i := range pvcList.Items {
 		pvc := pvcList.Items[i]
+		if !resourceownership.HasOwnerProof(&pvc, cluster) {
+			continue
+		}
 		if !isManagedDataPVC(cluster.Name, pvc.Name) {
 			continue
 		}

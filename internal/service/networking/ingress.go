@@ -25,6 +25,7 @@ func (m *Manager) ensureIngress(ctx context.Context, logger logr.Logger, cluster
 		apiVersion:        "networking.k8s.io/v1",
 		enabled:           enabled,
 		name:              name,
+		owner:             cluster,
 		logger:            logger,
 		logKey:            "ingress",
 		deleteDisabledMsg: "Ingress no longer enabled; deleting",

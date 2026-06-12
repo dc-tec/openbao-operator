@@ -15,6 +15,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -243,6 +244,7 @@ func TestHandlePreUpgradeSnapshot_EmitsSnapshotEvents(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
 				Namespace: "test-ns",
+				UID:       types.UID("test-cluster-uid"),
 			},
 			Spec: openbaov1alpha1.OpenBaoClusterSpec{
 				Profile:  openbaov1alpha1.ProfileDevelopment,
@@ -302,6 +304,7 @@ func TestHandlePreUpgradeSnapshot_EmitsSnapshotEvents(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       "test-cluster",
 				Namespace:  "test-ns",
+				UID:        types.UID("test-cluster-uid"),
 				Generation: 1,
 			},
 			Spec: openbaov1alpha1.OpenBaoClusterSpec{

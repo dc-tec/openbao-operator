@@ -15,6 +15,8 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 )
 
 // applySecret creates or patches a Secret using Server-Side Apply.
@@ -33,6 +35,9 @@ func (m *Manager) applySecret(ctx context.Context, secret *corev1.Secret) error 
 }
 
 func (m *Manager) ensureManagedSecretMetadata(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, secret *corev1.Secret) error {
+	if err := resourceownership.RequireOwnerProof("use operator-managed TLS Secret", secret, cluster); err != nil {
+		return err
+	}
 	before := secret.DeepCopy()
 
 	if secret.Labels == nil {
@@ -44,8 +49,13 @@ func (m *Manager) ensureManagedSecretMetadata(ctx context.Context, cluster *open
 	if err := controllerutil.SetControllerReference(cluster, secret, m.scheme); err != nil {
 		return fmt.Errorf("failed to set owner reference on Secret %s/%s: %w", secret.Namespace, secret.Name, err)
 	}
+	if err := resourceownership.SetOwnerUIDAnnotation(secret, cluster); err != nil {
+		return err
+	}
 
-	if reflect.DeepEqual(before.Labels, secret.Labels) && reflect.DeepEqual(before.OwnerReferences, secret.OwnerReferences) {
+	if reflect.DeepEqual(before.Labels, secret.Labels) &&
+		reflect.DeepEqual(before.Annotations, secret.Annotations) &&
+		reflect.DeepEqual(before.OwnerReferences, secret.OwnerReferences) {
 		return nil
 	}
 
@@ -73,11 +83,18 @@ func (m *Manager) getSecret(ctx context.Context, namespace, name, description st
 }
 
 func (m *Manager) applyOwnedSecret(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, secret *corev1.Secret, description string) error {
-	if err := controllerutil.SetControllerReference(cluster, secret, m.scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference on %s %s/%s: %w", description, secret.Namespace, secret.Name, err)
+	resolvedCluster, err := resourceapply.ResolveOwnerIdentity(ctx, m.client, cluster)
+	if err != nil {
+		return err
+	}
+	if err := resourceapply.EnsureOwnedResourceManageable(ctx, m.client, resolvedCluster, secret); err != nil {
+		return fmt.Errorf("failed to verify %s %s/%s owner proof: %w", description, secret.Namespace, secret.Name, err)
+	}
+	if err := resourceapply.PrepareOwned(secret, resolvedCluster, m.scheme); err != nil {
+		return err
 	}
 	if err := m.applySecret(ctx, secret); err != nil {
 		return fmt.Errorf("failed to apply %s %s/%s: %w", description, secret.Namespace, secret.Name, err)
 	}
-	return nil
+	return resourceapply.EnsureOwnedResourceProofStamped(ctx, m.client, m.scheme, resolvedCluster, secret)
 }

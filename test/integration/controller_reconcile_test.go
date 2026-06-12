@@ -285,6 +285,13 @@ func TestOpenBaoClusterReconciler_IdempotentReconcile(t *testing.T) {
 		if err := reconcileClusterResources(ctx, discardLogger(), controllerClient, k8sScheme, cluster, spec); err != nil {
 			t.Fatalf("Reconcile iteration %d error: %v", i+1, err)
 		}
+		if i == 0 {
+			configMap := &corev1.ConfigMap{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterName + constants.SuffixConfigMap, Namespace: namespace}, configMap); err != nil {
+				t.Fatalf("get ConfigMap after first reconcile: %v", err)
+			}
+			requireIntegrationOwnerProof(t, configMap, cluster)
+		}
 	}
 
 	// Verify resources still exist and are correct

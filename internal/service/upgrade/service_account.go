@@ -11,6 +11,8 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/kube"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 )
 
 // EnsureUpgradeServiceAccount creates or updates the ServiceAccount for upgrade executor Jobs using
@@ -21,6 +23,13 @@ func EnsureUpgradeServiceAccount(ctx context.Context, c client.Client, cluster *
 	}
 	if fieldOwner == "" {
 		fieldOwner = constants.FieldOwnerOpenBaoOperator
+	}
+	resolvedCluster, err := resourceapply.ResolveOwnerIdentity(ctx, c, cluster)
+	if err != nil {
+		return err
+	}
+	if err := resourceownership.RequireOwnerUID(resolvedCluster); err != nil {
+		return err
 	}
 
 	saName := cluster.Name + constants.SuffixUpgradeServiceAccount
@@ -44,6 +53,13 @@ func EnsureUpgradeServiceAccount(ctx context.Context, c client.Client, cluster *
 		},
 	}
 
+	if err := resourceapply.EnsureOwnedResourceManageable(ctx, c, resolvedCluster, sa); err != nil {
+		return fmt.Errorf("failed to verify upgrade ServiceAccount %s/%s owner proof: %w", cluster.Namespace, saName, err)
+	}
+	if err := resourceownership.SetOwnerUIDAnnotation(sa, resolvedCluster); err != nil {
+		return err
+	}
+
 	applyConfig, err := kube.ToApplyConfiguration(sa, c)
 	if err != nil {
 		return fmt.Errorf("failed to convert ServiceAccount to ApplyConfiguration: %w", err)
@@ -58,5 +74,5 @@ func EnsureUpgradeServiceAccount(ctx context.Context, c client.Client, cluster *
 		return fmt.Errorf("failed to ensure upgrade ServiceAccount %s/%s: %w", cluster.Namespace, saName, err)
 	}
 
-	return nil
+	return resourceapply.EnsureRetainedResourceProofStamped(ctx, c, resolvedCluster, sa)
 }

@@ -6,7 +6,9 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -20,19 +22,19 @@ func TestEnsureExternalService_UsesSharedClientSelector(t *testing.T) {
 	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{}
 	cluster.Spec.ReadReplicas = &openbaov1alpha1.ReadReplicaConfig{Replicas: 2}
 
-	client := fake.NewClientBuilder().
+	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
 
 	if err := manager.ensureExternalService(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("ensureExternalService() error = %v", err)
 	}
 
 	service := &corev1.Service{}
-	if err := client.Get(context.Background(), types.NamespacedName{
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      externalServiceName(cluster),
 	}, service); err != nil {
@@ -55,19 +57,19 @@ func TestEnsureExternalService_BlueGreenSelectorStillPinsActiveRevision(t *testi
 		BlueRevision: "blue123",
 	}
 
-	client := fake.NewClientBuilder().
+	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
 
 	if err := manager.ensureExternalService(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("ensureExternalService() error = %v", err)
 	}
 
 	service := &corev1.Service{}
-	if err := client.Get(context.Background(), types.NamespacedName{
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      externalServiceName(cluster),
 	}, service); err != nil {
@@ -94,19 +96,19 @@ func TestEnsureReadReplicaService_CreatesDedicatedSelector(t *testing.T) {
 		},
 	}
 
-	client := fake.NewClientBuilder().
+	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
 
 	if err := manager.ensureReadReplicaService(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("ensureReadReplicaService() error = %v", err)
 	}
 
 	service := &corev1.Service{}
-	if err := client.Get(context.Background(), types.NamespacedName{
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      resourceidentity.ReadReplicaServiceName(cluster),
 	}, service); err != nil {
@@ -127,19 +129,19 @@ func TestEnsureMetricsService_CreatesActiveMetricsSelector(t *testing.T) {
 		Metrics: &openbaov1alpha1.MetricsConfig{Enabled: true},
 	}
 
-	client := fake.NewClientBuilder().
+	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
 
 	if err := manager.ensureMetricsService(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("ensureMetricsService() error = %v", err)
 	}
 
 	service := &corev1.Service{}
-	if err := client.Get(context.Background(), types.NamespacedName{
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      metricsServiceName(cluster),
 	}, service); err != nil {
@@ -169,19 +171,19 @@ func TestEnsureMetricsService_AllNodesUsesHeadlessMetricsListener(t *testing.T) 
 		},
 	}
 
-	client := fake.NewClientBuilder().
+	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
 
 	if err := manager.ensureMetricsService(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("ensureMetricsService() error = %v", err)
 	}
 
 	service := &corev1.Service{}
-	if err := client.Get(context.Background(), types.NamespacedName{
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      metricsServiceName(cluster),
 	}, service); err != nil {
@@ -209,19 +211,19 @@ func TestEnsureHeadlessService_RemainsBroadAcrossPools(t *testing.T) {
 	cluster := newMinimalCluster("svc-headless", "default")
 	cluster.Spec.ReadReplicas = &openbaov1alpha1.ReadReplicaConfig{Replicas: 1}
 
-	client := fake.NewClientBuilder().
+	k8sClient := fake.NewClientBuilder().
 		WithScheme(testScheme).
 		WithObjects(cluster).
 		WithReturnManagedFields().
 		Build()
-	manager := NewManager(client, testScheme, "operators", constants.PlatformKubernetes)
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
 
 	if err := manager.ensureHeadlessService(context.Background(), logr.Discard(), cluster); err != nil {
 		t.Fatalf("ensureHeadlessService() error = %v", err)
 	}
 
 	service := &corev1.Service{}
-	if err := client.Get(context.Background(), types.NamespacedName{
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      resourceidentity.HeadlessServiceName(cluster),
 	}, service); err != nil {
@@ -230,5 +232,64 @@ func TestEnsureHeadlessService_RemainsBroadAcrossPools(t *testing.T) {
 
 	if _, ok := service.Spec.Selector[constants.LabelOpenBaoWorkloadPool]; ok {
 		t.Fatalf("did not expect headless Service selector to pin a workload pool")
+	}
+}
+
+func TestDeleteServiceIfExistsRejectsUnownedService(t *testing.T) {
+	cluster := newMinimalCluster("svc-delete", "default")
+	cluster.UID = types.UID("svc-delete-uid")
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      externalServiceName(cluster),
+			Namespace: cluster.Namespace,
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster, service).
+		Build()
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
+
+	err := manager.deleteServiceIfExists(context.Background(), cluster, service.Name)
+	if err == nil {
+		t.Fatal("deleteServiceIfExists() error = nil, want owner proof error")
+	}
+
+	current := &corev1.Service{}
+	if getErr := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(service), current); getErr != nil {
+		t.Fatalf("expected unowned Service to remain: %v", getErr)
+	}
+}
+
+func TestDeleteServiceIfExistsDeletesOwnedService(t *testing.T) {
+	cluster := newMinimalCluster("svc-delete-owned", "default")
+	cluster.UID = types.UID("svc-delete-owned-uid")
+	controller := true
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      externalServiceName(cluster),
+			Namespace: cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: openbaov1alpha1.GroupVersion.String(),
+				Kind:       "OpenBaoCluster",
+				Name:       cluster.Name,
+				UID:        cluster.UID,
+				Controller: &controller,
+			}},
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster, service).
+		Build()
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
+
+	if err := manager.deleteServiceIfExists(context.Background(), cluster, service.Name); err != nil {
+		t.Fatalf("deleteServiceIfExists() error = %v", err)
+	}
+
+	current := &corev1.Service{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(service), current); err == nil {
+		t.Fatal("expected owned Service to be deleted")
 	}
 }

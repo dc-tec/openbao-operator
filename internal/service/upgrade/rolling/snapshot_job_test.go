@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,6 +51,7 @@ func newPreUpgradeSnapshotCluster() *openbaov1alpha1.OpenBaoCluster {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",
@@ -211,6 +213,7 @@ func TestHandlePreUpgradeSnapshot_CreatesJob(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile:  openbaov1alpha1.ProfileDevelopment,
@@ -278,6 +281,7 @@ func TestHandlePreUpgradeSnapshot_VerifiesDefaultBackupExecutorImageForHardenedC
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile:  openbaov1alpha1.ProfileHardened,
@@ -340,6 +344,7 @@ func TestHandlePreUpgradeSnapshot_CreateAlreadyExists(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile:  openbaov1alpha1.ProfileDevelopment,
@@ -395,6 +400,7 @@ func TestHandlePreUpgradeSnapshot_CreatesJobWithOIDCDefaultRole(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile:  openbaov1alpha1.ProfileDevelopment,
@@ -464,6 +470,7 @@ func TestHandlePreUpgradeSnapshot_HardenedRequiresEgressRules(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile: openbaov1alpha1.ProfileHardened,
@@ -550,6 +557,7 @@ func TestHandlePreUpgradeSnapshot_JobFailed(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",
@@ -632,6 +640,7 @@ func TestHandlePreUpgradeSnapshot_JobFailedRetriesOnFirstFailure(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",
@@ -817,6 +826,7 @@ func TestPreUpgradeSnapshotBlocksUpgradeInitialization(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-ns",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",

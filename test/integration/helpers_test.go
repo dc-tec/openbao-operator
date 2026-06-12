@@ -23,6 +23,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	bootstrapmanager "github.com/dc-tec/openbao-operator/internal/service/bootstrap"
 	identitymanager "github.com/dc-tec/openbao-operator/internal/service/identity"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
@@ -193,6 +194,10 @@ func createMinimalCluster(t *testing.T, namespace, name string) *openbaov1alpha1
 		t.Fatalf("create OpenBaoCluster: %v", err)
 	}
 
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, cluster); err != nil {
+		t.Fatalf("get created OpenBaoCluster: %v", err)
+	}
+
 	return cluster
 }
 
@@ -274,6 +279,12 @@ func reconcileClusterResources(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	spec workloadsvc.StatefulSetSpec,
 ) error {
+	liveCluster := &openbaov1alpha1.OpenBaoCluster{}
+	if err := kubeClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, liveCluster); err != nil {
+		return fmt.Errorf("failed to get live OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
+	}
+	cluster = liveCluster
+
 	configContent, err := bootstrapmanager.NewManagerWithReader(
 		kubeClient,
 		kubeClient,
@@ -301,4 +312,32 @@ func reconcileClusterResources(
 	return workloadsvc.NewManager(kubeClient, scheme, "").
 		WithReader(kubeClient).
 		Reconcile(ctx, logger, cluster, configContent, spec)
+}
+
+func integrationOwnerRef(cluster *openbaov1alpha1.OpenBaoCluster) metav1.OwnerReference {
+	controller := true
+	return metav1.OwnerReference{
+		APIVersion: openbaov1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoCluster",
+		Name:       cluster.Name,
+		UID:        cluster.UID,
+		Controller: &controller,
+	}
+}
+
+func requireIntegrationOwnerProof(t *testing.T, obj client.Object, owner client.Object) {
+	t.Helper()
+
+	if resourceownership.HasOwnerProof(obj, owner) {
+		return
+	}
+	t.Fatalf(
+		"expected %T %s/%s to have owner proof for OpenBaoCluster UID %q, ownerRefs=%#v annotations=%#v",
+		obj,
+		obj.GetNamespace(),
+		obj.GetName(),
+		owner.GetUID(),
+		obj.GetOwnerReferences(),
+		obj.GetAnnotations(),
+	)
 }

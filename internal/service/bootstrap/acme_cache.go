@@ -13,6 +13,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -26,7 +27,7 @@ func (m *Manager) ensureACMESharedCachePVC(ctx context.Context, logger logr.Logg
 		return err
 	}
 
-	if err := m.applyResourceWithoutOwnerRef(ctx, pvc); err != nil {
+	if err := m.applyRetainedResource(ctx, pvc, cluster); err != nil {
 		return fmt.Errorf("failed to ensure ACME shared cache PVC %s/%s: %w", pvc.Namespace, pvc.Name, err)
 	}
 
@@ -66,9 +67,12 @@ func buildManagedACMESharedCachePVC(cluster *openbaov1alpha1.OpenBaoCluster) (*c
 		className := *sc
 		pvc.Spec.StorageClassName = &className
 	}
+	if err := resourceownership.SetOwnerUIDAnnotation(pvc, cluster); err != nil {
+		return nil, err
+	}
 	return pvc, nil
 }
 
-func (m *Manager) applyResourceWithoutOwnerRef(ctx context.Context, obj client.Object) error {
-	return resourceapply.ApplyUnowned(ctx, m.client, obj)
+func (m *Manager) applyRetainedResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	return resourceapply.ApplyRetained(ctx, m.client, cluster, obj)
 }

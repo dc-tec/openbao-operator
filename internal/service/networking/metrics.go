@@ -23,6 +23,7 @@ func (m *Manager) ensureWorkloadServiceMonitor(ctx context.Context, logger logr.
 		apiVersion:        "monitoring.coreos.com/v1",
 		enabled:           workloadServiceMonitorEnabled(cluster),
 		name:              name,
+		owner:             cluster,
 		logger:            logger,
 		logKey:            "servicemonitor",
 		deleteDisabledMsg: "workload ServiceMonitor no longer enabled; deleting",

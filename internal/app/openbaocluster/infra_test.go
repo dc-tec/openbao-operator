@@ -369,13 +369,15 @@ func TestReconcileDisabledReadReplicas_DeletesDrainedResources(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 		},
 	}
 	readReplicas := int32(0)
 	readSTS := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      resourceidentity.ReadReplicaStatefulSetName(cluster),
-			Namespace: cluster.Namespace,
+			Name:            resourceidentity.ReadReplicaStatefulSetName(cluster),
+			Namespace:       cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{infraOwnerRef(cluster)},
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &readReplicas,
@@ -391,6 +393,9 @@ func TestReconcileDisabledReadReplicas_DeletesDrainedResources(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      resourceidentity.ReadReplicaConfigMapName(cluster),
 			Namespace: cluster.Namespace,
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
+			},
 		},
 	}
 
@@ -434,13 +439,15 @@ func TestReconcileDisabledReadReplicas_RequeuesUntilDrained(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 		},
 	}
 	currentReplicas := int32(1)
 	readSTS := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      resourceidentity.ReadReplicaStatefulSetName(cluster),
-			Namespace: cluster.Namespace,
+			Name:            resourceidentity.ReadReplicaStatefulSetName(cluster),
+			Namespace:       cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{infraOwnerRef(cluster)},
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &currentReplicas,
@@ -738,6 +745,7 @@ func TestInfraReconciler_Reconcile_MapsAPIServerNetworkConfigurationError(t *tes
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "example",
 			Namespace: "default",
+			UID:       types.UID("example-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile: openbaov1alpha1.ProfileDevelopment,
@@ -1104,4 +1112,15 @@ func assertOIDCBootstrapConfigurationError(t *testing.T, err error) {
 func malformedJSONError() error {
 	var payload map[string]any
 	return json.Unmarshal([]byte("{"), &payload)
+}
+
+func infraOwnerRef(cluster *openbaov1alpha1.OpenBaoCluster) metav1.OwnerReference {
+	controller := true
+	return metav1.OwnerReference{
+		APIVersion: openbaov1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoCluster",
+		Name:       cluster.Name,
+		UID:        cluster.UID,
+		Controller: &controller,
+	}
 }

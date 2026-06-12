@@ -14,6 +14,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -61,6 +62,7 @@ func TestBuildSnapshotJob_PodSecurityContext_Platform(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",
 			Namespace: "default",
+			UID:       types.UID("test-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Replicas: 3,
@@ -132,6 +134,7 @@ func TestEnsurePreUpgradeSnapshotJob_RequiresBackupAuthUnlessOIDC(t *testing.T) 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile: openbaov1alpha1.ProfileDevelopment,
@@ -164,6 +167,7 @@ func TestEnsurePreUpgradeSnapshotJob_AllowsOIDCDefaultRole(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile: openbaov1alpha1.ProfileDevelopment,
@@ -205,6 +209,7 @@ func TestEnsurePreUpgradeSnapshotJob_VerifiesDefaultBackupExecutorImageForHarden
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Profile: openbaov1alpha1.ProfileHardened,
@@ -263,6 +268,7 @@ func TestHandlePhaseIdle_BlocksOnFailedSnapshot(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.5.0",

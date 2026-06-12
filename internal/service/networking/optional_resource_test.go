@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -13,6 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
 
 func newHTTPRouteNoKindMatchError() error {
@@ -124,6 +127,53 @@ func TestReconcileOptionalResource_Disabled_DeletesWhenPresent(t *testing.T) {
 	}
 	if getCalls != 1 || deleteCalls != 1 || applyCalls != 0 {
 		t.Fatalf("unexpected calls: get=%d delete=%d apply=%d", getCalls, deleteCalls, applyCalls)
+	}
+}
+
+func TestReconcileOptionalResource_DisabledRejectsUnownedExistingResource(t *testing.T) {
+	t.Parallel()
+
+	var deleteCalls int
+	owner := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "default", UID: types.UID("cluster-uid")},
+	}
+
+	opts := optionalResourceOptions{
+		kind:              "ConfigMap",
+		apiVersion:        "v1",
+		enabled:           false,
+		name:              types.NamespacedName{Namespace: "default", Name: "cluster-config"},
+		owner:             owner,
+		logger:            logr.Discard(),
+		deleteDisabledMsg: "disabled; deleting",
+		newEmpty: func() client.Object {
+			return &corev1.ConfigMap{}
+		},
+		buildDesired: func() (client.Object, bool, error) {
+			t.Fatalf("buildDesired should not be called")
+			return nil, false, nil
+		},
+		get: func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
+			obj.SetName("cluster-config")
+			obj.SetNamespace("default")
+			return nil
+		},
+		delete: func(_ context.Context, _ client.Object) error {
+			deleteCalls++
+			return nil
+		},
+		apply: func(_ context.Context, _ client.Object) error { return nil },
+	}
+
+	err := reconcileOptionalResource(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected owner proof error, got nil")
+	}
+	if !strings.Contains(err.Error(), "requires OpenBaoCluster owner proof") {
+		t.Fatalf("error = %q, want owner proof error", err.Error())
+	}
+	if deleteCalls != 0 {
+		t.Fatalf("deleteCalls = %d, want 0", deleteCalls)
 	}
 }
 

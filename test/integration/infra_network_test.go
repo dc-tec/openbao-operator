@@ -303,12 +303,16 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("create OpenBaoCluster: %v", err)
 	}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: cluster.Name}, cluster); err != nil {
+		t.Fatalf("get OpenBaoCluster: %v", err)
+	}
 	createTLSSecret(t, namespace, cluster.Name)
 
 	staleBlue := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-public-blue",
-			Namespace: namespace,
+			Name:            cluster.Name + "-public-blue",
+			Namespace:       namespace,
+			OwnerReferences: []metav1.OwnerReference{integrationOwnerRef(cluster)},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -321,8 +325,9 @@ func TestInfraNetwork_BlueGreenExternalService_UsesRevisionSelectorAndCleansStal
 	}
 	staleGreen := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-public-green",
-			Namespace: namespace,
+			Name:            cluster.Name + "-public-green",
+			Namespace:       namespace,
+			OwnerReferences: []metav1.OwnerReference{integrationOwnerRef(cluster)},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{

@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 )
 
 type optionalResourceOptions struct {
@@ -19,6 +20,7 @@ type optionalResourceOptions struct {
 
 	enabled bool
 	name    types.NamespacedName
+	owner   client.Object
 
 	logger logr.Logger
 
@@ -54,6 +56,11 @@ func reconcileOptionalResource(ctx context.Context, opts optionalResourceOptions
 				return nil
 			}
 			return fmt.Errorf("failed to get %s %s/%s: %w", opts.kind, opts.name.Namespace, opts.name.Name, err)
+		}
+		if opts.owner != nil {
+			if err := resourceownership.RequireOwnerProof("delete optional "+opts.kind, empty, opts.owner); err != nil {
+				return err
+			}
 		}
 
 		if msg != "" {

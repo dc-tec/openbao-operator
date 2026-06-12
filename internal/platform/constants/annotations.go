@@ -12,4 +12,6 @@ const (
 	AnnotationMaintenanceAllowed = "openbao.org/maintenance-allowed"
 	// AnnotationRestartAt is the annotation key used to trigger a rolling restart via Pod template updates.
 	AnnotationRestartAt = "openbao.org/restart-at"
+	// AnnotationOpenBaoOwnerUID ties retained operator-managed resources to the owning OpenBaoCluster UID.
+	AnnotationOpenBaoOwnerUID = "openbao.org/owner-uid"
 )

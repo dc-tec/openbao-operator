@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"strings"
 	"testing"
 	"time"
 
@@ -200,6 +201,7 @@ func TestReconcileCreatesCAAndServerSecrets(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "dev-cluster",
 			Namespace: "security",
+			UID:       types.UID("dev-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.1.0",
@@ -281,6 +283,7 @@ func TestReconcileBackfillsManagedSecretLabels(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "backfill-cluster",
 			Namespace: "security",
+			UID:       types.UID("backfill-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",
@@ -320,6 +323,7 @@ func TestReconcileBackfillsManagedSecretLabels(t *testing.T) {
 			Labels: map[string]string{
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
+			OwnerReferences: []metav1.OwnerReference{certOwnerRef(cluster)},
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
@@ -334,6 +338,7 @@ func TestReconcileBackfillsManagedSecretLabels(t *testing.T) {
 			Labels: map[string]string{
 				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
 			},
+			OwnerReferences: []metav1.OwnerReference{certOwnerRef(cluster)},
 		},
 		Type: corev1.SecretTypeTLS,
 		Data: map[string][]byte{
@@ -373,9 +378,97 @@ func TestReconcileBackfillsManagedSecretLabels(t *testing.T) {
 	}
 }
 
+func TestReconcileRejectsUnownedOperatorManagedCASecret(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add core scheme: %v", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add OpenBao scheme: %v", err)
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "preseeded-cluster",
+			Namespace: "security",
+			UID:       types.UID("preseeded-cluster-uid"),
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.4",
+			Image:    "openbao/openbao:2.4.4",
+			Replicas: 3,
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled:        true,
+				RotationPeriod: "720h",
+			},
+			Storage: openbaov1alpha1.StorageConfig{Size: "10Gi"},
+		},
+	}
+	caSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      caSecretName(cluster),
+			Namespace: cluster.Namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			caCertKey: []byte("attacker-ca"),
+			caKeyKey:  []byte("attacker-key"),
+		},
+	}
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, caSecret).Build()
+	manager := NewManagerWithReloader(client, scheme, nil)
+
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err == nil {
+		t.Fatal("Reconcile() error = nil, want owner proof error")
+	}
+}
+
+func TestApplyOwnedSecretRejectsUnownedExistingSecret(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add core scheme: %v", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("failed to add OpenBao scheme: %v", err)
+	}
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "race-cluster",
+			Namespace: "security",
+			UID:       types.UID("race-cluster-uid"),
+		},
+	}
+	existing := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      caSecretName(cluster),
+			Namespace: cluster.Namespace,
+		},
+	}
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
+	manager := NewManagerWithReloader(client, scheme, nil)
+
+	desired := buildCASecret(cluster, caSecretName(cluster), []byte("ca"), []byte("key"))
+	err := manager.applyOwnedSecret(context.Background(), cluster, desired, "CA Secret")
+	if err == nil || !strings.Contains(err.Error(), "requires OpenBaoCluster owner proof") {
+		t.Fatalf("applyOwnedSecret() error = %v, want owner proof error", err)
+	}
+}
+
 type recordingReloadSignaler struct {
 	called   bool
 	lastHash string
+}
+
+func certOwnerRef(cluster *openbaov1alpha1.OpenBaoCluster) metav1.OwnerReference {
+	controller := true
+	return metav1.OwnerReference{
+		APIVersion: openbaov1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoCluster",
+		Name:       cluster.Name,
+		UID:        cluster.UID,
+		Controller: &controller,
+	}
 }
 
 func (r *recordingReloadSignaler) SignalReload(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster, certHash string) error {
@@ -402,6 +495,7 @@ func TestReconcileTriggersReloadOnNewServerCert(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "reload-cluster",
 			Namespace: "security",
+			UID:       types.UID("reload-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.1.0",
@@ -448,6 +542,7 @@ func TestReconcileRotatesNearExpiryCertAndSignalsReload(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "rotate-cluster",
 			Namespace: "security",
+			UID:       types.UID("rotate-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",
@@ -569,6 +664,7 @@ func TestReconcileReissuesServerCertOnSANMismatch(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "san-mismatch-cluster",
 			Namespace: "security",
+			UID:       types.UID("san-mismatch-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",
@@ -614,6 +710,8 @@ func TestReconcileReissuesServerCertOnSANMismatch(t *testing.T) {
 
 	caSecret := buildCASecret(cluster, caSecretName(cluster), caCertPEM, caKeyPEM)
 	serverSecret := buildServerSecret(cluster, serverSecretName(cluster), staleServerCertPEM, staleServerKeyPEM, parsedCAPEM)
+	caSecret.OwnerReferences = []metav1.OwnerReference{certOwnerRef(cluster)}
+	serverSecret.OwnerReferences = []metav1.OwnerReference{certOwnerRef(cluster)}
 
 	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(caSecret, serverSecret).Build()
 	reloader := &recordingReloadSignaler{}

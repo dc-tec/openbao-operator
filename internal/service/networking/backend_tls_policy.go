@@ -17,6 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 )
 
 // ensureBackendTLSPolicy manages the Gateway API BackendTLSPolicy for the OpenBaoCluster.
@@ -39,6 +40,9 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 		}
 
 		logger.V(1).Info("BackendTLSPolicy not needed with TLS passthrough; deleting", "backendtlspolicy", name)
+		if err := resourceownership.RequireOwnerProof("delete BackendTLSPolicy", backendTLSPolicy, cluster); err != nil {
+			return err
+		}
 		if err := m.client.Delete(ctx, backendTLSPolicy); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete BackendTLSPolicy %s/%s: %w", cluster.Namespace, name, err)
 		}
@@ -62,6 +66,7 @@ func (m *Manager) ensureBackendTLSPolicy(ctx context.Context, logger logr.Logger
 		apiVersion:        "gateway.networking.k8s.io/v1",
 		enabled:           backendTLSEnabled,
 		name:              name,
+		owner:             cluster,
 		logger:            logger,
 		logKey:            "backendtlspolicy",
 		deleteDisabledMsg: "BackendTLSPolicy no longer enabled; deleting",
@@ -164,6 +169,9 @@ func (m *Manager) ensureGatewayCAConfigMap(ctx context.Context, logger logr.Logg
 		}
 
 		logger.Info("Gateway disabled; deleting CA ConfigMap", "configmap", configMapName)
+		if err := resourceownership.RequireOwnerProof("delete Gateway CA ConfigMap", configMap, cluster); err != nil {
+			return err
+		}
 		if deleteErr := m.client.Delete(ctx, configMap); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
 			return fmt.Errorf("failed to delete Gateway CA ConfigMap %s/%s: %w", cluster.Namespace, configMapName, deleteErr)
 		}

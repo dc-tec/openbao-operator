@@ -69,7 +69,7 @@ func TestEnsureUpgradeServiceAccountApplyFailure(t *testing.T) {
 		t.Fatalf("AddToScheme(core) error: %v", err)
 	}
 
-	cluster := newUpgradeTestCluster("demo", "default")
+	cluster := newUpgradeTestCluster()
 	expected := errors.New("apply failed")
 	injector := robustness.NewInjector(map[robustness.Operation]robustness.Rule{
 		robustness.OpApply: robustness.Always(expected),
@@ -103,7 +103,7 @@ func TestEnsureUpgradeServiceAccount_TransientApplyFailureThenSuccess(t *testing
 		t.Fatalf("AddToScheme(core) error: %v", err)
 	}
 
-	cluster := newUpgradeTestCluster("demo", "default")
+	cluster := newUpgradeTestCluster()
 	expected := errors.New("transient apply failed")
 	injector := robustness.NewInjector(map[robustness.Operation]robustness.Rule{
 		robustness.OpApply: robustness.Once(expected),
@@ -170,7 +170,7 @@ func TestEnsureUpgradeServiceAccountSuccess(t *testing.T) {
 				t.Fatalf("AddToScheme(core) error: %v", err)
 			}
 
-			cluster := newUpgradeTestCluster("demo", "default")
+			cluster := newUpgradeTestCluster()
 			var capturedOptions client.ApplyOptions
 
 			k8sClient := fake.NewClientBuilder().
@@ -211,6 +211,9 @@ func TestEnsureUpgradeServiceAccountSuccess(t *testing.T) {
 			if sa.Labels[constants.LabelOpenBaoServiceAccountRole] != constants.ServiceAccountRoleUpgrade {
 				t.Fatalf("label %q=%q, want %q", constants.LabelOpenBaoServiceAccountRole, sa.Labels[constants.LabelOpenBaoServiceAccountRole], constants.ServiceAccountRoleUpgrade)
 			}
+			if sa.Annotations[constants.AnnotationOpenBaoOwnerUID] != string(cluster.UID) {
+				t.Fatalf("annotation %q=%q, want %q", constants.AnnotationOpenBaoOwnerUID, sa.Annotations[constants.AnnotationOpenBaoOwnerUID], cluster.UID)
+			}
 
 			if capturedOptions.FieldManager != tt.wantFieldOwner {
 				t.Fatalf("FieldManager=%q, want %q", capturedOptions.FieldManager, tt.wantFieldOwner)
@@ -222,11 +225,43 @@ func TestEnsureUpgradeServiceAccountSuccess(t *testing.T) {
 	}
 }
 
-func newUpgradeTestCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
+func TestEnsureUpgradeServiceAccountRejectsUnownedExistingServiceAccount(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() error: %v", err)
+	}
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme(core) error: %v", err)
+	}
+
+	cluster := newUpgradeTestCluster()
+	existing := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + constants.SuffixUpgradeServiceAccount,
+			Namespace: cluster.Namespace,
+		},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(existing).
+		Build()
+
+	err := EnsureUpgradeServiceAccount(context.Background(), k8sClient, cluster, "")
+	if err == nil || !strings.Contains(err.Error(), "requires OpenBaoCluster owner proof") {
+		t.Fatalf("EnsureUpgradeServiceAccount() error = %v, want owner proof error", err)
+	}
+}
+
+func newUpgradeTestCluster() *openbaov1alpha1.OpenBaoCluster {
+	name := "demo"
+	namespace := "default"
 	return &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			UID:       types.UID(name + "-uid"),
 		},
 	}
 }
