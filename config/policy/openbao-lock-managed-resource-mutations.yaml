@@ -9,7 +9,7 @@ spec:
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
-        resources: ["secrets", "configmaps", "services", "pods", "endpoints"]
+        resources: ["secrets", "configmaps", "services", "pods", "endpoints", "persistentvolumeclaims"]
       - apiGroups: ["discovery.k8s.io"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
@@ -141,6 +141,25 @@ spec:
     - name: is_service_request
       expression: >-
         request.kind.group == "" && request.kind.kind == "Service"
+    - name: has_current_owner_uid_annotation
+      expression: >-
+        object != null &&
+        has(object.metadata) &&
+        has(object.metadata.annotations) &&
+        ("openbao.org/owner-uid" in object.metadata.annotations)
+    - name: has_old_owner_uid_annotation
+      expression: >-
+        oldObject != null &&
+        has(oldObject.metadata) &&
+        has(oldObject.metadata.annotations) &&
+        ("openbao.org/owner-uid" in oldObject.metadata.annotations)
+    - name: owner_uid_annotation_allowed
+      expression: >-
+        variables.is_operator_controller ||
+        variables.is_operator_provisioner ||
+        variables.is_kube_controller_manager ||
+        variables.is_system_controller ||
+        variables.is_kube_system_controller
     - name: is_service_monitor_request
       expression: >-
         request.kind.group == "monitoring.coreos.com" && request.kind.kind == "ServiceMonitor"
@@ -316,19 +335,15 @@ spec:
         (oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.labels)) ? oldObject.metadata.labels : {}
     - name: maintenance_cluster_name
       expression: >-
-        request.operation == "DELETE" ?
+        request.operation == "CREATE" ?
+          ("openbao.org/cluster" in variables.maintenance_current_labels ?
+            variables.maintenance_current_labels["openbao.org/cluster"] :
+            ("app.kubernetes.io/instance" in variables.maintenance_current_labels ?
+              variables.maintenance_current_labels["app.kubernetes.io/instance"] : "")) :
           ("openbao.org/cluster" in variables.maintenance_old_labels ?
             variables.maintenance_old_labels["openbao.org/cluster"] :
             ("app.kubernetes.io/instance" in variables.maintenance_old_labels ?
-              variables.maintenance_old_labels["app.kubernetes.io/instance"] : "")) :
-          ("openbao.org/cluster" in variables.maintenance_current_labels ?
-            variables.maintenance_current_labels["openbao.org/cluster"] :
-            ("openbao.org/cluster" in variables.maintenance_old_labels ?
-              variables.maintenance_old_labels["openbao.org/cluster"] :
-              ("app.kubernetes.io/instance" in variables.maintenance_current_labels ?
-                variables.maintenance_current_labels["app.kubernetes.io/instance"] :
-                ("app.kubernetes.io/instance" in variables.maintenance_old_labels ?
-                  variables.maintenance_old_labels["app.kubernetes.io/instance"] : ""))))
+              variables.maintenance_old_labels["app.kubernetes.io/instance"] : ""))
     - name: maintenance_authorized
       expression: >-
         variables.maintenance_enabled &&
@@ -341,6 +356,19 @@ spec:
           check("maintenance").
           allowed()
   validations:
+    - expression: >-
+        variables.owner_uid_annotation_allowed ||
+        (
+          !variables.has_current_owner_uid_annotation &&
+          !variables.has_old_owner_uid_annotation
+        ) ||
+        (
+          request.operation == "UPDATE" &&
+          variables.has_current_owner_uid_annotation &&
+          variables.has_old_owner_uid_annotation &&
+          object.metadata.annotations["openbao.org/owner-uid"] == oldObject.metadata.annotations["openbao.org/owner-uid"]
+        )
+      message: The openbao.org/owner-uid annotation is reserved for OpenBao Operator managed-resource provenance.
     - expression: >-
         !(variables.is_operator_controller || variables.is_operator_provisioner) ||
         !variables.is_service_monitor_request ||

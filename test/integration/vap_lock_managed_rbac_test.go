@@ -128,6 +128,57 @@ func grantPodDeleteAccess(t *testing.T, namespace, username string) {
 	}
 }
 
+func grantPodUpdateAccess(t *testing.T, namespace, username string) {
+	t.Helper()
+
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-pod-update",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "update"},
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create pod update role: %v", err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-pod-update-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create pod update binding: %v", err)
+	}
+}
+
 func grantClusterMaintenanceAccess(t *testing.T, namespace, clusterName, username string) {
 	t.Helper()
 
@@ -491,6 +542,44 @@ func TestVAP_LockManagedRBAC_AllowsMaintenanceMutationWithClusterMaintenanceVerb
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: podName}, &deleted); err == nil {
 		t.Fatalf("expected Pod %s/%s to be deleted", namespace, podName)
 	}
+}
+
+func TestVAP_LockManagedRBAC_DeniesMaintenanceRelabelToAuthorizedCluster(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	victimClusterName := "victim"
+	attackerClusterName := "attacker"
+	podName := "victim-maintenance-pod"
+	editorUsername := "maintenance-relabel-editor"
+	controllerClient := newPrivilegedImpersonatedClient(t, controllerUsername)
+	createManagedMaintenancePod(t, controllerClient, namespace, victimClusterName, podName)
+	grantPodUpdateAccess(t, namespace, editorUsername)
+	grantClusterMaintenanceAccess(t, namespace, attackerClusterName, editorUsername)
+
+	editorClient := newImpersonatedClient(t, editorUsername)
+	pod := &corev1.Pod{}
+	if err := editorClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: podName}, pod); err != nil {
+		t.Fatalf("get managed maintenance pod: %v", err)
+	}
+	pod.Labels["openbao.org/cluster"] = attackerClusterName
+	pod.Labels["app.kubernetes.io/instance"] = attackerClusterName
+
+	for attempt := 0; attempt < 25; attempt++ {
+		err := editorClient.Update(ctx, pod)
+		if err == nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "Direct modification of OpenBao-managed resources is prohibited") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny maintenance relabel against a different cluster")
 }
 
 func TestVAP_LockManagedRBAC_DeniesDirectMutationOfProvisionerManagedRoleBinding(t *testing.T) {

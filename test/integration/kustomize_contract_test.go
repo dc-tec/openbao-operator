@@ -155,6 +155,7 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		t.Fatal("openbao-lock-managed-resource-mutations policy missing spec.matchConstraints.resourceRules")
 	}
 	var hasServiceMonitorRule bool
+	var hasPersistentVolumeClaimRule bool
 	for _, rule := range resourceRules {
 		ruleMap, ok := rule.(map[string]any)
 		if !ok {
@@ -164,11 +165,16 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		resources, _, _ := unstructured.NestedStringSlice(ruleMap, "resources")
 		if containsString(groups, "monitoring.coreos.com") && containsString(resources, "servicemonitors") {
 			hasServiceMonitorRule = true
-			break
+		}
+		if containsString(groups, "") && containsString(resources, "persistentvolumeclaims") {
+			hasPersistentVolumeClaimRule = true
 		}
 	}
 	if !hasServiceMonitorRule {
 		t.Fatalf("openbao-lock-managed-resource-mutations policy does not protect monitoring.coreos.com ServiceMonitors")
+	}
+	if !hasPersistentVolumeClaimRule {
+		t.Fatalf("openbao-lock-managed-resource-mutations policy does not protect PersistentVolumeClaims")
 	}
 
 	variables, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "variables")
@@ -184,6 +190,9 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	var maintenanceClusterNameExpression string
 	var isManagedExpression string
 	var isServiceMonitorRequestExpression string
+	var hasCurrentOwnerUIDAnnotationExpression string
+	var hasOldOwnerUIDAnnotationExpression string
+	var ownerUIDAnnotationAllowedExpression string
 	var currentServiceMonitorOwnedExpression string
 	var oldServiceMonitorOwnedExpression string
 	for _, variable := range variables {
@@ -204,6 +213,12 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 			isManagedExpression = expression
 		case "is_service_monitor_request":
 			isServiceMonitorRequestExpression = expression
+		case "has_current_owner_uid_annotation":
+			hasCurrentOwnerUIDAnnotationExpression = expression
+		case "has_old_owner_uid_annotation":
+			hasOldOwnerUIDAnnotationExpression = expression
+		case "owner_uid_annotation_allowed":
+			ownerUIDAnnotationAllowedExpression = expression
 		case "current_service_monitor_is_operator_owned":
 			currentServiceMonitorOwnedExpression = expression
 		case "old_service_monitor_is_operator_owned":
@@ -232,6 +247,14 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 			maintenanceClusterNameExpression,
 		)
 	}
+	if !strings.Contains(maintenanceClusterNameExpression, `request.operation == "CREATE"`) ||
+		!strings.Contains(maintenanceClusterNameExpression, `variables.maintenance_old_labels["openbao.org/cluster"]`) ||
+		!strings.Contains(maintenanceClusterNameExpression, `variables.maintenance_old_labels["app.kubernetes.io/instance"]`) {
+		t.Fatalf(
+			"maintenance_cluster_name expression must authorize updates/deletes from old object labels: %q",
+			maintenanceClusterNameExpression,
+		)
+	}
 	if !strings.Contains(maintenanceAuthorizedExpression, `authorizer.group("openbao.org")`) {
 		t.Fatalf("maintenance_authorized expression does not use the CEL authorizer: %q", maintenanceAuthorizedExpression)
 	}
@@ -244,6 +267,19 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	if !strings.Contains(isServiceMonitorRequestExpression, `request.kind.group == "monitoring.coreos.com"`) ||
 		!strings.Contains(isServiceMonitorRequestExpression, `request.kind.kind == "ServiceMonitor"`) {
 		t.Fatalf("is_service_monitor_request expression does not target ServiceMonitors: %q", isServiceMonitorRequestExpression)
+	}
+	if !strings.Contains(hasCurrentOwnerUIDAnnotationExpression, `"openbao.org/owner-uid"`) {
+		t.Fatalf("has_current_owner_uid_annotation expression does not check owner UID provenance: %q", hasCurrentOwnerUIDAnnotationExpression)
+	}
+	if !strings.Contains(hasOldOwnerUIDAnnotationExpression, `"openbao.org/owner-uid"`) {
+		t.Fatalf("has_old_owner_uid_annotation expression does not check owner UID provenance: %q", hasOldOwnerUIDAnnotationExpression)
+	}
+	if !strings.Contains(ownerUIDAnnotationAllowedExpression, "variables.is_operator_controller") ||
+		!strings.Contains(ownerUIDAnnotationAllowedExpression, "variables.is_operator_provisioner") ||
+		!strings.Contains(ownerUIDAnnotationAllowedExpression, "variables.is_kube_controller_manager") ||
+		!strings.Contains(ownerUIDAnnotationAllowedExpression, "variables.is_system_controller") ||
+		!strings.Contains(ownerUIDAnnotationAllowedExpression, "variables.is_kube_system_controller") {
+		t.Fatalf("owner_uid_annotation_allowed expression does not restrict owner UID provenance writers: %q", ownerUIDAnnotationAllowedExpression)
 	}
 	if !strings.Contains(currentServiceMonitorOwnedExpression, `object.metadata.name.endsWith("-metrics")`) ||
 		!strings.Contains(currentServiceMonitorOwnedExpression, `"app.kubernetes.io/managed-by"`) ||
@@ -265,6 +301,7 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		t.Fatalf("read policy validations: found=%v err=%v", found, err)
 	}
 	var foundServiceMonitorOwnershipGuard bool
+	var foundOwnerUIDAnnotationGuard bool
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
 		if !ok {
@@ -277,11 +314,19 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 			strings.Contains(expression, "variables.current_service_monitor_is_operator_owned") &&
 			strings.Contains(expression, "variables.old_service_monitor_is_operator_owned") {
 			foundServiceMonitorOwnershipGuard = true
-			break
+		}
+		if strings.Contains(message, "openbao.org/owner-uid annotation is reserved") &&
+			strings.Contains(expression, "variables.owner_uid_annotation_allowed") &&
+			strings.Contains(expression, "variables.has_current_owner_uid_annotation") &&
+			strings.Contains(expression, "variables.has_old_owner_uid_annotation") {
+			foundOwnerUIDAnnotationGuard = true
 		}
 	}
 	if !foundServiceMonitorOwnershipGuard {
 		t.Fatalf("openbao-lock-managed-resource-mutations policy missing ServiceMonitor ownership guard")
+	}
+	if !foundOwnerUIDAnnotationGuard {
+		t.Fatalf("openbao-lock-managed-resource-mutations policy missing owner UID provenance annotation guard")
 	}
 }
 
