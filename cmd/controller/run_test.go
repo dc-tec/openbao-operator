@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // Note: OIDC/JWKS tests have been moved to internal/adapter/auth/oidc_test.go
@@ -56,4 +58,19 @@ func TestUnavailableHelperImageDefaultFields(t *testing.T) {
 			t.Fatalf("unavailableHelperImageDefaultFields() = %v, want empty", fields)
 		}
 	})
+}
+
+func TestNewManagerOptions_DisablesPDBCacheInMultiTenantMode(t *testing.T) {
+	opts := newManagerOptions(runtime.NewScheme(), buildMetricsServerOptions(runConfig{}), "0", false, "")
+	if opts.Client.Cache == nil {
+		t.Fatal("expected client cache options")
+	}
+
+	for _, obj := range opts.Client.Cache.DisableFor {
+		if _, ok := obj.(*policyv1.PodDisruptionBudget); ok {
+			return
+		}
+	}
+
+	t.Fatalf("expected PodDisruptionBudget reads to bypass the shared cache, got %T", opts.Client.Cache.DisableFor)
 }
