@@ -156,6 +156,7 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	}
 	var hasServiceMonitorRule bool
 	var hasPersistentVolumeClaimRule bool
+	var hasServiceAccountRule bool
 	for _, rule := range resourceRules {
 		ruleMap, ok := rule.(map[string]any)
 		if !ok {
@@ -169,12 +170,18 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 		if containsString(groups, "") && containsString(resources, "persistentvolumeclaims") {
 			hasPersistentVolumeClaimRule = true
 		}
+		if containsString(groups, "") && containsString(resources, "serviceaccounts") {
+			hasServiceAccountRule = true
+		}
 	}
 	if !hasServiceMonitorRule {
 		t.Fatalf("openbao-lock-managed-resource-mutations policy does not protect monitoring.coreos.com ServiceMonitors")
 	}
 	if !hasPersistentVolumeClaimRule {
 		t.Fatalf("openbao-lock-managed-resource-mutations policy does not protect PersistentVolumeClaims")
+	}
+	if !hasServiceAccountRule {
+		t.Fatalf("openbao-lock-managed-resource-mutations policy does not protect ServiceAccounts")
 	}
 
 	variables, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "variables")

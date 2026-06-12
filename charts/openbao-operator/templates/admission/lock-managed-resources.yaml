@@ -12,7 +12,7 @@ spec:
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
-        resources: ["secrets", "configmaps", "services", "pods", "endpoints", "persistentvolumeclaims"]
+        resources: ["secrets", "configmaps", "services", "serviceaccounts", "pods", "endpoints", "persistentvolumeclaims"]
       - apiGroups: ["discovery.k8s.io"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]

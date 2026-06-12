@@ -179,6 +179,57 @@ func grantPodUpdateAccess(t *testing.T, namespace, username string) {
 	}
 }
 
+func grantServiceAccountWriteAccess(t *testing.T, namespace, username string) {
+	t.Helper()
+
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-serviceaccount-write",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"serviceaccounts"},
+				Verbs:     []string{"create", "get", "update"},
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create serviceaccount write role: %v", err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-serviceaccount-write-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create serviceaccount write binding: %v", err)
+	}
+}
+
 func grantClusterMaintenanceAccess(t *testing.T, namespace, clusterName, username string) {
 	t.Helper()
 
@@ -422,6 +473,55 @@ func TestVAP_LockManagedRBAC_RestrictsOperatorServiceMonitorOwnership(t *testing
 	if err := controllerClient.Delete(ctx, ownedMonitor); err != nil {
 		t.Fatalf("expected owned ServiceMonitor delete to succeed, got: %v", err)
 	}
+}
+
+func TestVAP_LockManagedRBAC_DeniesForgedServiceAccountOwnerUID(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	editorUsername := "serviceaccount-provenance-editor"
+	grantServiceAccountWriteAccess(t, namespace, editorUsername)
+	cluster := createClusterForServiceMonitorGuard(t, namespace, "forged-sa")
+
+	forged := &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ServiceAccount",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + constants.SuffixUpgradeServiceAccount,
+			Namespace: namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:                   constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:               cluster.Name,
+				constants.LabelAppManagedBy:              constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:            cluster.Name,
+				constants.LabelOpenBaoComponent:          constants.ServiceAccountRoleUpgrade,
+				constants.LabelOpenBaoServiceAccountRole: constants.ServiceAccountRoleUpgrade,
+			},
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
+			},
+		},
+	}
+
+	editorClient := newImpersonatedClient(t, editorUsername)
+	for attempt := 0; attempt < 25; attempt++ {
+		err := editorClient.Create(ctx, forged.DeepCopy())
+		if err == nil {
+			_ = k8sClient.Delete(ctx, forged)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "openbao.org/owner-uid annotation is reserved") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny forged ServiceAccount owner UID provenance")
 }
 
 func TestVAP_LockManagedRBAC_DeniesDirectMutationOfControllerManagedRole(t *testing.T) {
