@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -534,6 +535,7 @@ func TestReconcile_PersistsResumeValidationFailureStatus(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.5.0",
@@ -1240,6 +1242,7 @@ func TestReconcile_ReleasesUpgradeLockOnValidationFailureBeforeStart(t *testing.
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
 					Namespace: "default",
+					UID:       types.UID("test-cluster-uid"),
 				},
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{
 					Version:  tt.version,

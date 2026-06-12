@@ -11,6 +11,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
 func ensureControllerServiceAccountRBAC(t *testing.T, namespace string) {
@@ -76,6 +78,9 @@ func TestVAP_ControllerServiceAccounts_AllowsManagedBackupServiceAccount(t *test
 				"openbao.org/component":            "backup",
 				"openbao.org/service-account-role": "backup",
 			},
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: "example-uid",
+			},
 		},
 	}
 
@@ -86,6 +91,9 @@ func TestVAP_ControllerServiceAccounts_AllowsManagedBackupServiceAccount(t *test
 	var latest corev1.ServiceAccount
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: sa.Name}, &latest); err != nil {
 		t.Fatalf("get created ServiceAccount: %v", err)
+	}
+	if got := latest.Annotations[constants.AnnotationOpenBaoOwnerUID]; got != "example-uid" {
+		t.Fatalf("owner UID annotation = %q, want example-uid", got)
 	}
 }
 

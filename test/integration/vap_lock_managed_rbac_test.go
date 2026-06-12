@@ -4,12 +4,14 @@
 package integration
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -125,6 +127,108 @@ func grantPodDeleteAccess(t *testing.T, namespace, username string) {
 	}
 	if err := k8sClient.Create(ctx, binding); err != nil {
 		t.Fatalf("create pod maintenance binding: %v", err)
+	}
+}
+
+func grantPodUpdateAccess(t *testing.T, namespace, username string) {
+	t.Helper()
+
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-pod-update",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "update"},
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create pod update role: %v", err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-pod-update-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create pod update binding: %v", err)
+	}
+}
+
+func grantServiceAccountWriteAccess(t *testing.T, namespace, username string) {
+	t.Helper()
+
+	role := &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "Role",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-serviceaccount-write",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"serviceaccounts"},
+				Verbs:     []string{"create", "get", "update"},
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, role); err != nil {
+		t.Fatalf("create serviceaccount write role: %v", err)
+	}
+
+	binding := &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "rbac.authorization.k8s.io/v1",
+			Kind:       "RoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "managed-serviceaccount-write-binding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				Name:     username,
+				APIGroup: "rbac.authorization.k8s.io",
+			},
+		},
+	}
+	if err := k8sClient.Create(ctx, binding); err != nil {
+		t.Fatalf("create serviceaccount write binding: %v", err)
 	}
 }
 
@@ -247,6 +351,37 @@ func newOwnedServiceMonitorObject(cluster *openbaov1alpha1.OpenBaoCluster) *unst
 	return obj
 }
 
+func newManagedStatefulSetPVC(namespace, clusterName, name string) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:    clusterName,
+				constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster: clusterName,
+			},
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: "example-cluster-uid",
+			},
+			Finalizers: []string{"kubernetes.io/pvc-protection"},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+}
+
 func createManagedMaintenancePod(t *testing.T, c client.Client, namespace, clusterName, podName string) {
 	t.Helper()
 
@@ -268,7 +403,8 @@ func createManagedMaintenancePod(t *testing.T, c client.Client, namespace, clust
 			Name:      podName,
 			Namespace: namespace,
 			Annotations: map[string]string{
-				"openbao.org/maintenance": testTrueString,
+				constants.AnnotationMaintenance:     testTrueString,
+				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
 			},
 			Labels: map[string]string{
 				"app.kubernetes.io/name":       "openbao",
@@ -370,6 +506,160 @@ func TestVAP_LockManagedRBAC_RestrictsOperatorServiceMonitorOwnership(t *testing
 
 	if err := controllerClient.Delete(ctx, ownedMonitor); err != nil {
 		t.Fatalf("expected owned ServiceMonitor delete to succeed, got: %v", err)
+	}
+}
+
+func TestVAP_LockManagedRBAC_DeniesForgedServiceAccountOwnerUID(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	editorUsername := "serviceaccount-provenance-editor"
+	grantServiceAccountWriteAccess(t, namespace, editorUsername)
+	cluster := createClusterForServiceMonitorGuard(t, namespace, "forged-sa")
+
+	forged := &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ServiceAccount",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + constants.SuffixUpgradeServiceAccount,
+			Namespace: namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:                   constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:               cluster.Name,
+				constants.LabelAppManagedBy:              constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster:            cluster.Name,
+				constants.LabelOpenBaoComponent:          constants.ServiceAccountRoleUpgrade,
+				constants.LabelOpenBaoServiceAccountRole: constants.ServiceAccountRoleUpgrade,
+			},
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
+			},
+		},
+	}
+
+	editorClient := newImpersonatedClient(t, editorUsername)
+	for attempt := 0; attempt < 25; attempt++ {
+		err := editorClient.Create(ctx, forged.DeepCopy())
+		if err == nil {
+			_ = k8sClient.Delete(ctx, forged)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "openbao.org/owner-uid annotation is reserved") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny forged ServiceAccount owner UID provenance")
+}
+
+func TestVAP_LockManagedRBAC_AllowsStatefulSetControllerManagedPVC(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	editorClient := newPrivilegedImpersonatedClient(t, "managed-pvc-editor")
+
+	var deniedForgedPVC bool
+	for attempt := 0; attempt < 25; attempt++ {
+		forged := newManagedStatefulSetPVC(namespace, "example", fmt.Sprintf("data-example-forged-%d", attempt))
+		err := editorClient.Create(ctx, forged.DeepCopy())
+		if err == nil {
+			_ = k8sClient.Delete(ctx, forged)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "openbao.org/owner-uid annotation is reserved") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		deniedForgedPVC = true
+		break
+	}
+	if !deniedForgedPVC {
+		t.Fatalf("expected VAP to deny forged managed PVC owner UID provenance")
+	}
+
+	statefulSetControllerClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:kube-system:statefulset-controller",
+	)
+	managedPVC := newManagedStatefulSetPVC(namespace, "example", "data-example-0")
+	if err := statefulSetControllerClient.Create(ctx, managedPVC); err != nil {
+		t.Fatalf("expected StatefulSet controller managed PVC create to succeed, got: %v", err)
+	}
+
+	if err := editorClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before direct editor update: %v", err)
+	}
+	if managedPVC.Annotations == nil {
+		managedPVC.Annotations = map[string]string{}
+	}
+	managedPVC.Annotations["example.com/direct-edit"] = "true"
+	err := editorClient.Update(ctx, managedPVC)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "Direct modification of OpenBao-managed resources is prohibited") {
+		t.Fatalf("unexpected direct PVC update error message: %v", err)
+	}
+
+	schedulerClient := newPrivilegedImpersonatedClient(t, "system:kube-scheduler")
+	if err := schedulerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before scheduler bind update: %v", err)
+	}
+	if managedPVC.Annotations == nil {
+		managedPVC.Annotations = map[string]string{}
+	}
+	managedPVC.Annotations["volume.kubernetes.io/selected-node"] = "worker-0"
+	if err := schedulerClient.Update(ctx, managedPVC); err != nil {
+		t.Fatalf("expected kube-scheduler managed PVC selected-node update to succeed, got: %v", err)
+	}
+
+	storageProvisionerClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:storage-system:example-csi-provisioner",
+	)
+	if err := storageProvisionerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before storage provisioner update: %v", err)
+	}
+	if managedPVC.Annotations == nil {
+		managedPVC.Annotations = map[string]string{}
+	}
+	managedPVC.Annotations["volume.kubernetes.io/storage-provisioner"] = "example.csi.test"
+	managedPVC.Finalizers = append(
+		managedPVC.Finalizers,
+		"external-provisioner.volume.kubernetes.io/finalizer",
+	)
+	if err := storageProvisionerClient.Update(ctx, managedPVC); err != nil {
+		t.Fatalf("expected CSI provisioner managed PVC metadata update to succeed, got: %v", err)
+	}
+
+	persistentVolumeBinderClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:kube-system:persistent-volume-binder",
+	)
+	if err := persistentVolumeBinderClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before persistent volume binder update: %v", err)
+	}
+	managedPVC.Spec.VolumeName = "pv-example"
+	if err := persistentVolumeBinderClient.Update(ctx, managedPVC); err != nil {
+		t.Fatalf("expected persistent-volume-binder managed PVC bind update to succeed, got: %v", err)
+	}
+
+	pvcProtectionClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:kube-system:pvc-protection-controller",
+	)
+	if err := pvcProtectionClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before PVC protection finalizer update: %v", err)
+	}
+	managedPVC.Finalizers = []string{"external-provisioner.volume.kubernetes.io/finalizer"}
+	if err := pvcProtectionClient.Update(ctx, managedPVC); err != nil {
+		t.Fatalf("expected pvc-protection-controller managed PVC finalizer update to succeed, got: %v", err)
 	}
 }
 
@@ -491,6 +781,44 @@ func TestVAP_LockManagedRBAC_AllowsMaintenanceMutationWithClusterMaintenanceVerb
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: podName}, &deleted); err == nil {
 		t.Fatalf("expected Pod %s/%s to be deleted", namespace, podName)
 	}
+}
+
+func TestVAP_LockManagedRBAC_DeniesMaintenanceRelabelToAuthorizedCluster(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	victimClusterName := "victim"
+	attackerClusterName := "attacker"
+	podName := "victim-maintenance-pod"
+	editorUsername := "maintenance-relabel-editor"
+	controllerClient := newPrivilegedImpersonatedClient(t, controllerUsername)
+	createManagedMaintenancePod(t, controllerClient, namespace, victimClusterName, podName)
+	grantPodUpdateAccess(t, namespace, editorUsername)
+	grantClusterMaintenanceAccess(t, namespace, attackerClusterName, editorUsername)
+
+	editorClient := newImpersonatedClient(t, editorUsername)
+	pod := &corev1.Pod{}
+	if err := editorClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: podName}, pod); err != nil {
+		t.Fatalf("get managed maintenance pod: %v", err)
+	}
+	pod.Labels["openbao.org/cluster"] = attackerClusterName
+	pod.Labels["app.kubernetes.io/instance"] = attackerClusterName
+
+	for attempt := 0; attempt < 25; attempt++ {
+		err := editorClient.Update(ctx, pod)
+		if err == nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "Direct modification of OpenBao-managed resources is prohibited") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		return
+	}
+
+	t.Fatalf("expected VAP to deny maintenance relabel against a different cluster")
 }
 
 func TestVAP_LockManagedRBAC_DeniesDirectMutationOfProvisionerManagedRoleBinding(t *testing.T) {

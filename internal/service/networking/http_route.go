@@ -26,6 +26,7 @@ func (m *Manager) ensureHTTPRoute(ctx context.Context, logger logr.Logger, clust
 		apiVersion:        "gateway.networking.k8s.io/v1",
 		enabled:           enabled,
 		name:              name,
+		owner:             cluster,
 		logger:            logger,
 		logKey:            "httproute",
 		deleteDisabledMsg: "HTTPRoute no longer enabled; deleting",

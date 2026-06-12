@@ -19,6 +19,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
@@ -35,10 +36,9 @@ func usesStaticSeal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 }
 
 // ensureUnsealSecret manages the static auto-unseal Secret for the OpenBaoCluster.
-// This function implements a "blind create" pattern: it generates the key in memory
-// and attempts to create the Secret, ignoring AlreadyExists errors. This ensures
-// the operator never needs GET permission on the unseal key Secret after creation,
-// improving security by preventing the operator from reading root keys.
+// This function implements a "blind create" pattern: it generates the key in
+// memory and attempts to create the Secret without reading Secret data. If a
+// Secret already exists, only metadata ownership proof is accepted.
 func (m *Manager) ensureUnsealSecret(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	secretName := resourceidentity.UnsealSecretName(cluster)
 
@@ -65,11 +65,17 @@ func (m *Manager) ensureUnsealSecret(ctx context.Context, logger logr.Logger, cl
 	if err := controllerutil.SetControllerReference(cluster, secret, m.scheme); err != nil {
 		return fmt.Errorf("failed to set owner reference on unseal Secret %s/%s: %w", cluster.Namespace, secretName, err)
 	}
+	if err := resourceownership.SetOwnerUIDAnnotation(secret, cluster); err != nil {
+		return err
+	}
 
-	// Attempt CREATE - ignore AlreadyExists errors (blind create pattern)
+	// Attempt CREATE first. Existing Secrets are accepted only when metadata
+	// proves they already belong to this OpenBaoCluster.
 	if err := m.client.Create(ctx, secret); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			// Secret already exists - this is fine, we don't need to read it
+			if proofErr := m.requireExistingSecretOwnerProof(ctx, cluster, secretName, "use existing unseal Secret"); proofErr != nil {
+				return proofErr
+			}
 			logger.Info("Unseal Secret already exists; skipping creation", "secret", secretName)
 			return nil
 		}
@@ -78,6 +84,15 @@ func (m *Manager) ensureUnsealSecret(ctx context.Context, logger logr.Logger, cl
 
 	logger.Info("Created unseal Secret", "secret", secretName)
 	return nil
+}
+
+func (m *Manager) requireExistingSecretOwnerProof(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, secretName, action string) error {
+	metadata := &metav1.PartialObjectMetadata{}
+	metadata.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Secret"))
+	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: secretName}, metadata); err != nil {
+		return fmt.Errorf("failed to verify existing Secret %s/%s owner proof: %w", cluster.Namespace, secretName, err)
+	}
+	return resourceownership.RequireOwnerProof(action, metadata, cluster)
 }
 
 // generateUnsealKey generates a 32-byte random key for the static unseal Secret.
@@ -146,6 +161,9 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		}
 
 		logger.Info("Self-init disabled; deleting self-init ConfigMap", "configmap", cmName)
+		if err := resourceownership.RequireOwnerProof("delete self-init ConfigMap", configMap, cluster); err != nil {
+			return err
+		}
 		if err := m.client.Delete(ctx, configMap); err != nil {
 			return fmt.Errorf("failed to delete self-init ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
 		}
@@ -217,6 +235,9 @@ func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logge
 		}
 
 		logger.Info("No self-init requests; deleting self-init ConfigMap", "configmap", cmName)
+		if err := resourceownership.RequireOwnerProof("delete self-init ConfigMap", configMap, cluster); err != nil {
+			return err
+		}
 		if err := m.client.Delete(ctx, configMap); err != nil {
 			return fmt.Errorf("failed to delete self-init ConfigMap %s/%s: %w", cluster.Namespace, cmName, err)
 		}

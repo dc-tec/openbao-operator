@@ -11,6 +11,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -34,7 +35,7 @@ func Cleanup(
 	)
 
 	if policy == openbaov1alpha1.DeletionPolicyDeletePVCs || policy == openbaov1alpha1.DeletionPolicyDeleteAll {
-		if err := deletePVCs(ctx, kubeClient, cluster); err != nil {
+		if err := deletePVCs(ctx, logger, kubeClient, cluster); err != nil {
 			return fmt.Errorf("failed to delete PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 		}
 		logger.Info("PVCs deleted per deletion policy")
@@ -45,7 +46,7 @@ func Cleanup(
 	return nil
 }
 
-func deletePVCs(ctx context.Context, kubeClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) error {
+func deletePVCs(ctx context.Context, logger logr.Logger, kubeClient client.Client, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	var pvcList corev1.PersistentVolumeClaimList
 	if err := kubeClient.List(
 		ctx,
@@ -62,6 +63,10 @@ func deletePVCs(ctx context.Context, kubeClient client.Client, cluster *openbaov
 			continue
 		}
 		if portopenbao.UsesExistingAuditFileStorage(cluster) && pvc.Name == portopenbao.AuditFileStorageClaimName(cluster) {
+			continue
+		}
+		if !resourceownership.HasOwnerProof(pvc, cluster) {
+			logger.Info("Skipping PVC cleanup because owner proof is missing", "pvc", pvc.Name)
 			continue
 		}
 		if len(pvc.Finalizers) > 0 {

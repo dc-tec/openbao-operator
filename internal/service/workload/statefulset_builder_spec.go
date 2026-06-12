@@ -13,6 +13,8 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func desiredStatefulSetReplicas(cluster *openbaov1alpha1.OpenBaoCluster, initialized bool, spec StatefulSetSpec) int32 {
@@ -168,6 +170,9 @@ func buildStatefulSetPVC(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulS
 		className := *storageClassName
 		pvc.Spec.StorageClassName = &className
 	}
+	if err := resourceownership.SetOwnerUIDAnnotation(&pvc, cluster); err != nil {
+		return corev1.PersistentVolumeClaim{}, err
+	}
 
 	return pvc, nil
 }
@@ -183,6 +188,9 @@ func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoClu
 			return
 		}
 		for key, value := range metadata.Labels {
+			if isReservedOpenBaoPodLabel(key) {
+				continue
+			}
 			if _, exists := podLabels[key]; exists {
 				continue
 			}
@@ -218,6 +226,19 @@ func buildStatefulSetPodLabelsAndAnnotations(cluster *openbaov1alpha1.OpenBaoClu
 	}
 
 	return podLabels, annotations
+}
+
+func isReservedOpenBaoPodLabel(key string) bool {
+	switch key {
+	case portopenbao.LabelActive,
+		portopenbao.LabelInitialized,
+		portopenbao.LabelSealed,
+		portopenbao.LabelVersion,
+		"openbao-perf-standby":
+		return true
+	default:
+		return false
+	}
 }
 
 func effectiveRestartAt(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSetSpec) string {

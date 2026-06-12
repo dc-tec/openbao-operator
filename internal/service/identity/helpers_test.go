@@ -5,6 +5,7 @@ package identity
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 )
@@ -14,6 +15,7 @@ func newMinimalCluster(name, namespace string) *openbaov1alpha1.OpenBaoCluster {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			UID:       types.UID(name + "-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",

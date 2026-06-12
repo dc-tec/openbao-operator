@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -99,6 +100,7 @@ func newManagerOptions(
 		&corev1.Service{},
 		&corev1.ConfigMap{},
 		&corev1.Namespace{},
+		&policyv1.PodDisruptionBudget{},
 		&networkingv1.Ingress{},
 		&networkingv1.NetworkPolicy{},
 		&rbacv1.Role{},

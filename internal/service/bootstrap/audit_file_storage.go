@@ -12,6 +12,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -25,7 +26,7 @@ func (m *Manager) ensureAuditFileStoragePVC(ctx context.Context, logger logr.Log
 		return err
 	}
 
-	if err := m.applyResourceWithoutOwnerRef(ctx, pvc); err != nil {
+	if err := m.applyRetainedResource(ctx, pvc, cluster); err != nil {
 		return fmt.Errorf("failed to ensure audit file storage PVC %s/%s: %w", pvc.Namespace, pvc.Name, err)
 	}
 
@@ -67,6 +68,9 @@ func buildManagedAuditFileStoragePVC(cluster *openbaov1alpha1.OpenBaoCluster) (*
 	if sc := cluster.Spec.AuditFileStorage.StorageClassName; sc != nil && *sc != "" {
 		className := *sc
 		pvc.Spec.StorageClassName = &className
+	}
+	if err := resourceownership.SetOwnerUIDAnnotation(pvc, cluster); err != nil {
+		return nil, err
 	}
 	return pvc, nil
 }

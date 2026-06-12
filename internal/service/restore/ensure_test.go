@@ -24,6 +24,7 @@ func TestEnsureRestoreServiceAccount_WithWorkloadIdentityAnnotations(t *testing.
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "default",
+			UID:       types.UID("test-cluster-uid"),
 		},
 	}
 	target := openbaov1alpha1.BackupTarget{

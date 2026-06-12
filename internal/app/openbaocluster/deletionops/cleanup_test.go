@@ -139,6 +139,27 @@ func TestDeletePVCsPreservesExistingACMESharedCachePVC(t *testing.T) {
 	}
 }
 
+func TestDeletePVCsSkipsLabelMatchedPVCWithoutOwnerProof(t *testing.T) {
+	cluster := newCleanupTestCluster("cleanup-unowned")
+	pvc := newCleanupTestPVC(cluster.Namespace, cluster.Name, "data-cleanup-unowned-0")
+	delete(pvc.Annotations, constants.AnnotationOpenBaoOwnerUID)
+	kubeClient := newCleanupTestClient(t, cluster, pvc)
+
+	err := Cleanup(context.Background(), logr.Discard(), kubeClient, cluster, openbaov1alpha1.DeletionPolicyDeletePVCs)
+	if err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+
+	err = kubeClient.Get(
+		context.Background(),
+		types.NamespacedName{Namespace: cluster.Namespace, Name: pvc.Name},
+		&corev1.PersistentVolumeClaim{},
+	)
+	if err != nil {
+		t.Fatalf("expected unproven PVC to be preserved, got error: %v", err)
+	}
+}
+
 func newCleanupTestClient(t *testing.T, objs ...runtime.Object) client.Client {
 	t.Helper()
 
@@ -161,6 +182,7 @@ func newCleanupTestCluster(name string) *openbaov1alpha1.OpenBaoCluster {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: "default",
+			UID:       types.UID(name + "-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",
@@ -183,6 +205,9 @@ func newCleanupTestPVC(namespace, clusterName, name string) *corev1.PersistentVo
 			Namespace: namespace,
 			Labels: map[string]string{
 				constants.LabelOpenBaoCluster: clusterName,
+			},
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: clusterName + "-uid",
 			},
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{

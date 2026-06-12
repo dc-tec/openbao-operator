@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,6 +56,8 @@ func TestStorageReconciler_ExpandsPVCs(t *testing.T) {
 			},
 		},
 	}
+	markStorageTestPVC(cluster, pvc)
+	markStorageTestPVC(cluster, pvc)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
 	r := NewStorageReconciler(
@@ -105,6 +108,8 @@ func TestStorageReconciler_RejectsShrink(t *testing.T) {
 			},
 		},
 	}
+	markStorageTestPVC(cluster, pvc)
+	markStorageTestPVC(cluster, pvc)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
 	r := NewStorageReconciler(
@@ -154,6 +159,8 @@ func TestStorageReconciler_RejectsStorageClassChangeWhenPVCClassIsUnset(t *testi
 			},
 		},
 	}
+	markStorageTestPVC(cluster, pvc)
+	markStorageTestPVC(cluster, pvc)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pvc).Build()
 	r := NewStorageReconciler(
@@ -204,6 +211,7 @@ func TestStorageReconciler_IgnoresACMECachePVCForStorageClassValidation(t *testi
 			},
 		},
 	}
+	markStorageTestPVC(cluster, dataPVC)
 
 	acmeClass := "efs-acme"
 	acmeCachePVC := &corev1.PersistentVolumeClaim{
@@ -277,6 +285,7 @@ func TestStorageReconciler_ExpandsReadReplicaPVCsUsingReadReplicaStorageSpec(t *
 			},
 		},
 	}
+	markStorageTestPVC(cluster, voterPVC)
 	readPVC := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "data-" + resourceidentity.ReadReplicaStatefulSetName(cluster) + "-0",
@@ -294,6 +303,7 @@ func TestStorageReconciler_ExpandsReadReplicaPVCsUsingReadReplicaStorageSpec(t *
 			},
 		},
 	}
+	markStorageTestPVC(cluster, readPVC)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(voterPVC, readPVC).Build()
 	r := NewStorageReconciler(
@@ -380,6 +390,7 @@ func TestStorageResizeRestartReconciler_RestartsFollowerPod(t *testing.T) {
 			},
 		},
 	}
+	markStorageTestPVC(cluster, pvc)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -448,6 +459,7 @@ func TestStorageResizeRestartReconciler_StepsDownLeaderFirst(t *testing.T) {
 			},
 		},
 	}
+	markStorageTestPVC(cluster, pvc)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -520,6 +532,7 @@ func TestStorageResizeRestartReconciler_RequiresMaintenance(t *testing.T) {
 			},
 		},
 	}
+	markStorageTestPVC(cluster, pvc)
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, pvc).Build()
 
@@ -567,6 +580,7 @@ func TestStorageResizeRestartReconciler_PrefersReadReplicaPods(t *testing.T) {
 			},
 		},
 	}
+	markStorageTestPVC(cluster, voterPVC)
 	readPVC := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "data-" + resourceidentity.ReadReplicaStatefulSetName(cluster) + "-0",
@@ -581,6 +595,7 @@ func TestStorageResizeRestartReconciler_PrefersReadReplicaPods(t *testing.T) {
 			},
 		},
 	}
+	markStorageTestPVC(cluster, readPVC)
 	voterPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-0", Namespace: "default"},
 		Status: corev1.PodStatus{
@@ -619,4 +634,14 @@ func TestStorageResizeRestartReconciler_PrefersReadReplicaPods(t *testing.T) {
 
 func quantityPtr(q resource.Quantity) *resource.Quantity {
 	return &q
+}
+
+func markStorageTestPVC(cluster *openbaov1alpha1.OpenBaoCluster, pvc *corev1.PersistentVolumeClaim) {
+	if cluster.UID == "" {
+		cluster.UID = types.UID(cluster.Name + "-uid")
+	}
+	if pvc.Annotations == nil {
+		pvc.Annotations = map[string]string{}
+	}
+	pvc.Annotations[constants.AnnotationOpenBaoOwnerUID] = string(cluster.UID)
 }

@@ -64,7 +64,7 @@ Reserve `any` and `interface{}` for external API boundaries. Helpers that only w
 - Use defined types for enum-like status and phase values instead of raw strings.
 - Avoid junk-drawer package names such as `util`, `common`, or `shared`.
 - Prefer package names that describe the actual boundary or job, such as `k8sutil`, `config`, or `schema`.
-- Reuse shared platform contracts such as `internal/platform/resourceidentity` and `internal/platform/resourceapply` instead of copying names, labels, selectors, or generic apply flow into another service.
+- Reuse shared platform contracts such as `internal/platform/resourceidentity`, `internal/platform/resourceapply`, and `internal/platform/resourceownership` instead of copying names, labels, selectors, provenance checks, or generic apply flow into another service.
 - Keep `config.hcl` semantics behind `internal/service/configuration` instead of letting workload bootstrap and upgrade flows render around each other.
 
 ## Review hygiene

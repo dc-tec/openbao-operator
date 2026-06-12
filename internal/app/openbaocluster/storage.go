@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 )
 
 const (
@@ -179,6 +180,7 @@ func ReconcileStorageResizeRestart(
 		}
 		return recon.Result{}, fmt.Errorf("failed to list PVCs for OpenBaoCluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
+	pvcList.Items = filterPVCsByOwnerProof(pvcList.Items, cluster)
 
 	if cluster.Spec.Maintenance == nil || !cluster.Spec.Maintenance.Enabled {
 		if anyPVCFileSystemResizePending(pvcList.Items) {
@@ -246,4 +248,15 @@ func ReconcileStorageResizeRestart(
 	}
 
 	return recon.Result{RequeueAfter: storageRequeueShort}, nil
+}
+
+func filterPVCsByOwnerProof(pvcs []corev1.PersistentVolumeClaim, cluster *openbaov1alpha1.OpenBaoCluster) []corev1.PersistentVolumeClaim {
+	owned := pvcs[:0]
+	for i := range pvcs {
+		pvc := pvcs[i]
+		if resourceownership.HasOwnerProof(&pvc, cluster) {
+			owned = append(owned, pvc)
+		}
+	}
+	return owned
 }

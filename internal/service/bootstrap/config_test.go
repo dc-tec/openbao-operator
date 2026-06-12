@@ -144,8 +144,9 @@ func TestEnsureUnsealSecret_CreatesSecret(t *testing.T) {
 	}
 }
 
-func TestEnsureUnsealSecret_HandlesAlreadyExists(t *testing.T) {
+func TestEnsureUnsealSecret_RejectsUnownedAlreadyExists(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.UID = types.UID("test-cluster-uid")
 	secretName := resourceidentity.UnsealSecretName(cluster)
 
 	existingSecret := &corev1.Secret{
@@ -164,10 +165,36 @@ func TestEnsureUnsealSecret_HandlesAlreadyExists(t *testing.T) {
 	k8sClient := newTestClientWithObjects(t, existingSecret)
 	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
 
-	// Should not error when secret already exists (blind create pattern)
 	err := manager.ensureUnsealSecret(ctx, logger, cluster)
-	if err != nil {
-		t.Fatalf("ensureUnsealSecret() with existing secret should not error, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "requires OpenBaoCluster owner proof") {
+		t.Fatalf("ensureUnsealSecret() error = %v, want owner proof error", err)
+	}
+}
+
+func TestEnsureUnsealSecret_AllowsOwnedAlreadyExists(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.UID = types.UID("test-cluster-uid")
+	secretName := resourceidentity.UnsealSecretName(cluster)
+
+	existingSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            secretName,
+			Namespace:       cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{bootstrapOwnerRef(cluster)},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			unsealSecretKey: []byte("existing-key"),
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClientWithObjects(t, existingSecret)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
+
+	if err := manager.ensureUnsealSecret(ctx, logger, cluster); err != nil {
+		t.Fatalf("ensureUnsealSecret() error = %v", err)
 	}
 }
 
@@ -204,12 +231,14 @@ func TestEnsureConfigMap_CreatesConfigMap(t *testing.T) {
 
 func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.UID = types.UID("test-cluster-uid")
 	cmName := resourceidentity.ConfigMapName(cluster)
 
 	existingConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cmName,
-			Namespace: cluster.Namespace,
+			Name:            cmName,
+			Namespace:       cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{bootstrapOwnerRef(cluster)},
 		},
 		Data: map[string]string{
 			configFileName: "old config content",
@@ -245,13 +274,15 @@ func TestEnsureConfigMap_UpdatesConfigMap(t *testing.T) {
 
 func TestEnsureConfigMap_IsIdempotent(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.UID = types.UID("test-cluster-uid")
 	cmName := resourceidentity.ConfigMapName(cluster)
 	configContent := "test config content"
 
 	existingConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cmName,
-			Namespace: cluster.Namespace,
+			Name:            cmName,
+			Namespace:       cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{bootstrapOwnerRef(cluster)},
 		},
 		Data: map[string]string{
 			configFileName: configContent,
@@ -292,6 +323,7 @@ func TestEnsureConfigMap_IsIdempotent(t *testing.T) {
 
 func TestEnsureSelfInitConfigMap_Disabled(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.UID = types.UID("test-cluster-uid")
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
 		Enabled: false,
 	}
@@ -299,8 +331,9 @@ func TestEnsureSelfInitConfigMap_Disabled(t *testing.T) {
 
 	existingConfigMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cmName,
-			Namespace: cluster.Namespace,
+			Name:            cmName,
+			Namespace:       cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{bootstrapOwnerRef(cluster)},
 		},
 		Data: map[string]string{
 			configFileName: "old init config",
@@ -643,5 +676,16 @@ func TestDeleteSecrets_PartialMissing(t *testing.T) {
 	err := deleteSecrets(ctx, k8sClient, cluster)
 	if err != nil {
 		t.Fatalf("deleteSecrets() with missing secrets should not error, got: %v", err)
+	}
+}
+
+func bootstrapOwnerRef(cluster *openbaov1alpha1.OpenBaoCluster) metav1.OwnerReference {
+	controller := true
+	return metav1.OwnerReference{
+		APIVersion: openbaov1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoCluster",
+		Name:       cluster.Name,
+		UID:        cluster.UID,
+		Controller: &controller,
 	}
 }

@@ -15,6 +15,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -66,14 +67,14 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 	// If service is not needed, check if it exists and delete it
 	if !needsService {
 		// Delete main external service
-		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, svcName); err != nil {
+		if err := m.deleteServiceIfExists(ctx, cluster, svcName); err != nil {
 			return fmt.Errorf("failed to delete external Service %s/%s: %w", cluster.Namespace, svcName, err)
 		}
 		// Delete any blue/green-specific services that might exist from previous runs
-		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, externalServiceNameBlue(cluster)); err != nil {
+		if err := m.deleteServiceIfExists(ctx, cluster, externalServiceNameBlue(cluster)); err != nil {
 			return fmt.Errorf("failed to delete blue external Service %s/%s: %w", cluster.Namespace, externalServiceNameBlue(cluster), err)
 		}
-		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, externalServiceNameGreen(cluster)); err != nil {
+		if err := m.deleteServiceIfExists(ctx, cluster, externalServiceNameGreen(cluster)); err != nil {
 			return fmt.Errorf("failed to delete green external Service %s/%s: %w", cluster.Namespace, externalServiceNameGreen(cluster), err)
 		}
 		return nil
@@ -126,10 +127,10 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 
 	// Gateway-weighted traffic switching was removed. Clean up any stale Services
 	// from previous iterations that used revision-specific HTTPRoute backends.
-	if err := m.deleteServiceIfExists(ctx, cluster.Namespace, externalServiceNameBlue(cluster)); err != nil {
+	if err := m.deleteServiceIfExists(ctx, cluster, externalServiceNameBlue(cluster)); err != nil {
 		return fmt.Errorf("failed to delete stale blue external Service: %w", err)
 	}
-	if err := m.deleteServiceIfExists(ctx, cluster.Namespace, externalServiceNameGreen(cluster)); err != nil {
+	if err := m.deleteServiceIfExists(ctx, cluster, externalServiceNameGreen(cluster)); err != nil {
 		return fmt.Errorf("failed to delete stale green external Service: %w", err)
 	}
 
@@ -144,7 +145,7 @@ func (m *Manager) ensureReadReplicaService(ctx context.Context, _ logr.Logger, c
 		cluster.Spec.ReadReplicas.Service != nil &&
 		cluster.Spec.ReadReplicas.Service.Enabled
 	if !enabled {
-		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, svcName); err != nil {
+		if err := m.deleteServiceIfExists(ctx, cluster, svcName); err != nil {
 			return fmt.Errorf("failed to delete read-replica Service %s/%s: %w", cluster.Namespace, svcName, err)
 		}
 		return nil
@@ -194,7 +195,7 @@ func (m *Manager) ensureReadReplicaService(ctx context.Context, _ logr.Logger, c
 func (m *Manager) ensureMetricsService(ctx context.Context, _ logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	svcName := metricsServiceName(cluster)
 	if !workloadServiceMonitorEnabled(cluster) {
-		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, svcName); err != nil {
+		if err := m.deleteServiceIfExists(ctx, cluster, svcName); err != nil {
 			return fmt.Errorf("failed to delete metrics Service %s/%s: %w", cluster.Namespace, svcName, err)
 		}
 		return nil
@@ -273,7 +274,7 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 	svcName := acmeServiceName(cluster)
 
 	if !enabled {
-		if err := m.deleteServiceIfExists(ctx, cluster.Namespace, svcName); err != nil {
+		if err := m.deleteServiceIfExists(ctx, cluster, svcName); err != nil {
 			return fmt.Errorf("failed to delete ACME challenge Service %s/%s: %w", cluster.Namespace, svcName, err)
 		}
 		return nil
@@ -322,21 +323,24 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 	return nil
 }
 
-// deleteServiceIfExists deletes the Service with the given namespace/name if it exists.
-func (m *Manager) deleteServiceIfExists(ctx context.Context, namespace, name string) error {
+// deleteServiceIfExists deletes an operator-owned Service with the given name if it exists.
+func (m *Manager) deleteServiceIfExists(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, name string) error {
 	if strings.TrimSpace(name) == "" {
 		return nil
 	}
 
 	service := &corev1.Service{}
 	err := m.client.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
+		Namespace: cluster.Namespace,
 		Name:      name,
 	}, service)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
+		return err
+	}
+	if err := resourceownership.RequireOwnerProof("delete Service", service, cluster); err != nil {
 		return err
 	}
 

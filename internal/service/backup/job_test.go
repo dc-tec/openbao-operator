@@ -59,6 +59,7 @@ func newTestClusterWithBackup(name, namespace string) *openbaov1alpha1.OpenBaoCl
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			UID:       types.UID(name + "-uid"),
 		},
 		Spec: openbaov1alpha1.OpenBaoClusterSpec{
 			Version:  "2.4.4",

@@ -16,6 +16,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 )
 
 func (m *Manager) ensureRootTokenSecretPresent(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
@@ -53,11 +54,34 @@ func (m *Manager) preflightRootTokenStorage(ctx context.Context, cluster *openba
 	secret := buildRootTokenSecret(cluster, "dry-run")
 	secretName := secret.Name
 
-	_, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Create(ctx, secret, metav1.CreateOptions{
+	existing, err := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err == nil {
+		if err := resourceownership.RequireOwnerProof("use root token Secret", existing, cluster); err != nil {
+			return err
+		}
+		return nil
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		if apierrors.IsForbidden(err) || apierrors.IsTimeout(err) || apierrors.IsServerTimeout(err) || apierrors.IsTooManyRequests(err) || apierrors.IsInternalError(err) {
+			return operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to read root token Secret %s/%s before initialization: %w", cluster.Namespace, secretName, err),
+			)
+		}
+		return fmt.Errorf("failed to read root token Secret %s/%s before initialization: %w", cluster.Namespace, secretName, err)
+	}
+
+	_, err = m.clientset.CoreV1().Secrets(cluster.Namespace).Create(ctx, secret, metav1.CreateOptions{
 		DryRun: []string{metav1.DryRunAll},
 	})
-	if err == nil || apierrors.IsAlreadyExists(err) {
+	if err == nil {
 		return nil
+	}
+	if apierrors.IsAlreadyExists(err) {
+		existing, getErr := m.clientset.CoreV1().Secrets(cluster.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+		if getErr != nil {
+			return fmt.Errorf("failed to read existing root token Secret %s/%s after dry-run collision: %w", cluster.Namespace, secretName, getErr)
+		}
+		return resourceownership.RequireOwnerProof("use root token Secret", existing, cluster)
 	}
 	if apierrors.IsForbidden(err) {
 		return operatorerrors.WrapTransientKubernetesAPI(
@@ -131,23 +155,62 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 		return nil
 	}
 
+	return m.updateExistingRootTokenSecret(ctx, cluster, desired, rootToken)
+}
+
+func (m *Manager) updateExistingRootTokenSecret(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, desired *corev1.Secret, rootToken string) error {
+	secretsClient := m.clientset.CoreV1().Secrets(cluster.Namespace)
+	secretName := desired.Name
+
 	existing, err := secretsClient.Get(ctx, secretName, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsForbidden(err) {
-			return nil
+			return operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to get root token Secret %s/%s after create collision: %w", cluster.Namespace, secretName, err),
+			)
 		}
 		return fmt.Errorf("failed to get root token Secret %s/%s: %w", cluster.Namespace, secretName, err)
 	}
+	if err := resourceownership.RequireOwnerProof("update root token Secret", existing, cluster); err != nil {
+		return err
+	}
 
+	if err := mergeRootTokenSecret(existing, desired, cluster, rootToken); err != nil {
+		return err
+	}
+
+	if _, updateErr := secretsClient.Update(ctx, existing, metav1.UpdateOptions{}); updateErr != nil {
+		if apierrors.IsForbidden(updateErr) {
+			return operatorerrors.WrapTransientKubernetesAPI(
+				fmt.Errorf("failed to update root token Secret %s/%s: %w", cluster.Namespace, secretName, updateErr),
+			)
+		}
+		return fmt.Errorf("failed to update root token Secret %s/%s: %w", cluster.Namespace, secretName, updateErr)
+	}
+
+	return nil
+}
+
+func mergeRootTokenSecret(existing, desired *corev1.Secret, cluster *openbaov1alpha1.OpenBaoCluster, rootToken string) error {
 	secretLabels := desired.Labels
+	secretAnnotations := desired.Annotations
 	ownerRef := desired.OwnerReferences[0]
 	immutable := desired.Immutable != nil && *desired.Immutable
+	if existing.Immutable != nil && *existing.Immutable && string(existing.Data[rootTokenSecretKey]) != rootToken {
+		return fmt.Errorf("root token Secret %s/%s is immutable and does not contain the current root token", cluster.Namespace, desired.Name)
+	}
 
 	if existing.Labels == nil {
 		existing.Labels = make(map[string]string)
 	}
 	for k, v := range secretLabels {
 		existing.Labels[k] = v
+	}
+	if existing.Annotations == nil {
+		existing.Annotations = make(map[string]string)
+	}
+	for k, v := range secretAnnotations {
+		existing.Annotations[k] = v
 	}
 
 	hasOwnerRef := false
@@ -164,13 +227,10 @@ func (m *Manager) storeRootToken(ctx context.Context, _ logr.Logger, cluster *op
 	if existing.Immutable == nil || *existing.Immutable != immutable {
 		existing.Immutable = &immutable
 	}
-
-	if _, updateErr := secretsClient.Update(ctx, existing, metav1.UpdateOptions{}); updateErr != nil {
-		if apierrors.IsForbidden(updateErr) {
-			return nil
-		}
-		return fmt.Errorf("failed to update root token Secret %s/%s: %w", cluster.Namespace, secretName, updateErr)
+	if existing.Data == nil {
+		existing.Data = make(map[string][]byte)
 	}
+	existing.Data[rootTokenSecretKey] = []byte(rootToken)
 
 	return nil
 }
@@ -180,7 +240,7 @@ func buildRootTokenSecret(cluster *openbaov1alpha1.OpenBaoCluster, token string)
 	ownerRef := metav1.NewControllerRef(cluster, openbaov1alpha1.GroupVersion.WithKind("OpenBaoCluster"))
 
 	immutable := true
-	return &corev1.Secret{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: cluster.Namespace,
@@ -198,4 +258,6 @@ func buildRootTokenSecret(cluster *openbaov1alpha1.OpenBaoCluster, token string)
 			rootTokenSecretKey: []byte(token),
 		},
 	}
+	_ = resourceownership.SetOwnerUIDAnnotation(secret, cluster)
+	return secret
 }

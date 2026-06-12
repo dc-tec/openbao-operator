@@ -306,6 +306,7 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 		existingSecret             *corev1.Secret
 		rootToken                  string
 		wantTokenInSecret          string
+		wantErrContains            string
 		transientCreateFailures    int
 		wantCreateFailuresObserved int
 	}{
@@ -322,7 +323,7 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 			wantCreateFailuresObserved: 2,
 		},
 		{
-			name: "does not overwrite existing Secret token",
+			name: "rejects unowned existing Secret",
 			existingSecret: &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "cluster-root-token",
@@ -333,8 +334,24 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 					rootTokenSecretKey: []byte("old-token"),
 				},
 			},
+			rootToken:       "s.newtoken",
+			wantErrContains: "requires OpenBaoCluster owner proof",
+		},
+		{
+			name: "updates owned mutable existing Secret token",
+			existingSecret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "cluster-root-token",
+					Namespace:       "default",
+					OwnerReferences: []metav1.OwnerReference{rootTokenOwnerRef("cluster", types.UID("test-uid-12345"))},
+				},
+				Type: corev1.SecretTypeOpaque,
+				Data: map[string][]byte{
+					rootTokenSecretKey: []byte("old-token"),
+				},
+			},
 			rootToken:         "s.newtoken",
-			wantTokenInSecret: "old-token",
+			wantTokenInSecret: "s.newtoken",
 		},
 	}
 
@@ -373,7 +390,17 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 				}
 			}
 
-			if err := manager.storeRootToken(context.Background(), logr.Discard(), cluster, tt.rootToken); err != nil {
+			err := manager.storeRootToken(context.Background(), logr.Discard(), cluster, tt.rootToken)
+			if tt.wantErrContains != "" {
+				if err == nil {
+					t.Fatalf("storeRootToken() error = nil, want %q", tt.wantErrContains)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrContains) {
+					t.Fatalf("storeRootToken() error = %q, want %q", err.Error(), tt.wantErrContains)
+				}
+				return
+			}
+			if err != nil {
 				t.Fatalf("storeRootToken() error = %v", err)
 			}
 
@@ -407,6 +434,51 @@ func TestStoreRootTokenCreatesOrUpdatesSecret(t *testing.T) {
 				t.Errorf("expected OwnerReference Kind 'OpenBaoCluster', got %s", ownerRef.Kind)
 			}
 		})
+	}
+}
+
+func TestStoreRootTokenRejectsImmutableOwnedSecretWithDifferentToken(t *testing.T) {
+	immutable := true
+	clusterUID := types.UID("test-uid-12345")
+	existingSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "cluster-root-token",
+			Namespace:       "default",
+			OwnerReferences: []metav1.OwnerReference{rootTokenOwnerRef("cluster", clusterUID)},
+		},
+		Immutable: &immutable,
+		Type:      corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			rootTokenSecretKey: []byte("old-token"),
+		},
+	}
+	clientset := kubernetesfake.NewClientset(existingSecret)
+	manager := NewManager(&rest.Config{}, clientset, openbao.NewClientManager(portopenbao.ClientConfig{}))
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "openbao.org/v1alpha1",
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "default", UID: clusterUID},
+	}
+
+	err := manager.storeRootToken(context.Background(), logr.Discard(), cluster, "s.newtoken")
+	if err == nil {
+		t.Fatal("storeRootToken() error = nil, want immutable mismatch error")
+	}
+	if !strings.Contains(err.Error(), "immutable") {
+		t.Fatalf("storeRootToken() error = %q, want immutable mismatch", err.Error())
+	}
+}
+
+func rootTokenOwnerRef(name string, uid types.UID) metav1.OwnerReference {
+	controller := true
+	return metav1.OwnerReference{
+		APIVersion: openbaov1alpha1.GroupVersion.String(),
+		Kind:       "OpenBaoCluster",
+		Name:       name,
+		UID:        uid,
+		Controller: &controller,
 	}
 }
 
