@@ -436,6 +436,7 @@ spec:
           allowed()
   validations:
     - expression: >-
+        request.operation == "DELETE" ||
         variables.owner_uid_annotation_allowed ||
         (
           !variables.has_current_owner_uid_annotation &&

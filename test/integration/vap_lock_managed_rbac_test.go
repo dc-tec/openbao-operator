@@ -403,7 +403,8 @@ func createManagedMaintenancePod(t *testing.T, c client.Client, namespace, clust
 			Name:      podName,
 			Namespace: namespace,
 			Annotations: map[string]string{
-				"openbao.org/maintenance": testTrueString,
+				constants.AnnotationMaintenance:     testTrueString,
+				constants.AnnotationOpenBaoOwnerUID: string(cluster.UID),
 			},
 			Labels: map[string]string{
 				"app.kubernetes.io/name":       "openbao",
