@@ -4,12 +4,14 @@
 package integration
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -349,6 +351,37 @@ func newOwnedServiceMonitorObject(cluster *openbaov1alpha1.OpenBaoCluster) *unst
 	return obj
 }
 
+func newManagedStatefulSetPVC(namespace, clusterName, name string) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "PersistentVolumeClaim",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:    clusterName,
+				constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster: clusterName,
+			},
+			Annotations: map[string]string{
+				constants.AnnotationOpenBaoOwnerUID: "example-cluster-uid",
+			},
+			Finalizers: []string{"kubernetes.io/pvc-protection"},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("1Gi"),
+				},
+			},
+		},
+	}
+}
+
 func createManagedMaintenancePod(t *testing.T, c client.Client, namespace, clusterName, podName string) {
 	t.Helper()
 
@@ -522,6 +555,111 @@ func TestVAP_LockManagedRBAC_DeniesForgedServiceAccountOwnerUID(t *testing.T) {
 	}
 
 	t.Fatalf("expected VAP to deny forged ServiceAccount owner UID provenance")
+}
+
+func TestVAP_LockManagedRBAC_AllowsStatefulSetControllerManagedPVC(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	editorClient := newPrivilegedImpersonatedClient(t, "managed-pvc-editor")
+
+	var deniedForgedPVC bool
+	for attempt := 0; attempt < 25; attempt++ {
+		forged := newManagedStatefulSetPVC(namespace, "example", fmt.Sprintf("data-example-forged-%d", attempt))
+		err := editorClient.Create(ctx, forged.DeepCopy())
+		if err == nil {
+			_ = k8sClient.Delete(ctx, forged)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "openbao.org/owner-uid annotation is reserved") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		deniedForgedPVC = true
+		break
+	}
+	if !deniedForgedPVC {
+		t.Fatalf("expected VAP to deny forged managed PVC owner UID provenance")
+	}
+
+	statefulSetControllerClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:kube-system:statefulset-controller",
+	)
+	managedPVC := newManagedStatefulSetPVC(namespace, "example", "data-example-0")
+	if err := statefulSetControllerClient.Create(ctx, managedPVC); err != nil {
+		t.Fatalf("expected StatefulSet controller managed PVC create to succeed, got: %v", err)
+	}
+
+	if err := editorClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before direct editor update: %v", err)
+	}
+	if managedPVC.Annotations == nil {
+		managedPVC.Annotations = map[string]string{}
+	}
+	managedPVC.Annotations["example.com/direct-edit"] = "true"
+	err := editorClient.Update(ctx, managedPVC)
+	requireAdmissionDenied(t, err)
+	if !strings.Contains(err.Error(), "Direct modification of OpenBao-managed resources is prohibited") {
+		t.Fatalf("unexpected direct PVC update error message: %v", err)
+	}
+
+	schedulerClient := newPrivilegedImpersonatedClient(t, "system:kube-scheduler")
+	if err := schedulerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before scheduler bind update: %v", err)
+	}
+	if managedPVC.Annotations == nil {
+		managedPVC.Annotations = map[string]string{}
+	}
+	managedPVC.Annotations["volume.kubernetes.io/selected-node"] = "worker-0"
+	if err := schedulerClient.Update(ctx, managedPVC); err != nil {
+		t.Fatalf("expected kube-scheduler managed PVC selected-node update to succeed, got: %v", err)
+	}
+
+	storageProvisionerClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:storage-system:example-csi-provisioner",
+	)
+	if err := storageProvisionerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before storage provisioner update: %v", err)
+	}
+	if managedPVC.Annotations == nil {
+		managedPVC.Annotations = map[string]string{}
+	}
+	managedPVC.Annotations["volume.kubernetes.io/storage-provisioner"] = "example.csi.test"
+	managedPVC.Finalizers = append(
+		managedPVC.Finalizers,
+		"external-provisioner.volume.kubernetes.io/finalizer",
+	)
+	if err := storageProvisionerClient.Update(ctx, managedPVC); err != nil {
+		t.Fatalf("expected CSI provisioner managed PVC metadata update to succeed, got: %v", err)
+	}
+
+	persistentVolumeBinderClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:kube-system:persistent-volume-binder",
+	)
+	if err := persistentVolumeBinderClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before persistent volume binder update: %v", err)
+	}
+	managedPVC.Spec.VolumeName = "pv-example"
+	if err := persistentVolumeBinderClient.Update(ctx, managedPVC); err != nil {
+		t.Fatalf("expected persistent-volume-binder managed PVC bind update to succeed, got: %v", err)
+	}
+
+	pvcProtectionClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:kube-system:pvc-protection-controller",
+	)
+	if err := pvcProtectionClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedPVC.Name}, managedPVC); err != nil {
+		t.Fatalf("get managed PVC before PVC protection finalizer update: %v", err)
+	}
+	managedPVC.Finalizers = []string{"external-provisioner.volume.kubernetes.io/finalizer"}
+	if err := pvcProtectionClient.Update(ctx, managedPVC); err != nil {
+		t.Fatalf("expected pvc-protection-controller managed PVC finalizer update to succeed, got: %v", err)
+	}
 }
 
 func TestVAP_LockManagedRBAC_DeniesDirectMutationOfControllerManagedRole(t *testing.T) {
