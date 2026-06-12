@@ -197,8 +197,8 @@ For Hardened clusters, admission rejects TLS disablement, TLS skip-verify, backe
     {
       cells: [
         'Managed-resource mutation',
-        'Drift on operator-managed StatefulSets, Services, Pods, and other objects is denied.',
-        'This protects the reconciliation contract and keeps GitOps or manual edits from undermining the lifecycle model.',
+        'Drift on operator-managed StatefulSets, Services, Pods, PVCs, and other objects is denied. The `openbao.org/owner-uid` provenance annotation is reserved for the operator and Kubernetes controllers.',
+        'This protects the reconciliation contract, prevents forged ownership proof, and keeps GitOps or manual edits from undermining the lifecycle model.',
       ],
     },
   ]}
@@ -216,6 +216,7 @@ Admission policy is one of the reasons the operator can separate user intent fro
 
 - user-owned surfaces stay in the CR where customization is supported
 - operator-owned networking, seal, listener identity, and lifecycle wiring stay protected
+- deterministic child resources must already carry an OpenBaoCluster controller owner reference or operator-written owner UID provenance before the operator mutates or deletes them
 - CR-selected helper images, hooks, plugin executables, restore images, and Hardened image-verification trust roots require explicit delegated RBAC before they can be persisted
 - unsafe or drifted changes are rejected before they have to be repaired later
 

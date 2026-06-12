@@ -102,6 +102,8 @@ Once the PVCs are deleted, the underlying volume data is gone unless you have an
 
 </Callout>
 
+The operator only deletes PVCs that carry OpenBao ownership proof, either through the `OpenBaoCluster` controller owner reference or the operator-written `openbao.org/owner-uid` annotation. Label-matched PVCs without that proof are left behind for manual review instead of being adopted or deleted by name.
+
 </TabItem>
 
 <TabItem value="delete-all" label="DeleteAll">
