@@ -107,9 +107,9 @@ description: Default-deny network posture for OpenBao Pods and lifecycle jobs, p
     },
     {
       cells: [
-        'Gateway or trusted ingress peer',
+        'Trusted ingress peer',
         '`8200`',
-        'Allowed only when gateway integration or trusted ingress peers are configured deliberately.',
+        'Allowed only when `spec.network.trustedIngressPeers` names the ingress controller, Gateway data plane, or application source deliberately.',
       ],
     },
     {
@@ -127,7 +127,7 @@ If you need additional ingress, use:
 - `spec.network.trustedIngressPeers` for user-managed ingress, passthrough proxies, and Hardened application access paths
 - `spec.network.ingressRules` only outside Hardened when the supported peer fields cannot model the source
 
-Managed `spec.ingress.enabled: true` configurations must declare at least one trusted ingress peer so the OpenBao API listener is not opened to every pod that can reach the namespace.
+Managed `spec.ingress.enabled: true` configurations must declare at least one trusted ingress peer so the OpenBao API listener is not opened to every pod that can reach the namespace. Managed Gateway routes also need explicit trusted ingress peers for the Gateway data plane; the referenced Gateway namespace is not allowed automatically.
 
 <Callout type="important" title="Hardened ingress is explicit">
 

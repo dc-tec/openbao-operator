@@ -101,6 +101,12 @@ The dedicated read-replica Service remains available for explicit consumers, but
 
 </Callout>
 
+<Callout type="note" title="External publication is delegated separately">
+
+In tenant or GitOps setups, an identity that edits `OpenBaoCluster` still needs `publishnetworking` on that cluster before it can configure a non-ClusterIP Service, enable managed Ingress or Gateway exposure, or set Service/Ingress/Gateway annotations. Referenced objects keep their own checks too: Gateway attachment still requires `use` on the Gateway, and Ingress class selection still requires `use` on the IngressClass.
+
+</Callout>
+
 ## Representative configurations
 
 <Tabs groupId="external-access-gateway-ingress-service">
@@ -119,7 +125,7 @@ The dedicated read-replica Service remains available for explicit consumers, but
       name: main-gateway
       namespace: gateway-system`}
 >
-  Start here when Gateway API is your edge standard. For most production clusters, use TLS passthrough unless you have a specific need for termination at the Gateway.
+  Start here when Gateway API is your edge standard. For most production clusters, use TLS passthrough unless you have a specific need for termination at the Gateway. Add `spec.network.trustedIngressPeers` for the Gateway data-plane pods that must reach OpenBao.
 </CommandBlock>
 
   </TabItem>

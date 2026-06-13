@@ -133,6 +133,42 @@ spec:
     - name: cloud_identities_authorized
       expression: >-
         authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.metadata.name).check("usecloudidentities").allowed()
+    - name: network_publication_authorized
+      expression: >-
+        authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.metadata.name).check("publishnetworking").allowed()
+    - name: has_network_publication_controls
+      expression: >-
+        (
+          has(object.spec.service) &&
+          (
+            (has(object.spec.service.type) && object.spec.service.type != "" && object.spec.service.type != "ClusterIP") ||
+            (has(object.spec.service.annotations) && size(object.spec.service.annotations) > 0)
+          )
+        ) ||
+        (
+          has(object.spec.readReplicas) &&
+          has(object.spec.readReplicas.service) &&
+          has(object.spec.readReplicas.service.enabled) &&
+          object.spec.readReplicas.service.enabled == true &&
+          (
+            (has(object.spec.readReplicas.service.type) && object.spec.readReplicas.service.type != "" && object.spec.readReplicas.service.type != "ClusterIP") ||
+            (has(object.spec.readReplicas.service.annotations) && size(object.spec.readReplicas.service.annotations) > 0)
+          )
+        ) ||
+        (
+          has(object.spec.ingress) &&
+          (
+            (has(object.spec.ingress.enabled) && object.spec.ingress.enabled == true) ||
+            (has(object.spec.ingress.annotations) && size(object.spec.ingress.annotations) > 0)
+          )
+        ) ||
+        (
+          has(object.spec.gateway) &&
+          (
+            (has(object.spec.gateway.enabled) && object.spec.gateway.enabled == true) ||
+            (has(object.spec.gateway.annotations) && size(object.spec.gateway.annotations) > 0)
+          )
+        )
     - name: has_main_workload_cloud_identity_metadata
       expression: >-
         (has(object.spec.serviceAccount) &&
@@ -630,6 +666,11 @@ spec:
         !variables.has_cloud_identity_metadata ||
         variables.cloud_identities_authorized
       message: "Users configuring workload identity annotations, labels, S3 roleArn, or workloadIdentity metadata must be authorized to use cloud identities on this OpenBaoCluster."
+    - expression: >-
+        variables.is_operator_controller ||
+        !variables.has_network_publication_controls ||
+        variables.network_publication_authorized
+      message: "Users configuring non-ClusterIP Services, Service/Ingress/Gateway annotations, or managed Ingress/Gateway exposure must be authorized to publish networking for this OpenBaoCluster."
     - expression: >-
         variables.is_operator_controller ||
         !has(object.spec.serviceAccount) ||

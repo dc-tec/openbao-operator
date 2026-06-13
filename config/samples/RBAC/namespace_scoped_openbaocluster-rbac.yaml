@@ -125,6 +125,48 @@ subjects:
     name: team-a-platform-operators # Change to actual group name
     apiGroup: rbac.authorization.k8s.io
 ---
+# Example: Grant network publication on one cluster
+#
+# This Role grants the custom `publishnetworking` verb only for one
+# OpenBaoCluster object. Grant it only to identities trusted to expose OpenBao
+# through non-ClusterIP Services, managed Ingress/Gateway routes, or
+# Service/Ingress/Gateway annotations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-network-publication-team-a
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - publishnetworking
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-network-publication-team-a
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-network-publication-team-a
+subjects:
+  - kind: Group
+    name: team-a-network-operators # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
 # Example: Grant Hardened image-verification trust-root selection on one cluster
 #
 # This Role grants the custom `useimagetrustroots` verb only for one

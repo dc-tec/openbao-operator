@@ -101,6 +101,22 @@ kind: ClusterRole
 metadata:
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
+  name: {{ include "openbao-operator.fullname" . }}-openbaocluster-network-publication
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    verbs:
+      - get
+      - publishnetworking
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "openbao-operator.labels" . | nindent 4 }}
   name: {{ include "openbao-operator.fullname" . }}-openbaocluster-restore
 rules:
   - apiGroups:

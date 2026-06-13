@@ -181,6 +181,11 @@ func grantClusterCloudIdentitiesAccess(t *testing.T, namespace, clusterName, use
 	grantClusterOpenBaoVerbs(t, namespace, clusterName, username, "cluster-cloud-identities-access", "usecloudidentities")
 }
 
+func grantClusterNetworkPublicationAccess(t *testing.T, namespace, clusterName, username string) {
+	t.Helper()
+	grantClusterOpenBaoVerbs(t, namespace, clusterName, username, "cluster-network-publication-"+clusterName, "publishnetworking")
+}
+
 func grantNamespacedResourceVerbs(t *testing.T, namespace, username, roleName, apiGroup, resourceName string, resourceNames []string, verbs ...string) {
 	t.Helper()
 
@@ -560,6 +565,7 @@ func TestVAP_OpenBaoCluster_RequiresReferenceUseAuthorization(t *testing.T) {
 			Host:      "bao.example.com",
 		}
 		configureTrustedIngressPeers(denied)
+		grantClusterNetworkPublicationAccess(t, namespace, denied.Name, username)
 		err := tenantClient.Create(ctx, denied, client.DryRunAll)
 		requireAdmissionDenied(t, err)
 		if !strings.Contains(err.Error(), "spec.ingress.className") {
@@ -584,6 +590,7 @@ func TestVAP_OpenBaoCluster_RequiresReferenceUseAuthorization(t *testing.T) {
 			Host:      "bao.example.com",
 		}
 		configureTrustedIngressPeers(allowed)
+		grantClusterNetworkPublicationAccess(t, namespace, allowed.Name, username)
 		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
 			t.Fatalf("expected ingress-class-use-authorized OpenBaoCluster create to succeed, got: %v", err)
 		}
@@ -600,6 +607,7 @@ func TestVAP_OpenBaoCluster_RequiresReferenceUseAuthorization(t *testing.T) {
 			TLSSecretName: secretName,
 		}
 		configureTrustedIngressPeers(denied)
+		grantClusterNetworkPublicationAccess(t, namespace, denied.Name, username)
 		err := tenantClient.Create(ctx, denied, client.DryRunAll)
 		requireAdmissionDenied(t, err)
 		if !strings.Contains(err.Error(), "spec.ingress.tlsSecretName") {
@@ -625,6 +633,7 @@ func TestVAP_OpenBaoCluster_RequiresReferenceUseAuthorization(t *testing.T) {
 			TLSSecretName: secretName,
 		}
 		configureTrustedIngressPeers(allowed)
+		grantClusterNetworkPublicationAccess(t, namespace, allowed.Name, username)
 		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
 			t.Fatalf("expected ingress-tls-secret-use-authorized OpenBaoCluster create to succeed, got: %v", err)
 		}
@@ -642,6 +651,7 @@ func TestVAP_OpenBaoCluster_RequiresReferenceUseAuthorization(t *testing.T) {
 			},
 			Hostname: "bao.example.com",
 		}
+		grantClusterNetworkPublicationAccess(t, namespace, denied.Name, username)
 		err := tenantClient.Create(ctx, denied, client.DryRunAll)
 		requireAdmissionDenied(t, err)
 		if !strings.Contains(err.Error(), "spec.gateway.gatewayRef") {
@@ -668,6 +678,7 @@ func TestVAP_OpenBaoCluster_RequiresReferenceUseAuthorization(t *testing.T) {
 			},
 			Hostname: "bao.example.com",
 		}
+		grantClusterNetworkPublicationAccess(t, namespace, allowed.Name, username)
 		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
 			t.Fatalf("expected gateway-use-authorized OpenBaoCluster create to succeed, got: %v", err)
 		}
@@ -886,6 +897,176 @@ func TestVAP_OpenBaoCluster_RequiresReferenceUseAuthorization(t *testing.T) {
 		}
 		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
 			t.Fatalf("expected backup-credentials-secret-get-authorized OpenBaoCluster create to succeed, got: %v", err)
+		}
+	})
+}
+
+func TestVAP_OpenBaoCluster_RequiresNetworkPublicationAuthorization(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	username := "network-publication-editor"
+	tenantClient := newImpersonatedClient(t, username)
+	grantTenantOpenBaoWriteAccess(t, namespace, username)
+
+	configureTrustedIngressPeers := func(cluster *openbaov1alpha1.OpenBaoCluster) {
+		cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
+			TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{
+				{
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"kubernetes.io/metadata.name": "ingress-system",
+						},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("service-loadbalancer", func(t *testing.T) {
+		denied := newMinimalClusterObj(namespace, "netpub-svc-lb-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Service = &openbaov1alpha1.ServiceConfig{Type: corev1.ServiceTypeLoadBalancer}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "publish networking") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		allowed := newMinimalClusterObj(namespace, "netpub-svc-lb-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Service = &openbaov1alpha1.ServiceConfig{Type: corev1.ServiceTypeLoadBalancer}
+		grantClusterNetworkPublicationAccess(t, namespace, allowed.Name, username)
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected publishnetworking-authorized LoadBalancer Service to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("service-annotations", func(t *testing.T) {
+		denied := newMinimalClusterObj(namespace, "netpub-svc-anno-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Service = &openbaov1alpha1.ServiceConfig{
+			Annotations: map[string]string{
+				"service.beta.kubernetes.io/aws-load-balancer-type": "nlb",
+			},
+		}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "publish networking") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		allowed := newMinimalClusterObj(namespace, "netpub-svc-anno-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Service = &openbaov1alpha1.ServiceConfig{
+			Annotations: map[string]string{
+				"service.beta.kubernetes.io/aws-load-balancer-type": "nlb",
+			},
+		}
+		grantClusterNetworkPublicationAccess(t, namespace, allowed.Name, username)
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected publishnetworking-authorized Service annotations to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("read-replica-nodeport", func(t *testing.T) {
+		denied := newMinimalClusterObj(namespace, "netpub-rr-nodeport-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.ReadReplicas = &openbaov1alpha1.ReadReplicaConfig{
+			Replicas: 1,
+			Service: &openbaov1alpha1.ReadReplicaServiceConfig{
+				Enabled: true,
+				Type:    corev1.ServiceTypeNodePort,
+			},
+		}
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "publish networking") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		allowed := newMinimalClusterObj(namespace, "netpub-rr-nodeport-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.ReadReplicas = &openbaov1alpha1.ReadReplicaConfig{
+			Replicas: 1,
+			Service: &openbaov1alpha1.ReadReplicaServiceConfig{
+				Enabled: true,
+				Type:    corev1.ServiceTypeNodePort,
+			},
+		}
+		grantClusterNetworkPublicationAccess(t, namespace, allowed.Name, username)
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected publishnetworking-authorized read-replica Service to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("ingress-enabled", func(t *testing.T) {
+		denied := newMinimalClusterObj(namespace, "netpub-ingress-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Ingress = &openbaov1alpha1.IngressConfig{
+			Enabled: true,
+			Host:    "bao.example.com",
+		}
+		configureTrustedIngressPeers(denied)
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "publish networking") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		allowed := newMinimalClusterObj(namespace, "netpub-ingress-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Ingress = &openbaov1alpha1.IngressConfig{
+			Enabled: true,
+			Host:    "bao.example.com",
+		}
+		configureTrustedIngressPeers(allowed)
+		grantClusterNetworkPublicationAccess(t, namespace, allowed.Name, username)
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected publishnetworking-authorized Ingress to succeed, got: %v", err)
+		}
+	})
+
+	t.Run("gateway-enabled", func(t *testing.T) {
+		const gatewayName = "tenant-gateway"
+
+		denied := newMinimalClusterObj(namespace, "netpub-gateway-denied")
+		denied.Spec.InitContainer = nil
+		denied.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+			Enabled: true,
+			GatewayRef: openbaov1alpha1.GatewayReference{
+				Name: gatewayName,
+			},
+			Hostname: "bao.example.com",
+		}
+		grantNamespacedResourceVerbs(
+			t,
+			namespace,
+			username,
+			"gateway-use-for-netpub-denied",
+			"gateway.networking.k8s.io",
+			"gateways",
+			[]string{gatewayName},
+			"use",
+		)
+		err := tenantClient.Create(ctx, denied, client.DryRunAll)
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "publish networking") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		allowed := newMinimalClusterObj(namespace, "netpub-gateway-allowed")
+		allowed.Spec.InitContainer = nil
+		allowed.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+			Enabled: true,
+			GatewayRef: openbaov1alpha1.GatewayReference{
+				Name: gatewayName,
+			},
+			Hostname: "bao.example.com",
+		}
+		grantClusterNetworkPublicationAccess(t, namespace, allowed.Name, username)
+		if err := tenantClient.Create(ctx, allowed, client.DryRunAll); err != nil {
+			t.Fatalf("expected publishnetworking-authorized Gateway to succeed, got: %v", err)
 		}
 	})
 }

@@ -116,6 +116,12 @@ func TestSyncAggregatedRBAC_IncludesDangerousControlDelegationRoles(t *testing.T
 		"useimagetrustroots",
 	)
 	writeRole(
+		"openbaocluster_network_publication_role.yaml",
+		"openbaocluster-network-publication-role",
+		"get",
+		"publishnetworking",
+	)
+	writeRole(
 		"openbaocluster_restore_role.yaml",
 		"openbaocluster-restore-role",
 		"get",
@@ -137,11 +143,13 @@ func TestSyncAggregatedRBAC_IncludesDangerousControlDelegationRoles(t *testing.T
 		`{{ include "openbao-operator.fullname" . }}-openbaocluster-helper-image`,
 		`{{ include "openbao-operator.fullname" . }}-openbaocluster-image-trust-roots`,
 		`{{ include "openbao-operator.fullname" . }}-openbaocluster-cloud-identity`,
+		`{{ include "openbao-operator.fullname" . }}-openbaocluster-network-publication`,
 		"usecustomexecutables",
 		`{{ include "openbao-operator.fullname" . }}-openbaocluster-restore`,
 		"usehelperimages",
 		"useimagetrustroots",
 		"usecloudidentities",
+		"publishnetworking",
 		"restore",
 	} {
 		if !strings.Contains(output, want) {
@@ -205,6 +213,34 @@ spec:
 		if !strings.Contains(got, want) {
 			t.Fatalf("transformed policy missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestHelmTemplateRendersNetworkPublicationAuthority(t *testing.T) {
+	rendered := string(renderChart(t, "--set", "admissionPolicies.enabled=true"))
+	for _, want := range []string{
+		"network_publication_authorized",
+		"has_network_publication_controls",
+		`check("publishnetworking")`,
+		"openbaocluster-network-publication",
+		"publishnetworking",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered multi-tenant chart missing %q", want)
+		}
+	}
+
+	singleTenant := string(renderChart(
+		t,
+		"--set",
+		"admissionPolicies.enabled=true",
+		"--set",
+		"tenancy.mode=single",
+		"--set",
+		"tenancy.targetNamespace=openbao-system",
+	))
+	if !strings.Contains(singleTenant, "publishnetworking") {
+		t.Fatalf("rendered single-tenant chart missing publishnetworking")
 	}
 }
 

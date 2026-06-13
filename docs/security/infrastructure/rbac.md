@@ -213,6 +213,8 @@ The verbs follow common Kubernetes RBAC patterns:
   restore executables that run with operator-managed identities or mounted data.
 - `useimagetrustroots` means the requester may choose custom image-verification trust roots in the
   `Hardened` profile.
+- `publishnetworking` means the requester may publish OpenBao through non-ClusterIP Services,
+  managed Ingress or Gateway routes, or Service/Ingress/Gateway annotations.
 - `restore` means the requester may run a destructive restore against the target `OpenBaoCluster`.
 
 <DecisionTable
@@ -232,7 +234,7 @@ The verbs follow common Kubernetes RBAC patterns:
       cells: [
         'Namespace-scoped tenant editor',
         '`openbaocluster-editor-role` bound into the tenant namespace.',
-        'Per-feature `use`, `get`, `usecloudidentities`, `usecustomexecutables`, `useimagetrustroots`, or `restore` grants for the exact referenced objects and cluster names.',
+        'Per-feature `use`, `get`, `publishnetworking`, `usecloudidentities`, `usecustomexecutables`, `useimagetrustroots`, or `restore` grants for the exact referenced objects and cluster names.',
       ],
     },
     {
@@ -257,7 +259,8 @@ The verbs follow common Kubernetes RBAC patterns:
 
 The validation messages name the missing authority. For example, an error mentioning
 `spec.gateway.gatewayRef` points to `use` on the referenced Gateway, and an error mentioning
-cloud identities points to `usecloudidentities` on the target `OpenBaoCluster`.
+cloud identities points to `usecloudidentities` on the target `OpenBaoCluster`. An error mentioning
+network publication points to `publishnetworking` on the target `OpenBaoCluster`.
 
 </Callout>
 
@@ -275,6 +278,9 @@ cloud identities points to `usecloudidentities` on the target `OpenBaoCluster`.
     },
     {
       cells: ['Custom ServiceAccount, existing PVC, Gateway, IngressClass, or StorageClass', '`use` on the referenced object.'],
+    },
+    {
+      cells: ['Non-ClusterIP Service exposure, managed Ingress/Gateway exposure, or Service/Ingress/Gateway annotations', '`publishnetworking` on the target `OpenBaoCluster`.'],
     },
     {
       cells: ['ServiceAccount annotations or known workload identity pod metadata', '`usecloudidentities` on the target `OpenBaoCluster`.'],
@@ -341,6 +347,15 @@ cloud identities points to `usecloudidentities` on the target `OpenBaoCluster`.
       cells: ['`spec.gateway.gatewayRef`', 'Referenced Gateway in `gatewayRef.namespace` or the cluster namespace', '`use` on `gateways/<name>` in the Gateway namespace'],
     },
     {
+      cells: ['`spec.service.type` values other than `ClusterIP`, `spec.readReplicas.service.type` values other than `ClusterIP` when the read Service is enabled', 'Kubernetes Service publication through LoadBalancer, NodePort, or another non-ClusterIP Service type', '`publishnetworking` on `openbaoclusters/<cluster>`'],
+    },
+    {
+      cells: ['`spec.service.annotations`, enabled read-replica Service annotations, `spec.ingress.annotations`, `spec.gateway.annotations`', 'Controller-specific networking behavior selected through annotations', '`publishnetworking` on `openbaoclusters/<cluster>`'],
+    },
+    {
+      cells: ['`spec.ingress.enabled`, `spec.gateway.enabled`', 'Operator-managed Ingress or Gateway route publication', '`publishnetworking` on `openbaoclusters/<cluster>`'],
+    },
+    {
       cells: ['Any `spec.serviceAccount.annotations`, plus identity-selector keys in `spec.podMetadata.annotations` or `spec.podMetadata.labels`', 'Main workload cloud identity metadata', '`usecloudidentities` on `openbaoclusters/<cluster>`'],
     },
     {
@@ -366,8 +381,8 @@ cloud identities points to `usecloudidentities` on the target `OpenBaoCluster`.
 
 Admission checks these permissions on create and update whenever the field is present, not only when
 that field changes. A Flux or Argo ServiceAccount that manages an `OpenBaoCluster` with a Gateway,
-custom StorageClass, image pull Secret, cloud identity annotation, or restore request needs the
-matching `use`, `get`, `usecloudidentities`, or `restore` grants before unrelated GitOps updates will
+Ingress, LoadBalancer Service, custom StorageClass, image pull Secret, cloud identity annotation, or restore request needs the
+matching `use`, `get`, `publishnetworking`, `usecloudidentities`, or `restore` grants before unrelated GitOps updates will
 continue to apply.
 
 </Callout>

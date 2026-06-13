@@ -609,6 +609,43 @@ func TestBuildNetworkPolicy_TrustedIngressPeers(t *testing.T) {
 	}
 }
 
+func TestBuildNetworkPolicy_GatewayDoesNotImplicitlyAllowGatewayNamespace(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "gateway-no-implicit-peer",
+			Namespace: "openbao",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Gateway: &openbaov1alpha1.GatewayConfig{
+				Enabled: true,
+				GatewayRef: openbaov1alpha1.GatewayReference{
+					Name:      "shared-gateway",
+					Namespace: "gateway-system",
+				},
+				Hostname: "bao.example.com",
+			},
+		},
+	}
+
+	policy, err := buildNetworkPolicy(cluster, &apiServerInfo{ServiceNetworkCIDR: "10.96.0.0/12"}, "openbao-operator-system")
+	if err != nil {
+		t.Fatalf("buildNetworkPolicy() error: %v", err)
+	}
+
+	for _, rule := range policy.Spec.Ingress {
+		if !networkPolicyRuleAllowsPort(rule.Ports, constants.PortAPI) {
+			continue
+		}
+		for _, peer := range rule.From {
+			if peer.NamespaceSelector != nil &&
+				peer.NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"] == "gateway-system" &&
+				peer.PodSelector == nil {
+				t.Fatalf("gateway namespace was implicitly allowed without a trustedIngressPeers entry: %#v", rule)
+			}
+		}
+	}
+}
+
 func TestBuildNetworkPolicy_TrustedIngressPeersAllowMetricsListenerPort(t *testing.T) {
 	cluster := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
