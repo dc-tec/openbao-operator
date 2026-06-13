@@ -235,6 +235,3 @@ else
     ' "${RAW_PATH}"
   } >> "${OUT_PATH}"
 fi
-
-# Ensure trailing newline for deterministic diffs.
-printf '\n' >> "${OUT_PATH}"
