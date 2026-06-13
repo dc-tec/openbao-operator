@@ -6737,10 +6737,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260612-f3e98c63d59d
+          value: nightly-20260613-fd39a1e8c7cc
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:276c1806e4fa101bb1b79b41c9147fdc2d32949b184fe178736b7f5343412378
+        image: ghcr.io/dc-tec/openbao-operator@sha256:1d8bd2e4b679f165a08d0d9048e92138f4a25bb0c0f109faa276f4f27299cb6f
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6855,8 +6855,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260612-f3e98c63d59d
-        image: ghcr.io/dc-tec/openbao-operator@sha256:276c1806e4fa101bb1b79b41c9147fdc2d32949b184fe178736b7f5343412378
+          value: nightly-20260613-fd39a1e8c7cc
+        image: ghcr.io/dc-tec/openbao-operator@sha256:1d8bd2e4b679f165a08d0d9048e92138f4a25bb0c0f109faa276f4f27299cb6f
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7043,8 +7043,10 @@ spec:
       - secrets
       - configmaps
       - services
+      - serviceaccounts
       - pods
       - endpoints
+      - persistentvolumeclaims
     - apiGroups:
       - discovery.k8s.io
       apiVersions:
@@ -7131,6 +7133,20 @@ spec:
       - servicemonitors
   validations:
   - expression: |-
+      request.operation == "DELETE" || variables.owner_uid_annotation_allowed || (
+
+        !variables.has_current_owner_uid_annotation &&
+        !variables.has_old_owner_uid_annotation
+      ) || (
+
+        request.operation == "UPDATE" &&
+        variables.has_current_owner_uid_annotation &&
+        variables.has_old_owner_uid_annotation &&
+        object.metadata.annotations["openbao.org/owner-uid"] == oldObject.metadata.annotations["openbao.org/owner-uid"]
+      )
+    message: The openbao.org/owner-uid annotation is reserved for OpenBao Operator
+      managed-resource provenance.
+  - expression: |-
       !(variables.is_operator_controller || variables.is_operator_provisioner) || !variables.is_service_monitor_request || (
 
         (request.operation == "CREATE" && variables.current_service_monitor_is_operator_owned) ||
@@ -7147,7 +7163,9 @@ spec:
       && request.resource.resource == "pods") || (variables.is_system_controller &&
       variables.is_endpoints_controller_request) || (variables.is_kube_system_controller
       && request.resource.resource == "pods" && (request.operation == "CREATE" ||
-      request.operation == "DELETE")) || (variables.is_kube_system_controller && variables.is_endpoints_controller_request)
+      request.operation == "DELETE")) || (variables.is_statefulset_controller && request.resource.resource
+      == "persistentvolumeclaims" && request.operation == "CREATE") || variables.is_storage_pvc_binding_update
+      || (variables.is_kube_system_controller && variables.is_endpoints_controller_request)
       || variables.is_kube_system_service_metadata_update || variables.is_cert_manager_secret_request
       || (variables.is_pod_request && variables.is_kubelet_node && request.operation
       == "DELETE") || variables.is_service_registration_label_update || variables.is_kube_system_pod_finalizer_update
@@ -7211,8 +7229,20 @@ spec:
   - expression: request.userInfo.username == "system:kube-controller-manager" || request.userInfo.username
       == "system:serviceaccount:kube-system:kube-controller-manager"
     name: is_kube_controller_manager
+  - expression: request.userInfo.username == "system:kube-scheduler" || request.userInfo.username
+      == "system:serviceaccount:kube-system:kube-scheduler"
+    name: is_kube_scheduler
+  - expression: request.userInfo.username.matches("^system:serviceaccount:[^:]+:.*(csi|provisioner).*$")
+    name: is_storage_provisioner_serviceaccount
+  - expression: request.userInfo.username == "system:serviceaccount:kube-system:persistent-volume-binder"
+    name: is_persistent_volume_binder
+  - expression: request.userInfo.username == "system:serviceaccount:kube-system:pvc-protection-controller"
+    name: is_pvc_protection_controller
   - expression: request.userInfo.username.startsWith("system:controller:")
     name: is_system_controller
+  - expression: request.userInfo.username == "system:controller:statefulset-controller"
+      || request.userInfo.username == "system:serviceaccount:kube-system:statefulset-controller"
+    name: is_statefulset_controller
   - expression: |-
       request.userInfo.username in [
 
@@ -7240,6 +7270,18 @@ spec:
     name: is_job_request
   - expression: request.kind.group == "" && request.kind.kind == "Service"
     name: is_service_request
+  - expression: request.kind.group == "" && request.kind.kind == "PersistentVolumeClaim"
+    name: is_pvc_request
+  - expression: object != null && has(object.metadata) && has(object.metadata.annotations)
+      && ("openbao.org/owner-uid" in object.metadata.annotations)
+    name: has_current_owner_uid_annotation
+  - expression: oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.annotations)
+      && ("openbao.org/owner-uid" in oldObject.metadata.annotations)
+    name: has_old_owner_uid_annotation
+  - expression: variables.is_operator_controller || variables.is_operator_provisioner
+      || variables.is_kube_controller_manager || variables.is_system_controller ||
+      variables.is_kube_system_controller
+    name: owner_uid_annotation_allowed
   - expression: request.kind.group == "monitoring.coreos.com" && request.kind.kind
       == "ServiceMonitor"
     name: is_service_monitor_request
@@ -7337,6 +7379,18 @@ spec:
   - expression: '(oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.annotations))
       ? oldObject.metadata.annotations : {}'
     name: service_old_annotations
+  - expression: '(object != null && has(object.metadata) && has(object.metadata.annotations))
+      ? object.metadata.annotations : {}'
+    name: pvc_new_annotations
+  - expression: '(oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.annotations))
+      ? oldObject.metadata.annotations : {}'
+    name: pvc_old_annotations
+  - expression: '(object != null && has(object.metadata) && has(object.metadata.finalizers))
+      ? object.metadata.finalizers : []'
+    name: pvc_new_finalizers
+  - expression: '(oldObject != null && has(oldObject.metadata) && has(oldObject.metadata.finalizers))
+      ? oldObject.metadata.finalizers : []'
+    name: pvc_old_finalizers
   - expression: |-
       variables.is_service_request && request.operation == "UPDATE" && variables.is_kube_system_controller && object.spec == oldObject.spec && (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
 
@@ -7353,6 +7407,57 @@ spec:
         !k.startsWith("openbao.org/") ||
         (k in variables.service_new_annotations && variables.service_new_annotations[k] == v))
     name: is_kube_system_service_metadata_update
+  - expression: |-
+      variables.is_pvc_request && request.operation == "UPDATE" && (variables.is_kube_scheduler ||
+
+        variables.is_kube_controller_manager ||
+        variables.is_persistent_volume_binder ||
+        variables.is_pvc_protection_controller ||
+        variables.is_storage_provisioner_serviceaccount) &&
+      object != null && oldObject != null && object.metadata.name == oldObject.metadata.name && object.metadata.namespace == oldObject.metadata.namespace && object.status == oldObject.status && (has(object.metadata.labels) == has(oldObject.metadata.labels) &&
+
+        (!has(object.metadata.labels) || object.metadata.labels == oldObject.metadata.labels)) &&
+      (has(object.metadata.ownerReferences) == has(oldObject.metadata.ownerReferences) &&
+
+        (!has(object.metadata.ownerReferences) || object.metadata.ownerReferences == oldObject.metadata.ownerReferences)) &&
+      variables.pvc_new_finalizers.all(f,
+
+        f in variables.pvc_old_finalizers ||
+        f in ["kubernetes.io/pvc-protection", "external-provisioner.volume.kubernetes.io/finalizer"]) &&
+      variables.pvc_old_finalizers.all(f,
+
+        f in variables.pvc_new_finalizers ||
+        f in ["kubernetes.io/pvc-protection", "external-provisioner.volume.kubernetes.io/finalizer"]) &&
+      variables.pvc_new_annotations.all(k, v,
+
+        !k.startsWith("openbao.org/") ||
+        (k in variables.pvc_old_annotations && variables.pvc_old_annotations[k] == v)) &&
+      variables.pvc_old_annotations.all(k, v,
+
+        !k.startsWith("openbao.org/") ||
+        (k in variables.pvc_new_annotations && variables.pvc_new_annotations[k] == v)) &&
+      object.spec.accessModes == oldObject.spec.accessModes && object.spec.resources == oldObject.spec.resources && (has(object.spec.storageClassName) == has(oldObject.spec.storageClassName) &&
+
+        (!has(object.spec.storageClassName) || object.spec.storageClassName == oldObject.spec.storageClassName)) &&
+      (has(object.spec.volumeMode) == has(oldObject.spec.volumeMode) &&
+
+        (!has(object.spec.volumeMode) || object.spec.volumeMode == oldObject.spec.volumeMode)) &&
+      (has(object.spec.selector) == has(oldObject.spec.selector) &&
+
+        (!has(object.spec.selector) || object.spec.selector == oldObject.spec.selector)) &&
+      (has(object.spec.dataSource) == has(oldObject.spec.dataSource) &&
+
+        (!has(object.spec.dataSource) || object.spec.dataSource == oldObject.spec.dataSource)) &&
+      (has(object.spec.dataSourceRef) == has(oldObject.spec.dataSourceRef) &&
+
+        (!has(object.spec.dataSourceRef) || object.spec.dataSourceRef == oldObject.spec.dataSourceRef)) &&
+      (
+
+        (!has(object.spec.volumeName) && !has(oldObject.spec.volumeName)) ||
+        (has(object.spec.volumeName) && has(oldObject.spec.volumeName) && object.spec.volumeName == oldObject.spec.volumeName) ||
+        (has(object.spec.volumeName) && object.spec.volumeName != "" && (!has(oldObject.spec.volumeName) || oldObject.spec.volumeName == ""))
+      )
+    name: is_storage_pvc_binding_update
   - expression: |-
       request.operation == "DELETE" ?
 
@@ -7379,20 +7484,16 @@ spec:
       ? oldObject.metadata.labels : {}'
     name: maintenance_old_labels
   - expression: |-
-      request.operation == "DELETE" ?
+      request.operation == "CREATE" ?
 
+        ("openbao.org/cluster" in variables.maintenance_current_labels ?
+          variables.maintenance_current_labels["openbao.org/cluster"] :
+          ("app.kubernetes.io/instance" in variables.maintenance_current_labels ?
+            variables.maintenance_current_labels["app.kubernetes.io/instance"] : "")) :
         ("openbao.org/cluster" in variables.maintenance_old_labels ?
           variables.maintenance_old_labels["openbao.org/cluster"] :
           ("app.kubernetes.io/instance" in variables.maintenance_old_labels ?
-            variables.maintenance_old_labels["app.kubernetes.io/instance"] : "")) :
-        ("openbao.org/cluster" in variables.maintenance_current_labels ?
-          variables.maintenance_current_labels["openbao.org/cluster"] :
-          ("openbao.org/cluster" in variables.maintenance_old_labels ?
-            variables.maintenance_old_labels["openbao.org/cluster"] :
-            ("app.kubernetes.io/instance" in variables.maintenance_current_labels ?
-              variables.maintenance_current_labels["app.kubernetes.io/instance"] :
-              ("app.kubernetes.io/instance" in variables.maintenance_old_labels ?
-                variables.maintenance_old_labels["app.kubernetes.io/instance"] : ""))))
+            variables.maintenance_old_labels["app.kubernetes.io/instance"] : ""))
     name: maintenance_cluster_name
   - expression: |-
       variables.maintenance_enabled && request.namespace != "" && variables.maintenance_cluster_name != "" && authorizer.group("openbao.org").
