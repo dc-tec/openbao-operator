@@ -146,9 +146,23 @@ When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins
       cells: [
         "Gateway reference exists",
         "The operator cannot integrate with a missing or mistyped target.",
-        "The referenced `Gateway` object is present in the namespace you point to.",
+        "The referenced `Gateway` object is present in the namespace you point to, and the applying identity has `use` on it.",
       ],
       emphasis: "recommended",
+    },
+    {
+      cells: [
+        "Publication is authorized",
+        "Creating Routes can publish OpenBao through shared edge infrastructure.",
+        "The applying identity has `publishnetworking` on the target `OpenBaoCluster`.",
+      ],
+    },
+    {
+      cells: [
+        "Gateway data-plane peers are explicit",
+        "Gateway attachment does not imply NetworkPolicy ingress from the whole Gateway namespace.",
+        "Configure `spec.network.trustedIngressPeers` for the Gateway controller or data-plane pods that should reach OpenBao.",
+      ],
     },
     {
       cells: [

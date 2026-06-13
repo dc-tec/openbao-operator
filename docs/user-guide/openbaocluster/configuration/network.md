@@ -184,6 +184,12 @@ description: Configure the operator-managed NetworkPolicy contract, including DN
   Use this when the source is a user-managed ingress controller, Gateway data plane, or another explicit application access path. Hardened clusters require these peers to select concrete sources; empty or wildcard peer selectors are rejected.
 </CommandBlock>
 
+<Callout type="note" title="Gateway attachment does not imply pod reachability">
+
+`spec.gateway.gatewayRef` controls whether the operator may attach a Route to a Gateway. It does not automatically allow every pod in the Gateway namespace through the OpenBao NetworkPolicy. Add `trustedIngressPeers` for the actual Gateway data-plane pods that should reach OpenBao.
+
+</Callout>
+
   </TabItem>
   <TabItem value="egress" label="External egress">
 
