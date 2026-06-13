@@ -500,6 +500,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 	var foundCustomExecutablesAuthorizer bool
 	var foundImageTrustRootsAuthorizer bool
 	var foundCloudIdentityAuthorizer bool
+	var foundNetworkPublicationAuthorizer bool
 	var foundServiceAccountUseAuthorizer bool
 	var foundImagePullSecretUseAuthorizer bool
 	var foundIngressTLSSecretAuthorizer bool
@@ -561,6 +562,10 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			strings.Contains(expression, `variables.has_cloud_identity_metadata`) &&
 			strings.Contains(expression, `variables.cloud_identities_authorized`):
 			foundCloudIdentityAuthorizer = true
+		case strings.Contains(message, "publish networking") &&
+			strings.Contains(expression, `variables.has_network_publication_controls`) &&
+			strings.Contains(expression, `variables.network_publication_authorized`):
+			foundNetworkPublicationAuthorizer = true
 		case strings.Contains(message, "spec.serviceAccount.name") &&
 			strings.Contains(expression, `resource("serviceaccounts")`) &&
 			strings.Contains(expression, `check("use")`):
@@ -613,6 +618,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 		!foundCustomExecutablesAuthorizer ||
 		!foundImageTrustRootsAuthorizer ||
 		!foundCloudIdentityAuthorizer ||
+		!foundNetworkPublicationAuthorizer ||
 		!foundServiceAccountUseAuthorizer ||
 		!foundImagePullSecretUseAuthorizer ||
 		!foundIngressTLSSecretAuthorizer ||
@@ -623,7 +629,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 		!foundServiceMonitorTLSReferenceAuthorizer ||
 		!foundSystemSecretBlock {
 		t.Fatalf(
-			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v serviceMonitorAuthorizer=%v executableCodeAuthorizer=%v imageTrustRootsAuthorizer=%v cloudIdentityAuthorizer=%v serviceAccountUseAuthorizer=%v imagePullSecretUseAuthorizer=%v ingressTLSSecretAuthorizer=%v gatewayUseAuthorizer=%v pvcUseAuthorizer=%v storageClassUseAuthorizer=%v imageVerificationPullSecretAuthorizer=%v serviceMonitorTLSReferenceAuthorizer=%v systemSecret=%v",
+			"openbao-validate-openbaocluster protections missing: https=%v unsafeURL=%v transitAuthorizer=%v backupAuthorizer=%v serviceMonitorAuthorizer=%v executableCodeAuthorizer=%v imageTrustRootsAuthorizer=%v cloudIdentityAuthorizer=%v networkPublicationAuthorizer=%v serviceAccountUseAuthorizer=%v imagePullSecretUseAuthorizer=%v ingressTLSSecretAuthorizer=%v gatewayUseAuthorizer=%v pvcUseAuthorizer=%v storageClassUseAuthorizer=%v imageVerificationPullSecretAuthorizer=%v serviceMonitorTLSReferenceAuthorizer=%v systemSecret=%v",
 			foundHTTPS,
 			foundUnsafeURLComponents,
 			foundSecretAuthorizer,
@@ -632,6 +638,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			foundCustomExecutablesAuthorizer,
 			foundImageTrustRootsAuthorizer,
 			foundCloudIdentityAuthorizer,
+			foundNetworkPublicationAuthorizer,
 			foundServiceAccountUseAuthorizer,
 			foundImagePullSecretUseAuthorizer,
 			foundIngressTLSSecretAuthorizer,
@@ -651,6 +658,7 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 	var foundCustomExecutablesVariable bool
 	var foundImageTrustRootsVariable bool
 	var foundCloudIdentitiesVariable bool
+	var foundNetworkPublicationVariable bool
 	for _, variable := range variables {
 		variableMap, ok := variable.(map[string]any)
 		if !ok {
@@ -666,14 +674,17 @@ func TestKustomizeDefault_OpenBaoClusterPolicyProtectsTransitUnseal(t *testing.T
 			foundImageTrustRootsVariable = strings.Contains(expression, `check("useimagetrustroots")`)
 		case "cloud_identities_authorized":
 			foundCloudIdentitiesVariable = strings.Contains(expression, `check("usecloudidentities")`)
+		case "network_publication_authorized":
+			foundNetworkPublicationVariable = strings.Contains(expression, `check("publishnetworking")`)
 		}
 	}
-	if !foundCustomExecutablesVariable || !foundImageTrustRootsVariable || !foundCloudIdentitiesVariable {
+	if !foundCustomExecutablesVariable || !foundImageTrustRootsVariable || !foundCloudIdentitiesVariable || !foundNetworkPublicationVariable {
 		t.Fatalf(
-			"openbao-validate-openbaocluster delegation variables missing: customExecutables=%v trustRoots=%v cloudIdentities=%v",
+			"openbao-validate-openbaocluster delegation variables missing: customExecutables=%v trustRoots=%v cloudIdentities=%v networkPublication=%v",
 			foundCustomExecutablesVariable,
 			foundImageTrustRootsVariable,
 			foundCloudIdentitiesVariable,
+			foundNetworkPublicationVariable,
 		)
 	}
 }
@@ -1066,7 +1077,7 @@ func TestKustomizeSingleTenantOverlay_BakesInNamespaceScopeAndRemovesProvisioner
 		singleTenantRole,
 		"openbao.org",
 		"openbaoclusters",
-		[]string{"restore", "usecloudidentities", "usecustomexecutables", "useimagetrustroots"},
+		[]string{"publishnetworking", "restore", "usecloudidentities", "usecustomexecutables", "useimagetrustroots"},
 	)
 
 	subjects, found, err := unstructured.NestedSlice(singleTenantBinding.Object, "subjects")

@@ -82,7 +82,8 @@ func TestRestrictProvisionerRBACPolicyAllowsControllerDelegationRule(t *testing.
 	policy := string(data)
 	required := []string{
 		"rule.resources[0] == 'openbaoclusters'",
-		"rule.verbs.all(v, v in ['restore', 'usecloudidentities', 'usecustomexecutables', 'useimagetrustroots'])",
+		"rule.verbs.all(v, v in ['publishnetworking', 'restore', " +
+			"'usecloudidentities', 'usecustomexecutables', 'useimagetrustroots'])",
 	}
 	for _, needle := range required {
 		if !containsString(policy, needle) {

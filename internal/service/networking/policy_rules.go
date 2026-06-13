@@ -36,27 +36,6 @@ func buildNetworkPolicyIngressRules(
 		},
 	}
 
-	if cluster.Spec.Gateway != nil && cluster.Spec.Gateway.Enabled {
-		gatewayNamespace := cluster.Spec.Gateway.GatewayRef.Namespace
-		if strings.TrimSpace(gatewayNamespace) == "" {
-			gatewayNamespace = cluster.Namespace
-		}
-
-		if gatewayNamespace != cluster.Namespace {
-			rules = appendIngressPeerRule(
-				rules,
-				networkingv1.NetworkPolicyPeer{
-					NamespaceSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{
-							"kubernetes.io/metadata.name": gatewayNamespace,
-						},
-					},
-				},
-				apiPort,
-			)
-		}
-	}
-
 	if cluster.Spec.Network != nil {
 		trustedIngressPorts := []intstr.IntOrString{apiPort}
 		if metricsOnlyListenerEnabled(cluster) {

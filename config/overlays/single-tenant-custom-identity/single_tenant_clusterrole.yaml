@@ -29,6 +29,7 @@ rules:
     resources:
       - openbaoclusters
     verbs:
+      - publishnetworking
       - restore
       - usecloudidentities
       - usecustomexecutables

@@ -110,6 +110,48 @@ subjects:
     name: team-a-break-glass # Change to actual group name
     apiGroup: rbac.authorization.k8s.io
 ---
+# Example: Grant network publication on one cluster
+#
+# This namespaced Role grants the custom `publishnetworking` verb only for a
+# single OpenBaoCluster object. Grant it only to operators trusted to expose
+# OpenBao through non-ClusterIP Services, managed Ingress/Gateway routes, or
+# Service/Ingress/Gateway annotations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbaocluster-network-publication-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+rules:
+  - apiGroups:
+      - openbao.org
+    resources:
+      - openbaoclusters
+    resourceNames:
+      - example-cluster # Change to target OpenBaoCluster name
+    verbs:
+      - get
+      - publishnetworking
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbaocluster-network-publication-team-a-example
+  namespace: team-a-prod # Change to target namespace
+  labels:
+    app.kubernetes.io/name: openbao-operator
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbaocluster-network-publication-team-a-example
+subjects:
+  - kind: Group
+    name: team-a-network-operators # Change to actual group name
+    apiGroup: rbac.authorization.k8s.io
+---
 # Example: Grant custom executable selection on one cluster
 #
 # This namespaced Role grants the custom `usecustomexecutables` verb only for a

@@ -38,6 +38,7 @@ resources:
   - openbaocluster_helper_image_role.yaml
   - openbaocluster_cloud_identity_role.yaml
   - openbaocluster_image_trust_roots_role.yaml
+  - openbaocluster_network_publication_role.yaml
   - openbaocluster_maintenance_role.yaml
   - openbaocluster_restore_role.yaml
   - openbaocluster_viewer_role.yaml
