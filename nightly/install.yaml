@@ -1269,9 +1269,10 @@ spec:
                       the operator-managed NetworkPolicy. This is useful for allowing access from external
                       services, monitoring tools, or other components that need to reach OpenBao pods.
 
-                      The operator's default ingress rules (cluster pods, kube-system, operator, gateway)
+                      The operator's default ingress rules (cluster pods and operator-managed jobs)
                       are always included and cannot be overridden. User-provided rules are appended to
-                      the operator-managed rules.
+                      the operator-managed rules. Gateway or ingress-controller data-plane reachability
+                      should be modeled with trustedIngressPeers.
                       Hardened clusters reject raw ingress rules; use trustedIngressPeers or managed
                       Gateway/Ingress integration for application access.
 
@@ -6342,6 +6343,22 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/name: openbao-operator
+  name: openbao-operator-openbaocluster-network-publication-role
+rules:
+- apiGroups:
+  - openbao.org
+  resources:
+  - openbaoclusters
+  verbs:
+  - get
+  - publishnetworking
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: openbao-operator
   name: openbao-operator-openbaocluster-restore-role
 rules:
 - apiGroups:
@@ -6737,10 +6754,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260613-fd39a1e8c7cc
+          value: nightly-20260614-f873094f2add
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:1d8bd2e4b679f165a08d0d9048e92138f4a25bb0c0f109faa276f4f27299cb6f
+        image: ghcr.io/dc-tec/openbao-operator@sha256:7eb659fa059b91459707e008d58f4cdf607ffd45e2c6f8de5cf0502268afb14b
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6855,8 +6872,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260613-fd39a1e8c7cc
-        image: ghcr.io/dc-tec/openbao-operator@sha256:1d8bd2e4b679f165a08d0d9048e92138f4a25bb0c0f109faa276f4f27299cb6f
+          value: nightly-20260614-f873094f2add
+        image: ghcr.io/dc-tec/openbao-operator@sha256:7eb659fa059b91459707e008d58f4cdf607ffd45e2c6f8de5cf0502268afb14b
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7977,7 +7994,7 @@ spec:
             rule.resources.size() == 1 &&
             rule.resources[0] == 'openbaoclusters' &&
             rule.verbs != null &&
-            rule.verbs.all(v, v in ['restore', 'usecloudidentities', 'usecustomexecutables', 'useimagetrustroots'])
+            rule.verbs.all(v, v in ['publishnetworking', 'restore', 'usecloudidentities', 'usecustomexecutables', 'useimagetrustroots'])
           ) ||
           (
             rule.apiGroups.size() == 1 &&
@@ -8760,6 +8777,11 @@ spec:
     message: Users configuring workload identity annotations, labels, S3 roleArn,
       or workloadIdentity metadata must be authorized to use cloud identities on this
       OpenBaoCluster.
+  - expression: variables.is_operator_controller || !variables.has_network_publication_controls
+      || variables.network_publication_authorized
+    message: Users configuring non-ClusterIP Services, Service/Ingress/Gateway annotations,
+      or managed Ingress/Gateway exposure must be authorized to publish networking
+      for this OpenBaoCluster.
   - expression: variables.is_operator_controller || !has(object.spec.serviceAccount)
       || !has(object.spec.serviceAccount.name) || object.spec.serviceAccount.name.trim()
       == "" || authorizer.group("").resource("serviceaccounts").namespace(request.namespace).name(object.spec.serviceAccount.name).check("use").allowed()
@@ -9055,6 +9077,42 @@ spec:
     name: image_trust_roots_authorized
   - expression: authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.metadata.name).check("usecloudidentities").allowed()
     name: cloud_identities_authorized
+  - expression: authorizer.group("openbao.org").resource("openbaoclusters").namespace(request.namespace).name(object.metadata.name).check("publishnetworking").allowed()
+    name: network_publication_authorized
+  - expression: |-
+      (
+
+        has(object.spec.service) &&
+        (
+          (has(object.spec.service.type) && object.spec.service.type != "" && object.spec.service.type != "ClusterIP") ||
+          (has(object.spec.service.annotations) && size(object.spec.service.annotations) > 0)
+        )
+      ) || (
+
+        has(object.spec.readReplicas) &&
+        has(object.spec.readReplicas.service) &&
+        has(object.spec.readReplicas.service.enabled) &&
+        object.spec.readReplicas.service.enabled == true &&
+        (
+          (has(object.spec.readReplicas.service.type) && object.spec.readReplicas.service.type != "" && object.spec.readReplicas.service.type != "ClusterIP") ||
+          (has(object.spec.readReplicas.service.annotations) && size(object.spec.readReplicas.service.annotations) > 0)
+        )
+      ) || (
+
+        has(object.spec.ingress) &&
+        (
+          (has(object.spec.ingress.enabled) && object.spec.ingress.enabled == true) ||
+          (has(object.spec.ingress.annotations) && size(object.spec.ingress.annotations) > 0)
+        )
+      ) || (
+
+        has(object.spec.gateway) &&
+        (
+          (has(object.spec.gateway.enabled) && object.spec.gateway.enabled == true) ||
+          (has(object.spec.gateway.annotations) && size(object.spec.gateway.annotations) > 0)
+        )
+      )
+    name: has_network_publication_controls
   - expression: |-
       (has(object.spec.serviceAccount) &&
 

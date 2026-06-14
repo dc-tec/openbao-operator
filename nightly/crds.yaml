@@ -1269,9 +1269,10 @@ spec:
                       the operator-managed NetworkPolicy. This is useful for allowing access from external
                       services, monitoring tools, or other components that need to reach OpenBao pods.
 
-                      The operator's default ingress rules (cluster pods, kube-system, operator, gateway)
+                      The operator's default ingress rules (cluster pods and operator-managed jobs)
                       are always included and cannot be overridden. User-provided rules are appended to
-                      the operator-managed rules.
+                      the operator-managed rules. Gateway or ingress-controller data-plane reachability
+                      should be modeled with trustedIngressPeers.
                       Hardened clusters reject raw ingress rules; use trustedIngressPeers or managed
                       Gateway/Ingress integration for application access.
 
