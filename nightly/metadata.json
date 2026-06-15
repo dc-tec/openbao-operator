@@ -6,8 +6,8 @@
     "install_yaml": "install.yaml",
     "provenance_index": "provenance-index.json"
   },
-  "date_utc": "20260614",
-  "generated_at": "2026-06-14T04:32:40Z",
+  "date_utc": "20260615",
+  "generated_at": "2026-06-15T04:02:43Z",
   "images": {
     "backup_executor": {
       "digest": "sha256:560ba7e9c54c5593699735aeb3d52874f066af75d666ce70c2e1d941fa282238",
@@ -27,5 +27,5 @@
     }
   },
   "sha": "f873094f2add4c3bd4d261a14105c6b5853b49c9",
-  "version": "nightly-20260614-f873094f2add"
+  "version": "nightly-20260615-f873094f2add"
 }
