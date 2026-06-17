@@ -6,26 +6,26 @@
     "install_yaml": "install.yaml",
     "provenance_index": "provenance-index.json"
   },
-  "date_utc": "20260615",
-  "generated_at": "2026-06-15T04:02:43Z",
+  "date_utc": "20260617",
+  "generated_at": "2026-06-17T04:11:16Z",
   "images": {
     "backup_executor": {
-      "digest": "sha256:560ba7e9c54c5593699735aeb3d52874f066af75d666ce70c2e1d941fa282238",
+      "digest": "sha256:70748b57ddea3fe53a26f41183b2921e69a91a2379a4dd8c725f7f9f393ae8c4",
       "ref": "ghcr.io/dc-tec/openbao-backup"
     },
     "config_init": {
-      "digest": "sha256:ac9374cebfd9833b6e98bbde1817fa5b60a6686ecc35e8eac795b3f7157c2726",
+      "digest": "sha256:04982db2dcf98d5e9488b47e87840ab15ccca55bddfc9cf581dab26195c17ed5",
       "ref": "ghcr.io/dc-tec/openbao-init"
     },
     "manager": {
-      "digest": "sha256:7eb659fa059b91459707e008d58f4cdf607ffd45e2c6f8de5cf0502268afb14b",
+      "digest": "sha256:69ad012924136eaa3a8c3146ce10f76f9a62e08a89386fb4455ddc34ccdd2c77",
       "ref": "ghcr.io/dc-tec/openbao-operator"
     },
     "upgrade_executor": {
-      "digest": "sha256:fe5f58b0d1679394c2b99fe144f350294eaff9afc6a9799ea53a011036185f8d",
+      "digest": "sha256:86b638264823aee8735f5b827921325a8e78ea26b49020c58be0d35a539a1222",
       "ref": "ghcr.io/dc-tec/openbao-upgrade"
     }
   },
-  "sha": "f873094f2add4c3bd4d261a14105c6b5853b49c9",
-  "version": "nightly-20260615-f873094f2add"
+  "sha": "1fd881219baf3ed071edb4d1110f3f4ff312e233",
+  "version": "nightly-20260617-1fd881219baf"
 }
