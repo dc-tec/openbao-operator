@@ -92,17 +92,17 @@ The current stable release line is intended for real deployments, but it remains
   columns={['Workflow', 'Scope', 'Versions tested']}
   rows={[
     {
-      cells: ['PR Gate', 'Logic, manifests, and primary compatibility path', 'K8s 1.35.1 + OpenBao 2.5.4'],
+      cells: ['PR Gate', 'Logic, manifests, and primary compatibility path', 'K8s 1.35.1 + OpenBao 2.5.5'],
       emphasis: 'recommended',
     },
     {
-      cells: ['Release Gate E2E', 'Stable release lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.5.4'],
+      cells: ['Release Gate E2E', 'Stable release lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.5.5'],
     },
     {
-      cells: ['Nightly E2E', 'Full lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.5.4'],
+      cells: ['Nightly E2E', 'Full lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.5.5'],
     },
     {
-      cells: ['Nightly Config Compatibility', 'Render and config compatibility checks', 'OpenBao 2.4.4 and 2.5.4'],
+      cells: ['Nightly Config Compatibility', 'Render and config compatibility checks', 'OpenBao 2.4.4 and 2.5.5'],
     },
   ]}
 />

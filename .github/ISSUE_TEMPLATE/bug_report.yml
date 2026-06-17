@@ -22,7 +22,7 @@ body:
     attributes:
       label: OpenBao version
       description: The version of the OpenBao container you are running (e.g., 2.4.4)
-      placeholder: 2.5.4
+      placeholder: 2.5.5
     validations:
       required: true
 

@@ -31,7 +31,7 @@ func testCILane(id string) ciLaneConfig {
 func testVersionPolicy() versionPolicy {
 	return versionPolicy{
 		OpenBao: openBaoVersionPolicy{
-			DefaultImage: "ghcr.io/openbao/openbao:2.5.4",
+			DefaultImage: "ghcr.io/openbao/openbao:2.5.5",
 		},
 		Kubernetes: kubernetesVersionPolicy{
 			Primary:       "1.35.1",

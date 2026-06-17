@@ -67,7 +67,7 @@ docker-build-upgrade: ## Build docker image with the upgrade helper.
 docker-push-upgrade: ## Push docker image with the upgrade helper.
 	$(CONTAINER_TOOL) push ${IMG}
 
-OPENBAO_SOFTHSM_BASE_IMAGE ?= openbao/openbao-hsm:2.5.4
+OPENBAO_SOFTHSM_BASE_IMAGE ?= openbao/openbao-hsm:2.5.5
 OPENBAO_SOFTHSM_IMG ?= openbao-softhsm:dev
 PYKMIP_BASE_IMAGE ?= python:3.11-slim
 PYKMIP_VERSION ?= 0.10.0
