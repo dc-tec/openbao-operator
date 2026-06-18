@@ -8,6 +8,12 @@ const (
 	PathPlugins = "/openbao/plugins"
 )
 
+// Common configuration file names and sentinel contents.
+const (
+	OpenBaoConfigFileName   = "config.hcl"
+	CompletedSelfInitConfig = "# OpenBao self-initialization completed; bootstrap stanzas are intentionally omitted.\n"
+)
+
 // Common volume names used by OpenBao pods.
 const (
 	VolumeTLS     = "tls"

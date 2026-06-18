@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -17,6 +18,8 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
 
 var _ = Describe("OpenBaoCluster Initialization", func() {
@@ -182,6 +185,60 @@ var _ = Describe("OpenBaoCluster Initialization", func() {
 			}, updated)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updated.Status.Initialized).To(BeTrue())
+		})
+
+		It("renders an inert self-init ConfigMap after self-initialization completes", func() {
+			cluster := createMinimalCluster("test-self-init-inert")
+			cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+				Requests: []openbaov1alpha1.SelfInitRequest{
+					{
+						Name:      "bootstrap_policy",
+						Operation: openbaov1alpha1.SelfInitOperationUpdate,
+						Path:      "sys/policies/acl/bootstrap",
+						Policy: &openbaov1alpha1.SelfInitPolicy{
+							Policy: `path "secret/*" { capabilities = ["read"] }`,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+			req := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				},
+			}
+
+			reconciler := newReconciler()
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			configMap := &corev1.ConfigMap{}
+			configMapKey := types.NamespacedName{
+				Name:      resourceidentity.ConfigInitMapName(cluster),
+				Namespace: cluster.Namespace,
+			}
+			Expect(k8sClient.Get(ctx, configMapKey, configMap)).To(Succeed())
+			Expect(configMap.Data[constants.OpenBaoConfigFileName]).To(ContainSubstring("initialize"))
+			Expect(configMap.Data[constants.OpenBaoConfigFileName]).To(ContainSubstring("bootstrap_policy"))
+
+			latest := &openbaov1alpha1.OpenBaoCluster{}
+			Expect(k8sClient.Get(ctx, req.NamespacedName, latest)).To(Succeed())
+			original := latest.DeepCopy()
+			latest.Status.Initialized = true
+			latest.Status.SelfInitialized = true
+			Expect(k8sClient.Status().Patch(ctx, latest, client.MergeFrom(original))).To(Succeed())
+
+			_, err = reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(k8sClient.Get(ctx, configMapKey, configMap)).To(Succeed())
+			content := configMap.Data[constants.OpenBaoConfigFileName]
+			Expect(content).To(Equal(constants.CompletedSelfInitConfig))
+			Expect(content).NotTo(ContainSubstring("initialize"))
+			Expect(content).NotTo(ContainSubstring("bootstrap_policy"))
 		})
 	})
 })

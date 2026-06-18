@@ -14,7 +14,12 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/logging"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+)
+
+const (
+	selfInitConfigMapUpdateReason = "reconcile completed self-init ConfigMap"
 )
 
 // Reconcile checks if the OpenBao cluster is initialized and initializes it if needed.
@@ -52,7 +57,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 
 	if selfInitEnabled {
-		return m.reconcileSelfInit(ctx, logger, cluster, pod), nil
+		return m.reconcileSelfInit(ctx, logger, cluster, pod)
 	}
 
 	return m.reconcileOperatorInit(ctx, logger, cluster, pod, selfInitEnabled)
@@ -90,15 +95,15 @@ func (m *Manager) reconcileSelfInit(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pod *corev1.Pod,
-) recon.Result {
+) (recon.Result, error) {
 	emitNormalEvent(m.recorder, cluster, ReasonInitStarted, "Self-initialization in progress for cluster %s", cluster.Name)
 
-	if handled, result := m.reconcileSelfInitFromServiceLabels(ctx, logger, cluster, pod); handled {
-		return result
+	if handled, result, err := m.reconcileSelfInitFromServiceLabels(ctx, logger, cluster, pod); handled || err != nil {
+		return result, err
 	}
 
-	if handled, result := m.reconcileSelfInitFromPodReadiness(ctx, logger, cluster, pod); handled {
-		return result
+	if handled, result, err := m.reconcileSelfInitFromPodReadiness(ctx, logger, cluster, pod); handled || err != nil {
+		return result, err
 	}
 
 	return m.reconcileSelfInitFromHealth(ctx, logger, cluster, pod)
@@ -109,7 +114,7 @@ func (m *Manager) reconcileSelfInitFromServiceLabels(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pod *corev1.Pod,
-) (bool, recon.Result) {
+) (bool, recon.Result, error) {
 	initializedLabel, hasInitializedLabel, err := portopenbao.ParseBoolLabel(pod.Labels, portopenbao.LabelInitialized)
 	if err != nil {
 		logger.V(1).Info("Invalid OpenBao initialized label value", "pod", pod.Name, "error", err)
@@ -121,12 +126,14 @@ func (m *Manager) reconcileSelfInitFromServiceLabels(
 	}
 
 	if !hasInitializedLabel || !hasSealedLabel || !initializedLabel || sealedLabel {
-		return false, recon.Result{}
+		return false, recon.Result{}, nil
 	}
 
 	logger.Info("OpenBao service registration labels indicate initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
-	m.markSelfInitComplete(ctx, logger, cluster)
-	return true, recon.Result{RequeueAfter: constants.RequeueShort}
+	if err := m.markSelfInitComplete(ctx, logger, cluster); err != nil {
+		return true, recon.Result{}, err
+	}
+	return true, recon.Result{RequeueAfter: constants.RequeueShort}, nil
 }
 
 func (m *Manager) reconcileSelfInitFromPodReadiness(
@@ -134,14 +141,16 @@ func (m *Manager) reconcileSelfInitFromPodReadiness(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pod *corev1.Pod,
-) (bool, recon.Result) {
+) (bool, recon.Result, error) {
 	if isPodReady(pod) {
 		logger.Info("OpenBao pod is Ready; marking cluster as initialized", "pod", pod.Name)
-		m.markSelfInitComplete(ctx, logger, cluster)
-		return true, recon.Result{RequeueAfter: constants.RequeueShort}
+		if err := m.markSelfInitComplete(ctx, logger, cluster); err != nil {
+			return true, recon.Result{}, err
+		}
+		return true, recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
-	return false, recon.Result{}
+	return false, recon.Result{}, nil
 }
 
 func (m *Manager) reconcileSelfInitFromHealth(
@@ -149,11 +158,11 @@ func (m *Manager) reconcileSelfInitFromHealth(
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	pod *corev1.Pod,
-) recon.Result {
+) (recon.Result, error) {
 	client, err := m.newOpenBaoClient(ctx, cluster)
 	if err != nil {
 		logger.Info("Self-initialization health observation is not ready yet; will retry", "pod", pod.Name, "error", err)
-		return recon.Result{RequeueAfter: constants.RequeueShort}
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	healthCtx, cancel := context.WithTimeout(ctx, selfInitHealthTimeout)
@@ -162,23 +171,29 @@ func (m *Manager) reconcileSelfInitFromHealth(
 	health, err := client.Health(healthCtx)
 	if err != nil {
 		logger.Info("Self-initialization health observation failed; will retry", "pod", pod.Name, "error", err)
-		return recon.Result{RequeueAfter: constants.RequeueShort}
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 	if health != nil && health.Initialized && !health.Sealed {
 		logger.Info("OpenBao health endpoint reports initialized and unsealed; marking cluster as initialized", "pod", pod.Name)
-		m.markSelfInitComplete(ctx, logger, cluster)
-		return recon.Result{RequeueAfter: constants.RequeueShort}
+		if err := m.markSelfInitComplete(ctx, logger, cluster); err != nil {
+			return recon.Result{}, err
+		}
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 	if health != nil {
 		logger.Info("Self-initialization is enabled; waiting for OpenBao health to report initialized and unsealed", "pod", pod.Name, "initialized", health.Initialized, "sealed", health.Sealed)
-		return recon.Result{RequeueAfter: constants.RequeueShort}
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	logger.Info("Self-initialization is enabled; waiting for OpenBao health observation", "pod", pod.Name)
-	return recon.Result{RequeueAfter: constants.RequeueShort}
+	return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 }
 
-func (m *Manager) markSelfInitComplete(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
+func (m *Manager) markSelfInitComplete(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if err := m.reconcileCompletedSelfInitConfigMap(ctx, logger, cluster); err != nil {
+		return err
+	}
+
 	cluster.Status.Initialized = true
 	cluster.Status.SelfInitialized = true
 
@@ -190,6 +205,43 @@ func (m *Manager) markSelfInitComplete(ctx context.Context, logger logr.Logger, 
 		}
 	}
 	emitNormalEvent(m.recorder, cluster, ReasonInitCompleted, "Self-initialization completed for cluster %s", cluster.Name)
+	return nil
+}
+
+func (m *Manager) reconcileCompletedSelfInitConfigMap(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if m.clientset == nil {
+		return fmt.Errorf("kubernetes clientset is required to %s", selfInitConfigMapUpdateReason)
+	}
+
+	configMaps := m.clientset.CoreV1().ConfigMaps(cluster.Namespace)
+	cmName := resourceidentity.ConfigInitMapName(cluster)
+	configMap, err := configMaps.Get(ctx, cmName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(1).Info("Self-init ConfigMap not found during completion; bootstrap reconcile will create inert ConfigMap", "configmap", cmName)
+			return nil
+		}
+		return operatorerrors.WrapTransientKubernetesAPI(
+			fmt.Errorf("failed to get self-init ConfigMap %s/%s while completing self-init: %w", cluster.Namespace, cmName, err),
+		)
+	}
+
+	if configMap.Data != nil && configMap.Data[constants.OpenBaoConfigFileName] == constants.CompletedSelfInitConfig && len(configMap.Data) == 1 {
+		return nil
+	}
+
+	updated := configMap.DeepCopy()
+	updated.Data = map[string]string{
+		constants.OpenBaoConfigFileName: constants.CompletedSelfInitConfig,
+	}
+	if _, err := configMaps.Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
+		return operatorerrors.WrapTransientKubernetesAPI(
+			fmt.Errorf("failed to update self-init ConfigMap %s/%s while completing self-init: %w", cluster.Namespace, cmName, err),
+		)
+	}
+
+	logger.Info("Reconciled inert self-init ConfigMap after self-initialization completed", "configmap", cmName)
+	return nil
 }
 
 func (m *Manager) reconcileOperatorInit(
