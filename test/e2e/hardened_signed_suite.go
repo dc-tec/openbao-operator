@@ -25,7 +25,7 @@ func requireHardenedSignedSuite() {
 	if !strings.EqualFold(strings.TrimSpace(os.Getenv(envEnableHardenedSignedSuite)), "true") {
 		ginkgo.Skip(fmt.Sprintf(
 			"requires signed hardened suite; set %s=true and provide %s and %s "+
-				"(for example ghcr.io/openbao/openbao:2.5.4 and ghcr.io/dc-tec/openbao-init:edge)",
+				"(for example ghcr.io/openbao/openbao:2.5.5 and ghcr.io/dc-tec/openbao-init:edge)",
 			envEnableHardenedSignedSuite,
 			envOpenBaoImage,
 			envHardenedConfigInitImage,

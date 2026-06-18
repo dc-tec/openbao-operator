@@ -100,7 +100,7 @@ func TestWorkloadObservabilityMetricsOnlyListenerIsVersionAware(t *testing.T) {
 		},
 		{
 			name:         "patch upgrade source keeps metrics only listener",
-			version:      "2.5.3",
+			version:      "2.5.4",
 			wantConfig:   true,
 			wantListener: true,
 		},
@@ -112,7 +112,7 @@ func TestWorkloadObservabilityMetricsOnlyListenerIsVersionAware(t *testing.T) {
 		},
 		{
 			name:            "existing cluster leaves observability unmanaged",
-			version:         "2.5.4",
+			version:         "2.5.5",
 			existingContext: "kind-existing",
 			wantConfig:      false,
 			wantListener:    false,
@@ -166,8 +166,8 @@ func TestRollingUpgradeClusterEnablesPublicService(t *testing.T) {
 		namespace: "perf-test",
 		runID:     "rolling-probe",
 		opts: Config{
-			UpgradeFromVersion:   "2.5.3",
-			UpgradeFromImage:     "ghcr.io/openbao/openbao:2.5.3",
+			UpgradeFromVersion:   "2.5.4",
+			UpgradeFromImage:     "ghcr.io/openbao/openbao:2.5.4",
 			UpgradeExecutorImage: "ghcr.io/dc-tec/openbao-operator-upgrade:dev",
 			ConfigInitImage:      "ghcr.io/dc-tec/openbao-operator-config-init:dev",
 		},
