@@ -23,6 +23,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -185,6 +186,150 @@ func TestReconcileSelfInitReady_EmitsInitEvents(t *testing.T) {
 
 	expectEventContains(t, recorder, "Normal", ReasonInitStarted)
 	expectEventContains(t, recorder, "Normal", ReasonInitCompleted)
+}
+
+func TestReconcileSelfInitReady_InertizesConfigMapBeforeStatus(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+			},
+		},
+	}
+
+	started := true
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-0",
+			Namespace: "default",
+			Labels: map[string]string{
+				constants.LabelAppInstance:  "cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{{
+				Name: constants.ContainerBao,
+				State: corev1.ContainerState{
+					Running: &corev1.ContainerStateRunning{
+						StartedAt: metav1.Now(),
+					},
+				},
+				Started: &started,
+			}},
+			Conditions: []corev1.PodCondition{{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			}},
+		},
+	}
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceidentity.ConfigInitMapName(cluster),
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string]string{
+			constants.OpenBaoConfigFileName: `initialize "bootstrap" {}`,
+		},
+	}
+
+	clientset := kubernetesfake.NewClientset(pod, configMap)
+	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
+	manager := NewManager(&rest.Config{}, clientset, clientMgr)
+
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if !cluster.Status.Initialized || !cluster.Status.SelfInitialized {
+		t.Fatalf("status initialized=%t selfInitialized=%t, want both true", cluster.Status.Initialized, cluster.Status.SelfInitialized)
+	}
+
+	got, err := clientset.CoreV1().ConfigMaps(cluster.Namespace).Get(context.Background(), configMap.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("failed to get ConfigMap: %v", err)
+	}
+	if got.Data[constants.OpenBaoConfigFileName] != constants.CompletedSelfInitConfig {
+		t.Fatalf("ConfigMap content = %q, want %q", got.Data[constants.OpenBaoConfigFileName], constants.CompletedSelfInitConfig)
+	}
+	if strings.Contains(got.Data[constants.OpenBaoConfigFileName], "initialize") {
+		t.Fatalf("completed self-init ConfigMap still contains initialize stanza:\n%s", got.Data[constants.OpenBaoConfigFileName])
+	}
+}
+
+func TestReconcileSelfInitReady_DoesNotMarkCompleteWhenConfigMapUpdateFails(t *testing.T) {
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+			},
+		},
+	}
+
+	started := true
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-0",
+			Namespace: "default",
+			Labels: map[string]string{
+				constants.LabelAppInstance:  "cluster",
+				constants.LabelAppName:      constants.LabelValueAppNameOpenBao,
+				constants.LabelAppManagedBy: constants.LabelValueAppManagedByOpenBaoOperator,
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{{
+				Name: constants.ContainerBao,
+				State: corev1.ContainerState{
+					Running: &corev1.ContainerStateRunning{
+						StartedAt: metav1.Now(),
+					},
+				},
+				Started: &started,
+			}},
+			Conditions: []corev1.PodCondition{{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			}},
+		},
+	}
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceidentity.ConfigInitMapName(cluster),
+			Namespace: cluster.Namespace,
+		},
+		Data: map[string]string{
+			constants.OpenBaoConfigFileName: `initialize "bootstrap" {}`,
+		},
+	}
+
+	clientset := kubernetesfake.NewClientset(pod, configMap)
+	clientset.PrependReactor("update", "configmaps", func(clienttesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewTooManyRequests("too many requests", 0)
+	})
+	clientMgr := openbao.NewClientManager(portopenbao.ClientConfig{})
+	manager := NewManager(&rest.Config{}, clientset, clientMgr)
+
+	_, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
+	if err == nil {
+		t.Fatal("Reconcile() error = nil, want ConfigMap update error")
+	}
+	if !operatorerrors.IsTransient(err) {
+		t.Fatalf("Reconcile() error = %v, want transient", err)
+	}
+	if cluster.Status.Initialized || cluster.Status.SelfInitialized {
+		t.Fatalf("status initialized=%t selfInitialized=%t, want both false", cluster.Status.Initialized, cluster.Status.SelfInitialized)
+	}
 }
 
 func TestReconcileOperatorInitFailure_EmitsInitFailedEvent(t *testing.T) {

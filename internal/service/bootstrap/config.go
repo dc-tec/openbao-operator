@@ -18,10 +18,13 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	configbuilder "github.com/dc-tec/openbao-operator/internal/adapter/config"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
+
+const completedSelfInitConfig = constants.CompletedSelfInitConfig
 
 // usesStaticSeal returns true if the cluster is configured to use the static seal
 // (either by default when unseal config is nil, or explicitly when type is "static").
@@ -145,6 +148,11 @@ func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov
 // only the first pod needs to execute initialization requests.
 func (m *Manager) ensureSelfInitConfigMap(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	cmName := resourceidentity.ConfigInitMapName(cluster)
+
+	if cluster.Status.SelfInitialized {
+		logger.Info("Self-init already completed; reconciling inert self-init ConfigMap", "configmap", cmName)
+		return m.ensureConfigMapWithName(ctx, cluster, cmName, completedSelfInitConfig)
+	}
 
 	// If self-init is not enabled, delete the ConfigMap if it exists
 	if cluster.Spec.SelfInit == nil || !cluster.Spec.SelfInit.Enabled {

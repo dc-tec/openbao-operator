@@ -362,6 +362,53 @@ func TestEnsureSelfInitConfigMap_Disabled(t *testing.T) {
 	}
 }
 
+func TestEnsureSelfInitConfigMap_SelfInitializedDisabledKeepsInertConfig(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.UID = types.UID("test-cluster-uid")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: false,
+	}
+	cluster.Status.SelfInitialized = true
+	cmName := resourceidentity.ConfigInitMapName(cluster)
+
+	existingConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            cmName,
+			Namespace:       cluster.Namespace,
+			OwnerReferences: []metav1.OwnerReference{bootstrapOwnerRef(cluster)},
+		},
+		Data: map[string]string{
+			configFileName: `initialize "old-bootstrap" {}`,
+		},
+	}
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClientWithObjects(t, existingConfigMap)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
+
+	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
+	if err != nil {
+		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
+	}
+
+	configMap := &corev1.ConfigMap{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cmName,
+	}, configMap)
+	if err != nil {
+		t.Fatalf("expected ConfigMap to remain: %v", err)
+	}
+	content := configMap.Data[configFileName]
+	if content != completedSelfInitConfig {
+		t.Fatalf("ConfigMap content = %q, want inert completed config %q", content, completedSelfInitConfig)
+	}
+	if strings.Contains(content, "initialize") {
+		t.Fatalf("completed self-init ConfigMap still contains initialize stanza:\n%s", content)
+	}
+}
+
 func TestEnsureSelfInitConfigMap_NotConfigured(t *testing.T) {
 	cluster := newMinimalCluster("test-cluster", "default")
 	cluster.Spec.SelfInit = nil
@@ -526,6 +573,62 @@ func TestEnsureSelfInitConfigMap_DevelopmentProfileWithBackupJWTAuthBootstraps(t
 	for _, snippet := range expectedSnippets {
 		if !strings.Contains(content, snippet) {
 			t.Errorf("expected ConfigMap content to contain %q, got:\n%s", snippet, content)
+		}
+	}
+}
+
+func TestEnsureSelfInitConfigMap_SelfInitializedRendersInertConfig(t *testing.T) {
+	cluster := newMinimalCluster("test-cluster", "default")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
+			Enabled: true,
+		},
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "create-admin-policy",
+				Operation: openbaov1alpha1.SelfInitOperationUpdate,
+				Path:      "sys/policies/acl/admin",
+				Policy: &openbaov1alpha1.SelfInitPolicy{
+					Policy: `path "*" { capabilities = ["create"] }`,
+				},
+			},
+		},
+	}
+	cluster.Status.SelfInitialized = true
+
+	ctx := context.Background()
+	logger := logr.Discard()
+	k8sClient := newTestClient(t)
+	manager := NewManager(k8sClient, testScheme, "openbao-operator-system")
+
+	err := manager.ensureSelfInitConfigMap(ctx, logger, cluster)
+	if err != nil {
+		t.Fatalf("ensureSelfInitConfigMap() error = %v", err)
+	}
+
+	cmName := resourceidentity.ConfigInitMapName(cluster)
+	configMap := &corev1.ConfigMap{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      cmName,
+	}, configMap)
+	if err != nil {
+		t.Fatalf("expected ConfigMap to exist: %v", err)
+	}
+
+	content := configMap.Data[configFileName]
+	if content != completedSelfInitConfig {
+		t.Fatalf("ConfigMap content = %q, want inert completed config %q", content, completedSelfInitConfig)
+	}
+	for _, forbidden := range []string{
+		`initialize "operator-bootstrap"`,
+		`initialize "create-admin-policy"`,
+		`request "create-operator-role"`,
+		`sys/policies/acl/admin`,
+	} {
+		if strings.Contains(content, forbidden) {
+			t.Fatalf("completed self-init ConfigMap still contains executable bootstrap snippet %q:\n%s", forbidden, content)
 		}
 	}
 }
