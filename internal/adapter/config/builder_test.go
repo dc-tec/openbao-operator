@@ -716,6 +716,124 @@ func TestRenderHCLWithSelfInitRequests(t *testing.T) {
 	compareGolden(t, "render_self_init_requests", got)
 }
 
+func TestRenderSelfInitHCLWithInitialRecoveryKeys(t *testing.T) {
+	cluster := newMinimalCluster("selfinit-recovery", "default")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+	}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "awskms",
+	}
+	cluster.Spec.RecoveryKeys = &openbaov1alpha1.RecoveryKeysConfig{
+		Initial: &openbaov1alpha1.InitialRecoveryKeysConfig{
+			Shares:    3,
+			Threshold: 2,
+			Recipients: []openbaov1alpha1.RecoveryKeyRecipient{
+				{Name: "custodian-01", Fingerprint: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", PGPPublicKey: "pgp-key-one"},
+				{Name: "custodian-02", Fingerprint: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", PGPPublicKey: "pgp-key-two"},
+				{Name: "custodian-03", Fingerprint: "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC", PGPPublicKey: "pgp-key-three"},
+			},
+		},
+	}
+
+	got, err := RenderSelfInitHCL(cluster, nil)
+	if err != nil {
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
+	}
+
+	compareGolden(t, "render_self_init_initial_recovery_keys", got)
+}
+
+func TestRenderSelfInitHCLRejectsInvalidInitialRecoveryKeys(t *testing.T) {
+	tests := []struct {
+		name          string
+		mutateCluster func(*openbaov1alpha1.OpenBaoCluster)
+		wantErr       string
+	}{
+		{
+			name: "requires self init",
+			mutateCluster: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.SelfInit = nil
+			},
+			wantErr: "spec.recoveryKeys.initial requires spec.selfInit.enabled=true",
+		},
+		{
+			name: "requires unseal configuration",
+			mutateCluster: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal = nil
+			},
+			wantErr: "requires a non-static spec.unseal.type",
+		},
+		{
+			name: "rejects static unseal",
+			mutateCluster: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{Type: "static"}
+			},
+			wantErr: "requires a non-static spec.unseal.type",
+		},
+		{
+			name: "threshold cannot exceed shares",
+			mutateCluster: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.RecoveryKeys.Initial.Threshold = 4
+			},
+			wantErr: "threshold must be less than or equal to shares",
+		},
+		{
+			name: "recipient count must match shares",
+			mutateCluster: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.RecoveryKeys.Initial.Recipients = cluster.Spec.RecoveryKeys.Initial.Recipients[:2]
+			},
+			wantErr: "recipients must contain exactly 3 entries",
+		},
+		{
+			name: "rejects raw recovery init conflict",
+			mutateCluster: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.SelfInit.Requests = []openbaov1alpha1.SelfInitRequest{
+					{
+						Name:      "raw-recovery-init",
+						Operation: openbaov1alpha1.SelfInitOperationUpdate,
+						Path:      "sys/rotate/recovery/init",
+					},
+				}
+			},
+			wantErr: "cannot be combined with a raw self-init request",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalCluster("selfinit-recovery-invalid", "default")
+			cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+				Enabled: true,
+			}
+			cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+				Type: "awskms",
+			}
+			cluster.Spec.RecoveryKeys = &openbaov1alpha1.RecoveryKeysConfig{
+				Initial: &openbaov1alpha1.InitialRecoveryKeysConfig{
+					Shares:    3,
+					Threshold: 2,
+					Recipients: []openbaov1alpha1.RecoveryKeyRecipient{
+						{Name: "custodian-01", PGPPublicKey: "pgp-key-one"},
+						{Name: "custodian-02", PGPPublicKey: "pgp-key-two"},
+						{Name: "custodian-03", PGPPublicKey: "pgp-key-three"},
+					},
+				},
+			}
+
+			tt.mutateCluster(cluster)
+
+			_, err := RenderSelfInitHCL(cluster, nil)
+			if err == nil {
+				t.Fatal("RenderSelfInitHCL() error = nil, want error")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("RenderSelfInitHCL() error = %q, want substring %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestRenderSelfInitHCLWithHTTPAuditHeaders(t *testing.T) {
 	cluster := newMinimalCluster("selfinit-http-audit", "default")
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{

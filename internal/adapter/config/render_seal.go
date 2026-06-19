@@ -10,13 +10,13 @@ import (
 )
 
 func buildSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, error) {
-	unsealType := "static"
+	unsealType := unsealTypeStatic
 	if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Type != "" {
 		unsealType = cluster.Spec.Unseal.Type
 	}
 
 	switch unsealType {
-	case "static":
+	case unsealTypeStatic:
 		currentKey := configUnsealKeyPath
 		currentKeyID := configUnsealKeyID
 		if cluster.Spec.Unseal != nil && cluster.Spec.Unseal.Static != nil {
@@ -28,7 +28,7 @@ func buildSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, e
 			}
 		}
 		return gohcl.EncodeAsBlock(hclSealStatic{
-			Type:         "static",
+			Type:         unsealTypeStatic,
 			CurrentKey:   currentKey,
 			CurrentKeyID: currentKeyID,
 		}, "seal"), nil

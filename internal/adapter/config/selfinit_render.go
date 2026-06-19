@@ -30,6 +30,9 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 	if err := validateAuditFileStorageConfiguration(cluster); err != nil {
 		return nil, err
 	}
+	if err := validateInitialRecoveryKeysConfiguration(cluster); err != nil {
+		return nil, err
+	}
 
 	// If bootstrap config provided, render it first
 	if bootstrapConfig != nil {
@@ -49,6 +52,10 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 		body.AppendBlock(buildSelfInitBootstrapInitializeBlock(cluster, *bootstrapConfig))
 	}
 
+	if initialRecoveryKeys := initialRecoveryKeysConfig(cluster); initialRecoveryKeys != nil {
+		body.AppendBlock(buildSelfInitInitialRecoveryKeysBlock(initialRecoveryKeys))
+	}
+
 	// Render user self-init requests if enabled
 	if cluster.Spec.SelfInit != nil && cluster.Spec.SelfInit.Enabled {
 		requests := cluster.Spec.SelfInit.Requests
@@ -66,6 +73,77 @@ func RenderSelfInitHCL(cluster *openbaov1alpha1.OpenBaoCluster, bootstrapConfig 
 	}
 
 	return file.Bytes(), nil
+}
+
+func initialRecoveryKeysConfig(cluster *openbaov1alpha1.OpenBaoCluster) *openbaov1alpha1.InitialRecoveryKeysConfig {
+	if cluster == nil || cluster.Spec.RecoveryKeys == nil {
+		return nil
+	}
+	return cluster.Spec.RecoveryKeys.Initial
+}
+
+func validateInitialRecoveryKeysConfiguration(cluster *openbaov1alpha1.OpenBaoCluster) error {
+	config := initialRecoveryKeysConfig(cluster)
+	if config == nil {
+		return nil
+	}
+
+	if cluster.Spec.SelfInit == nil || !cluster.Spec.SelfInit.Enabled {
+		return fmt.Errorf("spec.recoveryKeys.initial requires spec.selfInit.enabled=true")
+	}
+	if !hasNonStaticUnseal(cluster) {
+		return fmt.Errorf("spec.recoveryKeys.initial requires a non-static spec.unseal.type")
+	}
+	if hasRequestPath(cluster.Spec.SelfInit.Requests, pathSysRotateRecoveryInit) {
+		return fmt.Errorf("spec.recoveryKeys.initial cannot be combined with a raw self-init request for %s", pathSysRotateRecoveryInit)
+	}
+	if config.Shares < 1 {
+		return fmt.Errorf("spec.recoveryKeys.initial.shares must be greater than 0")
+	}
+	if config.Threshold < 1 {
+		return fmt.Errorf("spec.recoveryKeys.initial.threshold must be greater than 0")
+	}
+	if config.Threshold > config.Shares {
+		return fmt.Errorf("spec.recoveryKeys.initial.threshold must be less than or equal to shares")
+	}
+	if len(config.Recipients) != int(config.Shares) {
+		return fmt.Errorf("spec.recoveryKeys.initial.recipients must contain exactly %d entries", config.Shares)
+	}
+
+	seenNames := make(map[string]struct{}, len(config.Recipients))
+	for index, recipient := range config.Recipients {
+		name := strings.TrimSpace(recipient.Name)
+		if name == "" {
+			return fmt.Errorf("spec.recoveryKeys.initial.recipients[%d].name must not be empty", index)
+		}
+		if _, ok := seenNames[name]; ok {
+			return fmt.Errorf("spec.recoveryKeys.initial.recipients contains duplicate name %q", name)
+		}
+		seenNames[name] = struct{}{}
+
+		if strings.TrimSpace(recipient.PGPPublicKey) == "" {
+			return fmt.Errorf("spec.recoveryKeys.initial.recipients[%d].pgpPublicKey must not be empty", index)
+		}
+	}
+
+	return nil
+}
+
+func hasNonStaticUnseal(cluster *openbaov1alpha1.OpenBaoCluster) bool {
+	if cluster.Spec.Unseal == nil {
+		return false
+	}
+	unsealType := strings.TrimSpace(cluster.Spec.Unseal.Type)
+	return unsealType != "" && unsealType != unsealTypeStatic
+}
+
+func hasRequestPath(requests []openbaov1alpha1.SelfInitRequest, path string) bool {
+	for _, req := range requests {
+		if strings.Trim(req.Path, "/") == path {
+			return true
+		}
+	}
+	return false
 }
 
 func hasRequest(requests []openbaov1alpha1.SelfInitRequest, name string) bool {

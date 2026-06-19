@@ -60,6 +60,7 @@ journey: operate
 - Confirm your Kubernetes cluster already encrypts Secrets at rest. The operator cannot compensate for an unencrypted control plane.
 - Use `ACME` or `External` TLS for public or shared edges. Avoid `OperatorManaged` certificates for public-facing production entry points.
 - Enable `spec.selfInit` and configure real user authentication in `spec.selfInit.requests` so the first operator-driven bootstrap does not end in a lockout.
+- For auto-unseal production clusters, declare `spec.recoveryKeys.initial` before first reconcile and complete the external recovery-key custody ceremony after bootstrap.
 - If you rely on operator lifecycle auth for backups and upgrades, enable `spec.selfInit.oidc.enabled: true` or deliberately provision the equivalent JWT roles yourself.
 
 <Callout type="warning" title="Install success is not the production gate">

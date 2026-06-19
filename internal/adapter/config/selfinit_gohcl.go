@@ -42,6 +42,13 @@ type hclPolicyData struct {
 	Policy string `hcl:"policy"`
 }
 
+type hclInitialRecoveryKeysData struct {
+	SecretShares    int32    `hcl:"secret_shares"`
+	SecretThreshold int32    `hcl:"secret_threshold"`
+	Backup          bool     `hcl:"backup"`
+	PGPKeys         []string `hcl:"pgp_keys"`
+}
+
 type hclJWTRoleData struct {
 	RoleType             string             `hcl:"role_type"`
 	UserClaim            string             `hcl:"user_claim"`
@@ -78,6 +85,25 @@ func buildInitializeRequestBlock(label, operation, path string, allowFailure boo
 		req.AllowFailure = boolPtrValue(true)
 	}
 	return gohcl.EncodeAsBlock(req, "request")
+}
+
+func buildSelfInitInitialRecoveryKeysBlock(config *openbaov1alpha1.InitialRecoveryKeysConfig) *hclwrite.Block {
+	initBlock := buildInitializeBlock("initial-recovery-keys")
+	req := buildInitializeRequestBlock(reqInitialRecoveryKeys, opUpdate, pathSysRotateRecoveryInit, false)
+
+	pgpKeys := make([]string, 0, len(config.Recipients))
+	for _, recipient := range config.Recipients {
+		pgpKeys = append(pgpKeys, strings.TrimSpace(recipient.PGPPublicKey))
+	}
+
+	req.Body().AppendBlock(gohcl.EncodeAsBlock(hclInitialRecoveryKeysData{
+		SecretShares:    config.Shares,
+		SecretThreshold: config.Threshold,
+		Backup:          true,
+		PGPKeys:         pgpKeys,
+	}, "data"))
+	initBlock.Body().AppendBlock(req)
+	return initBlock
 }
 
 func buildSelfInitBootstrapInitializeBlock(cluster *openbaov1alpha1.OpenBaoCluster, config OperatorBootstrapConfig) *hclwrite.Block {
