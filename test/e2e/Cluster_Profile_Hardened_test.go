@@ -340,6 +340,7 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		By(fmt.Sprintf("creating Hardened OpenBaoCluster %q with External TLS and Transit auto-unseal", clusterName))
 		// Infra-bao always runs with TLS in production mode
 		infraAddr = fmt.Sprintf("https://%s.%s.svc:8200", infraBaoName, f.Namespace)
+		recoveryKeyRecipients := e2eRecoveryKeyRecipients()
 
 		cluster := &openbaov1alpha1.OpenBaoCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -360,7 +361,23 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 					OIDC: &openbaov1alpha1.SelfInitOIDCConfig{
 						Enabled: true,
 					},
-					Requests: e2ehelpers.CreateHardenedProfileRequests(f.Namespace),
+					Requests: append(
+						e2ehelpers.CreateHardenedProfileRequests(f.Namespace),
+						e2ehelpers.CreateJWTPolicyRoleRequests(
+							f.Namespace,
+							"default",
+							"recovery-backup-read",
+							"recovery-backup-read",
+							`path "sys/rotate/recovery/backup" { capabilities = ["read"] }`,
+						)...,
+					),
+				},
+				RecoveryKeys: &openbaov1alpha1.RecoveryKeysConfig{
+					Initial: &openbaov1alpha1.InitialRecoveryKeysConfig{
+						Shares:     3,
+						Threshold:  2,
+						Recipients: recoveryKeyRecipients,
+					},
 				},
 				TLS: openbaov1alpha1.TLSConfig{
 					Enabled: true,
@@ -559,6 +576,29 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		Expect(f.TriggerReconcile(ctx, clusterName)).To(Succeed())
 		_, _ = fmt.Fprintf(GinkgoWriter, "Triggered reconcile for cluster %q\n", clusterName)
 		_, _ = fmt.Fprintf(GinkgoWriter, "Cluster %q is initialized via self-init\n", clusterName)
+
+		By("verifying the encrypted recovery-key backup exists for the declared recipients")
+		Eventually(func(g Gomega) {
+			baoAddr, err := e2ehelpers.ResolveActiveOpenBaoAddress(ctx, c, f.Namespace, clusterName)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			backupJSON, err := e2ehelpers.RunCommandViaJWT(
+				ctx,
+				cfg,
+				c,
+				f.Namespace,
+				openBaoImage,
+				baoAddr,
+				"default",
+				"recovery-backup-read",
+				map[string]string{"role": "test-verifier"},
+				"bao read -format=json sys/rotate/recovery/backup",
+			)
+			g.Expect(err).NotTo(HaveOccurred())
+			for _, recipient := range recoveryKeyRecipients {
+				g.Expect(strings.ToUpper(backupJSON)).To(ContainSubstring(strings.ToUpper(recipient.Fingerprint)))
+			}
+		}, framework.DefaultLongWaitTimeout, 10*time.Second).Should(Succeed())
 
 		By("verifying the documented hardened production readiness condition")
 		f.WaitForConditionReason(
@@ -1279,3 +1319,65 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		// Cleanup handled by helper (best effort)
 	})
 })
+
+func e2eRecoveryKeyRecipients() []openbaov1alpha1.RecoveryKeyRecipient {
+	return []openbaov1alpha1.RecoveryKeyRecipient{
+		{
+			Name:        "e2e-custodian-01",
+			Fingerprint: "70D46A170DCA5C707AB145C1845034789595779C",
+			PGPPublicKey: strings.Join([]string{
+				"mQENBGo07dsBCAD0WK/TcCChXCx7zNF2wlpiBLOxwBhD/DXdH4BwOcE00jBUY60Shs/4UYt7D3hq",
+				"Tr9+HXNc7+ZGopjFs1iSjEpOPIBsogUH+/SO3YLzOeO9QR0Si6GowFOfsvT5JBqnAxSEnQbkJLLw",
+				"tPBA3HlDeI9UpNvC8L/nQ8x53vnnVrrzEK11rKb8UeMNWsUFCxkstvBnEzKbaadzZwweLnC+CwLk",
+				"tPhV0ea7C4sWsSmwg4TUFT/Nh3qJYhd9IWjTTG7KKZmECKcoWcrlinUZn8ee41RszDiDno+rZXR8",
+				"1oE5APYpp+l0mvKr6K8ihP7HNqm8h0H6IULKjV+nb7z1/kikT763ABEBAAG0M2UyZS1jdXN0b2Rp",
+				"YW4tMDEgPGUyZS1jdXN0b2RpYW4tMDFAZXhhbXBsZS5pbnZhbGlkPokBcwQTAQgAXRYhBHDUahcN",
+				"ylxwerFFwYRQNHiVlXecBQJqNO3bGxSAAAAAAAQADm1hbnUyLDIuNSsxLjEyLDAsMwIbDQUJAuPM",
+				"1QULCQgHAgIiAgYVCgkICwIEFgIDAQIeBwIXgAAKCRCEUDR4lZV3nNQYCAC9Ng3kGMaE5MibH/ZB",
+				"jmCoW60k34BHCHSf8VHuA/mYV3Cj7ESgbsRl+bRQ1WoweNeHFIh3Oki2TKnrUK1TQniiwevdpeJr",
+				"zYrCt2LZ6TkJKjw+JpbZific0oU8u5NDpEFLYtU5TsJa1v4Qg8l9lKJxXB0Udy38T8zJQoSBbzmS",
+				"7YAWa96ksf/cRa9uJpwBVIlkTglVOcEvzjneq6c7i9B7YQYj+ZS4KQRBlCQRphJv5fSUrkLCuWe/",
+				"J7ExDQxM+95OPaZHP06MAH++OJVNMsG3HC84gORsZDi5Dp/LHF1i1oJbLJ0blUiwsAGzUnCBpTXe",
+				"+iXQpaJ6MY1uFYwqzE7S",
+			}, ""),
+		},
+		{
+			Name:        "e2e-custodian-02",
+			Fingerprint: "37459146710CB1E66BCB26649C1ECEFEF129ECA9",
+			PGPPublicKey: strings.Join([]string{
+				"mQENBGo07dwBCADCy66TXwRwRfx0MggNmaP2/E7Q/JnmjyhwvOSZdxAnYPjkBqfcNeXci0P4o0kP",
+				"3SmqAZdTqTqyldsVz0ltFKbYlwcSw5GXJadeEg+WmN1GPBxfVgvVMBLXDsYK9kbCAyM+na3lUMmo",
+				"xEuotprWj1LYnLOPgGvI3k3BPsAj5sF4zPct3d8i23K5s5/Lq4e4aQxn8mKdYbmge5L3BwT2yxit",
+				"4Rkd6n8OvZ+DuahpVs63dYf4vnLMxORl0j7r0E/aaV41M7/zHCQKaQJXZgx4kMoVo8/a0HM76sbN",
+				"uWvQcwmrF7xhra1+myE5KanSvXrm3DZ68Yaet68immBZIrhMZjKlABEBAAG0M2UyZS1jdXN0b2Rp",
+				"YW4tMDIgPGUyZS1jdXN0b2RpYW4tMDJAZXhhbXBsZS5pbnZhbGlkPokBcwQTAQgAXRYhBDdFkUZx",
+				"DLHma8smZJwezv7xKeypBQJqNO3cGxSAAAAAAAQADm1hbnUyLDIuNSsxLjEyLDAsMwIbDQUJAuPM",
+				"1AULCQgHAgIiAgYVCgkICwIEFgIDAQIeBwIXgAAKCRCcHs7+8SnsqfwCB/9KNfwD8eaC2PS3FFaX",
+				"M/K5egY2v3VcXYaXkhPkJrAn5t8MOr2fJMUE+YiZH8YEBdehPKWBJepB3wc1boKXut/oMs8EHQPZ",
+				"34spLoBN4XIOSArcn3hUiolKRgCMJ+7VG98JjcXhLYOJCd32C1eQlJwjYgThItF0jWZuzmBWX0vd",
+				"6IZ5Ra5jqic6QLHS3fw8DqyeVlakFDijZ6lwD1uHHX6mJD8lG/9Xlfsg6SzArAbZVCuRK3/ubOYX",
+				"p8900v4yVD358k0pUmhz+gv1NHDCa3plbJDJmYLuSplam9pih4X6xhHir4KO5dIv/6h7pHVMIT5a",
+				"xPTwd03nyQ4+vZrQhxSp",
+			}, ""),
+		},
+		{
+			Name:        "e2e-custodian-03",
+			Fingerprint: "14484A33214ED7E5CAFBEF5761C1C1850CA4BF98",
+			PGPPublicKey: strings.Join([]string{
+				"mQENBGo07dwBCADU8pBxATOjRgFQJSN6MkK7hJRZp7WaihXV3njdfU3mKE8Rp9qyIWwhLaqLwCqS",
+				"KI2J7IM3YHKJRyRsdpXwx7pq4ssITJ33jbs7v932OQcVABkZmfb5dT7WQtTamicV82Nn8zkbaKlt",
+				"iH5eAQq5pigqErAzC3tclNIh+vsVw7gyXjvge5VW+FzTGsETJa2coSeY7XGlBD8JmdyDhjbqAYIy",
+				"+u4xL9TMaHUUQB1ljxnOrOq5/5wiXi3N6fBto+9/5vfLPoecMpZ/SG8uXlB/JoVIsiWqXQ6Yi+H+",
+				"3wZbo8Hc8akH23ruxmbKhLgdvl3f/18YVZ/RC6aJU8Ksdan218MbABEBAAG0M2UyZS1jdXN0b2Rp",
+				"YW4tMDMgPGUyZS1jdXN0b2RpYW4tMDNAZXhhbXBsZS5pbnZhbGlkPokBcwQTAQgAXRYhBBRISjMh",
+				"TtflyvvvV2HBwYUMpL+YBQJqNO3cGxSAAAAAAAQADm1hbnUyLDIuNSsxLjEyLDAsMwIbDQUJAuPM",
+				"1AULCQgHAgIiAgYVCgkICwIEFgIDAQIeBwIXgAAKCRBhwcGFDKS/mBp7CACPD/l+zhpzZdW9NqjO",
+				"16+ClCBIJ3+aVFQPMX+JjHrvPq/ugl5fLwdcDU1kGfD5oy/58Or2ko9ttAz5E7UA3qOy8WfzEKmv",
+				"p+d8JNYIt5Iwyrk+ylKW8ZwRhxZYvXr2eiGiT8k3+yggu0WmHukT6UQgTbxETwoZAFvLDNqs8bzT",
+				"r/s+ISTV2ywBuWDpAD9NVQ6t9oW3KmnU3R1gvR122pA7BKO/pNgLAeRDcKziam8oI38WIuLNXv0S",
+				"EG5OtwClqVilwRTH4FlQGh1bONhkS3fTaDuTuKR2JvJIPki+y3NErylc4COKxzvONvurud2qGB5+",
+				"VctBY9iDutCMgLrzYlsh",
+			}, ""),
+		},
+	}
+}
