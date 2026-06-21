@@ -797,6 +797,31 @@ _Appears in:_
 | `image` _string_ | Image is the container image to use for the init container.<br />If not specified, defaults to "&lt;repo&gt;:X.Y.Z" where &lt;repo&gt; is derived from OPERATOR_INIT_IMAGE_REPOSITORY<br />(default: "ghcr.io/dc-tec/openbao-init") and the tag matches OPERATOR_VERSION. |  | Optional: \{\} <br /> |
 
 
+#### InitialRecoveryKeysConfig
+
+
+
+InitialRecoveryKeysConfig declares the first recovery-key set that OpenBao
+should create through the authenticated recovery-key rotation endpoint during
+self-initialization.
+
+The Operator always renders this request with backup=true so encrypted
+recovery shares can be retrieved through OpenBao's recovery backup endpoint
+after bootstrap. Decrypted recovery shares must stay outside Kubernetes and
+outside the Operator.
+
+
+
+_Appears in:_
+- [RecoveryKeysConfig](#recoverykeysconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `shares` _integer_ | Shares is the total number of recovery-key shares to create. |  | Maximum: 255 <br />Minimum: 1 <br /> |
+| `threshold` _integer_ | Threshold is the number of recovery-key shares required for recovery<br />operations such as generate-root. |  | Maximum: 255 <br />Minimum: 1 <br /> |
+| `recipients` _[RecoveryKeyRecipient](#recoverykeyrecipient) array_ | Recipients lists the public OpenPGP recipients for encrypted recovery<br />shares. Each recipient is passed to OpenBao as one pgp_keys entry; use<br />fingerprints for custody mapping instead of relying on share numbering. |  | MaxItems: 255 <br />MinItems: 1 <br /> |
+
+
 #### KMIPSealConfig
 
 
@@ -1031,6 +1056,7 @@ _Appears in:_
 | `restore` _[RestoreConfig](#restoreconfig)_ | Restore configures optional restore authentication bootstrap for the cluster. |  | Optional: \{\} <br /> |
 | `deletionPolicy` _[DeletionPolicy](#deletionpolicy)_ | DeletionPolicy controls what happens to underlying resources when the CR is deleted. |  | Enum: [Retain DeletePVCs DeleteAll] <br />Optional: \{\} <br /> |
 | `selfInit` _[SelfInitConfig](#selfinitconfig)_ | SelfInit configures OpenBao's native self-initialization feature.<br />When enabled, OpenBao initializes itself on first start using the configured<br />requests, and the root token is automatically revoked.<br />See: https://openbao.org/docs/configuration/self-init/ |  | Optional: \{\} <br /> |
+| `recoveryKeys` _[RecoveryKeysConfig](#recoverykeysconfig)_ | RecoveryKeys configures Operator-assisted recovery-key bootstrap surfaces.<br />The Operator creates recovery keys only during initial self-initialization;<br />recovery share custody and proof ceremonies remain user-owned processes. |  | Optional: \{\} <br /> |
 | `gateway` _[GatewayConfig](#gatewayconfig)_ | Gateway configures Kubernetes Gateway API access (alternative to Ingress).<br />When enabled, the Operator creates an HTTPRoute that routes traffic through<br />a user-managed Gateway resource. |  | Optional: \{\} <br /> |
 | `network` _[NetworkConfig](#networkconfig)_ | Network configures network-related settings for the cluster. |  | Optional: \{\} <br /> |
 | `initContainer` _[InitContainerConfig](#initcontainerconfig)_ | InitContainer configures the init container used to render OpenBao configuration.<br />The init container renders the final config.hcl from a template using environment<br />variables such as HOSTNAME and POD_IP. |  | Optional: \{\} <br /> |
@@ -1468,6 +1494,46 @@ _Appears in:_
 | `metadata` _[PodMetadataConfig](#podmetadataconfig)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#resourcerequirements-v1-core)_ | Resources defines container resource requests and limits for read replicas. |  | Optional: \{\} <br /> |
 | `scheduling` _[ReadReplicaSchedulingConfig](#readreplicaschedulingconfig)_ | Scheduling defines node-placement and topology overrides for read replicas. |  | Optional: \{\} <br /> |
+
+
+#### RecoveryKeyRecipient
+
+
+
+RecoveryKeyRecipient describes one public OpenPGP recipient for an encrypted
+recovery-key share. The public key material is not secret, but it must be
+fingerprint-verified before production use.
+
+
+
+_Appears in:_
+- [InitialRecoveryKeysConfig](#initialrecoverykeysconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is a stable ceremony-local recipient identifier used only for review<br />and status/evidence mapping. |  | MaxLength: 64 <br />MinLength: 1 <br />Pattern: `^[A-Za-z0-9][A-Za-z0-9_.-]*$` <br /> |
+| `fingerprint` _string_ | Fingerprint is the expected OpenPGP public-key fingerprint for the<br />recipient. It is informational for the Operator and should be verified<br />out of band by the ceremony participants. |  | Pattern: `^([0-9A-Fa-f]\{40\}\|[0-9A-Fa-f]\{64\})$` <br />Optional: \{\} <br /> |
+| `pgpPublicKey` _string_ | PGPPublicKey is the base64-encoded binary OpenPGP public key material<br />expected by OpenBao's sys/rotate/recovery/init pgp_keys field. |  | MinLength: 1 <br /> |
+
+
+#### RecoveryKeysConfig
+
+
+
+RecoveryKeysConfig configures OpenBao recovery-key bootstrap surfaces.
+
+The Operator only creates recovery keys during first self-initialization. It
+does not distribute encrypted shares, collect decrypted shares, escrow share
+material, or run generate-root ceremonies.
+
+
+
+_Appears in:_
+- [OpenBaoClusterSpec](#openbaoclusterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `initial` _[InitialRecoveryKeysConfig](#initialrecoverykeysconfig)_ | Initial configures the first recovery-key generation request for a<br />self-initialized cluster using auto-unseal. |  | Optional: \{\} <br /> |
 
 
 #### RestoreConfig

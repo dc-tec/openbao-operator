@@ -83,6 +83,13 @@ If self-init is enabled and no usable auth method exists for operators or humans
         "Create at least one usable auth method and policy path for people before the root token is revoked.",
       ],
     },
+    {
+      cells: [
+        "Initial recovery keys",
+        "`spec.recoveryKeys.initial`",
+        "Declare the OpenPGP recipients, share count, and threshold when auto-unseal clusters need recovery keys created during self-init.",
+      ],
+    },
   ]}
 />
 
@@ -141,6 +148,45 @@ If the cluster will self-initialize, define the human login path in `selfInit.re
 >
   The exact human auth method is your choice, but it belongs inside the same `selfInit` contract. For a complete worked example, see the [development self-init userpass recipe](../../validated-deployments/recipes/local/development-self-init-userpass.md).
 </CommandBlock>
+
+## Create initial recovery keys
+
+For auto-unseal clusters, self-init starts without recovery keys. Use
+`spec.recoveryKeys.initial` when you want the Operator to render the initial
+authenticated recovery-key creation request during self-init.
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Declare initial recovery-key recipients"
+  code={`spec:
+  unseal:
+    type: awskms
+  selfInit:
+    enabled: true
+  recoveryKeys:
+    initial:
+      shares: 5
+      threshold: 3
+      recipients:
+        - name: provider-platform-lead
+          fingerprint: "0123456789ABCDEF0123456789ABCDEF01234567"
+          pgpPublicKey: "<base64-encoded-binary-openpgp-public-key>"
+        - name: provider-security-lead
+          pgpPublicKey: "<base64-encoded-binary-openpgp-public-key>"
+        # add exactly five recipients total`}
+>
+  The Operator renders this as `sys/rotate/recovery/init` with `backup=true` so encrypted shares can be retrieved from OpenBao after bootstrap.
+</CommandBlock>
+
+<Callout type="warning" title="Custody remains outside the Operator">
+
+The Operator does not distribute encrypted shares, store decrypted shares,
+escrow key material, or run generate-root ceremonies. Verify fingerprints out
+of band, retrieve the encrypted backup through an approved access path, confirm
+custody with each recipient, and delete the temporary backup from OpenBao.
+
+</Callout>
 
 ## What belongs in `requests`
 
