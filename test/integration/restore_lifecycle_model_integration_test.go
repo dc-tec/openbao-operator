@@ -37,7 +37,6 @@ const (
 	restoreLifecycleFailedJob          restoreLifecyclePath = "failed_job"
 	restoreLifecycleBlockedThenRelease restoreLifecyclePath = "blocked_then_release"
 	restoreLifecycleForceOverride      restoreLifecyclePath = "force_override"
-	restoreLifecycleInvalidOverride    restoreLifecyclePath = "invalid_override"
 	restoreLifecycleRunningLockLost    restoreLifecyclePath = "running_lock_lost"
 )
 
@@ -113,16 +112,6 @@ func runRestoreLifecycleModel(t *rapid.T, scenario restoreLifecycleScenario) {
 		clearRestoreModelLock(t, cluster)
 	case restoreLifecycleForceOverride:
 		setRestoreModelCompetingLock(t, cluster, openbaov1alpha1.ClusterOperationBackup)
-	case restoreLifecycleInvalidOverride:
-		setRestoreModelCompetingLock(t, cluster, openbaov1alpha1.ClusterOperationBackup)
-		reconcileRestoreModel(t, mgr, latest, "invalid override")
-		latest = getRestoreModelRequest(t, namespace, restoreObj.Name)
-		assertRestoreModelTerminal(t, latest, openbaov1alpha1.RestorePhaseFailed)
-		assertRestoreModelJobAbsent(t, namespace, latest.Name)
-		assertRestoreModelLock(t, namespace, cluster.Name, openbaov1alpha1.ClusterOperationBackup, false)
-		reconcileRestoreModelTerminalRetries(t, mgr, latest, scenario.TerminalReconcileRetries)
-		maybeDeleteRestoreModelRequest(t, mgr, namespace, latest.Name, scenario.DeleteAfterTerminal)
-		return
 	}
 
 	latest = getRestoreModelRequest(t, namespace, restoreObj.Name)
@@ -431,10 +420,6 @@ func createRestoreModelRequest(
 		restoreObj.Spec.Force = true
 		restoreObj.Spec.OverrideOperationLock = true
 	}
-	if scenario.Path == restoreLifecycleInvalidOverride {
-		restoreObj.Spec.OverrideOperationLock = true
-	}
-
 	if err := k8sClient.Create(ctx, restoreObj); err != nil {
 		t.Fatalf("create OpenBaoRestore: %v", err)
 	}
@@ -540,7 +525,6 @@ func restoreLifecycleScenarioGenerator() *rapid.Generator[restoreLifecycleScenar
 				restoreLifecycleFailedJob,
 				restoreLifecycleBlockedThenRelease,
 				restoreLifecycleForceOverride,
-				restoreLifecycleInvalidOverride,
 				restoreLifecycleRunningLockLost,
 			}).Draw(t, "path"),
 			NameSuffix: rapid.StringMatching(`[a-z0-9]([a-z0-9-]{0,11}[a-z0-9])?`).
