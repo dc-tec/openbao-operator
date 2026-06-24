@@ -90,17 +90,21 @@ make ci-core`}
 <CommandBlock
   language="bash"
   label="inspect"
-  title="Focused fuzz and existing-cluster checks"
+  title="Focused generated, fuzz, and existing-cluster checks"
   code={`make fuzz
 FUZZTIME=30s make fuzz
 FUZZ_TARGET_FILTER='FuzzRenderHCL|internal/adapter/auth' make fuzz
+
+go test ./internal/service/opslifecycle -run 'Properties'
+RAPID_CHECKS=1000 go test ./internal/service/opslifecycle -run 'Properties'
+go test ./internal/service/opslifecycle -run TestOperationLockIsHeldByProperties -rapid.seed=SEED
 
 export KUBECONFIG=/path/to/your/kubeconfig
 export E2E_OPERATOR_IMAGE=quay.io/your-org/openbao-operator:dev
 export E2E_API_SERVER_CIDR=0.0.0.0/0
 make test-e2e-existing E2E_LABEL_FILTER='openshift'`}
 >
-  These commands cover parser, auth, renderer, and platform-specific validation that does not fit the default local gate.
+  These commands cover fast property checks, parser/auth/renderer fuzzing, and platform-specific validation that does not fit the default local gate.
 </CommandBlock>
 
 For E2E debugging, prefer structured reports over log-only inspection. Set `E2E_JSON_REPORT` for the native Ginkgo report, `E2E_JUNIT_REPORT` for CI-compatible test output, and `E2E_FAIL_ON_EMPTY=true` when using a label filter so an accidental empty selection fails immediately.
@@ -128,6 +132,13 @@ make test-e2e`}
   title="Special validation lanes"
   columns={["Lane", "When to use it", "Primary entry point"]}
   rows={[
+    {
+      cells: [
+        "Property-based tests",
+        "Pure helper invariants and bounded generated inputs that should stay in the fast unit lane.",
+        "`make test`; rerun minimized failures with the emitted `-rapid.seed` or `-rapid.failfile`.",
+      ],
+    },
     {
       cells: [
         "Fuzzing",
