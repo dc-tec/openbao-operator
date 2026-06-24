@@ -84,6 +84,7 @@ Recorded checkpoints:
 - waiting for the StatefulSet pod to become Ready (proves auto-unseal worked)
 - waiting for status.initialized=true (self-init, no operator init)
 - triggering reconcile to ensure status is updated
+- verifying the encrypted recovery-key backup exists for the declared recipients
 - verifying the documented hardened production readiness condition
 - asserting root token and static unseal secrets do NOT exist
 - deleting pods to verify auto-unseal works after restart (maintenance mode)

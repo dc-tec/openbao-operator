@@ -1113,6 +1113,70 @@ type SelfInitRequest struct {
 	AllowFailure bool `json:"allowFailure,omitempty"`
 }
 
+// RecoveryKeysConfig configures OpenBao recovery-key bootstrap surfaces.
+//
+// The Operator only creates recovery keys during first self-initialization. It
+// does not distribute encrypted shares, collect decrypted shares, escrow share
+// material, or run generate-root ceremonies.
+type RecoveryKeysConfig struct {
+	// Initial configures the first recovery-key generation request for a
+	// self-initialized cluster using auto-unseal.
+	// +optional
+	Initial *InitialRecoveryKeysConfig `json:"initial,omitempty"`
+}
+
+// InitialRecoveryKeysConfig declares the first recovery-key set that OpenBao
+// should create through the authenticated recovery-key rotation endpoint during
+// self-initialization.
+//
+// The Operator always renders this request with backup=true so encrypted
+// recovery shares can be retrieved through OpenBao's recovery backup endpoint
+// after bootstrap. Decrypted recovery shares must stay outside Kubernetes and
+// outside the Operator.
+// +kubebuilder:validation:XValidation:rule="self.threshold <= self.shares",message="recoveryKeys.initial.threshold must be less than or equal to recoveryKeys.initial.shares"
+// +kubebuilder:validation:XValidation:rule="size(self.recipients) == self.shares",message="recoveryKeys.initial.recipients must contain exactly recoveryKeys.initial.shares entries"
+type InitialRecoveryKeysConfig struct {
+	// Shares is the total number of recovery-key shares to create.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=255
+	Shares int32 `json:"shares"`
+	// Threshold is the number of recovery-key shares required for recovery
+	// operations such as generate-root.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=255
+	Threshold int32 `json:"threshold"`
+	// Recipients lists the public OpenPGP recipients for encrypted recovery
+	// shares. Each recipient is passed to OpenBao as one pgp_keys entry; use
+	// fingerprints for custody mapping instead of relying on share numbering.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=255
+	// +listType=map
+	// +listMapKey=name
+	Recipients []RecoveryKeyRecipient `json:"recipients"`
+}
+
+// RecoveryKeyRecipient describes one public OpenPGP recipient for an encrypted
+// recovery-key share. The public key material is not secret, but it must be
+// fingerprint-verified before production use.
+type RecoveryKeyRecipient struct {
+	// Name is a stable ceremony-local recipient identifier used only for review
+	// and status/evidence mapping.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=64
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9][A-Za-z0-9_.-]*$`
+	Name string `json:"name"`
+	// Fingerprint is the expected OpenPGP public-key fingerprint for the
+	// recipient. It is informational for the Operator and should be verified
+	// out of band by the ceremony participants.
+	// +kubebuilder:validation:Pattern=`^([0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$`
+	// +optional
+	Fingerprint string `json:"fingerprint,omitempty"`
+	// PGPPublicKey is the base64-encoded binary OpenPGP public key material
+	// expected by OpenBao's sys/rotate/recovery/init pgp_keys field.
+	// +kubebuilder:validation:MinLength=1
+	PGPPublicKey string `json:"pgpPublicKey"`
+}
+
 // SelfInitAuditDevice provides structured configuration for enabling audit devices
 // via self-init requests. This replaces the need for raw JSON in the Data field.
 // See: https://openbao.org/api-docs/system/audit/
@@ -1986,6 +2050,8 @@ type PluginConfig struct {
 // +kubebuilder:validation:XValidation:rule="self.tls.mode != 'ACME' || ((self.replicas <= 1) && (!has(self.upgrade) || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) && has(self.tls.acme.sharedCache))",message="HA ACME clusters require spec.tls.acme.sharedCache when more than one Pod can serve the same hostname"
 // +kubebuilder:validation:XValidation:rule="((!has(self.upgrade) || !has(self.upgrade.strategy) || size(self.upgrade.strategy) == 0) ? 'RollingUpdate' : self.upgrade.strategy) == ((!has(oldSelf.upgrade) || !has(oldSelf.upgrade.strategy) || size(oldSelf.upgrade.strategy) == 0) ? 'RollingUpdate' : oldSelf.upgrade.strategy)",message="spec.upgrade.strategy is immutable after creation; switching between RollingUpdate and BlueGreen is not supported."
 // +kubebuilder:validation:XValidation:rule="!has(self.unseal) || self.unseal.type != 'ocikms' || !has(self.unseal.credentialsSecretRef) || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey) && self.unseal.ocikms.authTypeAPIKey == true)",message="spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true"
+// +kubebuilder:validation:XValidation:rule="!has(self.recoveryKeys) || !has(self.recoveryKeys.initial) || (has(self.selfInit) && self.selfInit.enabled)",message="spec.recoveryKeys.initial requires spec.selfInit.enabled=true"
+// +kubebuilder:validation:XValidation:rule="!has(self.recoveryKeys) || !has(self.recoveryKeys.initial) || (has(self.unseal) && self.unseal.type != 'static')",message="spec.recoveryKeys.initial requires a non-static spec.unseal.type"
 type OpenBaoClusterSpec struct {
 	// Version is the semantic OpenBao version, used for upgrade orchestration.
 	// The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.
@@ -2068,6 +2134,11 @@ type OpenBaoClusterSpec struct {
 	// See: https://openbao.org/docs/configuration/self-init/
 	// +optional
 	SelfInit *SelfInitConfig `json:"selfInit,omitempty"`
+	// RecoveryKeys configures Operator-assisted recovery-key bootstrap surfaces.
+	// The Operator creates recovery keys only during initial self-initialization;
+	// recovery share custody and proof ceremonies remain user-owned processes.
+	// +optional
+	RecoveryKeys *RecoveryKeysConfig `json:"recoveryKeys,omitempty"`
 	// Gateway configures Kubernetes Gateway API access (alternative to Ingress).
 	// When enabled, the Operator creates an HTTPRoute that routes traffic through
 	// a user-managed Gateway resource.

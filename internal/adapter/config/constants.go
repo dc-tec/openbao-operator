@@ -2,13 +2,17 @@ package config
 
 const (
 	// OpenBao API Paths
-	pathSysAuthJWT           = "sys/auth/jwt-operator"
-	pathAuthJWTConfig        = "auth/jwt-operator/config"
-	pathSysPoliciesACLPrefix = "sys/policies/acl/"
-	pathAuthJWTRolePrefix    = "auth/jwt-operator/role/"
+	pathSysAuthJWT            = "sys/auth/jwt-operator"
+	pathAuthJWTConfig         = "auth/jwt-operator/config"
+	pathSysPoliciesACLPrefix  = "sys/policies/acl/"
+	pathAuthJWTRolePrefix     = "auth/jwt-operator/role/"
+	pathSysRotateRecoveryInit = "sys/rotate/recovery/init"
 
 	// Operations
 	opUpdate = "update"
+
+	// Unseal types
+	unsealTypeStatic = "static"
 
 	// Request Names
 	reqEnableJWTAuth        = "enable-jwt-auth"
@@ -21,6 +25,7 @@ const (
 	reqCreateUpgradeRole    = "create-upgrade-jwt-role"
 	reqCreateRestorePolicy  = "create-restore-policy"
 	reqCreateRestoreRole    = "create-restore-jwt-role"
+	reqInitialRecoveryKeys  = "create-initial-recovery-keys"
 
 	// Auth Data
 	authMethodJWT = "jwt"
