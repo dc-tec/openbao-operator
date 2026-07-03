@@ -410,7 +410,7 @@ jobs:
         uses: ./.github/actions/setup-repo-tools
 
       - name: Setup Helm
-        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v4.1.1
 
@@ -785,7 +785,7 @@ jobs:
           cosign sign --yes --new-bundle-format=true "${UPGRADE_EXECUTOR_IMAGE}@${UPGRADE_EXECUTOR_DIGEST}"
 
       - name: Setup Helm
-        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v4.1.1
 
@@ -822,7 +822,7 @@ jobs:
           cosign sign --yes --new-bundle-format=true "ghcr.io/${OWNER}/charts/openbao-operator@${CHART_DIGEST}"
 
       - name: Attest Helm chart provenance (GitHub)
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/charts/openbao-operator
           subject-digest: ${{ steps.chart-digest.outputs.chart_digest }}
@@ -842,7 +842,7 @@ jobs:
             "ghcr.io/${OWNER}/charts/openbao-operator@${CHART_DIGEST}" >/dev/null
 
       - name: Attest release checksums provenance (GitHub)
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: dist/checksums.txt
 
