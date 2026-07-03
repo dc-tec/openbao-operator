@@ -1229,7 +1229,6 @@ jobs:
       backup_executor_image: ${{ needs.prepare-edge-candidate.outputs.backup_executor_image }}
       upgrade_executor_image: ${{ needs.prepare-edge-candidate.outputs.upgrade_executor_image }}
       byte_artifact_name: edge-byte-verified-assets
-    secrets: inherit
 
   assemble-edge-candidate-bundle:
     name: Assemble Edge Candidate Bundle

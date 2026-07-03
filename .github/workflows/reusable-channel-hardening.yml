@@ -94,7 +94,6 @@ jobs:
       ref: ${{ inputs.ref }}
       source_date_epoch: ${{ inputs.source_date_epoch }}
       cache-scope: ${{ inputs.build_tag }}
-    secrets: inherit
 
   rebuild:
     name: Independent Rebuild Images
@@ -109,7 +108,6 @@ jobs:
       ref: ${{ inputs.ref }}
       source_date_epoch: ${{ inputs.source_date_epoch }}
       cache-scope: ${{ inputs.repro_build_tag }}
-    secrets: inherit
 
   verify-provenance:
     name: Verify Image Provenance

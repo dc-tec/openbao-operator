@@ -603,7 +603,6 @@ jobs:
       backup_executor_image: ${{ needs.prepare-nightly-candidate.outputs.backup_executor_image }}
       upgrade_executor_image: ${{ needs.prepare-nightly-candidate.outputs.upgrade_executor_image }}
       byte_artifact_name: nightly-byte-verified-assets
-    secrets: inherit
 
   assemble-nightly-candidate-bundle:
     name: Assemble Nightly Candidate Bundle
