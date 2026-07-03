@@ -7,6 +7,8 @@ updates:
       day: monday
       time: "03:00"
       timezone: Europe/Amsterdam
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
     groups:
@@ -21,6 +23,8 @@ updates:
       day: tuesday
       time: "03:00"
       timezone: Europe/Amsterdam
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
     groups:
@@ -36,6 +40,8 @@ updates:
       day: wednesday
       time: "03:00"
       timezone: Europe/Amsterdam
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
     groups:
@@ -50,6 +56,8 @@ updates:
       day: thursday
       time: "03:00"
       timezone: Europe/Amsterdam
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
     groups:
@@ -64,6 +72,8 @@ updates:
       day: friday
       time: "03:00"
       timezone: Europe/Amsterdam
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
     groups:
