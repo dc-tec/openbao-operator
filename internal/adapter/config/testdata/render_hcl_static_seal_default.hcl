@@ -1,8 +1,7 @@
-ui               = true
-cluster_name     = "static-seal"
-api_addr         = "https://$${HOSTNAME}.static-seal.default.svc:8200"
-cluster_addr     = "https://$${HOSTNAME}.static-seal.default.svc:8201"
-plugin_directory = "/openbao/plugins"
+ui           = true
+cluster_name = "static-seal"
+api_addr     = "https://$${HOSTNAME}.static-seal.default.svc:8200"
+cluster_addr = "https://$${HOSTNAME}.static-seal.default.svc:8201"
 listener "tcp" {
   address              = "[::]:8200"
   cluster_address      = "[::]:8201"
