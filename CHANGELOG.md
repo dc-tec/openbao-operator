@@ -2,6 +2,23 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.4.0](https://github.com/dc-tec/openbao-operator/compare/0.3.0...0.4.0) (2026-07-04)
+
+
+### Features
+
+* **security:** require authority for network publication ([#507](https://github.com/dc-tec/openbao-operator/issues/507)) ([f873094](https://github.com/dc-tec/openbao-operator/commit/f873094f2add4c3bd4d261a14105c6b5853b49c9))
+* **self-init:** add initial recovery key bootstrap ([#516](https://github.com/dc-tec/openbao-operator/issues/516)) ([a04cb23](https://github.com/dc-tec/openbao-operator/commit/a04cb232aeaf7d7a6a53b8afbd6af81da1c0e442))
+
+
+### Bug Fixes
+
+* **security:** delegate dangerous CR controls ([#499](https://github.com/dc-tec/openbao-operator/issues/499)) ([14e1dad](https://github.com/dc-tec/openbao-operator/commit/14e1dadffe0c85e38db60bf76614580629d8b55c))
+* **security:** enforce CR reference authorization ([#500](https://github.com/dc-tec/openbao-operator/issues/500)) ([875b999](https://github.com/dc-tec/openbao-operator/commit/875b9997632f16181c233f5f94aba7765840c161))
+* **security:** enforce hardened contract for unsafe controls ([#502](https://github.com/dc-tec/openbao-operator/issues/502)) ([6b8f2ad](https://github.com/dc-tec/openbao-operator/commit/6b8f2ad81e797902246948d667f5a11be1a73063))
+* **security:** require provenance for managed resources ([#505](https://github.com/dc-tec/openbao-operator/issues/505)) ([fd39a1e](https://github.com/dc-tec/openbao-operator/commit/fd39a1e8c7ccfcb60240776dc1864c6dd810f9e3))
+* **self-init:** make bootstrap config one-shot ([#514](https://github.com/dc-tec/openbao-operator/issues/514)) ([cc5876c](https://github.com/dc-tec/openbao-operator/commit/cc5876cb64d00e64158f88fe6a71435376ca3572))
+
 ## [0.3.0](https://github.com/dc-tec/openbao-operator/compare/0.2.0...0.3.0) (2026-06-01)
 
 
