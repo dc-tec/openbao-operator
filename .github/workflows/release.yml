@@ -718,6 +718,8 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      issues: write
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -1003,6 +1005,14 @@ jobs:
           else
             gh release edit "${version}" --title "${version}" --draft=false --latest
           fi
+
+      - name: Clear release-please pending label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          REPO: ${{ github.repository }}
+          TAG_HEAD_SHA: ${{ github.sha }}
+        run: bash hack/ci/clear-release-please-pending-label.sh
 
   deploy-docs:
     name: Deploy Docs Site

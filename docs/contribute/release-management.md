@@ -174,8 +174,14 @@ For patch releases, make the source that release-please sees match the release n
   title="Run post-release verification"
   code={`VERSION=X.Y.Z REPO=dc-tec/openbao-operator hack/ci/verify-post-release.sh`}
 >
-  Requires `gh`, `jq`, `git`, Docker Buildx, and `cosign`. Checks the remote tag, published GitHub Release assets, checksum signature, OCI Helm chart publication and signature, and leftover release-please PRs or branches.
+  The `Post-Release Verification` workflow runs this automatically after a successful `Release` workflow and can also be started manually for a tag. Local runs require `gh`, `jq`, `git`, Docker Buildx, and `cosign`. The verifier checks the remote tag, published GitHub Release assets, checksum signature, OCI Helm chart publication and signature, release-please pending-label cleanup, and leftover release-please PRs or branches.
 </CommandBlock>
+
+<Callout type="note" title="Post-release verification evidence">
+
+The `Release` workflow removes the release-please `autorelease: pending` label from the merged release PR after the GitHub Release is published. The follow-up workflow uploads `post-release-verification.json` to the GitHub Release as durable evidence and also keeps a 90-day Actions artifact copy named `post-release-verification-<version>`. That JSON evidence captures the release URL, release workflow run, release PR, chart digest, published asset list, provenance index, and the post-release invariant checks that passed. When the merged release PR can be resolved, the workflow also writes or updates a release PR comment linking to the release, workflow runs, chart digest, and evidence asset.
+
+</Callout>
 
 <CommandBlock
   language="bash"
