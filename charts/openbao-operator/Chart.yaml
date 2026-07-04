@@ -26,78 +26,32 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: 'false'
+  artifacthub.io/prerelease: "false"
   artifacthub.io/containsSecurityUpdates: 'true'
   artifacthub.io/changes: |
-    - kind: added
-      description: "auth: default JWT flows to inline auth"
-    - kind: added
-      description: "observability: add workload metrics scraping support"
-    - kind: added
-      description: "openbaocluster: add audit file storage"
-    - kind: added
-      description: "openbaocluster: add ingress integration readiness"
-    - kind: added
-      description: "openbao: improve PKCS#11 runtime ergonomics"
-    - kind: added
-      description: "perfcheck: harden v2 weekly performance harness"
-    - kind: fixed
-      description: "backup: record manual triggers and failure time"
-    - kind: fixed
-      description: "config: align audit device options with OpenBao"
-    - kind: fixed
-      description: "config: harden generated JWT roles"
-    - kind: fixed
-      description: "config: use SemVer precedence for OpenBao version checks"
-    - kind: fixed
-      description: "deps: restore dependency update CI coverage"
-    - kind: fixed
-      description: "deps: update x/crypto for vulncheck"
-    - kind: fixed
-      description: "deps: update x/net for vulncheck"
-    - kind: fixed
-      description: "gateway: emit TLSRoute as Gateway API v1"
-    - kind: fixed
-      description: "gateway: tolerate missing SupportedVersion condition"
-    - kind: fixed
-      description: "helm: deduplicate generated RBAC labels"
-    - kind: fixed
-      description: "openbao: guard metrics-only listener configuration"
-    - kind: fixed
-      description: "openbao: share JWT token cache"
-    - kind: fixed
-      description: "provisioner: support external tenant PSS label ownership"
-    - kind: fixed
-      description: "rbac: allow verification pull secret reads"
-    - kind: fixed
-      description: "rbac: permit managed ServiceMonitor reconciliation"
-    - kind: fixed
-      description: "restore: harden restore job rendering"
-    - kind: fixed
-      description: "restore: validate static token secret identity"
     - kind: security
-      description: "security: harden backup and restore helper inputs"
+      description: "security: require authority for network publication"
+    - kind: added
+      description: "self-init: add initial recovery key bootstrap"
     - kind: security
-      description: "security: harden backup restore endpoint validation"
+      description: "security: delegate dangerous CR controls"
     - kind: security
-      description: "security: harden transit unseal credential handling"
+      description: "security: enforce CR reference authorization"
+    - kind: security
+      description: "security: enforce hardened contract for unsafe controls"
+    - kind: security
+      description: "security: require provenance for managed resources"
     - kind: fixed
-      description: "storage: enforce request-time endpoint guard"
-    - kind: fixed
-      description: "storage: retry transient S3 bucket ensure failures"
-    - kind: fixed
-      description: "upgrade: harden rolling upgrade resume"
-    - kind: fixed
-      description: "workload: mount OCI plugin directory"
+      description: "self-init: make bootstrap config one-shot"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.3.0
+      image: ghcr.io/dc-tec/openbao-operator:0.4.0
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.3.0
+      image: ghcr.io/dc-tec/openbao-init:0.4.0
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.3.0
+      image: ghcr.io/dc-tec/openbao-backup:0.4.0
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.3.0
+      image: ghcr.io/dc-tec/openbao-upgrade:0.4.0
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
