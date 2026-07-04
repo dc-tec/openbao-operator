@@ -2,11 +2,16 @@ package config
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/hashicorp/hcl/v2/gohcl"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/zclconf/go-cty/cty"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 func buildSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, error) {
@@ -111,6 +116,8 @@ func buildSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, e
 			TLS12Ciphers: stringPtr(cfg.TLS12Ciphers),
 			Disabled:     boolPtrString(cfg.Disabled),
 		}, "seal"), nil
+	case portopenbao.SealTypeKMSPlugin:
+		return buildKMSPluginSealBlock(cluster)
 	case "ocikms":
 		if cluster.Spec.Unseal == nil || cluster.Spec.Unseal.OCIKMS == nil {
 			return nil, fmt.Errorf("unseal.ocikms is required when unseal.type is ocikms")
@@ -145,4 +152,47 @@ func buildSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, e
 	default:
 		return nil, fmt.Errorf("unsupported unseal type %q", unsealType)
 	}
+}
+
+func buildKMSPluginSealBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Block, error) {
+	if cluster.Spec.Unseal == nil || cluster.Spec.Unseal.KMS == nil {
+		return nil, fmt.Errorf("unseal.kms is required when unseal.type is kms")
+	}
+
+	cfg := cluster.Spec.Unseal.KMS
+	pluginName := strings.TrimSpace(cfg.PluginName)
+	if pluginName == "" {
+		return nil, fmt.Errorf("unseal.kms.pluginName is required when unseal.type is kms")
+	}
+	if !hasKMSPlugin(cluster.Spec.Plugins, pluginName) {
+		return nil, fmt.Errorf("unseal.kms.pluginName %q must reference a spec.plugins entry with type \"kms\"", pluginName)
+	}
+
+	block := hclwrite.NewBlock("seal", []string{pluginName})
+	keys := make([]string, 0, len(cfg.Config))
+	for key := range cfg.Config {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if strings.TrimSpace(key) == "" {
+			return nil, fmt.Errorf("unseal.kms.config contains an empty key")
+		}
+		if strings.TrimSpace(key) != key || !hclsyntax.ValidIdentifier(key) {
+			return nil, fmt.Errorf("unseal.kms.config key %q must be a valid HCL identifier", key)
+		}
+		block.Body().SetAttributeValue(key, cty.StringVal(cfg.Config[key]))
+	}
+
+	return block, nil
+}
+
+func hasKMSPlugin(plugins []openbaov1alpha1.Plugin, name string) bool {
+	for _, plugin := range plugins {
+		if strings.TrimSpace(plugin.Type) == portopenbao.SealTypeKMSPlugin &&
+			strings.TrimSpace(plugin.Name) == name {
+			return true
+		}
+	}
+	return false
 }

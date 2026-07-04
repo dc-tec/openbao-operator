@@ -1538,6 +1538,140 @@ func TestRenderHCL_PKCS11Seal(t *testing.T) {
 	compareGolden(t, "render_hcl_pkcs11_seal", got)
 }
 
+func TestRenderHCL_KMSPluginSeal(t *testing.T) {
+	cluster := newMinimalCluster("kms-plugin-seal", "default")
+	cluster.Spec.Version = "2.6.0-beta20260622"
+	cluster.Spec.Image = "openbao/openbao:2.6.0-beta20260622"
+	cluster.Spec.Plugins = []openbaov1alpha1.Plugin{
+		{
+			Type:       "kms",
+			Name:       "corp-kms",
+			Command:    "openbao-kms-corp",
+			Version:    "0.0.0-dev",
+			BinaryName: "openbao-kms-corp",
+			SHA256Sum:  strings.Repeat("b", 64),
+		},
+	}
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "kms",
+		KMS: &openbaov1alpha1.KMSPluginSealConfig{
+			PluginName: "corp-kms",
+			Config: map[string]string{
+				"ca_file":    "/etc/bao/seal-creds/ca.pem",
+				"cluster_id": "prod-eu1",
+				"endpoint":   "https://kms.internal.example",
+				"mode":       "envelope",
+				"node_id":    "openbao.openbao",
+			},
+		},
+	}
+
+	infraDetails := InfrastructureDetails{
+		HeadlessServiceName: cluster.Name,
+		Namespace:           cluster.Namespace,
+		APIPort:             8200,
+		ClusterPort:         8201,
+	}
+
+	got, err := RenderHCL(cluster, infraDetails)
+	if err != nil {
+		t.Fatalf("RenderHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	for _, want := range []string{
+		`plugin_directory = "/openbao/plugins"`,
+		`seal "corp-kms" {`,
+		`ca_file    = "/etc/bao/seal-creds/ca.pem"`,
+		`cluster_id = "prod-eu1"`,
+		`endpoint   = "https://kms.internal.example"`,
+		`mode       = "envelope"`,
+		`node_id    = "openbao.openbao"`,
+		`plugin "kms" "corp-kms" {`,
+		`command     = "openbao-kms-corp"`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("RenderHCL() missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestRenderHCL_KMSPluginSealValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*openbaov1alpha1.OpenBaoCluster)
+		wantErr string
+	}{
+		{
+			name: "requires kms config",
+			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal.KMS = nil
+			},
+			wantErr: "unseal.kms is required",
+		},
+		{
+			name: "requires plugin name",
+			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal.KMS.PluginName = " "
+			},
+			wantErr: "unseal.kms.pluginName is required",
+		},
+		{
+			name: "requires matching kms plugin",
+			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Plugins[0].Type = "secret"
+			},
+			wantErr: "must reference a spec.plugins entry with type \"kms\"",
+		},
+		{
+			name: "rejects invalid config key",
+			mutate: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal.KMS.Config["bad key"] = "value"
+			},
+			wantErr: "must be a valid HCL identifier",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalCluster("kms-plugin-seal-invalid", "default")
+			cluster.Spec.Plugins = []openbaov1alpha1.Plugin{
+				{
+					Type:       "kms",
+					Name:       "corp-kms",
+					Command:    "openbao-kms-corp",
+					Version:    "0.0.0-dev",
+					BinaryName: "openbao-kms-corp",
+					SHA256Sum:  strings.Repeat("b", 64),
+				},
+			}
+			cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+				Type: "kms",
+				KMS: &openbaov1alpha1.KMSPluginSealConfig{
+					PluginName: "corp-kms",
+					Config: map[string]string{
+						"mode": "broker",
+					},
+				},
+			}
+			tt.mutate(cluster)
+
+			_, err := RenderHCL(cluster, InfrastructureDetails{
+				HeadlessServiceName: cluster.Name,
+				Namespace:           cluster.Namespace,
+				APIPort:             8200,
+				ClusterPort:         8201,
+			})
+			if err == nil {
+				t.Fatal("RenderHCL() error = nil, want error")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("RenderHCL() error = %q, want substring %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
 // boolPtr returns a pointer to a bool value.
 func boolPtr(b bool) *bool {
 	return &b

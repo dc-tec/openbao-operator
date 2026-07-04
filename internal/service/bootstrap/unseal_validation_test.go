@@ -795,6 +795,70 @@ func TestValidateKMIPUnsealPrerequisites(t *testing.T) {
 	})
 }
 
+func TestValidateKMSPluginUnsealPrerequisites(t *testing.T) {
+	t.Run("no credentials Secret is optional", func(t *testing.T) {
+		cluster := newMinimalCluster("kms-plugin-no-secret", "default")
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type: portopenbao.SealTypeKMSPlugin,
+			KMS: &openbaov1alpha1.KMSPluginSealConfig{
+				PluginName: "corp-kms",
+			},
+		}
+
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
+		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
+			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
+		}
+	})
+
+	t.Run("missing credentials Secret is rejected when referenced", func(t *testing.T) {
+		cluster := newMinimalCluster("kms-plugin-missing-secret", "default")
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type: portopenbao.SealTypeKMSPlugin,
+			CredentialsSecretRef: &corev1.LocalObjectReference{
+				Name: "kms-plugin-runtime",
+			},
+			KMS: &openbaov1alpha1.KMSPluginSealConfig{
+				PluginName: "corp-kms",
+			},
+		}
+
+		mgr := NewManager(newTestClient(t), testScheme, "operator-system")
+		err := mgr.validateUnsealPrerequisites(context.Background(), cluster)
+		if err == nil || !errors.Is(err, operatorerrors.ErrPermanentPrerequisitesMissing) {
+			t.Fatalf("expected permanent prerequisites missing error, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "kms plugin credentials Secret default/kms-plugin-runtime not found") {
+			t.Fatalf("error = %v, want missing KMS plugin credentials Secret", err)
+		}
+	})
+
+	t.Run("referenced credentials Secret may exist with plugin-owned keys", func(t *testing.T) {
+		cluster := newMinimalCluster("kms-plugin-secret", "default")
+		cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+			Type: portopenbao.SealTypeKMSPlugin,
+			CredentialsSecretRef: &corev1.LocalObjectReference{
+				Name: "kms-plugin-runtime",
+			},
+			KMS: &openbaov1alpha1.KMSPluginSealConfig{
+				PluginName: "corp-kms",
+			},
+		}
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "kms-plugin-runtime", Namespace: "default"},
+			Data: map[string][]byte{
+				"ca.crt": []byte("plugin-owned"),
+			},
+		}
+
+		client := fake.NewClientBuilder().WithScheme(testScheme).WithObjects(secret).Build()
+		mgr := NewManager(client, testScheme, "operator-system")
+		if err := mgr.validateUnsealPrerequisites(context.Background(), cluster); err != nil {
+			t.Fatalf("validateUnsealPrerequisites() error = %v, want nil", err)
+		}
+	})
+}
+
 func TestValidatePKCS11UnsealPrerequisites(t *testing.T) {
 	t.Run("inline pin passes", func(t *testing.T) {
 		cluster := newMinimalCluster("pkcs11-inline-pin", "default")

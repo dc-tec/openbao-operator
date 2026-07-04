@@ -848,6 +848,24 @@ _Appears in:_
 | `disabled` _boolean_ | Disabled disables this seal configuration, for example during seal migration. |  | Optional: \{\} <br /> |
 
 
+#### KMSPluginSealConfig
+
+
+
+KMSPluginSealConfig configures a plugin-backed KMS seal.
+The referenced plugin must be declared in spec.plugins with type "kms".
+
+
+
+_Appears in:_
+- [UnsealConfig](#unsealconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `pluginName` _string_ | PluginName is the name of the plugin registered through a matching<br />plugin "kms" stanza. OpenBao uses this value as the seal stanza label. |  | MinLength: 1 <br /> |
+| `config` _object (keys:string, values:string)_ | Config contains plugin-specific seal configuration rendered as string<br />attributes inside seal "&lt;pluginName&gt;". Keys must be valid HCL identifiers.<br />Values are stored in the OpenBaoCluster resource; use file paths to<br />credentialsSecretRef-mounted files for sensitive material instead of inline<br />secrets. |  | MaxProperties: 64 <br />Optional: \{\} <br /> |
+
+
 #### ListenerConfig
 
 
@@ -2047,16 +2065,17 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type specifies the seal type.<br />Defaults to "static". | static | Enum: [static awskms gcpckms azurekeyvault transit kmip ocikms pkcs11] <br /> |
+| `type` _string_ | Type specifies the seal type.<br />Defaults to "static". | static | Enum: [static awskms gcpckms azurekeyvault transit kmip kms ocikms pkcs11] <br /> |
 | `static` _[StaticSealConfig](#staticsealconfig)_ | Static configures the static seal type.<br />Optional when Type is "static" (operator provides defaults if omitted). |  | Optional: \{\} <br /> |
 | `transit` _[TransitSealConfig](#transitsealconfig)_ | Transit configures the Transit seal type.<br />Required when Type is "transit". |  | Optional: \{\} <br /> |
 | `awskms` _[AWSKMSSealConfig](#awskmssealconfig)_ | AWSKMS configures the AWS KMS seal type.<br />Required when Type is "awskms". |  | Optional: \{\} <br /> |
 | `azureKeyVault` _[AzureKeyVaultSealConfig](#azurekeyvaultsealconfig)_ | AzureKeyVault configures the Azure Key Vault seal type.<br />Required when Type is "azurekeyvault". |  | Optional: \{\} <br /> |
 | `gcpCloudKMS` _[GCPCloudKMSSealConfig](#gcpcloudkmssealconfig)_ | GCPCloudKMS configures the GCP Cloud KMS seal type.<br />Required when Type is "gcpckms". |  | Optional: \{\} <br /> |
 | `kmip` _[KMIPSealConfig](#kmipsealconfig)_ | KMIP configures the KMIP seal type.<br />Required when Type is "kmip". |  | Optional: \{\} <br /> |
+| `kms` _[KMSPluginSealConfig](#kmspluginsealconfig)_ | KMS configures a plugin-backed KMS seal.<br />Required when Type is "kms". |  | Optional: \{\} <br /> |
 | `ocikms` _[OCIKMSSealConfig](#ocikmssealconfig)_ | OCIKMS configures the OCI KMS seal type.<br />Required when Type is "ocikms". |  | Optional: \{\} <br /> |
 | `pkcs11` _[PKCS11SealConfig](#pkcs11sealconfig)_ | PKCS11 configures the PKCS#11 seal type.<br />Required when Type is "pkcs11". |  | Optional: \{\} <br /> |
-| `credentialsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | CredentialsSecretRef references a Secret containing provider credentials<br />(for example AWS access keys, GCP credentials.json, Azure client-secret keys,<br />or OCI SDK config for authTypeAPIKey mode).<br />If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons. |  | Optional: \{\} <br /> |
+| `credentialsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | CredentialsSecretRef references a Secret containing provider credentials<br />(for example AWS access keys, GCP credentials.json, Azure client-secret keys,<br />OCI SDK config for authTypeAPIKey mode, or plugin-backed KMS runtime files).<br />If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.<br />The Secret must exist in the same namespace as the OpenBaoCluster.<br />Cross-namespace references are not allowed for security reasons. |  | Optional: \{\} <br /> |
 
 
 #### UpdateStrategyType

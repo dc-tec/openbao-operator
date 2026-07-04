@@ -181,7 +181,7 @@ spec:
 Complete these before the first production reconcile:
 
 1. finish the full `selfInit` contract so it includes both `oidc.enabled: true` for operator lifecycle auth and at least one human login path in `selfInit.requests`, using [Self-Initialization](../openbaocluster/configuration/self-init.md) and [Operator Authentication](../operator/authn.md)
-2. finish `unseal` with an external trust path such as cloud KMS, transit, KMIP, OCI KMS, or PKCS#11 in [Unseal Configuration](../openbaocluster/configuration/unseal.md)
+2. finish `unseal` with an external trust path such as cloud KMS, transit, plugin-backed KMS, KMIP, OCI KMS, or PKCS#11 in [Unseal Configuration](../openbaocluster/configuration/unseal.md)
 3. finish the namespace handoff for your tenancy mode so `openbao-prod` is already onboarded in multi-tenant mode or is the watched namespace in single-tenant mode
 
 </Callout>

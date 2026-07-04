@@ -56,7 +56,7 @@ journey: operate
 ## Lock down the security baseline
 
 - Set `spec.profile: Hardened` so the workload starts from the strict controller posture rather than the evaluation defaults.
-- Use a non-static external seal such as Transit, cloud KMS, `ocikms`, `kmip`, or `pkcs11`. Do not keep long-lived unseal keys in Kubernetes Secrets for the production path.
+- Use a non-static external seal such as Transit, cloud KMS, plugin-backed KMS, `ocikms`, `kmip`, or `pkcs11`. Do not keep long-lived unseal keys in Kubernetes Secrets for the production path.
 - Confirm your Kubernetes cluster already encrypts Secrets at rest. The operator cannot compensate for an unencrypted control plane.
 - Use `ACME` or `External` TLS for public or shared edges. Avoid `OperatorManaged` certificates for public-facing production entry points.
 - Enable `spec.selfInit` and configure real user authentication in `spec.selfInit.requests` so the first operator-driven bootstrap does not end in a lockout.

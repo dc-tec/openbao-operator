@@ -4305,7 +4305,7 @@ spec:
                     description: |-
                       CredentialsSecretRef references a Secret containing provider credentials
                       (for example AWS access keys, GCP credentials.json, Azure client-secret keys,
-                      or OCI SDK config for authTypeAPIKey mode).
+                      OCI SDK config for authTypeAPIKey mode, or plugin-backed KMS runtime files).
                       If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
                       The Secret must exist in the same namespace as the OpenBaoCluster.
                       Cross-namespace references are not allowed for security reasons.
@@ -4413,6 +4413,31 @@ spec:
                     - clientKey
                     - endpoint
                     - kmsKeyID
+                    type: object
+                  kms:
+                    description: |-
+                      KMS configures a plugin-backed KMS seal.
+                      Required when Type is "kms".
+                    properties:
+                      config:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          Config contains plugin-specific seal configuration rendered as string
+                          attributes inside seal "<pluginName>". Keys must be valid HCL identifiers.
+                          Values are stored in the OpenBaoCluster resource; use file paths to
+                          credentialsSecretRef-mounted files for sensitive material instead of inline
+                          secrets.
+                        maxProperties: 64
+                        type: object
+                      pluginName:
+                        description: |-
+                          PluginName is the name of the plugin registered through a matching
+                          plugin "kms" stanza. OpenBao uses this value as the seal stanza label.
+                        minLength: 1
+                        type: string
+                    required:
+                    - pluginName
                     type: object
                   ocikms:
                     description: |-
@@ -4674,6 +4699,7 @@ spec:
                     - azurekeyvault
                     - transit
                     - kmip
+                    - kms
                     - ocikms
                     - pkcs11
                     type: string
