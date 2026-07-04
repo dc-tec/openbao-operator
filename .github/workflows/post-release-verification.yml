@@ -1,0 +1,175 @@
+name: Post-Release Verification
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "SemVer release/prerelease tag to verify (e.g. 0.4.0, 0.4.0-rc.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-release-verification-${{ github.event.workflow_run.id || github.event.inputs.tag || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify Published Release
+    runs-on: ubuntu-24.04
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         !github.event.workflow_run.repository.fork)
+      }}
+    permissions:
+      contents: write
+      actions: read
+      issues: write
+      packages: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 1
+
+      - name: Resolve release context
+        id: context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${EVENT_NAME}" == "workflow_run" ]]; then
+            tag="${WORKFLOW_RUN_HEAD_BRANCH}"
+            if ! [[ "${tag}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+              echo "Release workflow head branch is not a SemVer tag: ${tag}" >&2
+              exit 1
+            fi
+            {
+              echo "release_run_id=${WORKFLOW_RUN_ID}"
+              echo "tag_head_sha=${WORKFLOW_RUN_HEAD_SHA}"
+              echo "tag=${tag}"
+            } >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if ! [[ "${INPUT_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+            echo "SemVer tag required (X.Y.Z or X.Y.Z-rc.N). Got: ${INPUT_TAG}" >&2
+            exit 1
+          fi
+
+          ref_json="$(gh api "repos/${REPO}/git/ref/tags/${INPUT_TAG}")"
+          tag_object_type="$(REF_JSON="${ref_json}" python3 -c 'import json, os; print(json.loads(os.environ["REF_JSON"])["object"]["type"])')"
+          tag_object_sha="$(REF_JSON="${ref_json}" python3 -c 'import json, os; print(json.loads(os.environ["REF_JSON"])["object"]["sha"])')"
+          if [[ "${tag_object_type}" == "tag" ]]; then
+            head_sha="$(gh api "repos/${REPO}/git/tags/${tag_object_sha}" --jq '.object.sha')"
+          else
+            head_sha="${tag_object_sha}"
+          fi
+
+          runs_json="$(gh api "repos/${REPO}/actions/workflows/release.yml/runs?event=push&status=completed&head_sha=${head_sha}&per_page=100")"
+          release_run_id="$(
+            RUNS_JSON="${runs_json}" INPUT_TAG="${INPUT_TAG}" python3 - <<'PY'
+          import json
+          import os
+
+          data = json.loads(os.environ["RUNS_JSON"])
+          input_tag = os.environ["INPUT_TAG"]
+          for run in data.get("workflow_runs", []):
+              if run.get("conclusion") == "success" and run.get("head_branch") == input_tag:
+                  print(run["id"])
+                  break
+          PY
+          )"
+
+          if [[ -z "${release_run_id}" ]]; then
+            echo "No successful Release workflow run found for tag ${INPUT_TAG}" >&2
+            exit 1
+          fi
+
+          {
+            echo "release_run_id=${release_run_id}"
+            echo "tag_head_sha=${head_sha}"
+            echo "tag=${INPUT_TAG}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+        with:
+          version: v0.31.1
+
+      - name: Login to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.4
+
+      - name: Run post-release verification
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.context.outputs.tag }}
+          REPO: ${{ github.repository }}
+          RELEASE_RUN_ID: ${{ steps.context.outputs.release_run_id }}
+          EVIDENCE_OUT: dist/post-release-verification.json
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          bash hack/ci/verify-post-release.sh
+
+      - name: Publish release evidence and comment on release PR
+        id: publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.context.outputs.tag }}
+          REPO: ${{ github.repository }}
+          RELEASE_RUN_ID: ${{ steps.context.outputs.release_run_id }}
+          TAG_HEAD_SHA: ${{ steps.context.outputs.tag_head_sha }}
+          EVIDENCE_PATH: dist/post-release-verification.json
+        run: bash hack/ci/publish-post-release-evidence.sh
+
+      - name: Append verification summary
+        run: |
+          set -euo pipefail
+          {
+            echo "## Post-Release Verification"
+            echo
+            jq -r '
+              "- Release: \(.version)",
+              "- GitHub Release: \(.release.url)",
+              "- Release workflow run: \(.release_run.id // "n/a")",
+              "- Chart digest: \(.chart.digest)",
+              "- Required assets: \(.release.assets | length)",
+              "- Evidence asset: ${{ steps.publish.outputs.evidence_asset_url }}",
+              "- Release PR: ${{ steps.publish.outputs.release_pr_url || 'not resolved' }}",
+              "- Verification: passed"
+            ' dist/post-release-verification.json
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload verification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: post-release-verification-${{ steps.context.outputs.tag }}
+          path: dist/post-release-verification.json
+          if-no-files-found: error
+          retention-days: 90
