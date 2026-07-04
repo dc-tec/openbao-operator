@@ -19,9 +19,8 @@ require_cmd() {
 upsert_release_pr_comment() {
   local pr_number="$1"
   local pr_url="$2"
-  local evidence_url="$3"
-  local evidence_sha="$4"
-  local body_file="$5"
+  local evidence_sha="$3"
+  local body_file="$4"
   local marker
   local comments_json
   local comment_id
@@ -37,7 +36,7 @@ ${marker}
 - Release workflow run: ${RELEASE_RUN_URL}
 - Verification workflow run: ${VERIFICATION_RUN_URL}
 - Chart digest: \`${CHART_DIGEST}\`
-- Evidence asset: ${evidence_url}
+- Evidence artifact: ${VERIFICATION_RUN_URL} (artifact: \`${EVIDENCE_ARTIFACT_NAME}\`)
 - Evidence sha256: \`${evidence_sha}\`
 
 The published release assets, checksum signature, Helm chart signature, provenance index, and release-please cleanup checks have been verified.
@@ -54,10 +53,12 @@ EOF
   jq -n --rawfile body "${body_file}" '{body: $body}' > "${payload_file}"
 
   if [[ -n "${comment_id}" ]]; then
-    gh api -X PATCH "repos/${REPO}/issues/comments/${comment_id}" --input "${payload_file}" >/dev/null
+    gh api -X PATCH "repos/${REPO}/issues/comments/${comment_id}" --input "${payload_file}" >/dev/null ||
+      fail "failed to update post-release verification comment on ${pr_url}"
     echo "Updated post-release verification comment on ${pr_url}"
   else
-    gh api -X POST "repos/${REPO}/issues/${pr_number}/comments" --input "${payload_file}" >/dev/null
+    gh api -X POST "repos/${REPO}/issues/${pr_number}/comments" --input "${payload_file}" >/dev/null ||
+      fail "failed to create post-release verification comment on ${pr_url}"
     echo "Created post-release verification comment on ${pr_url}"
   fi
 }
@@ -109,43 +110,21 @@ done
 : "${REPO:?REPO is required}"
 : "${EVIDENCE_PATH:?EVIDENCE_PATH is required}"
 
-if [[ ! -s "${EVIDENCE_PATH}" ]]; then
-  fail "evidence file does not exist or is empty: ${EVIDENCE_PATH}"
-fi
-
-ASSET_NAME="${ASSET_NAME:-post-release-verification.json}"
 TAG_HEAD_SHA="${TAG_HEAD_SHA:-}"
 RELEASE_RUN_ID="${RELEASE_RUN_ID:-}"
 VERIFICATION_RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-${REPO}}/actions/runs/${GITHUB_RUN_ID:-}"
 RELEASE_RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${REPO}/actions/runs/${RELEASE_RUN_ID}"
+EVIDENCE_ARTIFACT_NAME="${EVIDENCE_ARTIFACT_NAME:-post-release-verification-${VERSION}}"
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
 
-release_json="$(gh release view "${VERSION}" --repo "${REPO}" --json assets,url)"
-RELEASE_URL="$(jq -r '.url' <<<"${release_json}")"
-asset_url="$(jq -r --arg name "${ASSET_NAME}" '.assets[]? | select(.name == $name) | .url' <<<"${release_json}" | head -n1)"
-evidence_sha="$(sha256sum "${EVIDENCE_PATH}" | awk '{print $1}')"
-
-if [[ -z "${asset_url}" ]]; then
-  upload_path="${TMPDIR}/${ASSET_NAME}"
-  cp "${EVIDENCE_PATH}" "${upload_path}"
-  gh release upload "${VERSION}" "${upload_path}" --repo "${REPO}"
-  release_json="$(gh release view "${VERSION}" --repo "${REPO}" --json assets,url)"
-  asset_url="$(jq -r --arg name "${ASSET_NAME}" '.assets[]? | select(.name == $name) | .url' <<<"${release_json}" | head -n1)"
-  if [[ -z "${asset_url}" ]]; then
-    fail "release evidence asset upload succeeded but ${ASSET_NAME} was not found on ${VERSION}"
-  fi
-  echo "Uploaded release evidence asset: ${asset_url}"
-else
-  existing_dir="${TMPDIR}/existing"
-  mkdir -p "${existing_dir}"
-  gh release download "${VERSION}" --repo "${REPO}" --pattern "${ASSET_NAME}" --dir "${existing_dir}"
-  existing_sha="$(sha256sum "${existing_dir}/${ASSET_NAME}" | awk '{print $1}')"
-  if [[ "${existing_sha}" != "${evidence_sha}" ]]; then
-    fail "existing ${ASSET_NAME} differs from local evidence (release=${existing_sha}, local=${evidence_sha})"
-  fi
-  echo "Release evidence asset already exists: ${asset_url}"
+if [[ ! -s "${EVIDENCE_PATH}" ]]; then
+  fail "evidence file does not exist or is empty: ${EVIDENCE_PATH}"
 fi
+
+release_json="$(gh release view "${VERSION}" --repo "${REPO}" --json url)"
+RELEASE_URL="$(jq -r '.url' <<<"${release_json}")"
+evidence_sha="$(sha256sum "${EVIDENCE_PATH}" | awk '{print $1}')"
 
 CHART_DIGEST="$(jq -r '.chart.digest' "${EVIDENCE_PATH}")"
 if [[ -z "${CHART_DIGEST}" || "${CHART_DIGEST}" == "null" ]]; then
@@ -155,15 +134,13 @@ fi
 RELEASE_PR_NUMBER=""
 RELEASE_PR_URL=""
 if resolve_release_pr; then
-  if ! upsert_release_pr_comment "${RELEASE_PR_NUMBER}" "${RELEASE_PR_URL}" "${asset_url}" "${evidence_sha}" "${TMPDIR}/release-pr-comment.md"; then
-    warn "failed to write post-release verification comment on release PR ${RELEASE_PR_URL}"
-  fi
+  upsert_release_pr_comment "${RELEASE_PR_NUMBER}" "${RELEASE_PR_URL}" "${evidence_sha}" "${TMPDIR}/release-pr-comment.md"
 fi
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   {
-    echo "evidence_asset_url=${asset_url}"
-    echo "evidence_asset_sha256=${evidence_sha}"
+    echo "evidence_artifact_name=${EVIDENCE_ARTIFACT_NAME}"
+    echo "evidence_sha256=${evidence_sha}"
     echo "release_pr_url=${RELEASE_PR_URL}"
   } >> "${GITHUB_OUTPUT}"
 fi

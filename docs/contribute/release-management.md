@@ -179,7 +179,7 @@ For patch releases, make the source that release-please sees match the release n
 
 <Callout type="note" title="Post-release verification evidence">
 
-The `Release` workflow removes the release-please `autorelease: pending` label from the merged release PR after the GitHub Release is published. The follow-up workflow uploads `post-release-verification.json` to the GitHub Release as durable evidence and also keeps a 90-day Actions artifact copy named `post-release-verification-<version>`. That JSON evidence captures the release URL, release workflow run, release PR, chart digest, published asset list, provenance index, and the post-release invariant checks that passed. When the merged release PR can be resolved, the workflow also writes or updates a release PR comment linking to the release, workflow runs, chart digest, and evidence asset.
+The `Release` workflow removes the release-please `autorelease: pending` label from the merged release PR after the GitHub Release is published. Published GitHub Releases are immutable in this repository, so the follow-up workflow does not try to attach new release assets. Instead, it keeps a 30-day Actions artifact named `post-release-verification-<version>` and writes or updates a release PR comment with the release links, workflow runs, chart digest, and evidence sha256. The JSON evidence captures the release URL, release workflow run, release PR, chart digest, published asset list, provenance index, and the post-release invariant checks that passed.
 
 </Callout>
 
