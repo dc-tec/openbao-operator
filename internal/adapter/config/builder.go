@@ -151,12 +151,17 @@ func RenderHCL(cluster *openbaov1alpha1.OpenBaoCluster, infra InfrastructureDeta
 	apiAddr := fmt.Sprintf("https://${HOSTNAME}.%s.%s.svc:%d", infra.HeadlessServiceName, infra.Namespace, infra.APIPort)
 	clusterAddr := fmt.Sprintf("https://${HOSTNAME}.%s.%s.svc:%d", infra.HeadlessServiceName, infra.Namespace, infra.ClusterPort)
 
+	var pluginDirectory *string
+	if len(cluster.Spec.Plugins) > 0 {
+		pluginDirectory = stringPtr(constants.PathPlugins)
+	}
+
 	gohcl.EncodeIntoBody(hclCoreAttributes{
 		UI:              uiEnabled,
 		ClusterName:     cluster.Name,
 		APIAddr:         apiAddr,
 		ClusterAddr:     clusterAddr,
-		PluginDirectory: constants.PathPlugins,
+		PluginDirectory: pluginDirectory,
 	}, body)
 
 	listenerBlocks, err := buildListenerBlocks(cluster)

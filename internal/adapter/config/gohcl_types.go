@@ -8,11 +8,11 @@ import (
 )
 
 type hclCoreAttributes struct {
-	UI              bool   `hcl:"ui"`
-	ClusterName     string `hcl:"cluster_name"`
-	APIAddr         string `hcl:"api_addr"`
-	ClusterAddr     string `hcl:"cluster_addr"`
-	PluginDirectory string `hcl:"plugin_directory"`
+	UI              bool    `hcl:"ui"`
+	ClusterName     string  `hcl:"cluster_name"`
+	APIAddr         string  `hcl:"api_addr"`
+	ClusterAddr     string  `hcl:"cluster_addr"`
+	PluginDirectory *string `hcl:"plugin_directory"`
 }
 
 type hclListenerTCP struct {

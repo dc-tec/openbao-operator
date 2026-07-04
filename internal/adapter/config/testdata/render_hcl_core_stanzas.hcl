@@ -1,8 +1,7 @@
-ui               = true
-cluster_name     = "config-hcl"
-api_addr         = "https://$${HOSTNAME}.config-hcl.security.svc:8200"
-cluster_addr     = "https://$${HOSTNAME}.config-hcl.security.svc:8201"
-plugin_directory = "/openbao/plugins"
+ui           = true
+cluster_name = "config-hcl"
+api_addr     = "https://$${HOSTNAME}.config-hcl.security.svc:8200"
+cluster_addr = "https://$${HOSTNAME}.config-hcl.security.svc:8201"
 listener "tcp" {
   address              = "[::]:8200"
   cluster_address      = "[::]:8201"
