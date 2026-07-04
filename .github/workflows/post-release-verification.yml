@@ -137,10 +137,22 @@ jobs:
           mkdir -p dist
           bash hack/ci/verify-post-release.sh
 
-      - name: Publish release evidence and comment on release PR
+      - name: Mint GitHub App token for release PR comment
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.OPENBAO_OPERATOR_RELEASE_PR_CLIENT_ID }}
+          private-key: ${{ secrets.OPENBAO_OPERATOR_RELEASE_PR_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Comment on release PR
         id: publish
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.context.outputs.tag }}
           REPO: ${{ github.repository }}
           RELEASE_RUN_ID: ${{ steps.context.outputs.release_run_id }}
@@ -160,7 +172,8 @@ jobs:
               "- Release workflow run: \(.release_run.id // "n/a")",
               "- Chart digest: \(.chart.digest)",
               "- Required assets: \(.release.assets | length)",
-              "- Evidence asset: ${{ steps.publish.outputs.evidence_asset_url }}",
+              "- Evidence artifact: ${{ steps.publish.outputs.evidence_artifact_name }}",
+              "- Evidence sha256: ${{ steps.publish.outputs.evidence_sha256 }}",
               "- Release PR: ${{ steps.publish.outputs.release_pr_url || 'not resolved' }}",
               "- Verification: passed"
             ' dist/post-release-verification.json
@@ -172,4 +185,4 @@ jobs:
           name: post-release-verification-${{ steps.context.outputs.tag }}
           path: dist/post-release-verification.json
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 30
