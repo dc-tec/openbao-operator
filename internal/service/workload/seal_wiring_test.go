@@ -65,6 +65,7 @@ func TestSealWiring_ExternalTypes_WithCredentials_MountsSealCredsAndEnv(t *testi
 			},
 		},
 		{name: "kmip", unsealType: portopenbao.SealTypeKMIP, expectSealCredsVolume: true},
+		{name: "kms", unsealType: portopenbao.SealTypeKMSPlugin, expectSealCredsVolume: true},
 		{name: "ocikms", unsealType: portopenbao.SealTypeOCIKMS, expectSealCredsVolume: true},
 		{name: "pkcs11", unsealType: portopenbao.SealTypePKCS11, expectEnvVar: []string{portopenbao.EnvBaoHSMPIN}},
 	}

@@ -6,6 +6,7 @@ const (
 	SealTypeAzureKeyVault = "azurekeyvault"
 	SealTypeGCPCKMS       = "gcpckms"
 	SealTypeKMIP          = "kmip"
+	SealTypeKMSPlugin     = "kms"
 	SealTypeOCIKMS        = "ocikms"
 	SealTypePKCS11        = "pkcs11"
 	SealTypeStatic        = "static"

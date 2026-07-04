@@ -1685,12 +1685,30 @@ type StaticSealConfig struct {
 	CurrentKeyID string `json:"currentKeyID,omitempty"`
 }
 
+// KMSPluginSealConfig configures a plugin-backed KMS seal.
+// The referenced plugin must be declared in spec.plugins with type "kms".
+type KMSPluginSealConfig struct {
+	// PluginName is the name of the plugin registered through a matching
+	// plugin "kms" stanza. OpenBao uses this value as the seal stanza label.
+	// +kubebuilder:validation:MinLength=1
+	PluginName string `json:"pluginName"`
+
+	// Config contains plugin-specific seal configuration rendered as string
+	// attributes inside seal "<pluginName>". Keys must be valid HCL identifiers.
+	// Values are stored in the OpenBaoCluster resource; use file paths to
+	// credentialsSecretRef-mounted files for sensitive material instead of inline
+	// secrets.
+	// +kubebuilder:validation:MaxProperties=64
+	// +optional
+	Config map[string]string `json:"config,omitempty"`
+}
+
 // UnsealConfig defines the auto-unseal configuration for an OpenBaoCluster.
 // If omitted, defaults to "static" mode managed by the operator.
 type UnsealConfig struct {
 	// Type specifies the seal type.
 	// Defaults to "static".
-	// +kubebuilder:validation:Enum=static;awskms;gcpckms;azurekeyvault;transit;kmip;ocikms;pkcs11
+	// +kubebuilder:validation:Enum=static;awskms;gcpckms;azurekeyvault;transit;kmip;kms;ocikms;pkcs11
 	// +kubebuilder:default=static
 	Type string `json:"type,omitempty"`
 
@@ -1724,6 +1742,11 @@ type UnsealConfig struct {
 	// +optional
 	KMIP *KMIPSealConfig `json:"kmip,omitempty"`
 
+	// KMS configures a plugin-backed KMS seal.
+	// Required when Type is "kms".
+	// +optional
+	KMS *KMSPluginSealConfig `json:"kms,omitempty"`
+
 	// OCIKMS configures the OCI KMS seal type.
 	// Required when Type is "ocikms".
 	// +optional
@@ -1736,7 +1759,7 @@ type UnsealConfig struct {
 
 	// CredentialsSecretRef references a Secret containing provider credentials
 	// (for example AWS access keys, GCP credentials.json, Azure client-secret keys,
-	// or OCI SDK config for authTypeAPIKey mode).
+	// OCI SDK config for authTypeAPIKey mode, or plugin-backed KMS runtime files).
 	// If using Workload Identity (IRSA, GKE WI, Azure MSI), this can be omitted.
 	// The Secret must exist in the same namespace as the OpenBaoCluster.
 	// Cross-namespace references are not allowed for security reasons.

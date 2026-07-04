@@ -54,6 +54,8 @@ func newSealWiringProvider(cluster *openbaov1alpha1.OpenBaoCluster) sealWiringPr
 		return &azureKeyVaultSealWiringProvider{cluster: cluster}
 	case portopenbao.SealTypeKMIP:
 		return &kmipSealWiringProvider{cluster: cluster}
+	case portopenbao.SealTypeKMSPlugin:
+		return &credentialsSecretSealWiringProvider{cluster: cluster}
 	case portopenbao.SealTypeOCIKMS:
 		return &ociKMSSealWiringProvider{cluster: cluster}
 	case portopenbao.SealTypePKCS11:

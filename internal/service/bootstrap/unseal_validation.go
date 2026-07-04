@@ -32,6 +32,8 @@ func (m *Manager) validateUnsealPrerequisites(ctx context.Context, cluster *open
 		return m.validateGCPCKMSUnsealPrerequisites(ctx, cluster)
 	case portopenbao.SealTypeKMIP:
 		return m.validateKMIPUnsealPrerequisites(ctx, cluster)
+	case portopenbao.SealTypeKMSPlugin:
+		return m.validateKMSPluginUnsealPrerequisites(ctx, cluster)
 	case portopenbao.SealTypeOCIKMS:
 		return m.validateOCIKMSUnsealPrerequisites(ctx, cluster)
 	case portopenbao.SealTypePKCS11:
@@ -54,4 +56,14 @@ func providerPrerequisitesError(err error) error {
 
 func missingSecretKeyError(namespace, secretName, provider, key string) error {
 	return fmt.Errorf("%s credentials Secret %s/%s is missing required key %q", provider, namespace, secretName, key)
+}
+
+func (m *Manager) validateKMSPluginUnsealPrerequisites(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	if cluster == nil || cluster.Spec.Unseal == nil || cluster.Spec.Unseal.CredentialsSecretRef == nil {
+		return nil
+	}
+	if _, err := m.credentialsSecret(ctx, cluster, "kms plugin"); err != nil {
+		return providerPrerequisitesError(err)
+	}
+	return nil
 }

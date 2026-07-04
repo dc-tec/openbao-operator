@@ -16,7 +16,7 @@ description: Configure the unseal root of trust and the Secret or mounted-file c
 
 <Callout type="important" title="Hardened posture prefers external trust">
 
-For production-oriented clusters, use an external trust source such as cloud KMS, transit, KMIP, OCI KMS, or PKCS#11. Reserve static unseal for development and controlled exceptions because it keeps decryption material inside Kubernetes.
+For production-oriented clusters, use an external trust source such as cloud KMS, transit, plugin-backed KMS, KMIP, OCI KMS, or PKCS#11. Reserve static unseal for development and controlled exceptions because it keeps decryption material inside Kubernetes.
 
 </Callout>
 
@@ -47,6 +47,13 @@ For production-oriented clusters, use an external trust source such as cloud KMS
         "Prefer workload identity or ambient credentials; only use Secrets when that identity path is unavailable or intentionally overridden.",
       ],
       emphasis: "recommended",
+    },
+    {
+      cells: [
+        "KMS plugin",
+        "You have an OpenBao KMS seal plugin that implements your own trust boundary.",
+        "Declare the plugin in `spec.plugins` with `type: kms` and reference it from `spec.unseal.kms.pluginName`.",
+      ],
     },
     {
       cells: [
@@ -160,6 +167,14 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     },
     {
       cells: [
+        "KMS plugin",
+        "Needed when the plugin reads files from the standard seal credentials mount.",
+        "Plugin-specific keys matching the file paths referenced under `spec.unseal.kms.config`, usually under `/etc/bao/seal-creds`.",
+        "The operator validates the Secret reference exists and renders string config values, but plugin-specific semantics are owned by the plugin implementation.",
+      ],
+    },
+    {
+      cells: [
         "PKCS#11",
         "Needed when `spec.unseal.pkcs11.pin` is omitted or PKCS#11 runtime env/config files are sourced from Secret data.",
         "`BAO_HSM_PIN`, plus every key referenced by `spec.unseal.pkcs11.runtime.env[*].secretKey` and `spec.unseal.pkcs11.runtime.fileEnv[*].secretKey`.",
@@ -168,6 +183,57 @@ For production-oriented clusters, use an external trust source such as cloud KMS
     },
   ]}
 />
+
+## KMS plugin seal contract
+
+Plugin-backed KMS unseal is for OpenBao 2.6.0 and newer versions that support the `plugin "kms"` catalog type. The operator renders a `plugin "kms" "<name>"` stanza from `spec.plugins` and a matching `seal "<name>"` stanza from `spec.unseal.kms`.
+
+The operator verifies that `spec.unseal.kms.pluginName` references a declared `spec.plugins` entry with `type: kms`. It does not validate plugin-specific config keys beyond requiring valid HCL identifiers, and it stores `spec.unseal.kms.config` values in the `OpenBaoCluster` resource. Use Secret-mounted file paths for sensitive material instead of inline values.
+
+<CommandBlock
+  language="yaml"
+  label="example"
+  title="Plugin-backed KMS unseal with OCI plugin download"
+  code={`apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: bao-kms-plugin
+  namespace: openbao
+spec:
+  version: "2.6.0"
+  image: openbao/openbao:2.6.0
+  configuration:
+    plugin:
+      autoDownload: true
+      downloadBehavior: fail
+  plugins:
+    - type: kms
+      name: corp-kms
+      image: registry.example.com/openbao-kms-corp
+      version: v0.1.0
+      binaryName: openbao-kms-corp
+      sha256sum: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  unseal:
+    type: kms
+    credentialsSecretRef:
+      name: corp-kms-runtime
+    kms:
+      pluginName: corp-kms
+      config:
+        mode: "broker"
+        endpoint: "https://kms-broker.example.com:8443"
+        ca_file: "/etc/bao/seal-creds/ca.crt"
+        cluster_id: "prod-eu1"
+        node_id: "$(HOSTNAME)"`}
+>
+  The Secret `corp-kms-runtime` must contain `ca.crt` if the plugin reads `/etc/bao/seal-creds/ca.crt`. Other config keys are plugin-defined and are passed through as string HCL attributes.
+</CommandBlock>
+
+<Callout type="warning" title="Command-based KMS plugins need a prepared image">
+
+When `spec.plugins[].command` is used for a KMS seal plugin, the binary must already exist in the OpenBao runtime before startup. The operator does not inject a plugin binary for command-only plugins.
+
+</Callout>
 
 ## KMIP provider contract
 

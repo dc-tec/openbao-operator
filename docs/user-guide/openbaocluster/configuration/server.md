@@ -226,6 +226,12 @@ Treat the audit PVC as a local collector handoff and replay buffer. Ship audit r
   Use a `command` plugin when the binary is already available inside the OpenBao runtime image or another explicitly managed runtime path.
 </CommandBlock>
 
+<Callout type="note" title="KMS seal plugins start before OpenBao unseals">
+
+KMS plugins used by `spec.unseal.type: kms` must be available during server startup. Use an OCI plugin with `autoDownload` when OpenBao can reach the registry before unseal, or use a `command` plugin only when the OpenBao runtime image already contains the binary.
+
+</Callout>
+
 <DecisionTable
   kind="reference"
   title="Plugin fields"
@@ -244,6 +250,13 @@ Treat the audit PVC as a local collector handoff and replay buffer. Ship audit r
         "`spec.plugins[].command`",
         "Plugin binaries already present in the OpenBao runtime environment.",
         "The operator does not create a plugin-download volume for command-only plugins.",
+      ],
+    },
+    {
+      cells: [
+        "`spec.plugins[].type: kms`",
+        "Plugin-backed KMS seal implementations used by `spec.unseal.kms.pluginName`.",
+        "The plugin name must match the unseal config, and the plugin must be present before OpenBao can initialize or unseal.",
       ],
     },
     {
