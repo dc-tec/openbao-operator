@@ -194,6 +194,24 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 		requestBlock := buildInitializeRequestBlock(requestLabel, string(req.Operation), req.Path, req.AllowFailure)
 		requestBody := requestBlock.Body()
 
+		if len(req.Headers) > 0 {
+			headersVal, err := selfInitHeadersToCty(req.Headers)
+			if err != nil {
+				return fmt.Errorf("failed to render self-init request headers for request %q: %w", req.Name, err)
+			}
+			requestBody.SetAttributeValue("headers", headersVal)
+		}
+
+		if req.When != nil && len(req.When.Raw) > 0 {
+			whenVal, err := decodeJSONToCty(req.When.Raw, fmt.Sprintf("self-init when for request %q", req.Name))
+			if err != nil {
+				return err
+			}
+			if whenVal != cty.NilVal {
+				requestBody.SetAttributeValue("when", whenVal)
+			}
+		}
+
 		dataVal := cty.NilVal
 		if structuredVal, handled, err := resolveSelfInitRequestStructuredData(req); err != nil {
 			return err
@@ -218,6 +236,37 @@ func renderSelfInitStanzas(body *hclwrite.Body, requests []openbaov1alpha1.SelfI
 	}
 
 	return nil
+}
+
+func selfInitHeadersToCty(headers map[string][]string) (cty.Value, error) {
+	rendered := make(map[string]cty.Value, len(headers))
+	keys := make([]string, 0, len(headers))
+	for header := range headers {
+		keys = append(keys, header)
+	}
+	sort.Strings(keys)
+
+	for _, header := range keys {
+		if strings.TrimSpace(header) == "" {
+			return cty.NilVal, fmt.Errorf("headers contains an empty header name")
+		}
+		if header != strings.TrimSpace(header) {
+			return cty.NilVal, fmt.Errorf("header name %q must not contain leading or trailing whitespace", header)
+		}
+
+		values := headers[header]
+		ctyValues := make([]cty.Value, 0, len(values))
+		for _, value := range values {
+			ctyValues = append(ctyValues, cty.StringVal(value))
+		}
+		if len(ctyValues) == 0 {
+			rendered[header] = cty.EmptyTupleVal
+			continue
+		}
+		rendered[header] = cty.TupleVal(ctyValues)
+	}
+
+	return cty.ObjectVal(rendered), nil
 }
 
 //nolint:unparam // Error return maintained for API consistency and future extensibility

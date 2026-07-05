@@ -1073,6 +1073,17 @@ type SelfInitRequest struct {
 	// Path is the API path to call (e.g., "sys/audit/stdout", "auth/kubernetes/config").
 	// +kubebuilder:validation:MinLength=1
 	Path string `json:"path"`
+	// Headers contains additional HTTP headers to send with this self-init request.
+	// Header names must not be empty. Values are rendered into OpenBao's profile-engine
+	// `headers` request field as map[string][]string.
+	// +optional
+	Headers map[string][]string `json:"headers,omitempty"`
+	// When controls whether OpenBao executes this request.
+	// Omit it to execute the request. Set it to a JSON boolean for static gating
+	// or to an OpenBao profile value object for dynamic evaluation, for example
+	// {"eval_source":"cel","eval_type":"bool","expression":"true"}.
+	// +optional
+	When *apiextensionsv1.JSON `json:"when,omitempty"`
 	// AuditDevice configures an audit device when Path starts with "sys/audit/".
 	// This provides structured configuration for audit devices instead of raw JSON.
 	// Only used when Path matches the pattern "sys/audit/*".

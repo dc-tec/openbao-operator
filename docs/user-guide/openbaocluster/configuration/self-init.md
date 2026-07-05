@@ -232,12 +232,65 @@ custody with each recipient, and delete the temporary backup from OpenBao.
       ],
       emphasis: "caution",
     },
+    {
+      cells: [
+        "`headers`",
+        "Add HTTP headers to a bootstrap request.",
+        "Header-based auth or routing controls for a specific request.",
+      ],
+    },
+    {
+      cells: [
+        "`when`",
+        "Gate a bootstrap request statically or through an OpenBao profile value.",
+        "Skip optional setup unless a profile expression evaluates to true.",
+      ],
+    },
   ]}
 />
 
 <Callout type="danger" title="Do not embed raw secrets in requests">
 
 Avoid placing passwords, tokens, or key material directly in the manifest. Use Kubernetes Secrets where supported and treat bootstrap content like the rest of your GitOps security surface.
+
+</Callout>
+
+## Use OpenBao profile request controls
+
+OpenBao 2.6.0 and newer versions evaluate self-init through the profile engine.
+The operator exposes the request-level `headers` and `when` controls for that
+path. Use them only with OpenBao versions that support profile-engine self-init
+request fields; older OpenBao versions may reject or ignore these fields.
+
+<CommandBlock
+  language="yaml"
+  label="configure"
+  title="Gate a request and add request headers"
+  code={`- name: configure-optional-system
+  operation: update
+  path: sys/config/example
+  headers:
+    X-Bootstrap-Source:
+      - operator
+  when:
+    eval_source: cel
+    eval_type: bool
+    expression: "true"
+  data:
+    enabled: true`}
+>
+  `headers` renders as OpenBao's `map[string][]string` request headers. `when`
+  accepts either a boolean or an OpenBao profile value object that evaluates to
+  a boolean.
+</CommandBlock>
+
+<Callout type="info" title="Workflow ownership stays separate">
+
+OpenBao's profile engine is also used by the upstream workflows API. The
+operator does not currently reconcile OpenBao workflow definitions or expose
+workflow CRDs. Use self-init for one-time bootstrap state and manage day-2
+OpenBao workflows through a deliberate external process until an operator
+ownership model exists.
 
 </Callout>
 
