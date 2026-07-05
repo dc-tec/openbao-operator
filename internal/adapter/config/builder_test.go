@@ -716,6 +716,111 @@ func TestRenderHCLWithSelfInitRequests(t *testing.T) {
 	compareGolden(t, "render_self_init_requests", got)
 }
 
+func TestRenderSelfInitHCLWithProfileRequestControls(t *testing.T) {
+	cluster := newMinimalCluster("selfinit-profile-controls", "default")
+	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+		Enabled: true,
+		Requests: []openbaov1alpha1.SelfInitRequest{
+			{
+				Name:      "conditional-health",
+				Operation: openbaov1alpha1.SelfInitOperationRead,
+				Path:      "sys/health",
+				Headers: map[string][]string{
+					"X-OpenBao-Trace": {"trace-1", "trace-2"},
+				},
+				When: &apiextensionsv1.JSON{Raw: []byte(`{"eval_source":"cel","eval_type":"bool","expression":"true"}`)},
+			},
+			{
+				Name:      "static-skip",
+				Operation: openbaov1alpha1.SelfInitOperationRead,
+				Path:      "sys/seal-status",
+				When:      &apiextensionsv1.JSON{Raw: []byte(`false`)},
+			},
+		},
+	}
+
+	got, err := RenderSelfInitHCL(cluster, nil)
+	if err != nil {
+		t.Fatalf("RenderSelfInitHCL() error = %v", err)
+	}
+
+	rendered := string(got)
+	for _, want := range []string{
+		`headers = {`,
+		`X-OpenBao-Trace = ["trace-1", "trace-2"]`,
+		`when = {`,
+		`eval_source = "cel"`,
+		`eval_type   = "bool"`,
+		`expression  = "true"`,
+		`when      = false`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("RenderSelfInitHCL() output missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestRenderSelfInitHCLRejectsInvalidProfileRequestControls(t *testing.T) {
+	tests := []struct {
+		name    string
+		request openbaov1alpha1.SelfInitRequest
+		wantErr string
+	}{
+		{
+			name: "empty header name",
+			request: openbaov1alpha1.SelfInitRequest{
+				Name:      "invalid-headers",
+				Operation: openbaov1alpha1.SelfInitOperationRead,
+				Path:      "sys/health",
+				Headers: map[string][]string{
+					" ": {"value"},
+				},
+			},
+			wantErr: "empty header name",
+		},
+		{
+			name: "header name with surrounding whitespace",
+			request: openbaov1alpha1.SelfInitRequest{
+				Name:      "invalid-headers",
+				Operation: openbaov1alpha1.SelfInitOperationRead,
+				Path:      "sys/health",
+				Headers: map[string][]string{
+					" X-Trace ": {"value"},
+				},
+			},
+			wantErr: "must not contain leading or trailing whitespace",
+		},
+		{
+			name: "malformed when JSON",
+			request: openbaov1alpha1.SelfInitRequest{
+				Name:      "invalid-when",
+				Operation: openbaov1alpha1.SelfInitOperationRead,
+				Path:      "sys/health",
+				When:      &apiextensionsv1.JSON{Raw: []byte(`{"eval_source"`)},
+			},
+			wantErr: "failed to decode self-init when",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalCluster("selfinit-profile-invalid", "default")
+			cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
+				Enabled:  true,
+				Requests: []openbaov1alpha1.SelfInitRequest{tt.request},
+			}
+
+			_, err := RenderSelfInitHCL(cluster, nil)
+			if err == nil {
+				t.Fatal("RenderSelfInitHCL() error = nil, want error")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("RenderSelfInitHCL() error = %q, want substring %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestRenderSelfInitHCLWithInitialRecoveryKeys(t *testing.T) {
 	cluster := newMinimalCluster("selfinit-recovery", "default")
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
