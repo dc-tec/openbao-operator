@@ -3851,6 +3851,16 @@ spec:
                             This payload is stored in the OpenBaoCluster resource and persisted in etcd;
                             it must not contain sensitive values such as tokens, passwords, or unseal keys.
                           x-kubernetes-preserve-unknown-fields: true
+                        headers:
+                          additionalProperties:
+                            items:
+                              type: string
+                            type: array
+                          description: |-
+                            Headers contains additional HTTP headers to send with this self-init request.
+                            Header names must not be empty. Values are rendered into OpenBao's profile-engine
+                            `headers` request field as map[string][]string.
+                          type: object
                         name:
                           description: |-
                             Name is a unique identifier for this request (used as the block name).
@@ -3924,6 +3934,13 @@ spec:
                           required:
                           - type
                           type: object
+                        when:
+                          description: |-
+                            When controls whether OpenBao executes this request.
+                            Omit it to execute the request. Set it to a JSON boolean for static gating
+                            or to an OpenBao profile value object for dynamic evaluation, for example
+                            {"eval_source":"cel","eval_type":"bool","expression":"true"}.
+                          x-kubernetes-preserve-unknown-fields: true
                       required:
                       - name
                       - operation

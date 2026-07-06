@@ -3851,6 +3851,16 @@ spec:
                             This payload is stored in the OpenBaoCluster resource and persisted in etcd;
                             it must not contain sensitive values such as tokens, passwords, or unseal keys.
                           x-kubernetes-preserve-unknown-fields: true
+                        headers:
+                          additionalProperties:
+                            items:
+                              type: string
+                            type: array
+                          description: |-
+                            Headers contains additional HTTP headers to send with this self-init request.
+                            Header names must not be empty. Values are rendered into OpenBao's profile-engine
+                            `headers` request field as map[string][]string.
+                          type: object
                         name:
                           description: |-
                             Name is a unique identifier for this request (used as the block name).
@@ -3924,6 +3934,13 @@ spec:
                           required:
                           - type
                           type: object
+                        when:
+                          description: |-
+                            When controls whether OpenBao executes this request.
+                            Omit it to execute the request. Set it to a JSON boolean for static gating
+                            or to an OpenBao profile value object for dynamic evaluation, for example
+                            {"eval_source":"cel","eval_type":"bool","expression":"true"}.
+                          x-kubernetes-preserve-unknown-fields: true
                       required:
                       - name
                       - operation
@@ -6867,10 +6884,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260705-f9114382c9b9
+          value: nightly-20260706-a79c5a0c84f6
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:13b15aadb5fb9e4e98765c71498c9326d57bab0f5de447c15d5e2f0b25e4705e
+        image: ghcr.io/dc-tec/openbao-operator@sha256:358add27322272e7193295fd99a0e96a7f2ad37845d9c96f41522097fbcba44d
         livenessProbe:
           httpGet:
             path: /healthz
@@ -6985,8 +7002,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260705-f9114382c9b9
-        image: ghcr.io/dc-tec/openbao-operator@sha256:13b15aadb5fb9e4e98765c71498c9326d57bab0f5de447c15d5e2f0b25e4705e
+          value: nightly-20260706-a79c5a0c84f6
+        image: ghcr.io/dc-tec/openbao-operator@sha256:358add27322272e7193295fd99a0e96a7f2ad37845d9c96f41522097fbcba44d
         livenessProbe:
           httpGet:
             path: /healthz
