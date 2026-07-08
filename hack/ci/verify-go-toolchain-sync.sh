@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+go_mod_version="$(awk '$1 == "go" { print $2; exit }' "${ROOT_DIR}/go.mod")"
+if [ -z "${go_mod_version}" ]; then
+  echo "error: failed to read Go version from go.mod" >&2
+  exit 1
+fi
+
+dockerfiles=()
+while IFS= read -r -d '' file; do
+  if grep -qE '^[[:space:]]*FROM[[:space:]].*golang:' "${file}"; then
+    dockerfiles+=("${file#"${ROOT_DIR}"/}")
+  fi
+done < <(
+  find "${ROOT_DIR}" \
+    \( -path "${ROOT_DIR}/.git" -o -path "${ROOT_DIR}/vendor" -o -path "${ROOT_DIR}/website/node_modules" -o -path "${ROOT_DIR}/.github/tools/node_modules" \) -prune \
+    -o -type f -name 'Dockerfile*' -print0
+)
+
+if [ "${#dockerfiles[@]}" -eq 0 ]; then
+  echo "error: no Dockerfiles with golang base images found" >&2
+  exit 1
+fi
+
+failed=false
+for dockerfile in "${dockerfiles[@]}"; do
+  from_line="$(grep -m1 -E '^[[:space:]]*FROM[[:space:]].*golang:' "${ROOT_DIR}/${dockerfile}")"
+  tag="$(sed -E 's/.*golang:([^@[:space:]]+).*/\1/' <<<"${from_line}")"
+
+  if [[ ! "${tag}" =~ ^([0-9]+\.[0-9]+(\.[0-9]+)?(rc[0-9]+)?)(-|$) ]]; then
+    echo "error: ${dockerfile} uses an unrecognized golang tag: ${tag}" >&2
+    failed=true
+    continue
+  fi
+
+  docker_go_version="${BASH_REMATCH[1]}"
+  if [ "${docker_go_version}" != "${go_mod_version}" ]; then
+    echo "error: ${dockerfile} uses golang:${tag}, but go.mod declares go ${go_mod_version}" >&2
+    failed=true
+  fi
+done
+
+if [ "${failed}" = true ]; then
+  echo "Go toolchain versions must stay aligned between go.mod and Dockerfile builder images." >&2
+  exit 1
+fi
+
+echo "Go toolchain sync verified: go ${go_mod_version}"

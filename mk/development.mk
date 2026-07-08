@@ -120,6 +120,10 @@ verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 		exit 1; \
 	}
 
+.PHONY: verify-go-toolchain-sync
+verify-go-toolchain-sync: ## Verify go.mod and Dockerfile golang builder tags use the same Go version.
+	@bash hack/ci/verify-go-toolchain-sync.sh
+
 .PHONY: verify-vendor
 verify-vendor: ## Verify vendor/ is synchronized with go.mod/go.sum.
 	@GOFLAGS="-mod=mod" go mod vendor
