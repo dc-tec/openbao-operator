@@ -54,6 +54,7 @@ jobs:
       workflow: ${{ steps.diff.outputs.workflow }}
       docs: ${{ steps.diff.outputs.docs }}
       go_quality: ${{ steps.diff.outputs.go_quality }}
+      go_toolchain: ${{ steps.diff.outputs.go_toolchain }}
       go_tests: ${{ steps.diff.outputs.go_tests }}
       config_compat: ${{ steps.diff.outputs.config_compat }}
       security_scan: ${{ steps.diff.outputs.security_scan }}
@@ -95,7 +96,7 @@ jobs:
               echo "manual_backup_e2e=${MANUAL_BACKUP_E2E}"
               echo "manual_upgrade_e2e=${MANUAL_UPGRADE_E2E}"
               echo "manual_hardened_e2e=${MANUAL_HARDENED_E2E}"
-              for key in chart workflow docs go_quality go_tests config_compat security_scan security_image fuzz e2e e2e_backup e2e_upgrade e2e_hardened; do
+              for key in chart workflow docs go_quality go_toolchain go_tests config_compat security_scan security_image fuzz e2e e2e_backup e2e_upgrade e2e_hardened; do
                 echo "${key}=false"
               done
             } >> "${GITHUB_OUTPUT}"
@@ -151,6 +152,12 @@ jobs:
             echo "go_quality=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_quality=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if changed_matches '^(Dockerfile(\..*)?|go\.mod$|Makefile|mk/|hack/ci/verify-go-toolchain-sync\.sh|\.github/workflows/ci\.yml)'; then
+            echo "go_toolchain=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "go_toolchain=false" >> "${GITHUB_OUTPUT}"
           fi
 
           if changed_matches '^(internal/|cmd/|api/|config/|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/helm(chart|values)/|test/(integration/|unit/))'; then
@@ -393,6 +400,18 @@ jobs:
 
       - name: Verify tidy
         run: make verify-tidy
+
+  go-toolchain-sync:
+    name: Verify Go Toolchain Sync
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.go_toolchain == 'true'
+    runs-on: *runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Verify Go toolchain sync
+        run: make verify-go-toolchain-sync
 
   verify-vendor:
     name: Verify vendor/
@@ -1051,6 +1070,7 @@ jobs:
       - lint
       - verify-fmt
       - tidy-check
+      - go-toolchain-sync
       - verify-vendor
       - verify-generated
       - test-unit
@@ -1076,6 +1096,7 @@ jobs:
           LINT: ${{ needs.lint.result }}
           VERIFY_FMT: ${{ needs.verify-fmt.result }}
           TIDY_CHECK: ${{ needs.tidy-check.result }}
+          GO_TOOLCHAIN_SYNC: ${{ needs.go-toolchain-sync.result }}
           VERIFY_VENDOR: ${{ needs.verify-vendor.result }}
           VERIFY_GENERATED: ${{ needs.verify-generated.result }}
           TEST_UNIT: ${{ needs.test-unit.result }}
@@ -1111,6 +1132,7 @@ jobs:
           lint=${LINT}
           verify-fmt=${VERIFY_FMT}
           tidy-check=${TIDY_CHECK}
+          go-toolchain-sync=${GO_TOOLCHAIN_SYNC}
           verify-vendor=${VERIFY_VENDOR}
           verify-generated=${VERIFY_GENERATED}
           test-unit=${TEST_UNIT}
@@ -1202,6 +1224,7 @@ jobs:
       - lint
       - verify-fmt
       - tidy-check
+      - go-toolchain-sync
       - verify-vendor
       - verify-generated
       - test-unit
