@@ -87,9 +87,25 @@ test-sum: manifests generate fmt vet gotestsum ## Run unit tests with gotestsum 
 	@mkdir -p "$(TEST_ARTIFACT_DIR)"
 	GOFLAGS="$(GOFLAGS_VENDOR)" "$(GOTESTSUM)" --format="$(GOTESTSUM_FORMAT)" --junitfile "$(TEST_ARTIFACT_DIR)/unit.xml" -- -coverprofile "$(TEST_ARTIFACT_DIR)/unit.cover.out" $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e)
 
+COVERAGE_PROFILE ?= cover.out
+COVERAGE_MIN_INTERNAL ?= 68.0
+
+.PHONY: verify-coverage
+verify-coverage: ## Verify production code under internal/ meets the coverage regression floor.
+	GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/coverage_check \
+		--profile "$(COVERAGE_PROFILE)" \
+		--minimum "$(COVERAGE_MIN_INTERNAL)"
+
 .PHONY: test-ci
-test-ci: manifests generate vet setup-envtest ## Run unit + integration tests in CI mode (does not modify tracked files).
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" GOFLAGS="$(GOFLAGS_VENDOR)" go test $$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e) -tags=integration -coverprofile cover.out
+test-ci: manifests generate vet setup-envtest gotestsum ## Run unit + integration tests and enforce the coverage floor.
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" \
+		GOFLAGS="$(GOFLAGS_VENDOR)" \
+		"$(GOTESTSUM)" --format="$(GOTESTSUM_FORMAT)" -- \
+		-tags=integration \
+		-count=1 \
+		-coverprofile "$(COVERAGE_PROFILE)" \
+		$$(GOFLAGS="$(GOFLAGS_VENDOR)" go list ./... | grep -v /e2e)
+	$(MAKE) verify-coverage COVERAGE_PROFILE="$(COVERAGE_PROFILE)" COVERAGE_MIN_INTERNAL="$(COVERAGE_MIN_INTERNAL)"
 
 .PHONY: test-integration
 test-integration: manifests generate vet setup-envtest ## Run envtest-based integration tests (envtest; requires -tags=integration).
