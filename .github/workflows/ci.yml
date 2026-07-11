@@ -478,9 +478,8 @@ jobs:
       - name: Setup repo tools
         uses: ./.github/actions/setup-repo-tools
 
-      - name: Run integration tests
-        run: |
-          make test-integration
+      - name: Run unit and integration tests with coverage gate
+        run: make test-ci
 
   fuzz:
     name: Fuzz Smoke
