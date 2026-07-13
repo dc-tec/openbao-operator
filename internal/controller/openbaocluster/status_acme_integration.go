@@ -6,7 +6,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
@@ -20,10 +19,6 @@ func (r *OpenBaoClusterReconciler) setACMEIntegrationReadyCondition(ctx context.
 		return
 	}
 
-	result := appopenbaocluster.EvaluateACMEIntegration(
-		ctx,
-		r.acmeIntegrationDependencies(),
-		cluster,
-	)
+	result := r.Applications.EvaluateACMEIntegration(ctx, cluster)
 	setACMEIntegrationReadyEvaluatedCondition(cluster, result)
 }

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -20,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
 	portauth "github.com/dc-tec/openbao-operator/internal/port/auth"
 )
 
@@ -32,17 +30,9 @@ var _ = Describe("OpenBaoCluster OIDC Bootstrap", func() {
 			parent := &OpenBaoClusterReconciler{
 				Client: k8sClient,
 				ControllerRuntime: ControllerRuntime{
-					APIReader:  k8sClient,
-					Scheme:     k8sClient.Scheme(),
-					RestConfig: cfg,
+					APIReader: k8sClient,
 				},
-				OIDCRuntime: OIDCRuntime{
-					DiscoverOIDCConfig: discover,
-					OIDCStatusCode:     portauth.DiscoveryStatusCode,
-				},
-				ImageVerificationRuntime: ImageVerificationRuntime{
-					ImageVerifier: security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-				},
+				Applications: newTestOpenBaoClusterApplications(testApplicationsOptions{OIDCDiscover: discover}),
 			}
 			return &testCompositeReconciler{parent: parent}
 		}

@@ -5,6 +5,8 @@ import (
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
@@ -18,6 +20,16 @@ type SubReconciler interface {
 
 // ErrorRecorder captures errors for metric bookkeeping in controller wrappers.
 type ErrorRecorder func(error)
+
+// StatusIntegrationDependencies groups the shared Kubernetes collaborators
+// used to evaluate operator-managed network integrations.
+type StatusIntegrationDependencies struct {
+	Client            client.Client
+	APIReader         client.Reader
+	Scheme            *runtime.Scheme
+	OperatorNamespace string
+	Platform          string
+}
 
 // ReconcileErrorReason extracts a stable status reason from typed errors.
 func ReconcileErrorReason(err error) string {

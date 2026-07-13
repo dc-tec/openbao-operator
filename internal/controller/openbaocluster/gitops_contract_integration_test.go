@@ -6,7 +6,6 @@ package openbaocluster
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -17,7 +16,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	kubeadapter "github.com/dc-tec/openbao-operator/internal/adapter/kube"
-	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
@@ -29,11 +27,8 @@ var _ = Describe("OpenBaoCluster GitOps contract", func() {
 			Client: k8sClient,
 			ControllerRuntime: ControllerRuntime{
 				APIReader: k8sClient,
-				Scheme:    k8sClient.Scheme(),
 			},
-			ImageVerificationRuntime: ImageVerificationRuntime{
-				ImageVerifier: security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-			},
+			Applications: newTestOpenBaoClusterApplications(testApplicationsOptions{}),
 		}
 		return &testCompositeReconciler{parent: parent}
 	}

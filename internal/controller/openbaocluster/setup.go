@@ -1,6 +1,7 @@
 package openbaocluster
 
 import (
+	"fmt"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -23,6 +24,9 @@ import (
 // In multi-tenant mode, the controller uses polling-based reconciliation to avoid requiring
 // cluster-wide list/watch permissions.
 func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Applications == nil {
+		return fmt.Errorf("OpenBaoCluster applications are not configured")
+	}
 	if r.SingleTenantMode {
 		return r.setupSingleTenantMode(mgr)
 	}

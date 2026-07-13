@@ -195,11 +195,10 @@ func TestOpenBaoClusterStatusReconciler_FinalizerAddUsesMergePatch(t *testing.T)
 	parent := &OpenBaoClusterReconciler{
 		Client: fakeClient,
 		ControllerRuntime: ControllerRuntime{
-			APIReader:         fakeClient,
-			Scheme:            scheme,
-			SingleTenantMode:  true,
-			OperatorNamespace: "openbao-operator-system",
+			APIReader:        fakeClient,
+			SingleTenantMode: true,
 		},
+		Applications: newStatusTestApplications(fakeClient, scheme),
 	}
 	reconciler := &openBaoClusterStatusReconciler{parent: parent}
 
@@ -265,11 +264,10 @@ func TestOpenBaoClusterStatusReconciler_FinalizerRemoveUsesMergePatch(t *testing
 	parent := &OpenBaoClusterReconciler{
 		Client: fakeClient,
 		ControllerRuntime: ControllerRuntime{
-			APIReader:         fakeClient,
-			Scheme:            scheme,
-			SingleTenantMode:  true,
-			OperatorNamespace: "openbao-operator-system",
+			APIReader:        fakeClient,
+			SingleTenantMode: true,
 		},
+		Applications: newStatusTestApplications(fakeClient, scheme),
 	}
 	reconciler := &openBaoClusterStatusReconciler{parent: parent}
 
@@ -326,9 +324,9 @@ func newTenantOnboardingTestContext(t *testing.T, singleTenant bool, objects ...
 		Client: fakeClient,
 		ControllerRuntime: ControllerRuntime{
 			APIReader:        fakeClient,
-			Scheme:           scheme,
 			SingleTenantMode: singleTenant,
 		},
+		Applications: newStatusTestApplications(fakeClient, scheme),
 	}
 
 	return cluster, parent

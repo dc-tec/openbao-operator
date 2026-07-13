@@ -25,6 +25,10 @@ func (r *OpenBaoClusterReconciler) patchStatusSSA(ctx context.Context, cluster *
 }
 
 func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (ctrl.Result, error) {
+	if r.Applications == nil {
+		return ctrl.Result{}, fmt.Errorf("OpenBaoCluster applications are not configured")
+	}
+
 	// Capture original state to check for changes (e.g. ReadyReplicas), but NOT for patching merge.
 	original := cluster.DeepCopy()
 
@@ -40,7 +44,7 @@ func (r *OpenBaoClusterReconciler) updateStatus(ctx context.Context, logger logr
 	r.setCloudUnsealIdentityReadyCondition(ctx, cluster)
 
 	// 1. Gather all observed state (API calls).
-	state, err := appopenbaocluster.GatherStatusState(ctx, logger, r.statusDependencies(), cluster)
+	state, err := r.Applications.GatherStatusState(ctx, logger, cluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

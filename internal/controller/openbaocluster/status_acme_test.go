@@ -123,8 +123,10 @@ func TestSetACMEIntegrationReadyCondition_FastContract(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 			reconciler := &OpenBaoClusterReconciler{
-				Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
+				Client:       fakeClient,
+				Applications: newStatusTestApplications(fakeClient, scheme),
 			}
 
 			reconciler.setACMEIntegrationReadyCondition(context.Background(), tt.cluster)

@@ -6,7 +6,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 )
 
 func (r *OpenBaoClusterReconciler) setIngressIntegrationReadyCondition(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) {
@@ -15,10 +14,6 @@ func (r *OpenBaoClusterReconciler) setIngressIntegrationReadyCondition(ctx conte
 		return
 	}
 
-	result := appopenbaocluster.EvaluateIngressIntegration(
-		ctx,
-		r.ingressIntegrationDependencies(),
-		cluster,
-	)
+	result := r.Applications.EvaluateIngressIntegration(ctx, cluster)
 	setIngressIntegrationReadyEvaluatedCondition(cluster, result)
 }

@@ -31,8 +31,8 @@ var _ = Describe("OpenBaoCluster Multi-Tenancy", func() {
 				Client: k8sClient,
 				ControllerRuntime: ControllerRuntime{
 					APIReader: k8sClient,
-					Scheme:    k8sClient.Scheme(),
 				},
+				Applications: newTestOpenBaoClusterApplications(testApplicationsOptions{}),
 			}
 			return &testCompositeReconciler{parent: parent}
 		}

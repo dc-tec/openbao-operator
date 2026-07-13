@@ -16,7 +16,6 @@ import (
 	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/observability"
-	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
 )
 
 type openBaoClusterWorkloadReconciler struct {
@@ -99,62 +98,17 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 	recordError func(error),
 ) (ctrl.Result, error) {
-	var autopilotRuntime initmanagerport.AutopilotRuntime
-	if provider, ok := r.parent.InitManager.(initmanagerport.AutopilotProvider); ok {
-		autopilotRuntime = provider.AutopilotRuntime()
-	}
-	statefulSetReader := r.parent.APIReader
-	if statefulSetReader == nil {
-		statefulSetReader = r.parent.Client
-	}
-
 	original := cluster.DeepCopy()
-	reconcilers := []appopenbaocluster.SubReconciler{
-		appopenbaocluster.NewCertificatesReconciler(r.parent.certificatesDependencies()),
-		appopenbaocluster.NewInfraReconciler(r.parent.infraDependencies()),
-		appopenbaocluster.NewStorageReconciler(r.parent.storageDependencies()),
-		appopenbaocluster.NewStorageResizeRestartReconciler(r.parent.storageResizeRestartDependencies()),
-	}
-	reconcilers = appopenbaocluster.AppendInitAndAutopilotReconcilers(
-		reconcilers,
-		r.parent.InitManager,
-		autopilotRuntime,
-		statefulSetReader,
-		r.parent.Recorder,
-		constants.RequeueShort,
-	)
-
-	policy := appopenbaocluster.WorkloadResultPolicy{
-		PrerequisitesMissingReason: ReasonPrerequisitesMissing,
-		GatewayAPIMissingReason:    ReasonGatewayAPIMissing,
-		RequeueShort:               constants.RequeueShort,
-		RequeueSafetyNetBase:       constants.RequeueSafetyNetBase,
-		RequeueSafetyNetJitter:     constants.RequeueSafetyNetJitter,
-		PermanentConfigurationReason: map[string]struct{}{
-			ReasonInvalidVersion:                              {},
-			ReasonDowngradeBlocked:                            {},
-			ReasonImageVersionMismatch:                        {},
-			ReasonOIDCBootstrapConfigurationInvalid:           {},
-			ReasonAPIServerNetworkConfigurationInvalid:        {},
-			ReasonStorageInvalidSize:                          {},
-			ReasonStorageShrinkNotSupported:                   {},
-			ReasonStorageResizeNotSupported:                   {},
-			ReasonStorageClassChangeNotSupported:              {},
-			ReasonStorageRestartRequired:                      {},
-			ReasonAuditFileStorageStatefulSetRecreateRequired: {},
-			constants.ReasonHelperImageConfigurationInvalid:   {},
-		},
+	if r.parent.Applications == nil {
+		return ctrl.Result{}, fmt.Errorf("OpenBaoCluster applications are not configured")
 	}
 
-	appResult, appErr := appopenbaocluster.RunWorkloadReconcilers(
+	appResult, appErr := r.parent.Applications.ReconcileWorkload(
 		ctx,
-		r.parent.Client,
 		logger,
 		original,
 		cluster,
-		reconcilers,
 		recordError,
-		policy,
 	)
 	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr
 }
@@ -205,7 +159,10 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	original := cluster.DeepCopy()
-	appResult, appErr := appopenbaocluster.ReconcileAdminOps(ctx, logger, r.parent.adminOpsDependencies(), original, cluster, recordError)
+	if r.parent.Applications == nil {
+		return ctrl.Result{}, fmt.Errorf("OpenBaoCluster applications are not configured")
+	}
+	appResult, appErr := r.parent.Applications.ReconcileAdminOps(ctx, logger, original, cluster, recordError)
 	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr
 }
 
@@ -245,7 +202,10 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 	if !cluster.DeletionTimestamp.IsZero() {
 		logger.Info("OpenBaoCluster is marked for deletion")
 		if controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
-			if err := appopenbaocluster.HandleDeletion(ctx, logger, r.parent.deletionDependencies(), cluster); err != nil {
+			if r.parent.Applications == nil {
+				return ctrl.Result{}, fmt.Errorf("OpenBaoCluster applications are not configured")
+			}
+			if err := r.parent.Applications.HandleDeletion(ctx, logger, cluster); err != nil {
 				return ctrl.Result{}, err
 			}
 			original := cluster.DeepCopy()
@@ -293,7 +253,7 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 		return statusUpdateResult, nil
 	}
 
-	if r.parent.InitManager != nil && !cluster.Status.Initialized {
+	if r.parent.Applications != nil && r.parent.Applications.InitializationConfigured() && !cluster.Status.Initialized {
 		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
