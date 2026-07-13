@@ -29,8 +29,10 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portsecurity "github.com/dc-tec/openbao-operator/internal/port/security"
 )
 
 func TestSetupWithManager_ReconcilesClusterInSingleTenantMode(t *testing.T) {
@@ -144,19 +146,34 @@ func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant boo
 	mgr, err := ctrl.NewManager(cfg, mgrOptions)
 	require.NoError(t, err)
 
+	imageVerifier := security.NewImageVerifier(logr.Discard(), mgr.GetClient(), nil)
 	reconciler := &openbaocluster.OpenBaoClusterReconciler{
 		Client: mgr.GetClient(),
 		ControllerRuntime: openbaocluster.ControllerRuntime{
-			APIReader:         mgr.GetAPIReader(),
-			Scheme:            mgr.GetScheme(),
-			RestConfig:        cfg,
-			OperatorNamespace: "openbao-operator-system",
-			Recorder:          mgr.GetEventRecorder("openbaocluster-test"),
-			SingleTenantMode:  singleTenant,
+			APIReader:        mgr.GetAPIReader(),
+			Recorder:         mgr.GetEventRecorder("openbaocluster-test"),
+			SingleTenantMode: singleTenant,
 		},
-		ImageVerificationRuntime: openbaocluster.ImageVerificationRuntime{
-			ImageVerifier: security.NewImageVerifier(logr.Discard(), mgr.GetClient(), nil),
-		},
+		Applications: appopenbaocluster.NewRuntimeApplications(appopenbaocluster.RuntimeApplicationsConfig{
+			Kubernetes: appopenbaocluster.RuntimeKubernetesConfig{
+				Client:            mgr.GetClient(),
+				APIReader:         mgr.GetAPIReader(),
+				Scheme:            mgr.GetScheme(),
+				RestConfig:        cfg,
+				OperatorNamespace: "openbao-operator-system",
+				Recorder:          mgr.GetEventRecorder("openbaocluster-test"),
+			},
+			ImageVerification: appopenbaocluster.RuntimeImageVerificationConfig{
+				ImageVerifier:         imageVerifier,
+				OperatorImageVerifier: imageVerifier,
+				Infra: appopenbaocluster.InfraImageVerificationRuntime{
+					OperatorImageVerifier:              imageVerifier,
+					VerifyOperatorImage:                portsecurity.VerifyOperatorImageForCluster,
+					IsMainImageVerificationEnabled:     portsecurity.IsMainImageVerificationEnabled,
+					IsOperatorImageVerificationEnabled: portsecurity.IsOperatorImageVerificationEnabled,
+				},
+			},
+		}),
 	}
 	require.NoError(t, reconciler.SetupWithManager(mgr))
 

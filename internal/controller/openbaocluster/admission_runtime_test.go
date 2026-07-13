@@ -152,7 +152,6 @@ func newAdmissionRuntimeTestContext(t *testing.T) (*openbaov1alpha1.OpenBaoClust
 		Client: fakeClient,
 		ControllerRuntime: ControllerRuntime{
 			APIReader:        fakeClient,
-			Scheme:           scheme,
 			AdmissionTracker: tracker,
 		},
 	}

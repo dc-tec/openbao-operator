@@ -73,13 +73,8 @@ var _ = Describe("OpenBaoCluster TLS Rotation", func() {
 
 			reloader := &tlsReloadRecorder{}
 			parent := &OpenBaoClusterReconciler{
-				Client: k8sClient,
-				ControllerRuntime: ControllerRuntime{
-					Scheme: k8sClient.Scheme(),
-				},
-				OpenBaoRuntime: OpenBaoRuntime{
-					TLSReload: reloader,
-				},
+				Client:       k8sClient,
+				Applications: newTestOpenBaoClusterApplications(testApplicationsOptions{TLSReload: reloader}),
 			}
 			controllerReconciler := &testCompositeReconciler{parent: parent}
 

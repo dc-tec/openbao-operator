@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	initmanagerport "github.com/dc-tec/openbao-operator/internal/port/initmanager"
@@ -30,6 +31,32 @@ type WorkloadResultPolicy struct {
 	RequeueShort                 time.Duration
 	RequeueSafetyNetBase         time.Duration
 	RequeueSafetyNetJitter       time.Duration
+}
+
+// DefaultWorkloadResultPolicy returns the production workload error and
+// requeue policy shared by controller entrypoints.
+func DefaultWorkloadResultPolicy() WorkloadResultPolicy {
+	return WorkloadResultPolicy{
+		PrerequisitesMissingReason: constants.ReasonPrerequisitesMissing,
+		GatewayAPIMissingReason:    constants.ReasonGatewayAPIMissing,
+		RequeueShort:               constants.RequeueShort,
+		RequeueSafetyNetBase:       constants.RequeueSafetyNetBase,
+		RequeueSafetyNetJitter:     constants.RequeueSafetyNetJitter,
+		PermanentConfigurationReason: map[string]struct{}{
+			constants.ReasonInvalidVersion:                              {},
+			constants.ReasonDowngradeBlocked:                            {},
+			constants.ReasonImageVersionMismatch:                        {},
+			constants.ReasonOIDCBootstrapConfigurationInvalid:           {},
+			constants.ReasonAPIServerNetworkConfigurationInvalid:        {},
+			constants.ReasonStorageInvalidSize:                          {},
+			constants.ReasonStorageShrinkNotSupported:                   {},
+			constants.ReasonStorageResizeNotSupported:                   {},
+			constants.ReasonStorageClassChangeNotSupported:              {},
+			constants.ReasonStorageRestartRequired:                      {},
+			constants.ReasonAuditFileStorageStatefulSetRecreateRequired: {},
+			constants.ReasonHelperImageConfigurationInvalid:             {},
+		},
+	}
 }
 
 // AppendInitAndAutopilotReconcilers appends init and optional autopilot reconcilers.

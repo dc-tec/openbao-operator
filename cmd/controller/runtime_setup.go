@@ -10,6 +10,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/adapter/auth"
 	"github.com/dc-tec/openbao-operator/internal/adapter/openbao"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 	appopenbaorestore "github.com/dc-tec/openbao-operator/internal/app/openbaorestore"
 	openbaoclustercontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaocluster"
 	openbaorestorecontroller "github.com/dc-tec/openbao-operator/internal/controller/openbaorestore"
@@ -25,9 +26,9 @@ type controllerProcessRuntime struct {
 	platform                 string
 	singleTenantMode         bool
 	admissionTracker         *admission.Tracker
-	oidcRuntime              openbaoclustercontroller.OIDCRuntime
-	openBaoRuntime           openbaoclustercontroller.OpenBaoRuntime
-	imageVerificationRuntime openbaoclustercontroller.ImageVerificationRuntime
+	oidcRuntime              appopenbaocluster.RuntimeOIDCConfig
+	openBaoRuntime           appopenbaocluster.RuntimeOpenBaoConfig
+	imageVerificationRuntime appopenbaocluster.RuntimeImageVerificationConfig
 }
 
 func buildControllerProcessRuntime(
@@ -72,53 +73,50 @@ func buildControllerProcessRuntime(
 
 	oidcConfig := discoverStartupOIDC(config)
 	admissionTracker := initializeAdmissionTracker(mgr, cfg.admissionEnforcement, cfg.admissionStartupTimeout)
+	clientFactory := func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
+		return openbao.NewClient(config)
+	}
 
 	return controllerProcessRuntime{
 		operatorNamespace: operatorNamespace,
 		platform:          platform,
 		singleTenantMode:  singleTenantMode,
 		admissionTracker:  admissionTracker,
-		oidcRuntime: openbaoclustercontroller.OIDCRuntime{
-			OIDCIssuer:         oidcConfig.IssuerURL,
-			OIDCDiscoveryURL:   oidcConfig.OIDCDiscoveryURL,
-			OIDCDiscoveryCAPEM: oidcConfig.OIDCDiscoveryCAPEM,
-			OIDCJWKSURL:        oidcConfig.JWKSURL,
-			OIDCJWKSCAPEM:      oidcConfig.JWKSCAPEM,
-			OIDCJWTKeys:        oidcConfig.JWKSKeys,
-			DiscoverOIDCConfig: auth.DiscoverConfig,
-			OIDCStatusCode:     portauth.DiscoveryStatusCode,
+		oidcRuntime: appopenbaocluster.RuntimeOIDCConfig{
+			Issuer:              oidcConfig.IssuerURL,
+			DiscoveryURL:        oidcConfig.OIDCDiscoveryURL,
+			DiscoveryCAPEM:      oidcConfig.OIDCDiscoveryCAPEM,
+			JWKSURL:             oidcConfig.JWKSURL,
+			JWKSCAPEM:           oidcConfig.JWKSCAPEM,
+			JWTKeys:             oidcConfig.JWKSKeys,
+			Discover:            openBaoClusterOIDCDiscoverer(auth.DiscoverConfig),
+			DiscoveryStatusCode: portauth.DiscoveryStatusCode,
 		},
-		openBaoRuntime: openbaoclustercontroller.OpenBaoRuntime{
+		openBaoRuntime: appopenbaocluster.RuntimeOpenBaoConfig{
 			TLSReload:         reloadSignaler,
 			InitManager:       initMgr,
 			SmartClientConfig: smartClientConfig,
-			OpenBaoClientFactory: func(config portopenbao.ClientConfig) (portopenbao.ClusterActions, error) {
-				return openbao.NewClient(config)
-			},
+			ClientForPod: openBaoClusterPodClientFactory(
+				mgr.GetClient(),
+				smartClientConfig,
+				clientFactory,
+			),
 		},
-		imageVerificationRuntime: openbaoclustercontroller.ImageVerificationRuntime{
-			ImageVerifier:         imageVerifier,
-			OperatorImageVerifier: operatorImageVerifier,
-		},
+		imageVerificationRuntime: openBaoClusterImageVerificationRuntime(imageVerifier, operatorImageVerifier),
 	}, nil
 }
 
 func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error {
+	applications := buildOpenBaoClusterApplications(mgr, runtime)
 	if err := (&openbaoclustercontroller.OpenBaoClusterReconciler{
 		Client: mgr.GetClient(),
 		ControllerRuntime: openbaoclustercontroller.ControllerRuntime{
-			APIReader:         mgr.GetAPIReader(),
-			Scheme:            mgr.GetScheme(),
-			RestConfig:        mgr.GetConfig(),
-			OperatorNamespace: runtime.operatorNamespace,
-			AdmissionTracker:  runtime.admissionTracker,
-			Recorder:          mgr.GetEventRecorder(controllerNameOpenBaoCluster),
-			Platform:          runtime.platform,
-			SingleTenantMode:  runtime.singleTenantMode,
+			APIReader:        mgr.GetAPIReader(),
+			AdmissionTracker: runtime.admissionTracker,
+			Recorder:         mgr.GetEventRecorder(controllerNameOpenBaoCluster),
+			SingleTenantMode: runtime.singleTenantMode,
 		},
-		OIDCRuntime:              runtime.oidcRuntime,
-		OpenBaoRuntime:           runtime.openBaoRuntime,
-		ImageVerificationRuntime: runtime.imageVerificationRuntime,
+		Applications: applications,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("unable to create controller %s: %w", controllerNameOpenBaoCluster, err)
 	}

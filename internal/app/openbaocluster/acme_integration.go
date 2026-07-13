@@ -7,24 +7,12 @@ import (
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
-
-// ACMEIntegrationDependencies groups infrastructure readers required to evaluate
-// the operator-owned prerequisites around OpenBao's native ACME flow.
-type ACMEIntegrationDependencies struct {
-	Client            client.Client
-	APIReader         client.Reader
-	Scheme            *runtime.Scheme
-	OperatorNamespace string
-	Platform          string
-}
 
 // ACMEIntegrationResult is the controller-facing evaluation result for the
 // operator-managed ACME integration contract.
@@ -38,7 +26,7 @@ type ACMEIntegrationResult struct {
 // OpenBao's native ACME flow and returns controller-ready status information.
 func EvaluateACMEIntegration(
 	ctx context.Context,
-	deps ACMEIntegrationDependencies,
+	deps StatusIntegrationDependencies,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) ACMEIntegrationResult {
 	manager := networkingmanager.NewManagerWithReader(

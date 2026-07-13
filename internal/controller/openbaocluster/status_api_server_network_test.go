@@ -66,11 +66,10 @@ func TestSetAPIServerNetworkReadyCondition(t *testing.T) {
 				t.Setenv("KUBERNETES_SERVICE_HOST", "")
 			}
 
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 			reconciler := &OpenBaoClusterReconciler{
-				Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
-				ControllerRuntime: ControllerRuntime{
-					Scheme: scheme,
-				},
+				Client:       fakeClient,
+				Applications: newStatusTestApplications(fakeClient, scheme),
 			}
 
 			reconciler.setAPIServerNetworkReadyCondition(context.Background(), tt.cluster)

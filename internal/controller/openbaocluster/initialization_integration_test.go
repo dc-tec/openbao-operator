@@ -6,7 +6,6 @@ package openbaocluster
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -17,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	security "github.com/dc-tec/openbao-operator/internal/adapter/security"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 )
@@ -31,11 +29,8 @@ var _ = Describe("OpenBaoCluster Initialization", func() {
 				Client: k8sClient,
 				ControllerRuntime: ControllerRuntime{
 					APIReader: k8sClient,
-					Scheme:    k8sClient.Scheme(),
 				},
-				ImageVerificationRuntime: ImageVerificationRuntime{
-					ImageVerifier: security.NewImageVerifier(logr.Discard(), k8sClient, nil),
-				},
+				Applications: newTestOpenBaoClusterApplications(testApplicationsOptions{}),
 			}
 			return &testCompositeReconciler{parent: parent}
 		}

@@ -6,23 +6,11 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
-
-// GatewayIntegrationDependencies groups infrastructure readers required to
-// evaluate the operator-owned Gateway API contract.
-type GatewayIntegrationDependencies struct {
-	Client            client.Client
-	APIReader         client.Reader
-	Scheme            *runtime.Scheme
-	OperatorNamespace string
-	Platform          string
-}
 
 // GatewayIntegrationResult is the controller-facing evaluation result for the
 // operator-managed Gateway API contract.
@@ -36,7 +24,7 @@ type GatewayIntegrationResult struct {
 // prerequisites and controller support for the selected Gateway mode.
 func EvaluateGatewayIntegration(
 	ctx context.Context,
-	deps GatewayIntegrationDependencies,
+	deps StatusIntegrationDependencies,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) GatewayIntegrationResult {
 	manager := networkingmanager.NewManagerWithReader(

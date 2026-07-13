@@ -7,9 +7,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
 )
 
 func newOpenBaoClusterTestScheme(t *testing.T) *runtime.Scheme {
@@ -29,6 +31,22 @@ func newOpenBaoClusterTestScheme(t *testing.T) *runtime.Scheme {
 		t.Fatalf("add openbao scheme: %v", err)
 	}
 	return scheme
+}
+
+func newStatusTestApplications(c client.Client, scheme *runtime.Scheme) *appopenbaocluster.Applications {
+	integrationDeps := appopenbaocluster.StatusIntegrationDependencies{
+		Client:    c,
+		APIReader: c,
+		Scheme:    scheme,
+	}
+	return appopenbaocluster.NewApplications(appopenbaocluster.ApplicationsConfig{
+		Client: c,
+		StatusDependencies: appopenbaocluster.StatusDependencies{
+			Reader: c,
+		},
+		DeletionDependencies: appopenbaocluster.DeletionDependencies{Client: c},
+		StatusIntegration:    integrationDeps,
+	})
 }
 
 func newOpenBaoClusterStatusTestObject() *openbaov1alpha1.OpenBaoCluster {

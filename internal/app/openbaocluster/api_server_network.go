@@ -5,23 +5,11 @@ import (
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	networkingmanager "github.com/dc-tec/openbao-operator/internal/service/networking"
 )
-
-// APIServerNetworkDependencies groups dependencies required to evaluate the
-// operator-managed Kubernetes API egress contract.
-type APIServerNetworkDependencies struct {
-	Client            client.Client
-	APIReader         client.Reader
-	Scheme            *runtime.Scheme
-	OperatorNamespace string
-	Platform          string
-}
 
 // APIServerNetworkResult is the controller-facing evaluation result for the
 // operator-managed Kubernetes API egress contract.
@@ -35,7 +23,7 @@ type APIServerNetworkResult struct {
 // contract for operator-managed NetworkPolicies.
 func EvaluateAPIServerNetwork(
 	ctx context.Context,
-	deps APIServerNetworkDependencies,
+	deps StatusIntegrationDependencies,
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) APIServerNetworkResult {
 	manager := networkingmanager.NewManagerWithReader(

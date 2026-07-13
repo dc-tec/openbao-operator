@@ -122,11 +122,10 @@ func TestSetIngressIntegrationReadyCondition_FastContract(t *testing.T) {
 				builder = builder.WithObjects(tt.objects...)
 			}
 
+			fakeClient := builder.Build()
 			reconciler := &OpenBaoClusterReconciler{
-				Client: builder.Build(),
-				ControllerRuntime: ControllerRuntime{
-					Scheme: scheme,
-				},
+				Client:       fakeClient,
+				Applications: newStatusTestApplications(fakeClient, scheme),
 			}
 
 			reconciler.setIngressIntegrationReadyCondition(context.Background(), tt.cluster)
