@@ -72,7 +72,7 @@ The current stable release line is intended for real deployments, but it remains
   columns={['Version', 'Validated', 'Support posture', 'Production note']}
   rows={[
     {
-      cells: ['2.6.x', 'PR gate, nightly E2E, and config compatibility checks', 'Best-effort supported on the latest stable line', 'Primary validated target'],
+      cells: ['2.6.x', 'PR gate, nightly E2E, rolling-upgrade coverage, and config compatibility checks', 'Best-effort supported on the latest stable line', 'Primary validated target; pre-2.6 to 2.6.0 BlueGreen upgrades are excluded by the known mixed-version limitation'],
       emphasis: 'recommended',
     },
     {
@@ -113,6 +113,12 @@ The current stable release line is intended for real deployments, but it remains
 <Callout type="warning" title="Production upgrade rule">
 
 Always validate new Kubernetes or OpenBao versions in a staging environment before upgrading production, even when they are listed as validated and best-effort supported.
+
+</Callout>
+
+<Callout type="warning" title="OpenBao 2.6.0 BlueGreen upgrade limitation">
+
+OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. A 2.6.0 Green peer cannot report Raft Autopilot health to a pre-2.6 Blue leader, so the operator blocks pre-2.6 to 2.6-or-newer `BlueGreen` transitions before creating Green resources until a compatible target is explicitly qualified. Fresh 2.6.0 clusters and rolling upgrades remain validated. Existing `BlueGreen` clusters must wait for a qualified upstream fix or restore a backup into a new target-version cluster.
 
 </Callout>
 

@@ -44,6 +44,14 @@ Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a s
 
 </Callout>
 
+<Callout type="warning" title="OpenBao 2.6.0 cannot complete a mixed-version BlueGreen upgrade">
+
+OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. During a pre-2.6 to 2.6.0 `BlueGreen` upgrade, Green peers cannot report Raft Autopilot health to the Blue leader and therefore cannot be promoted safely. The operator rejects pre-2.6 to 2.6-or-newer transitions before creating Green resources until a compatible target is explicitly qualified.
+
+Fresh 2.6.0 clusters and the `RollingUpdate` path remain supported. If the existing cluster is already configured for `BlueGreen`, wait for an operator release that qualifies an upstream compatibility fix or restore a backup into a new target-version cluster. Safe idle-only strategy switching is tracked in [#548](https://github.com/dc-tec/openbao-operator/issues/548); do not bypass the current immutability check.
+
+</Callout>
+
 <DiagramFrame
   title="Upgrade control flow"
   caption="Every upgrade starts with validation. After that, the controller either executes a partitioned rolling rollout or creates a parallel Green revision for promotion and cleanup."
