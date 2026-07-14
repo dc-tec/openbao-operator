@@ -647,6 +647,8 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 					openBaoImages,
 					fmt.Sprintf("openbao/openbao:%s", defaultUpgradeFromVersion),
 					fmt.Sprintf("openbao/openbao:%s", defaultUpgradeToVersion),
+					fmt.Sprintf("openbao/openbao:%s", defaultBlueGreenUpgradeFromVersion),
+					fmt.Sprintf("openbao/openbao:%s", defaultBlueGreenUpgradeToVersion),
 				)
 			}
 			if preloadHardenedAssets {

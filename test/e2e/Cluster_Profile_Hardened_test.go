@@ -960,8 +960,8 @@ var _ = Describe("Hardened profile (External TLS + Transit auto-unseal + SelfIni
 		It("performs a hardened blue/green upgrade", Label(
 			"case:hardened-bluegreen-upgrade",
 		), func() {
-			initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialVersion := blueGreenUpgradeFromVersion()
+			targetVersion := blueGreenUpgradeToVersion()
 			initialImage := fmt.Sprintf("openbao/openbao:%s", initialVersion)
 			targetImage := fmt.Sprintf("openbao/openbao:%s", targetVersion)
 			upgradeImage := hardenedSignedUpgradeExecutorImage()
