@@ -62,11 +62,11 @@ func main() {
 	var verbose bool
 
 	const openbaoImageTagUsage = "OpenBao Docker image tag used to resolve an upstream git SHA " +
-		"(e.g. 2.4.4)"
+		"(e.g. 2.6.0)"
 	const openbaoGitSHAUsage = "OpenBao git SHA (40 hex) to use instead of resolving " +
 		"from Docker image"
 
-	flag.StringVar(&openbaoImageTag, "openbao-image-tag", "2.4.4", openbaoImageTagUsage)
+	flag.StringVar(&openbaoImageTag, "openbao-image-tag", "2.6.0", openbaoImageTagUsage)
 	flag.StringVar(&openbaoGitSHA, "openbao-git-sha", "", openbaoGitSHAUsage)
 	flag.IntVar(&maxList, "max-list", 60, "Max number of keys to print per section (0 = unlimited)")
 	flag.BoolVar(&verbose, "v", false, "Verbose output (prints extra keys and sets)")
@@ -100,16 +100,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: fetch upstream openbao module at %s: %v\n", upstreamSHA, err)
 		os.Exit(1)
 	}
+	upstreamConfigDir, err := findUpstreamConfigDir(upstreamModDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: locate upstream config package: %v\n", err)
+		os.Exit(1)
+	}
 
 	upstreamRoots := []rootSpec{
 		// Core server config fields.
 		{Prefix: "", Dir: filepath.Join(upstreamModDir, "command", "server"), Type: "Config"},
 
 		// Shared config fields (logging, telemetry block, etc).
-		{Prefix: "", Dir: filepath.Join(upstreamModDir, "internalshared", "configutil"), Type: "SharedConfig"},
+		{Prefix: "", Dir: upstreamConfigDir, Type: "SharedConfig"},
 
 		// Stanzas parsed manually (listener, audit). We still extract their hcl tag keys from structs.
-		{Prefix: "listener", Dir: filepath.Join(upstreamModDir, "internalshared", "configutil"), Type: "Listener"},
+		{Prefix: "listener", Dir: upstreamConfigDir, Type: "Listener"},
 		{Prefix: "audit", Dir: filepath.Join(upstreamModDir, "command", "server"), Type: "AuditDevice"},
 	}
 
@@ -237,6 +242,26 @@ func extractDefaultGeneratedKeySet() (map[string]struct{}, error) {
 	keys := map[string]struct{}{}
 	collectKeysFromHCLBody(keys, "", parsed.Body())
 	return keys, nil
+}
+
+func findUpstreamConfigDir(upstreamModDir string) (string, error) {
+	candidates := []string{
+		filepath.Join(upstreamModDir, "helper", "configutil"),
+		filepath.Join(upstreamModDir, "internalshared", "configutil"),
+	}
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil && info.IsDir() {
+			return candidate, nil
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("stat %s: %w", candidate, err)
+		}
+	}
+	return "", fmt.Errorf(
+		"neither helper/configutil nor internalshared/configutil exists under %s",
+		upstreamModDir,
+	)
 }
 
 func collectKeysFromHCLBody(out map[string]struct{}, prefix string, body *hclwrite.Body) {
