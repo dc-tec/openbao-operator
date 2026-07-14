@@ -513,7 +513,7 @@ jobs:
           retention-days: 7
 
   openbao-config-compat:
-    name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.6.0)
+    name: OpenBao Config Compatibility (OpenBao >=2.4.0 <2.7.0)
     needs: changes
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.config_compat == 'true'
     runs-on: *runner
@@ -530,7 +530,7 @@ jobs:
       - name: Run OpenBao config compatibility
         uses: ./.github/actions/run-openbao-config-compat
         with:
-          versions: 2.4.4 2.5.5
+          versions: 2.4.4 2.5.5 2.6.0
 
   docs:
     name: Docs Build
