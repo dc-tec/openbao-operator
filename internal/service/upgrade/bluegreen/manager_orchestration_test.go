@@ -249,6 +249,13 @@ func TestManager_ReconcileBlueGreen_BlocksUnsupportedTargetVersion(t *testing.T)
 			wantErrSubstr: "spec.image tag \"2.4.4\" does not match spec.version \"2.5.0\"",
 			wantReason:    upgrade.ReasonImageVersionMismatch,
 		},
+		{
+			name:          "OpenBao 2.6.0 mixed-version blue green incompatibility",
+			current:       "2.5.5",
+			target:        "2.6.0",
+			wantErrSubstr: "blue/green upgrade from OpenBao 2.5.5 to 2.6.0 is blocked",
+			wantReason:    upgrade.ReasonBlueGreenVersionIncompatible,
+		},
 	}
 
 	for _, tt := range tests {

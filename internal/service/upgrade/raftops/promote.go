@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultPromoteVerifyMaxAttempts = 10
+	defaultPromoteVerifyMaxAttempts = 60
 	defaultPromoteVerifyInterval    = time.Second
 )
 
@@ -36,23 +36,27 @@ func promoteRaftPeerAndVerifyWithPolicy(
 	serverID string,
 	policy RetryPolicy,
 ) (bool, error) {
-	if err := client.PromoteRaftPeer(ctx, serverID); err != nil {
-		if errors.Is(err, portopenbao.ErrAlreadyVoter) {
-			return true, nil
-		}
+	promoteErr := client.PromoteRaftPeer(ctx, serverID)
+	alreadyVoterResponse := errors.Is(promoteErr, portopenbao.ErrAlreadyVoter)
 
-		isVoter, verifyErr := waitForRaftServerVoter(ctx, client, serverID, policy)
-		if verifyErr == nil && isVoter {
-			return true, nil
-		}
-		if verifyErr != nil {
-			return false, fmt.Errorf("%w; failed to verify raft voter state after promote error: %v", err, verifyErr)
-		}
-
-		return false, err
+	isVoter, verifyErr := waitForRaftServerVoter(ctx, client, serverID, policy)
+	if verifyErr == nil && isVoter {
+		return alreadyVoterResponse || promoteErr != nil, nil
 	}
 
-	return false, nil
+	if promoteErr != nil {
+		if verifyErr != nil {
+			return false, fmt.Errorf("%w; failed to verify raft voter state after promote error: %v", promoteErr, verifyErr)
+		}
+
+		return false, promoteErr
+	}
+
+	if verifyErr != nil {
+		return false, fmt.Errorf("failed to verify raft voter state after promote request: %w", verifyErr)
+	}
+
+	return false, fmt.Errorf("raft server %q did not become a voter after promote request", serverID)
 }
 
 func waitForRaftServerVoter(ctx context.Context, client raftConfigurationReader, serverID string, policy RetryPolicy) (bool, error) {

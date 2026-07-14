@@ -20,6 +20,15 @@ const defaultUpgradeFromVersion = "2.5.5"
 // Update this when new OpenBao versions are released.
 const defaultUpgradeToVersion = "2.6.0"
 
+// OpenBao 2.6.0 changed the internal request-forwarding gRPC service name, so
+// it cannot exchange Raft Autopilot health with pre-2.6 peers during a
+// blue/green upgrade. Keep successful blue/green coverage on the newest known
+// compatible mixed-version pair while rolling coverage qualifies 2.6.0.
+const (
+	defaultBlueGreenUpgradeFromVersion = "2.4.4"
+	defaultBlueGreenUpgradeToVersion   = "2.5.5"
+)
+
 var (
 	openBaoVersion string
 	openBaoImage   string
@@ -46,4 +55,18 @@ func init() {
 	if apiServerCIDR == "" {
 		apiServerCIDR = kindDefaultServiceCIDR
 	}
+}
+
+func blueGreenUpgradeFromVersion() string {
+	return envOrDefault(
+		"E2E_BLUEGREEN_UPGRADE_FROM_VERSION",
+		envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultBlueGreenUpgradeFromVersion),
+	)
+}
+
+func blueGreenUpgradeToVersion() string {
+	return envOrDefault(
+		"E2E_BLUEGREEN_UPGRADE_TO_VERSION",
+		envOrDefault("E2E_UPGRADE_TO_VERSION", defaultBlueGreenUpgradeToVersion),
+	)
 }
