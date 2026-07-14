@@ -52,13 +52,25 @@ func assertOpenBaoReleaseSubjectRegExp(t *testing.T, expr string) {
 	t.Helper()
 
 	re := compileRegExp(t, expr)
-	trusted := "https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4"
-	if !re.MatchString(trusted) {
-		t.Fatalf("OpenBao release subject %q did not match %q", trusted, expr)
+	trusted := []string{
+		"https://github.com/openbao/openbao/.github/workflows/release.yml@refs/tags/v2.4.4",
+		"https://github.com/openbao/openbao/.github/workflows/release-images.yml@refs/tags/v2.6.0",
 	}
-	untrusted := "https://github.com/openbao/openbao/.github/workflows/ci.yml@refs/heads/main"
-	if re.MatchString(untrusted) {
-		t.Fatalf("OpenBao release regexp %q matched untrusted subject %q", expr, untrusted)
+	for _, subject := range trusted {
+		if !re.MatchString(subject) {
+			t.Fatalf("OpenBao release subject %q did not match %q", subject, expr)
+		}
+	}
+
+	untrusted := []string{
+		"https://github.com/openbao/openbao/.github/workflows/ci.yml@refs/heads/main",
+		"https://github.com/openbao/openbao/.github/workflows/release-images.yml@refs/heads/main",
+		"https://github.com/openbao/openbao/.github/workflows/release-packages.yml@refs/tags/v2.6.0",
+	}
+	for _, subject := range untrusted {
+		if re.MatchString(subject) {
+			t.Fatalf("OpenBao release regexp %q matched untrusted subject %q", expr, subject)
+		}
 	}
 }
 
