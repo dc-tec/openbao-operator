@@ -52,8 +52,9 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 		Owns(&batchv1.Job{}).
 		Owns(&corev1.ServiceAccount{}).
 		WithEventFilter(operatorpredicates.OpenBaoClusterPredicateWithOptions(operatorpredicates.OpenBaoClusterPredicateOptions{
-			ReconcileOnBlueGreenStatus: true,
-			ReconcileOnOperationLock:   true,
+			ReconcileOnAcceptedUpgradeStrategy: true,
+			ReconcileOnBlueGreenStatus:         true,
+			ReconcileOnOperationLock:           true,
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,
@@ -126,8 +127,9 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&openbaov1alpha1.OpenBaoCluster{}).
 		WithEventFilter(operatorpredicates.OpenBaoClusterPredicateWithOptions(operatorpredicates.OpenBaoClusterPredicateOptions{
-			ReconcileOnBlueGreenStatus: true,
-			ReconcileOnOperationLock:   true,
+			ReconcileOnAcceptedUpgradeStrategy: true,
+			ReconcileOnBlueGreenStatus:         true,
+			ReconcileOnOperationLock:           true,
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,

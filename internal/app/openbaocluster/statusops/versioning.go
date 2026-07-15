@@ -75,8 +75,7 @@ func MaybeAdvanceCurrentVersionForBlueGreen(logger logr.Logger, cluster *openbao
 		cluster.Status.BlueGreen.Phase != openbaov1alpha1.PhaseIdle ||
 		cluster.Status.CurrentVersion == "" ||
 		cluster.Status.CurrentVersion == cluster.Spec.Version ||
-		cluster.Spec.Upgrade == nil ||
-		cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
+		upgrade.EffectiveStrategy(cluster) != openbaov1alpha1.UpdateStrategyBlueGreen {
 		return
 	}
 

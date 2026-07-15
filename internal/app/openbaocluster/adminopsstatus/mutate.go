@@ -51,6 +51,7 @@ func MutateWithReader(
 	}
 
 	cluster.ResourceVersion = updated.ResourceVersion
+	cluster.Status.AcceptedUpgradeStrategy = updated.Status.AcceptedUpgradeStrategy
 	cluster.Status.Upgrade = updated.Status.Upgrade
 	cluster.Status.UpgradeRequests = updated.Status.UpgradeRequests
 	cluster.Status.Backup = updated.Status.Backup

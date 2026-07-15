@@ -14,13 +14,10 @@ import (
 )
 
 func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	if cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
-		updateStrategy := "nil"
-		if cluster.Spec.Upgrade != nil {
-			updateStrategy = string(cluster.Spec.Upgrade.Strategy)
-		}
+	if upgrade.EffectiveStrategy(cluster) != openbaov1alpha1.UpdateStrategyBlueGreen {
 		logger.V(1).Info("UpdateStrategy is not BlueGreen; skipping blue/green upgrade reconciliation",
-			"updateStrategy", updateStrategy)
+			"requestedStrategy", upgrade.DesiredStrategy(cluster),
+			"acceptedStrategy", cluster.Status.AcceptedUpgradeStrategy)
 		return false
 	}
 	return true

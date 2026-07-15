@@ -96,6 +96,44 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 	})
 }
 
+func TestUnrevisionedBlueIdentityDoesNotMatchRevisionedGreen(t *testing.T) {
+	t.Parallel()
+
+	cfg := &ExecutorConfig{
+		ClusterName:     "vault",
+		ClusterReplicas: 3,
+	}
+	config := &portopenbao.RaftConfigurationResponse{
+		Config: portopenbao.RaftConfiguration{
+			Servers: []portopenbao.RaftServer{
+				{NodeID: "vault-0", Address: "vault-0.vault.default.svc", Voter: true},
+				{NodeID: "vault-green-0", Address: "vault-green-0.vault.default.svc", Leader: true, Voter: true},
+			},
+		},
+	}
+
+	leaderID, leaderIsBlue := RaftLeaderInfoForRevision(config, cfg)
+	if leaderID != "vault-green-0" || leaderIsBlue {
+		t.Fatalf("RaftLeaderInfoForRevision() = (%q, %v), want (vault-green-0, false)", leaderID, leaderIsBlue)
+	}
+
+	demoter := &demoterStub{}
+	if err := DemoteBlueVotersExceptLeader(
+		context.Background(),
+		logr.Discard(),
+		cfg,
+		demoter,
+		config,
+		"vault-green-0",
+		"vault--",
+	); err != nil {
+		t.Fatalf("DemoteBlueVotersExceptLeader() error = %v", err)
+	}
+	if len(demoter.calls) != 1 || demoter.calls[0] != "vault-0" {
+		t.Fatalf("DemoteRaftPeer calls = %v, want [vault-0]", demoter.calls)
+	}
+}
+
 func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 	t.Parallel()
 

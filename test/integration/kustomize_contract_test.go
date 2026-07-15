@@ -404,7 +404,7 @@ func TestKustomizeDefault_LockManagedPolicyRequiresOpenBaoLabels(t *testing.T) {
 	}
 }
 
-func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *testing.T) {
+func TestKustomizeDefault_OpenBaoClusterPolicyGuardsUpgradeStrategySwitches(t *testing.T) {
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
 		gvk := u.GroupVersionKind()
@@ -424,6 +424,10 @@ func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *t
 
 	var hasRequestedStrategy bool
 	var hasPreviousStrategy bool
+	var hasStrategyChanged bool
+	var hasIdleStatusGuard bool
+	var idleStatusExpression string
+	var hasHandledRequestsGuard bool
 	for _, variable := range variables {
 		variableMap, ok := variable.(map[string]any)
 		if !ok {
@@ -435,15 +439,28 @@ func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *t
 			hasRequestedStrategy = true
 		case "previous_upgrade_strategy":
 			hasPreviousStrategy = true
+		case "upgrade_strategy_changed":
+			hasStrategyChanged = true
+		case "upgrade_strategy_status_idle":
+			hasIdleStatusGuard = true
+			idleStatusExpression, _ = variableMap["expression"].(string)
+		case "upgrade_requests_handled":
+			hasHandledRequestsGuard = true
 		}
 	}
 
-	if !hasRequestedStrategy || !hasPreviousStrategy {
+	if !hasRequestedStrategy || !hasPreviousStrategy || !hasStrategyChanged || !hasIdleStatusGuard || !hasHandledRequestsGuard {
 		t.Fatalf(
-			"expected strategy transition variables in openbao-validate-openbaocluster policy, got requested=%v previous=%v",
+			"expected guarded strategy transition variables, got requested=%v previous=%v changed=%v idle=%v requests=%v",
 			hasRequestedStrategy,
 			hasPreviousStrategy,
+			hasStrategyChanged,
+			hasIdleStatusGuard,
+			hasHandledRequestsGuard,
 		)
+	}
+	if !strings.Contains(idleStatusExpression, "!has(oldObject.status.operationLock) || oldObject.status.operationLock == null") {
+		t.Fatalf("idle strategy transition guard must treat an SSA-cleared operation lock as idle, got %q", idleStatusExpression)
 	}
 
 	validations, found, err := unstructured.NestedSlice(objs[0].Object, "spec", "validations")
@@ -451,26 +468,30 @@ func TestKustomizeDefault_OpenBaoClusterPolicyBlocksUpgradeStrategySwitches(t *t
 		t.Fatalf("read policy validations: found=%v err=%v", found, err)
 	}
 
-	const wantMessage = "spec.upgrade.strategy is immutable after creation; " +
-		"switching between RollingUpdate and BlueGreen is not supported."
-	var foundRule bool
+	wantMessages := []string{
+		"Change only spec.upgrade.strategy first; wait for the operator to accept it before changing version, image, replicas, storage, or restart controls.",
+		"spec.upgrade.strategy can change only while the cluster is initialized, healthy, fully ready, at spec.version, and no upgrade, backup/restore lock, restart/resize, BlueGreen phase, failure, pending Green workload, or safe-mode recovery is active.",
+		"Finish or clear pending spec.upgrade.requests before changing spec.upgrade.strategy.",
+		"Switching to BlueGreen requires spec.upgrade.jwtAuthRole or the default upgrade role created by enabled spec.selfInit.oidc bootstrap.",
+	}
+	foundMessages := make(map[string]bool, len(wantMessages))
 	for _, validation := range validations {
 		validationMap, ok := validation.(map[string]any)
 		if !ok {
 			continue
 		}
 		message, _ := validationMap["message"].(string)
-		expression, _ := validationMap["expression"].(string)
-		if message == wantMessage &&
-			strings.Contains(expression, "variables.requested_upgrade_strategy") &&
-			strings.Contains(expression, "variables.previous_upgrade_strategy") {
-			foundRule = true
-			break
+		for _, wantMessage := range wantMessages {
+			if message == wantMessage {
+				foundMessages[wantMessage] = true
+			}
 		}
 	}
 
-	if !foundRule {
-		t.Fatalf("openbao-validate-openbaocluster policy is missing the upgrade strategy immutability rule")
+	for _, wantMessage := range wantMessages {
+		if !foundMessages[wantMessage] {
+			t.Fatalf("openbao-validate-openbaocluster policy is missing strategy transition guard %q", wantMessage)
+		}
 	}
 }
 
@@ -799,7 +820,7 @@ func TestKustomizeDefault_OpenBaoRestorePolicyProtectsSecretRefs(t *testing.T) {
 	}
 }
 
-func TestKustomizeDefault_OpenBaoClusterCRDRejectsUpgradeStrategySwitches(t *testing.T) {
+func TestKustomizeDefault_OpenBaoClusterCRDDoesNotMakeUpgradeStrategyImmutable(t *testing.T) {
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
 		return u.GetAPIVersion() == "apiextensions.k8s.io/v1" &&
@@ -856,12 +877,12 @@ func TestKustomizeDefault_OpenBaoClusterCRDRejectsUpgradeStrategySwitches(t *tes
 			}
 			message, _ := validationMap["message"].(string)
 			rule, _ := validationMap["rule"].(string)
-			if message == wantMessage && strings.Contains(rule, "oldSelf.upgrade.strategy") {
-				return
+			if message == wantMessage || strings.Contains(rule, "oldSelf.upgrade.strategy") {
+				t.Fatalf("v1alpha1 CRD schema still contains the upgrade strategy immutability rule: %#v", validationMap)
 			}
 		}
 
-		t.Fatalf("v1alpha1 CRD schema is missing the upgrade strategy transition rule")
+		return
 	}
 
 	t.Fatal("v1alpha1 version not found in openbaoclusters CRD")

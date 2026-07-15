@@ -20,7 +20,7 @@ func (m *Manager) shouldSkipUpgradeReconcile(logger logr.Logger, cluster *openba
 		return recon.Result{RequeueAfter: constants.RequeueStandard}, true
 	}
 
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if upgrade.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen {
 		logger.V(1).Info("Skipping rolling upgrade reconciliation; BlueGreen strategy active")
 		return recon.Result{}, true
 	}

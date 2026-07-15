@@ -104,10 +104,7 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	)
 
 	metrics := upgrade.NewMetrics(cluster.Namespace, cluster.Name)
-	strategy := string(openbaov1alpha1.UpdateStrategyRollingUpdate)
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy != "" {
-		strategy = string(cluster.Spec.Upgrade.Strategy)
-	}
+	strategy := string(upgrade.EffectiveStrategy(cluster))
 
 	if result, done := m.shouldSkipUpgradeReconcile(logger, cluster); done {
 		return result, nil

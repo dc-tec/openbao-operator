@@ -19,6 +19,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
 // Manager reconciles workload-owned resources for an OpenBaoCluster.
@@ -168,7 +169,7 @@ func (m *Manager) ensureConfigMapWithName(ctx context.Context, cluster *openbaov
 
 func (m *Manager) applyResource(ctx context.Context, obj client.Object, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if sts, ok := obj.(*appsv1.StatefulSet); ok &&
-		(cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen) {
+		portworkload.EffectiveStrategy(cluster) != openbaov1alpha1.UpdateStrategyBlueGreen {
 		resolvedCluster, err := resourceapply.ResolveOwnerIdentity(ctx, m.client, cluster)
 		if err != nil {
 			return err

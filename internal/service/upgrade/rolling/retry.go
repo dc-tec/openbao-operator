@@ -105,7 +105,7 @@ func (m *Manager) cleanupStepDownJobForRetry(ctx context.Context, logger logr.Lo
 	}
 
 	targetOrdinal := cluster.Status.Upgrade.CurrentPartition - 1
-	targetPod := fmt.Sprintf("%s-%d", cluster.Name, targetOrdinal)
+	targetPod := upgrade.StableVoterPodName(cluster, targetOrdinal)
 	jobName := upgrade.ExecutorJobName(cluster.Name, upgrade.ExecutorActionRollingStepDownLeader, targetPod, "", "")
 	jobKey := types.NamespacedName{Namespace: cluster.Namespace, Name: jobName}
 
@@ -134,11 +134,12 @@ func (m *Manager) resetRolloutPodsForRetry(ctx context.Context, logger logr.Logg
 	}
 
 	sts := &appsv1.StatefulSet{}
-	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, sts); err != nil {
+	statefulSetName := upgrade.StableVoterStatefulSetName(cluster)
+	if err := m.client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: statefulSetName}, sts); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to get StatefulSet %s/%s for retry pod reset: %w", cluster.Namespace, cluster.Name, err)
+		return fmt.Errorf("failed to get StatefulSet %s/%s for retry pod reset: %w", cluster.Namespace, statefulSetName, err)
 	}
 
 	desiredImage := strings.TrimSpace(baoContainerImage(sts.Spec.Template.Spec.Containers))
@@ -170,7 +171,7 @@ func (m *Manager) resetRolloutPodForRetry(
 	sts *appsv1.StatefulSet,
 	ordinal int32,
 ) error {
-	targetPod := fmt.Sprintf("%s-%d", cluster.Name, ordinal)
+	targetPod := upgrade.StableVoterPodName(cluster, ordinal)
 	podKey := types.NamespacedName{Namespace: cluster.Namespace, Name: targetPod}
 
 	pod := &corev1.Pod{}

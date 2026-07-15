@@ -176,6 +176,20 @@ func NewLeaderSearchPolicy(
 	}
 }
 
+// NewLeaderSearchPolicyForRevisions constructs a leader search policy for two
+// concrete workload revisions. An empty revision identifies an unrevisioned
+// StatefulSet and is therefore still a valid fallback when the revisions differ.
+func NewLeaderSearchPolicyForRevisions(
+	primaryRevision string,
+	fallbackRevision string,
+	primaryLabel string,
+	fallbackLabel string,
+) LeaderSearchPolicy {
+	policy := NewLeaderSearchPolicy(primaryRevision, fallbackRevision, primaryLabel, fallbackLabel)
+	policy.AllowFallback = fallbackRevision != primaryRevision
+	return policy
+}
+
 // MaxLeaderSearchAttempts returns the number of revision scans a policy allows.
 func MaxLeaderSearchAttempts(policy LeaderSearchPolicy) int {
 	if policy.AllowFallback {

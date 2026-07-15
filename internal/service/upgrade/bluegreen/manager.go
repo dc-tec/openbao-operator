@@ -17,6 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
@@ -107,10 +108,7 @@ func requeueAfter(duration time.Duration) recon.Result {
 // For Green resources (StatefulSet and snapshot Jobs), we verify and pin digests here to ensure the
 // target images are validated when ImageVerification is enabled.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
-	updateStrategy := "RollingUpdate"
-	if cluster.Spec.Upgrade != nil {
-		updateStrategy = string(cluster.Spec.Upgrade.Strategy)
-	}
+	updateStrategy := string(upgrade.EffectiveStrategy(cluster))
 	logger.Info("Manager reconciling",
 		"updateStrategy", updateStrategy,
 		"currentVersion", cluster.Status.CurrentVersion,

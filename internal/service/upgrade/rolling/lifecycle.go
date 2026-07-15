@@ -10,6 +10,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
@@ -51,7 +52,7 @@ func (m *Manager) waitForFinalizationConverged(ctx context.Context, logger logr.
 	sts := &appsv1.StatefulSet{}
 	stsKey := types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
+		Name:      upgrade.StableVoterStatefulSetName(cluster),
 	}
 	if err := m.client.Get(ctx, stsKey, sts); err != nil {
 		return false, fmt.Errorf("failed to get StatefulSet while checking upgrade convergence: %w", err)

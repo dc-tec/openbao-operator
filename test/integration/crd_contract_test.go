@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
 	provisionerpkg "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
@@ -467,6 +468,104 @@ func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
 
 	if err := k8sClient.Create(ctx, cluster); err != nil {
 		t.Fatalf("expected OpenBaoCluster create without spec.initContainer to succeed, got: %v", err)
+	}
+}
+
+func TestVAP_OpenBaoCluster_GuardsIdleUpgradeStrategySwitches(t *testing.T) {
+	namespace := newTestNamespace(t)
+	waitForOpenBaoClusterAdmissionPolicies(t, namespace)
+
+	healthyStatus := func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+		status.Initialized = true
+		status.Phase = openbaov1alpha1.ClusterPhaseRunning
+		status.CurrentVersion = testOpenBaoVersion244
+		status.ReadyReplicas = 3
+		status.AcceptedUpgradeStrategy = openbaov1alpha1.UpdateStrategyRollingUpdate
+		status.Conditions = []metav1.Condition{
+			{
+				Type:               string(openbaov1alpha1.ConditionAvailable),
+				Status:             metav1.ConditionTrue,
+				Reason:             "Ready",
+				Message:            "all voters are ready",
+				LastTransitionTime: metav1.Now(),
+			},
+		}
+	}
+
+	cluster := newMinimalClusterObj(namespace, "cluster-strategy-switch-idle")
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy:    openbaov1alpha1.UpdateStrategyRollingUpdate,
+		JWTAuthRole: "upgrade-role",
+	}
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("create strategy-switch cluster: %v", err)
+	}
+	updateClusterStatus(t, cluster, healthyStatus)
+
+	var latest openbaov1alpha1.OpenBaoCluster
+	key := types.NamespacedName{Namespace: namespace, Name: cluster.Name}
+	if err := k8sClient.Get(ctx, key, &latest); err != nil {
+		t.Fatalf("get cluster before RollingUpdate to BlueGreen switch: %v", err)
+	}
+	latest.Spec.Upgrade.Strategy = openbaov1alpha1.UpdateStrategyBlueGreen
+	if err := k8sClient.Update(ctx, &latest); err != nil {
+		t.Fatalf("expected healthy idle RollingUpdate to BlueGreen switch to succeed, got: %v", err)
+	}
+
+	updateClusterStatus(t, &latest, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+		healthyStatus(status)
+		status.AcceptedUpgradeStrategy = openbaov1alpha1.UpdateStrategyBlueGreen
+		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{Phase: openbaov1alpha1.PhaseIdle}
+	})
+	if err := statusapply.ApplyOpenBaoClusterOperationLockStatus(
+		ctx,
+		k8sClient,
+		&latest,
+		statusapply.OpenBaoClusterOperationLockStatusApplyOptions{},
+	); err != nil {
+		t.Fatalf("persist cleared operation lock as explicit null: %v", err)
+	}
+	var raw unstructured.Unstructured
+	raw.SetAPIVersion(openbaov1alpha1.GroupVersion.String())
+	raw.SetKind("OpenBaoCluster")
+	if err := k8sClient.Get(ctx, key, &raw); err != nil {
+		t.Fatalf("get raw cluster after explicit-null operation lock apply: %v", err)
+	}
+	operationLock, found, err := unstructured.NestedFieldNoCopy(raw.Object, "status", "operationLock")
+	if err != nil || !found || operationLock != nil {
+		t.Fatalf("expected explicit null status.operationLock, found=%v value=%#v err=%v", found, operationLock, err)
+	}
+	if err := k8sClient.Get(ctx, key, &latest); err != nil {
+		t.Fatalf("get cluster before BlueGreen to RollingUpdate switch: %v", err)
+	}
+	latest.Spec.Upgrade.Strategy = openbaov1alpha1.UpdateStrategyRollingUpdate
+	if err := k8sClient.Update(ctx, &latest); err != nil {
+		t.Fatalf("expected healthy idle BlueGreen to RollingUpdate switch to succeed, got: %v", err)
+	}
+
+	blocked := newMinimalClusterObj(namespace, "cluster-strategy-switch-blocked")
+	blocked.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy:    openbaov1alpha1.UpdateStrategyRollingUpdate,
+		JWTAuthRole: "upgrade-role",
+	}
+	if err := k8sClient.Create(ctx, blocked); err != nil {
+		t.Fatalf("create blocked strategy-switch cluster: %v", err)
+	}
+	updateClusterStatus(t, blocked, func(status *openbaov1alpha1.OpenBaoClusterStatus) {
+		healthyStatus(status)
+		status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+			Operation: openbaov1alpha1.ClusterOperationBackup,
+			Holder:    "backup-manager",
+		}
+	})
+	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: blocked.Name}, blocked); err != nil {
+		t.Fatalf("get blocked strategy-switch cluster: %v", err)
+	}
+	blocked.Spec.Upgrade.Strategy = openbaov1alpha1.UpdateStrategyBlueGreen
+	updateErr := k8sClient.Update(ctx, blocked)
+	requireAdmissionDenied(t, updateErr)
+	if !strings.Contains(updateErr.Error(), "can change only while the cluster is initialized, healthy") {
+		t.Fatalf("unexpected strategy-switch rejection: %v", updateErr)
 	}
 }
 

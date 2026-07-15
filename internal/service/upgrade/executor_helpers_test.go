@@ -184,6 +184,18 @@ func TestNewLeaderSearchPolicy(t *testing.T) {
 	}
 }
 
+func TestNewLeaderSearchPolicyForRevisions(t *testing.T) {
+	t.Parallel()
+
+	policy := raftops.NewLeaderSearchPolicyForRevisions("green", "", "Green", "Blue")
+	if !policy.AllowFallback {
+		t.Fatal("NewLeaderSearchPolicyForRevisions() AllowFallback=false, want true for unrevisioned fallback")
+	}
+	if policy.FallbackRevision != "" {
+		t.Fatalf("NewLeaderSearchPolicyForRevisions() FallbackRevision=%q, want unrevisioned fallback", policy.FallbackRevision)
+	}
+}
+
 func TestNormalizeRetryPolicy(t *testing.T) {
 	t.Parallel()
 

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 	"github.com/go-logr/logr"
 )
@@ -874,15 +873,6 @@ func TestRunBlueGreenRepairConsensusValidation(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name: "missing blue revision",
-			cfg: func() *ExecutorConfig {
-				cfg := baseExecutorTestConfig()
-				cfg.BlueRevision = ""
-				return cfg
-			}(),
-			wantErr: "blue revision is required for consensus repair",
-		},
-		{
 			name: "missing green revision",
 			cfg: func() *ExecutorConfig {
 				cfg := baseExecutorTestConfig()
@@ -907,23 +897,26 @@ func TestRunBlueGreenRepairConsensusValidation(t *testing.T) {
 	}
 }
 
-func TestRunBlueGreenRemovePeersValidation(t *testing.T) {
+func TestRunBlueGreenRemovePeersAcceptsUnrevisionedTarget(t *testing.T) {
 	t.Parallel()
 
 	err := raftops.RunBlueGreenRemovePeers(
-		context.Background(),
+		canceledContext(),
 		logr.Discard(),
 		baseExecutorTestConfig(),
 		"",
 		"green",
-		"blue",
+		"",
 		"Blue",
 	)
 	if err == nil {
-		t.Fatalf("RunBlueGreenRemovePeers() error=nil, want validation error")
+		t.Fatal("RunBlueGreenRemovePeers() error=nil, want leader lookup error")
 	}
-	if !strings.Contains(err.Error(), "revision to remove is required") {
-		t.Fatalf("RunBlueGreenRemovePeers() error=%q, want revision validation error", err.Error())
+	if strings.Contains(err.Error(), "revision to remove is required") {
+		t.Fatalf("RunBlueGreenRemovePeers() rejected an unrevisioned target: %v", err)
+	}
+	if !strings.Contains(err.Error(), "failed to find leader") {
+		t.Fatalf("RunBlueGreenRemovePeers() error=%q, want leader lookup error", err.Error())
 	}
 }
 
@@ -944,95 +937,6 @@ func TestFindLeaderAndFindLeaderOnceValidation(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "config is required") {
 		t.Fatalf("raftops.FindLeader() error=%q, want contains %q", err.Error(), "config is required")
-	}
-}
-
-func TestRaftLeaderInfo(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		config     *portopenbao.RaftConfigurationResponse
-		bluePrefix string
-		wantID     string
-		wantBlue   bool
-	}{
-		{
-			name:       "nil config",
-			config:     nil,
-			bluePrefix: "openbao-blue-",
-			wantID:     "",
-			wantBlue:   false,
-		},
-		{
-			name: "no leader in config",
-			config: &portopenbao.RaftConfigurationResponse{
-				Config: portopenbao.RaftConfiguration{
-					Servers: []portopenbao.RaftServer{
-						{NodeID: "openbao-blue-0", Leader: false},
-					},
-				},
-			},
-			bluePrefix: "openbao-blue-",
-			wantID:     "",
-			wantBlue:   false,
-		},
-		{
-			name: "leader is blue by node id",
-			config: &portopenbao.RaftConfigurationResponse{
-				Config: portopenbao.RaftConfiguration{
-					Servers: []portopenbao.RaftServer{
-						{NodeID: "openbao-blue-1", Leader: true},
-					},
-				},
-			},
-			bluePrefix: "openbao-blue-",
-			wantID:     "openbao-blue-1",
-			wantBlue:   true,
-		},
-		{
-			name: "leader is blue by address",
-			config: &portopenbao.RaftConfigurationResponse{
-				Config: portopenbao.RaftConfiguration{
-					Servers: []portopenbao.RaftServer{
-						{
-							NodeID:  "node-1",
-							Address: "https://openbao-blue-2.openbao.default.svc:8201",
-							Leader:  true,
-						},
-					},
-				},
-			},
-			bluePrefix: "openbao-blue-",
-			wantID:     "node-1",
-			wantBlue:   true,
-		},
-		{
-			name: "leader is not blue",
-			config: &portopenbao.RaftConfigurationResponse{
-				Config: portopenbao.RaftConfiguration{
-					Servers: []portopenbao.RaftServer{
-						{NodeID: "openbao-green-0", Leader: true},
-					},
-				},
-			},
-			bluePrefix: "openbao-blue-",
-			wantID:     "openbao-green-0",
-			wantBlue:   false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			gotID, gotBlue := raftops.RaftLeaderInfo(tt.config, tt.bluePrefix)
-			if gotID != tt.wantID {
-				t.Fatalf("raftops.RaftLeaderInfo() id=%q, want %q", gotID, tt.wantID)
-			}
-			if gotBlue != tt.wantBlue {
-				t.Fatalf("raftops.RaftLeaderInfo() isBlue=%v, want %v", gotBlue, tt.wantBlue)
-			}
-		})
 	}
 }
 

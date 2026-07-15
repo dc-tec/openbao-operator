@@ -3,11 +3,15 @@ package bluegreen
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/labels"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	configurationservice "github.com/dc-tec/openbao-operator/internal/service/configuration"
 )
 
@@ -45,9 +49,7 @@ func (m *Manager) createGreenStatefulSet(ctx context.Context, logger logr.Logger
 		return phaseOutcome{}, fmt.Errorf("workload runtime is not configured")
 	}
 
-	configContent, err := configurationservice.Render(cluster, configurationservice.RenderOptions{
-		TargetRevisionForJoin: blueRevision,
-	})
+	configContent, err := configurationservice.Render(cluster, greenRenderOptions(cluster, blueRevision))
 	if err != nil {
 		return phaseOutcome{}, fmt.Errorf("failed to render config for Green cluster: %w", err)
 	}
@@ -63,6 +65,29 @@ func (m *Manager) createGreenStatefulSet(ctx context.Context, logger logr.Logger
 
 	logger.Info("Created Green StatefulSet", "greenRevision", greenRevision)
 	return requeueAfterOutcome(constants.RequeueShort), nil
+}
+
+func greenRenderOptions(cluster *openbaov1alpha1.OpenBaoCluster, blueRevision string) configurationservice.RenderOptions {
+	return configurationservice.RenderOptions{
+		TargetRevisionForJoin:  blueRevision,
+		RetryJoinLabelSelector: blueRetryJoinLabelSelector(cluster, blueRevision),
+		RetryJoinAsNonVoter:    true,
+	}
+}
+
+func blueRetryJoinLabelSelector(cluster *openbaov1alpha1.OpenBaoCluster, blueRevision string) string {
+	if strings.TrimSpace(blueRevision) != "" || cluster == nil || cluster.Status.BlueGreen == nil {
+		return ""
+	}
+
+	controllerRevision := strings.TrimSpace(cluster.Status.BlueGreen.BlueControllerRevision)
+	if controllerRevision == "" {
+		return ""
+	}
+
+	selector := resourceidentity.VoterPodSelectorLabels(cluster)
+	selector[appsv1.ControllerRevisionHashLabelKey] = controllerRevision
+	return labels.Set(selector).String()
 }
 
 func (m *Manager) prepareGreenStatefulSetImages(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (string, string, error) {

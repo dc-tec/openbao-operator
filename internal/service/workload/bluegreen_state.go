@@ -10,27 +10,25 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
 // IsBlueGreenStrategy returns true when the cluster is configured for blue/green upgrades.
 func IsBlueGreenStrategy(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	return cluster != nil &&
-		cluster.Spec.Upgrade != nil &&
-		cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen
+	return portworkload.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen
 }
 
 // BlueGreenStableRevision returns the currently-active stable revision ("Blue").
 // If status does not yet contain BlueRevision, a deterministic spec-derived revision is returned.
 func BlueGreenStableRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
-	if !IsBlueGreenStrategy(cluster) {
-		return ""
+	if cluster.Status.BlueGreen != nil {
+		// A non-nil status with an empty revision intentionally identifies the
+		// original unrevisioned StatefulSet after RollingUpdate -> BlueGreen.
+		return strings.TrimSpace(cluster.Status.BlueGreen.BlueRevision)
 	}
 
-	if cluster.Status.BlueGreen != nil {
-		blueRevision := strings.TrimSpace(cluster.Status.BlueGreen.BlueRevision)
-		if blueRevision != "" {
-			return blueRevision
-		}
+	if !IsBlueGreenStrategy(cluster) {
+		return ""
 	}
 
 	return revision.OpenBaoClusterRevision(
@@ -44,14 +42,7 @@ func BlueGreenStableRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
 // Traffic remains on Blue by default and switches to Green only in Cleanup phase.
 func BlueGreenActiveRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	blueRevision := BlueGreenStableRevision(cluster)
-	if blueRevision == "" {
-		return ""
-	}
-	if cluster.Status.BlueGreen == nil {
-		return blueRevision
-	}
-
-	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
+	if cluster != nil && cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
 		greenRevision := strings.TrimSpace(cluster.Status.BlueGreen.GreenRevision)
 		if greenRevision != "" {
 			return greenRevision
