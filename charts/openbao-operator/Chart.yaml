@@ -4,8 +4,8 @@ description: >-
   OpenBao Operator installs the OpenBao Kubernetes operator and its required
   cluster-scoped resources.
 type: application
-version: 0.4.0
-appVersion: 0.4.0
+version: 0.4.1
+appVersion: 0.4.1
 icon: >-
   https://raw.githubusercontent.com/dc-tec/openbao-operator/main/docs/assets/logo.svg
 home: https://github.com/dc-tec/openbao-operator
@@ -27,31 +27,21 @@ annotations:
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
   artifacthub.io/prerelease: "false"
-  artifacthub.io/containsSecurityUpdates: 'true'
+  artifacthub.io/containsSecurityUpdates: 'false'
   artifacthub.io/changes: |
-    - kind: security
-      description: "security: require authority for network publication"
-    - kind: added
-      description: "self-init: add initial recovery key bootstrap"
-    - kind: security
-      description: "security: delegate dangerous CR controls"
-    - kind: security
-      description: "security: enforce CR reference authorization"
-    - kind: security
-      description: "security: enforce hardened contract for unsafe controls"
-    - kind: security
-      description: "security: require provenance for managed resources"
     - kind: fixed
-      description: "self-init: make bootstrap config one-shot"
+      description: "compat: support OpenBao 2.6.0 on 0.4.x"
+    - kind: fixed
+      description: "config: omit plugin directory without plugins"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.4.0
+      image: ghcr.io/dc-tec/openbao-operator:0.4.1
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.4.0
+      image: ghcr.io/dc-tec/openbao-init:0.4.1
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.4.0
+      image: ghcr.io/dc-tec/openbao-backup:0.4.1
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.4.0
+      image: ghcr.io/dc-tec/openbao-upgrade:0.4.1
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
