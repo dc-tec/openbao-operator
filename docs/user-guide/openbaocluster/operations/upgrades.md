@@ -102,11 +102,27 @@ Use this sequence in either direction. It deliberately separates the control-pla
 <CommandBlock
   language="bash"
   label="switch"
-  title="Switch an idle cluster from blue-green to rolling"
+  title="Switch an idle cluster from BlueGreen to RollingUpdate"
   code={`kubectl patch openbaocluster <name> -n <namespace> --type merge -p '{
   "spec": {
     "upgrade": {
       "strategy": "RollingUpdate"
+    }
+  }
+}'
+
+kubectl get openbaocluster <name> -n <namespace> \
+  -o jsonpath='{.status.acceptedUpgradeStrategy}{"\\n"}'`}
+/>
+
+<CommandBlock
+  language="bash"
+  label="switch"
+  title="Switch an idle cluster from RollingUpdate to BlueGreen"
+  code={`kubectl patch openbaocluster <name> -n <namespace> --type merge -p '{
+  "spec": {
+    "upgrade": {
+      "strategy": "BlueGreen"
     }
   }
 }'
