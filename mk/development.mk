@@ -120,6 +120,10 @@ verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 		exit 1; \
 	}
 
+.PHONY: verify-go-toolchain-sync
+verify-go-toolchain-sync: ## Verify go.mod and Dockerfile golang builder tags use the same Go version.
+	@bash hack/ci/verify-go-toolchain-sync.sh
+
 .PHONY: verify-vendor
 verify-vendor: ## Verify vendor/ is synchronized with go.mod/go.sum.
 	@GOFLAGS="-mod=mod" go mod vendor
@@ -147,15 +151,15 @@ api-reference: crd-ref-docs ## Generate CRD API reference docs from api/v1alpha1
 
 .PHONY: verify-openbao-config-compat
 verify-openbao-config-compat: ## Validate generated HCL fixtures against upstream OpenBao config parser (semantic).
-	@bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.4
+	@bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.5 2.6.0
 
 .PHONY: report-openbao-config-schema-drift
 report-openbao-config-schema-drift: ## Report upstream OpenBao config schema drift across the supported range (non-failing).
-	@REPORT_SCHEMA_DRIFT=true bash hack/ci/openbao-config-compat.sh 2.4.0 2.4.4
+	@REPORT_SCHEMA_DRIFT=true bash hack/ci/openbao-config-compat.sh 2.4.4 2.5.5 2.6.0
 
 .PHONY: report-openbao-operator-schema-drift
 report-openbao-operator-schema-drift: ## Report operator-vs-upstream OpenBao config schema drift (non-failing).
-	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.4.4
+	@GOFLAGS="-mod=mod" go run ./hack/tools/openbao_operator_schema_drift --openbao-image-tag 2.6.0
 
 .PHONY: report-ast
 report-ast: generate-ast-rules ast-grep ## Run ast-grep rules in report mode (non-failing; warnings only).
@@ -434,12 +438,12 @@ PERF_OPERATOR_IMAGE ?= example.com/openbao-operator:0.0.1
 PERF_CONFIG_INIT_IMAGE ?= openbao-init:dev
 PERF_BACKUP_EXECUTOR_IMAGE ?= openbao-backup:dev
 PERF_UPGRADE_EXECUTOR_IMAGE ?= openbao-upgrade:dev
-PERF_OPENBAO_VERSION ?= 2.5.5
-PERF_OPENBAO_IMAGE ?= openbao/openbao:2.5.5
-PERF_UPGRADE_FROM_VERSION ?= 2.5.4
-PERF_UPGRADE_FROM_IMAGE ?= openbao/openbao:2.5.4
-PERF_UPGRADE_TO_VERSION ?= 2.5.5
-PERF_UPGRADE_TO_IMAGE ?= openbao/openbao:2.5.5
+PERF_OPENBAO_VERSION ?= 2.6.0
+PERF_OPENBAO_IMAGE ?= openbao/openbao:2.6.0
+PERF_UPGRADE_FROM_VERSION ?= 2.5.5
+PERF_UPGRADE_FROM_IMAGE ?= openbao/openbao:2.5.5
+PERF_UPGRADE_TO_VERSION ?= 2.6.0
+PERF_UPGRADE_TO_IMAGE ?= openbao/openbao:2.6.0
 PERF_API_SERVER_CIDR ?= 10.96.0.0/12
 PERF_STORAGE_CLASS ?=
 PERF_TENANT_CHURN_COUNT ?= 10

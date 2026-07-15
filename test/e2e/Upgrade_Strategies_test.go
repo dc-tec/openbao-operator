@@ -1395,8 +1395,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			cfg, err = ctrlconfig.GetConfig()
 			Expect(err).NotTo(HaveOccurred())
 
-			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialVersion = blueGreenUpgradeFromVersion()
+			targetVersion = blueGreenUpgradeToVersion()
 
 			if initialVersion == targetVersion {
 				Skip(fmt.Sprintf("Upgrade test skipped: versions identical (%s)", initialVersion))
@@ -1909,8 +1909,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			tenantNamespace = tenantFW.Namespace
 			admin = tenantFW.Client
 
-			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialVersion = blueGreenUpgradeFromVersion()
+			targetVersion = blueGreenUpgradeToVersion()
 			if initialVersion == targetVersion {
 				Skip("Blue/green syncing gates test skipped")
 			}
@@ -2087,8 +2087,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			cfg, err = ctrlconfig.GetConfig()
 			Expect(err).NotTo(HaveOccurred())
 
-			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialVersion = blueGreenUpgradeFromVersion()
+			targetVersion = blueGreenUpgradeToVersion()
 			initialImage = fmt.Sprintf("openbao/openbao:%s", initialVersion)
 			targetImage = fmt.Sprintf("openbao/openbao:%s", targetVersion)
 			if initialVersion == targetVersion {
@@ -2277,8 +2277,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			tenantNamespace = tenantFW.Namespace
 			admin = tenantFW.Client
 
-			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialVersion = blueGreenUpgradeFromVersion()
+			targetVersion = blueGreenUpgradeToVersion()
 			if initialVersion == targetVersion {
 				Skip("Failure test skipped")
 			}
@@ -2472,8 +2472,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			tenantNamespace = tenantFW.Namespace
 			admin = tenantFW.Client
 
-			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialVersion = blueGreenUpgradeFromVersion()
+			targetVersion = blueGreenUpgradeToVersion()
 			if initialVersion == targetVersion {
 				Skip("Late-phase rollback test skipped")
 			}
@@ -2690,8 +2690,8 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 			cfg, err = ctrlconfig.GetConfig()
 			Expect(err).NotTo(HaveOccurred())
 
-			initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-			targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+			initialVersion = blueGreenUpgradeFromVersion()
+			targetVersion = blueGreenUpgradeToVersion()
 
 			if initialVersion == targetVersion {
 				Skip(fmt.Sprintf("Safe mode chaos test skipped: from version (%s) equals to version (%s). Set E2E_UPGRADE_TO_VERSION to a different version to test upgrades.", initialVersion, targetVersion))
@@ -3057,7 +3057,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				ensureGatewayClassReady(ctx, admin, gatewayClassName, gatewayv1.FeatureName("HTTPRoute"))
 				markGatewayProgrammed(ctx, admin, tenantNamespace, gw.Name)
 
-				initialVersion := envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
+				initialVersion := blueGreenUpgradeFromVersion()
 				upgradeCluster = &openbaov1alpha1.OpenBaoCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "gateway-cluster",
@@ -3129,7 +3129,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				"e2e-anchor",
 				"case:upgrade-gateway-httproute-cutover",
 			), func() {
-				targetVersion := envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+				targetVersion := blueGreenUpgradeToVersion()
 
 				By("Capturing HTTPRoute before upgrade to verify stability")
 				var httpRouteBeforeUpgrade *gatewayv1.HTTPRoute
