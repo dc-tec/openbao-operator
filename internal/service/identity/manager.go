@@ -17,6 +17,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceapply"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
 // Manager reconciles ServiceAccount and RBAC resources for an OpenBaoCluster.
@@ -154,20 +155,27 @@ func openBaoPodResourceNames(cluster *openbaov1alpha1.OpenBaoCluster) []string {
 	}
 
 	prefixReplicaCounts := map[string]int32{
-		cluster.Name: voterReplicas,
+		portworkload.StableVoterStatefulSetName(cluster): voterReplicas,
 	}
 
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if portworkload.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen {
+		// Keep the original name authorized for initial BlueGreen bootstrap and
+		// RollingUpdate-to-BlueGreen transitions with an unrevisioned Blue.
+		prefixReplicaCounts[cluster.Name] = voterReplicas
 		resolvedImage := cluster.Spec.Image
 		if resolvedImage == "" {
 			resolvedImage = constants.GetOpenBaoImage(cluster.Spec.Version)
 		}
 
-		blueRevision := revision.OpenBaoClusterRevision(cluster.Spec.Version, resolvedImage, cluster.Spec.Replicas)
-		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueRevision != "" {
+		blueRevision := ""
+		if cluster.Status.BlueGreen == nil {
+			blueRevision = revision.OpenBaoClusterRevision(cluster.Spec.Version, resolvedImage, cluster.Spec.Replicas)
+		} else {
 			blueRevision = cluster.Status.BlueGreen.BlueRevision
 		}
-		prefixReplicaCounts[fmt.Sprintf("%s-%s", cluster.Name, blueRevision)] = voterReplicas
+		if blueRevision != "" {
+			prefixReplicaCounts[fmt.Sprintf("%s-%s", cluster.Name, blueRevision)] = voterReplicas
+		}
 
 		if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.GreenRevision != "" {
 			prefixReplicaCounts[fmt.Sprintf("%s-%s", cluster.Name, cluster.Status.BlueGreen.GreenRevision)] = voterReplicas

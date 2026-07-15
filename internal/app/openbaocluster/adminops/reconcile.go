@@ -18,6 +18,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
+	upgrademanager "github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 	rollingupgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade/rolling"
 	workloadmanager "github.com/dc-tec/openbao-operator/internal/service/workload"
@@ -145,6 +146,10 @@ func ensureAdminOpsStatus(cluster *openbaov1alpha1.OpenBaoCluster) {
 func buildReconcilers(deps Dependencies) []subReconciler {
 	workloadMgr := workloadmanager.NewManager(deps.Client, deps.Scheme, deps.Platform).WithReader(deps.APIReader)
 	backupRuntime := backupmanager.NewUpgradeStrategyRuntime(deps.Client, deps.Scheme)
+	strategyReader := deps.APIReader
+	if strategyReader == nil {
+		strategyReader = deps.Client
+	}
 	adminOpsMutator := func(
 		ctx context.Context,
 		cluster *openbaov1alpha1.OpenBaoCluster,
@@ -158,6 +163,7 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 	}
 
 	return []subReconciler{
+		upgrademanager.NewStrategyTransitionManager(strategyReader),
 		bluegreen.NewManager(
 			deps.Client,
 			deps.Scheme,

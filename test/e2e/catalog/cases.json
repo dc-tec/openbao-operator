@@ -2588,6 +2588,48 @@
     "suiteTitle": ""
   },
   {
+    "id": "idle-upgrade-strategy-switch",
+    "generatedId": "upgrade-strategy-switch-switches-both-directions-at-idle-and-ac0fc484",
+    "caseLabel": "idle-upgrade-strategy-switch",
+    "coverage": [
+      "upgrade-strategy-switch",
+      "stable-workload-identity"
+    ],
+    "file": "test/e2e/Upgrade_Strategy_Switch_test.go",
+    "type": "It",
+    "name": "switches both directions at idle and preserves the active workload",
+    "path": [
+      "Upgrade Strategy Switching",
+      "switches both directions at idle and preserves the active workload"
+    ],
+    "labels": [
+      "upgrade",
+      "rolling",
+      "bluegreen",
+      "slow",
+      "case:idle-upgrade-strategy-switch",
+      "covers:upgrade-strategy-switch",
+      "covers:stable-workload-identity"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "rolling",
+      "bluegreen",
+      "slow"
+    ],
+    "steps": [
+      "recording the initial rolling StatefulSet identity",
+      "switching only the idle strategy from RollingUpdate to BlueGreen",
+      "performing a blue-green upgrade from 2.4.4 to 2.5.5",
+      "switching only the idle strategy from BlueGreen to RollingUpdate",
+      "performing a rolling upgrade from 2.5.5 to 2.6.0 against the same StatefulSet"
+    ],
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "bluegreen-target-drift-restart",
     "generatedId": "upgrade-target-drift-abandons-an-outdated-green-revision-without-0a3dcf0d",
     "caseLabel": "bluegreen-target-drift-restart",

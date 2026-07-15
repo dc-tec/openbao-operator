@@ -26,6 +26,9 @@ import (
 
 // OpenBaoClusterPredicateOptions controls which OpenBaoCluster changes should trigger reconciliation.
 type OpenBaoClusterPredicateOptions struct {
+	// ReconcileOnAcceptedUpgradeStrategy enables reconciliation when the
+	// operator-accepted upgrade strategy changes.
+	ReconcileOnAcceptedUpgradeStrategy bool
 	// ReconcileOnUpgradeStatus enables reconciliation when status.upgrade changes.
 	ReconcileOnUpgradeStatus bool
 	// ReconcileOnBackupStatus enables reconciliation when status.backup changes.
@@ -76,6 +79,10 @@ func shouldReconcileOpenBaoClusterUpdate(
 	opts OpenBaoClusterPredicateOptions,
 	oldCluster, newCluster *openbaov1alpha1.OpenBaoCluster,
 ) bool {
+	if opts.ReconcileOnAcceptedUpgradeStrategy &&
+		oldCluster.Status.AcceptedUpgradeStrategy != newCluster.Status.AcceptedUpgradeStrategy {
+		return true
+	}
 	if opts.ReconcileOnUpgradeStatus && !equality.Semantic.DeepEqual(oldCluster.Status.Upgrade, newCluster.Status.Upgrade) {
 		return true
 	}

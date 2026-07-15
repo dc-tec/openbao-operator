@@ -15,6 +15,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	upgradesvc "github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
@@ -51,7 +52,7 @@ func nextPodNeedingFSResizeRestart(
 	}
 
 	var wantRev string
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if upgradesvc.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen {
 		wantRev = workloadsvc.BlueGreenActiveRevision(cluster)
 	}
 

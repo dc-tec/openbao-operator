@@ -182,6 +182,22 @@ func FindPreferredLeaderWithFallback(
 	return FindLeaderWithPolicy(ctx, logger, cfg, policy)
 }
 
+// FindPreferredLeaderForRevisions searches two concrete workload revisions.
+// Unlike an optional fallback, an empty revision identifies an unrevisioned
+// StatefulSet and is searched when it differs from the preferred revision.
+func FindPreferredLeaderForRevisions(
+	ctx context.Context,
+	logger logr.Logger,
+	cfg *ExecutorConfig,
+	preferredRevision string,
+	fallbackRevision string,
+	preferredLabel string,
+	fallbackLabel string,
+) (string, error) {
+	policy := NewLeaderSearchPolicyForRevisions(preferredRevision, fallbackRevision, preferredLabel, fallbackLabel)
+	return FindLeaderWithPolicy(ctx, logger, cfg, policy)
+}
+
 // FindAnyLeader tries the first revision and then the second revision.
 func FindAnyLeader(
 	ctx context.Context,
@@ -190,7 +206,7 @@ func FindAnyLeader(
 	firstRevision string,
 	secondRevision string,
 ) (string, error) {
-	return FindPreferredLeaderWithFallback(ctx, logger, cfg, firstRevision, secondRevision, "first", "second")
+	return FindPreferredLeaderForRevisions(ctx, logger, cfg, firstRevision, secondRevision, "first", "second")
 }
 
 // FindLeaderWithPolicy resolves a leader using the provided search policy.

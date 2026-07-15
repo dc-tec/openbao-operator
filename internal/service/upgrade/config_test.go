@@ -32,7 +32,7 @@ func TestExecutorConfig_Validate_BlueGreenRepairConsensus(t *testing.T) {
 			},
 		},
 		{
-			name: "requires blue revision",
+			name: "accepts unrevisioned blue workload",
 			cfg: ExecutorConfig{
 				ClusterNamespace: "default",
 				ClusterName:      "example",
@@ -45,8 +45,6 @@ func TestExecutorConfig_Validate_BlueGreenRepairConsensus(t *testing.T) {
 				SyncThreshold:    100,
 				Timeout:          10 * time.Second,
 			},
-			wantErr:    true,
-			errContain: "blue revision is required",
 		},
 		{
 			name: "requires green revision",

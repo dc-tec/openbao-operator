@@ -111,7 +111,7 @@ func (m *Manager) getUpgradeStatefulSet(ctx context.Context, cluster *openbaov1a
 	sts := &appsv1.StatefulSet{}
 	stsName := types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
+		Name:      upgrade.StableVoterStatefulSetName(cluster),
 	}
 	if err := m.client.Get(ctx, stsName, sts); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -126,7 +126,7 @@ func currentResumeTargetPodName(cluster *openbaov1alpha1.OpenBaoCluster) string 
 	if cluster == nil || cluster.Status.Upgrade == nil || cluster.Status.Upgrade.CurrentPartition <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("%s-%d", cluster.Name, cluster.Status.Upgrade.CurrentPartition-1)
+	return upgrade.StableVoterPodName(cluster, cluster.Status.Upgrade.CurrentPartition-1)
 }
 
 func requiredQuorum(replicas int32) int {
@@ -217,7 +217,7 @@ func (m *Manager) verifyNonTargetPodsReadyAndHealthy(
 	}
 
 	for ordinal := int32(0); ordinal < cluster.Spec.Replicas; ordinal++ {
-		podName := fmt.Sprintf("%s-%d", cluster.Name, ordinal)
+		podName := upgrade.StableVoterPodName(cluster, ordinal)
 		if podName == targetPodName {
 			continue
 		}

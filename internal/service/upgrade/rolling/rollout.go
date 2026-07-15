@@ -113,7 +113,7 @@ func nextRolloutTargetPod(cluster *openbaov1alpha1.OpenBaoCluster) (rolloutTarge
 		CurrentPartition: currentPartition,
 		NextPartition:    currentPartition - 1,
 		Ordinal:          targetOrdinal,
-		Name:             fmt.Sprintf("%s-%d", cluster.Name, targetOrdinal),
+		Name:             upgrade.StableVoterPodName(cluster, targetOrdinal),
 	}, false, nil
 }
 
