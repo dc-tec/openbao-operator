@@ -728,6 +728,31 @@ suites:
     nightly:
       policy: primary-version-full
 
+  - id: upgrade-strategy-switch
+    title: "Upgrade Strategy Switching"
+    owner: upgrade
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Upgrade_Strategy_Switch_test.go
+    labels:
+      - upgrade
+      - rolling
+      - bluegreen
+      - slow
+    coverage:
+      - upgrade-strategy-switch
+      - stable-workload-identity
+    runtime:
+      observed: 15m
+      budget: 25m
+    ci:
+      lanes:
+        - upgrade-bluegreen-core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
   - id: anti-tamper-policy
     title: "Security: Anti-Tamper Policy"
     owner: security

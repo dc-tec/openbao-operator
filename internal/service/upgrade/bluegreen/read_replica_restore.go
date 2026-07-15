@@ -27,6 +27,7 @@ func beginSteadyReadReplicaRestore(
 
 	if greenRevision := cluster.Status.BlueGreen.GreenRevision; greenRevision != "" {
 		cluster.Status.BlueGreen.BlueRevision = greenRevision
+		cluster.Status.BlueGreen.BlueControllerRevision = ""
 	}
 	if cluster.Spec.Image != "" {
 		cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image

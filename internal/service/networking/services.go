@@ -93,9 +93,7 @@ func (m *Manager) ensureExternalService(ctx context.Context, _ logr.Logger, clus
 	}
 
 	selectorLabels := resourceidentity.PodSelectorLabels(cluster)
-	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
-		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
-	}
+	applyActiveServiceSelector(cluster, selectorLabels)
 
 	service := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -281,9 +279,7 @@ func (m *Manager) ensureACMEChallengeService(ctx context.Context, _ logr.Logger,
 	}
 
 	selectorLabels := resourceidentity.PodSelectorLabels(cluster)
-	if activeRevision := activeServiceRevision(cluster); activeRevision != "" {
-		selectorLabels[constants.LabelOpenBaoRevision] = activeRevision
-	}
+	applyActiveServiceSelector(cluster, selectorLabels)
 
 	service := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{

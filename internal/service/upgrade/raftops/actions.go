@@ -233,9 +233,6 @@ func RunBlueGreenWaitGreenSynced(ctx context.Context, logger logr.Logger, cfg *E
 // RunBlueGreenRepairConsensus enforces Blue voters and Green non-voters during
 // rollback repair.
 func RunBlueGreenRepairConsensus(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) error {
-	if cfg.BlueRevision == "" {
-		return fmt.Errorf("blue revision is required for consensus repair")
-	}
 	if cfg.GreenRevision == "" {
 		return fmt.Errorf("green revision is required for consensus repair")
 	}
@@ -433,11 +430,7 @@ func RunBlueGreenRemovePeers(
 	fallbackLeaderRevision string,
 	peerColor string,
 ) error {
-	if strings.TrimSpace(revisionToRemove) == "" {
-		return fmt.Errorf("revision to remove is required")
-	}
-
-	leaderURL, err := FindPreferredLeaderWithFallback(
+	leaderURL, err := FindPreferredLeaderForRevisions(
 		ctx,
 		logger,
 		cfg,

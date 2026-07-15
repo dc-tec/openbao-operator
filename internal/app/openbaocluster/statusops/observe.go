@@ -218,9 +218,10 @@ func gatherStatefulSetState(
 		Name:      cluster.Name,
 	}
 
-	// Compute active revision for blue/green deployments.
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
-		state.ActiveRevision = workloadsvc.BlueGreenActiveRevision(cluster)
+	// Preserve the active revision across strategy changes so status follows the
+	// existing workload rather than assuming the requested strategy renamed it.
+	state.ActiveRevision = workloadsvc.BlueGreenActiveRevision(cluster)
+	if state.ActiveRevision != "" {
 		statefulSetName.Name = fmt.Sprintf("%s-%s", cluster.Name, state.ActiveRevision)
 	}
 
@@ -299,8 +300,15 @@ func gatherPodState(
 	podSelector := resourceidentity.VoterPodSelectorLabels(cluster)
 	podSelector[labelsCfg.AppNameKey] = labelsCfg.AppNameValue
 	podSelector[labelsCfg.AppManagedByKey] = labelsCfg.AppManagedByValue
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen && state.ActiveRevision != "" {
+	if state.ActiveRevision != "" {
 		podSelector[labelsCfg.OpenBaoRevisionKey] = state.ActiveRevision
+	} else if upgrade.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen && cluster.Status.BlueGreen != nil {
+		// A RollingUpdate-to-BlueGreen transition keeps the original StatefulSet
+		// as Blue. Isolate those pods from Green using their controller revision
+		// because the original workload has no OpenBao revision label.
+		if controllerRevision := strings.TrimSpace(cluster.Status.BlueGreen.BlueControllerRevision); controllerRevision != "" {
+			podSelector[appsv1.ControllerRevisionHashLabelKey] = controllerRevision
+		}
 	}
 
 	var pods corev1.PodList
@@ -314,7 +322,7 @@ func gatherPodState(
 	state.Pods = pods.Items
 
 	pod0Name := fmt.Sprintf("%s-0", cluster.Name)
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen && state.ActiveRevision != "" {
+	if state.ActiveRevision != "" {
 		pod0Name = fmt.Sprintf("%s-%s-0", cluster.Name, state.ActiveRevision)
 	}
 

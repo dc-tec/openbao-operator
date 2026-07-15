@@ -4939,12 +4939,6 @@ spec:
               rule: self.tls.mode != 'ACME' || ((self.replicas <= 1) && (!has(self.upgrade)
                 || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) &&
                 has(self.tls.acme.sharedCache))
-            - message: spec.upgrade.strategy is immutable after creation; switching
-                between RollingUpdate and BlueGreen is not supported.
-              rule: '((!has(self.upgrade) || !has(self.upgrade.strategy) || size(self.upgrade.strategy)
-                == 0) ? ''RollingUpdate'' : self.upgrade.strategy) == ((!has(oldSelf.upgrade)
-                || !has(oldSelf.upgrade.strategy) || size(oldSelf.upgrade.strategy)
-                == 0) ? ''RollingUpdate'' : oldSelf.upgrade.strategy)'
             - message: spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true
               rule: '!has(self.unseal) || self.unseal.type != ''ocikms'' || !has(self.unseal.credentialsSecretRef)
                 || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey)
@@ -4958,6 +4952,16 @@ spec:
           status:
             description: Status defines the observed state of OpenBaoCluster.
             properties:
+              acceptedUpgradeStrategy:
+                description: |-
+                  AcceptedUpgradeStrategy is the upgrade strategy the operator has accepted
+                  after applying idle-state transition guards. While a requested strategy
+                  change is blocked, controllers continue using this strategy so an existing
+                  operation can finish safely.
+                enum:
+                - RollingUpdate
+                - BlueGreen
+                type: string
               activeLeader:
                 description: ActiveLeader is the current Raft leader pod name, for
                   example "prod-cluster-0".
@@ -5051,6 +5055,12 @@ spec:
                 description: BlueGreen tracks the state of blue/green upgrades (if
                   enabled).
                 properties:
+                  blueControllerRevision:
+                    description: |-
+                      BlueControllerRevision is the Kubernetes StatefulSet controller revision
+                      of Blue. It identifies an unrevisioned rolling workload after switching to
+                      BlueGreen without requiring the existing Pods to be restarted or relabeled.
+                    type: string
                   blueImage:
                     description: |-
                       BlueImage is the container image used by the Blue cluster.

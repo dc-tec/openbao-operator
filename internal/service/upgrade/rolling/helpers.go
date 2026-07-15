@@ -12,6 +12,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 )
 
 // getClusterPods returns all pods belonging to the cluster.
@@ -35,7 +36,7 @@ func (m *Manager) getClusterPods(ctx context.Context, cluster *openbaov1alpha1.O
 	// StatefulSet pods have a name pattern: <cluster-name>-<ordinal>
 	// Backup job pods have labels like "openbao.org/component": backup
 	filteredPods := make([]corev1.Pod, 0, len(podList.Items))
-	statefulSetPrefix := cluster.Name + "-"
+	statefulSetPrefix := upgrade.StableVoterStatefulSetName(cluster) + "-"
 	for _, pod := range podList.Items {
 		// Skip backup job pods (they have the backup component label)
 		if pod.Labels[constants.LabelOpenBaoComponent] == constants.ComponentBackup {

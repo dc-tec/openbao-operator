@@ -2048,7 +2048,6 @@ type PluginConfig struct {
 // +kubebuilder:validation:XValidation:rule="self.tls.mode != 'OperatorManaged' || size(self.tls.rotationPeriod) > 0",message="spec.tls.rotationPeriod is required when spec.tls.mode is OperatorManaged"
 // +kubebuilder:validation:XValidation:rule="self.tls.mode == 'ACME' || !has(self.tls.acme) || !has(self.tls.acme.sharedCache)",message="spec.tls.acme.sharedCache is only supported when spec.tls.mode is ACME"
 // +kubebuilder:validation:XValidation:rule="self.tls.mode != 'ACME' || ((self.replicas <= 1) && (!has(self.upgrade) || self.upgrade.strategy != 'BlueGreen')) || (has(self.tls.acme) && has(self.tls.acme.sharedCache))",message="HA ACME clusters require spec.tls.acme.sharedCache when more than one Pod can serve the same hostname"
-// +kubebuilder:validation:XValidation:rule="((!has(self.upgrade) || !has(self.upgrade.strategy) || size(self.upgrade.strategy) == 0) ? 'RollingUpdate' : self.upgrade.strategy) == ((!has(oldSelf.upgrade) || !has(oldSelf.upgrade.strategy) || size(oldSelf.upgrade.strategy) == 0) ? 'RollingUpdate' : oldSelf.upgrade.strategy)",message="spec.upgrade.strategy is immutable after creation; switching between RollingUpdate and BlueGreen is not supported."
 // +kubebuilder:validation:XValidation:rule="!has(self.unseal) || self.unseal.type != 'ocikms' || !has(self.unseal.credentialsSecretRef) || (has(self.unseal.ocikms) && has(self.unseal.ocikms.authTypeAPIKey) && self.unseal.ocikms.authTypeAPIKey == true)",message="spec.unseal.credentialsSecretRef for ocikms requires spec.unseal.ocikms.authTypeAPIKey=true"
 // +kubebuilder:validation:XValidation:rule="!has(self.recoveryKeys) || !has(self.recoveryKeys.initial) || (has(self.selfInit) && self.selfInit.enabled)",message="spec.recoveryKeys.initial requires spec.selfInit.enabled=true"
 // +kubebuilder:validation:XValidation:rule="!has(self.recoveryKeys) || !has(self.recoveryKeys.initial) || (has(self.unseal) && self.unseal.type != 'static')",message="spec.recoveryKeys.initial requires a non-static spec.unseal.type"
@@ -2326,6 +2325,11 @@ type BlueGreenStatus struct {
 	Phase BlueGreenPhase `json:"phase,omitempty"`
 	// BlueRevision is the hash/name of the currently active cluster.
 	BlueRevision string `json:"blueRevision,omitempty"`
+	// BlueControllerRevision is the Kubernetes StatefulSet controller revision
+	// of Blue. It identifies an unrevisioned rolling workload after switching to
+	// BlueGreen without requiring the existing Pods to be restarted or relabeled.
+	// +optional
+	BlueControllerRevision string `json:"blueControllerRevision,omitempty"`
 	// BlueImage is the container image used by the Blue cluster.
 	// This ensures the Blue cluster is not actively upgraded when spec.image changes.
 	BlueImage string `json:"blueImage,omitempty"`
@@ -2481,6 +2485,12 @@ type OpenBaoClusterStatus struct {
 	// CurrentVersion is the OpenBao version currently running on the cluster.
 	// +optional
 	CurrentVersion string `json:"currentVersion,omitempty"`
+	// AcceptedUpgradeStrategy is the upgrade strategy the operator has accepted
+	// after applying idle-state transition guards. While a requested strategy
+	// change is blocked, controllers continue using this strategy so an existing
+	// operation can finish safely.
+	// +optional
+	AcceptedUpgradeStrategy UpdateStrategyType `json:"acceptedUpgradeStrategy,omitempty"`
 	// Initialized indicates whether the OpenBao cluster has been initialized.
 	// This is set to true after the first pod is initialized using bao operator init
 	// or after self-initialization completes.

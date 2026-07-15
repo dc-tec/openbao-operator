@@ -41,12 +41,13 @@ func ApplyOpenBaoClusterAdminOpsStatus(
 			Namespace: cluster.Namespace,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			Upgrade:         cluster.Status.Upgrade,
-			UpgradeRequests: cluster.Status.UpgradeRequests,
-			Backup:          cluster.Status.Backup,
-			BlueGreen:       cluster.Status.BlueGreen,
-			BreakGlass:      cluster.Status.BreakGlass,
-			AdminOps:        cluster.Status.AdminOps,
+			AcceptedUpgradeStrategy: cluster.Status.AcceptedUpgradeStrategy,
+			Upgrade:                 cluster.Status.Upgrade,
+			UpgradeRequests:         cluster.Status.UpgradeRequests,
+			Backup:                  cluster.Status.Backup,
+			BlueGreen:               cluster.Status.BlueGreen,
+			BreakGlass:              cluster.Status.BreakGlass,
+			AdminOps:                cluster.Status.AdminOps,
 		},
 	}, c)
 	if err != nil {

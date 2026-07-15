@@ -14,6 +14,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/raftops"
 )
 
@@ -23,7 +24,7 @@ func (m *Manager) setStatefulSetPartition(ctx context.Context, cluster *openbaov
 	sts := &appsv1.StatefulSet{}
 	stsName := types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
+		Name:      upgrade.StableVoterStatefulSetName(cluster),
 	}
 
 	if err := m.client.Get(ctx, stsName, sts); err != nil {
@@ -53,7 +54,7 @@ func (m *Manager) waitForPodRevisionUpdated(ctx context.Context, logger logr.Log
 	sts := &appsv1.StatefulSet{}
 	stsKey := types.NamespacedName{
 		Namespace: cluster.Namespace,
-		Name:      cluster.Name,
+		Name:      upgrade.StableVoterStatefulSetName(cluster),
 	}
 	if err := m.client.Get(ctx, stsKey, sts); err != nil {
 		return false, fmt.Errorf("failed to get StatefulSet while checking pod revision: %w", err)

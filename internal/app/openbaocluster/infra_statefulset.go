@@ -8,6 +8,7 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
@@ -27,7 +28,7 @@ func (r *infraReconciler) computeStatefulSetSpec(
 		SkipReconciliation: false,
 	}
 
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if workloadsvc.IsBlueGreenStrategy(cluster) {
 		spec.Revision = workloadsvc.BlueGreenStableRevision(cluster)
 		if spec.Revision == "" {
 			spec.Name = cluster.Name
@@ -44,8 +45,8 @@ func (r *infraReconciler) computeStatefulSetSpec(
 			return spec
 		}
 	} else {
-		spec.Revision = ""
-		spec.Name = cluster.Name
+		spec.Revision = upgrade.StableVoterRevision(cluster)
+		spec.Name = upgrade.StableVoterStatefulSetName(cluster)
 	}
 
 	return spec

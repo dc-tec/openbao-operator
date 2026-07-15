@@ -118,7 +118,7 @@ Always validate new Kubernetes or OpenBao versions in a staging environment befo
 
 <Callout type="warning" title="OpenBao 2.6.0 BlueGreen upgrade limitation">
 
-OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. A 2.6.0 Green peer cannot report Raft Autopilot health to a pre-2.6 Blue leader, so the operator blocks pre-2.6 to 2.6-or-newer `BlueGreen` transitions before creating Green resources until a compatible target is explicitly qualified. Fresh 2.6.0 clusters and rolling upgrades remain validated. Existing `BlueGreen` clusters must wait for a qualified upstream fix or restore a backup into a new target-version cluster.
+OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. A 2.6.0 Green peer cannot report Raft Autopilot health to a pre-2.6 Blue leader, so the operator blocks pre-2.6 to 2.6-or-newer `BlueGreen` transitions before creating Green resources until a compatible target is explicitly qualified. Fresh 2.6.0 clusters and rolling upgrades remain validated. Existing `BlueGreen` clusters can return to a healthy, idle state, change only `spec.upgrade.strategy` to `RollingUpdate`, wait for `status.acceptedUpgradeStrategy=RollingUpdate`, and then request 2.6.x.
 
 </Callout>
 

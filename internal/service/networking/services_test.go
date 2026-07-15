@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -81,6 +82,87 @@ func TestEnsureExternalService_BlueGreenSelectorStillPinsActiveRevision(t *testi
 	}
 	if _, ok := service.Spec.Selector[constants.LabelOpenBaoWorkloadPool]; ok {
 		t.Fatalf("did not expect external Service selector to pin a workload pool during blue/green")
+	}
+}
+
+func TestEnsureExternalService_BlueGreenSelectorPinsUnrevisionedBlueControllerRevision(t *testing.T) {
+	cluster := newMinimalCluster("svc-bluegreen-unrevisioned", "default")
+	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{}
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
+		Strategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+	}
+	cluster.Status.AcceptedUpgradeStrategy = openbaov1alpha1.UpdateStrategyBlueGreen
+	cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+		Phase:                  openbaov1alpha1.PhaseIdle,
+		BlueControllerRevision: "svc-bluegreen-unrevisioned-6d89f76c4b",
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
+
+	if err := manager.ensureExternalService(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("ensureExternalService() error = %v", err)
+	}
+
+	service := &corev1.Service{}
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      externalServiceName(cluster),
+	}, service); err != nil {
+		t.Fatalf("failed to get external Service: %v", err)
+	}
+
+	if got := service.Spec.Selector[appsv1.ControllerRevisionHashLabelKey]; got != cluster.Status.BlueGreen.BlueControllerRevision {
+		t.Fatalf("selector controller revision = %q, want %q", got, cluster.Status.BlueGreen.BlueControllerRevision)
+	}
+	if _, ok := service.Spec.Selector[constants.LabelOpenBaoRevision]; ok {
+		t.Fatalf("did not expect revision selector for unrevisioned Blue: %#v", service.Spec.Selector)
+	}
+}
+
+func TestEnsureExternalService_SwitchToRollingRemovesBlueGreenSelector(t *testing.T) {
+	cluster := newMinimalCluster("svc-switch-rolling", "default")
+	cluster.Spec.Service = &openbaov1alpha1.ServiceConfig{}
+	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{Strategy: openbaov1alpha1.UpdateStrategyBlueGreen}
+	cluster.Status.AcceptedUpgradeStrategy = openbaov1alpha1.UpdateStrategyBlueGreen
+	cluster.Status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{
+		Phase:        openbaov1alpha1.PhaseIdle,
+		BlueRevision: "blue123",
+	}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(cluster).
+		WithReturnManagedFields().
+		Build()
+	manager := NewManager(k8sClient, testScheme, "operators", constants.PlatformKubernetes)
+	ctx := context.Background()
+
+	if err := manager.ensureExternalService(ctx, logr.Discard(), cluster); err != nil {
+		t.Fatalf("ensureExternalService() BlueGreen error = %v", err)
+	}
+	cluster.Spec.Upgrade.Strategy = openbaov1alpha1.UpdateStrategyRollingUpdate
+	cluster.Status.AcceptedUpgradeStrategy = openbaov1alpha1.UpdateStrategyRollingUpdate
+	if err := manager.ensureExternalService(ctx, logr.Discard(), cluster); err != nil {
+		t.Fatalf("ensureExternalService() RollingUpdate error = %v", err)
+	}
+
+	service := &corev1.Service{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: cluster.Namespace,
+		Name:      externalServiceName(cluster),
+	}, service); err != nil {
+		t.Fatalf("failed to get external Service: %v", err)
+	}
+	if _, ok := service.Spec.Selector[constants.LabelOpenBaoRevision]; ok {
+		t.Fatalf("did not expect rolling Service to retain the BlueGreen revision selector: %#v", service.Spec.Selector)
+	}
+	if _, ok := service.Spec.Selector[appsv1.ControllerRevisionHashLabelKey]; ok {
+		t.Fatalf("did not expect rolling Service to retain the Blue controller selector: %#v", service.Spec.Selector)
 	}
 }
 

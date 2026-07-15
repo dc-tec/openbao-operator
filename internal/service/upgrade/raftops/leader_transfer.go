@@ -57,7 +57,7 @@ const (
 
 // FindInitialLeader prefers a Green leader and falls back to Blue.
 func FindInitialLeader(ctx context.Context, logger logr.Logger, cfg *ExecutorConfig) (string, error) {
-	leaderURL, err := FindPreferredLeaderWithFallback(
+	leaderURL, err := FindPreferredLeaderForRevisions(
 		ctx,
 		logger,
 		cfg,
@@ -134,7 +134,7 @@ func EnsureGreenLeaderBySteppingDownBlueWithFuncs(
 					return nil, NewExecutorReasonedError(ReasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), err)
 				}
 				config = currentConfig
-				leaderID, leaderIsBlue = RaftLeaderInfo(config, bluePrefix)
+				leaderID, leaderIsBlue = RaftLeaderInfoForRevision(config, cfg)
 				if leaderID == "" {
 					return nil, NewExecutorReasonedError(ReasonLeaderTransferStateFailed, fmt.Sprintf("leader transfer state %s failed", state), errors.New("raft leader not found in configuration"))
 				}
@@ -205,10 +205,11 @@ func clientForLeaderURL(ctx context.Context, cfg *ExecutorConfig, factory *openb
 	return client, nil
 }
 
-// RaftLeaderInfo returns the leader ID from the raft configuration and whether
-// it belongs to the Blue revision.
-func RaftLeaderInfo(config *portopenbao.RaftConfigurationResponse, bluePrefix string) (string, bool) {
-	if config == nil {
+// RaftLeaderInfoForRevision returns the leader and whether it belongs to the
+// configured Blue workload. Exact expected pod names are required because the
+// original unrevisioned StatefulSet prefix also prefixes revisioned Green Pods.
+func RaftLeaderInfoForRevision(config *portopenbao.RaftConfigurationResponse, cfg *ExecutorConfig) (string, bool) {
+	if config == nil || cfg == nil {
 		return "", false
 	}
 
@@ -216,8 +217,13 @@ func RaftLeaderInfo(config *portopenbao.RaftConfigurationResponse, bluePrefix st
 		if !server.Leader {
 			continue
 		}
-		leaderID := server.NodeID
-		return leaderID, IsBlueRaftServer(server.NodeID, server.Address, bluePrefix)
+		return server.NodeID, RaftServerMatchesRevision(
+			server.NodeID,
+			server.Address,
+			cfg.ClusterName,
+			cfg.BlueRevision,
+			cfg.ClusterReplicas,
+		)
 	}
 
 	return "", false
@@ -247,7 +253,14 @@ func DemoteBlueVotersExceptLeader(
 		if !server.Voter || server.NodeID == leaderID {
 			continue
 		}
-		if !IsBlueRaftServer(server.NodeID, server.Address, bluePrefix) {
+		isBlue := RaftServerMatchesRevision(server.NodeID, server.Address, cfg.ClusterName, cfg.BlueRevision, cfg.ClusterReplicas)
+		// Retain the prefix-based contract for older direct callers that did not
+		// populate BlueRevision. Production passes "<cluster>--" for an
+		// unrevisioned Blue workload and therefore uses exact expected pod names.
+		if cfg.BlueRevision == "" && bluePrefix != "" && bluePrefix != cfg.ClusterName+"--" {
+			isBlue = IsBlueRaftServer(server.NodeID, server.Address, bluePrefix)
+		}
+		if !isBlue {
 			continue
 		}
 
@@ -441,7 +454,7 @@ func DemoteAllBluePods(ctx context.Context, logger logr.Logger, cfg *ExecutorCon
 	}
 
 	for _, i := range ReplicaOrdinals(cfg.ClusterReplicas) {
-		bluePodName := fmt.Sprintf("%s-%s-%d", cfg.ClusterName, cfg.BlueRevision, i)
+		bluePodName := RevisionPodName(cfg.ClusterName, cfg.BlueRevision, i)
 		logger.V(1).Info("Demoting Blue pod to non-voter", "pod_name", bluePodName)
 		if err := client.DemoteRaftPeer(ctx, bluePodName); err != nil {
 			if IsBenignDemoteError(err) {
