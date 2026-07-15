@@ -2,6 +2,14 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.4.1](https://github.com/dc-tec/openbao-operator/compare/0.4.0...0.4.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* **compat:** support OpenBao 2.6.0 on 0.4.x ([#547](https://github.com/dc-tec/openbao-operator/issues/547)) ([dbba4fd](https://github.com/dc-tec/openbao-operator/commit/dbba4fd4fb0372a7fda4745a63b568b08567c147))
+* **config:** omit plugin directory without plugins ([763a433](https://github.com/dc-tec/openbao-operator/commit/763a433de982d4ba09c36a94db32df6309aded6e))
+
 ## [0.4.0](https://github.com/dc-tec/openbao-operator/compare/0.3.0...0.4.0) (2026-07-04)
 
 
