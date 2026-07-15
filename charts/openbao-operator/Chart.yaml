@@ -4,8 +4,8 @@ description: >-
   OpenBao Operator installs the OpenBao Kubernetes operator and its required
   cluster-scoped resources.
 type: application
-version: 0.4.1
-appVersion: 0.4.1
+version: 0.4.2
+appVersion: 0.4.2
 icon: >-
   https://raw.githubusercontent.com/dc-tec/openbao-operator/main/docs/assets/logo.svg
 home: https://github.com/dc-tec/openbao-operator
@@ -30,18 +30,16 @@ annotations:
   artifacthub.io/containsSecurityUpdates: 'false'
   artifacthub.io/changes: |
     - kind: fixed
-      description: "compat: support OpenBao 2.6.0 on 0.4.x"
-    - kind: fixed
-      description: "config: omit plugin directory without plugins"
+      description: "upgrade: allow idle strategy switching on 0.4.x"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.4.1
+      image: ghcr.io/dc-tec/openbao-operator:0.4.2
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.4.1
+      image: ghcr.io/dc-tec/openbao-init:0.4.2
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.4.1
+      image: ghcr.io/dc-tec/openbao-backup:0.4.2
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.4.1
+      image: ghcr.io/dc-tec/openbao-upgrade:0.4.2
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1

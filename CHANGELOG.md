@@ -2,6 +2,13 @@
 
 Release notes are generated and maintained via **release-please** based on **Conventional Commits**.
 
+## [0.4.2](https://github.com/dc-tec/openbao-operator/compare/0.4.1...0.4.2) (2026-07-15)
+
+
+### Bug Fixes
+
+* **upgrade:** allow idle strategy switching on 0.4.x ([#552](https://github.com/dc-tec/openbao-operator/issues/552)) ([3501400](https://github.com/dc-tec/openbao-operator/commit/35014002c6f9b4c2700545d909490a92b2dc92bd))
+
 ## [0.4.1](https://github.com/dc-tec/openbao-operator/compare/0.4.0...0.4.1) (2026-07-15)
 
 
