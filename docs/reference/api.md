@@ -438,6 +438,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `phase` _[BlueGreenPhase](#bluegreenphase)_ | Phase is the current phase of the blue/green upgrade. |  | Enum: [Idle DeployingGreen JoiningMesh Syncing Promoting DemotingBlue Cleanup RestoringReadReplicas RollingBack RollbackCleanup] <br /> |
 | `blueRevision` _string_ | BlueRevision is the hash/name of the currently active cluster. |  |  |
+| `blueControllerRevision` _string_ | BlueControllerRevision is the Kubernetes StatefulSet controller revision<br />of Blue. It identifies an unrevisioned rolling workload after switching to<br />BlueGreen without requiring the existing Pods to be restarted or relabeled. |  | Optional: \{\} <br /> |
 | `blueImage` _string_ | BlueImage is the container image used by the Blue cluster.<br />This ensures the Blue cluster is not actively upgraded when spec.image changes. |  |  |
 | `greenRevision` _string_ | GreenRevision is the hash/name of the next cluster (if upgrade in progress). |  |  |
 | `manualPromotionRequired` _boolean_ | ManualPromotionRequired snapshots whether the current in-flight blue/green<br />upgrade requires an explicit spec.upgrade.requests.promote request before<br />promotion can proceed. It is derived from spec.upgrade.blueGreen.autoPromote<br />when the upgrade starts. |  | Optional: \{\} <br /> |
@@ -1111,6 +1112,7 @@ _Appears in:_
 | `readyReplicas` _integer_ | ReadyReplicas is the number of replicas that are currently Ready. |  | Optional: \{\} <br /> |
 | `readReplicas` _[ReadReplicaStatus](#readreplicastatus)_ | ReadReplicas captures observed state for the read-replica pool. |  | Optional: \{\} <br /> |
 | `currentVersion` _string_ | CurrentVersion is the OpenBao version currently running on the cluster. |  | Optional: \{\} <br /> |
+| `acceptedUpgradeStrategy` _[UpdateStrategyType](#updatestrategytype)_ | AcceptedUpgradeStrategy is the upgrade strategy the operator has accepted<br />after applying idle-state transition guards. While a requested strategy<br />change is blocked, controllers continue using this strategy so an existing<br />operation can finish safely. |  | Enum: [RollingUpdate BlueGreen] <br />Optional: \{\} <br /> |
 | `initialized` _boolean_ | Initialized indicates whether the OpenBao cluster has been initialized.<br />This is set to true after the first pod is initialized using bao operator init<br />or after self-initialization completes. |  | Optional: \{\} <br /> |
 | `selfInitialized` _boolean_ | SelfInitialized indicates whether the cluster was initialized using<br />OpenBao's self-initialization feature. When true, no root token Secret<br />exists for this cluster (the root token was auto-revoked). |  | Optional: \{\} <br /> |
 | `lastBackupTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastBackupTime is the timestamp of the last successful backup, if configured.<br />Deprecated: Use Backup.LastBackupTime instead. |  | Optional: \{\} <br /> |
@@ -2090,6 +2092,7 @@ _Validation:_
 - Enum: [RollingUpdate BlueGreen]
 
 _Appears in:_
+- [OpenBaoClusterStatus](#openbaoclusterstatus)
 - [UpgradeConfig](#upgradeconfig)
 
 | Field | Description |

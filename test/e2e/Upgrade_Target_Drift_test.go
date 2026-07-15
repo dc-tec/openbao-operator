@@ -46,8 +46,8 @@ var _ = Describe("Upgrade Strategies: Blue/Green Drift", Label("upgrade", "blueg
 		tenantNamespace = tenantFW.Namespace
 		admin = tenantFW.Client
 
-		initialVersion = envOrDefault("E2E_UPGRADE_FROM_VERSION", defaultUpgradeFromVersion)
-		targetVersion = envOrDefault("E2E_UPGRADE_TO_VERSION", defaultUpgradeToVersion)
+		initialVersion = blueGreenUpgradeFromVersion()
+		targetVersion = blueGreenUpgradeToVersion()
 		initialImage = fmt.Sprintf("openbao/openbao:%s", initialVersion)
 		targetImage = fmt.Sprintf("openbao/openbao:%s", targetVersion)
 		driftImage = fmt.Sprintf("ghcr.io/openbao/openbao:%s", targetVersion)

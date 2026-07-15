@@ -1,7 +1,7 @@
 version: 1
 versions:
   openbao:
-    defaultImage: "ghcr.io/openbao/openbao:2.5.5"
+    defaultImage: "ghcr.io/openbao/openbao:2.6.0"
   storageEmulators:
     rustfsImage: "docker.io/rustfs/rustfs@sha256:3c2d55977829620284ece8593901bf776bcfc0fc9972784352de4dcffdb92416"
     fakeGCSImage: "docker.io/fsouza/fake-gcs-server@sha256:3730da0e31f7e5186a90ec4899dc2c336104e7599df400411392ef17e684c31f"
@@ -721,6 +721,31 @@ suites:
     runtime:
       observed: 8m6.824s
       budget: 12m
+    ci:
+      lanes:
+        - upgrade-bluegreen-core
+      pullRequest: changed-paths
+    nightly:
+      policy: primary-version-full
+
+  - id: upgrade-strategy-switch
+    title: "Upgrade Strategy Switching"
+    owner: upgrade
+    riskTier: critical
+    isolation: global-mutator
+    files:
+      - test/e2e/Upgrade_Strategy_Switch_test.go
+    labels:
+      - upgrade
+      - rolling
+      - bluegreen
+      - slow
+    coverage:
+      - upgrade-strategy-switch
+      - stable-workload-identity
+    runtime:
+      observed: 15m
+      budget: 25m
     ci:
       lanes:
         - upgrade-bluegreen-core

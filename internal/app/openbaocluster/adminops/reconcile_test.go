@@ -19,6 +19,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 	backupmanager "github.com/dc-tec/openbao-operator/internal/service/backup"
+	upgrademanager "github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	"github.com/dc-tec/openbao-operator/internal/service/upgrade/bluegreen"
 	rollingupgrade "github.com/dc-tec/openbao-operator/internal/service/upgrade/rolling"
 )
@@ -328,25 +329,29 @@ func TestBuildReconcilers_InjectsRecorderIntoManagers(t *testing.T) {
 		Recorder:  recorder,
 	})
 
-	if len(reconcilers) != 3 {
-		t.Fatalf("len(reconcilers) = %d, want 3", len(reconcilers))
+	if len(reconcilers) != 4 {
+		t.Fatalf("len(reconcilers) = %d, want 4", len(reconcilers))
 	}
 
-	blueGreenMgr, ok := reconcilers[0].(*bluegreen.Manager)
+	if _, ok := reconcilers[0].(*upgrademanager.StrategyTransitionManager); !ok {
+		t.Fatalf("reconcilers[0] = %T, want *upgrade.StrategyTransitionManager", reconcilers[0])
+	}
+
+	blueGreenMgr, ok := reconcilers[1].(*bluegreen.Manager)
 	if !ok {
-		t.Fatalf("reconcilers[0] = %T, want *bluegreen.Manager", reconcilers[0])
+		t.Fatalf("reconcilers[1] = %T, want *bluegreen.Manager", reconcilers[1])
 	}
 	assertRecorderInjected(t, blueGreenMgr)
 
-	rollingMgr, ok := reconcilers[1].(*rollingupgrade.Manager)
+	rollingMgr, ok := reconcilers[2].(*rollingupgrade.Manager)
 	if !ok {
-		t.Fatalf("reconcilers[1] = %T, want *rollingupgrade.Manager", reconcilers[1])
+		t.Fatalf("reconcilers[2] = %T, want *rollingupgrade.Manager", reconcilers[2])
 	}
 	assertRecorderInjected(t, rollingMgr)
 
-	backupMgr, ok := reconcilers[2].(*backupmanager.Manager)
+	backupMgr, ok := reconcilers[3].(*backupmanager.Manager)
 	if !ok {
-		t.Fatalf("reconcilers[2] = %T, want *backup.Manager", reconcilers[2])
+		t.Fatalf("reconcilers[3] = %T, want *backup.Manager", reconcilers[3])
 	}
 	assertRecorderInjected(t, backupMgr)
 }

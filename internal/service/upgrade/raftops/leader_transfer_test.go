@@ -96,6 +96,123 @@ func TestDemoteBlueVotersExceptLeader(t *testing.T) {
 	})
 }
 
+func TestRaftLeaderInfoForRevision(t *testing.T) {
+	t.Parallel()
+
+	cfg := &ExecutorConfig{
+		ClusterName:     "openbao",
+		BlueRevision:    "blue",
+		ClusterReplicas: 3,
+	}
+	tests := []struct {
+		name     string
+		config   *portopenbao.RaftConfigurationResponse
+		cfg      *ExecutorConfig
+		wantID   string
+		wantBlue bool
+	}{
+		{name: "nil config", cfg: cfg},
+		{
+			name: "nil executor config",
+			config: &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{{NodeID: "openbao-blue-0", Leader: true}},
+			}},
+		},
+		{
+			name: "no leader in config",
+			config: &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{{NodeID: "openbao-blue-0"}},
+			}},
+			cfg: cfg,
+		},
+		{
+			name: "leader is blue by node id",
+			config: &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{{NodeID: "openbao-blue-1", Leader: true}},
+			}},
+			cfg:      cfg,
+			wantID:   "openbao-blue-1",
+			wantBlue: true,
+		},
+		{
+			name: "leader is blue by address",
+			config: &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{{
+					NodeID:  "node-1",
+					Address: "https://openbao-blue-2.openbao.default.svc:8201",
+					Leader:  true,
+				}},
+			}},
+			cfg:      cfg,
+			wantID:   "node-1",
+			wantBlue: true,
+		},
+		{
+			name: "leader is not blue",
+			config: &portopenbao.RaftConfigurationResponse{Config: portopenbao.RaftConfiguration{
+				Servers: []portopenbao.RaftServer{{NodeID: "openbao-green-0", Leader: true}},
+			}},
+			cfg:    cfg,
+			wantID: "openbao-green-0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotID, gotBlue := RaftLeaderInfoForRevision(tt.config, tt.cfg)
+			if gotID != tt.wantID || gotBlue != tt.wantBlue {
+				t.Fatalf(
+					"RaftLeaderInfoForRevision() = (%q, %v), want (%q, %v)",
+					gotID,
+					gotBlue,
+					tt.wantID,
+					tt.wantBlue,
+				)
+			}
+		})
+	}
+}
+
+func TestUnrevisionedBlueIdentityDoesNotMatchRevisionedGreen(t *testing.T) {
+	t.Parallel()
+
+	cfg := &ExecutorConfig{
+		ClusterName:     "vault",
+		ClusterReplicas: 3,
+	}
+	config := &portopenbao.RaftConfigurationResponse{
+		Config: portopenbao.RaftConfiguration{
+			Servers: []portopenbao.RaftServer{
+				{NodeID: "vault-0", Address: "vault-0.vault.default.svc", Voter: true},
+				{NodeID: "vault-green-0", Address: "vault-green-0.vault.default.svc", Leader: true, Voter: true},
+			},
+		},
+	}
+
+	leaderID, leaderIsBlue := RaftLeaderInfoForRevision(config, cfg)
+	if leaderID != "vault-green-0" || leaderIsBlue {
+		t.Fatalf("RaftLeaderInfoForRevision() = (%q, %v), want (vault-green-0, false)", leaderID, leaderIsBlue)
+	}
+
+	demoter := &demoterStub{}
+	if err := DemoteBlueVotersExceptLeader(
+		context.Background(),
+		logr.Discard(),
+		cfg,
+		demoter,
+		config,
+		"vault-green-0",
+		"vault--",
+	); err != nil {
+		t.Fatalf("DemoteBlueVotersExceptLeader() error = %v", err)
+	}
+	if len(demoter.calls) != 1 || demoter.calls[0] != "vault-0" {
+		t.Fatalf("DemoteRaftPeer calls = %v, want [vault-0]", demoter.calls)
+	}
+}
+
 func TestWaitForLeaderElectionWithFinderAndPolicy(t *testing.T) {
 	t.Parallel()
 

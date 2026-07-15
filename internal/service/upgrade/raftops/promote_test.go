@@ -55,11 +55,43 @@ func TestPromoteRaftPeerAndVerify(t *testing.T) {
 		wantOriginalError bool
 	}{
 		{
-			name: "promote success does not re-read raft config",
+			name: "promote success verifies raft config",
 			client: &raftPeerPromoterStub{
 				config: raftConfigWithServer(true),
 			},
 			wantPromoteCalls: 1,
+			wantReadCalls:    1,
+		},
+		{
+			name: "promote success waits for raft config to converge",
+			client: &raftPeerPromoterStub{
+				readResults: []raftConfigReadResult{
+					{config: raftConfigWithServer(false)},
+					{config: raftConfigWithServer(true)},
+				},
+			},
+			wantPromoteCalls: 1,
+			wantReadCalls:    2,
+		},
+		{
+			name: "promote success fails when raft config does not converge",
+			client: &raftPeerPromoterStub{
+				config: raftConfigWithServer(false),
+			},
+			wantErr:          true,
+			wantErrContains:  "did not become a voter after promote request",
+			wantPromoteCalls: 1,
+			wantReadCalls:    3,
+		},
+		{
+			name: "promote success reports raft config verification errors",
+			client: &raftPeerPromoterStub{
+				configErr: errors.New("configuration unavailable"),
+			},
+			wantErr:          true,
+			wantErrContains:  "failed to verify raft voter state after promote request",
+			wantPromoteCalls: 1,
+			wantReadCalls:    3,
 		},
 		{
 			name: "promote error is benign when raft config confirms voter",
@@ -72,13 +104,38 @@ func TestPromoteRaftPeerAndVerify(t *testing.T) {
 			wantReadCalls:    1,
 		},
 		{
-			name: "promote already voter error is benign without raft config verification",
+			name: "promote already voter error is benign when raft config confirms voter",
+			client: &raftPeerPromoterStub{
+				promoteErr: portopenbao.ErrAlreadyVoter,
+				config:     raftConfigWithServer(true),
+			},
+			wantAlreadyVoter: true,
+			wantPromoteCalls: 1,
+			wantReadCalls:    1,
+		},
+		{
+			name: "promote already voter error waits for raft config to converge",
+			client: &raftPeerPromoterStub{
+				promoteErr: portopenbao.ErrAlreadyVoter,
+				readResults: []raftConfigReadResult{
+					{config: raftConfigWithServer(false)},
+					{config: raftConfigWithServer(true)},
+				},
+			},
+			wantAlreadyVoter: true,
+			wantPromoteCalls: 1,
+			wantReadCalls:    2,
+		},
+		{
+			name: "promote already voter error is returned when raft config does not confirm voter",
 			client: &raftPeerPromoterStub{
 				promoteErr: portopenbao.ErrAlreadyVoter,
 				config:     raftConfigWithServer(false),
 			},
-			wantAlreadyVoter: true,
-			wantPromoteCalls: 1,
+			wantErr:           true,
+			wantPromoteCalls:  1,
+			wantReadCalls:     3,
+			wantOriginalError: false,
 		},
 		{
 			name: "promote error is benign when raft config converges to voter after stale read",

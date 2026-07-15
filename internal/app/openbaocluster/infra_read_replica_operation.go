@@ -2,6 +2,7 @@ package openbaocluster
 
 import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	upgradesvc "github.com/dc-tec/openbao-operator/internal/service/upgrade"
 	workloadsvc "github.com/dc-tec/openbao-operator/internal/service/workload"
 )
 
@@ -42,8 +43,7 @@ func shouldStageSteadyReadReplicasDown(cluster *openbaov1alpha1.OpenBaoCluster) 
 	case openbaov1alpha1.ClusterOperationRestore:
 		return true
 	case openbaov1alpha1.ClusterOperationUpgrade:
-		return cluster.Spec.Upgrade != nil &&
-			cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen &&
+		return upgradesvc.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen &&
 			(phase == "" || phase == openbaov1alpha1.PhaseIdle)
 	default:
 		return false

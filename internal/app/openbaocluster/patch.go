@@ -134,7 +134,8 @@ func PatchAdminOpsOwnedFieldsWithReader(
 	// Backup-only diffs are persisted by the backup manager. When we do patch
 	// adminops status for other reasons, we still apply the full current adminops
 	// plane so shared SSA ownership does not clear backup or peer fields by omission.
-	if reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
+	if original.Status.AcceptedUpgradeStrategy == cluster.Status.AcceptedUpgradeStrategy &&
+		reflect.DeepEqual(original.Status.BlueGreen, cluster.Status.BlueGreen) &&
 		reflect.DeepEqual(original.Status.UpgradeRequests, cluster.Status.UpgradeRequests) &&
 		reflect.DeepEqual(original.Status.BreakGlass, cluster.Status.BreakGlass) &&
 		reflect.DeepEqual(original.Status.AdminOps, cluster.Status.AdminOps) {
@@ -148,6 +149,7 @@ func PatchAdminOpsOwnedFieldsWithReader(
 
 	cluster.Status.AdminOps = adminOps
 	err := adminopsstatus.MutateWithReader(ctx, reader, c, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+		obj.Status.AcceptedUpgradeStrategy = cluster.Status.AcceptedUpgradeStrategy
 		obj.Status.BlueGreen = cluster.Status.BlueGreen
 		obj.Status.UpgradeRequests = cluster.Status.UpgradeRequests
 		obj.Status.BreakGlass = cluster.Status.BreakGlass

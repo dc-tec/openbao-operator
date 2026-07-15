@@ -43,6 +43,9 @@ func (m *Manager) ensureBlueClusterReadyForGreen(
 
 func bluePodsHaveExpectedRevision(logger logr.Logger, bluePods []corev1.Pod, blueRevision string) bool {
 	for _, pod := range bluePods {
+		if blueRevision == "" && pod.Labels[constants.LabelOpenBaoRevision] == "" {
+			continue
+		}
 		rev, present := pod.Labels[constants.LabelOpenBaoRevision]
 		if present && rev == blueRevision {
 			continue

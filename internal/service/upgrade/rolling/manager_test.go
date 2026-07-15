@@ -1031,8 +1031,9 @@ func TestReconcile_SkipsBlueGreenStrategy(t *testing.T) {
 			},
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			Initialized:    true,
-			CurrentVersion: "2.4.0",
+			Initialized:             true,
+			CurrentVersion:          "2.4.0",
+			AcceptedUpgradeStrategy: openbaov1alpha1.UpdateStrategyBlueGreen,
 		},
 	}
 

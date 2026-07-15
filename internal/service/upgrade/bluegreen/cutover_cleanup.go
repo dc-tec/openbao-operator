@@ -115,7 +115,7 @@ func (m *Manager) ensureBlueStatefulSetDeleted(
 	cluster *openbaov1alpha1.OpenBaoCluster,
 ) (phaseOutcome, bool, error) {
 	blueRevision := cluster.Status.BlueGreen.BlueRevision
-	blueStatefulSetName := fmt.Sprintf("%s-%s", cluster.Name, blueRevision)
+	blueStatefulSetName := upgrade.StableVoterStatefulSetName(cluster)
 	blueStatefulSet := &appsv1.StatefulSet{}
 	if err := m.client.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,

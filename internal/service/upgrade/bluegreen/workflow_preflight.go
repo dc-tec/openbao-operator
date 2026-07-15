@@ -14,13 +14,10 @@ import (
 )
 
 func (m *Manager) shouldReconcileBlueGreen(logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	if cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
-		updateStrategy := "nil"
-		if cluster.Spec.Upgrade != nil {
-			updateStrategy = string(cluster.Spec.Upgrade.Strategy)
-		}
+	if upgrade.EffectiveStrategy(cluster) != openbaov1alpha1.UpdateStrategyBlueGreen {
 		logger.V(1).Info("UpdateStrategy is not BlueGreen; skipping blue/green upgrade reconciliation",
-			"updateStrategy", updateStrategy)
+			"requestedStrategy", upgrade.DesiredStrategy(cluster),
+			"acceptedStrategy", cluster.Status.AcceptedUpgradeStrategy)
 		return false
 	}
 	return true
@@ -122,6 +119,9 @@ func (m *Manager) validateIdleUpgradeInputs(ctx context.Context, logger logr.Log
 	}
 
 	if err := upgrade.ValidateUpgradeTargetVersion(logger, cluster.Status.CurrentVersion, cluster.Spec.Version); err != nil {
+		return core.ReleaseUpgradeLockOnErrorIfHeldWithReader(ctx, m.reader, m.client, logger, cluster, true, err, "")
+	}
+	if err := validateVersionCompatibility(cluster.Status.CurrentVersion, cluster.Spec.Version); err != nil {
 		return core.ReleaseUpgradeLockOnErrorIfHeldWithReader(ctx, m.reader, m.client, logger, cluster, true, err, "")
 	}
 	if err := upgrade.ValidateImageRefMatchesVersion(cluster.Spec.Version, cluster.Spec.Image); err != nil {

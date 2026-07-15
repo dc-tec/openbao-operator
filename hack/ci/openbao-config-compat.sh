@@ -15,7 +15,7 @@ fi
 
 VERSIONS=("$@")
 if [ ${#VERSIONS[@]} -eq 0 ]; then
-  VERSIONS=("2.4.0" "2.4.4")
+  VERSIONS=("2.4.4" "2.5.5" "2.6.0")
 fi
 
 FILES=( "$ROOT_DIR"/internal/adapter/config/testdata/*.hcl )
@@ -86,7 +86,13 @@ GO
   (
     cd "${tmpdir}"
     go mod init tmp.example/openbao-config-compat >/dev/null 2>&1
-    GOFLAGS="${TMPMODULE_GOFLAGS}" go get "github.com/openbao/openbao@${sha}" >/dev/null 2>&1
+    # OpenBao's root module is not a supported consumer module and uses a local
+    # replace for sdk/v2. Module consumers do not inherit that replace, so pin
+    # the SDK to the same commit as the server source. This keeps the parser and
+    # its request types aligned across release tags (notably OpenBao 2.6+).
+    GOFLAGS="${TMPMODULE_GOFLAGS}" go get \
+      "github.com/openbao/openbao@${sha}" \
+      "github.com/openbao/openbao/sdk/v2@${sha}" >/dev/null 2>&1
     GOFLAGS="${TMPMODULE_GOFLAGS}" go mod tidy >/dev/null 2>&1
     GOFLAGS="${TMPMODULE_GOFLAGS}" go run . "${FILES[@]}"
 

@@ -16,7 +16,9 @@ import (
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
+	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
 // ErrStatefulSetPrerequisitesMissing indicates that required prerequisites (ConfigMap or TLS Secret)
@@ -173,16 +175,19 @@ func (m *Manager) EnsureStatefulSet(ctx context.Context, logger logr.Logger, clu
 		// the controllers reconcile concurrently, the workload controller must ensure the partition
 		// is locked before it applies an upgrade template, otherwise Kubernetes may roll all pods
 		// immediately and bypass the orchestrated upgrade flow.
-		rollingStrategy := cluster.Spec.Upgrade == nil ||
-			cluster.Spec.Upgrade.Strategy == "" ||
-			cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyRollingUpdate
+		rollingStrategy := portworkload.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyRollingUpdate
 		pendingVersionUpgrade := rollingStrategy &&
 			spec.Pool == constants.LabelValueOpenBaoWorkloadPoolVoter &&
 			initialized &&
-			spec.Revision == "" &&
 			cluster.Status.Upgrade == nil &&
 			cluster.Status.CurrentVersion != "" &&
 			cluster.Status.CurrentVersion != cluster.Spec.Version
+
+		if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolVoter && !pendingVersionUpgrade {
+			if err := m.reconcileIdleStatefulSetUpdateStrategy(ctx, logger, cluster, existingSTS, rollingStrategy); err != nil {
+				return err
+			}
+		}
 
 		if pendingVersionUpgrade {
 			var existingPartition *int32
@@ -232,6 +237,67 @@ func (m *Manager) EnsureStatefulSet(ctx context.Context, logger logr.Logger, clu
 
 	if err := m.reconcileMaintenanceAnnotationsForPods(ctx, logger, cluster, spec); err != nil {
 		return fmt.Errorf("failed to reconcile maintenance annotations for OpenBaoCluster %s/%s pods: %w", cluster.Namespace, cluster.Name, err)
+	}
+
+	return nil
+}
+
+func (m *Manager) reconcileIdleStatefulSetUpdateStrategy(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	existingSTS *appsv1.StatefulSet,
+	rollingStrategy bool,
+) error {
+	if existingSTS == nil {
+		return nil
+	}
+
+	patched := existingSTS.DeepCopy()
+	if rollingStrategy {
+		if existingSTS.Spec.UpdateStrategy.Type != appsv1.OnDeleteStatefulSetStrategyType {
+			return nil
+		}
+
+		partition := int32(0)
+		if existingSTS.Status.CurrentRevision != "" &&
+			existingSTS.Status.UpdateRevision != "" &&
+			existingSTS.Status.CurrentRevision != existingSTS.Status.UpdateRevision {
+			// Preserve healthy OnDelete pods when the stable Blue workload has a
+			// newer post-promotion template. The next rolling version upgrade owns
+			// the partition and will advance these pods under normal orchestration.
+			partition = cluster.Spec.Replicas
+		}
+		patched.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
+			Type: appsv1.RollingUpdateStatefulSetStrategyType,
+			RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
+				Partition: &partition,
+			},
+		}
+		logger.Info("Restoring RollingUpdate StatefulSet strategy after idle strategy transition",
+			"statefulset", existingSTS.Name,
+			"partition", partition)
+	} else {
+		if existingSTS.Spec.UpdateStrategy.Type == appsv1.OnDeleteStatefulSetStrategyType &&
+			existingSTS.Spec.UpdateStrategy.RollingUpdate == nil {
+			return nil
+		}
+
+		// A typed SSA object cannot clear the API-defaulted rollingUpdate payload
+		// while changing the discriminator to OnDelete. Patch the union atomically
+		// first so Kubernetes never validates a mixed OnDelete/RollingUpdate value.
+		patched.Spec.UpdateStrategy = appsv1.StatefulSetUpdateStrategy{
+			Type: appsv1.OnDeleteStatefulSetStrategyType,
+		}
+		logger.Info("Setting OnDelete StatefulSet strategy after idle strategy transition",
+			"statefulset", existingSTS.Name)
+	}
+
+	if err := resourceownership.RequireOwnerProof("change workload StatefulSet update strategy", existingSTS, cluster); err != nil {
+		return err
+	}
+	if err := m.client.Patch(ctx, patched, client.MergeFrom(existingSTS)); err != nil {
+		return fmt.Errorf("failed to change update strategy on StatefulSet %s/%s: %w", cluster.Namespace, existingSTS.Name, err)
 	}
 
 	return nil
