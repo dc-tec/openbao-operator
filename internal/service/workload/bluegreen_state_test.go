@@ -43,6 +43,12 @@ func TestBlueGreenActiveRevision_SwitchesInCleanup(t *testing.T) {
 	if got := BlueGreenActiveRevision(cluster); got != "blue-rev" {
 		t.Fatalf("expected blue revision before cleanup phase, got %q", got)
 	}
+
+	cluster.Status.BlueGreen.BlueRevision = ""
+	cluster.Status.BlueGreen.Phase = openbaov1alpha1.PhaseCleanup
+	if got := BlueGreenActiveRevision(cluster); got != "green-rev" {
+		t.Fatalf("expected green revision in cleanup after unrevisioned Blue, got %q", got)
+	}
 }
 
 func TestEnsureBlueGreenStatus_PrefersCurrentVersionImageDuringUpgrade(t *testing.T) {

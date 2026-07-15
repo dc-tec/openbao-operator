@@ -39,6 +39,68 @@ spec:
     - name: previous_upgrade_strategy
       expression: >-
         oldObject != null && has(oldObject.spec.upgrade) && has(oldObject.spec.upgrade.strategy) && oldObject.spec.upgrade.strategy != "" ? oldObject.spec.upgrade.strategy : "RollingUpdate"
+    - name: upgrade_strategy_changed
+      expression: >-
+        oldObject != null && variables.requested_upgrade_strategy != variables.previous_upgrade_strategy
+    - name: upgrade_strategy_status_idle
+      expression: >-
+        oldObject != null &&
+        has(oldObject.status) &&
+        has(oldObject.status.initialized) && oldObject.status.initialized == true &&
+        has(oldObject.status.phase) && oldObject.status.phase == "Running" &&
+        has(oldObject.status.currentVersion) && oldObject.status.currentVersion == oldObject.spec.version &&
+        has(oldObject.status.readyReplicas) && oldObject.status.readyReplicas == oldObject.spec.replicas &&
+        has(oldObject.status.acceptedUpgradeStrategy) && oldObject.status.acceptedUpgradeStrategy == variables.previous_upgrade_strategy &&
+        (!has(oldObject.status.upgrade)) &&
+        (!has(oldObject.status.operationLock) || oldObject.status.operationLock == null) &&
+        (!has(oldObject.status.breakGlass) || !has(oldObject.status.breakGlass.active) || oldObject.status.breakGlass.active == false) &&
+        (!has(oldObject.status.workload) || !has(oldObject.status.workload.lastError)) &&
+        has(oldObject.status.conditions) &&
+        oldObject.status.conditions.exists(c, c.type == "Available" && c.status == "True") &&
+        !oldObject.status.conditions.exists(c, c.type == "Degraded" && c.status == "True") &&
+        (!has(oldObject.status.blueGreen) ||
+          ((!has(oldObject.status.blueGreen.phase) || oldObject.status.blueGreen.phase == "Idle") &&
+           (!has(oldObject.status.blueGreen.greenRevision) || oldObject.status.blueGreen.greenRevision == "") &&
+           (!has(oldObject.status.blueGreen.startTime)) &&
+           (!has(oldObject.status.blueGreen.rollbackStartTime)) &&
+           (!has(oldObject.status.blueGreen.manualPromotionRequired) || oldObject.status.blueGreen.manualPromotionRequired == false) &&
+           (!has(oldObject.status.blueGreen.jobFailureCount) || oldObject.status.blueGreen.jobFailureCount == 0) &&
+           (!has(oldObject.status.blueGreen.lastJobFailure) || oldObject.status.blueGreen.lastJobFailure == ""))) &&
+        (!has(oldObject.spec.readReplicas) || oldObject.spec.readReplicas.replicas == 0 ||
+          (has(oldObject.status.readReplicas) && has(oldObject.status.readReplicas.readyReplicas) && oldObject.status.readReplicas.readyReplicas == oldObject.spec.readReplicas.replicas))
+    - name: upgrade_requests_handled
+      expression: >-
+        oldObject == null || !has(object.spec.upgrade) || !has(object.spec.upgrade.requests) ||
+        (((!has(object.spec.upgrade.requests.retry) || object.spec.upgrade.requests.retry == "") ||
+          (has(oldObject.status.upgradeRequests) && has(oldObject.status.upgradeRequests.lastHandledRetry) && object.spec.upgrade.requests.retry == oldObject.status.upgradeRequests.lastHandledRetry)) &&
+         ((!has(object.spec.upgrade.requests.promote) || object.spec.upgrade.requests.promote == "") ||
+          (has(oldObject.status.upgradeRequests) && has(oldObject.status.upgradeRequests.lastHandledPromote) && object.spec.upgrade.requests.promote == oldObject.status.upgradeRequests.lastHandledPromote)) &&
+         ((!has(object.spec.upgrade.requests.rollback) || object.spec.upgrade.requests.rollback == "") ||
+          (has(oldObject.status.upgradeRequests) && has(oldObject.status.upgradeRequests.lastHandledRollback) && object.spec.upgrade.requests.rollback == oldObject.status.upgradeRequests.lastHandledRollback)))
+    - name: requested_image
+      expression: >-
+        has(object.spec.image) ? object.spec.image : ""
+    - name: previous_image
+      expression: >-
+        oldObject != null && has(oldObject.spec.image) ? oldObject.spec.image : ""
+    - name: requested_runtime_restart
+      expression: >-
+        has(object.spec.runtime) && has(object.spec.runtime.restartAt) ? object.spec.runtime.restartAt : ""
+    - name: previous_runtime_restart
+      expression: >-
+        oldObject != null && has(oldObject.spec.runtime) && has(oldObject.spec.runtime.restartAt) ? oldObject.spec.runtime.restartAt : ""
+    - name: requested_maintenance_restart
+      expression: >-
+        has(object.spec.maintenance) && has(object.spec.maintenance.restartAt) ? object.spec.maintenance.restartAt : ""
+    - name: previous_maintenance_restart
+      expression: >-
+        oldObject != null && has(oldObject.spec.maintenance) && has(oldObject.spec.maintenance.restartAt) ? oldObject.spec.maintenance.restartAt : ""
+    - name: requested_read_replicas
+      expression: >-
+        has(object.spec.readReplicas) ? object.spec.readReplicas.replicas : 0
+    - name: previous_read_replicas
+      expression: >-
+        oldObject != null && has(oldObject.spec.readReplicas) ? oldObject.spec.readReplicas.replicas : 0
     - name: has_pre_upgrade_snapshot
       expression: has(object.spec.upgrade) && has(object.spec.upgrade.preUpgradeSnapshot) && object.spec.upgrade.preUpgradeSnapshot == true
     - name: has_bluegreen_pre_upgrade_snapshot
@@ -595,9 +657,29 @@ spec:
           object.spec.backup.schedule.matches("^\\S+\\s+\\S+\\s+\\S+\\s+\\S+\\s+\\S+$"))
       message: spec.backup requires schedule, OpenBao auth (jwtAuthRole or tokenSecretRef, or self-init OIDC bootstrap enabled when jwtAuthRole is empty/unset for auto-creation of "openbao-operator-backup" role), and a 5-field cron expression. Hardened profile requires explicit storage credentials via target.credentialsSecretRef, target.workloadIdentity, or target.roleArn for S3 targets.
     - expression: >-
-        oldObject == null ||
-        variables.requested_upgrade_strategy == variables.previous_upgrade_strategy
-      message: "spec.upgrade.strategy is immutable after creation; switching between RollingUpdate and BlueGreen is not supported."
+        !variables.upgrade_strategy_changed ||
+        (object.spec.version == oldObject.spec.version &&
+          variables.requested_image == variables.previous_image &&
+          object.spec.replicas == oldObject.spec.replicas &&
+          variables.requested_read_replicas == variables.previous_read_replicas &&
+          object.spec.storage == oldObject.spec.storage &&
+          variables.requested_runtime_restart == variables.previous_runtime_restart &&
+          variables.requested_maintenance_restart == variables.previous_maintenance_restart)
+      message: "Change only spec.upgrade.strategy first; wait for the operator to accept it before changing version, image, replicas, storage, or restart controls."
+    - expression: >-
+        !variables.upgrade_strategy_changed ||
+        variables.upgrade_strategy_status_idle
+      message: "spec.upgrade.strategy can change only while the cluster is initialized, healthy, fully ready, at spec.version, and no upgrade, backup/restore lock, restart/resize, BlueGreen phase, failure, pending Green workload, or safe-mode recovery is active."
+    - expression: >-
+        !variables.upgrade_strategy_changed ||
+        variables.upgrade_requests_handled
+      message: "Finish or clear pending spec.upgrade.requests before changing spec.upgrade.strategy."
+    - expression: >-
+        !variables.upgrade_strategy_changed ||
+        variables.requested_upgrade_strategy != "BlueGreen" ||
+        ((has(object.spec.upgrade.jwtAuthRole) && object.spec.upgrade.jwtAuthRole.trim() != "") ||
+          (has(object.spec.selfInit) && object.spec.selfInit.enabled == true && has(object.spec.selfInit.oidc) && object.spec.selfInit.oidc.enabled == true))
+      message: "Switching to BlueGreen requires spec.upgrade.jwtAuthRole or the default upgrade role created by enabled spec.selfInit.oidc bootstrap."
     - expression: >-
         !has(object.spec.profile) ||
         object.spec.profile != "Hardened" ||

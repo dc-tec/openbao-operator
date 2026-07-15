@@ -230,7 +230,7 @@ func (r *infraReconciler) resolveTargetMainImage(ctx context.Context, logger log
 		targetImage = defaultOpenBaoImage(cluster.Spec.Version)
 	}
 
-	if cluster.Spec.Upgrade == nil || cluster.Spec.Upgrade.Strategy != openbaov1alpha1.UpdateStrategyBlueGreen {
+	if !workloadsvc.IsBlueGreenStrategy(cluster) {
 		return targetImage
 	}
 

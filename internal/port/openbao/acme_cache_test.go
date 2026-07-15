@@ -63,6 +63,44 @@ func TestRequiresSharedACMECache(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "pending blue green transition keeps rolling cache requirements",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "example", Namespace: "default"},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: 1,
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeACME,
+						ACME:    &openbaov1alpha1.ACMEConfig{DirectoryURL: "https://acme.example/directory"},
+					},
+					Upgrade: &openbaov1alpha1.UpgradeConfig{Strategy: openbaov1alpha1.UpdateStrategyBlueGreen},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					AcceptedUpgradeStrategy: openbaov1alpha1.UpdateStrategyRollingUpdate,
+				},
+			},
+			want: false,
+		},
+		{
+			name: "pending rolling transition keeps blue green cache requirements",
+			cluster: &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "example", Namespace: "default"},
+				Spec: openbaov1alpha1.OpenBaoClusterSpec{
+					Replicas: 1,
+					TLS: openbaov1alpha1.TLSConfig{
+						Enabled: true,
+						Mode:    openbaov1alpha1.TLSModeACME,
+						ACME:    &openbaov1alpha1.ACMEConfig{DirectoryURL: "https://acme.example/directory"},
+					},
+					Upgrade: &openbaov1alpha1.UpgradeConfig{Strategy: openbaov1alpha1.UpdateStrategyRollingUpdate},
+				},
+				Status: openbaov1alpha1.OpenBaoClusterStatus{
+					AcceptedUpgradeStrategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+				},
+			},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {

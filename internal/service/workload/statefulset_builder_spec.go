@@ -15,6 +15,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
 func desiredStatefulSetReplicas(cluster *openbaov1alpha1.OpenBaoCluster, initialized bool, spec StatefulSetSpec) int32 {
@@ -109,7 +110,7 @@ func buildStatefulSetUpdateStrategy(cluster *openbaov1alpha1.OpenBaoCluster, spe
 	// Important: The rolling upgrade manager controls the RollingUpdate.Partition field to
 	// orchestrate upgrades. The workload manager strips updateStrategy from StatefulSet
 	// SSA patches for non-BlueGreen clusters to avoid clearing/overriding that partition value.
-	if cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+	if portworkload.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen {
 		return appsv1.StatefulSetUpdateStrategy{
 			Type: appsv1.OnDeleteStatefulSetStrategyType,
 		}

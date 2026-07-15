@@ -38,9 +38,11 @@ journey: operate
   ]}
 />
 
-<Callout type="warning" title="Do not switch strategies on an existing cluster">
+<Callout type="note" title="Switch strategies only while the cluster is idle">
 
-Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a supported in-place transition today. Choose the strategy before the next rollout and keep it stable for that cluster.
+The operator supports `RollingUpdate` to `BlueGreen` and `BlueGreen` to `RollingUpdate` without renaming or replacing the active StatefulSet. Admission allows the change only after initialization, while every voter is Ready, `status.currentVersion` equals `spec.version`, and no upgrade, backup, restore, resize, restart, Green workload, pending request, failure, or safe-mode recovery is active.
+
+Change only `spec.upgrade.strategy`, then wait until `status.acceptedUpgradeStrategy` reports the new value. Change `spec.version` or other workload settings only after that acknowledgment. A strategy change that does not meet these conditions is rejected with recovery guidance.
 
 </Callout>
 
@@ -48,7 +50,7 @@ Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a s
 
 OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. During a pre-2.6 to 2.6.0 `BlueGreen` upgrade, Green peers cannot report Raft Autopilot health to the Blue leader and therefore cannot be promoted safely. The operator rejects pre-2.6 to 2.6-or-newer transitions before creating Green resources until a compatible target is explicitly qualified.
 
-Fresh 2.6.0 clusters and the `RollingUpdate` path remain supported. If the existing cluster is already configured for `BlueGreen`, wait for an operator release that qualifies an upstream compatibility fix or restore a backup into a new target-version cluster. Safe idle-only strategy switching is tracked in [#548](https://github.com/dc-tec/openbao-operator/issues/548); do not bypass the current immutability check.
+Fresh 2.6.0 clusters and the `RollingUpdate` path remain supported. If a pre-2.6 cluster is configured for `BlueGreen`, first let the cluster return to a healthy `Idle` state, switch only the strategy to `RollingUpdate`, wait for `status.acceptedUpgradeStrategy=RollingUpdate`, and then request the 2.6.0 version change.
 
 </Callout>
 
@@ -85,6 +87,51 @@ Fresh 2.6.0 clusters and the `RollingUpdate` path remain supported. If the exist
   - with an explicit `spec.upgrade.jwtAuthRole`
 - If you want pre-upgrade snapshots, configure `spec.backup` first and make sure the backup auth path is already working.
 - In the `Hardened` profile, explicitly allow egress to object storage or other external dependencies the upgrade path needs.
+
+## Change the strategy of an existing cluster
+
+Use this sequence in either direction. It deliberately separates the control-plane strategy transition from the next workload change.
+
+1. Finish or recover every active upgrade, backup, restore, resize, restart, promotion, rollback, or safe-mode workflow.
+2. Verify `status.phase=Running`, `status.currentVersion=spec.version`, all voter and configured read replicas are Ready, `Available=True`, and BlueGreen is absent or `Idle` with no Green revision.
+3. Ensure the BlueGreen executor prerequisites are configured before switching to `BlueGreen`: an explicit `spec.upgrade.jwtAuthRole` or the default role created by enabled `selfInit.oidc`, plus a resolvable upgrade executor image. The referenced role must already grant the BlueGreen raft join, configuration, remove-peer, promote, and demote capabilities. Self-init policies are created during initial bootstrap and are not rewritten by a later strategy change, so update the role policy first when a rolling-origin cluster was initialized with rolling-only permissions.
+4. Patch only `spec.upgrade.strategy`.
+5. Wait for `status.acceptedUpgradeStrategy` to equal the requested strategy.
+6. Patch `spec.version`, `spec.image`, replicas, storage, or restart controls in a later request.
+
+<CommandBlock
+  language="bash"
+  label="switch"
+  title="Switch an idle cluster from BlueGreen to RollingUpdate"
+  code={`kubectl patch openbaocluster <name> -n <namespace> --type merge -p '{
+  "spec": {
+    "upgrade": {
+      "strategy": "RollingUpdate"
+    }
+  }
+}'
+
+kubectl get openbaocluster <name> -n <namespace> \
+  -o jsonpath='{.status.acceptedUpgradeStrategy}{"\\n"}'`}
+/>
+
+<CommandBlock
+  language="bash"
+  label="switch"
+  title="Switch an idle cluster from RollingUpdate to BlueGreen"
+  code={`kubectl patch openbaocluster <name> -n <namespace> --type merge -p '{
+  "spec": {
+    "upgrade": {
+      "strategy": "BlueGreen"
+    }
+  }
+}'
+
+kubectl get openbaocluster <name> -n <namespace> \
+  -o jsonpath='{.status.acceptedUpgradeStrategy}{"\\n"}'`}
+/>
+
+The active StatefulSet and its PVCs remain the stable workload after either transition. A later rolling rollout continues against a revisioned StatefulSet when switching from BlueGreen; a later blue-green rollout treats the original unrevisioned StatefulSet as Blue when switching from RollingUpdate.
 
 <Callout type="note" title="Upgrade auth is separate from backup auth">
 

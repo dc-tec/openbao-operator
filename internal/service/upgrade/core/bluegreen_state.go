@@ -66,6 +66,7 @@ func FinalizeBlueGreenTerminalState(cluster *openbaov1alpha1.OpenBaoCluster, pro
 
 	if promoteGreenToBlue {
 		cluster.Status.BlueGreen.BlueRevision = cluster.Status.BlueGreen.GreenRevision
+		cluster.Status.BlueGreen.BlueControllerRevision = ""
 		if cluster.Spec.Image != "" {
 			cluster.Status.BlueGreen.BlueImage = cluster.Spec.Image
 		}

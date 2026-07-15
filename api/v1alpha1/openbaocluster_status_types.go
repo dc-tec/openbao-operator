@@ -125,6 +125,11 @@ type BlueGreenStatus struct {
 	Phase BlueGreenPhase `json:"phase,omitempty"`
 	// BlueRevision is the hash/name of the currently active cluster.
 	BlueRevision string `json:"blueRevision,omitempty"`
+	// BlueControllerRevision is the Kubernetes StatefulSet controller revision
+	// of Blue. It identifies an unrevisioned rolling workload after switching to
+	// BlueGreen without requiring the existing Pods to be restarted or relabeled.
+	// +optional
+	BlueControllerRevision string `json:"blueControllerRevision,omitempty"`
 	// BlueImage is the container image used by the Blue cluster.
 	// This ensures the Blue cluster is not actively upgraded when spec.image changes.
 	BlueImage string `json:"blueImage,omitempty"`
@@ -280,6 +285,12 @@ type OpenBaoClusterStatus struct {
 	// CurrentVersion is the OpenBao version currently running on the cluster.
 	// +optional
 	CurrentVersion string `json:"currentVersion,omitempty"`
+	// AcceptedUpgradeStrategy is the upgrade strategy the operator has accepted
+	// after applying idle-state transition guards. While a requested strategy
+	// change is blocked, controllers continue using this strategy so an existing
+	// operation can finish safely.
+	// +optional
+	AcceptedUpgradeStrategy UpdateStrategyType `json:"acceptedUpgradeStrategy,omitempty"`
 	// Initialized indicates whether the OpenBao cluster has been initialized.
 	// This is set to true after the first pod is initialized using bao operator init
 	// or after self-initialization completes.

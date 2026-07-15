@@ -175,6 +175,61 @@ func TestGatherState_ObservesReadServingAndMembership(t *testing.T) {
 	require.EqualValues(t, 1, state.ReadReplicaHealthyReplicas)
 }
 
+func TestGatherPodState_IsolatesUnrevisionedBlueByControllerRevision(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "example", Namespace: "default"},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			AcceptedUpgradeStrategy: openbaov1alpha1.UpdateStrategyBlueGreen,
+			BlueGreen: &openbaov1alpha1.BlueGreenStatus{
+				BlueControllerRevision: "blue-controller-revision",
+				GreenRevision:          "green-revision",
+				Phase:                  openbaov1alpha1.PhaseDemotingBlue,
+			},
+		},
+	}
+	labelsForPod := func(controllerRevision, revision string) map[string]string {
+		podLabels := map[string]string{
+			constants.LabelAppName:                constants.LabelValueAppNameOpenBao,
+			constants.LabelAppInstance:            cluster.Name,
+			constants.LabelAppManagedBy:           constants.LabelValueAppManagedByOpenBaoOperator,
+			constants.LabelOpenBaoCluster:         cluster.Name,
+			constants.LabelOpenBaoWorkloadPool:    constants.LabelValueOpenBaoWorkloadPoolVoter,
+			appsv1.ControllerRevisionHashLabelKey: controllerRevision,
+		}
+		if revision != "" {
+			podLabels[constants.LabelOpenBaoRevision] = revision
+		}
+		return podLabels
+	}
+	bluePod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: "example-0", Namespace: cluster.Namespace,
+		Labels: labelsForPod("blue-controller-revision", ""),
+	}}
+	greenPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: "example-green-revision-0", Namespace: cluster.Namespace,
+		Labels: labelsForPod("green-controller-revision", "green-revision"),
+	}}
+	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, bluePod, greenPod).Build()
+	state := &StatusState{}
+
+	err := gatherPodState(context.Background(), reader, cluster, state, LabelConfig{
+		AppNameKey:         constants.LabelAppName,
+		AppNameValue:       constants.LabelValueAppNameOpenBao,
+		AppManagedByKey:    constants.LabelAppManagedBy,
+		AppManagedByValue:  constants.LabelValueAppManagedByOpenBaoOperator,
+		OpenBaoRevisionKey: constants.LabelOpenBaoRevision,
+	})
+	require.NoError(t, err)
+	require.Len(t, state.Pods, 1)
+	require.Equal(t, bluePod.Name, state.Pods[0].Name)
+	require.NotNil(t, state.Pod0)
+	require.Equal(t, bluePod.Name, state.Pod0.Name)
+}
+
 type fakePodObserver struct {
 	health  map[string]*portopenbao.HealthStatus
 	podName string

@@ -7,6 +7,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
 const (
@@ -29,7 +30,7 @@ func RequiresSharedACMECache(cluster *openbaov1alpha1.OpenBaoCluster) bool {
 	if cluster.Spec.Replicas > 1 {
 		return true
 	}
-	return cluster.Spec.Upgrade != nil && cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen
+	return portworkload.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen
 }
 
 // HasACMESharedCache reports whether the cluster config includes a shared ACME cache.

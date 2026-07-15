@@ -3,6 +3,7 @@ package bluegreen
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -40,11 +41,16 @@ func countActivePods(pods []corev1.Pod) int {
 // This is a unified helper used for both Blue and Green pod lookup.
 func (m *Manager) getPodsByRevision(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster, rev string) ([]corev1.Pod, error) {
 	podList := &corev1.PodList{}
-	labelSelector := labels.SelectorFromSet(map[string]string{
-		constants.LabelAppInstance:     cluster.Name,
-		constants.LabelAppName:         constants.LabelValueAppNameOpenBao,
-		constants.LabelOpenBaoRevision: rev,
-	})
+	selectorLabels := map[string]string{
+		constants.LabelAppInstance: cluster.Name,
+		constants.LabelAppName:     constants.LabelValueAppNameOpenBao,
+	}
+	if rev != "" {
+		selectorLabels[constants.LabelOpenBaoRevision] = rev
+	} else if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueControllerRevision != "" {
+		selectorLabels[appsv1.ControllerRevisionHashLabelKey] = cluster.Status.BlueGreen.BlueControllerRevision
+	}
+	labelSelector := labels.SelectorFromSet(selectorLabels)
 
 	if err := m.client.List(ctx, podList,
 		client.InNamespace(cluster.Namespace),
@@ -53,7 +59,21 @@ func (m *Manager) getPodsByRevision(ctx context.Context, cluster *openbaov1alpha
 		return nil, fmt.Errorf("failed to list pods for revision %s: %w", rev, err)
 	}
 
-	return podList.Items, nil
+	if rev != "" || (cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.BlueControllerRevision != "") {
+		return podList.Items, nil
+	}
+
+	// Compatibility fallback for status written before BlueControllerRevision
+	// existed: only Pods from the original unrevisioned StatefulSet are Blue.
+	pods := make([]corev1.Pod, 0, len(podList.Items))
+	prefix := cluster.Name + "-"
+	for i := range podList.Items {
+		pod := podList.Items[i]
+		if strings.HasPrefix(pod.Name, prefix) && pod.Labels[constants.LabelOpenBaoRevision] == "" {
+			pods = append(pods, pod)
+		}
+	}
+	return pods, nil
 }
 
 // cleanupGreenStatefulSet removes any lingering Green StatefulSet.

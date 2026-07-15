@@ -3,32 +3,37 @@ package networking
 import (
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
+
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/revision"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portworkload "github.com/dc-tec/openbao-operator/internal/port/workload"
 )
 
-func activeServiceRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
+func applyActiveServiceSelector(cluster *openbaov1alpha1.OpenBaoCluster, selector map[string]string) {
 	if !isBlueGreenStrategy(cluster) {
-		return ""
+		return
 	}
 
-	stableRevision := stableServiceRevision(cluster)
-	if stableRevision == "" {
-		return ""
-	}
-	if cluster.Status.BlueGreen == nil {
-		return stableRevision
-	}
-
-	if cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
+	if cluster.Status.BlueGreen != nil && cluster.Status.BlueGreen.Phase == openbaov1alpha1.PhaseCleanup {
 		greenRevision := strings.TrimSpace(cluster.Status.BlueGreen.GreenRevision)
 		if greenRevision != "" {
-			return greenRevision
+			selector[constants.LabelOpenBaoRevision] = greenRevision
+			return
 		}
 	}
 
-	return stableRevision
+	if stableRevision := stableServiceRevision(cluster); stableRevision != "" {
+		selector[constants.LabelOpenBaoRevision] = stableRevision
+		return
+	}
+
+	if cluster.Status.BlueGreen != nil {
+		if controllerRevision := strings.TrimSpace(cluster.Status.BlueGreen.BlueControllerRevision); controllerRevision != "" {
+			selector[appsv1.ControllerRevisionHashLabelKey] = controllerRevision
+		}
+	}
 }
 
 func stableServiceRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
@@ -37,10 +42,7 @@ func stableServiceRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
 	}
 
 	if cluster.Status.BlueGreen != nil {
-		blueRevision := strings.TrimSpace(cluster.Status.BlueGreen.BlueRevision)
-		if blueRevision != "" {
-			return blueRevision
-		}
+		return strings.TrimSpace(cluster.Status.BlueGreen.BlueRevision)
 	}
 
 	return revision.OpenBaoClusterRevision(
@@ -51,9 +53,7 @@ func stableServiceRevision(cluster *openbaov1alpha1.OpenBaoCluster) string {
 }
 
 func isBlueGreenStrategy(cluster *openbaov1alpha1.OpenBaoCluster) bool {
-	return cluster != nil &&
-		cluster.Spec.Upgrade != nil &&
-		cluster.Spec.Upgrade.Strategy == openbaov1alpha1.UpdateStrategyBlueGreen
+	return portworkload.EffectiveStrategy(cluster) == openbaov1alpha1.UpdateStrategyBlueGreen
 }
 
 func resolvedSpecImage(cluster *openbaov1alpha1.OpenBaoCluster) string {
