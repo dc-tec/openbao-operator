@@ -7,7 +7,7 @@ const websiteRoot = process.cwd();
 const versionsPath = path.join(websiteRoot, 'versions.json');
 
 if (!version) {
-  console.error('Usage: npm run refresh:docs-version -- <version>');
+  console.error('Usage: pnpm run refresh:docs-version <version>');
   process.exit(1);
 }
 
@@ -104,8 +104,13 @@ try {
     `${JSON.stringify(dedupedOriginalVersions.filter((candidate) => candidate !== version), null, 2)}\n`,
   );
 
-  run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'prepare:contribute']);
-  run(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['docusaurus', 'docs:version', version]);
+  run(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', ['run', 'prepare:contribute']);
+  run(process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', [
+    'exec',
+    'docusaurus',
+    'docs:version',
+    version,
+  ]);
 
   await fs.writeFile(versionsPath, `${JSON.stringify(dedupedOriginalVersions, null, 2)}\n`);
   await fs.rm(tempRoot, {recursive: true, force: true});

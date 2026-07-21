@@ -8,7 +8,7 @@ $(LOCALBIN):
 ## Tool Binaries
 KUBECTL ?= kubectl
 KIND ?= kind
-NPM ?= npm
+PNPM ?= pnpm
 TILT ?= tilt
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
@@ -163,10 +163,10 @@ $(SEMGREP): $(LOCALBIN)
 	@ln -sf "$$(realpath "$(SEMGREP_VENV)/bin/semgrep")" "$(SEMGREP)"
 
 .PHONY: ast-grep
-ast-grep: $(AST_GREP_LOCAL_BIN) ## Install ast-grep locally via npm if necessary.
-$(AST_GREP_LOCAL_BIN): .github/tools/package.json .github/tools/package-lock.json
-	@command -v "$(NPM)" >/dev/null 2>&1 || { \
-		echo "npm is required to install ast-grep. Install Node.js 20+ and retry."; \
+ast-grep: $(AST_GREP_LOCAL_BIN) ## Install ast-grep locally via pnpm if necessary.
+$(AST_GREP_LOCAL_BIN): .github/tools/package.json .github/tools/pnpm-lock.yaml
+	@command -v "$(PNPM)" >/dev/null 2>&1 || { \
+		echo "pnpm is required to install ast-grep. Install Node.js 22 and enable Corepack, then retry."; \
 		exit 1; \
 	}
-	@"$(NPM)" ci --prefix "$(AST_GREP_PREFIX)"
+	@"$(PNPM)" --dir "$(AST_GREP_PREFIX)" install --frozen-lockfile

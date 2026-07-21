@@ -2,15 +2,16 @@
   "name": "website",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.34.5",
   "scripts": {
     "prepare:contribute": "node ./scripts/sync-contribute-docs.mjs",
     "prepare:releases": "node ./scripts/generate-releases.mjs",
-    "prepare:site": "npm run prepare:contribute && npm run prepare:releases",
+    "prepare:site": "pnpm run prepare:contribute && pnpm run prepare:releases",
     "docusaurus": "docusaurus",
-    "start": "npm run prepare:site && docusaurus start --host 0.0.0.0 --port 8000 --no-open",
-    "build": "npm run prepare:site && docusaurus build",
+    "start": "pnpm run prepare:site && docusaurus start --host 0.0.0.0 --port 8000 --no-open",
+    "build": "pnpm run prepare:site && docusaurus build",
     "swizzle": "docusaurus swizzle",
-    "deploy": "npm run prepare:site && docusaurus deploy",
+    "deploy": "pnpm run prepare:site && docusaurus deploy",
     "clear": "docusaurus clear",
     "serve": "docusaurus serve",
     "write-translations": "docusaurus write-translations",
@@ -26,6 +27,7 @@
     "@docusaurus/core": "3.10.1",
     "@docusaurus/faster": "3.10.1",
     "@docusaurus/plugin-client-redirects": "3.10.1",
+    "@docusaurus/plugin-content-docs": "3.10.1",
     "@docusaurus/preset-classic": "3.10.1",
     "@docusaurus/theme-mermaid": "3.10.1",
     "@mdx-js/react": "^3.0.0",
@@ -35,10 +37,12 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
-  "overrides": {
-    "lodash": "4.18.1",
-    "lodash-es": "4.18.1",
-    "serialize-javascript": "7.0.5"
+  "pnpm": {
+    "overrides": {
+      "lodash": "4.18.1",
+      "lodash-es": "4.18.1",
+      "serialize-javascript": "7.0.5"
+    }
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.10.1",
@@ -60,6 +64,6 @@
     ]
   },
   "engines": {
-    "node": ">=20.0"
+    "node": ">=22.0 <23"
   }
 }

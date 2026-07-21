@@ -11,7 +11,7 @@ thresholds:
 
 ignore:
   - go.sum
-  - website/package-lock.json
+  - website/pnpm-lock.yaml
   - vendor/**/*
   - api/v1alpha1/zz_generated.deepcopy.go
   - docs/reference/api.md

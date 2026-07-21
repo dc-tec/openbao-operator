@@ -2,15 +2,15 @@
 
 .PHONY: bootstrap
 bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint ginkgo govulncheck go-licenses gomu gotestsum dlv air benchstat semgrep ## Install repo-managed tools and local development dependencies.
-	@if command -v "$(NPM)" >/dev/null 2>&1; then \
+	@if command -v "$(PNPM)" >/dev/null 2>&1; then \
 		$(MAKE) ast-grep; \
 	else \
-		echo "Skipping ast-grep bootstrap because npm is not available."; \
+		echo "Skipping ast-grep bootstrap because pnpm is not available."; \
 	fi
-	@if command -v "$(DOCS_NPM)" >/dev/null 2>&1; then \
+	@if command -v "$(DOCS_PNPM)" >/dev/null 2>&1; then \
 		$(MAKE) docs-deps; \
 	else \
-		echo "Skipping docs bootstrap because npm is not available."; \
+		echo "Skipping docs bootstrap because pnpm is not available."; \
 	fi
 	@$(MAKE) git-hooks-install
 	@echo "Bootstrap complete."
@@ -380,7 +380,7 @@ verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
 	@echo "trusted_root.json is valid"
 
 DOCS_DIR ?= website
-DOCS_NPM ?= $(NPM)
+DOCS_PNPM ?= $(PNPM)
 DOCS_VERSION ?=
 TEST_ARTIFACT_DIR ?= dist/test
 GOTESTSUM_FORMAT ?= pkgname
@@ -390,29 +390,29 @@ FUZZ_TARGET_FILTER ?=
 
 .PHONY: docs-deps
 docs-deps: ## Install Docusaurus site dependencies from lockfile.
-	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" ci
+	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" install --frozen-lockfile
 
 .PHONY: docs-build
 docs-build: docs-deps ## Build the Docusaurus docs site locally. Writes ./website/build/.
-	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run build
+	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run build
 
 .PHONY: docs-serve
 docs-serve: docs-deps ## Serve docs locally. http://localhost:8000
-	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run start
+	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run start
 
 .PHONY: docs-preview
 docs-preview: docs-build ## Preview the built docs locally with production behavior, including search. http://localhost:3000
-	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run serve -- --host 0.0.0.0
+	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run serve --host 0.0.0.0
 
 .PHONY: docs-version
 docs-version: docs-deps ## Snapshot the current docs into a versioned Docusaurus release. Set DOCS_VERSION=<version>.
 	@test -n "$(DOCS_VERSION)" || { echo "DOCS_VERSION is required, for example: make docs-version DOCS_VERSION=1.2.3"; exit 1; }
-	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run version:docs -- "$(DOCS_VERSION)"
+	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run version:docs "$(DOCS_VERSION)"
 
 .PHONY: docs-refresh-version
 docs-refresh-version: docs-deps ## Refresh an existing release-line docs snapshot from the checked-out docs. Set DOCS_VERSION=<X.Y.0>.
 	@test -n "$(DOCS_VERSION)" || { echo "DOCS_VERSION is required, for example: make docs-refresh-version DOCS_VERSION=1.2.0"; exit 1; }
-	@$(DOCS_NPM) --prefix "$(DOCS_DIR)" run refresh:docs-version -- "$(DOCS_VERSION)"
+	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run refresh:docs-version "$(DOCS_VERSION)"
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

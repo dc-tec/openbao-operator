@@ -78,7 +78,7 @@ dependencies:
           - 'Dockerfile*'
           - '.github/dependabot.yml'
           - '.github/tools/package.json'
-          - '.github/tools/package-lock.json'
+          - '.github/tools/pnpm-lock.yaml'
 
 # API / CRD changes
 api:
@@ -201,7 +201,7 @@ devops:
           - '.github/labeler.yml'
           - '.github/size-labeler.yml'
           - '.github/tools/package.json'
-          - '.github/tools/package-lock.json'
+          - '.github/tools/pnpm-lock.yaml'
           - 'Makefile'
           - 'mk/**/*'
           - '**/Makefile'

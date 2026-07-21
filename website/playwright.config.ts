@@ -14,7 +14,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run build && npm run serve -- --host 127.0.0.1 --port 4173 --no-open',
+    command: 'pnpm run build && pnpm run serve --host 127.0.0.1 --port 4173 --no-open',
     url: 'http://127.0.0.1:4173/openbao-operator/',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

@@ -20,7 +20,7 @@ Required tools:
 - Helm `3+`
 - Trivy
 - Python `3`
-- Node.js `20+` with `npm`
+- Node.js `22.x` with pnpm `10.34.5`
 - a Kubernetes cluster such as Kind, Minikube, or a cloud cluster
 
 Optional but recommended:

@@ -6,7 +6,7 @@ const version = process.argv[2];
 const versionsPath = path.join(process.cwd(), 'versions.json');
 
 if (!version) {
-  console.error('Usage: npm run version:docs -- <version>');
+  console.error('Usage: pnpm run version:docs <version>');
   process.exit(1);
 }
 
@@ -34,7 +34,7 @@ async function dedupeVersions() {
 }
 
 const prepareResult = spawnSync(
-  process.platform === 'win32' ? 'npm.cmd' : 'npm',
+  process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
   ['run', 'prepare:contribute'],
   {
     stdio: 'inherit',
@@ -46,8 +46,8 @@ if (prepareResult.status !== 0) {
 }
 
 const result = spawnSync(
-  process.platform === 'win32' ? 'npx.cmd' : 'npx',
-  ['docusaurus', 'docs:version', version],
+  process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+  ['exec', 'docusaurus', 'docs:version', version],
   {
     stdio: 'inherit',
   },
