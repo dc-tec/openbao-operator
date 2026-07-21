@@ -159,9 +159,9 @@ Section ownership:
 make docs-preview
 make docs-build
 
-npm --prefix website run typecheck
-npm --prefix website run build
-npm --prefix website run test:e2e`}
+pnpm --dir website run typecheck
+pnpm --dir website run build
+pnpm --dir website run test:e2e`}
 >
   Use `make docs-serve` for the fast authoring loop. Use `make docs-preview` when you need production-style behavior such as local search. Run the full site checks before merging structural or high-traffic documentation changes.
 </CommandBlock>

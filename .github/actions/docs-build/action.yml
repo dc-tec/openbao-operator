@@ -10,21 +10,20 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup Node.js
-      uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.4
+    - name: Setup Node.js and pnpm
+      uses: ./.github/actions/setup-node-pnpm
       with:
         node-version: ${{ inputs.node-version }}
-        cache: npm
-        cache-dependency-path: website/package-lock.json
+        cache-dependency-path: website/pnpm-lock.yaml
 
     - name: Install docs dependencies
       shell: bash
-      run: npm --prefix website ci
+      run: pnpm --dir website install --frozen-lockfile
 
     - name: Install Playwright browser
       shell: bash
-      run: npx --prefix website playwright install --with-deps chromium
+      run: pnpm --dir website exec playwright install --with-deps chromium
 
     - name: Run docs smoke suite
       shell: bash
-      run: npm --prefix website run test:e2e
+      run: pnpm --dir website run test:e2e

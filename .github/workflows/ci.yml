@@ -348,17 +348,16 @@ jobs:
       - name: Setup repo tools
         uses: ./.github/actions/setup-repo-tools
 
-      - name: Setup Node (for ast-grep install)
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: .github/tools/package-lock.json
+          node-version: "22"
+          cache-dependency-path: .github/tools/pnpm-lock.yaml
 
       - name: Install ast-grep
-        run: npm ci --prefix .github/tools
+        run: pnpm --dir .github/tools install --frozen-lockfile
 
-      - name: Add local npm tools to PATH
+      - name: Add local Node.js tools to PATH
         run: echo "${GITHUB_WORKSPACE}/.github/tools/node_modules/.bin" >> "${GITHUB_PATH}"
 
       - name: Verify ast-grep version

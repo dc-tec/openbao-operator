@@ -147,9 +147,9 @@ Treat allowlist changes as maintainer-level changes. When you change the allowed
 ## GitHub dependency review scope
 
 The GitHub dependency review workflow is currently used as a pull-request
-vulnerability gate, not as the canonical license gate. In practice, its npm
-license metadata is not reliable enough for this repository's documentation-site
-dependencies.
+vulnerability gate, not as the canonical license gate. In practice, its
+JavaScript dependency license metadata is not reliable enough for this
+repository's documentation-site dependencies.
 
 License policy is still enforced, but the authoritative check is the shipped
 artifact workflow around `make license-check` and maintainer review of

@@ -36,6 +36,9 @@ printf 'Repository: %s\n\n' "${ROOT_DIR}"
 
 expected_go="$(sed -n 's/^go //p' go.mod | head -n 1)"
 expected_semgrep="$(sed -n 's/^SEMGREP_VERSION ?= //p' mk/dependencies.mk | head -n 1)"
+expected_node="$(tr -d '[:space:]' < .node-version)"
+expected_node_major="${expected_node%%.*}"
+expected_pnpm="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' website/package.json | head -n 1)"
 if command -v go >/dev/null 2>&1; then
   current_go="$(go env GOVERSION 2>/dev/null || true)"
   if [[ "${current_go}" == "go${expected_go}"* ]]; then
@@ -47,13 +50,36 @@ else
   err "Go toolchain missing (install Go ${expected_go})"
 fi
 
+if command -v node >/dev/null 2>&1; then
+  current_node="$(node --version 2>/dev/null || true)"
+  current_node_major="${current_node#v}"
+  current_node_major="${current_node_major%%.*}"
+  if [ "${current_node_major}" = "${expected_node_major}" ]; then
+    ok "Node.js major version matches .node-version (${current_node})"
+  else
+    err "Node.js major version mismatch: expected ${expected_node_major}.x, found ${current_node:-unknown}"
+  fi
+else
+  err "Node.js missing (install Node.js ${expected_node})"
+fi
+
+if command -v pnpm >/dev/null 2>&1; then
+  current_pnpm="$(pnpm --version 2>/dev/null || true)"
+  if [ "${current_pnpm}" = "${expected_pnpm}" ]; then
+    ok "pnpm version matches packageManager (${current_pnpm})"
+  else
+    err "pnpm version mismatch: expected ${expected_pnpm}, found ${current_pnpm:-unknown}"
+  fi
+else
+  err "pnpm missing (enable Corepack for pnpm ${expected_pnpm})"
+fi
+
 check_cmd git "git" "required for repository workflows"
 check_cmd docker "docker" "required for image builds and config compatibility checks"
 check_cmd kubectl "kubectl" "required for install/deploy workflows"
 check_cmd helm "helm" "required for verify-helm and helm-test"
 check_cmd trivy "trivy" "required for security-ci and security-scan"
 check_cmd python3 "python3" "required for manifest patch helpers, Tilt manifest rendering, and API/reference generation"
-check_cmd npm "npm" "required to install ast-grep for lint-ci"
 
 if command -v kind >/dev/null 2>&1; then
   ok "kind: $(command -v kind)"

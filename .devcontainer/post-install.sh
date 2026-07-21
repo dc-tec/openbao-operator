@@ -9,8 +9,8 @@ KUBECTL_VERSION="${KUBECTL_VERSION:-v1.33.4}"
 HELM_VERSION="${HELM_VERSION:-v3.17.4}"
 TRIVY_VERSION="${TRIVY_VERSION:-v0.69.3}"
 TILT_VERSION="${TILT_VERSION:-v0.37.0}"
-NODE_MAJOR="${NODE_MAJOR:-20}"
-NODE_VERSION="${NODE_VERSION:-v20.20.1}"
+NODE_VERSION="${NODE_VERSION:-v$(tr -d '[:space:]' < "${ROOT_DIR}/.node-version")}"
+PNPM_VERSION="${PNPM_VERSION:-$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "${ROOT_DIR}/website/package.json" | head -n 1)}"
 
 go_arch="$(go env GOARCH)"
 case "${go_arch}" in
@@ -138,9 +138,9 @@ ensure_apt_packages() {
 
 ensure_nodejs() {
   if command -v node >/dev/null 2>&1; then
-    local current_major
-    current_major="$(node -p 'process.versions.node.split(".")[0]')"
-    if [ "${current_major}" -ge "${NODE_MAJOR}" ]; then
+    local current_version
+    current_version="$(node -p 'process.versions.node')"
+    if [ "${current_version}" = "${NODE_VERSION#v}" ]; then
       return
     fi
   fi
@@ -164,6 +164,20 @@ ensure_nodejs() {
   install_symlink "${install_root}/bin/npx" "npx"
   install_symlink "${install_root}/bin/corepack" "corepack"
   rm -rf "${tmp_dir}"
+}
+
+ensure_pnpm() {
+  if command -v pnpm >/dev/null 2>&1 && [ "$(pnpm --version 2>/dev/null)" = "${PNPM_VERSION}" ]; then
+    return
+  fi
+
+  if ! command -v corepack >/dev/null 2>&1; then
+    echo "corepack is required to install pnpm ${PNPM_VERSION}" >&2
+    exit 1
+  fi
+
+  corepack prepare "pnpm@${PNPM_VERSION}" --activate
+  corepack enable pnpm --install-directory "${INSTALL_DIR}"
 }
 
 ensure_kind() {
@@ -275,7 +289,7 @@ print_versions() {
   docker --version
   python3 --version
   node --version
-  npm --version
+  pnpm --version
   kind version
   kubectl version --client
   helm version --short
@@ -285,6 +299,7 @@ print_versions() {
 
 ensure_apt_packages
 ensure_nodejs
+ensure_pnpm
 ensure_kind
 ensure_kubectl
 ensure_helm

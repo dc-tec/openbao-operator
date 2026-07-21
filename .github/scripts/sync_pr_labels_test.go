@@ -211,7 +211,7 @@ func TestLabelerConfigMatchesCIRoutingLabels(t *testing.T) {
 		},
 		{
 			name:       "github tool dependencies route dependency and devops labels",
-			path:       ".github/tools/package-lock.json",
+			path:       ".github/tools/pnpm-lock.yaml",
 			wantLabels: []string{"dependencies", "devops"},
 		},
 	}

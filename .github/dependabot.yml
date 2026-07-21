@@ -49,6 +49,7 @@ updates:
         patterns:
           - "*"
 
+  # Dependabot uses the npm ecosystem value for pnpm manifests and lockfiles.
   - package-ecosystem: npm
     directory: "/.github/tools"
     schedule:
@@ -61,7 +62,7 @@ updates:
     labels:
       - dependencies
     groups:
-      npm-tools:
+      pnpm-tools:
         patterns:
           - "*"
 
@@ -77,6 +78,6 @@ updates:
     labels:
       - dependencies
     groups:
-      npm-website:
+      pnpm-website:
         patterns:
           - "*"

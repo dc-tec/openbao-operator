@@ -1030,27 +1030,26 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v4.0.4
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: website/package-lock.json
+          cache-dependency-path: website/pnpm-lock.yaml
 
       - name: Install docs dependencies
-        run: npm --prefix website ci
+        run: pnpm --dir website install --frozen-lockfile
 
       - name: Verify stable release-line docs snapshot
         if: ${{ !contains(needs.prepare.outputs.version, '-') }}
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: npm --prefix website run verify:docs-version -- "${VERSION}"
+        run: pnpm --dir website run verify:docs-version "${VERSION}"
 
       - name: Install Playwright browser
-        run: npx --prefix website playwright install --with-deps chromium
+        run: pnpm --dir website exec playwright install --with-deps chromium
 
       - name: Run docs smoke suite
-        run: npm --prefix website run test:e2e
+        run: pnpm --dir website run test:e2e
 
       - name: Publish docs site
         env:
