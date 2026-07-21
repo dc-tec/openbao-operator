@@ -77,6 +77,11 @@ updates:
       default-days: 7
     labels:
       - dependencies
+    # Docusaurus 3.10.x still relies on baseUrl, which TypeScript 7 removed.
+    ignore:
+      - dependency-name: typescript
+        versions:
+          - ">=7.0.0"
     groups:
       pnpm-website:
         patterns:
