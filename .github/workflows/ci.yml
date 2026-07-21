@@ -348,16 +348,10 @@ jobs:
       - name: Setup repo tools
         uses: ./.github/actions/setup-repo-tools
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        with:
-          version: "10.34.5"
-
-      - name: Setup Node (for ast-grep install)
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - name: Setup Node.js and pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
           node-version: "22"
-          cache: pnpm
           cache-dependency-path: .github/tools/pnpm-lock.yaml
 
       - name: Install ast-grep
