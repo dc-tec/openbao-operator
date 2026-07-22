@@ -15,6 +15,26 @@ import (
 	"time"
 )
 
+func TestDefaultPackagesIncludeSealFixtures(t *testing.T) {
+	t.Parallel()
+
+	packages := make(map[string]bool, len(defaultPackages))
+	for _, name := range defaultPackages {
+		packages[name] = true
+	}
+
+	for _, name := range []string{
+		"ci-e2e-openbao-softhsm",
+		"ci-e2e-pykmip-server",
+		"pr-e2e-openbao-softhsm",
+		"pr-e2e-pykmip-server",
+	} {
+		if !packages[name] {
+			t.Errorf("default packages are missing seal fixture package %q", name)
+		}
+	}
+}
+
 func TestEvaluateVersionProtectsSemverWithTransientAlias(t *testing.T) {
 	cfg, rules := testPolicy(t)
 	now := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)

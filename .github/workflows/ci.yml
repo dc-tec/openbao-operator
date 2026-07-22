@@ -29,6 +29,11 @@ on:
         required: false
         default: false
         type: boolean
+      force_seal_e2e:
+        description: Run the HSM/KMIP/PKCS#11 PR E2E lane.
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -50,6 +55,7 @@ jobs:
       manual_backup_e2e: ${{ steps.diff.outputs.manual_backup_e2e }}
       manual_upgrade_e2e: ${{ steps.diff.outputs.manual_upgrade_e2e }}
       manual_hardened_e2e: ${{ steps.diff.outputs.manual_hardened_e2e }}
+      manual_seal_e2e: ${{ steps.diff.outputs.manual_seal_e2e }}
       chart: ${{ steps.diff.outputs.chart }}
       workflow: ${{ steps.diff.outputs.workflow }}
       docs: ${{ steps.diff.outputs.docs }}
@@ -64,6 +70,7 @@ jobs:
       e2e_backup: ${{ steps.diff.outputs.e2e_backup }}
       e2e_upgrade: ${{ steps.diff.outputs.e2e_upgrade }}
       e2e_hardened: ${{ steps.diff.outputs.e2e_hardened }}
+      e2e_seal: ${{ steps.diff.outputs.e2e_seal }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -75,11 +82,12 @@ jobs:
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          MANUAL_E2E_REQUESTED: ${{ (inputs.force_full_e2e || inputs.force_backup_e2e || inputs.force_upgrade_e2e || inputs.force_hardened_e2e) && 'true' || 'false' }}
+          MANUAL_E2E_REQUESTED: ${{ (inputs.force_full_e2e || inputs.force_backup_e2e || inputs.force_upgrade_e2e || inputs.force_hardened_e2e || inputs.force_seal_e2e) && 'true' || 'false' }}
           MANUAL_FULL_E2E: ${{ inputs.force_full_e2e && 'true' || 'false' }}
           MANUAL_BACKUP_E2E: ${{ inputs.force_backup_e2e && 'true' || 'false' }}
           MANUAL_UPGRADE_E2E: ${{ inputs.force_upgrade_e2e && 'true' || 'false' }}
           MANUAL_HARDENED_E2E: ${{ inputs.force_hardened_e2e && 'true' || 'false' }}
+          MANUAL_SEAL_E2E: ${{ inputs.force_seal_e2e && 'true' || 'false' }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
@@ -96,7 +104,8 @@ jobs:
               echo "manual_backup_e2e=${MANUAL_BACKUP_E2E}"
               echo "manual_upgrade_e2e=${MANUAL_UPGRADE_E2E}"
               echo "manual_hardened_e2e=${MANUAL_HARDENED_E2E}"
-              for key in chart workflow docs go_quality go_toolchain go_tests config_compat security_scan security_image fuzz e2e e2e_backup e2e_upgrade e2e_hardened; do
+              echo "manual_seal_e2e=${MANUAL_SEAL_E2E}"
+              for key in chart workflow docs go_quality go_toolchain go_tests config_compat security_scan security_image fuzz e2e e2e_backup e2e_upgrade e2e_hardened e2e_seal; do
                 echo "${key}=false"
               done
             } >> "${GITHUB_OUTPUT}"
@@ -110,6 +119,7 @@ jobs:
             echo "manual_backup_e2e=false"
             echo "manual_upgrade_e2e=false"
             echo "manual_hardened_e2e=false"
+            echo "manual_seal_e2e=false"
           } >> "${GITHUB_OUTPUT}"
 
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
@@ -128,6 +138,10 @@ jobs:
           changed="$(git diff --name-only "${base_sha}" "${head_sha}" || true)"
           changed_matches() {
             grep -qE "$1" <<< "${changed}"
+          }
+
+          changed_matches_file() {
+            grep -qE -f "$1" <<< "${changed}"
           }
 
           if changed_matches '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/)'; then
@@ -212,6 +226,12 @@ jobs:
             echo "e2e_hardened=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_hardened=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if changed_matches_file 'hack/ci/e2e-seal-paths.txt'; then
+            echo "e2e_seal=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "e2e_seal=false" >> "${GITHUB_OUTPUT}"
           fi
   security:
     name: Security (vulncheck + Semgrep + Trivy FS)
@@ -655,7 +675,7 @@ jobs:
   build-artifacts:
     name: Build Artifacts
     needs: changes
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || needs.changes.outputs.e2e_seal == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: *runner
     steps:
       - name: Checkout
@@ -682,7 +702,9 @@ jobs:
     name: Build E2E Images Once
     runs-on: *runner
     needs: [changes, build-artifacts]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || needs.changes.outputs.e2e_seal == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    env:
+      BUILD_SEAL_FIXTURES: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_full_e2e == 'true' || needs.changes.outputs.manual_seal_e2e == 'true' || needs.changes.outputs.e2e_seal == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')) }}
     permissions:
       contents: read
       packages: write
@@ -691,6 +713,8 @@ jobs:
       config_init_ref: ${{ steps.refs.outputs.config_init_ref }}
       backup_executor_ref: ${{ steps.refs.outputs.backup_executor_ref }}
       upgrade_executor_ref: ${{ steps.refs.outputs.upgrade_executor_ref }}
+      openbao_softhsm_ref: ${{ steps.refs.outputs.openbao_softhsm_ref }}
+      pykmip_server_ref: ${{ steps.refs.outputs.pykmip_server_ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -737,6 +761,8 @@ jobs:
             echo "config_init_repo=ghcr.io/${GITHUB_REPOSITORY_OWNER}/${prefix}-openbao-init"
             echo "backup_executor_repo=ghcr.io/${GITHUB_REPOSITORY_OWNER}/${prefix}-openbao-backup"
             echo "upgrade_executor_repo=ghcr.io/${GITHUB_REPOSITORY_OWNER}/${prefix}-openbao-upgrade"
+            echo "openbao_softhsm_repo=ghcr.io/${GITHUB_REPOSITORY_OWNER}/${prefix}-openbao-softhsm"
+            echo "pykmip_server_repo=ghcr.io/${GITHUB_REPOSITORY_OWNER}/${prefix}-pykmip-server"
           } >> "${GITHUB_OUTPUT}"
 
       - name: Build operator image
@@ -798,6 +824,34 @@ jobs:
           cache-from: type=gha,scope=${{ github.event_name == 'push' && 'main-e2e' || 'pr-e2e' }}-openbao-upgrade
           cache-to: type=gha,mode=max,scope=${{ github.event_name == 'push' && 'main-e2e' || 'pr-e2e' }}-openbao-upgrade
 
+      - name: Build SoftHSM-enabled OpenBao fixture image
+        if: env.BUILD_SEAL_FIXTURES == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: test/e2e/images/openbao-softhsm
+          file: test/e2e/images/openbao-softhsm/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.image-repos.outputs.openbao_softhsm_repo }}:${{ steps.tag.outputs.value }}
+          cache-from: type=gha,scope=${{ github.event_name == 'push' && 'main-e2e' || 'pr-e2e' }}-openbao-softhsm
+          cache-to: type=gha,mode=max,scope=${{ github.event_name == 'push' && 'main-e2e' || 'pr-e2e' }}-openbao-softhsm
+
+      - name: Build PyKMIP fixture image
+        if: env.BUILD_SEAL_FIXTURES == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: test/e2e/images/pykmip-server
+          file: test/e2e/images/pykmip-server/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.image-repos.outputs.pykmip_server_repo }}:${{ steps.tag.outputs.value }}
+          cache-from: type=gha,scope=${{ github.event_name == 'push' && 'main-e2e' || 'pr-e2e' }}-pykmip-server
+          cache-to: type=gha,mode=max,scope=${{ github.event_name == 'push' && 'main-e2e' || 'pr-e2e' }}-pykmip-server
+
       - name: Publish image refs
         id: refs
         run: |
@@ -807,13 +861,17 @@ jobs:
             echo "config_init_ref=${{ steps.image-repos.outputs.config_init_repo }}:${{ steps.tag.outputs.value }}"
             echo "backup_executor_ref=${{ steps.image-repos.outputs.backup_executor_repo }}:${{ steps.tag.outputs.value }}"
             echo "upgrade_executor_ref=${{ steps.image-repos.outputs.upgrade_executor_repo }}:${{ steps.tag.outputs.value }}"
+            if [[ "${BUILD_SEAL_FIXTURES}" == "true" ]]; then
+              echo "openbao_softhsm_ref=${{ steps.image-repos.outputs.openbao_softhsm_repo }}:${{ steps.tag.outputs.value }}"
+              echo "pykmip_server_ref=${{ steps.image-repos.outputs.pykmip_server_repo }}:${{ steps.tag.outputs.value }}"
+            fi
           } >> "${GITHUB_OUTPUT}"
 
   e2e-matrix:
     name: Plan E2E Matrix
     runs-on: *runner
     needs: changes
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || needs.changes.outputs.e2e_seal == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
@@ -843,7 +901,7 @@ jobs:
 
   e2e:
     needs: [changes, e2e-matrix, build-e2e-images]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.manual_e2e_requested == 'true' || (((needs.changes.outputs.e2e == 'true' || needs.changes.outputs.e2e_seal == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') || contains(github.event.pull_request.labels.*.name, 'backup') || contains(github.event.pull_request.labels.*.name, 'upgrades') || contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))))) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository))
     name: E2E (${{ matrix.name }})
     runs-on: *runner
     permissions:
@@ -871,9 +929,11 @@ jobs:
             ${{ needs.changes.outputs.manual_upgrade_e2e == 'true' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'upgrades')) }}
           PR_HARDENED: >-
             ${{ needs.changes.outputs.manual_hardened_e2e == 'true' || (github.event_name == 'pull_request' && (contains(github.event.pull_request.labels.*.name, 'security') || contains(github.event.pull_request.labels.*.name, 'provisioner') || contains(github.event.pull_request.labels.*.name, 'admission') || contains(github.event.pull_request.labels.*.name, 'controller'))) }}
+          PR_SEAL: ${{ needs.changes.outputs.manual_seal_e2e }}
           E2E_BACKUP_CHANGED: ${{ needs.changes.outputs.e2e_backup }}
           E2E_UPGRADE_CHANGED: ${{ needs.changes.outputs.e2e_upgrade }}
           E2E_HARDENED_CHANGED: ${{ needs.changes.outputs.e2e_hardened }}
+          E2E_SEAL_CHANGED: ${{ needs.changes.outputs.e2e_seal }}
           EXCLUDE_PENTEST_ON_DEFAULT_PR: ${{ matrix.exclude_pentest_on_default_pr }}
           LABEL_FILTER: ${{ matrix.label_filter }}
           PR_LABEL_FILTER: ${{ matrix.pr_label_filter }}
@@ -911,6 +971,11 @@ jobs:
                 SHOULD_RUN="true"
               fi
               ;;
+            seal)
+              if [[ "${FULL_E2E}" == "true" ]] || [[ "${PR_SEAL}" == "true" ]] || [[ "${E2E_SEAL_CHANGED}" == "true" ]]; then
+                SHOULD_RUN="true"
+              fi
+              ;;
           esac
 
           if [[ "${FULL_E2E}" != "true" ]]; then
@@ -927,6 +992,18 @@ jobs:
             echo "::notice::Skipping ${SHARD_NAME} shard (routing optimization)"
           else
             echo "::notice::Running ${SHARD_NAME} with filter: $FILTER"
+          fi
+
+      - name: Validate seal fixture image references
+        if: env.SHOULD_RUN == 'true' && matrix.id == 'hsm'
+        env:
+          OPENBAO_SOFTHSM_REF: ${{ needs.build-e2e-images.outputs.openbao_softhsm_ref }}
+          PYKMIP_SERVER_REF: ${{ needs.build-e2e-images.outputs.pykmip_server_ref }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${OPENBAO_SOFTHSM_REF}" ]] || [[ -z "${PYKMIP_SERVER_REF}" ]]; then
+            echo "Seal E2E lane requires exact per-run SoftHSM and PyKMIP image references." >&2
+            exit 1
           fi
 
       - name: Setup repo tools
@@ -994,8 +1071,11 @@ jobs:
           E2E_SKIP_IMAGE_BUILD: "true"
           E2E_INSTALL_CSI_HOSTPATH: ${{ matrix.install_csi_hostpath }}
           E2E_ENABLE_HARDENED_SIGNED_SUITE: ${{ matrix.hardened_signed }}
+          E2E_ENABLE_SOFTHSM_SUITE: ${{ matrix.id == 'hsm' && 'true' || 'false' }}
+          E2E_ENABLE_KMIP_SUITE: ${{ matrix.id == 'hsm' && 'true' || 'false' }}
           E2E_OPERATOR_IMAGE: ${{ needs.build-e2e-images.outputs.manager_ref }}
-          E2E_OPENBAO_IMAGE: ${{ matrix.openbao_image }}
+          E2E_OPENBAO_IMAGE: ${{ matrix.id == 'hsm' && needs.build-e2e-images.outputs.openbao_softhsm_ref || matrix.openbao_image }}
+          E2E_KMIP_SERVER_IMAGE: ${{ matrix.id == 'hsm' && needs.build-e2e-images.outputs.pykmip_server_ref || '' }}
           E2E_RUSTFS_IMAGE: ${{ steps.prepare-e2e-lane.outputs['rustfs-image'] }}
           E2E_FAKE_GCS_IMAGE: ${{ steps.prepare-e2e-lane.outputs['fake-gcs-image'] }}
           E2E_AZURITE_IMAGE: ${{ steps.prepare-e2e-lane.outputs['azurite-image'] }}
@@ -1024,7 +1104,7 @@ jobs:
               echo "No Ginkgo JSON report was produced for ${{ matrix.name }}."
             } > "${E2E_SUMMARY_REPORT:-e2e-summary.md}"
           else
-            openbao_version='${{ matrix.openbao_image }}'
+            openbao_version='${{ matrix.id == 'hsm' && needs.build-e2e-images.outputs.openbao_softhsm_ref || matrix.openbao_image }}'
             if [[ -z "${openbao_version}" ]]; then
               openbao_version="default"
             fi
