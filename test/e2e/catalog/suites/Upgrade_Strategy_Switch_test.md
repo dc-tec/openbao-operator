@@ -27,4 +27,4 @@ Recorded checkpoints:
 - switching only the idle strategy from RollingUpdate to BlueGreen
 - performing a blue-green upgrade from 2.4.4 to 2.5.5
 - switching only the idle strategy from BlueGreen to RollingUpdate
-- performing a rolling upgrade from 2.5.5 to 2.6.0 against the same StatefulSet
+- performing a rolling upgrade from 2.5.5 to 2.6.1 against the same StatefulSet

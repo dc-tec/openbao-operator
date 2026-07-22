@@ -1,4 +1,4 @@
-ARG OPENBAO_HSM_BASE_IMAGE=openbao/openbao-hsm:2.6.0
+ARG OPENBAO_HSM_BASE_IMAGE=openbao/openbao-hsm:2.6.1
 FROM ${OPENBAO_HSM_BASE_IMAGE}
 
 USER root

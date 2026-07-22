@@ -200,8 +200,8 @@ metadata:
   name: bao-kms-plugin
   namespace: openbao
 spec:
-  version: "2.6.0"
-  image: openbao/openbao:2.6.0
+  version: "2.6.1"
+  image: openbao/openbao:2.6.1
   configuration:
     plugin:
       autoDownload: true
@@ -310,7 +310,7 @@ metadata:
   name: bao-hsm
   namespace: openbao
 spec:
-  image: registry.example.com/openbao-hsm-vendor:2.6.0
+  image: registry.example.com/openbao-hsm-vendor:2.6.1
   unseal:
     type: pkcs11
     credentialsSecretRef:

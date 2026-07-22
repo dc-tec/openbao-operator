@@ -72,7 +72,7 @@ The current stable release line is intended for real deployments, but it remains
   columns={['Version', 'Validated', 'Support posture', 'Production note']}
   rows={[
     {
-      cells: ['2.6.x', 'PR gate, nightly E2E, rolling-upgrade coverage, and config compatibility checks', 'Best-effort supported on the latest stable line', 'Primary validated target; pre-2.6 to 2.6.0 BlueGreen upgrades are excluded by the known mixed-version limitation'],
+      cells: ['2.6.x', 'PR gate, nightly E2E, rolling-upgrade coverage, and config compatibility checks', 'Best-effort supported on the latest stable line', 'Primary validated target; pre-2.6 to 2.6.x BlueGreen upgrades are excluded by the known mixed-version limitation'],
       emphasis: 'recommended',
     },
     {
@@ -95,17 +95,17 @@ The current stable release line is intended for real deployments, but it remains
   columns={['Workflow', 'Scope', 'Versions tested']}
   rows={[
     {
-      cells: ['PR Gate', 'Logic, manifests, and primary compatibility path', 'K8s 1.35.1 + OpenBao 2.6.0'],
+      cells: ['PR Gate', 'Logic, manifests, and primary compatibility path', 'K8s 1.35.1 + OpenBao 2.6.1'],
       emphasis: 'recommended',
     },
     {
-      cells: ['Release Gate E2E', 'Stable release lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.6.0'],
+      cells: ['Release Gate E2E', 'Stable release lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.6.1'],
     },
     {
-      cells: ['Nightly E2E', 'Full lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.6.0'],
+      cells: ['Nightly E2E', 'Full lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.6.1'],
     },
     {
-      cells: ['Nightly Config Compatibility', 'Render and config compatibility checks', 'OpenBao 2.4.4, 2.5.5, and 2.6.0'],
+      cells: ['Nightly Config Compatibility', 'Render and config compatibility checks', 'OpenBao 2.4.4, 2.5.5, and 2.6.1'],
     },
   ]}
 />
@@ -116,9 +116,9 @@ Always validate new Kubernetes or OpenBao versions in a staging environment befo
 
 </Callout>
 
-<Callout type="warning" title="OpenBao 2.6.0 BlueGreen upgrade limitation">
+<Callout type="warning" title="OpenBao 2.6.x BlueGreen upgrade limitation">
 
-OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. A 2.6.0 Green peer cannot report Raft Autopilot health to a pre-2.6 Blue leader, so the operator blocks pre-2.6 to 2.6-or-newer `BlueGreen` transitions before creating Green resources until a compatible target is explicitly qualified. Fresh 2.6.0 clusters and rolling upgrades remain validated. Existing `BlueGreen` clusters can return to a healthy, idle state, change only `spec.upgrade.strategy` to `RollingUpdate`, wait for `status.acceptedUpgradeStrategy=RollingUpdate`, and then request 2.6.x.
+OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. A 2.6.x Green peer cannot report Raft Autopilot health to a pre-2.6 Blue leader, so the operator blocks pre-2.6 to 2.6-or-newer `BlueGreen` transitions before creating Green resources until a compatible target is explicitly qualified. Fresh 2.6.x clusters and rolling upgrades remain validated. Existing `BlueGreen` clusters can return to a healthy, idle state, change only `spec.upgrade.strategy` to `RollingUpdate`, wait for `status.acceptedUpgradeStrategy=RollingUpdate`, and then request 2.6.x.
 
 </Callout>
 

@@ -62,11 +62,11 @@ func main() {
 	var verbose bool
 
 	const openbaoImageTagUsage = "OpenBao Docker image tag used to resolve an upstream git SHA " +
-		"(e.g. 2.6.0)"
+		"(e.g. 2.6.1)"
 	const openbaoGitSHAUsage = "OpenBao git SHA (40 hex) to use instead of resolving " +
 		"from Docker image"
 
-	flag.StringVar(&openbaoImageTag, "openbao-image-tag", "2.6.0", openbaoImageTagUsage)
+	flag.StringVar(&openbaoImageTag, "openbao-image-tag", "2.6.1", openbaoImageTagUsage)
 	flag.StringVar(&openbaoGitSHA, "openbao-git-sha", "", openbaoGitSHAUsage)
 	flag.IntVar(&maxList, "max-list", 60, "Max number of keys to print per section (0 = unlimited)")
 	flag.BoolVar(&verbose, "v", false, "Verbose output (prints extra keys and sets)")

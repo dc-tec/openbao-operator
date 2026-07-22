@@ -66,10 +66,10 @@ func TestDefaultRollingUpgradeSourceUsesPreviousStableRelease(t *testing.T) {
 	t.Setenv("PERF_UPGRADE_FROM_IMAGE", "")
 
 	opts := defaultOptions("verify")
-	if opts.UpgradeFromVersion != "2.5.5" {
-		t.Fatalf("UpgradeFromVersion = %q, want 2.5.5", opts.UpgradeFromVersion)
+	if opts.UpgradeFromVersion != "2.6.0" {
+		t.Fatalf("UpgradeFromVersion = %q, want 2.6.0", opts.UpgradeFromVersion)
 	}
-	if opts.UpgradeFromImage != "openbao/openbao:2.5.5" {
-		t.Fatalf("UpgradeFromImage = %q, want openbao/openbao:2.5.5", opts.UpgradeFromImage)
+	if opts.UpgradeFromImage != "openbao/openbao:2.6.0" {
+		t.Fatalf("UpgradeFromImage = %q, want openbao/openbao:2.6.0", opts.UpgradeFromImage)
 	}
 }

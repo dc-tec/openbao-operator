@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const defaultOpenBaoVersion = "2.6.0"
+const defaultOpenBaoVersion = "2.6.1"
 
 // defaultUpgradeFromVersion is the version to start with for upgrade tests.
 // This should be set to a stable, known-good version.
@@ -18,12 +18,12 @@ const defaultUpgradeFromVersion = "2.5.5"
 // defaultUpgradeToVersion is the target version for upgrade tests.
 // This should be set to a newer version than defaultUpgradeFromVersion.
 // Update this when new OpenBao versions are released.
-const defaultUpgradeToVersion = "2.6.0"
+const defaultUpgradeToVersion = "2.6.1"
 
 // OpenBao 2.6.0 changed the internal request-forwarding gRPC service name, so
 // it cannot exchange Raft Autopilot health with pre-2.6 peers during a
 // blue/green upgrade. Keep successful blue/green coverage on the newest known
-// compatible mixed-version pair while rolling coverage qualifies 2.6.0.
+// compatible mixed-version pair while rolling coverage qualifies 2.6.1.
 const (
 	defaultBlueGreenUpgradeFromVersion = "2.4.4"
 	defaultBlueGreenUpgradeToVersion   = "2.5.5"
