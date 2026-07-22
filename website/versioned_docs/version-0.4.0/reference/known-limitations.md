@@ -41,7 +41,7 @@ journey: reference
       cells: ['Audit file storage archival', '`spec.auditFileStorage` provides a PVC-backed collector handoff and replay buffer; it does not provide rotation, pruning, tamper-proof retention, or a collector.', 'Mount the audit PVC read-only into a collector and ship records to external retention-controlled storage.'],
     },
     {
-      cells: ['Upgrade strategy switching', 'Switching an existing cluster between `RollingUpdate` and `BlueGreen` is not a supported in-place transition today.', 'Choose the upgrade strategy before the next rollout and keep it stable for that cluster.'],
+      cells: ['OpenBao 2.6.0 BlueGreen upgrade', 'OpenBao 2.6.0 cannot exchange Raft Autopilot health with pre-2.6 peers because its internal request-forwarding gRPC service name changed. The operator blocks pre-2.6 to 2.6-or-newer BlueGreen transitions before deploying Green until a compatible target is explicitly qualified.', 'Return the cluster to a healthy, idle BlueGreen state, change only `spec.upgrade.strategy` to `RollingUpdate`, wait for `status.acceptedUpgradeStrategy=RollingUpdate`, and then request 2.6.x. Fresh 2.6.x clusters and rolling upgrades remain supported.'],
       emphasis: 'caution',
     },
   ]}
