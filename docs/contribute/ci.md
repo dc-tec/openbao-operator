@@ -113,6 +113,13 @@ Inline `nosemgrep` suppressions are reserved for bounded intentional exceptions.
     },
     {
       cells: [
+        "PR touches unseal API, seal rendering, validation, workload wiring, runtime contracts, or HSM fixtures",
+        "The HSM/KMIP/PKCS#11 lane runs with per-run SoftHSM and PyKMIP fixture images.",
+        "Seal-path changes cannot merge with the hardware-backed suites skipped or using an implicit local image.",
+      ],
+    },
+    {
+      cells: [
         "Maintainer adds `ci:full-e2e`",
         "The broader E2E suite runs.",
         "This is appropriate when the change spans enough surface area that targeted routing is no longer sufficient.",
@@ -147,6 +154,9 @@ FUZZ_TARGET_FILTER='FuzzDiscoverConfig|internal/service/upgrade' make fuzz`}
 </CommandBlock>
 
 CI E2E shards write both JUnit and Ginkgo JSON reports under the uploaded E2E artifact. The workflow summary includes the selected label filter, spec counts, failures, and the slowest specs. Local reproductions can use the same report path variables:
+
+Seal-sensitive path routing is defined in `hack/ci/e2e-seal-paths.txt`. Keep that catalog synchronized when seal API,
+validation, rendering, projection, runtime, or fixture ownership moves to a different file.
 
 <CommandBlock
   language="bash"

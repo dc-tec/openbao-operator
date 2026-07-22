@@ -33,6 +33,10 @@ func requireKMIPSuite() {
 			defaultKMIPServerImage,
 		))
 	}
+
+	if strings.TrimSpace(os.Getenv(envKMIPServerImage)) == "" {
+		ginkgo.Fail(fmt.Sprintf("%s=true requires an explicit %s fixture image", envEnableKMIPSuite, envKMIPServerImage))
+	}
 }
 
 func kmipServerImage() string {

@@ -627,6 +627,7 @@ var allowedPRScopes = map[string]bool{
 	"backup":   true,
 	"hardened": true,
 	"manual":   true,
+	"seal":     true,
 	"upgrade":  true,
 }
 

@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -458,6 +460,127 @@ func loadRepoManifest(t *testing.T) manifest {
 		t.Fatalf("load repo manifest: %v", err)
 	}
 	return m
+}
+
+func TestRepoManifestIncludesSealLaneInPRMatrix(t *testing.T) {
+	t.Parallel()
+
+	matrix, err := buildGithubMatrix(loadRepoManifest(t))
+	if err != nil {
+		t.Fatalf("buildGithubMatrix() error = %v", err)
+	}
+
+	for _, row := range matrix.Include {
+		if row.ID != "hsm" {
+			continue
+		}
+		if row.PRScope != "seal" {
+			t.Fatalf("hsm PR scope = %q, want seal", row.PRScope)
+		}
+		if row.ParallelNodes != 1 {
+			t.Fatalf("hsm parallel nodes = %d, want 1", row.ParallelNodes)
+		}
+		if row.OpenBaoImage != "openbao-softhsm:dev" {
+			t.Fatalf("hsm local OpenBao image = %q, want openbao-softhsm:dev", row.OpenBaoImage)
+		}
+		return
+	}
+
+	t.Fatal("PR matrix does not include the hsm lane")
+}
+
+func TestSealChangePathPatterns(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join("..", "..", "..", "hack", "ci", "e2e-seal-paths.txt")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read seal change paths: %v", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	patterns := make([]*regexp.Regexp, 0, len(lines))
+	for lineNumber, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		pattern, err := regexp.Compile(line)
+		if err != nil {
+			t.Fatalf("compile seal change path line %d: %v", lineNumber+1, err)
+		}
+		patterns = append(patterns, pattern)
+	}
+	if len(patterns) == 0 {
+		t.Fatal("seal change path patterns are empty")
+	}
+
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{path: "api/v1alpha1/openbaocluster_unseal_types.go", want: true},
+		{path: "config/policy/openbao-validate-openbaocluster.yaml", want: true},
+		{path: "internal/adapter/config/render_seal.go", want: true},
+		{path: "internal/service/bootstrap/unseal_validation_hsm.go", want: true},
+		{path: "internal/service/workload/seal_wiring.go", want: true},
+		{path: "internal/port/openbao/pkcs11.go", want: true},
+		{path: "test/e2e/images/openbao-softhsm/Dockerfile", want: true},
+		{path: "test/e2e/images/pykmip-server/Dockerfile", want: true},
+		{path: "test/e2e/Cluster_Unseal_KMIP_test.go", want: true},
+		{path: "test/e2e/e2e_suite_test.go", want: true},
+		{path: "hack/tools/e2e_plan/main.go", want: true},
+		{path: ".github/actions/prepare-e2e-lane/action.yml", want: true},
+		{path: ".github/workflows/ci.yml", want: true},
+		{path: "docs/user-guide/openbaocluster/configuration/unseal.md", want: false},
+		{path: "internal/service/backup/manager.go", want: false},
+		{path: "api/v1alpha1/openbaocluster_networking_types.go", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got := false
+			for _, pattern := range patterns {
+				if pattern.MatchString(tt.path) {
+					got = true
+					break
+				}
+			}
+			if got != tt.want {
+				t.Fatalf("seal change path match = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCIWorkflowWiresSealLaneFixtures(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join("..", "..", "..", ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read CI workflow: %v", err)
+	}
+	workflow := string(data)
+
+	required := []string{
+		"e2e_seal: ${{ steps.diff.outputs.e2e_seal }}",
+		"changed_matches_file 'hack/ci/e2e-seal-paths.txt'",
+		"BUILD_SEAL_FIXTURES:",
+		"Build SoftHSM-enabled OpenBao fixture image",
+		"Build PyKMIP fixture image",
+		"openbao_softhsm_ref:",
+		"pykmip_server_ref:",
+		"E2E_ENABLE_SOFTHSM_SUITE:",
+		"E2E_ENABLE_KMIP_SUITE:",
+		"E2E_KMIP_SERVER_IMAGE:",
+		"--fail-on-selected-skips",
+	}
+	for _, value := range required {
+		if !strings.Contains(workflow, value) {
+			t.Errorf("CI workflow is missing seal-lane contract %q", value)
+		}
+	}
 }
 
 func singleNightlyRow(t *testing.T, m manifest, profile string, filters nightlyFilters) matrixRow {

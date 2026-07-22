@@ -2,7 +2,7 @@
 set -eu
 
 if [ "${1:-}" != "server" ]; then
-  exec /bin/bao.real "$@"
+  exec /usr/local/bin/bao.real "$@"
 fi
 
 token_dir="/bao/data/softhsm/tokens"
@@ -44,4 +44,4 @@ if ! pkcs11-tool \
   exit 1
 fi
 
-exec /bin/bao.real "$@"
+exec /usr/local/bin/bao.real "$@"
