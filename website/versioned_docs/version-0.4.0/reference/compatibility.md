@@ -72,11 +72,14 @@ The current stable release line is intended for real deployments, but it remains
   columns={['Version', 'Validated', 'Support posture', 'Production note']}
   rows={[
     {
-      cells: ['2.5.x', 'PR gate, nightly E2E, and config compatibility checks', 'Best-effort supported on the latest stable line', 'Primary validated target'],
+      cells: ['2.6.x', 'PR gate, nightly E2E, rolling-upgrade coverage, and config compatibility checks', 'Best-effort supported on the latest stable line', 'Primary validated target; pre-2.6 to 2.6.0 BlueGreen upgrades are excluded by the known mixed-version limitation'],
       emphasis: 'recommended',
     },
     {
-      cells: ['2.4.x', 'Nightly config compatibility checks', 'Best-effort supported on the latest stable line', 'Validate workload behavior and upgrade flow in staging before production rollout'],
+      cells: ['2.5.x', 'Nightly config compatibility checks and rolling-upgrade source coverage', 'Best-effort compatibility', 'Validate workload behavior and the upgrade flow in staging before production rollout'],
+    },
+    {
+      cells: ['2.4.x', 'Nightly config compatibility checks', 'Maintenance compatibility only', 'Upgrade to a newer OpenBao release before production rollout'],
     },
     {
       cells: ['2.3.x', 'Not validated', 'Deprecated and out of support scope', 'Upgrade before production use'],
@@ -92,17 +95,17 @@ The current stable release line is intended for real deployments, but it remains
   columns={['Workflow', 'Scope', 'Versions tested']}
   rows={[
     {
-      cells: ['PR Gate', 'Logic, manifests, and primary compatibility path', 'K8s 1.35.1 + OpenBao 2.5.5'],
+      cells: ['PR Gate', 'Logic, manifests, and primary compatibility path', 'K8s 1.35.1 + OpenBao 2.6.0'],
       emphasis: 'recommended',
     },
     {
-      cells: ['Release Gate E2E', 'Stable release lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.5.5'],
+      cells: ['Release Gate E2E', 'Stable release lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.6.0'],
     },
     {
-      cells: ['Nightly E2E', 'Full lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.5.5'],
+      cells: ['Nightly E2E', 'Full lifecycle coverage', 'K8s 1.34.3 and 1.35.1 + OpenBao 2.6.0'],
     },
     {
-      cells: ['Nightly Config Compatibility', 'Render and config compatibility checks', 'OpenBao 2.4.4 and 2.5.5'],
+      cells: ['Nightly Config Compatibility', 'Render and config compatibility checks', 'OpenBao 2.4.4, 2.5.5, and 2.6.0'],
     },
   ]}
 />
@@ -110,6 +113,12 @@ The current stable release line is intended for real deployments, but it remains
 <Callout type="warning" title="Production upgrade rule">
 
 Always validate new Kubernetes or OpenBao versions in a staging environment before upgrading production, even when they are listed as validated and best-effort supported.
+
+</Callout>
+
+<Callout type="warning" title="OpenBao 2.6.0 BlueGreen upgrade limitation">
+
+OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. A 2.6.0 Green peer cannot report Raft Autopilot health to a pre-2.6 Blue leader, so the operator blocks pre-2.6 to 2.6-or-newer `BlueGreen` transitions before creating Green resources until a compatible target is explicitly qualified. Fresh 2.6.0 clusters and rolling upgrades remain validated. Existing `BlueGreen` clusters can return to a healthy, idle state, change only `spec.upgrade.strategy` to `RollingUpdate`, wait for `status.acceptedUpgradeStrategy=RollingUpdate`, and then request 2.6.x.
 
 </Callout>
 
