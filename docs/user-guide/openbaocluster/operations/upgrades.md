@@ -46,11 +46,11 @@ Change only `spec.upgrade.strategy`, then wait until `status.acceptedUpgradeStra
 
 </Callout>
 
-<Callout type="warning" title="OpenBao 2.6.0 cannot complete a mixed-version BlueGreen upgrade">
+<Callout type="warning" title="OpenBao 2.6.x cannot complete a mixed-version BlueGreen upgrade">
 
-OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. During a pre-2.6 to 2.6.0 `BlueGreen` upgrade, Green peers cannot report Raft Autopilot health to the Blue leader and therefore cannot be promoted safely. The operator rejects pre-2.6 to 2.6-or-newer transitions before creating Green resources until a compatible target is explicitly qualified.
+OpenBao 2.6.0 changed its internal request-forwarding gRPC service name. During a pre-2.6 to 2.6.x `BlueGreen` upgrade, Green peers cannot report Raft Autopilot health to the Blue leader and therefore cannot be promoted safely. The operator rejects pre-2.6 to 2.6-or-newer transitions before creating Green resources until a compatible target is explicitly qualified.
 
-Fresh 2.6.0 clusters and the `RollingUpdate` path remain supported. If a pre-2.6 cluster is configured for `BlueGreen`, first let the cluster return to a healthy `Idle` state, switch only the strategy to `RollingUpdate`, wait for `status.acceptedUpgradeStrategy=RollingUpdate`, and then request the 2.6.0 version change.
+Fresh 2.6.x clusters and the `RollingUpdate` path remain supported. If a pre-2.6 cluster is configured for `BlueGreen`, first let the cluster return to a healthy `Idle` state, switch only the strategy to `RollingUpdate`, wait for `status.acceptedUpgradeStrategy=RollingUpdate`, and then request the 2.6.x version change.
 
 </Callout>
 
