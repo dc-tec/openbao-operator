@@ -25,8 +25,9 @@ RUN set -eux; \
         --key-type rsa:4096 \
         --label bao-root-key-rsa \
         --id 01; \
-    mv /bin/bao /bin/bao.real; \
-    ln -s /usr/local/bin/bao-softhsm-wrapper /bin/bao; \
+    bao_path="$(command -v bao)"; \
+    mv "${bao_path}" /usr/local/bin/bao.real; \
+    ln -s /usr/local/bin/bao-softhsm-wrapper "${bao_path}"; \
     chmod 0755 /usr/local/bin/bao-softhsm-wrapper; \
     chown -R 100:1000 /opt/openbao-softhsm; \
     chmod -R u=rwX,g=rX,o= /opt/openbao-softhsm
