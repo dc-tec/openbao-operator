@@ -17,6 +17,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GINKGO ?= $(LOCALBIN)/ginkgo
 GOVULNCHECK ?= $(LOCALBIN)/govulncheck
+GOVULNCHECK_IGNORE ?= $(LOCALBIN)/govulncheck-ignore
 GO_LICENSES ?= $(LOCALBIN)/go-licenses
 GOMU ?= $(LOCALBIN)/gomu
 GOTESTSUM ?= $(LOCALBIN)/gotestsum
@@ -62,6 +63,7 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
   printf '%s\n' "$$v" | sed -E 's/^v?[0-9]+\.([0-9]+).*/1.\1/')
 GOLANGCI_LINT_VERSION ?= v2.5.0
 GOVULNCHECK_VERSION ?= v1.1.4
+GOVULNCHECK_IGNORE_VERSION ?= v1.0.0
 GO_LICENSES_VERSION ?= v2.0.1
 GOMU_VERSION ?= v0.1.0
 GOTESTSUM_VERSION ?= v1.13.0
@@ -112,6 +114,11 @@ $(GINKGO): $(LOCALBIN)
 govulncheck: $(GOVULNCHECK) ## Download govulncheck locally if necessary.
 $(GOVULNCHECK): $(LOCALBIN)
 	$(call go-install-tool,$(GOVULNCHECK),golang.org/x/vuln/cmd/govulncheck,$(GOVULNCHECK_VERSION))
+
+.PHONY: govulncheck-ignore
+govulncheck-ignore: $(GOVULNCHECK_IGNORE) ## Download govulncheck-ignore locally if necessary.
+$(GOVULNCHECK_IGNORE): $(LOCALBIN)
+	$(call go-install-tool,$(GOVULNCHECK_IGNORE),github.com/dc-tec/govulncheck-ignore,$(GOVULNCHECK_IGNORE_VERSION))
 
 .PHONY: go-licenses
 go-licenses: $(GO_LICENSES) ## Download go-licenses locally if necessary.
