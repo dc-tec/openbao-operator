@@ -448,6 +448,21 @@ spec:
                     required:
                     - bucket
                     type: object
+                    x-kubernetes-validations:
+                    - message: backup target endpoint is required when provider is
+                        s3
+                      rule: self.provider != 's3' || (has(self.endpoint) && size(self.endpoint)
+                        > 0)
+                    - message: backup target gcs options are only supported when provider
+                        is gcs
+                      rule: self.provider == 'gcs' || !has(self.gcs)
+                    - message: backup target azure options are only supported when
+                        provider is azure
+                      rule: self.provider == 'azure' || !has(self.azure)
+                    - message: backup target roleArn is only supported when provider
+                        is s3
+                      rule: self.provider == 's3' || !has(self.roleArn) || size(self.roleArn)
+                        == 0
                   tokenSecretRef:
                     description: |-
                       TokenSecretRef optionally references a Secret containing an OpenBao API
@@ -1001,16 +1016,6 @@ spec:
                       `openbao.org/maintenance=true` to allow controlled restarts/deletes where
                       admission policies require an explicit maintenance signal.
                     type: boolean
-                  restartAt:
-                    description: |-
-                      RestartAt triggers a rolling restart when changed.
-                      The operator propagates this value as a Pod template annotation; any change
-                      results in a new StatefulSet revision and a controlled restart.
-                      Recommended value is an RFC3339 timestamp string.
-                      Deprecated: use spec.runtime.restartAt instead. spec.runtime.restartAt
-                      takes precedence when both fields are set.
-                    minLength: 1
-                    type: string
                 type: object
               network:
                 description: Network configures network-related settings for the cluster.
@@ -4125,12 +4130,6 @@ spec:
                           "https://acme-v02.api.letsencrypt.org/directory").
                         minLength: 1
                         type: string
-                      domain:
-                        description: |-
-                          Domain is the domain name for which to obtain the certificate.
-                          Deprecated: use Domains to request a certificate with multiple SANs.
-                        minLength: 1
-                        type: string
                       domains:
                         description: |-
                           Domains is the list of domain names for which to obtain the certificate.
@@ -4200,11 +4199,6 @@ spec:
                     required:
                     - directoryURL
                     type: object
-                    x-kubernetes-validations:
-                    - message: tls.acme.domain and tls.acme.domains are mutually exclusive;
-                        use only one
-                      rule: '!(has(self.domain) && has(self.domains) && size(self.domains)
-                        > 0)'
                   enabled:
                     description: Enabled controls whether TLS is enabled for the cluster.
                     type: boolean
@@ -4721,6 +4715,42 @@ spec:
                     - pkcs11
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: the selected spec.unseal.type requires its matching configuration
+                    block
+                  rule: self.type == 'static' || (self.type == 'transit' && has(self.transit))
+                    || (self.type == 'awskms' && has(self.awskms)) || (self.type ==
+                    'azurekeyvault' && has(self.azureKeyVault)) || (self.type == 'gcpckms'
+                    && has(self.gcpCloudKMS)) || (self.type == 'kmip' && has(self.kmip))
+                    || (self.type == 'kms' && has(self.kms)) || (self.type == 'ocikms'
+                    && has(self.ocikms)) || (self.type == 'pkcs11' && has(self.pkcs11))
+                - message: spec.unseal.static is only supported when spec.unseal.type
+                    is static
+                  rule: self.type == 'static' || !has(self.static)
+                - message: spec.unseal.transit is only supported when spec.unseal.type
+                    is transit
+                  rule: self.type == 'transit' || !has(self.transit)
+                - message: spec.unseal.awskms is only supported when spec.unseal.type
+                    is awskms
+                  rule: self.type == 'awskms' || !has(self.awskms)
+                - message: spec.unseal.azureKeyVault is only supported when spec.unseal.type
+                    is azurekeyvault
+                  rule: self.type == 'azurekeyvault' || !has(self.azureKeyVault)
+                - message: spec.unseal.gcpCloudKMS is only supported when spec.unseal.type
+                    is gcpckms
+                  rule: self.type == 'gcpckms' || !has(self.gcpCloudKMS)
+                - message: spec.unseal.kmip is only supported when spec.unseal.type
+                    is kmip
+                  rule: self.type == 'kmip' || !has(self.kmip)
+                - message: spec.unseal.kms is only supported when spec.unseal.type
+                    is kms
+                  rule: self.type == 'kms' || !has(self.kms)
+                - message: spec.unseal.ocikms is only supported when spec.unseal.type
+                    is ocikms
+                  rule: self.type == 'ocikms' || !has(self.ocikms)
+                - message: spec.unseal.pkcs11 is only supported when spec.unseal.type
+                    is pkcs11
+                  rule: self.type == 'pkcs11' || !has(self.pkcs11)
               upgrade:
                 description: |-
                   Upgrade configures upgrade operations.
@@ -4952,6 +4982,7 @@ spec:
                   The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.
                   Versions below 2.4.0 do not support the static seal feature and will fail to start.
                 minLength: 1
+                pattern: ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$
                 type: string
               workloadHardening:
                 description: WorkloadHardening configures opt-in workload hardening
@@ -5281,13 +5312,6 @@ spec:
                   This is set to true after the first pod is initialized using bao operator init
                   or after self-initialization completes.
                 type: boolean
-              lastBackupTime:
-                description: |-
-                  LastBackupTime is the timestamp of the last successful backup, if configured.
-                  Deprecated: Use Backup.LastBackupTime instead.
-                format: date-time
-                nullable: true
-                type: string
               observedGeneration:
                 description: |-
                   ObservedGeneration is the most recent metadata.generation that has been
@@ -5432,23 +5456,6 @@ spec:
                     type: object
                   fromVersion:
                     description: FromVersion is the version being upgraded from.
-                    type: string
-                  lastErrorAt:
-                    description: |-
-                      LastErrorAt is when the last upgrade error was recorded (best-effort).
-                      Deprecated: use Failure.At.
-                    format: date-time
-                    type: string
-                  lastErrorMessage:
-                    description: |-
-                      LastErrorMessage is a human-readable failure message (best-effort).
-                      Deprecated: use Failure.Message.
-                    type: string
-                  lastErrorReason:
-                    description: |-
-                      LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
-                      Deprecated: use Failure.Reason.
-                      When set, the status controller should consider the cluster Degraded.
                     type: string
                   lastStepDownTime:
                     description: LastStepDownTime records when the last leader step-down
