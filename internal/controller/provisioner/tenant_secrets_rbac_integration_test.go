@@ -67,6 +67,7 @@ func TestTenantSecretsRBAC_SetupWithManager_SynchronizesSecretAllowlists(t *test
 			Backup: &openbaov1alpha1.BackupSchedule{
 				Schedule: "0 3 * * *",
 				Target: openbaov1alpha1.BackupTarget{
+					Endpoint:             "https://objectstore.example.com",
 					Bucket:               "backups",
 					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "backup-creds"},
 				},
@@ -90,6 +91,7 @@ func TestTenantSecretsRBAC_SetupWithManager_SynchronizesSecretAllowlists(t *test
 			Cluster: "cluster-a",
 			Source: openbaov1alpha1.RestoreSource{
 				Target: openbaov1alpha1.BackupTarget{
+					Endpoint:             "https://objectstore.example.com",
 					Bucket:               "restore-backups",
 					CredentialsSecretRef: &corev1.LocalObjectReference{Name: "restore-creds"},
 				},
