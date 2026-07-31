@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -111,6 +112,15 @@ type schemaField struct {
 	Default     string
 	Validation  string
 	Description string
+}
+
+type canonicalValidationRule struct {
+	Rule              string `json:"rule"`
+	Message           string `json:"message,omitempty"`
+	MessageExpression string `json:"messageExpression,omitempty"`
+	FieldPath         string `json:"fieldPath,omitempty"`
+	Reason            string `json:"reason,omitempty"`
+	OptionalOldSelf   string `json:"optionalOldSelf,omitempty"`
 }
 
 type effectivePolicy struct {
@@ -423,7 +433,7 @@ func schemaValidation(schema apiextensionsv1.JSONSchemaProps) string {
 		constraints = append(constraints, "enum="+strings.Join(values, ","))
 	}
 	if len(schema.XValidations) > 0 {
-		constraints = append(constraints, fmt.Sprintf("cel=%d", len(schema.XValidations)))
+		constraints = append(constraints, "cel="+canonicalCELValidation(schema.XValidations))
 	}
 	if schema.Nullable {
 		constraints = append(constraints, "nullable")
@@ -432,6 +442,28 @@ func schemaValidation(schema apiextensionsv1.JSONSchemaProps) string {
 		return "-"
 	}
 	return strings.Join(constraints, "; ")
+}
+
+func canonicalCELValidation(rules apiextensionsv1.ValidationRules) string {
+	encoded := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		item := canonicalValidationRule{
+			Rule:              rule.Rule,
+			Message:           rule.Message,
+			MessageExpression: rule.MessageExpression,
+			FieldPath:         rule.FieldPath,
+		}
+		if rule.Reason != nil {
+			item.Reason = string(*rule.Reason)
+		}
+		if rule.OptionalOldSelf != nil {
+			item.OptionalOldSelf = strconv.FormatBool(*rule.OptionalOldSelf)
+		}
+		data, _ := json.Marshal(item)
+		encoded = append(encoded, string(data))
+	}
+	sort.Strings(encoded)
+	return "[" + strings.Join(encoded, ",") + "]"
 }
 
 func formatFloat(value float64) string {

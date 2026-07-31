@@ -49,6 +49,43 @@ func TestCollectSchemaFieldsIncludesNestedArraysAndSchemaFacts(t *testing.T) {
 	}
 }
 
+func TestSchemaValidationCanonicalizesCELRuleContents(t *testing.T) {
+	optionalOldSelf := false
+	reason := apiextensionsv1.FieldValueForbidden
+	rules := apiextensionsv1.ValidationRules{
+		{
+			Rule:              "self != oldSelf",
+			MessageExpression: "'must change from ' + string(oldSelf)",
+			FieldPath:         ".value",
+			Reason:            &reason,
+			OptionalOldSelf:   &optionalOldSelf,
+		},
+		{
+			Rule:    "self > 0",
+			Message: "must be positive",
+		},
+	}
+
+	got := schemaValidation(apiextensionsv1.JSONSchemaProps{XValidations: rules})
+	want := `cel=[{"rule":"self != oldSelf","messageExpression":"'must change from ' + string(oldSelf)",` +
+		`"fieldPath":".value","reason":"FieldValueForbidden","optionalOldSelf":"false"},` +
+		`{"rule":"self \u003e 0","message":"must be positive"}]`
+	if got != want {
+		t.Fatalf("schemaValidation() = %q, want %q", got, want)
+	}
+
+	reordered := apiextensionsv1.ValidationRules{rules[1], rules[0]}
+	if got != schemaValidation(apiextensionsv1.JSONSchemaProps{XValidations: reordered}) {
+		t.Fatal("schemaValidation() changed when CEL rules were reordered")
+	}
+
+	changed := append(apiextensionsv1.ValidationRules(nil), rules...)
+	changed[1].Rule = "self >= 0"
+	if got == schemaValidation(apiextensionsv1.JSONSchemaProps{XValidations: changed}) {
+		t.Fatal("schemaValidation() did not change when CEL rule content changed")
+	}
+}
+
 func TestResolvePolicyMergesInheritedAndSpecificRules(t *testing.T) {
 	resource := resourceInventory{
 		Defaults: resourceDefaults{
