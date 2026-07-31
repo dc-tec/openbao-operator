@@ -458,6 +458,40 @@ func TestCRD_OpenBaoCluster_RequiresProfile(t *testing.T) {
 	t.Fatalf("expected CRD validation to reject OpenBaoCluster create without spec.profile after retries")
 }
 
+func TestCRD_OpenBaoCluster_ValidatesSemanticVersion(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		valid   bool
+	}{
+		{name: "release", version: "2.6.1", valid: true},
+		{name: "lowercase v prefix", version: "v2.6.1", valid: true},
+		{name: "prerelease and build", version: "2.7.0-rc.1+build.7", valid: true},
+		{name: "missing patch", version: "2.6", valid: false},
+		{name: "leading zero segment", version: "2.06.1", valid: false},
+		{name: "leading zero numeric prerelease", version: "2.7.0-rc.01", valid: false},
+		{name: "uppercase v prefix", version: "V2.6.1", valid: false},
+		{name: "surrounding whitespace", version: " 2.6.1 ", valid: false},
+		{name: "image tag alias", version: "latest", valid: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-semver")
+			cluster.Spec.Version = tt.version
+
+			err := k8sClient.Create(ctx, cluster)
+			if tt.valid {
+				if err != nil {
+					t.Fatalf("expected semantic version %q to be accepted, got: %v", tt.version, err)
+				}
+				return
+			}
+			requireInvalidRequest(t, err)
+		})
+	}
+}
+
 func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoClusterAdmissionPolicies(t, namespace)

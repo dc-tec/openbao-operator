@@ -1054,7 +1054,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `version` _string_ | Version is the semantic OpenBao version, used for upgrade orchestration.<br />The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.<br />Versions below 2.4.0 do not support the static seal feature and will fail to start. |  | MinLength: 1 <br /> |
+| `version` _string_ | Version is the semantic OpenBao version, used for upgrade orchestration.<br />The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.<br />Versions below 2.4.0 do not support the static seal feature and will fail to start. |  | MinLength: 1 <br />Pattern: `^v?(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)\.(0\|[1-9][0-9]*)(-(0\|[1-9][0-9]*\|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0\|[1-9][0-9]*\|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$` <br /> |
 | `image` _string_ | Image is the container image to run; defaults may be derived from Version. |  | Optional: \{\} <br /> |
 | `serviceAccount` _[ServiceAccountConfig](#serviceaccountconfig)_ | ServiceAccount configures the Kubernetes ServiceAccount used by the OpenBao Pods. |  | Optional: \{\} <br /> |
 | `podMetadata` _[PodMetadataConfig](#podmetadataconfig)_ | PodMetadata configures additional labels and annotations for the OpenBao Pod template.<br />This is useful for platform integrations that select Pods via metadata, such as<br />Azure Workload Identity. Operator-managed Pod metadata takes precedence. |  | Optional: \{\} <br /> |
