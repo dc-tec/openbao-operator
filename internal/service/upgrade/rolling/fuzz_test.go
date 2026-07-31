@@ -31,9 +31,11 @@ func FuzzRollingHelpers(f *testing.F) {
 			},
 			Status: openbaov1alpha1.OpenBaoClusterStatus{
 				Upgrade: &openbaov1alpha1.UpgradeProgress{
-					LastErrorReason:  strings.TrimSpace(lastErrorReason),
-					LastErrorMessage: strings.TrimSpace(lastErrorMessage),
-					LastErrorAt:      &metav1.Time{Time: time.Unix(1_700_000_000, 0).UTC()},
+					Failure: &openbaov1alpha1.ControllerErrorStatus{
+						Reason:  strings.TrimSpace(lastErrorReason),
+						Message: strings.TrimSpace(lastErrorMessage),
+						At:      &metav1.Time{Time: time.Unix(1_700_000_000, 0).UTC()},
+					},
 					LastStepDownTime: &metav1.Time{Time: time.Unix(1_700_000_100, 0).UTC()},
 				},
 			},
@@ -46,10 +48,7 @@ func FuzzRollingHelpers(f *testing.F) {
 			if cluster.Status.Upgrade.Failure != nil {
 				t.Fatalf("clearUpgradeFailureForRetry() should clear structured failure")
 			}
-			if cluster.Status.Upgrade.LastErrorReason != "" || cluster.Status.Upgrade.LastErrorMessage != "" {
-				t.Fatalf("clearUpgradeFailureForRetry() should clear error fields")
-			}
-			if cluster.Status.Upgrade.LastErrorAt != nil || cluster.Status.Upgrade.LastStepDownTime != nil {
+			if cluster.Status.Upgrade.LastStepDownTime != nil {
 				t.Fatalf("clearUpgradeFailureForRetry() should clear timestamps")
 			}
 		}

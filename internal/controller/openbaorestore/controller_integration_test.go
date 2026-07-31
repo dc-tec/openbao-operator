@@ -46,7 +46,8 @@ func TestOpenBaoRestore_SetupWithManager_InitializesRestoreStatusFromPending(t *
 			Cluster: "test-cluster",
 			Source: openbaov1alpha1.RestoreSource{
 				Target: openbaov1alpha1.BackupTarget{
-					Bucket: "backups",
+					Endpoint: "https://objectstore.example.com",
+					Bucket:   "backups",
 				},
 				Key: "snapshots/backup.snap",
 			},

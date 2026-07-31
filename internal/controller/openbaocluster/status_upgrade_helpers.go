@@ -224,23 +224,17 @@ func ensureSentence(message string) string {
 }
 
 func rollingUpgradeFailureReason(progress *openbaov1alpha1.UpgradeProgress) string {
-	if progress == nil {
+	if progress == nil || progress.Failure == nil {
 		return ""
 	}
-	if progress.Failure != nil {
-		return strings.TrimSpace(progress.Failure.Reason)
-	}
-	return strings.TrimSpace(progress.LastErrorReason)
+	return strings.TrimSpace(progress.Failure.Reason)
 }
 
 func rollingUpgradeFailureMessage(progress *openbaov1alpha1.UpgradeProgress) string {
-	if progress == nil {
+	if progress == nil || progress.Failure == nil {
 		return ""
 	}
-	if progress.Failure != nil {
-		return strings.TrimSpace(progress.Failure.Message)
-	}
-	return strings.TrimSpace(progress.LastErrorMessage)
+	return strings.TrimSpace(progress.Failure.Message)
 }
 
 func rollingUpgradeFailed(progress *openbaov1alpha1.UpgradeProgress) bool {

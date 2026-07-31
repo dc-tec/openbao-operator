@@ -62,10 +62,9 @@ func TestPatchStatusOwnedFields_PreservesPointerClearsInApplyPayload(t *testing.
 		t.Fatalf("FieldManager = %q, want %q", capturedOptions.FieldManager, constants.FieldOwnerStatus)
 	}
 	gotPayload := string(payload)
-	for _, want := range []string{`"readReplicas":null`, `"lastBackupTime":null`} {
-		if !strings.Contains(gotPayload, want) {
-			t.Fatalf("apply payload missing %s: %s", want, gotPayload)
-		}
+	want := `"readReplicas":null`
+	if !strings.Contains(gotPayload, want) {
+		t.Fatalf("apply payload missing %s: %s", want, gotPayload)
 	}
 }
 

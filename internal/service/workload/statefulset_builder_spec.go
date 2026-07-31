@@ -247,12 +247,8 @@ func effectiveRestartAt(cluster *openbaov1alpha1.OpenBaoCluster, spec StatefulSe
 		return strings.TrimSpace(*spec.RestartAt)
 	}
 
-	restartAt := ""
-	if cluster.Spec.Runtime != nil {
-		restartAt = strings.TrimSpace(cluster.Spec.Runtime.RestartAt)
+	if cluster.Spec.Runtime == nil {
+		return ""
 	}
-	if restartAt == "" && cluster.Spec.Maintenance != nil {
-		restartAt = strings.TrimSpace(cluster.Spec.Maintenance.RestartAt)
-	}
-	return restartAt
+	return strings.TrimSpace(cluster.Spec.Runtime.RestartAt)
 }

@@ -378,6 +378,16 @@ type KMSPluginSealConfig struct {
 
 // UnsealConfig defines the auto-unseal configuration for an OpenBaoCluster.
 // If omitted, defaults to "static" mode managed by the operator.
+// +kubebuilder:validation:XValidation:rule="self.type == 'static' || (self.type == 'transit' && has(self.transit)) || (self.type == 'awskms' && has(self.awskms)) || (self.type == 'azurekeyvault' && has(self.azureKeyVault)) || (self.type == 'gcpckms' && has(self.gcpCloudKMS)) || (self.type == 'kmip' && has(self.kmip)) || (self.type == 'kms' && has(self.kms)) || (self.type == 'ocikms' && has(self.ocikms)) || (self.type == 'pkcs11' && has(self.pkcs11))",message="the selected spec.unseal.type requires its matching configuration block"
+// +kubebuilder:validation:XValidation:rule="self.type == 'static' || !has(self.static)",message="spec.unseal.static is only supported when spec.unseal.type is static"
+// +kubebuilder:validation:XValidation:rule="self.type == 'transit' || !has(self.transit)",message="spec.unseal.transit is only supported when spec.unseal.type is transit"
+// +kubebuilder:validation:XValidation:rule="self.type == 'awskms' || !has(self.awskms)",message="spec.unseal.awskms is only supported when spec.unseal.type is awskms"
+// +kubebuilder:validation:XValidation:rule="self.type == 'azurekeyvault' || !has(self.azureKeyVault)",message="spec.unseal.azureKeyVault is only supported when spec.unseal.type is azurekeyvault"
+// +kubebuilder:validation:XValidation:rule="self.type == 'gcpckms' || !has(self.gcpCloudKMS)",message="spec.unseal.gcpCloudKMS is only supported when spec.unseal.type is gcpckms"
+// +kubebuilder:validation:XValidation:rule="self.type == 'kmip' || !has(self.kmip)",message="spec.unseal.kmip is only supported when spec.unseal.type is kmip"
+// +kubebuilder:validation:XValidation:rule="self.type == 'kms' || !has(self.kms)",message="spec.unseal.kms is only supported when spec.unseal.type is kms"
+// +kubebuilder:validation:XValidation:rule="self.type == 'ocikms' || !has(self.ocikms)",message="spec.unseal.ocikms is only supported when spec.unseal.type is ocikms"
+// +kubebuilder:validation:XValidation:rule="self.type == 'pkcs11' || !has(self.pkcs11)",message="spec.unseal.pkcs11 is only supported when spec.unseal.type is pkcs11"
 type UnsealConfig struct {
 	// Type specifies the seal type.
 	// Defaults to "static".

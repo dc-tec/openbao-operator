@@ -77,8 +77,10 @@ func TestReconcileCurrentVersion_SkipsWhenRollingUpgradeStatusExists(t *testing.
 			Initialized:    true,
 			CurrentVersion: "2.4.3",
 			Upgrade: &openbaov1alpha1.UpgradeProgress{
-				TargetVersion:   "2.4.4",
-				LastErrorReason: "UpgradeFailed",
+				TargetVersion: "2.4.4",
+				Failure: &openbaov1alpha1.ControllerErrorStatus{
+					Reason: "UpgradeFailed",
+				},
 			},
 		},
 	}

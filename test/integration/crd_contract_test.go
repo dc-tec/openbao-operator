@@ -4,9 +4,12 @@
 package integration
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -456,6 +460,177 @@ func TestCRD_OpenBaoCluster_RequiresProfile(t *testing.T) {
 	}
 
 	t.Fatalf("expected CRD validation to reject OpenBaoCluster create without spec.profile after retries")
+}
+
+func TestCRD_OpenBaoCluster_ValidatesSemanticVersion(t *testing.T) {
+	tests := []struct {
+		name    string
+		version string
+		valid   bool
+	}{
+		{name: "release", version: "2.6.1", valid: true},
+		{name: "lowercase v prefix", version: "v2.6.1", valid: true},
+		{name: "prerelease and build", version: "2.7.0-rc.1+build.7", valid: true},
+		{name: "missing patch", version: "2.6", valid: false},
+		{name: "leading zero segment", version: "2.06.1", valid: false},
+		{name: "leading zero numeric prerelease", version: "2.7.0-rc.01", valid: false},
+		{name: "uppercase v prefix", version: "V2.6.1", valid: false},
+		{name: "surrounding whitespace", version: " 2.6.1 ", valid: false},
+		{name: "image tag alias", version: "latest", valid: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-semver")
+			cluster.Spec.Version = tt.version
+
+			err := k8sClient.Create(ctx, cluster)
+			if tt.valid {
+				if err != nil {
+					t.Fatalf("expected semantic version %q to be accepted, got: %v", tt.version, err)
+				}
+				return
+			}
+			requireInvalidRequest(t, err)
+		})
+	}
+}
+
+func TestCRD_OpenBaoCluster_AcceptsMigratedStabilityFixture(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "fixtures", "api-migration", "0.5.0-openbaocluster.yaml"))
+	if err != nil {
+		t.Fatalf("read migrated API fixture: %v", err)
+	}
+	data, err = utilyaml.ToJSON(data)
+	if err != nil {
+		t.Fatalf("convert migrated API fixture to JSON: %v", err)
+	}
+	cluster := &unstructured.Unstructured{}
+	if err := json.Unmarshal(data, &cluster.Object); err != nil {
+		t.Fatalf("decode migrated API fixture: %v", err)
+	}
+	cluster.SetNamespace(newTestNamespace(t))
+	cluster.SetName("cluster-migrated-api")
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected migrated 0.5.0 API fixture to be accepted, got: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_RequiresSelectedUnsealConfiguration(t *testing.T) {
+	for _, unsealType := range []string{
+		"transit",
+		"awskms",
+		"azurekeyvault",
+		"gcpckms",
+		"kmip",
+		"kms",
+		"ocikms",
+		"pkcs11",
+	} {
+		t.Run(unsealType, func(t *testing.T) {
+			cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-unseal-branch")
+			cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{Type: unsealType}
+
+			err := k8sClient.Create(ctx, cluster)
+			requireInvalidRequest(t, err)
+			if !strings.Contains(err.Error(), "requires its matching configuration block") {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+func TestCRD_OpenBaoCluster_RejectsUnselectedUnsealConfiguration(t *testing.T) {
+	cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-unseal-extra-branch")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Address:   "https://transit.example.com",
+			KeyName:   "autounseal",
+			MountPath: "transit",
+		},
+		AWSKMS: &openbaov1alpha1.AWSKMSSealConfig{
+			Region:   "eu-west-1",
+			KMSKeyID: "alias/unused",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireInvalidRequest(t, err)
+	if !strings.Contains(err.Error(), "spec.unseal.awskms is only supported when spec.unseal.type is awskms") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_AllowsStaticUnsealWithoutConfiguration(t *testing.T) {
+	cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-static-unseal")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{Type: "static"}
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected static unseal without an explicit configuration block to succeed, got: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_ValidatesBackupTargetProviderShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  openbaov1alpha1.BackupTarget
+		message string
+	}{
+		{
+			name: "s3 endpoint is required",
+			target: openbaov1alpha1.BackupTarget{
+				Provider: "s3",
+				Bucket:   testBackupBucket,
+			},
+			message: "backup target endpoint is required when provider is s3",
+		},
+		{
+			name: "gcs options require gcs provider",
+			target: openbaov1alpha1.BackupTarget{
+				Provider: "s3",
+				Endpoint: "https://objectstore.example.com",
+				Bucket:   testBackupBucket,
+				GCS:      &openbaov1alpha1.GCSTargetConfig{},
+			},
+			message: "backup target gcs options are only supported when provider is gcs",
+		},
+		{
+			name: "azure options require azure provider",
+			target: openbaov1alpha1.BackupTarget{
+				Provider: "gcs",
+				Bucket:   testBackupBucket,
+				Azure:    &openbaov1alpha1.AzureTargetConfig{StorageAccount: "unused"},
+			},
+			message: "backup target azure options are only supported when provider is azure",
+		},
+		{
+			name: "role arn requires s3 provider",
+			target: openbaov1alpha1.BackupTarget{
+				Provider: "gcs",
+				Bucket:   testBackupBucket,
+				RoleARN:  "arn:aws:iam::123456789012:role/unused",
+			},
+			message: "backup target roleArn is only supported when provider is s3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-backup-target")
+			cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+				Schedule: "0 3 * * *",
+				Target:   tt.target,
+			}
+
+			err := k8sClient.Create(ctx, cluster)
+			requireInvalidRequest(t, err)
+			if !strings.Contains(err.Error(), tt.message) {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
 }
 
 func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
@@ -1587,7 +1762,7 @@ func TestCRD_OpenBaoCluster_RejectsHAACMEWithoutSharedCache(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme.example/directory",
-		Domain:       "bao.example.com",
+		Domains:      []string{"bao.example.com"},
 	}
 
 	err := k8sClient.Create(ctx, cluster)

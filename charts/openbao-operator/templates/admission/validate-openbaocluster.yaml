@@ -89,12 +89,6 @@ spec:
     - name: previous_runtime_restart
       expression: >-
         oldObject != null && has(oldObject.spec.runtime) && has(oldObject.spec.runtime.restartAt) ? oldObject.spec.runtime.restartAt : ""
-    - name: requested_maintenance_restart
-      expression: >-
-        has(object.spec.maintenance) && has(object.spec.maintenance.restartAt) ? object.spec.maintenance.restartAt : ""
-    - name: previous_maintenance_restart
-      expression: >-
-        oldObject != null && has(oldObject.spec.maintenance) && has(oldObject.spec.maintenance.restartAt) ? oldObject.spec.maintenance.restartAt : ""
     - name: requested_read_replicas
       expression: >-
         has(object.spec.readReplicas) ? object.spec.readReplicas.replicas : 0
@@ -663,8 +657,7 @@ spec:
           object.spec.replicas == oldObject.spec.replicas &&
           variables.requested_read_replicas == variables.previous_read_replicas &&
           object.spec.storage == oldObject.spec.storage &&
-          variables.requested_runtime_restart == variables.previous_runtime_restart &&
-          variables.requested_maintenance_restart == variables.previous_maintenance_restart)
+          variables.requested_runtime_restart == variables.previous_runtime_restart)
       message: "Change only spec.upgrade.strategy first; wait for the operator to accept it before changing version, image, replicas, storage, or restart controls."
     - expression: >-
         !variables.upgrade_strategy_changed ||

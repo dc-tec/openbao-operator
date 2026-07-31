@@ -134,11 +134,11 @@ func TestStepDownLeader_TimesOutBasedOnJobAge(t *testing.T) {
 	if cluster.Status.Upgrade == nil {
 		t.Fatalf("expected upgrade status to be present")
 	}
-	if cluster.Status.Upgrade.LastErrorReason != upgrade.ReasonStepDownTimeout {
-		t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, upgrade.ReasonStepDownTimeout)
+	if cluster.Status.Upgrade.Failure == nil || cluster.Status.Upgrade.Failure.Reason != upgrade.ReasonStepDownTimeout {
+		t.Fatalf("Failure=%#v, want reason %q", cluster.Status.Upgrade.Failure, upgrade.ReasonStepDownTimeout)
 	}
-	if cluster.Status.Upgrade.LastErrorMessage != "Leader step-down timed out for pod "+podName {
-		t.Fatalf("LastErrorMessage=%q, want %q", cluster.Status.Upgrade.LastErrorMessage, "Leader step-down timed out for pod "+podName)
+	if cluster.Status.Upgrade.Failure.Message != "Leader step-down timed out for pod "+podName {
+		t.Fatalf("Failure.Message=%q, want %q", cluster.Status.Upgrade.Failure.Message, "Leader step-down timed out for pod "+podName)
 	}
 }
 
@@ -216,11 +216,11 @@ func TestStepDownLeader_FailsWhenSucceededJobStillLeavesTargetAsLeader(t *testin
 	if ok {
 		t.Fatalf("expected step-down to remain incomplete after timeout")
 	}
-	if cluster.Status.Upgrade.LastErrorReason != upgrade.ReasonStepDownTimeout {
-		t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, upgrade.ReasonStepDownTimeout)
+	if cluster.Status.Upgrade.Failure == nil || cluster.Status.Upgrade.Failure.Reason != upgrade.ReasonStepDownTimeout {
+		t.Fatalf("Failure=%#v, want reason %q", cluster.Status.Upgrade.Failure, upgrade.ReasonStepDownTimeout)
 	}
-	if cluster.Status.Upgrade.LastErrorMessage != "Leader step-down timed out for pod "+podName {
-		t.Fatalf("LastErrorMessage=%q, want %q", cluster.Status.Upgrade.LastErrorMessage, "Leader step-down timed out for pod "+podName)
+	if cluster.Status.Upgrade.Failure.Message != "Leader step-down timed out for pod "+podName {
+		t.Fatalf("Failure.Message=%q, want %q", cluster.Status.Upgrade.Failure.Message, "Leader step-down timed out for pod "+podName)
 	}
 }
 
@@ -815,11 +815,11 @@ func TestRollingWaitStages_TimeoutsMarkUpgradeFailed(t *testing.T) {
 			if cluster.Status.Upgrade == nil {
 				t.Fatal("expected upgrade status to remain present")
 			}
-			if cluster.Status.Upgrade.LastErrorReason != tt.wantReason {
-				t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, tt.wantReason)
+			if cluster.Status.Upgrade.Failure == nil || cluster.Status.Upgrade.Failure.Reason != tt.wantReason {
+				t.Fatalf("Failure=%#v, want reason %q", cluster.Status.Upgrade.Failure, tt.wantReason)
 			}
-			if cluster.Status.Upgrade.LastErrorMessage != tt.wantMsg {
-				t.Fatalf("LastErrorMessage=%q, want %q", cluster.Status.Upgrade.LastErrorMessage, tt.wantMsg)
+			if cluster.Status.Upgrade.Failure.Message != tt.wantMsg {
+				t.Fatalf("Failure.Message=%q, want %q", cluster.Status.Upgrade.Failure.Message, tt.wantMsg)
 			}
 		})
 	}

@@ -26,8 +26,7 @@ type StatefulSetSpec struct {
 	ConfigHash string
 
 	// RestartAt overrides the effective pod-template restart annotation for this
-	// workload pool. Nil falls back to the cluster-level runtime or deprecated
-	// maintenance restart request.
+	// workload pool. Nil falls back to the cluster-level runtime request.
 	RestartAt *string
 
 	// DisableSelfInit prevents pod self-initialization (used for Green pods in BlueGreen)

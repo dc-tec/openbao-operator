@@ -666,7 +666,7 @@ func TestRenderHCLWithMetricsOnlyListenerRejectsACME(t *testing.T) {
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		Email:        "platform@example.com",
 		DirectoryURL: "https://acme.example.test/directory",
-		Domain:       "bao.example.test",
+		Domains:      []string{"bao.example.test"},
 	}
 	cluster.Spec.Observability = &openbaov1alpha1.ObservabilityConfig{
 		Metrics: &openbaov1alpha1.MetricsConfig{
@@ -1313,7 +1313,7 @@ func TestRenderHCL_ACMEMode_RendersACMEConfig(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
+		Domains:      []string{"example.com"},
 		Email:        "admin@example.com",
 	}
 
@@ -1337,7 +1337,7 @@ func TestRenderHCL_ACMEMode_NoRetryJoinTLSFiles(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
+		Domains:      []string{"example.com"},
 	}
 
 	infraDetails := InfrastructureDetails{

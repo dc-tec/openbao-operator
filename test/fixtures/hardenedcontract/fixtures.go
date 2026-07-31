@@ -206,15 +206,6 @@ func Fixtures() []Fixture {
 			},
 		},
 		{
-			Name:          "gcs-role-arn-is-not-identity",
-			AdmissionRule: hardenedcontract.RuleStorageExplicitIdentity,
-			RuntimeRule:   hardenedcontract.RuleStorageExplicitIdentity,
-			Configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
-				configureBackup(cluster)
-				cluster.Spec.Backup.Target.Provider = "gcs"
-			},
-		},
-		{
 			Name:          "service-monitor-tls-verification-disabled",
 			AdmissionRule: hardenedcontract.RuleServiceMonitorTLSVerification,
 			RuntimeRule:   hardenedcontract.RuleServiceMonitorTLSVerification,

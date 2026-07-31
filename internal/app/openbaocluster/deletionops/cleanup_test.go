@@ -104,7 +104,7 @@ func TestDeletePVCsPreservesExistingACMESharedCachePVC(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://example.invalid/acme",
-		Domain:       "example.com",
+		Domains:      []string{"example.com"},
 		SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
 			Mode:              openbaov1alpha1.ACMESharedCacheModeExistingPVC,
 			ExistingClaimName: "shared-acme-cache",

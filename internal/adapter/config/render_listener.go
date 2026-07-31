@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclwrite"
@@ -56,9 +55,6 @@ func buildListenerBlock(cluster *openbaov1alpha1.OpenBaoCluster) (*hclwrite.Bloc
 	if tlsMode == openbaov1alpha1.TLSModeACME {
 		if cluster.Spec.TLS.ACME == nil {
 			return nil, fmt.Errorf("ACME configuration is required when tls.mode is ACME")
-		}
-		if strings.TrimSpace(cluster.Spec.TLS.ACME.Domain) != "" && len(cluster.Spec.TLS.ACME.Domains) > 0 {
-			return nil, fmt.Errorf("tls.acme.domain and tls.acme.domains are mutually exclusive; use only one")
 		}
 		listener.TLSACMECADir = stringPtr(cluster.Spec.TLS.ACME.DirectoryURL)
 		domains := portopenbao.ComputeACMEDomains(cluster)

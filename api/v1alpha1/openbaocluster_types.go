@@ -185,6 +185,7 @@ type OpenBaoClusterSpec struct {
 	// The Operator uses static auto-unseal, which requires OpenBao v2.4.0 or later.
 	// Versions below 2.4.0 do not support the static seal feature and will fail to start.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`
 	Version string `json:"version"`
 	// Image is the container image to run; defaults may be derived from Version.
 	// +optional

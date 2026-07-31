@@ -1105,10 +1105,6 @@ func (in *OpenBaoClusterStatus) DeepCopyInto(out *OpenBaoClusterStatus) {
 		*out = new(ReadReplicaStatus)
 		**out = **in
 	}
-	if in.LastBackupTime != nil {
-		in, out := &in.LastBackupTime, &out.LastBackupTime
-		*out = (*in).DeepCopy()
-	}
 	if in.Upgrade != nil {
 		in, out := &in.Upgrade, &out.Upgrade
 		*out = new(UpgradeProgress)
@@ -2577,10 +2573,6 @@ func (in *UpgradeProgress) DeepCopyInto(out *UpgradeProgress) {
 		in, out := &in.Failure, &out.Failure
 		*out = new(ControllerErrorStatus)
 		(*in).DeepCopyInto(*out)
-	}
-	if in.LastErrorAt != nil {
-		in, out := &in.LastErrorAt, &out.LastErrorAt
-		*out = (*in).DeepCopy()
 	}
 }
 

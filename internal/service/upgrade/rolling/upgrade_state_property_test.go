@@ -121,18 +121,14 @@ func upgradeProgressGenerator(specVersion string) *rapid.Generator[*openbaov1alp
 			TargetVersion:    targetVersion,
 			CurrentPartition: int32(rapid.IntRange(0, 5).Draw(t, "current_partition")),
 		}
-		switch rapid.IntRange(0, 3).Draw(t, "failure_mode") {
+		switch rapid.IntRange(0, 2).Draw(t, "failure_mode") {
 		case 1:
-			progress.LastErrorReason = rollingReasonGenerator().Draw(t, "legacy_reason")
-			progress.LastErrorMessage = "legacy failure"
-		case 2:
 			progress.Failure = &openbaov1alpha1.ControllerErrorStatus{
 				Reason:  rollingReasonGenerator().Draw(t, "structured_reason"),
 				Message: "structured failure",
 			}
-		case 3:
+		case 2:
 			progress.Failure = &openbaov1alpha1.ControllerErrorStatus{}
-			progress.LastErrorReason = rollingReasonGenerator().Draw(t, "ignored_legacy_reason")
 		}
 		return progress
 	})

@@ -50,7 +50,7 @@ func ComputeACMEDomains(cluster *openbaov1alpha1.OpenBaoCluster) []string {
 	}
 
 	seen := map[string]struct{}{}
-	out := make([]string, 0, len(cluster.Spec.TLS.ACME.Domains)+1)
+	out := make([]string, 0, len(cluster.Spec.TLS.ACME.Domains))
 	for _, raw := range cluster.Spec.TLS.ACME.Domains {
 		d := strings.TrimSpace(raw)
 		if d == "" {
@@ -61,12 +61,6 @@ func ComputeACMEDomains(cluster *openbaov1alpha1.OpenBaoCluster) []string {
 		}
 		seen[d] = struct{}{}
 		out = append(out, d)
-	}
-
-	if len(out) == 0 {
-		if d := strings.TrimSpace(cluster.Spec.TLS.ACME.Domain); d != "" {
-			out = append(out, d)
-		}
 	}
 
 	if len(out) == 0 && cluster != nil {

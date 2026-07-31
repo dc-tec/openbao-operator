@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -163,9 +164,11 @@ func TestClearUpgradeFailureForRetry_TableDriven(t *testing.T) {
 						CurrentPartition: 2,
 						CompletedPods:    []int32{2},
 						StartedAt:        &startedAt,
-						LastErrorReason:  upgrade.ReasonStepDownTimeout,
-						LastErrorMessage: "leader step down timed out",
-						LastErrorAt:      &now,
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason:  upgrade.ReasonStepDownTimeout,
+							Message: "leader step down timed out",
+							At:      &now,
+						},
 						LastStepDownTime: &now,
 					},
 				},
@@ -174,15 +177,6 @@ func TestClearUpgradeFailureForRetry_TableDriven(t *testing.T) {
 				t.Helper()
 				if cluster.Status.Upgrade == nil {
 					t.Fatalf("Upgrade=nil, want non-nil")
-				}
-				if cluster.Status.Upgrade.LastErrorReason != "" {
-					t.Fatalf("LastErrorReason=%q, want empty", cluster.Status.Upgrade.LastErrorReason)
-				}
-				if cluster.Status.Upgrade.LastErrorMessage != "" {
-					t.Fatalf("LastErrorMessage=%q, want empty", cluster.Status.Upgrade.LastErrorMessage)
-				}
-				if cluster.Status.Upgrade.LastErrorAt != nil {
-					t.Fatalf("LastErrorAt=%v, want nil", cluster.Status.Upgrade.LastErrorAt)
 				}
 				if cluster.Status.Upgrade.LastStepDownTime != nil {
 					t.Fatalf("LastStepDownTime=%v, want nil", cluster.Status.Upgrade.LastStepDownTime)
@@ -255,9 +249,11 @@ func TestPrepareFailedUpgradeRetry_WaitsForStatefulSetTemplateToMatchRetryTarget
 				CurrentPartition: 2,
 				CompletedPods:    []int32{2},
 				StartedAt:        &startedAt,
-				LastErrorReason:  upgrade.ReasonUpgradeFailed,
-				LastErrorMessage: "step-down timed out",
-				LastErrorAt:      &now,
+				Failure: &openbaov1alpha1.ControllerErrorStatus{
+					Reason:  upgrade.ReasonUpgradeFailed,
+					Message: "step-down timed out",
+					At:      &now,
+				},
 				LastStepDownTime: &now,
 			},
 		},
@@ -334,8 +330,8 @@ func TestPrepareFailedUpgradeRetry_WaitsForStatefulSetTemplateToMatchRetryTarget
 	if cluster.Status.Upgrade == nil {
 		t.Fatal("Upgrade=nil, want still failed")
 	}
-	if cluster.Status.Upgrade.LastErrorReason == "" {
-		t.Fatal("LastErrorReason cleared unexpectedly")
+	if cluster.Status.Upgrade.Failure == nil || cluster.Status.Upgrade.Failure.Reason == "" {
+		t.Fatal("Failure cleared unexpectedly")
 	}
 
 	storedPod := &corev1.Pod{}
@@ -369,9 +365,6 @@ func TestPatchRetryStatusSSA_ApplyPayloadOmitsClearedFailureFields(t *testing.T)
 					Message: "pod failed to become ready",
 					At:      &failedAt,
 				},
-				LastErrorReason:  upgrade.ReasonPodNotReady,
-				LastErrorMessage: "pod failed to become ready",
-				LastErrorAt:      &failedAt,
 				LastStepDownTime: &stepDownAt,
 			},
 		},
@@ -406,7 +399,6 @@ func TestPatchRetryStatusSSA_ApplyPayloadOmitsClearedFailureFields(t *testing.T)
 
 	for _, forbidden := range []string{
 		`"failure":null`,
-		`"lastErrorAt":null`,
 		`"lastStepDownTime":null`,
 	} {
 		if strings.Contains(capturedPayload, forbidden) {
@@ -457,9 +449,11 @@ func TestPrepareFailedUpgradeRetry_DeletesStaleCompletedPod(t *testing.T) {
 				FromVersion:      "2.4.4",
 				CurrentPartition: 2,
 				CompletedPods:    []int32{2},
-				LastErrorReason:  upgrade.ReasonPodNotReady,
-				LastErrorMessage: "Pod retry-cluster-2 failed to become ready within 10m0s",
-				LastErrorAt:      &now,
+				Failure: &openbaov1alpha1.ControllerErrorStatus{
+					Reason:  upgrade.ReasonPodNotReady,
+					Message: "Pod retry-cluster-2 failed to become ready within 10m0s",
+					At:      &now,
+				},
 			},
 		},
 	}
@@ -578,8 +572,8 @@ func TestPrepareFailedUpgradeRetry_GuardConditions(t *testing.T) {
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: "2.5.0"},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion:   "2.5.0",
-						LastErrorReason: "",
+						TargetVersion: "2.5.0",
+						Failure:       &openbaov1alpha1.ControllerErrorStatus{},
 					},
 				},
 			},
@@ -590,8 +584,10 @@ func TestPrepareFailedUpgradeRetry_GuardConditions(t *testing.T) {
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: "2.5.1"},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion:   "2.5.0",
-						LastErrorReason: upgrade.ReasonUpgradeFailed,
+						TargetVersion: "2.5.0",
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason: upgrade.ReasonUpgradeFailed,
+						},
 					},
 				},
 			},
@@ -602,8 +598,10 @@ func TestPrepareFailedUpgradeRetry_GuardConditions(t *testing.T) {
 				Spec: openbaov1alpha1.OpenBaoClusterSpec{Version: "2.5.0"},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						TargetVersion:   "2.5.0",
-						LastErrorReason: upgrade.ReasonUpgradeFailed,
+						TargetVersion: "2.5.0",
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason: upgrade.ReasonUpgradeFailed,
+						},
 					},
 				},
 			},
@@ -632,10 +630,8 @@ func TestPrepareFailedUpgradeRetry_GuardConditions(t *testing.T) {
 				if tt.cluster.Status.Upgrade == nil && before.Status.Upgrade != nil {
 					t.Fatalf("Upgrade unexpectedly changed from non-nil to nil")
 				}
-				if tt.cluster.Status.Upgrade != nil && before.Status.Upgrade != nil {
-					if tt.cluster.Status.Upgrade.LastErrorReason != before.Status.Upgrade.LastErrorReason {
-						t.Fatalf("LastErrorReason mutated to %q, want unchanged %q", tt.cluster.Status.Upgrade.LastErrorReason, before.Status.Upgrade.LastErrorReason)
-					}
+				if tt.cluster.Status.Upgrade != nil && before.Status.Upgrade != nil && !reflect.DeepEqual(tt.cluster.Status.Upgrade.Failure, before.Status.Upgrade.Failure) {
+					t.Fatalf("Failure mutated to %#v, want unchanged %#v", tt.cluster.Status.Upgrade.Failure, before.Status.Upgrade.Failure)
 				}
 			}
 		})
@@ -693,9 +689,11 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 						CurrentPartition: 2,
 						CompletedPods:    []int32{2},
 						StartedAt:        &startedAt,
-						LastErrorReason:  upgrade.ReasonUpgradeFailed,
-						LastErrorMessage: "step-down timed out",
-						LastErrorAt:      &now,
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason:  upgrade.ReasonUpgradeFailed,
+							Message: "step-down timed out",
+							At:      &now,
+						},
 						LastStepDownTime: &now,
 					},
 				},
@@ -783,14 +781,8 @@ func TestPrepareFailedUpgradeRetry_SuccessClearsFailureAndRemovesRetrySignal(t *
 			if cluster.Status.Upgrade == nil {
 				t.Fatalf("Upgrade=nil, want non-nil")
 			}
-			if cluster.Status.Upgrade.LastErrorReason != "" {
-				t.Fatalf("LastErrorReason=%q, want empty", cluster.Status.Upgrade.LastErrorReason)
-			}
-			if cluster.Status.Upgrade.LastErrorMessage != "" {
-				t.Fatalf("LastErrorMessage=%q, want empty", cluster.Status.Upgrade.LastErrorMessage)
-			}
-			if cluster.Status.Upgrade.LastErrorAt != nil {
-				t.Fatalf("LastErrorAt=%v, want nil", cluster.Status.Upgrade.LastErrorAt)
+			if cluster.Status.Upgrade.Failure != nil {
+				t.Fatalf("Failure=%#v, want nil", cluster.Status.Upgrade.Failure)
 			}
 			if cluster.Status.Upgrade.LastStepDownTime != nil {
 				t.Fatalf("LastStepDownTime=%v, want nil", cluster.Status.Upgrade.LastStepDownTime)

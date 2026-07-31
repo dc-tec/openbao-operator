@@ -97,8 +97,10 @@ func FuzzApplyAllConditions(f *testing.F) {
 				FromVersion:      "2.0.0",
 				TargetVersion:    "2.1.0",
 				CurrentPartition: int32(upgradeSeed % 5),
-				LastErrorReason:  fuzzUpgradeErrorReason(upgradeSeed),
-				LastErrorMessage: sanitizeMessage(admissionIssue, "upgrade issue"),
+				Failure: &openbaov1alpha1.ControllerErrorStatus{
+					Reason:  fuzzUpgradeErrorReason(upgradeSeed),
+					Message: sanitizeMessage(admissionIssue, "upgrade issue"),
+				},
 			}
 		}
 		if upgradeSeed%3 == 0 {
@@ -128,6 +130,7 @@ func FuzzApplyAllConditions(f *testing.F) {
 			}
 		}
 
+		upgradeFailed, upgradeInProgress := fuzzUpgradeState(cluster.Status.Upgrade)
 		state := &clusterState{
 			ReadyReplicas:            clampReplicas(readyReplicas),
 			Initialized:              initialized,
@@ -138,8 +141,8 @@ func FuzzApplyAllConditions(f *testing.F) {
 			LeaderName:               sanitizeClusterToken(leaderName, "leader-0"),
 			BackupInProgress:         upgradeSeed%3 == 1,
 			BackupJobName:            sanitizeClusterToken(storageClass, "backup-job"),
-			UpgradeFailed:            cluster.Status.Upgrade != nil && cluster.Status.Upgrade.LastErrorReason != "",
-			UpgradeInProgress:        cluster.Status.Upgrade != nil && cluster.Status.Upgrade.LastErrorReason == "",
+			UpgradeFailed:            upgradeFailed,
+			UpgradeInProgress:        upgradeInProgress,
 			Available:                clampReplicas(readyReplicas) == clampReplicas(replicas) && clampReplicas(replicas) > 0,
 			DataPVCCount:             int(profileSeed % 4),
 			DataPVCStorageClassUnset: tlsSeed%3 == 0,
@@ -257,6 +260,17 @@ func fuzzTLSMode(seed uint8) openbaov1alpha1.TLSMode {
 	default:
 		return openbaov1alpha1.TLSModeExternal
 	}
+}
+
+func fuzzUpgradeState(progress *openbaov1alpha1.UpgradeProgress) (failed, inProgress bool) {
+	if progress == nil {
+		return false, false
+	}
+	if progress.Failure == nil {
+		return false, true
+	}
+	failed = strings.TrimSpace(progress.Failure.Reason) != ""
+	return failed, !failed
 }
 
 func fuzzUnsealType(seed uint8) string {

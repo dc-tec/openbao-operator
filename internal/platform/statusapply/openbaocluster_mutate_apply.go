@@ -82,9 +82,6 @@ func upgradeFailureFieldsCleared(current, desired *openbaov1alpha1.OpenBaoCluste
 	if currentFailure != nil && desiredFailure != nil && currentFailure.At != nil && desiredFailure.At == nil {
 		return true
 	}
-	if current.Status.Upgrade.LastErrorAt != nil && desired.Status.Upgrade.LastErrorAt == nil {
-		return true
-	}
 	if current.Status.Upgrade.LastStepDownTime != nil && desired.Status.Upgrade.LastStepDownTime == nil {
 		return true
 	}

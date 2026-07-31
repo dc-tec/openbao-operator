@@ -14,7 +14,7 @@ func TestStatefulSet_ACMEMode_NoSidecar(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
+		Domains:      []string{"example.com"},
 	}
 
 	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
@@ -42,7 +42,7 @@ func TestStatefulSet_ACMEMode_NoTLSVolume(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
+		Domains:      []string{"example.com"},
 	}
 
 	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
@@ -63,7 +63,7 @@ func TestStatefulSet_ACMEMode_WithSharedCacheMount(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
+		Domains:      []string{"example.com"},
 		SharedCache: &openbaov1alpha1.ACMESharedCacheConfig{
 			Mode: openbaov1alpha1.ACMESharedCacheModeManagedPVC,
 			Size: "1Gi",
@@ -118,7 +118,7 @@ func TestStatefulSet_ACMEMode_ProbeTrustUsesACMEPKICA(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
+		Domains:      []string{"example.com"},
 	}
 	cluster.Spec.Configuration = &openbaov1alpha1.OpenBaoConfiguration{
 		ACMECARoot: "/etc/bao/seal-creds/ca.crt",
@@ -153,7 +153,7 @@ func TestStatefulSet_ACMEMode_NoShareProcessNamespace(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-		Domain:       "example.com",
+		Domains:      []string{"example.com"},
 	}
 
 	statefulSet, err := buildStatefulSet(cluster, "test-config", true, "", "", "")
