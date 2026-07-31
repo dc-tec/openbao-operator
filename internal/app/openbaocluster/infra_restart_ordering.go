@@ -52,12 +52,7 @@ func clusterRestartAt(cluster *openbaov1alpha1.OpenBaoCluster) string {
 		return ""
 	}
 	if cluster.Spec.Runtime != nil {
-		if restartAt := strings.TrimSpace(cluster.Spec.Runtime.RestartAt); restartAt != "" {
-			return restartAt
-		}
-	}
-	if cluster.Spec.Maintenance != nil {
-		return strings.TrimSpace(cluster.Spec.Maintenance.RestartAt)
+		return strings.TrimSpace(cluster.Spec.Runtime.RestartAt)
 	}
 	return ""
 }

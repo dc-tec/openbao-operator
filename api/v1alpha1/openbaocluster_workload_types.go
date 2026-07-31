@@ -126,15 +126,6 @@ type MaintenanceConfig struct {
 	// admission policies require an explicit maintenance signal.
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// RestartAt triggers a rolling restart when changed.
-	// The operator propagates this value as a Pod template annotation; any change
-	// results in a new StatefulSet revision and a controlled restart.
-	// Recommended value is an RFC3339 timestamp string.
-	// Deprecated: use spec.runtime.restartAt instead. spec.runtime.restartAt
-	// takes precedence when both fields are set.
-	// +kubebuilder:validation:MinLength=1
-	// +optional
-	RestartAt string `json:"restartAt,omitempty"`
 }
 
 // RuntimeConfig defines explicit runtime control requests for the OpenBao

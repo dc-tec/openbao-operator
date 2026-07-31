@@ -185,7 +185,7 @@ Use `spec.runtime.restartAt` when you need the workload to roll because an exter
 
 This request is independent from maintenance authorization. Set maintenance only when you need disruptive work on managed resources or an operator flow that explicitly requires the maintenance gate.
 
-Use `spec.runtime.restartAt` for new configurations. The older `spec.maintenance.restartAt` path remains temporarily for compatibility.
+Use `spec.runtime.restartAt` for explicit workload restart requests. Maintenance mode remains focused on authorizing controlled day-2 operations.
 
 When a leader Pod must be restarted or evicted, the operator handles graceful step-down automatically before termination so the cluster can elect a new leader cleanly.
 

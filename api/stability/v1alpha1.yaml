@@ -78,9 +78,6 @@ resources:
       - path: spec.maintenance
         classification: beta-stable
         owner: lifecycle
-      - path: spec.maintenance.restartAt
-        classification: deprecated
-        rationale: Use spec.runtime.restartAt.
       - path: spec.network
         classification: beta-stable
         owner: networking
@@ -147,9 +144,6 @@ resources:
         classification: beta-stable
         owner: transport-security
         enforcement: [crd-schema, admission-policy, controller]
-      - path: spec.tls.acme.domain
-        classification: deprecated
-        rationale: Use spec.tls.acme.domains.
       - path: spec.unseal
         classification: beta-stable
         owner: seal

@@ -12,10 +12,7 @@ import (
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
-const (
-	testRuntimeRestartAt             = "2026-01-19T00:00:00Z"
-	testDeprecatedMaintenanceRestart = "2026-01-18T00:00:00Z"
-)
+const testRuntimeRestartAt = "2026-01-19T00:00:00Z"
 
 func TestBuildStatefulSetPodSecurityContext(t *testing.T) {
 	tests := []struct {
@@ -142,41 +139,6 @@ func TestBuildStatefulSet_MaintenanceAnnotations(t *testing.T) {
 
 	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != testRuntimeRestartAt {
 		t.Fatalf("expected Pod template annotation %q to be set, got %q", constants.AnnotationRestartAt, got)
-	}
-}
-
-func TestBuildStatefulSet_RuntimeRestartAtOverridesDeprecatedMaintenanceRestartAt(t *testing.T) {
-	cluster := newMinimalCluster("runtime-precedence-cluster", "default")
-	cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{
-		RestartAt: testDeprecatedMaintenanceRestart,
-	}
-	cluster.Spec.Runtime = &openbaov1alpha1.RuntimeConfig{
-		RestartAt: testRuntimeRestartAt,
-	}
-
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", constants.PlatformKubernetes)
-	if err != nil {
-		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
-	}
-
-	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != testRuntimeRestartAt {
-		t.Fatalf("expected runtime restart annotation to win, got %q", got)
-	}
-}
-
-func TestBuildStatefulSet_DeprecatedMaintenanceRestartAtFallback(t *testing.T) {
-	cluster := newMinimalCluster("maintenance-fallback-cluster", "default")
-	cluster.Spec.Maintenance = &openbaov1alpha1.MaintenanceConfig{
-		RestartAt: testDeprecatedMaintenanceRestart,
-	}
-
-	statefulSet, err := buildStatefulSetWithRevision(cluster, "test-config", true, "", "", "", constants.PlatformKubernetes)
-	if err != nil {
-		t.Fatalf("buildStatefulSetWithRevision() error = %v", err)
-	}
-
-	if got := statefulSet.Spec.Template.Annotations[constants.AnnotationRestartAt]; got != testDeprecatedMaintenanceRestart {
-		t.Fatalf("expected deprecated maintenance restart annotation fallback, got %q", got)
 	}
 }
 

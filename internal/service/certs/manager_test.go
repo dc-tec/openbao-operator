@@ -938,7 +938,7 @@ func TestReconcile_ACMEMode_SkipsReconciliation(t *testing.T) {
 				Mode:    openbaov1alpha1.TLSModeACME,
 				ACME: &openbaov1alpha1.ACMEConfig{
 					DirectoryURL: "https://acme-v02.api.letsencrypt.org/directory",
-					Domain:       "example.com",
+					Domains:      []string{"example.com"},
 				},
 			},
 			Storage: openbaov1alpha1.StorageConfig{

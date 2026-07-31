@@ -508,10 +508,7 @@ func (f *Framework) SetMaintenanceEnabled(ctx context.Context, clusterName strin
 		if cluster.Spec.Maintenance == nil {
 			return nil
 		}
-		cluster.Spec.Maintenance.Enabled = false
-		if cluster.Spec.Maintenance.RestartAt == "" {
-			cluster.Spec.Maintenance = nil
-		}
+		cluster.Spec.Maintenance = nil
 	}
 
 	if err := f.Client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {

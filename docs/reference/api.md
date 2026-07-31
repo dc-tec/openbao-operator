@@ -57,7 +57,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `directoryURL` _string_ | DirectoryURL is the ACME directory URL (e.g., "https://acme-v02.api.letsencrypt.org/directory"). |  | MinLength: 1 <br /> |
-| `domain` _string_ | Domain is the domain name for which to obtain the certificate.<br />Deprecated: use Domains to request a certificate with multiple SANs. |  | MinLength: 1 <br />Optional: \{\} <br /> |
 | `domains` _string array_ | Domains is the list of domain names for which to obtain the certificate.<br />This maps to OpenBao's listener `tls_acme_domains` field.<br />When empty, the operator will default to an internal Service name suitable for<br />private ACME CAs running inside the cluster (e.g., "&lt;cluster&gt;-acme.&lt;namespace&gt;.svc"). |  | MinItems: 1 <br />Optional: \{\} <br /> |
 | `email` _string_ | Email is the email address to use for ACME registration. |  | Optional: \{\} <br /> |
 | `sharedCache` _[ACMESharedCacheConfig](#acmesharedcacheconfig)_ | SharedCache configures a filesystem cache shared across OpenBao replicas for ACME account<br />and certificate state. This is required for HA ACME topologies where more than one Pod<br />can serve the same hostname concurrently. |  | Optional: \{\} <br /> |
@@ -921,7 +920,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled enables maintenance mode for this cluster.<br />When true, the operator annotates managed resources (Pods/StatefulSet) with<br />`openbao.org/maintenance=true` to allow controlled restarts/deletes where<br />admission policies require an explicit maintenance signal. |  | Optional: \{\} <br /> |
-| `restartAt` _string_ | RestartAt triggers a rolling restart when changed.<br />The operator propagates this value as a Pod template annotation; any change<br />results in a new StatefulSet revision and a controlled restart.<br />Recommended value is an RFC3339 timestamp string.<br />Deprecated: use spec.runtime.restartAt instead. spec.runtime.restartAt<br />takes precedence when both fields are set. |  | MinLength: 1 <br />Optional: \{\} <br /> |
 
 
 #### MetricsConfig

@@ -37,7 +37,6 @@ spec:
       # ACME directory URL (Let's Encrypt production)
       directoryURL: "https://acme-v02.api.letsencrypt.org/directory"
       # Domain names for which to obtain the certificate (multi-SAN).
-      # Prefer `domains` (list) over `domain` (deprecated).
       domains:
         - "openbao.example.com"
       # Optional: Email address for CA notifications about certificate expiration

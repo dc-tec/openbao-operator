@@ -20,16 +20,10 @@ import networkingv1 "k8s.io/api/networking/v1"
 
 // ACMEConfig configures ACME certificate management for OpenBao.
 // See: https://openbao.org/docs/configuration/listener/tcp/#acme-parameters
-// +kubebuilder:validation:XValidation:rule="!(has(self.domain) && has(self.domains) && size(self.domains) > 0)",message="tls.acme.domain and tls.acme.domains are mutually exclusive; use only one"
 type ACMEConfig struct {
 	// DirectoryURL is the ACME directory URL (e.g., "https://acme-v02.api.letsencrypt.org/directory").
 	// +kubebuilder:validation:MinLength=1
 	DirectoryURL string `json:"directoryURL"`
-	// Domain is the domain name for which to obtain the certificate.
-	// Deprecated: use Domains to request a certificate with multiple SANs.
-	// +kubebuilder:validation:MinLength=1
-	// +optional
-	Domain string `json:"domain,omitempty"`
 	// Domains is the list of domain names for which to obtain the certificate.
 	// This maps to OpenBao's listener `tls_acme_domains` field.
 	//

@@ -1737,7 +1737,7 @@ func TestCRD_OpenBaoCluster_RejectsHAACMEWithoutSharedCache(t *testing.T) {
 	cluster.Spec.TLS.Mode = openbaov1alpha1.TLSModeACME
 	cluster.Spec.TLS.ACME = &openbaov1alpha1.ACMEConfig{
 		DirectoryURL: "https://acme.example/directory",
-		Domain:       "bao.example.com",
+		Domains:      []string{"bao.example.com"},
 	}
 
 	err := k8sClient.Create(ctx, cluster)
