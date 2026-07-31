@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
@@ -77,6 +78,79 @@ func TestCompareSnapshotsClassifiesChanges(t *testing.T) {
 	)
 }
 
+func TestCompareSnapshotsClassifiesEnumConstraintTransitions(t *testing.T) {
+	t.Parallel()
+
+	unconstrained := testSchemaNode("spec.mode", "string")
+	constrained := testSchemaNode("spec.mode", "string")
+	constrained.Enum = []string{`"active"`, `"passive"`}
+
+	added := compareSnapshots([]schemaNode{unconstrained}, []schemaNode{constrained})
+	assertChange(t, added, impactBreaking, "enum-constraint-added", "spec.mode")
+	assertNoChange(t, added, impactCompatible, "enum-values-added", "spec.mode")
+
+	removed := compareSnapshots([]schemaNode{constrained}, []schemaNode{unconstrained})
+	assertChange(t, removed, impactCompatible, "enum-constraint-removed", "spec.mode")
+	assertNoChange(t, removed, impactBreaking, "enum-values-removed", "spec.mode")
+}
+
+func TestCollectNodeIncludesMapValuesAndComposedSchemas(t *testing.T) {
+	t.Parallel()
+
+	schema := apiextensionsv1.JSONSchemaProps{
+		Type: "object",
+		Properties: map[string]apiextensionsv1.JSONSchemaProps{
+			"hard": {
+				Type: "object",
+				AdditionalProperties: &apiextensionsv1.JSONSchemaPropsOrBool{
+					Allows: true,
+					Schema: &apiextensionsv1.JSONSchemaProps{
+						Type:    "string",
+						Pattern: `^[0-9]+$`,
+					},
+				},
+			},
+			"profile": {
+				Type: "string",
+				AllOf: []apiextensionsv1.JSONSchemaProps{
+					{
+						Enum: []apiextensionsv1.JSON{
+							{Raw: []byte(`"baseline"`)},
+							{Raw: []byte(`"restricted"`)},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	var nodes []schemaNode
+	collectNode(&nodes, "widgets.example.com", "Widget", "v1", "spec", schema, true)
+
+	mapValue := findSchemaNode(t, nodes, "spec.hard.*")
+	if mapValue.Type != "string" || mapValue.Constraints["pattern"] != `^[0-9]+$` {
+		t.Fatalf("map value node = %#v, want string with quantity pattern", mapValue)
+	}
+	composed := findSchemaNode(t, nodes, "spec.profile.allOf[0]")
+	if strings.Join(composed.Enum, ",") != `"baseline","restricted"` {
+		t.Fatalf("composed enum = %v, want baseline and restricted", composed.Enum)
+	}
+
+	changedSchema := schema.DeepCopy()
+	hard := changedSchema.Properties["hard"]
+	hard.AdditionalProperties.Schema.Type = "integer"
+	changedSchema.Properties["hard"] = hard
+	profile := changedSchema.Properties["profile"]
+	profile.AllOf[0].Enum = profile.AllOf[0].Enum[1:]
+	changedSchema.Properties["profile"] = profile
+
+	var changedNodes []schemaNode
+	collectNode(&changedNodes, "widgets.example.com", "Widget", "v1", "spec", *changedSchema, true)
+	changes := compareSnapshots(nodes, changedNodes)
+	assertChange(t, changes, impactBreaking, "type-changed", "spec.hard.*")
+	assertChange(t, changes, impactBreaking, "enum-values-removed", "spec.profile.allOf[0]")
+}
+
 func TestWriteReportMakesReportOnlyModeExplicit(t *testing.T) {
 	t.Parallel()
 
@@ -139,6 +213,27 @@ func assertChange(t *testing.T, changes []change, impact, classification, path s
 		}
 	}
 	t.Errorf("missing %s/%s change for %s; got %#v", impact, classification, path, changes)
+}
+
+func assertNoChange(t *testing.T, changes []change, impact, classification, path string) {
+	t.Helper()
+	for _, item := range changes {
+		if item.Impact == impact && item.Classification == classification && item.Path == path {
+			t.Errorf("unexpected %s/%s change for %s; got %#v", impact, classification, path, changes)
+			return
+		}
+	}
+}
+
+func findSchemaNode(t *testing.T, nodes []schemaNode, path string) schemaNode {
+	t.Helper()
+	for _, node := range nodes {
+		if node.Path == path {
+			return node
+		}
+	}
+	t.Fatalf("missing schema node for %s; got %#v", path, nodes)
+	return schemaNode{}
 }
 
 func loadMigrationFixture(t *testing.T, name string) map[string]any {

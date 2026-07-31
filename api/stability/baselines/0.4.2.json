@@ -531,8 +531,22 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.backup.target.workloadIdentity.podLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.backup.target.workloadIdentity.serviceAccountAnnotations",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.backup.target.workloadIdentity.serviceAccountAnnotations.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -926,6 +940,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.gateway.annotations.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.gateway.backendTLS",
       "type": "object"
     },
@@ -1151,6 +1172,13 @@
       "version": "v1alpha1",
       "path": "spec.ingress.annotations",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.ingress.annotations.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -1486,6 +1514,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.network.egressRules[].to[].namespaceSelector.matchLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.network.egressRules[].to[].podSelector",
       "type": "object",
       "constraints": {
@@ -1548,6 +1583,13 @@
       "version": "v1alpha1",
       "path": "spec.network.egressRules[].to[].podSelector.matchLabels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.network.egressRules[].to[].podSelector.matchLabels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -1683,6 +1725,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.network.ingressRules[].from[].namespaceSelector.matchLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.network.ingressRules[].from[].podSelector",
       "type": "object",
       "constraints": {
@@ -1745,6 +1794,13 @@
       "version": "v1alpha1",
       "path": "spec.network.ingressRules[].from[].podSelector.matchLabels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.network.ingressRules[].from[].podSelector.matchLabels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -1903,6 +1959,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.network.trustedIngressPeers[].namespaceSelector.matchLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.network.trustedIngressPeers[].podSelector",
       "type": "object",
       "constraints": {
@@ -1965,6 +2028,13 @@
       "version": "v1alpha1",
       "path": "spec.network.trustedIngressPeers[].podSelector.matchLabels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.network.trustedIngressPeers[].podSelector.matchLabels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -2053,6 +2123,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.observability.metrics.serviceMonitor.annotations.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.observability.metrics.serviceMonitor.authorization",
       "type": "object"
     },
@@ -2119,6 +2196,13 @@
       "version": "v1alpha1",
       "path": "spec.observability.metrics.serviceMonitor.labels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.observability.metrics.serviceMonitor.labels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -2433,8 +2517,22 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.podMetadata.annotations.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.podMetadata.labels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.podMetadata.labels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -2443,6 +2541,26 @@
       "path": "spec.profile",
       "type": "string",
       "required": true
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.profile.allOf[0]",
+      "enum": [
+        "\"Development\"",
+        "\"Hardened\""
+      ]
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.profile.allOf[1]",
+      "enum": [
+        "\"Development\"",
+        "\"Hardened\""
+      ]
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -2475,6 +2593,13 @@
       "version": "v1alpha1",
       "path": "spec.readReplicas.service.annotations",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.readReplicas.service.annotations.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -2538,8 +2663,22 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.readReplicas.template.metadata.annotations.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.readReplicas.template.metadata.labels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.readReplicas.template.metadata.labels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -2592,8 +2731,26 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.readReplicas.template.resources.limits.*",
+      "constraints": {
+        "pattern": "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
+      }
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.readReplicas.template.resources.requests",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.readReplicas.template.resources.requests.*",
+      "constraints": {
+        "pattern": "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
+      }
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -2989,6 +3146,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.affinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.affinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.matchLabelKeys",
       "type": "array",
       "constraints": {
@@ -3085,6 +3249,13 @@
       "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.affinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.namespaceSelector.matchLabels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.affinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.namespaceSelector.matchLabels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -3210,6 +3381,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.affinity.podAffinity.requiredDuringSchedulingIgnoredDuringExecution[].labelSelector.matchLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.affinity.podAffinity.requiredDuringSchedulingIgnoredDuringExecution[].matchLabelKeys",
       "type": "array",
       "constraints": {
@@ -3306,6 +3484,13 @@
       "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.affinity.podAffinity.requiredDuringSchedulingIgnoredDuringExecution[].namespaceSelector.matchLabels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.affinity.podAffinity.requiredDuringSchedulingIgnoredDuringExecution[].namespaceSelector.matchLabels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -3435,6 +3620,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.labelSelector.matchLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.matchLabelKeys",
       "type": "array",
       "constraints": {
@@ -3531,6 +3723,13 @@
       "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.namespaceSelector.matchLabels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[].podAffinityTerm.namespaceSelector.matchLabels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -3656,6 +3855,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[].labelSelector.matchLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[].matchLabelKeys",
       "type": "array",
       "constraints": {
@@ -3757,6 +3963,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[].namespaceSelector.matchLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[].namespaces",
       "type": "array",
       "constraints": {
@@ -3784,6 +3997,13 @@
       "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.nodeSelector",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.nodeSelector.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -3917,6 +4137,13 @@
       "version": "v1alpha1",
       "path": "spec.readReplicas.template.scheduling.topologySpreadConstraints[].labelSelector.matchLabels",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.readReplicas.template.scheduling.topologySpreadConstraints[].labelSelector.matchLabels.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -4609,6 +4836,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.selfInit.requests[].authMethod.config.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.selfInit.requests[].authMethod.description",
       "type": "string"
     },
@@ -4652,6 +4886,34 @@
       "path": "spec.selfInit.requests[].operation",
       "type": "string",
       "required": true
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.selfInit.requests[].operation.allOf[0]",
+      "enum": [
+        "\"create\"",
+        "\"delete\"",
+        "\"list\"",
+        "\"patch\"",
+        "\"read\"",
+        "\"update\""
+      ]
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.selfInit.requests[].operation.allOf[1]",
+      "enum": [
+        "\"create\"",
+        "\"delete\"",
+        "\"list\"",
+        "\"patch\"",
+        "\"read\"",
+        "\"update\""
+      ]
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -4707,6 +4969,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.selfInit.requests[].secretEngine.options.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.selfInit.requests[].secretEngine.type",
       "type": "string",
       "required": true,
@@ -4732,6 +5001,13 @@
       "crd": "openbaoclusters.openbao.org",
       "kind": "OpenBaoCluster",
       "version": "v1alpha1",
+      "path": "spec.service.annotations.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
       "path": "spec.service.type",
       "type": "string"
     },
@@ -4748,6 +5024,13 @@
       "version": "v1alpha1",
       "path": "spec.serviceAccount.annotations",
       "type": "object"
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.serviceAccount.annotations.*",
+      "type": "string"
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -5151,6 +5434,28 @@
       "path": "spec.tls.mode",
       "type": "string",
       "default": "\"OperatorManaged\""
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.tls.mode.allOf[0]",
+      "enum": [
+        "\"ACME\"",
+        "\"External\"",
+        "\"OperatorManaged\""
+      ]
+    },
+    {
+      "crd": "openbaoclusters.openbao.org",
+      "kind": "OpenBaoCluster",
+      "version": "v1alpha1",
+      "path": "spec.tls.mode.allOf[1]",
+      "enum": [
+        "\"ACME\"",
+        "\"External\"",
+        "\"OperatorManaged\""
+      ]
     },
     {
       "crd": "openbaoclusters.openbao.org",
@@ -7237,8 +7542,22 @@
       "crd": "openbaorestores.openbao.org",
       "kind": "OpenBaoRestore",
       "version": "v1alpha1",
+      "path": "spec.source.target.workloadIdentity.podLabels.*",
+      "type": "string"
+    },
+    {
+      "crd": "openbaorestores.openbao.org",
+      "kind": "OpenBaoRestore",
+      "version": "v1alpha1",
       "path": "spec.source.target.workloadIdentity.serviceAccountAnnotations",
       "type": "object"
+    },
+    {
+      "crd": "openbaorestores.openbao.org",
+      "kind": "OpenBaoRestore",
+      "version": "v1alpha1",
+      "path": "spec.source.target.workloadIdentity.serviceAccountAnnotations.*",
+      "type": "string"
     },
     {
       "crd": "openbaorestores.openbao.org",
@@ -7457,8 +7776,26 @@
       "crd": "openbaotenants.openbao.org",
       "kind": "OpenBaoTenant",
       "version": "v1alpha1",
+      "path": "spec.limitRange.limits[].default.*",
+      "constraints": {
+        "pattern": "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
+      }
+    },
+    {
+      "crd": "openbaotenants.openbao.org",
+      "kind": "OpenBaoTenant",
+      "version": "v1alpha1",
       "path": "spec.limitRange.limits[].defaultRequest",
       "type": "object"
+    },
+    {
+      "crd": "openbaotenants.openbao.org",
+      "kind": "OpenBaoTenant",
+      "version": "v1alpha1",
+      "path": "spec.limitRange.limits[].defaultRequest.*",
+      "constraints": {
+        "pattern": "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
+      }
     },
     {
       "crd": "openbaotenants.openbao.org",
@@ -7471,6 +7808,15 @@
       "crd": "openbaotenants.openbao.org",
       "kind": "OpenBaoTenant",
       "version": "v1alpha1",
+      "path": "spec.limitRange.limits[].max.*",
+      "constraints": {
+        "pattern": "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
+      }
+    },
+    {
+      "crd": "openbaotenants.openbao.org",
+      "kind": "OpenBaoTenant",
+      "version": "v1alpha1",
       "path": "spec.limitRange.limits[].maxLimitRequestRatio",
       "type": "object"
     },
@@ -7478,8 +7824,26 @@
       "crd": "openbaotenants.openbao.org",
       "kind": "OpenBaoTenant",
       "version": "v1alpha1",
+      "path": "spec.limitRange.limits[].maxLimitRequestRatio.*",
+      "constraints": {
+        "pattern": "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
+      }
+    },
+    {
+      "crd": "openbaotenants.openbao.org",
+      "kind": "OpenBaoTenant",
+      "version": "v1alpha1",
       "path": "spec.limitRange.limits[].min",
       "type": "object"
+    },
+    {
+      "crd": "openbaotenants.openbao.org",
+      "kind": "OpenBaoTenant",
+      "version": "v1alpha1",
+      "path": "spec.limitRange.limits[].min.*",
+      "constraints": {
+        "pattern": "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
+      }
     },
     {
       "crd": "openbaotenants.openbao.org",
@@ -7502,6 +7866,15 @@
       "version": "v1alpha1",
       "path": "spec.quota.hard",
       "type": "object"
+    },
+    {
+      "crd": "openbaotenants.openbao.org",
+      "kind": "OpenBaoTenant",
+      "version": "v1alpha1",
+      "path": "spec.quota.hard.*",
+      "constraints": {
+        "pattern": "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
+      }
     },
     {
       "crd": "openbaotenants.openbao.org",

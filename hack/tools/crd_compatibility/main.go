@@ -315,6 +315,12 @@ func collectNode(
 	if schema.Type == "array" && schema.Items != nil && schema.Items.Schema != nil {
 		collectNode(nodes, crd, kind, version, path+"[]", *schema.Items.Schema, false)
 	}
+	if schema.AdditionalProperties != nil && schema.AdditionalProperties.Schema != nil {
+		collectNode(nodes, crd, kind, version, path+".*", *schema.AdditionalProperties.Schema, false)
+	}
+	for index, composed := range schema.AllOf {
+		collectNode(nodes, crd, kind, version, fmt.Sprintf("%s.allOf[%d]", path, index), composed, false)
+	}
 }
 
 func canonicalJSON(value *apiextensionsv1.JSON) string {
@@ -484,24 +490,7 @@ func compareNode(oldNode, newNode schemaNode) []change {
 			fmt.Sprintf("default changed from %s to %s", display(oldNode.Default), display(newNode.Default)),
 		))
 	}
-	removedEnum := difference(oldNode.Enum, newNode.Enum)
-	if len(removedEnum) > 0 {
-		changes = append(changes, newChange(
-			impactBreaking,
-			"enum-values-removed",
-			newNode,
-			"removed values: "+strings.Join(removedEnum, ", "),
-		))
-	}
-	addedEnum := difference(newNode.Enum, oldNode.Enum)
-	if len(addedEnum) > 0 {
-		changes = append(changes, newChange(
-			impactCompatible,
-			"enum-values-added",
-			newNode,
-			"added values: "+strings.Join(addedEnum, ", "),
-		))
-	}
+	changes = append(changes, compareEnum(oldNode, newNode)...)
 	changes = append(changes, compareConstraints(oldNode, newNode)...)
 	if !equalJSON(oldNode.CEL, newNode.CEL) {
 		oldRules := celRuleSet(oldNode.CEL)
@@ -531,6 +520,44 @@ func compareNode(oldNode, newNode schemaNode) []change {
 				"CEL validation rules changed and require semantic review",
 			))
 		}
+	}
+	return changes
+}
+
+func compareEnum(oldNode, newNode schemaNode) []change {
+	switch {
+	case len(oldNode.Enum) == 0 && len(newNode.Enum) > 0:
+		return []change{newChange(
+			impactBreaking,
+			"enum-constraint-added",
+			newNode,
+			"field changed from unconstrained to allowed values: "+strings.Join(newNode.Enum, ", "),
+		)}
+	case len(oldNode.Enum) > 0 && len(newNode.Enum) == 0:
+		return []change{newChange(
+			impactCompatible,
+			"enum-constraint-removed",
+			newNode,
+			"field changed from enum to unconstrained; previously allowed values: "+strings.Join(oldNode.Enum, ", "),
+		)}
+	}
+
+	var changes []change
+	if removed := difference(oldNode.Enum, newNode.Enum); len(removed) > 0 {
+		changes = append(changes, newChange(
+			impactBreaking,
+			"enum-values-removed",
+			newNode,
+			"removed values: "+strings.Join(removed, ", "),
+		))
+	}
+	if added := difference(newNode.Enum, oldNode.Enum); len(added) > 0 {
+		changes = append(changes, newChange(
+			impactCompatible,
+			"enum-values-added",
+			newNode,
+			"added values: "+strings.Join(added, ", "),
+		))
 	}
 	return changes
 }
