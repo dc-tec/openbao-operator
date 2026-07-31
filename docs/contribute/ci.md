@@ -49,7 +49,7 @@ make ci-core`}
       cells: [
         "Core PR validation",
         "`make ci-core`",
-        "Covers lint, formatting, tidy, vendor, generated artifacts, tests, docs, Helm, security, fuzz smoke, and config compatibility.",
+        "Covers lint, formatting, tidy, vendor, generated artifacts, the API stability inventory, tests, docs, Helm, security, fuzz smoke, and config compatibility.",
       ],
       emphasis: "recommended",
     },
@@ -157,6 +157,11 @@ CI E2E shards write both JUnit and Ginkgo JSON reports under the uploaded E2E ar
 
 Seal-sensitive path routing is defined in `hack/ci/e2e-seal-paths.txt`. Keep that catalog synchronized when seal API,
 validation, rendering, projection, runtime, or fixture ownership moves to a different file.
+
+The proposed 0.5.0 API freeze is tracked in `api/stability/v1alpha1.yaml`. CI expands its inherited decisions across the
+three generated CRD schemas and compares the result with `api/stability/v1alpha1-paths.tsv`. After an intentional API or
+inventory change, run `make update-api-stability-inventory` and review the resolved type, requiredness, default,
+validation, and classification diff.
 
 <CommandBlock
   language="bash"

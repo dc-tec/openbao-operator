@@ -71,7 +71,8 @@ Reserve `any` and `interface{}` for external API boundaries. Helpers that only w
 
 - Keep a PR to one main theme.
 - Avoid drive-by reformatting of unrelated files.
-- If a change touches `api/`, update the generated artifacts in the same branch.
+- If a change touches served API fields, update the generated artifacts and the
+  resolved API stability snapshot in the same branch.
 - If a service needs a new adapter import, update `serviceBoundaries` and regenerate the ast-grep rules in the same branch.
 
 <CommandBlock

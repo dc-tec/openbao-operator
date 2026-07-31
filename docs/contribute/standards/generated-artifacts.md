@@ -38,6 +38,13 @@ Edit the source input and rerun the owning command. Manual edits to generated ou
     },
     {
       cells: [
+        "Served CRD fields or `api/stability/v1alpha1.yaml` decisions",
+        "`make update-api-stability-inventory`",
+        "`verify-api-stability-inventory`",
+      ],
+    },
+    {
+      cells: [
         "CRD, admission, or RBAC inputs that feed the chart",
         "`make helm-sync`",
         "`verify-helm`",
@@ -71,6 +78,8 @@ Edit the source input and rerun the owning command. Manual edits to generated ou
 
 - Kubernetes CRDs and `zz_generated.deepcopy.go` come from `api/v1alpha1/*.go`.
 - API reference docs come from API types and comments.
+- The resolved API stability path snapshot comes from generated CRDs and
+  `api/stability/v1alpha1.yaml`.
 - Helm chart sync output comes from CRD, policy, and RBAC source material.
 - Channel installer manifests such as `dist/install.yaml` and `dist/crds.yaml` come from Kustomize targets and are intentionally ignored. Release, edge, and nightly workflows generate and publish them as channel artifacts.
 - Golden HCL files come from renderer behavior in `internal/adapter/config/`.
@@ -82,6 +91,7 @@ Edit the source input and rerun the owning command. Manual edits to generated ou
   title="Safe regeneration sweep"
   code={`make manifests generate
 make api-reference
+make update-api-stability-inventory
 make helm-sync
 make generate-ast-rules
 make test-update-golden`}

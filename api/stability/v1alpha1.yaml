@@ -1,0 +1,350 @@
+schemaVersion: 1
+release: 0.5.0
+baseline: 0.4.2
+decisionStatus: proposed
+snapshot: api/stability/v1alpha1-paths.tsv
+notes:
+  - The inventory defines the intended beta-stable subset; it does not graduate v1alpha1.
+  - No new non-core OpenBaoCluster field should land while these decisions are proposed.
+  - Condition types are automation-facing; reason sets may expand and message text is best-effort.
+  - Main has no TypedObjectReference module hooks; any future hook requires an explicit inventory decision.
+resources:
+  - kind: OpenBaoCluster
+    crd: config/crd/bases/openbao.org_openbaoclusters.yaml
+    version: v1alpha1
+    defaults:
+      spec:
+        mutability: mutable
+        migration: required-if-changed
+        moduleInteraction: none
+        enforcement: [crd-schema, controller]
+      status:
+        mutability: operator-owned
+        migration: required-if-changed
+        moduleInteraction: none
+        enforcement: [crd-schema, status-writer]
+    notes:
+      - The stable target is deliberately smaller than the currently served surface.
+      - Unseal and backup target shapes remain review units; audit raw options remain an explicit advanced-contract question.
+    rules:
+      - path: spec.audit
+        classification: additive-unfrozen
+        owner: configuration
+        rationale: Declarative audit devices are supported, but the advanced fallback contract still needs a freeze decision.
+      - path: spec.audit[].options
+        classification: likely-move
+        rationale: Raw options may remain an advanced contract or be narrowed after inventory review.
+      - path: spec.auditFileStorage
+        classification: additive-unfrozen
+        owner: configuration
+      - path: spec.backup
+        classification: beta-stable
+        owner: backup
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.backup.target
+        classification: likely-move
+        rationale: Common and provider-specific storage fields currently share one shape.
+      - path: spec.breakGlassAck
+        classification: beta-stable
+        owner: lifecycle-safety
+        mutability: request-token
+      - path: spec.configuration
+        classification: beta-stable
+        owner: configuration
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.deletionPolicy
+        classification: beta-stable
+        owner: lifecycle
+      - path: spec.gateway
+        classification: additive-unfrozen
+        owner: networking
+      - path: spec.image
+        classification: beta-stable
+        owner: workload
+      - path: spec.imagePullSecrets
+        classification: beta-stable
+        owner: workload
+      - path: spec.imageVerification
+        classification: beta-stable
+        owner: supply-chain-security
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.ingress
+        classification: beta-stable
+        owner: networking
+      - path: spec.initContainer
+        classification: beta-stable
+        owner: workload
+      - path: spec.maintenance
+        classification: beta-stable
+        owner: lifecycle
+      - path: spec.maintenance.restartAt
+        classification: deprecated
+        rationale: Use spec.runtime.restartAt.
+      - path: spec.network
+        classification: beta-stable
+        owner: networking
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.observability
+        classification: additive-unfrozen
+        owner: observability
+      - path: spec.operatorImageVerification
+        classification: beta-stable
+        owner: supply-chain-security
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.paused
+        classification: beta-stable
+        owner: lifecycle
+      - path: spec.plugins
+        classification: additive-unfrozen
+        owner: configuration
+      - path: spec.podMetadata
+        classification: beta-stable
+        owner: workload
+      - path: spec.profile
+        classification: beta-stable
+        owner: security-posture
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.readReplicas
+        classification: additive-unfrozen
+        owner: workload
+      - path: spec.recoveryKeys
+        classification: additive-unfrozen
+        owner: bootstrap-security
+      - path: spec.replicas
+        classification: beta-stable
+        owner: workload
+      - path: spec.restore
+        classification: beta-stable
+        owner: restore
+      - path: spec.runtime
+        classification: beta-stable
+        owner: lifecycle
+      - path: spec.securityContext
+        classification: beta-stable
+        owner: workload-security
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.selfInit
+        classification: beta-stable
+        owner: bootstrap-security
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.service
+        classification: beta-stable
+        owner: networking
+      - path: spec.serviceAccount
+        classification: beta-stable
+        owner: workload-identity
+      - path: spec.storage
+        classification: beta-stable
+        owner: storage
+      - path: spec.storage.storageClassName
+        mutability: immutable
+        rationale: Admission rejects storage class changes after creation.
+      - path: spec.telemetry
+        classification: additive-unfrozen
+        owner: observability
+      - path: spec.tls
+        classification: beta-stable
+        owner: transport-security
+        enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.tls.acme.domain
+        classification: deprecated
+        rationale: Use spec.tls.acme.domains.
+      - path: spec.unseal
+        classification: likely-move
+        owner: seal
+        enforcement: [crd-schema, admission-policy, controller]
+        rationale: Discriminator and provider branch consistency must be decided before beta.
+      - path: spec.upgrade
+        classification: beta-stable
+        owner: upgrade
+      - path: spec.version
+        classification: beta-stable
+        owner: workload
+      - path: spec.workloadHardening
+        classification: additive-unfrozen
+        owner: workload-security
+      - path: status.acceptedUpgradeStrategy
+        classification: stable-automation
+        owner: upgrade
+      - path: status.activeLeader
+        classification: informational
+        owner: workload-status
+      - path: status.adminOps
+        classification: informational
+        owner: adminops-status
+      - path: status.backup
+        classification: informational
+        owner: backup-status
+      - path: status.backup.lastBackupTime
+        classification: stable-automation
+        rationale: This is the replacement for deprecated status.lastBackupTime.
+      - path: status.blueGreen
+        classification: informational
+        owner: upgrade-status
+      - path: status.breakGlass
+        classification: stable-automation
+        owner: lifecycle-safety
+        rationale: The nonce and active state participate in the explicit acknowledgement workflow.
+      - path: status.breakGlass.message
+        classification: informational
+      - path: status.breakGlass.steps
+        classification: informational
+      - path: status.conditions
+        classification: stable-automation
+        owner: status-controller
+        rationale: Condition types are stable; reason sets may expand and messages are best-effort.
+      - path: status.conditions[].message
+        classification: informational
+      - path: status.currentVersion
+        classification: stable-automation
+        owner: workload-status
+      - path: status.initialized
+        classification: stable-automation
+        owner: bootstrap-status
+      - path: status.lastBackupTime
+        classification: deprecated
+        owner: backup-status
+        rationale: Use status.backup.lastBackupTime.
+      - path: status.observedGeneration
+        classification: stable-automation
+        owner: status-controller
+      - path: status.operationLock
+        classification: informational
+        owner: lifecycle-status
+      - path: status.phase
+        classification: stable-automation
+        owner: status-controller
+      - path: status.readReplicas
+        classification: informational
+        owner: workload-status
+      - path: status.readyReplicas
+        classification: stable-automation
+        owner: workload-status
+      - path: status.selfInitialized
+        classification: stable-automation
+        owner: bootstrap-status
+      - path: status.upgrade
+        classification: informational
+        owner: upgrade-status
+      - path: status.upgrade.lastErrorAt
+        classification: deprecated
+        rationale: Use status.upgrade.failure.at.
+      - path: status.upgrade.lastErrorMessage
+        classification: deprecated
+        rationale: Use status.upgrade.failure.message.
+      - path: status.upgrade.lastErrorReason
+        classification: deprecated
+        rationale: Use status.upgrade.failure.reason.
+      - path: status.upgradeRequests
+        classification: informational
+        owner: upgrade-status
+      - path: status.workload
+        classification: informational
+        owner: workload-status
+
+  - kind: OpenBaoRestore
+    crd: config/crd/bases/openbao.org_openbaorestores.yaml
+    version: v1alpha1
+    defaults:
+      spec:
+        mutability: immutable
+        migration: required-if-changed
+        moduleInteraction: none
+        enforcement: [crd-schema, admission-policy, restore-controller]
+      status:
+        mutability: operator-owned
+        migration: required-if-changed
+        moduleInteraction: none
+        enforcement: [crd-schema, status-writer]
+    notes:
+      - Restore resources are immutable job requests; changed inputs require a new resource.
+      - The shared BackupTarget storage shape remains a pre-beta review unit.
+    rules:
+      - path: spec.cluster
+        classification: beta-stable
+        owner: restore
+      - path: spec.force
+        classification: beta-stable
+        owner: restore
+      - path: spec.image
+        classification: beta-stable
+        owner: restore
+      - path: spec.jwtAuthRole
+        classification: beta-stable
+        owner: restore-authentication
+      - path: spec.overrideOperationLock
+        classification: beta-stable
+        owner: lifecycle-safety
+      - path: spec.source
+        classification: beta-stable
+        owner: restore
+      - path: spec.source.target
+        classification: likely-move
+        rationale: OpenBaoRestore reuses the same mixed provider shape as scheduled backups.
+      - path: spec.tokenSecretRef
+        classification: beta-stable
+        owner: restore-authentication
+      - path: status.completionTime
+        classification: informational
+        owner: restore-status
+      - path: status.conditions
+        classification: stable-automation
+        owner: restore-status
+        rationale: Condition types are stable; reason sets may expand and messages are best-effort.
+      - path: status.conditions[].message
+        classification: informational
+      - path: status.message
+        classification: informational
+        owner: restore-status
+      - path: status.phase
+        classification: stable-automation
+        owner: restore-status
+      - path: status.snapshotKey
+        classification: informational
+        owner: restore-status
+      - path: status.snapshotSize
+        classification: informational
+        owner: restore-status
+      - path: status.startTime
+        classification: informational
+        owner: restore-status
+
+  - kind: OpenBaoTenant
+    crd: config/crd/bases/openbao.org_openbaotenants.yaml
+    version: v1alpha1
+    defaults:
+      spec:
+        mutability: mutable
+        migration: required-if-changed
+        moduleInteraction: none
+        enforcement: [crd-schema, admission-policy, provisioner]
+      status:
+        mutability: operator-owned
+        migration: required-if-changed
+        moduleInteraction: none
+        enforcement: [crd-schema, status-writer]
+    notes:
+      - Target namespace identity is immutable; centrally managed quota and limit range policy remains mutable.
+    rules:
+      - path: spec.limitRange
+        classification: beta-stable
+        owner: tenant-governance
+      - path: spec.quota
+        classification: beta-stable
+        owner: tenant-governance
+      - path: spec.targetNamespace
+        classification: beta-stable
+        owner: tenant-governance
+        mutability: immutable
+      - path: status.conditions
+        classification: stable-automation
+        owner: tenant-status
+        rationale: Condition types are stable; reason sets may expand and messages are best-effort.
+      - path: status.conditions[].message
+        classification: informational
+      - path: status.lastError
+        classification: informational
+        owner: tenant-status
+      - path: status.provisioned
+        classification: stable-automation
+        owner: tenant-status
