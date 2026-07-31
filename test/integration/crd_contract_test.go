@@ -492,6 +492,122 @@ func TestCRD_OpenBaoCluster_ValidatesSemanticVersion(t *testing.T) {
 	}
 }
 
+func TestCRD_OpenBaoCluster_RequiresSelectedUnsealConfiguration(t *testing.T) {
+	for _, unsealType := range []string{
+		"transit",
+		"awskms",
+		"azurekeyvault",
+		"gcpckms",
+		"kmip",
+		"kms",
+		"ocikms",
+		"pkcs11",
+	} {
+		t.Run(unsealType, func(t *testing.T) {
+			cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-unseal-branch")
+			cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{Type: unsealType}
+
+			err := k8sClient.Create(ctx, cluster)
+			requireInvalidRequest(t, err)
+			if !strings.Contains(err.Error(), "requires its matching configuration block") {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+func TestCRD_OpenBaoCluster_RejectsUnselectedUnsealConfiguration(t *testing.T) {
+	cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-unseal-extra-branch")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+		Type: "transit",
+		Transit: &openbaov1alpha1.TransitSealConfig{
+			Address:   "https://transit.example.com",
+			KeyName:   "autounseal",
+			MountPath: "transit",
+		},
+		AWSKMS: &openbaov1alpha1.AWSKMSSealConfig{
+			Region:   "eu-west-1",
+			KMSKeyID: "alias/unused",
+		},
+	}
+
+	err := k8sClient.Create(ctx, cluster)
+	requireInvalidRequest(t, err)
+	if !strings.Contains(err.Error(), "spec.unseal.awskms is only supported when spec.unseal.type is awskms") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_AllowsStaticUnsealWithoutConfiguration(t *testing.T) {
+	cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-static-unseal")
+	cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{Type: "static"}
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected static unseal without an explicit configuration block to succeed, got: %v", err)
+	}
+}
+
+func TestCRD_OpenBaoCluster_ValidatesBackupTargetProviderShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  openbaov1alpha1.BackupTarget
+		message string
+	}{
+		{
+			name: "s3 endpoint is required",
+			target: openbaov1alpha1.BackupTarget{
+				Provider: "s3",
+				Bucket:   testBackupBucket,
+			},
+			message: "backup target endpoint is required when provider is s3",
+		},
+		{
+			name: "gcs options require gcs provider",
+			target: openbaov1alpha1.BackupTarget{
+				Provider: "s3",
+				Endpoint: "https://objectstore.example.com",
+				Bucket:   testBackupBucket,
+				GCS:      &openbaov1alpha1.GCSTargetConfig{},
+			},
+			message: "backup target gcs options are only supported when provider is gcs",
+		},
+		{
+			name: "azure options require azure provider",
+			target: openbaov1alpha1.BackupTarget{
+				Provider: "gcs",
+				Bucket:   testBackupBucket,
+				Azure:    &openbaov1alpha1.AzureTargetConfig{StorageAccount: "unused"},
+			},
+			message: "backup target azure options are only supported when provider is azure",
+		},
+		{
+			name: "role arn requires s3 provider",
+			target: openbaov1alpha1.BackupTarget{
+				Provider: "gcs",
+				Bucket:   testBackupBucket,
+				RoleARN:  "arn:aws:iam::123456789012:role/unused",
+			},
+			message: "backup target roleArn is only supported when provider is s3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-backup-target")
+			cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
+				Schedule: "0 3 * * *",
+				Target:   tt.target,
+			}
+
+			err := k8sClient.Create(ctx, cluster)
+			requireInvalidRequest(t, err)
+			if !strings.Contains(err.Error(), tt.message) {
+				t.Fatalf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
 func TestVAP_OpenBaoCluster_AllowsDefaultInitContainer(t *testing.T) {
 	namespace := newTestNamespace(t)
 	waitForOpenBaoClusterAdmissionPolicies(t, namespace)

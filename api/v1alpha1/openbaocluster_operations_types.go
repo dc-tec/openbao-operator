@@ -288,6 +288,10 @@ type BackupRetention struct {
 }
 
 // BackupTarget describes a generic, cloud-agnostic object storage destination.
+// +kubebuilder:validation:XValidation:rule="self.provider != 's3' || (has(self.endpoint) && size(self.endpoint) > 0)",message="backup target endpoint is required when provider is s3"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'gcs' || !has(self.gcs)",message="backup target gcs options are only supported when provider is gcs"
+// +kubebuilder:validation:XValidation:rule="self.provider == 'azure' || !has(self.azure)",message="backup target azure options are only supported when provider is azure"
+// +kubebuilder:validation:XValidation:rule="self.provider == 's3' || !has(self.roleArn) || size(self.roleArn) == 0",message="backup target roleArn is only supported when provider is s3"
 type BackupTarget struct {
 	// Provider selects the storage backend. Defaults to "s3" for backward compatibility.
 	// +optional

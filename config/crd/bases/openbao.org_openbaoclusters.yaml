@@ -447,6 +447,21 @@ spec:
                     required:
                     - bucket
                     type: object
+                    x-kubernetes-validations:
+                    - message: backup target endpoint is required when provider is
+                        s3
+                      rule: self.provider != 's3' || (has(self.endpoint) && size(self.endpoint)
+                        > 0)
+                    - message: backup target gcs options are only supported when provider
+                        is gcs
+                      rule: self.provider == 'gcs' || !has(self.gcs)
+                    - message: backup target azure options are only supported when
+                        provider is azure
+                      rule: self.provider == 'azure' || !has(self.azure)
+                    - message: backup target roleArn is only supported when provider
+                        is s3
+                      rule: self.provider == 's3' || !has(self.roleArn) || size(self.roleArn)
+                        == 0
                   tokenSecretRef:
                     description: |-
                       TokenSecretRef optionally references a Secret containing an OpenBao API
@@ -4720,6 +4735,42 @@ spec:
                     - pkcs11
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: the selected spec.unseal.type requires its matching configuration
+                    block
+                  rule: self.type == 'static' || (self.type == 'transit' && has(self.transit))
+                    || (self.type == 'awskms' && has(self.awskms)) || (self.type ==
+                    'azurekeyvault' && has(self.azureKeyVault)) || (self.type == 'gcpckms'
+                    && has(self.gcpCloudKMS)) || (self.type == 'kmip' && has(self.kmip))
+                    || (self.type == 'kms' && has(self.kms)) || (self.type == 'ocikms'
+                    && has(self.ocikms)) || (self.type == 'pkcs11' && has(self.pkcs11))
+                - message: spec.unseal.static is only supported when spec.unseal.type
+                    is static
+                  rule: self.type == 'static' || !has(self.static)
+                - message: spec.unseal.transit is only supported when spec.unseal.type
+                    is transit
+                  rule: self.type == 'transit' || !has(self.transit)
+                - message: spec.unseal.awskms is only supported when spec.unseal.type
+                    is awskms
+                  rule: self.type == 'awskms' || !has(self.awskms)
+                - message: spec.unseal.azureKeyVault is only supported when spec.unseal.type
+                    is azurekeyvault
+                  rule: self.type == 'azurekeyvault' || !has(self.azureKeyVault)
+                - message: spec.unseal.gcpCloudKMS is only supported when spec.unseal.type
+                    is gcpckms
+                  rule: self.type == 'gcpckms' || !has(self.gcpCloudKMS)
+                - message: spec.unseal.kmip is only supported when spec.unseal.type
+                    is kmip
+                  rule: self.type == 'kmip' || !has(self.kmip)
+                - message: spec.unseal.kms is only supported when spec.unseal.type
+                    is kms
+                  rule: self.type == 'kms' || !has(self.kms)
+                - message: spec.unseal.ocikms is only supported when spec.unseal.type
+                    is ocikms
+                  rule: self.type == 'ocikms' || !has(self.ocikms)
+                - message: spec.unseal.pkcs11 is only supported when spec.unseal.type
+                    is pkcs11
+                  rule: self.type == 'pkcs11' || !has(self.pkcs11)
               upgrade:
                 description: |-
                   Upgrade configures upgrade operations.

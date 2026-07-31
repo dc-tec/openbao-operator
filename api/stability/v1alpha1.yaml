@@ -25,15 +25,16 @@ resources:
         enforcement: [crd-schema, status-writer]
     notes:
       - The stable target is deliberately smaller than the currently served surface.
-      - Unseal and backup target shapes remain review units; audit raw options remain an explicit advanced-contract question.
+      - Unseal and backup targets retain their wire shape with discriminator consistency enforced by CEL.
+      - Audit raw options remain a supported advanced compatibility contract outside the beta-stable subset.
     rules:
       - path: spec.audit
         classification: additive-unfrozen
         owner: configuration
         rationale: Declarative audit devices are supported, but the advanced fallback contract still needs a freeze decision.
       - path: spec.audit[].options
-        classification: likely-move
-        rationale: Raw options may remain an advanced contract or be narrowed after inventory review.
+        classification: additive-unfrozen
+        rationale: Raw scalar options remain supported for backward compatibility and advanced OpenBao settings, but are not part of the beta-stable subset.
       - path: spec.auditFileStorage
         classification: additive-unfrozen
         owner: configuration
@@ -42,8 +43,8 @@ resources:
         owner: backup
         enforcement: [crd-schema, admission-policy, controller]
       - path: spec.backup.target
-        classification: likely-move
-        rationale: Common and provider-specific storage fields currently share one shape.
+        classification: beta-stable
+        rationale: Retain the existing shared target shape; CEL rejects mismatched nested provider options and missing S3 endpoints without a JSON reshape.
       - path: spec.breakGlassAck
         classification: beta-stable
         owner: lifecycle-safety
@@ -150,10 +151,10 @@ resources:
         classification: deprecated
         rationale: Use spec.tls.acme.domains.
       - path: spec.unseal
-        classification: likely-move
+        classification: beta-stable
         owner: seal
         enforcement: [crd-schema, admission-policy, controller]
-        rationale: Discriminator and provider branch consistency must be decided before beta.
+        rationale: Retain the existing wire shape; CEL requires the selected provider branch and rejects non-selected branches.
       - path: spec.upgrade
         classification: beta-stable
         owner: upgrade
@@ -279,8 +280,8 @@ resources:
         classification: beta-stable
         owner: restore
       - path: spec.source.target
-        classification: likely-move
-        rationale: OpenBaoRestore reuses the same mixed provider shape as scheduled backups.
+        classification: beta-stable
+        rationale: Shares the validated BackupTarget contract with scheduled backups.
       - path: spec.tokenSecretRef
         classification: beta-stable
         owner: restore-authentication
