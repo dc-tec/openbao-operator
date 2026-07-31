@@ -161,6 +161,14 @@ verify-generated: manifests generate api-reference ## Verify generated artifacts
 		exit 1; \
 	}
 
+.PHONY: verify-api-stability-inventory
+verify-api-stability-inventory: ## Verify every served CRD field has a proposed or approved stability classification.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/api_inventory
+
+.PHONY: update-api-stability-inventory
+update-api-stability-inventory: ## Update the resolved CRD stability snapshot after an intentional API or inventory change.
+	@GOFLAGS="$(GOFLAGS_VENDOR)" go run ./hack/tools/api_inventory --update
+
 .PHONY: api-reference
 api-reference: crd-ref-docs ## Generate CRD API reference docs from api/v1alpha1.
 	@CRD_REF_DOCS_BIN="$(CRD_REF_DOCS)" bash hack/docs/generate-api-reference.sh
