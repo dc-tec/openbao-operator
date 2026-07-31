@@ -49,3 +49,22 @@ Render the fully resolved field table for review with:
 ```sh
 go run ./hack/tools/api_inventory --format markdown
 ```
+
+## CRD compatibility report
+
+`baselines/0.4.2.json` is a normalized snapshot of the CRDs shipped in the
+`0.4.2` release asset. The snapshot records the source asset SHA-256 digest so
+the comparison remains tied to what users installed rather than to a mutable
+source checkout.
+
+Run the report with:
+
+```sh
+make report-crd-compatibility
+```
+
+The 0.5.0 stabilization cycle runs this check in report-only mode so intentional
+pre-beta removals and validation tightening stay visible without blocking the
+work. After 0.5.0 is published, generate a baseline from its released
+`crds.yaml` asset and switch `CRD_COMPAT_MODE` to `enforce` so breaking or
+review-required changes fail CI by default.

@@ -4,9 +4,12 @@
 package integration
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -489,6 +493,27 @@ func TestCRD_OpenBaoCluster_ValidatesSemanticVersion(t *testing.T) {
 			}
 			requireInvalidRequest(t, err)
 		})
+	}
+}
+
+func TestCRD_OpenBaoCluster_AcceptsMigratedStabilityFixture(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "fixtures", "api-migration", "0.5.0-openbaocluster.yaml"))
+	if err != nil {
+		t.Fatalf("read migrated API fixture: %v", err)
+	}
+	data, err = utilyaml.ToJSON(data)
+	if err != nil {
+		t.Fatalf("convert migrated API fixture to JSON: %v", err)
+	}
+	cluster := &unstructured.Unstructured{}
+	if err := json.Unmarshal(data, &cluster.Object); err != nil {
+		t.Fatalf("decode migrated API fixture: %v", err)
+	}
+	cluster.SetNamespace(newTestNamespace(t))
+	cluster.SetName("cluster-migrated-api")
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected migrated 0.5.0 API fixture to be accepted, got: %v", err)
 	}
 }
 
