@@ -1,7 +1,7 @@
 ##@ Development
 
 .PHONY: bootstrap
-bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint ginkgo govulncheck go-licenses gomu gotestsum dlv air benchstat semgrep ## Install repo-managed tools and local development dependencies.
+bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint ginkgo govulncheck govulncheck-ignore go-licenses gomu gotestsum dlv air benchstat semgrep ## Install repo-managed tools and local development dependencies.
 	@if command -v "$(PNPM)" >/dev/null 2>&1; then \
 		$(MAKE) ast-grep; \
 	else \
@@ -891,8 +891,8 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 lint-ci: lint-config lint verify-arch-policy lint-testonly-exports test-ast lint-ast ## Run CI lint gates (golangci-lint + test-only export audit + ast-grep tests/scans).
 
 .PHONY: vulncheck
-vulncheck: govulncheck ## Run govulncheck to scan for known vulnerabilities (production code only). Findings listed in .govulnignore are ignored. Set VULNCHECK_SHOW_IGNORED=true to print traces even if all findings are ignored.
-	@go run ./hack/govulncheck_wrapper/ -govulncheck "$(GOVULNCHECK)" -ignore .govulnignore -show-ignored="$${VULNCHECK_SHOW_IGNORED:-false}" ./...
+vulncheck: govulncheck govulncheck-ignore ## Run govulncheck to scan for known vulnerabilities (production code only). Findings listed in .govulnignore are ignored. Set VULNCHECK_SHOW_IGNORED=true to print traces even if all findings are ignored.
+	@"$(GOVULNCHECK_IGNORE)" -govulncheck "$(GOVULNCHECK)" -ignore .govulnignore -show-ignored="$${VULNCHECK_SHOW_IGNORED:-false}" ./...
 
 .PHONY: semgrep-rules-test
 semgrep-rules-test: semgrep ## Validate repo-local Semgrep custom rules against test fixtures.
