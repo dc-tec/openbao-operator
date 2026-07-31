@@ -274,7 +274,7 @@ Choose `BlueGreen` when you need parallel validation, a manual promotion point, 
       cells: [
         'spec.upgrade.requests.retry',
         'Restarts a failed rolling upgrade after you fix the underlying cause.',
-        'The operator preserved `status.upgrade.failure.reason` (and the deprecated `lastError*` compatibility fields) and is waiting for an explicit retry.',
+        'The operator preserved `status.upgrade.failure.reason` and is waiting for an explicit retry.',
       ],
       emphasis: 'recommended',
     },
@@ -331,7 +331,7 @@ kubectl get jobs -n <namespace>`}
     {
       cells: [
         'Upgrade status',
-        'No unresolved `status.upgrade.failure.reason` (or deprecated `lastErrorReason`) and no stalled blue-green phase.',
+        'No unresolved `status.upgrade.failure.reason` and no stalled blue-green phase.',
         'The controller does not think operator action is still required.',
       ],
     },

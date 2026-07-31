@@ -30,7 +30,6 @@ func TestToApplyConfiguration_PrunesNestedNilStatusFields(t *testing.T) {
 				CurrentPartition: 2,
 				StartedAt:        &startedAt,
 				Failure:          nil,
-				LastErrorAt:      nil,
 				LastStepDownTime: nil,
 			},
 		},
@@ -49,7 +48,6 @@ func TestToApplyConfiguration_PrunesNestedNilStatusFields(t *testing.T) {
 	got := string(payload)
 	for _, forbidden := range []string{
 		`"failure":null`,
-		`"lastErrorAt":null`,
 		`"lastStepDownTime":null`,
 	} {
 		if strings.Contains(got, forbidden) {

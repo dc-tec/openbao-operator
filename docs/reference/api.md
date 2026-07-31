@@ -1113,7 +1113,6 @@ _Appears in:_
 | `acceptedUpgradeStrategy` _[UpdateStrategyType](#updatestrategytype)_ | AcceptedUpgradeStrategy is the upgrade strategy the operator has accepted<br />after applying idle-state transition guards. While a requested strategy<br />change is blocked, controllers continue using this strategy so an existing<br />operation can finish safely. |  | Enum: [RollingUpdate BlueGreen] <br />Optional: \{\} <br /> |
 | `initialized` _boolean_ | Initialized indicates whether the OpenBao cluster has been initialized.<br />This is set to true after the first pod is initialized using bao operator init<br />or after self-initialization completes. |  | Optional: \{\} <br /> |
 | `selfInitialized` _boolean_ | SelfInitialized indicates whether the cluster was initialized using<br />OpenBao's self-initialization feature. When true, no root token Secret<br />exists for this cluster (the root token was auto-revoked). |  | Optional: \{\} <br /> |
-| `lastBackupTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastBackupTime is the timestamp of the last successful backup, if configured.<br />Deprecated: Use Backup.LastBackupTime instead. |  | Optional: \{\} <br /> |
 | `upgrade` _[UpgradeProgress](#upgradeprogress)_ | Upgrade tracks the state of an in-progress upgrade (if any).<br />When non-nil, an upgrade is in progress and the UpgradeManager is orchestrating<br />the pod-by-pod rolling update with leader step-down. |  | Optional: \{\} <br /> |
 | `upgradeRequests` _[UpgradeRequestStatus](#upgraderequeststatus)_ | UpgradeRequests tracks which explicit upgrade request values have already<br />been handled so one-shot requests are edge-triggered instead of level-triggered. |  | Optional: \{\} <br /> |
 | `backup` _[BackupStatus](#backupstatus)_ | Backup tracks the state of backups for this cluster. |  | Optional: \{\} <br /> |
@@ -2141,9 +2140,6 @@ _Appears in:_
 | `completedPods` _integer array_ | CompletedPods lists ordinals of pods that have been successfully upgraded. |  | Optional: \{\} <br /> |
 | `lastStepDownTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastStepDownTime records when the last leader step-down was performed. |  | Optional: \{\} <br /> |
 | `failure` _[ControllerErrorStatus](#controllererrorstatus)_ | Failure is the structured rolling-upgrade failure status.<br />When Failure.Reason is non-empty, the upgrade is considered failed. |  | Optional: \{\} <br /> |
-| `lastErrorReason` _string_ | LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).<br />Deprecated: use Failure.Reason.<br />When set, the status controller should consider the cluster Degraded. |  | Optional: \{\} <br /> |
-| `lastErrorMessage` _string_ | LastErrorMessage is a human-readable failure message (best-effort).<br />Deprecated: use Failure.Message. |  | Optional: \{\} <br /> |
-| `lastErrorAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastErrorAt is when the last upgrade error was recorded (best-effort).<br />Deprecated: use Failure.At. |  | Optional: \{\} <br /> |
 
 
 #### UpgradeRequestConfig

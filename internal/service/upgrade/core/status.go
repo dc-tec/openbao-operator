@@ -17,9 +17,6 @@ func SetUpgradeStarted(status *openbaov1alpha1.OpenBaoClusterStatus, from, to st
 		CurrentPartition: replicas, // Start with partition = replicas (no pods updated yet)
 		CompletedPods:    []int32{},
 		Failure:          nil,
-		LastErrorReason:  "",
-		LastErrorMessage: "",
-		LastErrorAt:      nil,
 	}
 }
 
@@ -64,9 +61,6 @@ func SetUpgradeFailed(status *openbaov1alpha1.OpenBaoClusterStatus, reason, mess
 		Message: message,
 		At:      &now,
 	}
-	status.Upgrade.LastErrorReason = reason
-	status.Upgrade.LastErrorMessage = message
-	status.Upgrade.LastErrorAt = &now
 }
 
 // ClearUpgrade clears the upgrade status without marking it complete.

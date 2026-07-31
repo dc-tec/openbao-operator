@@ -41,19 +41,6 @@ type UpgradeProgress struct {
 	// +nullable
 	// +kubebuilder:validation:Nullable
 	Failure *ControllerErrorStatus `json:"failure,omitempty"`
-	// LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
-	// Deprecated: use Failure.Reason.
-	// When set, the status controller should consider the cluster Degraded.
-	// +optional
-	LastErrorReason string `json:"lastErrorReason,omitempty"`
-	// LastErrorMessage is a human-readable failure message (best-effort).
-	// Deprecated: use Failure.Message.
-	// +optional
-	LastErrorMessage string `json:"lastErrorMessage,omitempty"`
-	// LastErrorAt is when the last upgrade error was recorded (best-effort).
-	// Deprecated: use Failure.At.
-	// +optional
-	LastErrorAt *metav1.Time `json:"lastErrorAt,omitempty"`
 }
 
 // ControllerErrorStatus captures a controller-scoped error signal that the status controller
@@ -301,12 +288,6 @@ type OpenBaoClusterStatus struct {
 	// exists for this cluster (the root token was auto-revoked).
 	// +optional
 	SelfInitialized bool `json:"selfInitialized,omitempty"`
-	// LastBackupTime is the timestamp of the last successful backup, if configured.
-	// Deprecated: Use Backup.LastBackupTime instead.
-	// +optional
-	// +nullable
-	// +kubebuilder:validation:Nullable
-	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
 	// Upgrade tracks the state of an in-progress upgrade (if any).
 	// When non-nil, an upgrade is in progress and the UpgradeManager is orchestrating
 	// the pod-by-pod rolling update with leader step-down.

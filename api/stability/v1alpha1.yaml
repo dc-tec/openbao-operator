@@ -196,10 +196,6 @@ resources:
       - path: status.initialized
         classification: stable-automation
         owner: bootstrap-status
-      - path: status.lastBackupTime
-        classification: deprecated
-        owner: backup-status
-        rationale: Use status.backup.lastBackupTime.
       - path: status.observedGeneration
         classification: stable-automation
         owner: status-controller
@@ -221,15 +217,6 @@ resources:
       - path: status.upgrade
         classification: informational
         owner: upgrade-status
-      - path: status.upgrade.lastErrorAt
-        classification: deprecated
-        rationale: Use status.upgrade.failure.at.
-      - path: status.upgrade.lastErrorMessage
-        classification: deprecated
-        rationale: Use status.upgrade.failure.message.
-      - path: status.upgrade.lastErrorReason
-        classification: deprecated
-        rationale: Use status.upgrade.failure.reason.
       - path: status.upgradeRequests
         classification: informational
         owner: upgrade-status

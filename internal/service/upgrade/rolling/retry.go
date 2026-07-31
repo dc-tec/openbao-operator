@@ -263,9 +263,6 @@ func clearUpgradeFailureForRetry(cluster *openbaov1alpha1.OpenBaoCluster) {
 
 	now := metav1.Now()
 	cluster.Status.Upgrade.Failure = nil
-	cluster.Status.Upgrade.LastErrorReason = ""
-	cluster.Status.Upgrade.LastErrorMessage = ""
-	cluster.Status.Upgrade.LastErrorAt = nil
 	cluster.Status.Upgrade.LastStepDownTime = nil
 	cluster.Status.Upgrade.StartedAt = &now
 }

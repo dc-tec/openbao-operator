@@ -106,10 +106,12 @@ func TestBuildDegradedCondition(t *testing.T) {
 				},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						FromVersion:      "2.0.0",
-						TargetVersion:    "2.1.0",
-						LastErrorReason:  "PodNotReady",
-						LastErrorMessage: "Pod test-1 failed to become ready",
+						FromVersion:   "2.0.0",
+						TargetVersion: "2.1.0",
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason:  "PodNotReady",
+							Message: "Pod test-1 failed to become ready",
+						},
 					},
 				},
 			},
@@ -166,10 +168,12 @@ func TestBuildUpgradingCondition(t *testing.T) {
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					Upgrade: &openbaov1alpha1.UpgradeProgress{
-						FromVersion:      "2.0.0",
-						TargetVersion:    "2.1.0",
-						LastErrorReason:  "PodNotReady",
-						LastErrorMessage: "Pod failed to become ready",
+						FromVersion:   "2.0.0",
+						TargetVersion: "2.1.0",
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason:  "PodNotReady",
+							Message: "Pod failed to become ready",
+						},
 					},
 				},
 			},

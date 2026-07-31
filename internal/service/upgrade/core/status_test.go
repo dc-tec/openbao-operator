@@ -232,14 +232,17 @@ func TestSetUpgradeFailed(t *testing.T) {
 			if status.Upgrade == nil {
 				t.Error("expected Upgrade to be preserved")
 			}
-			if status.Upgrade.LastErrorReason != tt.reason {
-				t.Errorf("LastErrorReason = %q, want %q", status.Upgrade.LastErrorReason, tt.reason)
+			if status.Upgrade.Failure == nil {
+				t.Fatal("expected Failure to be set")
 			}
-			if status.Upgrade.LastErrorMessage != tt.message {
-				t.Errorf("LastErrorMessage = %q, want %q", status.Upgrade.LastErrorMessage, tt.message)
+			if status.Upgrade.Failure.Reason != tt.reason {
+				t.Errorf("Failure.Reason = %q, want %q", status.Upgrade.Failure.Reason, tt.reason)
 			}
-			if status.Upgrade.LastErrorAt == nil {
-				t.Error("expected LastErrorAt to be set")
+			if status.Upgrade.Failure.Message != tt.message {
+				t.Errorf("Failure.Message = %q, want %q", status.Upgrade.Failure.Message, tt.message)
+			}
+			if status.Upgrade.Failure.At == nil {
+				t.Error("expected Failure.At to be set")
 			}
 		})
 	}

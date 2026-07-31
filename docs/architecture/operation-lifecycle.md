@@ -66,7 +66,7 @@ That keeps the shared safety model in one place instead of scattering lock and r
   columns={['Plane', 'Field manager', 'Owned status fields']}
   rows={[
     {
-      cells: ['Observed status', '`openbao-status-controller`', '`status.observedGeneration`, `status.phase`, `status.activeLeader`, `status.readyReplicas`, `status.currentVersion`, `status.lastBackupTime`, `status.conditions`'],
+      cells: ['Observed status', '`openbao-status-controller`', '`status.observedGeneration`, `status.phase`, `status.activeLeader`, `status.readyReplicas`, `status.currentVersion`, `status.conditions`'],
       emphasis: 'recommended',
     },
     {

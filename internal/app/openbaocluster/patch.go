@@ -38,17 +38,13 @@ func PatchStatusOwnedFields(ctx context.Context, c client.Client, cluster *openb
 			ReadyReplicas:      cluster.Status.ReadyReplicas,
 			ReadReplicas:       cluster.Status.ReadReplicas,
 			CurrentVersion:     cluster.Status.CurrentVersion,
-			LastBackupTime:     cluster.Status.LastBackupTime,
 			Conditions:         cluster.Status.Conditions,
 		},
 	}
 
-	explicitNullPaths := make([]string, 0, 2)
+	explicitNullPaths := make([]string, 0, 1)
 	if cluster.Status.ReadReplicas == nil {
 		explicitNullPaths = append(explicitNullPaths, "status.readReplicas")
-	}
-	if cluster.Status.LastBackupTime == nil {
-		explicitNullPaths = append(explicitNullPaths, "status.lastBackupTime")
 	}
 
 	applyConfig, err := statusapply.ToApplyConfigurationWithExplicitNulls(applyCluster, c, explicitNullPaths...)

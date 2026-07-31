@@ -203,7 +203,7 @@ Blue-green creates a second revision and needs roughly double storage capacity f
   columns={['State surface', 'What it preserves']}
   rows={[
     {
-      cells: ['status.upgrade', 'Rolling partition progress, completed pods, finalization gating, and the structured failure surface under `status.upgrade.failure` (with deprecated `lastError*` compatibility fields still mirrored for now).'],
+      cells: ['status.upgrade', 'Rolling partition progress, completed pods, finalization gating, and the structured failure surface under `status.upgrade.failure`.'],
       emphasis: 'recommended',
     },
     {

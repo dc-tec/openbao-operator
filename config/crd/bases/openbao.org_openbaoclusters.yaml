@@ -5311,13 +5311,6 @@ spec:
                   This is set to true after the first pod is initialized using bao operator init
                   or after self-initialization completes.
                 type: boolean
-              lastBackupTime:
-                description: |-
-                  LastBackupTime is the timestamp of the last successful backup, if configured.
-                  Deprecated: Use Backup.LastBackupTime instead.
-                format: date-time
-                nullable: true
-                type: string
               observedGeneration:
                 description: |-
                   ObservedGeneration is the most recent metadata.generation that has been
@@ -5462,23 +5455,6 @@ spec:
                     type: object
                   fromVersion:
                     description: FromVersion is the version being upgraded from.
-                    type: string
-                  lastErrorAt:
-                    description: |-
-                      LastErrorAt is when the last upgrade error was recorded (best-effort).
-                      Deprecated: use Failure.At.
-                    format: date-time
-                    type: string
-                  lastErrorMessage:
-                    description: |-
-                      LastErrorMessage is a human-readable failure message (best-effort).
-                      Deprecated: use Failure.Message.
-                    type: string
-                  lastErrorReason:
-                    description: |-
-                      LastErrorReason is a low-cardinality reason describing why the upgrade failed (if it did).
-                      Deprecated: use Failure.Reason.
-                      When set, the status controller should consider the cluster Degraded.
                     type: string
                   lastStepDownTime:
                     description: LastStepDownTime records when the last leader step-down

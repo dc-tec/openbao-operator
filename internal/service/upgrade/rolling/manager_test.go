@@ -121,8 +121,10 @@ func TestDetectUpgradeState(t *testing.T) {
 						TargetVersion:    "2.5.0",
 						FromVersion:      "2.4.0",
 						CurrentPartition: 1,
-						LastErrorReason:  upgrade.ReasonUpgradeFailed,
-						LastErrorMessage: "step-down timeout",
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason:  upgrade.ReasonUpgradeFailed,
+							Message: "step-down timeout",
+						},
 					},
 				},
 			},
@@ -147,8 +149,10 @@ func TestDetectUpgradeState(t *testing.T) {
 						TargetVersion:    "2.5.0",
 						FromVersion:      "2.4.0",
 						CurrentPartition: 1,
-						LastErrorReason:  upgrade.ReasonUpgradeFailed,
-						LastErrorMessage: "step-down timeout",
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason:  upgrade.ReasonUpgradeFailed,
+							Message: "step-down timeout",
+						},
 					},
 				},
 			},
@@ -168,8 +172,10 @@ func TestDetectUpgradeState(t *testing.T) {
 						TargetVersion:    "2.5.0",
 						FromVersion:      "2.4.0",
 						CurrentPartition: 1,
-						LastErrorReason:  upgrade.ReasonUpgradeFailed,
-						LastErrorMessage: "step-down timeout",
+						Failure: &openbaov1alpha1.ControllerErrorStatus{
+							Reason:  upgrade.ReasonUpgradeFailed,
+							Message: "step-down timeout",
+						},
 					},
 				},
 			},
@@ -518,11 +524,11 @@ func TestValidateUpgrade_ResumeHealthMarksTimedOutTargetAsPodNotReady(t *testing
 	if cluster.Status.Upgrade == nil {
 		t.Fatal("expected rolling upgrade status to remain present")
 	}
-	if cluster.Status.Upgrade.LastErrorReason != upgrade.ReasonPodNotReady {
-		t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, upgrade.ReasonPodNotReady)
+	if cluster.Status.Upgrade.Failure == nil || cluster.Status.Upgrade.Failure.Reason != upgrade.ReasonPodNotReady {
+		t.Fatalf("Failure=%#v, want reason %q", cluster.Status.Upgrade.Failure, upgrade.ReasonPodNotReady)
 	}
-	if !strings.Contains(cluster.Status.Upgrade.LastErrorMessage, "test-cluster-2") {
-		t.Fatalf("LastErrorMessage=%q, want target pod name", cluster.Status.Upgrade.LastErrorMessage)
+	if !strings.Contains(cluster.Status.Upgrade.Failure.Message, "test-cluster-2") {
+		t.Fatalf("Failure.Message=%q, want target pod name", cluster.Status.Upgrade.Failure.Message)
 	}
 }
 
@@ -591,11 +597,11 @@ func TestReconcile_PersistsResumeValidationFailureStatus(t *testing.T) {
 	if latest.Status.Upgrade == nil {
 		t.Fatal("expected persisted rolling upgrade status")
 	}
-	if latest.Status.Upgrade.LastErrorReason != upgrade.ReasonPodNotReady {
-		t.Fatalf("persisted LastErrorReason=%q, want %q", latest.Status.Upgrade.LastErrorReason, upgrade.ReasonPodNotReady)
+	if latest.Status.Upgrade.Failure == nil || latest.Status.Upgrade.Failure.Reason != upgrade.ReasonPodNotReady {
+		t.Fatalf("persisted Failure=%#v, want reason %q", latest.Status.Upgrade.Failure, upgrade.ReasonPodNotReady)
 	}
-	if !strings.Contains(latest.Status.Upgrade.LastErrorMessage, "test-cluster-2") {
-		t.Fatalf("persisted LastErrorMessage=%q, want target pod name", latest.Status.Upgrade.LastErrorMessage)
+	if !strings.Contains(latest.Status.Upgrade.Failure.Message, "test-cluster-2") {
+		t.Fatalf("persisted Failure.Message=%q, want target pod name", latest.Status.Upgrade.Failure.Message)
 	}
 }
 
@@ -732,11 +738,11 @@ func TestValidateUpgrade_ResumeHealthMarksTimedOutNonTargetAsPodNotReady(t *test
 	if cluster.Status.Upgrade == nil {
 		t.Fatal("expected rolling upgrade status to remain present")
 	}
-	if cluster.Status.Upgrade.LastErrorReason != upgrade.ReasonPodNotReady {
-		t.Fatalf("LastErrorReason=%q, want %q", cluster.Status.Upgrade.LastErrorReason, upgrade.ReasonPodNotReady)
+	if cluster.Status.Upgrade.Failure == nil || cluster.Status.Upgrade.Failure.Reason != upgrade.ReasonPodNotReady {
+		t.Fatalf("Failure=%#v, want reason %q", cluster.Status.Upgrade.Failure, upgrade.ReasonPodNotReady)
 	}
-	if !strings.Contains(cluster.Status.Upgrade.LastErrorMessage, "test-cluster-0") {
-		t.Fatalf("LastErrorMessage=%q, want non-target pod name", cluster.Status.Upgrade.LastErrorMessage)
+	if !strings.Contains(cluster.Status.Upgrade.Failure.Message, "test-cluster-0") {
+		t.Fatalf("Failure.Message=%q, want non-target pod name", cluster.Status.Upgrade.Failure.Message)
 	}
 }
 
@@ -1203,14 +1209,14 @@ func TestReconcile_PersistsFailureWhenUpgradeLockIsBlockedMidUpgrade(t *testing.
 	if latest.Status.Upgrade == nil {
 		t.Fatal("expected persisted rolling upgrade status")
 	}
-	if latest.Status.Upgrade.LastErrorReason != upgrade.ReasonUpgradeFailed {
-		t.Fatalf("persisted LastErrorReason=%q, want %q", latest.Status.Upgrade.LastErrorReason, upgrade.ReasonUpgradeFailed)
+	if latest.Status.Upgrade.Failure == nil || latest.Status.Upgrade.Failure.Reason != upgrade.ReasonUpgradeFailed {
+		t.Fatalf("persisted Failure=%#v, want reason %q", latest.Status.Upgrade.Failure, upgrade.ReasonUpgradeFailed)
 	}
-	if !strings.Contains(latest.Status.Upgrade.LastErrorMessage, "concurrent operation lock") {
-		t.Fatalf("persisted LastErrorMessage=%q, want lock-contention message", latest.Status.Upgrade.LastErrorMessage)
+	if !strings.Contains(latest.Status.Upgrade.Failure.Message, "concurrent operation lock") {
+		t.Fatalf("persisted Failure.Message=%q, want lock-contention message", latest.Status.Upgrade.Failure.Message)
 	}
-	if latest.Status.Upgrade.LastErrorAt == nil {
-		t.Fatal("expected persisted LastErrorAt timestamp")
+	if latest.Status.Upgrade.Failure.At == nil {
+		t.Fatal("expected persisted Failure.At timestamp")
 	}
 }
 

@@ -732,7 +732,9 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 
 				Expect(progress.TargetVersion).To(Equal(targetVersion))
 				Expect(progress.FromVersion).To(Equal(initialVersion))
-				Expect(progress.LastErrorReason).To(BeEmpty(), "rolling upgrade entered failed state: %s", progress.LastErrorMessage)
+				if progress.Failure != nil {
+					Expect(progress.Failure.Reason).To(BeEmpty(), "rolling upgrade entered failed state: %s", progress.Failure.Message)
+				}
 
 				Expect(progress.CurrentPartition).To(BeNumerically(">=", 0))
 				Expect(progress.CurrentPartition).To(BeNumerically("<=", lastPartition), "partition should move monotonically downward")
@@ -1308,13 +1310,14 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
-				if updated.Status.Upgrade.LastErrorReason != upgrade.ReasonPodNotReady {
+				if updated.Status.Upgrade.Failure == nil || updated.Status.Upgrade.Failure.Reason != upgrade.ReasonPodNotReady {
 					original := updated.DeepCopy()
 					updated.Status.Upgrade.StartedAt = ptrTo(metav1.NewTime(time.Now().Add(-(upgrade.DefaultPodReadyTimeout + time.Minute))))
 					g.Expect(admin.Status().Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
 					g.Expect(tenantFW.TriggerReconcile(ctx, recoveryCluster.Name)).To(Succeed())
 				}
-				g.Expect(updated.Status.Upgrade.LastErrorReason).To(Equal(upgrade.ReasonPodNotReady))
+				g.Expect(updated.Status.Upgrade.Failure).NotTo(BeNil())
+				g.Expect(updated.Status.Upgrade.Failure.Reason).To(Equal(upgrade.ReasonPodNotReady))
 				g.Expect(updated.Status.Upgrade.CurrentPartition).To(BeNumerically(">", 0))
 				failedPartition = updated.Status.Upgrade.CurrentPartition
 			}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
@@ -1348,7 +1351,7 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 				updated := &openbaov1alpha1.OpenBaoCluster{}
 				g.Expect(admin.Get(ctx, types.NamespacedName{Name: recoveryCluster.Name, Namespace: tenantNamespace}, updated)).To(Succeed())
 				g.Expect(updated.Status.Upgrade).NotTo(BeNil())
-				g.Expect(updated.Status.Upgrade.LastErrorReason).To(BeEmpty())
+				g.Expect(updated.Status.Upgrade.Failure).To(BeNil())
 				g.Expect(updated.Status.UpgradeRequests).NotTo(BeNil())
 				g.Expect(updated.Status.UpgradeRequests.LastHandledRetry).To(Equal(retryToken))
 
