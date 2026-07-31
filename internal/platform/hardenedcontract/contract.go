@@ -13,6 +13,7 @@ import (
 )
 
 type Violation struct {
+	Rule    RuleID
 	Reason  string
 	Message string
 }
@@ -23,11 +24,14 @@ func EvaluateOpenBaoCluster(cluster *openbaov1alpha1.OpenBaoCluster) *Violation 
 	}
 
 	if !cluster.Spec.TLS.Enabled {
-		return securityViolation("Hardened profile requires spec.tls.enabled=true.")
+		return securityViolation(RuleRuntimeTLSEnabled, "Hardened profile requires spec.tls.enabled=true.")
 	}
 
 	if listenerTLSDisabled(cluster) {
-		return securityViolation("Hardened profile does not allow spec.configuration.listener.tlsDisable=true.")
+		return securityViolation(
+			RuleListenerTLS,
+			"Hardened profile does not allow spec.configuration.listener.tlsDisable=true.",
+		)
 	}
 
 	if target := backupTarget(cluster); target != nil {
@@ -37,27 +41,45 @@ func EvaluateOpenBaoCluster(cluster *openbaov1alpha1.OpenBaoCluster) *Violation 
 	}
 
 	if serviceMonitorTLSSkipVerify(cluster) {
-		return securityViolation("Hardened profile does not allow ServiceMonitor TLS insecureSkipVerify.")
+		return securityViolation(
+			RuleServiceMonitorTLSVerification,
+			"Hardened profile does not allow ServiceMonitor TLS insecureSkipVerify.",
+		)
 	}
 
 	if gatewayBackendTLSDisabled(cluster) {
-		return securityViolation("Hardened profile requires Gateway backend TLS unless spec.gateway.tlsPassthrough=true.")
+		return securityViolation(
+			RuleGatewayBackendTLS,
+			"Hardened profile requires Gateway backend TLS unless spec.gateway.tlsPassthrough=true.",
+		)
 	}
 
 	if flagName, ok := dangerousRuntimeFlag(cluster); ok {
-		return securityViolation(fmt.Sprintf("Hardened profile does not allow %s=true.", flagName))
+		return securityViolation(
+			RuleDangerousRuntimeFlags,
+			fmt.Sprintf("Hardened profile does not allow %s=true.", flagName),
+		)
 	}
 
 	if rawIngressRulesConfigured(cluster) {
-		return securityViolation("Hardened profile does not allow spec.network.ingressRules; use spec.network.trustedIngressPeers.")
+		return securityViolation(
+			RuleRawIngressRules,
+			"Hardened profile does not allow spec.network.ingressRules; use spec.network.trustedIngressPeers.",
+		)
 	}
 
 	if network := cluster.Spec.Network; network != nil {
 		if !TrustedIngressPeersExplicit(network.TrustedIngressPeers) {
-			return securityViolation("Hardened profile requires spec.network.trustedIngressPeers entries to select explicit non-wildcard sources.")
+			return securityViolation(
+				RuleTrustedIngressPeers,
+				"Hardened profile requires spec.network.trustedIngressPeers entries to select explicit non-wildcard sources.",
+			)
 		}
 		if !EgressRulesExplicit(network.EgressRules) {
-			return securityViolation("Hardened profile requires spec.network.egressRules entries to be port-scoped and target explicit non-wildcard peers.")
+			return securityViolation(
+				RuleEgressRules,
+				"Hardened profile requires spec.network.egressRules entries to be port-scoped and target explicit non-wildcard peers.",
+			)
 		}
 	}
 
@@ -70,10 +92,23 @@ func EvaluateStorageTarget(operation string, target openbaov1alpha1.BackupTarget
 		title = "Storage"
 	}
 	if target.InsecureSkipVerify {
-		return securityViolation(fmt.Sprintf("Hardened profile does not allow %s storage TLS verification to be disabled.", strings.ToLower(title)))
+		return securityViolation(
+			RuleStorageTLSVerification,
+			fmt.Sprintf(
+				"Hardened profile does not allow %s storage TLS verification to be disabled.",
+				strings.ToLower(title),
+			),
+		)
 	}
 	if !HasExplicitStorageIdentity(target) {
-		return securityViolation(fmt.Sprintf("Hardened profile does not allow %s storage to rely on ambient credentials; configure target.credentialsSecretRef, target.workloadIdentity, or target.roleArn for S3 targets.", strings.ToLower(title)))
+		return securityViolation(
+			RuleStorageExplicitIdentity,
+			fmt.Sprintf(
+				"Hardened profile does not allow %s storage to rely on ambient credentials; configure "+
+					"target.credentialsSecretRef, target.workloadIdentity, or target.roleArn for S3 targets.",
+				strings.ToLower(title),
+			),
+		)
 	}
 	return nil
 }
@@ -145,8 +180,9 @@ func NetworkPolicyPeerExplicit(peer networkingv1.NetworkPolicyPeer) bool {
 	return namespaceExplicit || podExplicit || peer.IPBlock != nil
 }
 
-func securityViolation(message string) *Violation {
+func securityViolation(rule RuleID, message string) *Violation {
 	return &Violation{
+		Rule:    rule,
 		Reason:  constants.ReasonSecurityViolation,
 		Message: message,
 	}

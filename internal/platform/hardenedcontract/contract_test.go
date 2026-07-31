@@ -1,116 +1,40 @@
-package hardenedcontract
+package hardenedcontract_test
 
 import (
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 
-	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	"github.com/dc-tec/openbao-operator/internal/platform/hardenedcontract"
+	hardenedfixtures "github.com/dc-tec/openbao-operator/test/fixtures/hardenedcontract"
 )
 
 func TestEvaluateOpenBaoCluster_HardenedContractViolations(t *testing.T) {
-	tests := []struct {
-		name      string
-		configure func(*openbaov1alpha1.OpenBaoCluster)
-		want      bool
-	}{
-		{
-			name: "safe baseline",
-		},
-		{
-			name: "tls disabled",
-			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
-				cluster.Spec.TLS.Enabled = false
-			},
-			want: true,
-		},
-		{
-			name: "ambient backup identity",
-			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
-				cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
-					Target: openbaov1alpha1.BackupTarget{
-						Bucket: "backups",
-					},
-				}
-			},
-			want: true,
-		},
-		{
-			name: "gcs role arn is ambient backup identity",
-			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
-				cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
-					Target: openbaov1alpha1.BackupTarget{
-						Provider: "gcs",
-						Bucket:   "backups",
-						RoleARN:  "arn:aws:iam::123456789012:role/openbao-backup",
-					},
-				}
-			},
-			want: true,
-		},
-		{
-			name: "s3 role arn is explicit backup identity",
-			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
-				cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
-					Target: openbaov1alpha1.BackupTarget{
-						Provider: "s3",
-						Bucket:   "backups",
-						RoleARN:  "arn:aws:iam::123456789012:role/openbao-backup",
-					},
-				}
-			},
-		},
-		{
-			name: "empty trusted ingress peer",
-			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
-				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
-					TrustedIngressPeers: []networkingv1.NetworkPolicyPeer{{}},
-				}
-			},
-			want: true,
-		},
-		{
-			name: "wildcard egress",
-			configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
-				port := intstr.FromInt32(443)
-				cluster.Spec.Network = &openbaov1alpha1.NetworkConfig{
-					EgressRules: []networkingv1.NetworkPolicyEgressRule{
-						{
-							To: []networkingv1.NetworkPolicyPeer{
-								{IPBlock: &networkingv1.IPBlock{CIDR: "0.0.0.0/0"}},
-							},
-							Ports: []networkingv1.NetworkPolicyPort{
-								{Protocol: ptr.To(corev1.ProtocolTCP), Port: &port},
-							},
-						},
-					},
-				}
-			},
-			want: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cluster := newSafeHardenedCluster()
-			if tt.configure != nil {
-				tt.configure(cluster)
+	for _, fixture := range hardenedfixtures.Fixtures() {
+		t.Run(fixture.Name, func(t *testing.T) {
+			cluster := hardenedfixtures.NewValidCluster("default", "fixture")
+			if fixture.Configure != nil {
+				fixture.Configure(cluster)
 			}
 
-			violation := EvaluateOpenBaoCluster(cluster)
-			if tt.want {
-				if violation == nil || violation.Reason != constants.ReasonSecurityViolation {
-					t.Fatalf("EvaluateOpenBaoCluster() = %#v, want SecurityViolation", violation)
+			violation := hardenedcontract.EvaluateOpenBaoCluster(cluster)
+			if fixture.RuntimeRule == "" {
+				if violation != nil {
+					t.Fatalf("EvaluateOpenBaoCluster() = %#v, want nil", violation)
 				}
 				return
 			}
-			if violation != nil {
-				t.Fatalf("EvaluateOpenBaoCluster() = %#v, want nil", violation)
+			if violation == nil {
+				t.Fatalf("EvaluateOpenBaoCluster() = nil, want rule %q", fixture.RuntimeRule)
+			}
+			if violation.Reason != constants.ReasonSecurityViolation || violation.Rule != fixture.RuntimeRule {
+				t.Fatalf(
+					"EvaluateOpenBaoCluster() = %#v, want SecurityViolation rule %q",
+					violation,
+					fixture.RuntimeRule,
+				)
 			}
 		})
 	}
@@ -185,40 +109,9 @@ func TestNetworkPolicyPeerExplicit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NetworkPolicyPeerExplicit(tt.peer); got != tt.want {
+			if got := hardenedcontract.NetworkPolicyPeerExplicit(tt.peer); got != tt.want {
 				t.Fatalf("NetworkPolicyPeerExplicit() = %v, want %v", got, tt.want)
 			}
 		})
-	}
-}
-
-func newSafeHardenedCluster() *openbaov1alpha1.OpenBaoCluster {
-	return &openbaov1alpha1.OpenBaoCluster{
-		Spec: openbaov1alpha1.OpenBaoClusterSpec{
-			Profile: openbaov1alpha1.ProfileHardened,
-			TLS: openbaov1alpha1.TLSConfig{
-				Enabled: true,
-				Mode:    openbaov1alpha1.TLSModeExternal,
-			},
-			Network: &openbaov1alpha1.NetworkConfig{
-				EgressRules: []networkingv1.NetworkPolicyEgressRule{safeEgressRule()},
-			},
-		},
-	}
-}
-
-func safeEgressRule() networkingv1.NetworkPolicyEgressRule {
-	port := intstr.FromInt32(443)
-	return networkingv1.NetworkPolicyEgressRule{
-		To: []networkingv1.NetworkPolicyPeer{
-			{
-				NamespaceSelector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{"kubernetes.io/metadata.name": "objectstore"},
-				},
-			},
-		},
-		Ports: []networkingv1.NetworkPolicyPort{
-			{Protocol: ptr.To(corev1.ProtocolTCP), Port: &port},
-		},
 	}
 }
