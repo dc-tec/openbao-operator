@@ -6,7 +6,7 @@ description: Security practices for the OpenBao Operator
 
 # Security Practices
 
-See [Security Practices](docs/contributing/standards/security-practices.md).
+See [Security Practices](docs/contribute/standards/security-practices.md).
 
 ## Critical Security Rules
 

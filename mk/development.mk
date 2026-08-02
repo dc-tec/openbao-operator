@@ -1,7 +1,7 @@
 ##@ Development
 
 .PHONY: bootstrap
-bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint ginkgo govulncheck govulncheck-ignore go-licenses gomu gotestsum dlv air benchstat semgrep ## Install repo-managed tools and local development dependencies.
+bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint actionlint ginkgo govulncheck govulncheck-ignore go-licenses gomu gotestsum dlv air benchstat semgrep ## Install repo-managed tools and local development dependencies.
 	@if command -v "$(PNPM)" >/dev/null 2>&1; then \
 		$(MAKE) ast-grep; \
 	else \
@@ -35,6 +35,14 @@ git-hooks-uninstall: ## Remove the repo-local Git hooks path.
 .PHONY: doctor
 doctor: ## Validate local prerequisites for the main contributor workflow.
 	@bash hack/dev/doctor.sh
+
+.PHONY: clean-artifacts
+clean-artifacts: ## Remove known local build, test, documentation, and report artifacts.
+	@$(RM) cover.out coverage.out report.xml
+	@$(RM) -r .contribute-docs website/.docusaurus website/build site artifacts
+	@$(RM) -r dist/architecture dist/bench dist/fuzz dist/perf dist/test dist/mutation dist/licenses dist/semgrep
+	@$(RM) dist/install.yaml dist/crds.yaml dist/checksums.txt dist/sbom-*.spdx.json
+	@echo "Removed known local artifacts."
 
 .PHONY: tilt-up
 tilt-up: ## Launch the local Kubernetes dev loop in Tilt. Use TILT_ARGS for extra flags.
@@ -137,8 +145,12 @@ verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 	}
 
 .PHONY: verify-go-toolchain-sync
-verify-go-toolchain-sync: ## Verify go.mod and Dockerfile golang builder tags use the same Go version.
+verify-go-toolchain-sync: ## Verify go.mod, Dockerfile builders, and the devcontainer use the same Go version.
 	@bash hack/ci/verify-go-toolchain-sync.sh
+
+.PHONY: verify-workflows
+verify-workflows: actionlint ## Validate GitHub Actions workflows with the repo-pinned actionlint.
+	@"$(ACTIONLINT)" .github/workflows/*.yml
 
 .PHONY: verify-vendor
 verify-vendor: ## Verify vendor/ is synchronized with go.mod/go.sum.

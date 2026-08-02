@@ -23,4 +23,4 @@ make docs-build
 
 Follow:
 
-- `docs/contributing/docs-style-guide.md`
+- `docs/contribute/docs-style-guide.md`

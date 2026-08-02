@@ -6,7 +6,7 @@ description: Kubernetes operator patterns for the OpenBao Operator
 
 # Kubernetes Operator Patterns
 
-See [Kubernetes Patterns](docs/contributing/standards/kubernetes-patterns.md).
+See [Kubernetes Patterns](docs/contribute/standards/kubernetes-patterns.md).
 
 ## Reconciler Rules
 

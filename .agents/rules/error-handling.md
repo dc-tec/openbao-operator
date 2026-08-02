@@ -6,7 +6,7 @@ description: Error handling patterns for the OpenBao Operator
 
 # Error Handling
 
-See [Error Handling](docs/contributing/standards/error-handling.md).
+See [Error Handling](docs/contribute/standards/error-handling.md).
 
 ## Wrapping Errors
 

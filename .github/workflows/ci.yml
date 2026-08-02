@@ -346,15 +346,8 @@ jobs:
         with:
           cache-tools: false
 
-      - name: Install actionlint
-        env:
-          GOFLAGS: -mod=mod
-          GOBIN: ${{ github.workspace }}/bin
-        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
-
       - name: Run actionlint
-        run: |
-          "${GITHUB_WORKSPACE}/bin/actionlint" .github/workflows/*.yml
+        run: make verify-workflows
 
   lint:
     name: Lint

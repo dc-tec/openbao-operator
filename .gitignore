@@ -20,6 +20,7 @@ go.work
 # Local development files
 .DS_Store
 .gocache
+.pnpm-store/
 .contribute-docs/
 node_modules/
 
@@ -51,7 +52,10 @@ dist/checksums.txt
 dist/sbom-*.spdx.json
 dist/architecture/
 dist/bench/
+dist/fuzz/
+dist/licenses/
 dist/perf/
+dist/semgrep/
 dist/test/
 dist/mutation/
 tmp/air/
