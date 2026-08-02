@@ -121,6 +121,10 @@ func TestCollectNodeIncludesMapValuesAndComposedSchemas(t *testing.T) {
 					},
 				},
 			},
+			"port": {
+				AnyOf:        []apiextensionsv1.JSONSchemaProps{{Type: "integer"}, {Type: "string"}},
+				XIntOrString: true,
+			},
 		},
 	}
 
@@ -135,6 +139,16 @@ func TestCollectNodeIncludesMapValuesAndComposedSchemas(t *testing.T) {
 	if strings.Join(composed.Enum, ",") != `"baseline","restricted"` {
 		t.Fatalf("composed enum = %v, want baseline and restricted", composed.Enum)
 	}
+	port := findSchemaNode(t, nodes, "spec.port")
+	if port.Constraints["intOrString"] != trueValue {
+		t.Fatalf("int-or-string node = %#v", port)
+	}
+	if findSchemaNode(t, nodes, "spec.port.anyOf[0]").Type != "integer" {
+		t.Fatalf("integer anyOf branch missing: %#v", nodes)
+	}
+	if findSchemaNode(t, nodes, "spec.port.anyOf[1]").Type != "string" {
+		t.Fatalf("string anyOf branch missing: %#v", nodes)
+	}
 
 	changedSchema := schema.DeepCopy()
 	hard := changedSchema.Properties["hard"]
@@ -143,12 +157,16 @@ func TestCollectNodeIncludesMapValuesAndComposedSchemas(t *testing.T) {
 	profile := changedSchema.Properties["profile"]
 	profile.AllOf[0].Enum = profile.AllOf[0].Enum[1:]
 	changedSchema.Properties["profile"] = profile
+	portSchema := changedSchema.Properties["port"]
+	portSchema.AnyOf = portSchema.AnyOf[1:]
+	changedSchema.Properties["port"] = portSchema
 
 	var changedNodes []schemaNode
 	collectNode(&changedNodes, "widgets.example.com", "Widget", "v1", "spec", *changedSchema, true)
 	changes := compareSnapshots(nodes, changedNodes)
 	assertChange(t, changes, impactBreaking, "type-changed", "spec.hard.*")
 	assertChange(t, changes, impactBreaking, "enum-values-removed", "spec.profile.allOf[0]")
+	assertChange(t, changes, impactBreaking, "field-removed", "spec.port.anyOf[1]")
 }
 
 func TestWriteReportMakesReportOnlyModeExplicit(t *testing.T) {
@@ -199,6 +217,9 @@ func TestMigrationFixturesCoverRequiredManifestChanges(t *testing.T) {
 	assertNestedStringSlice(t, after, []string{"bao.example.com"}, "spec", "tls", "acme", "domains")
 	assertNestedString(t, before, "2026-08-01T12:00:00Z", "spec", "maintenance", "restartAt")
 	assertNestedString(t, after, "2026-08-01T12:00:00Z", "spec", "runtime", "restartAt")
+	assertNestedPresence(t, before, true, "spec", "upgrade", "tokenSecretRef")
+	assertNestedPresence(t, after, false, "spec", "upgrade", "tokenSecretRef")
+	assertNestedString(t, after, "upgrade", "spec", "upgrade", "jwtAuthRole")
 	assertNestedPresence(t, before, true, "spec", "unseal", "awskms")
 	assertNestedPresence(t, after, false, "spec", "unseal", "awskms")
 	assertNestedPresence(t, before, true, "spec", "backup", "target", "gcs")

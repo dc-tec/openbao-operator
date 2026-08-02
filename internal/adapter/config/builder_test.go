@@ -1268,13 +1268,13 @@ func TestRenderSelfInitHCL_DoesNotCreateBackupUpgradePoliciesWhenNotConfigured(t
 	compareGolden(t, "render_self_init_no_backup_upgrade", got)
 }
 
-func TestRenderSelfInitHCL_DoesNotCreatePoliciesWhenUsingTokenSecretRef(t *testing.T) {
+func TestRenderSelfInitHCL_DoesNotCreateBackupPolicyWhenUsingTokenSecretRef(t *testing.T) {
 	cluster := newMinimalCluster("hardened-cluster", "default")
 	cluster.Spec.Profile = openbaov1alpha1.ProfileHardened
 	cluster.Spec.SelfInit = &openbaov1alpha1.SelfInitConfig{
 		Enabled: true,
 	}
-	// Backup and upgrade are configured but use TokenSecretRef instead of JWTAuthRole
+	// Backup is configured with TokenSecretRef instead of JWTAuthRole.
 	cluster.Spec.Backup = &openbaov1alpha1.BackupSchedule{
 		Schedule: "0 3 * * *",
 		Target: openbaov1alpha1.BackupTarget{
@@ -1284,13 +1284,7 @@ func TestRenderSelfInitHCL_DoesNotCreatePoliciesWhenUsingTokenSecretRef(t *testi
 		TokenSecretRef: &corev1.LocalObjectReference{
 			Name: "backup-token",
 		},
-		// JWTAuthRole is not set - using TokenSecretRef instead
-	}
-	cluster.Spec.Upgrade = &openbaov1alpha1.UpgradeConfig{
-		TokenSecretRef: &corev1.LocalObjectReference{
-			Name: "upgrade-token",
-		},
-		// JWTAuthRole is not set - using TokenSecretRef instead
+		// JWTAuthRole is not set - using TokenSecretRef instead.
 	}
 
 	bootstrapConfig := &OperatorBootstrapConfig{

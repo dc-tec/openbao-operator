@@ -232,16 +232,6 @@ type UpgradeConfig struct {
 	// This is the supported authentication mechanism for built-in upgrade orchestration.
 	// +optional
 	JWTAuthRole string `json:"jwtAuthRole,omitempty"`
-	// TokenSecretRef optionally references a Secret containing an OpenBao API
-	// token for future non-JWT upgrade authentication flows.
-	//
-	// Built-in rolling and blue/green upgrade orchestration does not support
-	// token-based authentication. Configure spec.upgrade.jwtAuthRole, or use the
-	// default role created during initial spec.selfInit.oidc bootstrap.
-	// +kubebuilder:validation:XValidation:rule="self == null",message="spec.upgrade.tokenSecretRef is not supported; configure spec.upgrade.jwtAuthRole or use the default role created during initial spec.selfInit.oidc bootstrap"
-	// +optional
-	TokenSecretRef *corev1.LocalObjectReference `json:"tokenSecretRef,omitempty"`
-
 	// Strategy defines the update strategy to use.
 	// +kubebuilder:default="RollingUpdate"
 	Strategy UpdateStrategyType `json:"strategy,omitempty"`

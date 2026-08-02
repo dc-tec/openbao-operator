@@ -35,9 +35,6 @@ journey: reference
       cells: ['Helm CRD lifecycle', 'Helm does not automatically upgrade or delete CRDs.', 'Use release `crds.yaml` assets for CRD lifecycle operations.'],
     },
     {
-      cells: ['Built-in upgrade authentication', 'Built-in rolling and blue/green upgrade orchestration do not support `spec.upgrade.tokenSecretRef`; upgrade Jobs use JWT authentication only.', 'Configure `spec.upgrade.jwtAuthRole`, or use the default role created during initial `selfInit.oidc` bootstrap.'],
-    },
-    {
       cells: ['Audit file storage archival', '`spec.auditFileStorage` provides a PVC-backed collector handoff and replay buffer; it does not provide rotation, pruning, tamper-proof retention, or a collector.', 'Mount the audit PVC read-only into a collector and ship records to external retention-controlled storage.'],
     },
     {

@@ -42,7 +42,14 @@ var allowedStatusClassifications = stringSet(
 	"deprecated",
 )
 
-var allowedMutability = stringSet("mutable", "immutable", "request-token", "operator-owned")
+var allowedMutability = stringSet(
+	"mutable",
+	"immutable",
+	"grow-only",
+	"transition-guarded",
+	"request-token",
+	"operator-owned",
+)
 
 var allowedMigration = stringSet("required-if-changed", "none")
 
@@ -99,6 +106,8 @@ type inventoryRule struct {
 	Classification    string   `yaml:"classification,omitempty"`
 	Owner             string   `yaml:"owner,omitempty"`
 	Mutability        string   `yaml:"mutability,omitempty"`
+	Omission          string   `yaml:"omission,omitempty"`
+	StableValues      []string `yaml:"stableValues,omitempty"`
 	Migration         string   `yaml:"migration,omitempty"`
 	ModuleInteraction string   `yaml:"moduleInteraction,omitempty"`
 	Enforcement       []string `yaml:"enforcement,omitempty"`
@@ -112,6 +121,7 @@ type schemaField struct {
 	Default     string
 	Validation  string
 	Description string
+	SchemaRoot  bool
 }
 
 type canonicalValidationRule struct {
@@ -127,6 +137,8 @@ type effectivePolicy struct {
 	Classification    string
 	Owner             string
 	Mutability        string
+	Omission          string
+	StableValues      []string
 	Migration         string
 	ModuleInteraction string
 	Enforcement       []string
@@ -323,11 +335,13 @@ func loadSchemaFields(resource resourceInventory) ([]schemaField, error) {
 
 		root := version.Schema.OpenAPIV3Schema
 		var fields []schemaField
+		rootRequired := stringSet(root.Required...)
 		for _, prefix := range []string{"spec", "status"} {
 			schema, ok := root.Properties[prefix]
 			if !ok {
 				return nil, fmt.Errorf("%s: version %s has no %s schema", resource.Kind, resource.Version, prefix)
 			}
+			fields = append(fields, newSchemaField(prefix, schema, rootRequired[prefix], true))
 			fields = append(fields, collectSchemaFields(prefix, schema)...)
 		}
 		sort.Slice(fields, func(i, j int) bool { return fields[i].Path < fields[j].Path })
@@ -349,21 +363,48 @@ func collectSchemaFields(prefix string, schema apiextensionsv1.JSONSchemaProps) 
 	for _, name := range propertyNames {
 		child := schema.Properties[name]
 		path := prefix + "." + name
-		fields = append(fields, schemaField{
-			Path:        path,
-			Type:        schemaType(child),
-			Required:    required[name],
-			Default:     schemaDefault(child),
-			Validation:  schemaValidation(child),
-			Description: child.Description,
-		})
-		fields = append(fields, collectSchemaFields(path, child)...)
+		fields = append(fields, collectSchemaNode(path, child, required[name])...)
 	}
 
 	if schema.Items != nil && schema.Items.Schema != nil {
-		fields = append(fields, collectSchemaFields(prefix+"[]", *schema.Items.Schema)...)
+		fields = append(fields, collectSchemaNode(prefix+"[]", *schema.Items.Schema, false)...)
+	}
+	if schema.AdditionalProperties != nil && schema.AdditionalProperties.Schema != nil {
+		fields = append(fields, collectSchemaNode(prefix+".*", *schema.AdditionalProperties.Schema, false)...)
+	}
+	for index, composed := range schema.AllOf {
+		path := fmt.Sprintf("%s.allOf[%d]", prefix, index)
+		fields = append(fields, collectSchemaNode(path, composed, false)...)
+	}
+	for index, composed := range schema.AnyOf {
+		path := fmt.Sprintf("%s.anyOf[%d]", prefix, index)
+		fields = append(fields, collectSchemaNode(path, composed, false)...)
+	}
+	for index, composed := range schema.OneOf {
+		path := fmt.Sprintf("%s.oneOf[%d]", prefix, index)
+		fields = append(fields, collectSchemaNode(path, composed, false)...)
+	}
+	if schema.Not != nil {
+		fields = append(fields, collectSchemaNode(prefix+".not", *schema.Not, false)...)
 	}
 	return fields
+}
+
+func collectSchemaNode(path string, schema apiextensionsv1.JSONSchemaProps, required bool) []schemaField {
+	fields := []schemaField{newSchemaField(path, schema, required, false)}
+	return append(fields, collectSchemaFields(path, schema)...)
+}
+
+func newSchemaField(path string, schema apiextensionsv1.JSONSchemaProps, required, schemaRoot bool) schemaField {
+	return schemaField{
+		Path:        path,
+		Type:        schemaType(schema),
+		Required:    required,
+		Default:     schemaDefault(schema),
+		Validation:  schemaValidation(schema),
+		Description: schema.Description,
+		SchemaRoot:  schemaRoot,
+	}
 }
 
 func schemaType(schema apiextensionsv1.JSONSchemaProps) string {
@@ -378,6 +419,12 @@ func schemaType(schema apiextensionsv1.JSONSchemaProps) string {
 	}
 	if len(schema.AllOf) > 0 {
 		return "allOf"
+	}
+	if len(schema.AnyOf) > 0 {
+		return "anyOf"
+	}
+	if len(schema.OneOf) > 0 {
+		return "oneOf"
 	}
 	return "unknown"
 }
@@ -404,8 +451,17 @@ func schemaValidation(schema apiextensionsv1.JSONSchemaProps) string {
 	if schema.Minimum != nil {
 		constraints = append(constraints, "minimum="+formatFloat(*schema.Minimum))
 	}
+	if schema.ExclusiveMinimum {
+		constraints = append(constraints, "exclusiveMinimum")
+	}
 	if schema.Maximum != nil {
 		constraints = append(constraints, "maximum="+formatFloat(*schema.Maximum))
+	}
+	if schema.ExclusiveMaximum {
+		constraints = append(constraints, "exclusiveMaximum")
+	}
+	if schema.MultipleOf != nil {
+		constraints = append(constraints, "multipleOf="+formatFloat(*schema.MultipleOf))
 	}
 	if schema.MinLength != nil {
 		constraints = append(constraints, fmt.Sprintf("minLength=%d", *schema.MinLength))
@@ -418,6 +474,9 @@ func schemaValidation(schema apiextensionsv1.JSONSchemaProps) string {
 	}
 	if schema.MaxItems != nil {
 		constraints = append(constraints, fmt.Sprintf("maxItems=%d", *schema.MaxItems))
+	}
+	if schema.UniqueItems {
+		constraints = append(constraints, "uniqueItems")
 	}
 	if schema.MinProperties != nil {
 		constraints = append(constraints, fmt.Sprintf("minProperties=%d", *schema.MinProperties))
@@ -437,6 +496,32 @@ func schemaValidation(schema apiextensionsv1.JSONSchemaProps) string {
 	}
 	if schema.Nullable {
 		constraints = append(constraints, "nullable")
+	}
+	if schema.AdditionalProperties != nil {
+		constraints = append(
+			constraints,
+			"additionalProperties="+strconv.FormatBool(schema.AdditionalProperties.Allows),
+		)
+	}
+	if schema.XPreserveUnknownFields != nil && *schema.XPreserveUnknownFields {
+		constraints = append(constraints, "x-kubernetes-preserve-unknown-fields")
+	}
+	if schema.XEmbeddedResource {
+		constraints = append(constraints, "x-kubernetes-embedded-resource")
+	}
+	if schema.XIntOrString {
+		constraints = append(constraints, "x-kubernetes-int-or-string")
+	}
+	if schema.XListType != nil {
+		constraints = append(constraints, "x-kubernetes-list-type="+*schema.XListType)
+	}
+	if len(schema.XListMapKeys) > 0 {
+		keys := append([]string(nil), schema.XListMapKeys...)
+		sort.Strings(keys)
+		constraints = append(constraints, "x-kubernetes-list-map-keys="+strings.Join(keys, ","))
+	}
+	if schema.XMapType != nil {
+		constraints = append(constraints, "x-kubernetes-map-type="+*schema.XMapType)
 	}
 	if len(constraints) == 0 {
 		return "-"
@@ -495,10 +580,37 @@ func resolveResource(resource resourceInventory, fields []schemaField) (resource
 			continue
 		}
 		rulesByPath[rule.Path] = rule
+
+		stableValues := make(map[string]bool, len(rule.StableValues))
+		for _, value := range rule.StableValues {
+			if strings.TrimSpace(value) == "" {
+				errs = append(errs, fmt.Sprintf("%s %s: stableValues must not contain empty values", resource.Kind, rule.Path))
+				continue
+			}
+			if stableValues[value] {
+				errs = append(errs, fmt.Sprintf("%s %s: duplicate stable value %q", resource.Kind, rule.Path, value))
+				continue
+			}
+			stableValues[value] = true
+		}
 	}
 
 	matchedRules := make(map[string]bool)
 	for _, field := range fields {
+		if field.SchemaRoot {
+			report.Fields = append(report.Fields, resolvedField{
+				Resource: resource.Kind,
+				Field:    field,
+				Policy: effectivePolicy{
+					Classification: "schema-root",
+					Owner:          "schema",
+					Mutability:     "-",
+					Enforcement:    []string{"crd-schema"},
+					RulePath:       "schema-root",
+				},
+			})
+			continue
+		}
 		policy, matched := resolvePolicy(resource, field.Path)
 		for _, path := range matched {
 			matchedRules[path] = true
@@ -556,6 +668,11 @@ func resolvePolicy(resource resourceInventory, path string) (effectivePolicy, []
 		}
 		if rule.Mutability != "" {
 			policy.Mutability = rule.Mutability
+		}
+		if rule.Path == path {
+			policy.Omission = rule.Omission
+			policy.StableValues = append([]string(nil), rule.StableValues...)
+			sort.Strings(policy.StableValues)
 		}
 		if rule.Migration != "" {
 			policy.Migration = rule.Migration
@@ -639,6 +756,9 @@ func validateResolvedField(
 			}
 		}
 	}
+	if len(policy.StableValues) > 0 && policy.Classification != "stable-automation" {
+		errs = append(errs, fmt.Sprintf("%s: stableValues require stable-automation classification", prefix))
+	}
 	if strings.Contains(field.Description, "Deprecated:") {
 		rule, explicit := rulesByPath[field.Path]
 		if !explicit || rule.Classification != "deprecated" {
@@ -663,7 +783,7 @@ func writeSummary(w io.Writer, report inventoryReport) error {
 		return err
 	}
 	for _, resource := range report.Resources {
-		if _, err := fmt.Fprintf(w, "%s: %d schema fields\n", resource.Kind, len(resource.Fields)); err != nil {
+		if _, err := fmt.Fprintf(w, "%s: %d schema nodes\n", resource.Kind, len(resource.Fields)); err != nil {
 			return err
 		}
 		for _, classification := range classificationOrder {
@@ -731,7 +851,7 @@ func renderSnapshot(w io.Writer, report inventoryReport) error {
 				field.Policy.Migration,
 				field.Policy.RulePath,
 				descriptionSummary(field.Field.Description),
-				field.Policy.Rationale,
+				decisionSummary(field.Policy),
 			}
 			for index := range values {
 				values[index] = sanitizeTSV(values[index])
@@ -771,23 +891,24 @@ func writeMarkdown(w io.Writer, report inventoryReport) error {
 			return err
 		}
 		if _, err := fmt.Fprintln(w,
-			"| Path | Type | Omission/default | Validation | Enforcement | Classification | Owner | Mutability | Module | Migration | Rule | Purpose | Decision |",
+			"| Path | Type | Omission/default | Validation | Stable values | Enforcement | Classification | Owner | Mutability | Module | Migration | Rule | Purpose | Decision |",
 		); err != nil {
 			return err
 		}
 		if _, err := fmt.Fprintln(w,
-			"| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
+			"| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
 		); err != nil {
 			return err
 		}
 		for _, field := range resource.Fields {
 			if _, err := fmt.Fprintf(
 				w,
-				"| `%s` | `%s` | %s | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | %s | %s |\n",
+				"| `%s` | `%s` | %s | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | `%s` | %s | %s |\n",
 				escapeMarkdown(field.Field.Path),
 				escapeMarkdown(field.Field.Type),
-				escapeMarkdown(omissionSummary(field.Field)),
+				escapeMarkdown(omissionSummary(field.Field, field.Policy)),
 				escapeMarkdown(field.Field.Validation),
+				escapeMarkdown(strings.Join(field.Policy.StableValues, ", ")),
 				escapeMarkdown(strings.Join(field.Policy.Enforcement, ", ")),
 				escapeMarkdown(field.Policy.Classification),
 				escapeMarkdown(field.Policy.Owner),
@@ -805,14 +926,31 @@ func writeMarkdown(w io.Writer, report inventoryReport) error {
 	return nil
 }
 
-func omissionSummary(field schemaField) string {
+func omissionSummary(field schemaField, policy effectivePolicy) string {
+	structural := "optional"
 	if field.Required {
-		return "required"
+		structural = "required"
+	} else if field.Default != "-" {
+		structural = "optional; default=" + field.Default
 	}
-	if field.Default != "-" {
-		return "optional; default=" + field.Default
+	if policy.Omission == "" {
+		return structural
 	}
-	return "optional"
+	return structural + "; " + policy.Omission
+}
+
+func decisionSummary(policy effectivePolicy) string {
+	var decisions []string
+	if policy.Omission != "" {
+		decisions = append(decisions, "omission: "+policy.Omission)
+	}
+	if len(policy.StableValues) > 0 {
+		decisions = append(decisions, "stable values: "+strings.Join(policy.StableValues, ","))
+	}
+	if policy.Rationale != "" {
+		decisions = append(decisions, policy.Rationale)
+	}
+	return strings.Join(decisions, "; ")
 }
 
 func descriptionSummary(description string) string {
