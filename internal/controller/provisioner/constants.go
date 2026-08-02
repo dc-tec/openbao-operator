@@ -9,5 +9,5 @@ const (
 
 	controllerNameNamespaceProvisioner = "namespace-provisioner"
 	controllerNameTenantSecretsRBAC    = controllerNameNamespaceProvisioner + "-tenant-secrets"
-	conditionTypeProvisioned           = "Provisioned"
+	conditionTypeProvisioned           = constants.TenantProvisionedConditionType
 )

@@ -677,11 +677,6 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 					Name: "backup-token",
 				},
 			},
-			Upgrade: &openbaov1alpha1.UpgradeConfig{
-				TokenSecretRef: &corev1.LocalObjectReference{
-					Name: "upgrade-token",
-				},
-			},
 			ImageVerification: &openbaov1alpha1.ImageVerificationConfig{
 				Enabled: true,
 				ImagePullSecrets: []corev1.LocalObjectReference{
@@ -746,7 +741,6 @@ func TestEnsureTenantSecretRBAC_CreatesRolesAndRoleBindings(t *testing.T) {
 		"restore-creds",
 		"restore-token",
 		"unseal-creds",
-		"upgrade-token",
 	}
 	sort.Strings(expectedReaderNames)
 

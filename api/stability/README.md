@@ -1,14 +1,15 @@
 # API stability inventory
 
-`v1alpha1.yaml` records the proposed 0.5.0 stability decision for every user-facing
+`v1alpha1.yaml` records the approved 0.5.0 stability decision for every user-facing
 `spec` and `status` path in the three served CRDs. It is a release-planning contract,
 not a declaration that `v1alpha1` is already stable.
 
 The inventory uses inherited path rules. Every top-level field requires an explicit
 rule, while nested fields inherit the closest matching rule unless a more specific
 decision overrides it. The checker expands those rules against the generated CRD
-schemas, rejects unclassified top-level fields, and requires every schema-deprecated
-field to have an explicit `deprecated` rule.
+schemas, including schema roots, array items, map values, composed branches, and
+Kubernetes merge semantics. It rejects unclassified top-level fields and requires
+every schema-deprecated field to have an explicit `deprecated` rule.
 
 `v1alpha1-paths.tsv` is the deterministic resolved contract. It ensures nested fields
 cannot appear, disappear, or change their schema facts or inherited decision without a
@@ -16,13 +17,16 @@ reviewable snapshot diff.
 
 The resolved review table derives field purpose, requiredness, defaults, and structural
 validation directly from the generated schema. The policy file adds ownership,
-mutability, enforcement layers, module interaction, migration posture, and the proposed
-stability decision.
+semantic omission behavior where it differs from the schema, mutability, stable status
+values, enforcement layers, module interaction, migration posture, and the approved
+stability decision. `grow-only` and `transition-guarded` distinguish constrained writes
+from freely mutable fields; `request-token` identifies changed values that trigger a
+one-shot operator action.
 
 Classifications have the following meanings:
 
 - `beta-stable`: intended to retain its name, type, omission/default semantics,
-  meaning, and mutability after the 0.5.0 freeze is approved
+  meaning, and mutability under the approved 0.5.0 freeze
 - `additive-unfrozen`: supported current surface whose beta commitment still needs
   a later decision; compatible additions may continue
 - `likely-move`: known candidate for validation or shape work before beta

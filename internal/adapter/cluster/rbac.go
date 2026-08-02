@@ -93,13 +93,6 @@ func GetRequiredSecretPermissions(c *openbaov1alpha1.OpenBaoCluster) []SecretPer
 		}
 	}
 
-	if c.Spec.Upgrade != nil && c.Spec.Upgrade.TokenSecretRef != nil {
-		perms = append(perms, SecretPermission{
-			Name:       c.Spec.Upgrade.TokenSecretRef.Name,
-			Permission: PermissionRead,
-		})
-	}
-
 	if c.Spec.ImageVerification != nil && c.Spec.ImageVerification.Enabled {
 		for _, secretRef := range c.Spec.ImageVerification.ImagePullSecrets {
 			perms = append(perms, SecretPermission{

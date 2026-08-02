@@ -1,11 +1,11 @@
 schemaVersion: 1
 release: 0.5.0
 baseline: 0.4.2
-decisionStatus: proposed
+decisionStatus: approved
 snapshot: api/stability/v1alpha1-paths.tsv
 notes:
   - The inventory defines the intended beta-stable subset; it does not graduate v1alpha1.
-  - No new non-core OpenBaoCluster field should land while these decisions are proposed.
+  - Any new non-core OpenBaoCluster field requires an explicit path-level inventory decision.
   - Condition types are automation-facing; reason sets may expand and message text is best-effort.
   - Main has no TypedObjectReference module hooks; any future hook requires an explicit inventory decision.
 resources:
@@ -41,10 +41,23 @@ resources:
       - path: spec.backup
         classification: beta-stable
         owner: backup
+        omission: scheduled backups are disabled
         enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.backup.image
+        omission: controller derives the backup image repository and operator-version tag
+      - path: spec.backup.jwtAuthRole
+        omission: self-init OIDC uses the operator-managed backup role; otherwise token authentication applies
       - path: spec.backup.target
         classification: beta-stable
         rationale: Retain the existing shared target shape; CEL rejects mismatched nested provider options and missing S3 endpoints without a JSON reshape.
+      - path: spec.backup.target.concurrency
+        omission: backup executor uses 3 concurrent upload parts
+      - path: spec.backup.target.endpoint
+        omission: GCS uses googleapis.com and Azure derives its endpoint; S3 requires an explicit endpoint
+      - path: spec.backup.target.partSize
+        omission: backup executor uses 10485760-byte upload parts
+      - path: spec.backup.target.provider
+        omission: provider is s3
       - path: spec.breakGlassAck
         classification: beta-stable
         owner: lifecycle-safety
@@ -53,6 +66,16 @@ resources:
         classification: beta-stable
         owner: configuration
         enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.configuration.cacheSize
+        omission: OpenBao applies its built-in cache-size default
+      - path: spec.configuration.defaultLeaseTTL
+        omission: OpenBao applies its built-in default lease TTL
+      - path: spec.configuration.maxLeaseTTL
+        omission: OpenBao applies its built-in maximum lease TTL
+      - path: spec.configuration.plugin.downloadBehavior
+        omission: OpenBao fails startup when a declarative plugin download fails
+      - path: spec.configuration.raft.autopilot.minQuorum
+        omission: controller derives max(3, replicas/2 + 1)
       - path: spec.deletionPolicy
         classification: beta-stable
         owner: lifecycle
@@ -62,6 +85,7 @@ resources:
       - path: spec.image
         classification: beta-stable
         owner: workload
+        omission: controller derives the OpenBao image from spec.version
       - path: spec.imagePullSecrets
         classification: beta-stable
         owner: workload
@@ -72,9 +96,16 @@ resources:
       - path: spec.ingress
         classification: beta-stable
         owner: networking
+        omission: managed Ingress is disabled
+      - path: spec.ingress.path
+        omission: path is /
+      - path: spec.ingress.tlsSecretName
+        omission: controller uses the cluster TLS Secret
       - path: spec.initContainer
         classification: beta-stable
         owner: workload
+      - path: spec.initContainer.image
+        omission: controller derives the init image repository and operator-version tag
       - path: spec.maintenance
         classification: beta-stable
         owner: lifecycle
@@ -82,12 +113,15 @@ resources:
         classification: beta-stable
         owner: networking
         enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.network.dnsNamespace
+        omission: DNS namespace is kube-system
       - path: spec.observability
         classification: additive-unfrozen
         owner: observability
       - path: spec.operatorImageVerification
         classification: beta-stable
         owner: supply-chain-security
+        omission: disabled in Development and enabled in Hardened without inheriting spec.imageVerification
         enforcement: [crd-schema, admission-policy, controller]
       - path: spec.paused
         classification: beta-stable
@@ -114,12 +148,18 @@ resources:
       - path: spec.restore
         classification: beta-stable
         owner: restore
+      - path: spec.restore.jwtAuthRole
+        omission: self-init OIDC uses the operator-managed restore role
       - path: spec.runtime
         classification: beta-stable
         owner: lifecycle
+      - path: spec.runtime.restartAt
+        mutability: request-token
+        rationale: A changed non-empty value requests a rolling restart.
       - path: spec.securityContext
         classification: beta-stable
         owner: workload-security
+        omission: controller applies the profile-specific pod security context
         enforcement: [crd-schema, admission-policy, controller]
       - path: spec.selfInit
         classification: beta-stable
@@ -131,12 +171,17 @@ resources:
       - path: spec.serviceAccount
         classification: beta-stable
         owner: workload-identity
+      - path: spec.serviceAccount.name
+        omission: controller uses <cluster-name>-serviceaccount
       - path: spec.storage
         classification: beta-stable
         owner: storage
       - path: spec.storage.storageClassName
         mutability: immutable
         rationale: Admission rejects storage class changes after creation.
+      - path: spec.storage.size
+        mutability: grow-only
+        rationale: Admission permits volume expansion but rejects shrinking the requested size.
       - path: spec.telemetry
         classification: additive-unfrozen
         owner: observability
@@ -144,17 +189,50 @@ resources:
         classification: beta-stable
         owner: transport-security
         enforcement: [crd-schema, admission-policy, controller]
+      - path: spec.tls.acme.domains
+        omission: controller derives an internal Service name for private in-cluster ACME
       - path: spec.unseal
         classification: beta-stable
         owner: seal
+        omission: controller uses operator-managed static unseal
         enforcement: [crd-schema, admission-policy, controller]
         rationale: Retain the existing wire shape; CEL requires the selected provider branch and rejects non-selected branches.
+      - path: spec.unseal.kms
+        classification: additive-unfrozen
+        rationale: The plugin-backed KMS selector remains supported, while its open-ended plugin payload is not part of the initial freeze.
+      - path: spec.unseal.static.currentKey
+        omission: controller uses file:///etc/bao/unseal/key
+      - path: spec.unseal.static.currentKeyID
+        omission: controller uses operator-generated-v1
+      - path: spec.unseal.type
+        omission: type is static
       - path: spec.upgrade
         classification: beta-stable
         owner: upgrade
+        omission: controller uses RollingUpdate without creating an upgrade executor flow
+      - path: spec.upgrade.blueGreen.verification.prePromotionHook.timeoutSeconds
+        omission: hook timeout is 300 seconds
+      - path: spec.upgrade.image
+        omission: controller derives the upgrade image repository and operator-version tag
+      - path: spec.upgrade.jwtAuthRole
+        omission: self-init OIDC uses the operator-managed upgrade role
+      - path: spec.upgrade.requests.promote
+        mutability: request-token
+        rationale: A changed non-empty value requests promotion of a held blue-green upgrade.
+      - path: spec.upgrade.requests.retry
+        mutability: request-token
+        rationale: A changed non-empty value requests retry of the current failed rolling upgrade.
+      - path: spec.upgrade.requests.rollback
+        mutability: request-token
+        rationale: A changed non-empty value requests abort or rollback of the current blue-green upgrade.
+      - path: spec.upgrade.strategy
+        mutability: transition-guarded
+        rationale: Admission permits isolated strategy changes only while the cluster is healthy and idle.
       - path: spec.version
         classification: beta-stable
         owner: workload
+        mutability: transition-guarded
+        rationale: Admission rejects downgrades below the running version and reductions below an active rolling target.
       - path: spec.workloadHardening
         classification: additive-unfrozen
         owner: workload-security
@@ -187,6 +265,34 @@ resources:
       - path: status.conditions
         classification: stable-automation
         owner: status-controller
+        stableValues:
+          - ACMECacheReady
+          - ACMEIntegrationReady
+          - APIServerNetworkReady
+          - AuditFileStorageReady
+          - Available
+          - BackingUp
+          - BackupConfigurationReady
+          - CloudUnsealIdentityReady
+          - Degraded
+          - EtcdEncryptionWarning
+          - GatewayIntegrationReady
+          - IngressIntegrationReady
+          - NodeSecurityCapabilityMismatch
+          - OpenBaoInitialized
+          - OpenBaoLeader
+          - OpenBaoSealed
+          - ProductionReady
+          - RaftMembershipReady
+          - ReadReplicaStorageConfigured
+          - ReadReplicasAutopilotHealthy
+          - ReadReplicasReady
+          - ReadServingAvailable
+          - SecurityRisk
+          - StorageConfigured
+          - TLSReady
+          - Upgrading
+          - UserAccessBootstrap
         rationale: Condition types are stable; reason sets may expand and messages are best-effort.
       - path: status.conditions[].message
         classification: informational
@@ -251,9 +357,11 @@ resources:
       - path: spec.image
         classification: beta-stable
         owner: restore
+        omission: controller derives the restore image from the configured backup image
       - path: spec.jwtAuthRole
         classification: beta-stable
         owner: restore-authentication
+        omission: self-init OIDC uses the operator-managed restore role
       - path: spec.overrideOperationLock
         classification: beta-stable
         owner: lifecycle-safety
@@ -263,6 +371,8 @@ resources:
       - path: spec.source.target
         classification: beta-stable
         rationale: Shares the validated BackupTarget contract with scheduled backups.
+      - path: spec.source.target.provider
+        omission: provider is s3
       - path: spec.tokenSecretRef
         classification: beta-stable
         owner: restore-authentication
@@ -272,6 +382,10 @@ resources:
       - path: status.conditions
         classification: stable-automation
         owner: restore-status
+        stableValues:
+          - OperationLockOverride
+          - RestoreComplete
+          - RestoreConfigurationReady
         rationale: Condition types are stable; reason sets may expand and messages are best-effort.
       - path: status.conditions[].message
         classification: informational
@@ -321,6 +435,8 @@ resources:
       - path: status.conditions
         classification: stable-automation
         owner: tenant-status
+        stableValues:
+          - Provisioned
         rationale: Condition types are stable; reason sets may expand and messages are best-effort.
       - path: status.conditions[].message
         classification: informational

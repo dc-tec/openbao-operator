@@ -10,7 +10,7 @@ const (
 	// RestoreConfigurationConditionType reports whether operator-known restore
 	// prerequisites such as auth references, storage credential references, and
 	// hardened-profile egress requirements are satisfied.
-	RestoreConfigurationConditionType = "RestoreConfigurationReady"
+	RestoreConfigurationConditionType = constants.RestoreConfigurationConditionType
 
 	// ReasonRestoreStarted indicates restore execution has started.
 	ReasonRestoreStarted = "RestoreStarted"

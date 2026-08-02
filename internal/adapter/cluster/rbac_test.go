@@ -210,32 +210,6 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 			},
 		},
 		{
-			name: "Upgrade with token",
-			cluster: &openbaov1alpha1.OpenBaoCluster{
-				ObjectMeta: objectMeta("upgrade"),
-				Spec: openbaov1alpha1.OpenBaoClusterSpec{
-					TLS: openbaov1alpha1.TLSConfig{
-						Enabled: true,
-						Mode:    openbaov1alpha1.TLSModeOperatorManaged,
-					},
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						TokenSecretRef: &corev1.LocalObjectReference{
-							Name: "upgrade-token",
-						},
-					},
-				},
-			},
-			wantWriters: []string{
-				"upgrade-root-token",
-				"upgrade-tls-ca",
-				"upgrade-tls-server",
-				"upgrade-unseal-key",
-			},
-			wantReaders: []string{
-				"upgrade-token",
-			},
-		},
-		{
 			name: "Image verification pull secrets are readable",
 			cluster: &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: objectMeta("verified"),
@@ -325,11 +299,6 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 							Name: "backup-token",
 						},
 					},
-					Upgrade: &openbaov1alpha1.UpgradeConfig{
-						TokenSecretRef: &corev1.LocalObjectReference{
-							Name: "upgrade-token",
-						},
-					},
 				},
 			},
 			wantWriters: []string{
@@ -342,7 +311,6 @@ func TestGetRequiredSecretPermissions(t *testing.T) {
 				"backup-creds",
 				"backup-token",
 				"unseal-creds",
-				"upgrade-token",
 			},
 		},
 	}

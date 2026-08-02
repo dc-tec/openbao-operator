@@ -38,10 +38,14 @@ const (
 const (
 	// RestoreConditionType is the condition type for restore operations.
 	RestoreConditionType = "RestoreComplete"
+	// RestoreConfigurationConditionType reports whether operator-known restore prerequisites are satisfied.
+	RestoreConfigurationConditionType = "RestoreConfigurationReady"
 
 	// ConditionTypeOperationLockOverride is the condition type used when an operation
 	// lock is forcefully overridden (e.g., during disaster recovery restore).
 	ConditionTypeOperationLockOverride = "OperationLockOverride"
+	// TenantProvisionedConditionType reports tenant RBAC provisioning state.
+	TenantProvisionedConditionType = "Provisioned"
 
 	// ReasonOperationLockOverridden indicates that an existing operation lock was
 	// cleared to allow a higher-priority operation to proceed.

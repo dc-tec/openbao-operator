@@ -321,6 +321,15 @@ func collectNode(
 	for index, composed := range schema.AllOf {
 		collectNode(nodes, crd, kind, version, fmt.Sprintf("%s.allOf[%d]", path, index), composed, false)
 	}
+	for index, composed := range schema.AnyOf {
+		collectNode(nodes, crd, kind, version, fmt.Sprintf("%s.anyOf[%d]", path, index), composed, false)
+	}
+	for index, composed := range schema.OneOf {
+		collectNode(nodes, crd, kind, version, fmt.Sprintf("%s.oneOf[%d]", path, index), composed, false)
+	}
+	if schema.Not != nil {
+		collectNode(nodes, crd, kind, version, path+".not", *schema.Not, false)
+	}
 }
 
 func canonicalJSON(value *apiextensionsv1.JSON) string {
@@ -353,6 +362,7 @@ func constraints(schema apiextensionsv1.JSONSchemaProps) map[string]string {
 	putString(result, "pattern", schema.Pattern)
 	putFloat(result, "minimum", schema.Minimum)
 	putFloat(result, "maximum", schema.Maximum)
+	putFloat(result, "multipleOf", schema.MultipleOf)
 	putInt(result, "minLength", schema.MinLength)
 	putInt(result, "maxLength", schema.MaxLength)
 	putInt(result, "minItems", schema.MinItems)
@@ -362,11 +372,23 @@ func constraints(schema apiextensionsv1.JSONSchemaProps) map[string]string {
 	if schema.UniqueItems {
 		result["uniqueItems"] = trueValue
 	}
+	if schema.ExclusiveMinimum {
+		result["exclusiveMinimum"] = trueValue
+	}
+	if schema.ExclusiveMaximum {
+		result["exclusiveMaximum"] = trueValue
+	}
 	if schema.Nullable {
 		result["nullable"] = trueValue
 	}
 	if schema.XPreserveUnknownFields != nil && *schema.XPreserveUnknownFields {
 		result["preserveUnknownFields"] = trueValue
+	}
+	if schema.XEmbeddedResource {
+		result["embeddedResource"] = trueValue
+	}
+	if schema.XIntOrString {
+		result["intOrString"] = trueValue
 	}
 	if schema.XListType != nil {
 		result["listType"] = *schema.XListType
@@ -378,6 +400,9 @@ func constraints(schema apiextensionsv1.JSONSchemaProps) map[string]string {
 		keys := append([]string(nil), schema.XListMapKeys...)
 		sort.Strings(keys)
 		result["listMapKeys"] = strings.Join(keys, ",")
+	}
+	if schema.AdditionalProperties != nil {
+		result["additionalProperties"] = strconv.FormatBool(schema.AdditionalProperties.Allows)
 	}
 	if len(result) == 0 {
 		return nil
