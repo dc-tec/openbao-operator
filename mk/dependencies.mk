@@ -15,6 +15,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+ACTIONLINT ?= $(LOCALBIN)/actionlint
 GINKGO ?= $(LOCALBIN)/ginkgo
 GOVULNCHECK ?= $(LOCALBIN)/govulncheck
 GOVULNCHECK_IGNORE ?= $(LOCALBIN)/govulncheck-ignore
@@ -62,6 +63,7 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
   [ -n "$$v" ] || { echo "Set ENVTEST_K8S_VERSION manually (k8s.io/api replace has no tag)" >&2; exit 1; }; \
   printf '%s\n' "$$v" | sed -E 's/^v?[0-9]+\.([0-9]+).*/1.\1/')
 GOLANGCI_LINT_VERSION ?= v2.5.0
+ACTIONLINT_VERSION ?= v1.7.11
 GOVULNCHECK_VERSION ?= v1.1.4
 GOVULNCHECK_IGNORE_VERSION ?= v1.0.0
 GO_LICENSES_VERSION ?= v2.0.1
@@ -104,6 +106,11 @@ $(ENVTEST): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+.PHONY: actionlint
+actionlint: $(ACTIONLINT) ## Download actionlint locally if necessary.
+$(ACTIONLINT): $(LOCALBIN)
+	$(call go-install-tool,$(ACTIONLINT),github.com/rhysd/actionlint/cmd/actionlint,$(ACTIONLINT_VERSION))
 
 .PHONY: ginkgo
 ginkgo: $(GINKGO) ## Download ginkgo CLI locally if necessary.

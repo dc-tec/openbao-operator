@@ -35,6 +35,7 @@ printf 'OpenBao Operator development environment check\n'
 printf 'Repository: %s\n\n' "${ROOT_DIR}"
 
 expected_go="$(sed -n 's/^go //p' go.mod | head -n 1)"
+expected_actionlint="$(sed -n 's/^ACTIONLINT_VERSION ?= v\{0,1\}//p' mk/dependencies.mk | head -n 1)"
 expected_semgrep="$(sed -n 's/^SEMGREP_VERSION ?= //p' mk/dependencies.mk | head -n 1)"
 expected_node="$(tr -d '[:space:]' < .node-version)"
 expected_node_major="${expected_node%%.*}"
@@ -108,6 +109,18 @@ if [ -x "${ROOT_DIR}/bin/semgrep" ]; then
   fi
 else
   warn "semgrep not bootstrapped locally yet (run 'make bootstrap' or 'make semgrep')"
+fi
+
+if [ -x "${ROOT_DIR}/bin/actionlint" ]; then
+  current_actionlint="$("${ROOT_DIR}/bin/actionlint" -version 2>/dev/null | head -n 1 || true)"
+  current_actionlint="${current_actionlint#v}"
+  if [ "${current_actionlint}" = "${expected_actionlint}" ]; then
+    ok "actionlint bootstrapped locally (${current_actionlint})"
+  else
+    warn "actionlint version mismatch: expected ${expected_actionlint}, found ${current_actionlint:-unknown} (run 'make actionlint')"
+  fi
+else
+  warn "actionlint not bootstrapped locally yet (run 'make bootstrap' or 'make actionlint')"
 fi
 
 if command -v docker >/dev/null 2>&1; then

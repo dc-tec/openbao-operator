@@ -1,6 +1,6 @@
 {
   "name": "OpenBao Operator DevContainer",
-  "image": "golang:1.26.1",
+  "image": "golang:1.26.5",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/git:1": {}

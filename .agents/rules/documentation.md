@@ -6,14 +6,14 @@ description: Documentation standards for the OpenBao Operator
 
 # Documentation Standards
 
-See [Documentation Style Guide](docs/contributing/docs-style-guide.md).
+See [Documentation Style Guide](docs/contribute/docs-style-guide.md).
 
 ## Structure
 
 - `docs/user-guide/` — User-facing guides
 - `docs/architecture/` — Technical deep-dives
 - `docs/security/` — Security documentation
-- `docs/contributing/` — Contributor guides
+- `docs/contribute/` — Contributor guides
 - `docs/reference/` — API and compatibility references
 
 ## Rules
