@@ -495,8 +495,8 @@ echo "Seeding Hardened-profile data through self-initialized JWT auth..." >&2
 
 render_migration_fixture() {
   local fixture="$1"
-  awk -v namespace="${TENANT_NAMESPACE}" '
-    $0 == "  namespace: openbao" { $0 = "  namespace: " namespace }
+  awk -v target_namespace="${TENANT_NAMESPACE}" '
+    $0 == "  namespace: openbao" { $0 = "  namespace: " target_namespace }
     { print }
     $0 == "spec:" { print "  paused: true" }
   ' "${fixture}"
