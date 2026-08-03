@@ -4948,31 +4948,6 @@ spec:
                     - RollingUpdate
                     - BlueGreen
                     type: string
-                  tokenSecretRef:
-                    description: |-
-                      TokenSecretRef optionally references a Secret containing an OpenBao API
-                      token for future non-JWT upgrade authentication flows.
-
-                      Built-in rolling and blue/green upgrade orchestration does not support
-                      token-based authentication. Configure spec.upgrade.jwtAuthRole, or use the
-                      default role created during initial spec.selfInit.oidc bootstrap.
-                    properties:
-                      name:
-                        default: ""
-                        description: |-
-                          Name of the referent.
-                          This field is effectively required, but due to backwards compatibility is
-                          allowed to be empty. Instances of this type with an empty value here are
-                          almost certainly wrong.
-                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                        type: string
-                    type: object
-                    x-kubernetes-map-type: atomic
-                    x-kubernetes-validations:
-                    - message: spec.upgrade.tokenSecretRef is not supported; configure
-                        spec.upgrade.jwtAuthRole or use the default role created during
-                        initial spec.selfInit.oidc bootstrap
-                      rule: self == null
                 type: object
               version:
                 description: |-

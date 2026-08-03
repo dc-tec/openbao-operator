@@ -4948,31 +4948,6 @@ spec:
                     - RollingUpdate
                     - BlueGreen
                     type: string
-                  tokenSecretRef:
-                    description: |-
-                      TokenSecretRef optionally references a Secret containing an OpenBao API
-                      token for future non-JWT upgrade authentication flows.
-
-                      Built-in rolling and blue/green upgrade orchestration does not support
-                      token-based authentication. Configure spec.upgrade.jwtAuthRole, or use the
-                      default role created during initial spec.selfInit.oidc bootstrap.
-                    properties:
-                      name:
-                        default: ""
-                        description: |-
-                          Name of the referent.
-                          This field is effectively required, but due to backwards compatibility is
-                          allowed to be empty. Instances of this type with an empty value here are
-                          almost certainly wrong.
-                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                        type: string
-                    type: object
-                    x-kubernetes-map-type: atomic
-                    x-kubernetes-validations:
-                    - message: spec.upgrade.tokenSecretRef is not supported; configure
-                        spec.upgrade.jwtAuthRole or use the default role created during
-                        initial spec.selfInit.oidc bootstrap
-                      rule: self == null
                 type: object
               version:
                 description: |-
@@ -6916,10 +6891,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260802-711944ed4ec7
+          value: nightly-20260803-d6feeb160e07
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:c2de1e0e39f4d05a7c1447f5d6f2e7312ad704432803f31d918d6f9115ad4cef
+        image: ghcr.io/dc-tec/openbao-operator@sha256:566e63e613f8a8206bafd526d36c37a5d6ce17c61c3a6505c5ba149ccf2909d3
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7034,8 +7009,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260802-711944ed4ec7
-        image: ghcr.io/dc-tec/openbao-operator@sha256:c2de1e0e39f4d05a7c1447f5d6f2e7312ad704432803f31d918d6f9115ad4cef
+          value: nightly-20260803-d6feeb160e07
+        image: ghcr.io/dc-tec/openbao-operator@sha256:566e63e613f8a8206bafd526d36c37a5d6ce17c61c3a6505c5ba149ccf2909d3
         livenessProbe:
           httpGet:
             path: /healthz
