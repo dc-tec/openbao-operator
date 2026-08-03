@@ -1,0 +1,52 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: operator-upgrade-hardened-selfsigned
+  namespace: openbao-upgrade-e2e
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: operator-upgrade-hardened-ca
+  namespace: openbao-upgrade-e2e
+spec:
+  isCA: true
+  commonName: operator-upgrade-hardened-ca
+  secretName: operator-upgrade-hardened-ca-material
+  issuerRef:
+    kind: Issuer
+    name: operator-upgrade-hardened-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: operator-upgrade-hardened-ca
+  namespace: openbao-upgrade-e2e
+spec:
+  ca:
+    secretName: operator-upgrade-hardened-ca-material
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: operator-upgrade-hardened-server
+  namespace: openbao-upgrade-e2e
+spec:
+  secretName: operator-upgrade-hardened-server-material
+  commonName: operator-upgrade-hardened.openbao-upgrade-e2e.svc
+  dnsNames:
+    - localhost
+    - operator-upgrade-hardened.openbao-upgrade-e2e.svc
+    - "*.operator-upgrade-hardened.openbao-upgrade-e2e.svc"
+    - "*.openbao-upgrade-e2e.svc"
+    - openbao-cluster-operator-upgrade-hardened.local
+    - operator-upgrade-hardened-0.operator-upgrade-hardened.openbao-upgrade-e2e.svc
+    - operator-upgrade-hardened-1.operator-upgrade-hardened.openbao-upgrade-e2e.svc
+    - operator-upgrade-hardened-2.operator-upgrade-hardened.openbao-upgrade-e2e.svc
+  ipAddresses:
+    - 127.0.0.1
+  issuerRef:
+    kind: Issuer
+    name: operator-upgrade-hardened-ca

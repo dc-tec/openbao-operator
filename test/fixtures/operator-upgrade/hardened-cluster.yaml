@@ -1,0 +1,77 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: operator-upgrade-hardened
+  namespace: openbao-upgrade-e2e
+spec:
+  version: "2.6.1"
+  image: "ghcr.io/openbao/openbao:2.6.1"
+  replicas: 3
+  profile: Hardened
+  initContainer:
+    enabled: true
+    image: "ghcr.io/dc-tec/openbao-init@sha256:e08e55a017a2594434dfa8f72860f4185bd4f82cebc3d09eb2e8310c819c4119"
+  selfInit:
+    enabled: true
+    oidc:
+      enabled: true
+    requests:
+      - name: enable-upgrade-kv
+        operation: update
+        path: sys/mounts/secret
+        secretEngine:
+          type: kv
+          description: Operator upgrade continuity data
+          options:
+            version: "2"
+      - name: create-upgrade-policy
+        operation: update
+        path: sys/policies/acl/operator-upgrade-hardened
+        policy:
+          policy: |
+            path "secret/*" { capabilities = ["create", "read", "update", "delete", "list"] }
+            path "secret/data/*" { capabilities = ["create", "read", "update", "delete", "list"] }
+            path "secret/metadata/*" { capabilities = ["read", "list", "delete"] }
+      - name: create-upgrade-role
+        operation: update
+        path: auth/jwt-operator/role/operator-upgrade-hardened
+        data:
+          role_type: jwt
+          user_claim: sub
+          bound_audiences:
+            - openbao-internal
+          bound_subject: system:serviceaccount:openbao-upgrade-e2e:default
+          token_policies:
+            - operator-upgrade-hardened
+          ttl: 1h
+  tls:
+    enabled: true
+    mode: External
+  service:
+    type: ClusterIP
+  unseal:
+    type: transit
+    transit:
+      address: https://operator-upgrade-transit.openbao-upgrade-e2e.svc:8200
+      mountPath: transit
+      keyName: operator-upgrade-hardened
+      tlsCACert: /etc/bao/seal-creds/ca.crt
+    credentialsSecretRef:
+      name: operator-upgrade-transit-credentials
+  storage:
+    size: "1Gi"
+  network:
+    apiServerCIDR: "10.96.0.0/12"
+    egressRules:
+      - to:
+          - podSelector:
+              matchLabels:
+                openbao.org/cluster: operator-upgrade-transit
+        ports:
+          - protocol: TCP
+            port: 8200
+    trustedIngressPeers:
+      - podSelector:
+          matchLabels:
+            role: operator-upgrade-hardened-verifier
+  deletionPolicy: Retain

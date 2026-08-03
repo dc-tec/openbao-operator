@@ -478,6 +478,46 @@ jobs:
           path: artifacts/
           retention-days: 7
 
+  operator-upgrade-e2e:
+    name: Operator Upgrade E2E
+    runs-on: *runner
+    needs: build-e2e-images
+    permissions:
+      contents: read
+      packages: read
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup repo tools
+        uses: ./.github/actions/setup-repo-tools
+        with:
+          cache-tools: false
+
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.1.1
+
+      - name: Install kind (pinned)
+        uses: ./.github/actions/install-kind
+        with:
+          install-dir: bin/
+
+      - name: Login to GHCR (pull)
+        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upgrade previous stable operator to nightly candidate
+        env:
+          OPERATOR_UPGRADE_E2E_MANAGER_SOURCE: ${{ needs.build-e2e-images.outputs.manager_ref }}
+          OPERATOR_UPGRADE_E2E_INIT_SOURCE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
+        run: make test-e2e-operator-upgrade
+
   docs:
     name: Docs Build
     runs-on: *runner
@@ -584,6 +624,7 @@ jobs:
       - docs
       - helm
       - e2e
+      - operator-upgrade-e2e
     permissions:
       contents: read
       packages: write

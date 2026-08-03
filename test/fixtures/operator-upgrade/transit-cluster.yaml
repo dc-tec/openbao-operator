@@ -1,0 +1,32 @@
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoCluster
+metadata:
+  name: operator-upgrade-transit
+  namespace: openbao-upgrade-e2e
+spec:
+  version: "2.6.1"
+  image: "ghcr.io/openbao/openbao:2.6.1"
+  replicas: 1
+  profile: Development
+  initContainer:
+    enabled: true
+  tls:
+    enabled: true
+    mode: OperatorManaged
+    rotationPeriod: "720h"
+  storage:
+    size: "1Gi"
+  network:
+    apiServerCIDR: "10.96.0.0/12"
+    ingressRules:
+      - from:
+          - podSelector:
+              matchLabels:
+                role: operator-upgrade-transit-config
+          - podSelector:
+              matchLabels:
+                openbao.org/cluster: operator-upgrade-hardened
+        ports:
+          - protocol: TCP
+            port: 8200
+  deletionPolicy: Retain
