@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openbao-upgrade-e2e
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: openbao.org/v1alpha1
+kind: OpenBaoTenant
+metadata:
+  name: openbao-upgrade-e2e
+  namespace: openbao-operator-system
+spec:
+  targetNamespace: openbao-upgrade-e2e

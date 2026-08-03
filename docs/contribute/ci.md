@@ -77,8 +77,8 @@ make ci-core`}
     {
       cells: [
         "Focused E2E and platform validation",
-        "`make test-e2e-ci ...`, `make helm-e2e-smoke`, or `make test-e2e-existing ...`",
-        "Label filters and the existing-cluster path provide smaller or platform-specific reproductions.",
+        "`make test-e2e-ci ...`, `make helm-e2e-smoke`, `make test-e2e-operator-upgrade`, or `make test-e2e-existing ...`",
+        "Label filters, the previous-stable Development and Hardened upgrade path, and the existing-cluster path provide smaller or platform-specific reproductions.",
       ],
     },
   ]}
@@ -183,6 +183,17 @@ The same manifest owns E2E parallelism. Matrix rows include `parallel_nodes`, an
 Lanes may also declare `prLabelFilter` for pull-request routing. CI uses that optimized filter unless a full E2E run is requested or the run is for `main`; nightly and release-gate profiles continue to use the full lane `labelFilter`.
 
 Nightly E2E routing is manifest-driven. The daily profile runs full coverage on the primary Kubernetes version and compatibility smoke rows on adjacent supported versions. The weekly profile runs full compatibility coverage across supported Kubernetes versions. Maintainers can manually dispatch the release-gate profile, optionally filtered to one lane or one Kubernetes version while preserving the same manifest validation.
+
+Same-repository E2E pull requests, `main`, nightly, and tagged release workflows also run a focused operator-upgrade gate outside
+the normal Ginkgo matrix. It installs the published API stability baseline; creates and seeds active Development and Hardened
+clusters; exercises External TLS, Transit unseal, self-init, and signed helper verification; applies the documented stored-object
+migration and candidate CRDs; then upgrades the Helm release. The gate verifies resource identity, both root-token and JWT data
+continuity, candidate reconciliation, and post-upgrade tenant provisioning. Keep the `release` and `baseline` values in
+`api/stability/v1alpha1.yaml`, the matching release notes, and the migration fixtures synchronized.
+
+Changes to the upgrade harness, its operator-upgrade or API-migration fixtures, the candidate chart, release notes, and API
+stability inputs route directly to this focused gate. Tagged release runs provide the signed candidate init image by immutable
+digest; other lanes use the pinned signed helper digest declared by the harness unless explicitly overridden with another digest.
 
 <CommandBlock
   language="bash"

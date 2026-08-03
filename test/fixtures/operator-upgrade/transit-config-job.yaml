@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: operator-upgrade-transit-config
+  namespace: openbao-upgrade-e2e
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        role: operator-upgrade-transit-config
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bao
+          image: ghcr.io/openbao/openbao:2.6.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              if ! bao secrets list -format=json | grep -q '"transit/"'; then
+                bao secrets enable -path=transit transit
+              fi
+              if ! bao read transit/keys/operator-upgrade-hardened >/dev/null 2>&1; then
+                bao write -f transit/keys/operator-upgrade-hardened type=aes256-gcm96
+              fi
+          env:
+            - name: BAO_ADDR
+              value: https://operator-upgrade-transit.openbao-upgrade-e2e.svc:8200
+            - name: BAO_SKIP_VERIFY
+              value: "true"
+            - name: BAO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: operator-upgrade-transit-root-token
+                  key: token
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

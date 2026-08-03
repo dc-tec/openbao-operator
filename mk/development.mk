@@ -318,6 +318,15 @@ helm-test: helm-sync helm-lint ## Test the Helm chart without requiring a live c
 helm-e2e-smoke: ## Helm chart smoke test against a Kind cluster (installs chart and waits for deployments).
 	@bash hack/ci/helm-e2e-smoke.sh
 
+.PHONY: verify-operator-upgrade-e2e
+verify-operator-upgrade-e2e: ## Verify the previous-stable Development and Hardened operator upgrade harness.
+	@bash -n hack/ci/operator-upgrade-e2e.sh
+	@OPERATOR_UPGRADE_E2E_VERIFY_ONLY=true bash hack/ci/operator-upgrade-e2e.sh
+
+.PHONY: test-e2e-operator-upgrade
+test-e2e-operator-upgrade: ## Upgrade previous-stable Development and Hardened resources to the local candidate in Kind.
+	@bash hack/ci/operator-upgrade-e2e.sh
+
 .PHONY: helm-template
 helm-template: helm-sync ## Template the Helm chart with default values (useful for debugging).
 	@helm template openbao-operator charts/openbao-operator \

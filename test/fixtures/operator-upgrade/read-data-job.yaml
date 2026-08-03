@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: operator-upgrade-read
+  namespace: openbao-upgrade-e2e
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        role: operator-upgrade-verifier
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bao
+          image: ghcr.io/openbao/openbao:2.6.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - bao kv get -field=value secret/operator-upgrade
+          env:
+            - name: BAO_ADDR
+              value: https://operator-upgrade.openbao-upgrade-e2e.svc:8200
+            - name: BAO_SKIP_VERIFY
+              value: "true"
+            - name: BAO_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: operator-upgrade-root-token
+                  key: token
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

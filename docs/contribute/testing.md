@@ -160,6 +160,13 @@ make test-e2e`}
         "`make test-e2e-existing ...` with a preconfigured cluster context.",
       ],
     },
+    {
+      cells: [
+        "Operator upgrade compatibility",
+        "Controller, provisioner, CRD, Helm, security-profile, or migration changes that must preserve resources created by the previous stable operator.",
+        "`make test-e2e-operator-upgrade`; the baseline and target release come from `api/stability/v1alpha1.yaml`. The lane upgrades active Development and Hardened clusters, including External TLS, Transit unseal, self-init, signed helper verification, and pre-upgrade data continuity through JWT auth.",
+      ],
+    },
   ]}
 />
 

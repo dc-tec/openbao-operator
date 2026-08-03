@@ -148,7 +148,7 @@ For patch releases, make the source that release-please sees match the release n
     {
       cells: [
         "Pre-flight",
-        "Release-please PR looks correct, docs are updated, new stable release lines have a committed `X.Y.0` docs snapshot, compatibility docs are current, CI is green, full E2E release evidence is clean, nightly regressions are reviewed, and performance findings are either cleared or explicitly accepted by maintainers.",
+        "Release-please PR looks correct, docs are updated, new stable release lines have a committed `X.Y.0` docs snapshot, compatibility docs are current, CI is green, full E2E and previous-stable Development plus Hardened operator-upgrade evidence is clean, nightly regressions are reviewed, and performance findings are either cleared or explicitly accepted by maintainers.",
       ],
       emphasis: "recommended",
     },

@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: operator-upgrade-hardened-read
+  namespace: openbao-upgrade-e2e
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        role: operator-upgrade-hardened-verifier
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: bao
+          image: ghcr.io/openbao/openbao:2.6.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              token="$(bao write -field=token auth/jwt-operator/login \
+                role=operator-upgrade-hardened \
+                jwt=@/var/run/secrets/openbao/token)"
+              export BAO_TOKEN="${token}"
+              bao kv get -field=value secret/operator-upgrade-hardened
+          env:
+            - name: BAO_ADDR
+              value: https://operator-upgrade-hardened.openbao-upgrade-e2e.svc:8200
+            - name: BAO_CACERT
+              value: /var/run/secrets/openbao-ca/ca.crt
+          volumeMounts:
+            - name: openbao-token
+              mountPath: /var/run/secrets/openbao
+              readOnly: true
+            - name: openbao-ca
+              mountPath: /var/run/secrets/openbao-ca
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: openbao-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: openbao-internal
+                  expirationSeconds: 3600
+                  path: token
+        - name: openbao-ca
+          secret:
+            secretName: operator-upgrade-hardened-tls-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
