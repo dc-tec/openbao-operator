@@ -248,10 +248,11 @@ func TestRunHousekeepingEnforceStopsAboveSafetyBrake(t *testing.T) {
 		Mode:                modeEnforce,
 		PolicyFile:          "test-policy.json",
 		MaxDeletePerPackage: 1,
+		MaxDeleteTotal:      1,
 		ReportJSON:          "dist/report.json",
 	}
 
-	report, err := runHousekeeping(context.Background(), opts, cfg, rules, client, now)
+	report, err := runHousekeeping(context.Background(), opts, cfg, rules, client, nil, now)
 	if err == nil {
 		t.Fatalf("expected safety-brake error in enforce mode")
 	}
@@ -293,10 +294,11 @@ func TestRunHousekeepingDryRunNeverDeletes(t *testing.T) {
 		Mode:                modeDryRun,
 		PolicyFile:          "test-policy.json",
 		MaxDeletePerPackage: 1,
+		MaxDeleteTotal:      1,
 		ReportJSON:          "dist/report.json",
 	}
 
-	report, err := runHousekeeping(context.Background(), opts, cfg, rules, client, now)
+	report, err := runHousekeeping(context.Background(), opts, cfg, rules, client, nil, now)
 	if err != nil {
 		t.Fatalf("runHousekeeping dry-run returned error: %v", err)
 	}
@@ -334,10 +336,11 @@ func TestRunHousekeepingEnforceAbortsAllDeletesWhenOnePackageExceedsSafetyBrake(
 		Mode:                modeEnforce,
 		PolicyFile:          "test-policy.json",
 		MaxDeletePerPackage: 1,
+		MaxDeleteTotal:      1,
 		ReportJSON:          "dist/report.json",
 	}
 
-	report, err := runHousekeeping(context.Background(), opts, cfg, rules, client, now)
+	report, err := runHousekeeping(context.Background(), opts, cfg, rules, client, nil, now)
 	if err == nil {
 		t.Fatalf("expected safety-brake error in enforce mode")
 	}
@@ -370,10 +373,11 @@ func TestRunHousekeepingTracksUnknownBreakdown(t *testing.T) {
 		Mode:                modeDryRun,
 		PolicyFile:          "test-policy.json",
 		MaxDeletePerPackage: 100,
+		MaxDeleteTotal:      100,
 		ReportJSON:          "dist/report.json",
 	}
 
-	report, err := runHousekeeping(context.Background(), opts, cfg, rules, client, now)
+	report, err := runHousekeeping(context.Background(), opts, cfg, rules, client, nil, now)
 	if err != nil {
 		t.Fatalf("runHousekeeping returned error: %v", err)
 	}
@@ -570,6 +574,32 @@ func testPolicy(t *testing.T) (policyConfig, []compiledRule) {
 		t.Fatalf("loadPolicy() error = %v", err)
 	}
 	return loadedCfg, rules
+}
+
+func TestRepositoryPolicyEnablesOCIOrphanGrace(t *testing.T) {
+	t.Parallel()
+
+	cfg, _, err := loadPolicy("policy.json")
+	if err != nil {
+		t.Fatalf("loadPolicy(policy.json) error = %v", err)
+	}
+	if !cfg.OCIGraph.Enabled || cfg.OCIGraph.OrphanTTLDays != 30 {
+		t.Fatalf("OCI graph policy = %#v, want enabled with 30-day grace", cfg.OCIGraph)
+	}
+}
+
+func TestLoadPolicyRejectsInvalidOCIOrphanTTL(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "policy.json")
+	raw := `{"protect_unknown":true,"oci_graph":{"enabled":true,"orphan_ttl_days":0},` +
+		`"rules":[{"name":"semver","pattern":"^v$","action":"keep"}]}`
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+	if _, _, err := loadPolicy(path); err == nil || !strings.Contains(err.Error(), "orphan_ttl_days must be > 0") {
+		t.Fatalf("loadPolicy() error = %v, want invalid orphan TTL", err)
+	}
 }
 
 func TestRenderSummaryIncludesTable(t *testing.T) {

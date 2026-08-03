@@ -1,5 +1,9 @@
 {
   "protect_unknown": true,
+  "oci_graph": {
+    "enabled": true,
+    "orphan_ttl_days": 30
+  },
   "rules": [
     {
       "name": "semver",

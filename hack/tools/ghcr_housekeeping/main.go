@@ -18,29 +18,33 @@ import (
 )
 
 const (
-	defaultOwner                  = "dc-tec"
-	defaultOwnerKind              = "org"
-	defaultPolicyPath             = "hack/tools/ghcr_housekeeping/policy.json"
-	defaultReportPath             = "dist/housekeeping-report.json"
-	defaultMode                   = "dry-run"
-	defaultMaxDelete              = 100
-	ownerKindOrg                  = "org"
-	ownerKindUser                 = "user"
-	modeDryRun                    = "dry-run"
-	modeEnforce                   = "enforce"
-	actionKeep                    = "keep"
-	actionDeleteAfter             = "delete_after"
-	githubAPIBaseURL              = "https://api.github.com"
-	githubAPIVersion              = "2022-11-28"
-	perPage                       = 100
-	requestTimeout                = 30 * time.Second
-	summaryEnvVar                 = "GITHUB_STEP_SUMMARY"
-	defaultErrorMessage           = "unknown API error"
-	unknownReasonUntagged         = unknownReason("untagged")
-	unknownReasonUnmatchedTag     = unknownReason("unmatched_tag")
-	unknownReasonNoTransientMatch = unknownReason("no_transient_match")
-	summaryTableHeader            = "| Package | Scanned | Candidates | Deleted | Kept protected | Kept unknown | " +
-		"Unknown untagged | Unknown unmatched | Unknown no-transient | Errors |\n"
+	defaultOwner                   = "dc-tec"
+	defaultOwnerKind               = "org"
+	defaultPolicyPath              = "hack/tools/ghcr_housekeeping/policy.json"
+	defaultReportPath              = "dist/housekeeping-report.json"
+	defaultMode                    = "dry-run"
+	defaultMaxDelete               = 100
+	defaultMaxDeleteTotal          = 100
+	ownerKindOrg                   = "org"
+	ownerKindUser                  = "user"
+	modeDryRun                     = "dry-run"
+	modeEnforce                    = "enforce"
+	actionKeep                     = "keep"
+	actionDeleteAfter              = "delete_after"
+	candidateKindTaggedTransient   = "tagged_transient"
+	candidateKindOCIReferrerOrphan = "oci_referrer_orphan"
+	candidateKindOCIOrphan         = "oci_orphan"
+	githubAPIBaseURL               = "https://api.github.com"
+	githubAPIVersion               = "2022-11-28"
+	perPage                        = 100
+	requestTimeout                 = 30 * time.Second
+	summaryEnvVar                  = "GITHUB_STEP_SUMMARY"
+	defaultErrorMessage            = "unknown API error"
+	unknownReasonUntagged          = unknownReason("untagged")
+	unknownReasonUnmatchedTag      = unknownReason("unmatched_tag")
+	unknownReasonNoTransientMatch  = unknownReason("no_transient_match")
+	summaryTableHeader             = "| Package | Scanned | Candidates | Tagged | OCI orphans | Planned | Deleted | " +
+		"Kept protected | Kept active | Kept reachable | Orphan grace | Kept unknown | Errors |\n"
 )
 
 var defaultPackages = []string{
@@ -84,16 +88,24 @@ func (m *multiStringFlag) Set(value string) error {
 type options struct {
 	Owner               string
 	OwnerKind           string
+	RegistryUser        string
 	Packages            []string
 	Mode                string
 	PolicyFile          string
 	MaxDeletePerPackage int
+	MaxDeleteTotal      int
 	ReportJSON          string
 }
 
 type policyConfig struct {
-	ProtectUnknown bool         `json:"protect_unknown"`
-	Rules          []policyRule `json:"rules"`
+	ProtectUnknown bool           `json:"protect_unknown"`
+	OCIGraph       ociGraphPolicy `json:"oci_graph"`
+	Rules          []policyRule   `json:"rules"`
+}
+
+type ociGraphPolicy struct {
+	Enabled       bool `json:"enabled"`
+	OrphanTTLDays int  `json:"orphan_ttl_days"`
 }
 
 type policyRule struct {
@@ -123,14 +135,22 @@ type runReport struct {
 	OwnerKind           string `json:"owner_kind"`
 	PolicyFile          string `json:"policy_file"`
 	MaxDeletePerPackage int    `json:"max_delete_per_package"`
+	MaxDeleteTotal      int    `json:"max_delete_total"`
 }
 
 type packageReport struct {
 	Name                        string            `json:"name"`
 	ScannedVersions             int               `json:"scanned_versions"`
 	Candidates                  int               `json:"candidates"`
+	TaggedCandidates            int               `json:"tagged_candidates"`
+	OrphanCandidates            int               `json:"orphan_candidates"`
+	Planned                     int               `json:"planned"`
 	Deleted                     int               `json:"deleted"`
 	KeptProtected               int               `json:"kept_protected"`
+	KeptActiveTransient         int               `json:"kept_active_transient"`
+	KeptGraphReachable          int               `json:"kept_graph_reachable"`
+	KeptOrphanGrace             int               `json:"kept_orphan_grace"`
+	GraphRoots                  int               `json:"graph_roots"`
 	KeptUnknown                 int               `json:"kept_unknown"`
 	KeptUnknownUntagged         int               `json:"kept_unknown_untagged"`
 	KeptUnknownUnmatchedTag     int               `json:"kept_unknown_unmatched_tag"`
@@ -142,11 +162,13 @@ type packageReport struct {
 type candidateReport struct {
 	ID              int64    `json:"id"`
 	Name            string   `json:"name"`
+	Kind            string   `json:"kind"`
 	UpdatedAt       string   `json:"updated_at"`
 	AgeDays         int      `json:"age_days"`
 	RequiredAgeDays int      `json:"required_age_days"`
 	Tags            []string `json:"tags"`
 	MatchedRules    []string `json:"matched_rules"`
+	Planned         bool     `json:"planned"`
 }
 
 type packageClient interface {
@@ -217,7 +239,17 @@ func main() {
 	}
 
 	now := time.Now().UTC()
-	report, runErr := runHousekeeping(context.Background(), opts, policy, rules, client, now)
+	registryClient := &githubContainerRegistryClient{
+		baseURL:      defaultRegistryBaseURL,
+		tokenURL:     defaultRegistryTokenURL,
+		githubToken:  token,
+		registryUser: opts.RegistryUser,
+		httpClient: &http.Client{
+			Timeout: requestTimeout,
+		},
+	}
+
+	report, runErr := runHousekeeping(context.Background(), opts, policy, rules, client, registryClient, now)
 
 	if err := writeReportJSON(opts.ReportJSON, report); err != nil {
 		fmt.Fprintf(os.Stderr, "ghcr_housekeeping: write report %s: %v\n", opts.ReportJSON, err)
@@ -243,6 +275,12 @@ func parseOptions() (options, error) {
 
 	flag.StringVar(&opts.Owner, "owner", defaultOwner, "Package owner (org/user)")
 	flag.StringVar(&opts.OwnerKind, "owner-kind", defaultOwnerKind, "Owner type: org or user")
+	flag.StringVar(
+		&opts.RegistryUser,
+		"registry-user",
+		strings.TrimSpace(os.Getenv("GITHUB_ACTOR")),
+		"GitHub username used to request private GHCR pull tokens (defaults to GITHUB_ACTOR or owner)",
+	)
 	flag.Var(&pkgFlags, "package", "Container package name (repeatable). Defaults to operator image packages")
 	flag.StringVar(&opts.Mode, "mode", defaultMode, "Run mode: dry-run or enforce")
 	flag.StringVar(&opts.PolicyFile, "policy-file", defaultPolicyPath, "Policy JSON file path")
@@ -250,13 +288,20 @@ func parseOptions() (options, error) {
 		&opts.MaxDeletePerPackage,
 		"max-delete-per-package",
 		defaultMaxDelete,
-		"Safety brake: max candidates allowed per package in enforce mode",
+		"Safety brake: max tagged candidates and planned deletions per package in enforce mode",
+	)
+	flag.IntVar(
+		&opts.MaxDeleteTotal,
+		"max-delete-total",
+		defaultMaxDeleteTotal,
+		"Safety brake: max planned deletions across all packages in one run",
 	)
 	flag.StringVar(&opts.ReportJSON, "report-json", defaultReportPath, "Output JSON report path")
 	flag.Parse()
 
 	opts.Owner = strings.TrimSpace(opts.Owner)
 	opts.OwnerKind = strings.TrimSpace(opts.OwnerKind)
+	opts.RegistryUser = strings.TrimSpace(opts.RegistryUser)
 	opts.Mode = strings.TrimSpace(opts.Mode)
 	opts.PolicyFile = strings.TrimSpace(opts.PolicyFile)
 	opts.ReportJSON = strings.TrimSpace(opts.ReportJSON)
@@ -269,6 +314,9 @@ func parseOptions() (options, error) {
 
 	if opts.Owner == "" {
 		return opts, errors.New("--owner is required")
+	}
+	if opts.RegistryUser == "" {
+		opts.RegistryUser = opts.Owner
 	}
 	if opts.OwnerKind != ownerKindOrg && opts.OwnerKind != ownerKindUser {
 		return opts, fmt.Errorf("--owner-kind must be %q or %q", ownerKindOrg, ownerKindUser)
@@ -284,6 +332,9 @@ func parseOptions() (options, error) {
 	}
 	if opts.MaxDeletePerPackage <= 0 {
 		return opts, errors.New("--max-delete-per-package must be > 0")
+	}
+	if opts.MaxDeleteTotal <= 0 {
+		return opts, errors.New("--max-delete-total must be > 0")
 	}
 	for _, pkg := range opts.Packages {
 		if strings.TrimSpace(pkg) == "" {
@@ -306,6 +357,11 @@ func loadPolicy(path string) (policyConfig, []compiledRule, error) {
 	}
 	if len(cfg.Rules) == 0 {
 		return cfg, nil, fmt.Errorf("policy %s has no rules", path)
+	}
+	if cfg.OCIGraph.Enabled {
+		if cfg.OCIGraph.OrphanTTLDays <= 0 {
+			return cfg, nil, fmt.Errorf("policy %s OCI graph orphan_ttl_days must be > 0", path)
+		}
 	}
 
 	compiled := make([]compiledRule, 0, len(cfg.Rules))
@@ -352,6 +408,7 @@ func runHousekeeping(
 	policy policyConfig,
 	rules []compiledRule,
 	client packageClient,
+	graphClient manifestGraphClient,
 	now time.Time,
 ) (housekeepingReport, error) {
 	report := housekeepingReport{
@@ -362,6 +419,7 @@ func runHousekeeping(
 			OwnerKind:           opts.OwnerKind,
 			PolicyFile:          opts.PolicyFile,
 			MaxDeletePerPackage: opts.MaxDeletePerPackage,
+			MaxDeleteTotal:      opts.MaxDeleteTotal,
 		},
 		Packages: make([]packageReport, 0, len(opts.Packages)),
 	}
@@ -373,7 +431,7 @@ func runHousekeeping(
 			continue
 		}
 
-		result := processPackage(ctx, opts, policy, rules, client, now, pkg)
+		result := processPackage(ctx, opts, policy, rules, client, graphClient, now, pkg)
 		if len(result.Errors) > 0 {
 			problems = append(problems, result.Errors...)
 		}
@@ -383,42 +441,20 @@ func runHousekeeping(
 	if len(problems) > 0 {
 		return report, errors.New(strings.Join(problems, "; "))
 	}
+
+	if opts.Mode == modeEnforce {
+		problems = append(problems, validateTaggedCandidateSafety(&report, opts.MaxDeletePerPackage)...)
+	}
+	if len(problems) > 0 {
+		return report, errors.New(strings.Join(problems, "; "))
+	}
+	planDeletions(&report, opts.MaxDeletePerPackage, opts.MaxDeleteTotal)
 	if opts.Mode == modeDryRun {
 		return report, nil
 	}
 
-	for i := range report.Packages {
-		pkgReport := &report.Packages[i]
-		if len(pkgReport.CandidateItems) <= opts.MaxDeletePerPackage {
-			continue
-		}
-		errMsg := fmt.Sprintf(
-			"%s: candidate count %d exceeds max-delete-per-package=%d; use workflow_dispatch override to continue",
-			pkgReport.Name,
-			len(pkgReport.CandidateItems),
-			opts.MaxDeletePerPackage,
-		)
-		pkgReport.Errors = append(pkgReport.Errors, errMsg)
-		problems = append(problems, errMsg)
-	}
-	if len(problems) > 0 {
-		return report, errors.New(strings.Join(problems, "; "))
-	}
-
-	for i := range report.Packages {
-		pkgReport := &report.Packages[i]
-		for _, candidate := range pkgReport.CandidateItems {
-			if err := client.DeletePackageVersion(ctx, opts.OwnerKind, opts.Owner, pkgReport.Name, candidate.ID); err != nil {
-				errMsg := fmt.Sprintf("%s: delete version %d failed: %v", pkgReport.Name, candidate.ID, err)
-				pkgReport.Errors = append(pkgReport.Errors, errMsg)
-				problems = append(problems, errMsg)
-				continue
-			}
-			pkgReport.Deleted++
-		}
-	}
-	if len(problems) > 0 {
-		return report, errors.New(strings.Join(problems, "; "))
+	if err := applyDeletionPlan(ctx, opts, client, &report); err != nil {
+		return report, err
 	}
 
 	return report, nil
@@ -430,6 +466,7 @@ func processPackage(
 	policy policyConfig,
 	rules []compiledRule,
 	client packageClient,
+	graphClient manifestGraphClient,
 	now time.Time,
 	pkg string,
 ) packageReport {
@@ -446,8 +483,41 @@ func processPackage(
 
 	result.ScannedVersions = len(versions)
 	candidates := make([]candidateReport, 0)
+	graph := ociGraphResult{Reachable: make(map[string]struct{})}
+	if policy.OCIGraph.Enabled {
+		graph, err = resolveOCIGraph(ctx, opts.Owner, pkg, versions, graphClient)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: resolve OCI graph failed: %v", pkg, err))
+			return result
+		}
+		result.GraphRoots = graph.Roots
+	}
 
 	for _, version := range versions {
+		if policy.OCIGraph.Enabled {
+			normalTags, _ := splitGraphTags(version.Tags)
+			candidate, disposition := graphCandidate(
+				version,
+				normalTags,
+				graph.Reachable,
+				policy.OCIGraph.OrphanTTLDays,
+				now,
+			)
+			switch disposition {
+			case dispositionReachable:
+				result.KeptGraphReachable++
+				continue
+			case dispositionGrace:
+				result.KeptOrphanGrace++
+				continue
+			case dispositionCandidate:
+				result.OrphanCandidates++
+				candidates = append(candidates, candidate)
+				continue
+			}
+			version.Tags = normalTags
+		}
+
 		eval := evaluateVersion(version, rules, policy.ProtectUnknown, now)
 		switch {
 		case eval.Unknown:
@@ -465,15 +535,19 @@ func processPackage(
 		case eval.Protected:
 			result.KeptProtected++
 		case eval.Candidate:
+			result.TaggedCandidates++
 			candidates = append(candidates, candidateReport{
 				ID:              version.ID,
 				Name:            version.Name,
+				Kind:            candidateKindTaggedTransient,
 				UpdatedAt:       version.UpdatedAt.UTC().Format(time.RFC3339),
 				AgeDays:         eval.AgeDays,
 				RequiredAgeDays: eval.RequiredAgeDays,
 				Tags:            append([]string{}, version.Tags...),
 				MatchedRules:    append([]string{}, eval.MatchedRules...),
 			})
+		case eval.RequiredAgeDays > 0:
+			result.KeptActiveTransient++
 		}
 	}
 
@@ -571,22 +645,28 @@ func renderSummary(report housekeepingReport) string {
 	b.WriteString(fmt.Sprintf("- Mode: `%s`\n", report.Run.Mode))
 	b.WriteString(fmt.Sprintf("- Timestamp: `%s`\n", report.Run.TimestampUTC))
 	b.WriteString(fmt.Sprintf("- Owner: `%s` (%s)\n", report.Run.Owner, report.Run.OwnerKind))
-	b.WriteString(fmt.Sprintf("- Max delete per package: `%d`\n\n", report.Run.MaxDeletePerPackage))
+	b.WriteString(fmt.Sprintf("- Max delete per package: `%d`\n", report.Run.MaxDeletePerPackage))
+	b.WriteString(fmt.Sprintf("- Max delete total: `%d`\n\n", report.Run.MaxDeleteTotal))
 	b.WriteString(summaryTableHeader)
-	b.WriteString("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	b.WriteString(
+		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+	)
 	for _, pkg := range report.Packages {
 		b.WriteString(
 			fmt.Sprintf(
-				"| `%s` | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
+				"| `%s` | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
 				pkg.Name,
 				pkg.ScannedVersions,
 				pkg.Candidates,
+				pkg.TaggedCandidates,
+				pkg.OrphanCandidates,
+				pkg.Planned,
 				pkg.Deleted,
 				pkg.KeptProtected,
+				pkg.KeptActiveTransient,
+				pkg.KeptGraphReachable,
+				pkg.KeptOrphanGrace,
 				pkg.KeptUnknown,
-				pkg.KeptUnknownUntagged,
-				pkg.KeptUnknownUnmatchedTag,
-				pkg.KeptUnknownNoTransientMatch,
 				len(pkg.Errors),
 			),
 		)

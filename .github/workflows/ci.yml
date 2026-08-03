@@ -162,7 +162,7 @@ jobs:
             echo "docs=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|api/|config/|test/|docs/reference/api\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|helm(chart|values)/|boilerplate\.go\.txt)|\.golangci\.yml|\.github/tools/)'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|test/|docs/reference/api\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|tools/|helm(chart|values)/|boilerplate\.go\.txt)|\.golangci\.yml|\.github/tools/)'; then
             echo "go_quality=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_quality=false" >> "${GITHUB_OUTPUT}"
@@ -174,7 +174,7 @@ jobs:
             echo "go_toolchain=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|api/|config/|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/helm(chart|values)/|test/(integration/|unit/))'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(tools/|helm(chart|values)/)|test/(integration/|unit/))'; then
             echo "go_tests=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_tests=false" >> "${GITHUB_OUTPUT}"
@@ -186,7 +186,7 @@ jobs:
             echo "config_compat=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|api/|config/|charts/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|vendor/|\.trivyignore|\.trivy\.yaml|Makefile|mk/)'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|charts/|Dockerfile(\..*)?$|hack/(ci/|tools/)|go\.(mod|sum)$|vendor/|\.trivyignore|\.trivy\.yaml|Makefile|mk/)'; then
             echo "security_scan=true" >> "${GITHUB_OUTPUT}"
           else
             echo "security_scan=false" >> "${GITHUB_OUTPUT}"
