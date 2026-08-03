@@ -13,6 +13,10 @@ on:
         description: "Optional safety brake override for this run (>0)"
         required: false
         type: string
+      max_delete_total:
+        description: "Optional global deletion budget override for this run (>0)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -44,6 +48,8 @@ jobs:
           MODE_VAR: ${{ vars.GHCR_HOUSEKEEPING_MODE }}
           MAX_INPUT: ${{ github.event.inputs.max_delete_per_package }}
           MAX_VAR: ${{ vars.GHCR_HOUSEKEEPING_MAX_DELETE_PER_PACKAGE }}
+          MAX_TOTAL_INPUT: ${{ github.event.inputs.max_delete_total }}
+          MAX_TOTAL_VAR: ${{ vars.GHCR_HOUSEKEEPING_MAX_DELETE_TOTAL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -84,8 +90,26 @@ jobs:
             max_delete="${MAX_VAR}"
           fi
 
-          echo "mode=${mode}" >> "${GITHUB_OUTPUT}"
-          echo "max_delete_per_package=${max_delete}" >> "${GITHUB_OUTPUT}"
+          max_delete_total="100"
+          if [[ -n "${MAX_TOTAL_INPUT:-}" ]]; then
+            if ! [[ "${MAX_TOTAL_INPUT}" =~ ^[0-9]+$ ]] || [[ "${MAX_TOTAL_INPUT}" -le 0 ]]; then
+              echo "max_delete_total must be a positive integer; got '${MAX_TOTAL_INPUT}'" >&2
+              exit 1
+            fi
+            max_delete_total="${MAX_TOTAL_INPUT}"
+          elif [[ -n "${MAX_TOTAL_VAR:-}" ]]; then
+            if ! [[ "${MAX_TOTAL_VAR}" =~ ^[0-9]+$ ]] || [[ "${MAX_TOTAL_VAR}" -le 0 ]]; then
+              echo "GHCR_HOUSEKEEPING_MAX_DELETE_TOTAL must be a positive integer; got '${MAX_TOTAL_VAR}'" >&2
+              exit 1
+            fi
+            max_delete_total="${MAX_TOTAL_VAR}"
+          fi
+
+          {
+            echo "mode=${mode}"
+            echo "max_delete_per_package=${max_delete}"
+            echo "max_delete_total=${max_delete_total}"
+          } >> "${GITHUB_OUTPUT}"
 
           owner="${GITHUB_REPOSITORY_OWNER}"
           owner_kind="user"
@@ -117,9 +141,11 @@ jobs:
           go run ./hack/tools/ghcr_housekeeping \
             --owner "${{ steps.cfg.outputs.owner }}" \
             --owner-kind "${{ steps.cfg.outputs.owner_kind }}" \
+            --registry-user "${GITHUB_ACTOR}" \
             --mode "${{ steps.cfg.outputs.mode }}" \
             --policy-file hack/tools/ghcr_housekeeping/policy.json \
             --max-delete-per-package "${{ steps.cfg.outputs.max_delete_per_package }}" \
+            --max-delete-total "${{ steps.cfg.outputs.max_delete_total }}" \
             --report-json dist/housekeeping-report.json
 
       - name: Upload housekeeping report
