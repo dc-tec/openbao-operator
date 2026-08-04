@@ -20,7 +20,12 @@ expect_valid_request() {
   local expected_branch="$3"
   local actual_branch
 
-  actual_branch="$(TARGET_BRANCH="${target_branch}" VERSION="${version}" bash "${VALIDATOR}")"
+  actual_branch="$(
+    env -u GITHUB_OUTPUT \
+      TARGET_BRANCH="${target_branch}" \
+      VERSION="${version}" \
+      bash "${VALIDATOR}"
+  )"
   [[ "${actual_branch}" == "${expected_branch}" ]] || {
     fail "expected marker '${expected_branch}', got '${actual_branch}'"
   }
@@ -81,7 +86,7 @@ expect_invalid_request "main" "0.5"
 expect_invalid_request "main" "00.5.0"
 expect_invalid_request "main" "0.5.0-rc.01"
 
-marker_branch="$(TARGET_BRANCH=main VERSION=0.5.0-rc.1 bash "${VALIDATOR}")"
+marker_branch="$(env -u GITHUB_OUTPUT TARGET_BRANCH=main VERSION=0.5.0-rc.1 bash "${VALIDATOR}")"
 if [[ "${marker_branch}" == release-* ]]; then
   fail "marker branch '${marker_branch}' overlaps the release branch namespace"
 fi
