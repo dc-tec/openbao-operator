@@ -26,32 +26,40 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/operator: 'true'
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: 'false'
-  artifacthub.io/containsSecurityUpdates: 'true'
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: 'false'
   artifacthub.io/changes: |
-    - kind: security
-      description: "security: require authority for network publication"
     - kind: added
-      description: "self-init: add initial recovery key bootstrap"
-    - kind: security
-      description: "security: delegate dangerous CR controls"
-    - kind: security
-      description: "security: enforce CR reference authorization"
-    - kind: security
-      description: "security: enforce hardened contract for unsafe controls"
-    - kind: security
-      description: "security: require provenance for managed resources"
+      description: "api: stabilize v1alpha1 contracts"
+    - kind: added
+      description: "config: support plugin-backed KMS seals"
+    - kind: added
+      description: "config: support self-init profile controls"
+    - kind: added
+      description: "upgrade: allow idle strategy switching"
     - kind: fixed
-      description: "self-init: make bootstrap config one-shot"
+      description: "compat: qualify OpenBao 2.6.0"
+    - kind: fixed
+      description: "config: omit plugin directory without plugins"
+    - kind: fixed
+      description: "deps: remediate website transitive vulnerabilities"
+    - kind: fixed
+      description: "deps: update vulnerable brace-expansion"
+    - kind: fixed
+      description: "deps: update vulnerable Go modules"
+    - kind: fixed
+      description: "deps: update vulnerable website transitive dependencies"
+    - kind: fixed
+      description: "docs: restore TypeScript compatibility"
   artifacthub.io/images: |
     - name: openbao-operator
-      image: ghcr.io/dc-tec/openbao-operator:0.4.0
+      image: ghcr.io/dc-tec/openbao-operator:0.5.0
     - name: openbao-init
-      image: ghcr.io/dc-tec/openbao-init:0.4.0
+      image: ghcr.io/dc-tec/openbao-init:0.5.0
     - name: openbao-backup
-      image: ghcr.io/dc-tec/openbao-backup:0.4.0
+      image: ghcr.io/dc-tec/openbao-backup:0.5.0
     - name: openbao-upgrade
-      image: ghcr.io/dc-tec/openbao-upgrade:0.4.0
+      image: ghcr.io/dc-tec/openbao-upgrade:0.5.0
   artifacthub.io/crds: |
     - kind: OpenBaoCluster
       version: v1alpha1
