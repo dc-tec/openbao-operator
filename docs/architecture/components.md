@@ -74,6 +74,46 @@ Restores are reconciled through the separate `OpenBaoRestore` controller, which 
 
 </Callout>
 
+## Watch and requeue strategy
+
+The controller registration strategy follows the tenancy RBAC boundary. Single-tenant mode can watch owned child
+resources inside the operator namespace. Multi-tenant mode does not register those child watches because
+controller-runtime would require list and watch access across tenant namespaces.
+
+<DecisionTable
+  kind="reference"
+  title="Reconcile triggers by tenancy mode"
+  columns={['Mode', 'Primary triggers', 'Tradeoff']}
+  rows={[
+    {
+      cells: [
+        'Single-tenant',
+        '`OpenBaoCluster` changes plus owned StatefulSet, Service, ConfigMap, Secret, Job, and ServiceAccount events; AdminOps also watches owned Jobs.',
+        'Child-resource changes enqueue reconciliation quickly because namespace-scoped list and watch permissions stay inside one trust boundary.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Multi-tenant',
+        'Qualifying `OpenBaoCluster` changes plus explicit progress and retry requeues; the status controller also performs a steady-state refresh.',
+        'Status freshness stays bounded, but arbitrary steady-state child mutation does not enqueue the workload controller. Repair can wait for its next parent event or another explicit workload requeue. This preserves namespace-scoped tenant RBAC and avoids cluster-wide child-resource discovery.',
+      ],
+    },
+  ]}
+/>
+
+Both modes use rate-limited retries. The status controller has a steady-state refresh and safety requeues, while
+workload and AdminOps requeues follow active reconcile progress. The difference is event immediacy, not ownership:
+the same managers still read and reconcile the same named resources when a cluster is processed.
+
+<Callout type="warning" title="Multi-tenant child watches change the trust model">
+
+Adding `Owns` registration for tenant child resources in multi-tenant mode requires a deliberate RBAC and
+architecture change. Update the tenancy model, permissions, tests, and this page together.
+
+</Callout>
+
 ## App orchestration and managers
 
 <DiagramFrame

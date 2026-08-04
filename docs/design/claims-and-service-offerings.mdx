@@ -78,6 +78,53 @@ The same-cluster path resolves service intent through a bounded pipeline:
 The concrete workload remains visible and owned. Claim-managed clusters are machine-distinguishable from directly
 managed clusters through ownership labels and admission protection.
 
+## API and module boundary
+
+Claims and Service Offerings are an optional product module above the core lifecycle API. Their planned public
+resources use the `claims.openbao.org` API group and own their versions independently from the core `openbao.org`
+resources.
+
+<DecisionTable
+  kind="reference"
+  title="Claims module contract"
+  columns={['Concern', 'Decision', 'Effect']}
+  rows={[
+    {
+      cells: [
+        'Public API group',
+        'Claims, offerings, profiles, and module-owned supporting resources use `claims.openbao.org`.',
+        'The self-service API can evolve without expanding or version-coupling the core lifecycle group.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Core lifecycle API',
+        '`OpenBaoCluster`, `OpenBaoRestore`, and `OpenBaoTenant` remain in `openbao.org`.',
+        'Direct lifecycle users retain one stable core API surface.',
+      ],
+    },
+    {
+      cells: [
+        'Dependency direction',
+        'The Claims module may consume stable core APIs and narrow contracts. Core packages must not import Claims module packages.',
+        'The module builds on the lifecycle core without making the core depend on the self-service layer.',
+      ],
+    },
+    {
+      cells: [
+        'Optional installation',
+        'Core generation, installation, startup, and reconciliation work without Claims CRDs or controllers.',
+        'Operators can deploy the lifecycle core alone; module discovery cannot become a core startup prerequisite.',
+      ],
+    },
+  ]}
+/>
+
+This is a landing contract, not a statement that the module ships in the current release. The integration branch
+must align its API packages, generated CRDs, install wiring, architecture rules, and core-only tests with this
+boundary before the feature is proposed for release.
+
 ## Current implementation status
 
 The same-cluster path is in integration. The implementation branch is `integration/claims-service`.
