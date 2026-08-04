@@ -221,10 +221,7 @@ PY
     } >> "${OUT_PATH}"
   done
 
-  {
-    echo '</Tabs>'
-    echo
-  } >> "${OUT_PATH}"
+  echo '</Tabs>' >> "${OUT_PATH}"
 else
   {
     echo
