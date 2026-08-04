@@ -66,20 +66,66 @@ That keeps the shared safety model in one place instead of scattering lock and r
   columns={['Plane', 'Field manager', 'Owned status fields']}
   rows={[
     {
-      cells: ['Observed status', '`openbao-status-controller`', '`status.observedGeneration`, `status.phase`, `status.activeLeader`, `status.readyReplicas`, `status.currentVersion`, `status.conditions`'],
+      cells: ['Observed status', '`openbao-status-controller`', '`status.observedGeneration`, `status.phase`, `status.activeLeader`, `status.readyReplicas`, `status.readReplicas`, `status.currentVersion`, `status.conditions`'],
       emphasis: 'recommended',
     },
     {
       cells: ['Workload status', '`openbao-workload-controller`', '`status.initialized`, `status.selfInitialized`, `status.workload`'],
     },
     {
-      cells: ['AdminOps status', '`openbao-adminops-controller`', '`status.upgrade`, `status.upgradeRequests`, `status.backup`, `status.blueGreen`, `status.breakGlass`, `status.adminOps`'],
+      cells: ['AdminOps status', '`openbao-adminops-controller`', '`status.acceptedUpgradeStrategy`, `status.upgrade`, `status.upgradeRequests`, `status.backup`, `status.blueGreen`, `status.breakGlass`, `status.adminOps`'],
     },
     {
       cells: ['Operation lock status', '`openbao-operationlock-controller`', '`status.operationLock`'],
     },
   ]}
 />
+
+## Server-side apply status contract
+
+Each status plane has one server-side apply field manager. The split prevents an observed-status write from
+claiming workload or AdminOps fields, but it does not make fragments within one plane independent. A writer that
+shares a field manager must read and apply that manager's complete plane.
+
+<DecisionTable
+  kind="reference"
+  title="Status write rules"
+  columns={['Concern', 'Required behavior', 'Why']}
+  rows={[
+    {
+      cells: [
+        'Ownership plane',
+        'Use the field manager assigned in the status ownership table and apply only that manager\'s fields.',
+        'Separate managers preserve sibling planes and make ownership conflicts diagnosable.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Shared AdminOps plane',
+        'Read the latest object, mutate one concern, and apply the full AdminOps plane.',
+        'Omitting sibling fields from a later apply by the same manager can clear them. Fresh-read and concurrency tests protect upgrade, backup, blue-green, break-glass, and AdminOps state from each other.',
+      ],
+    },
+    {
+      cells: [
+        'Immediate readback',
+        'Use a fresh API read after apply when the same reconcile decision depends on the committed value.',
+        'The controller-runtime cache can lag the API server after a status write.',
+      ],
+    },
+    {
+      cells: [
+        'Operation lock clear',
+        'Clear through the dedicated operation-lock manager and use explicit ownership takeover only when legacy or external ownership conflicts.',
+        'Lock removal must not silently steal unrelated status ownership; force is a conflict recovery path, not the normal write mode.',
+      ],
+    },
+  ]}
+/>
+
+The preservation guarantee has two parts: separate field managers protect sibling status planes, while a
+fresh-read, full-plane mutation protects sibling fields that intentionally share the AdminOps manager.
 
 <DiagramFrame
   title="Coordination model"

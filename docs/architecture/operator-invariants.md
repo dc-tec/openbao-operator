@@ -1,6 +1,6 @@
 ---
 title: Operator Invariants
-description: Cross-cutting invariants preserved by OpenBao Operator across identity boundaries, production posture, configuration ownership, and lifecycle safety.
+description: Cross-cutting invariants preserved by OpenBao Operator across identity boundaries, production posture, guardrail ownership, module boundaries, and lifecycle safety.
 hide_title: true
 pageType: concept
 journey: architecture
@@ -40,6 +40,13 @@ journey: architecture
     },
     {
       cells: [
+        'Guardrail ownership',
+        'Hardened rules are assigned to the earliest applicable enforcement layer and agree where ownership overlaps.',
+        'This keeps admission and runtime readiness aligned without duplicating every rule in every layer.',
+      ],
+    },
+    {
+      cells: [
         'Integration assumptions',
         'External dependencies surface as explicit status and readiness conditions.',
         'This makes environment assumptions visible before they become runtime failures.',
@@ -50,6 +57,13 @@ journey: architecture
         'Lifecycle safety',
         'Disruptive workflows stay explicit, lock-aware, and separated from steady-state workload reconciliation.',
         'This prevents upgrades, backups, and restores from colliding or becoming invisible side effects.',
+      ],
+    },
+    {
+      cells: [
+        'Module boundaries',
+        'Optional product modules remain separable from the core lifecycle API and controller runtime.',
+        'The core operator must remain installable and usable when an optional module is absent.',
       ],
     },
   ]}
@@ -144,6 +158,53 @@ Related reading: <SiteLink docId="security/infrastructure/rbac">RBAC Architectur
 
 Related reading: <SiteLink docId="security/fundamentals/profiles">Security Profiles</SiteLink>, <SiteLink docId="security/workload/tls">TLS and Identity</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/configuration/self-init">Self-Initialization</SiteLink>.
 
+## Hardened guardrail ownership
+
+Hardened rules fail at the earliest layer that has enough information to decide them. The layers do not need to
+repeat every rule: request authorization belongs at admission, while runtime readiness covers the smaller set of
+violations that must remain visible after an object has already been accepted or restored.
+
+<DecisionTable
+  kind="reference"
+  title="Hardened enforcement layers"
+  columns={['Layer', 'Responsibility', 'Agreement contract']}
+  rows={[
+    {
+      cells: [
+        'CRD schema and CEL',
+        'Own general structural and cross-field validity that is independent of the Hardened profile.',
+        'No profile-specific Hardened rule is assigned to this layer today. New ownership requires catalog coverage and an explicit reason that schema evaluation has enough context.',
+      ],
+    },
+    {
+      cells: [
+        'ValidatingAdmissionPolicy',
+        'Own Hardened request-time safety and authorization checks that can be decided at the API boundary.',
+        'Policy messages and dry-run API-server fixtures map back to stable rule IDs in the Hardened contract catalog.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Runtime readiness',
+        'Re-evaluate the subset whose violation must remain observable during reconciliation.',
+        'Rules shared with admission use same-rule verdict fixtures. Runtime-only and admission-only rules stay explicit instead of being forced into false symmetry.',
+      ],
+    },
+  ]}
+/>
+
+`internal/platform/hardenedcontract` is the registry for stable rule IDs, enforcement ownership, and shared fixture
+identity. Agreement means that layers which claim the same rule reach the same allow or deny verdict for that
+rule's fixtures. It does not require the layers to use the same expression, status message, or available context.
+
+<Callout type="note" title="Ownership changes are contract changes">
+
+Moving a Hardened rule between layers, adding a second owner, or changing a shared verdict requires catalog,
+policy, runtime, and agreement-test updates in the same change.
+
+</Callout>
+
 ## Integration invariants
 
 <DecisionTable
@@ -177,6 +238,52 @@ Related reading: <SiteLink docId="security/fundamentals/profiles">Security Profi
 />
 
 Related reading: <SiteLink docId="reference/status-and-events">Status and Events</SiteLink>, <SiteLink docId="user-guide/openbaocluster/configuration/observability">Observability</SiteLink>, and <SiteLink docId="user-guide/openbaocluster/operations/backups">Configure Backups</SiteLink>.
+
+## Optional module invariants
+
+Optional product modules may build on the lifecycle core, but they do not become hidden prerequisites for it.
+This is a landing contract for future module code and APIs; it does not imply that an optional module ships in
+the current release.
+
+<DecisionTable
+  kind="reference"
+  title="Core and module separation"
+  columns={['Invariant', 'Design effect', 'Landing evidence']}
+  rows={[
+    {
+      cells: [
+        'Core API ownership remains stable.',
+        '`OpenBaoCluster`, `OpenBaoRestore`, and `OpenBaoTenant` remain in the core `openbao.org` API group.',
+        'Core API review and compatibility checks.',
+      ],
+      emphasis: 'recommended',
+    },
+    {
+      cells: [
+        'Optional modules own separate API groups and versions.',
+        'A module can evolve, install, and be reviewed without expanding the core API group.',
+        'Module-specific CRDs, generated artifacts, install wiring, and API tests.',
+      ],
+    },
+    {
+      cells: [
+        'Dependencies point from modules to stable core contracts.',
+        'Module packages may consume core APIs and narrow contracts; core packages must not import module packages.',
+        'Generated architecture policy and dependency reports.',
+      ],
+    },
+    {
+      cells: [
+        'The core works when module CRDs are absent.',
+        'Core build, installation, startup, and reconciliation cannot require optional API discovery or module controllers.',
+        'Core-only generation, installation, startup, and reconcile tests.',
+      ],
+    },
+  ]}
+/>
+
+The Claims and Service Offerings design applies this contract with the planned `claims.openbao.org` API group.
+See <SiteLink docId="design/claims-and-service-offerings">Claims and Service Offerings</SiteLink>.
 
 ## Lifecycle safety invariants
 
@@ -242,6 +349,11 @@ If a change weakens one of these invariants, update the related architecture, se
       label: 'Security overview',
       description: 'User-facing security model behind these invariants.',
       docId: 'security/index',
+    },
+    {
+      label: 'Claims and Service Offerings',
+      description: 'Optional-module and API-group boundaries for the planned self-service layer.',
+      docId: 'design/claims-and-service-offerings',
     },
   ]}
 />

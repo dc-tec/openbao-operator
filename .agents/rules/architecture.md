@@ -14,10 +14,14 @@ See [Architecture Documentation](docs/architecture/index.md).
 - `L1` Entrypoints/bootstrap: `cmd/*`, `internal/platform/entrypoint`
 - `L2` Controller plumbing: `internal/controller/*`
 - `L3` App orchestration: `internal/app/*`
-- `L4` Services/managers: `internal/service/{backup,restore,upgrade,infra,certs,init,provisioner,opslifecycle,workloadidentity}`
-- `L5` Ports/contracts: `internal/port/{auth,backup,blobstore,imageverify,infra,initmanager,openbao,security}`
-- `L6` Adapters/integrations: `internal/adapter/{kube,openbao,storage,auth,raft,security,storageenv,cluster,config,operationlock,probe,revision}`
-- `L7` Platform/cross-cutting: `internal/platform/{admission,constants,entrypoint,errors,logging,observability,openbaotls,predicates,reconcile,testutil}`
+- `L4` Services/managers:
+  `internal/service/{backup,bootstrap,certs,configuration,identity,init,networking,opslifecycle,provisioner,restore,upgrade,workload,workloadidentity}`
+- `L5` Ports/contracts:
+  `internal/port/{auth,backup,blobstore,imageverify,initmanager,openbao,security,workload}`
+- `L6` Adapters/integrations:
+  `internal/adapter/{auth,cluster,config,kube,openbao,probe,raft,revision,security,storage,storageenv}`
+- `L7` Platform/cross-cutting:
+  `internal/platform/{admission,constants,entrypoint,errors,hardenedcontract,logging,observability,openbaotls,predicates,reconcile,resourceapply,resourceidentity,resourceownership,semver,statusapply,statuspatch,testutil}`
 
 ## Separation of Concerns
 
@@ -101,6 +105,17 @@ Disallowed direction:
 - `L4/L6 -> L2` (service/adapter importing controllers)
 - `L6 -> L4` (adapter importing services/managers)
 - Re-introducing `internal/interfaces` as a generic dependency bucket
+
+## Optional Module Boundaries
+
+- Core lifecycle APIs remain under `openbao.org`; `OpenBaoCluster`, `OpenBaoRestore`, and `OpenBaoTenant` are core.
+- Optional modules own separate API groups and versions. The Claims and Service Offerings module uses
+  `claims.openbao.org`.
+- Optional module packages may depend on stable core APIs and narrow contracts. Core packages must not import
+  optional module packages.
+- Core generation, installation, startup, and reconciliation must work when optional module CRDs and controllers
+  are absent.
+- A module proposal must add architecture-policy and core-only test coverage before it lands.
 
 ## Verification
 
