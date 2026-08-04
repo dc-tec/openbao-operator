@@ -73,6 +73,13 @@ def change_kind(section):
     return "changed"
 
 
+def is_security_description(description):
+    normalized = description.lower()
+    if re.match(r"^[a-z0-9_,./-]*security[a-z0-9_,./-]*\s*:", normalized):
+        return True
+    return bool(re.search(r"\b(cve-[0-9-]+|ghsa-[0-9a-z-]+|vulnerab\w*)\b", normalized))
+
+
 def clean_description(raw):
     value = re.sub(r"\s+\(\[#\d+\]\([^)]+\)\)", "", raw)
     value = re.sub(r"\s+\(\[[0-9a-f]{7,40}\]\([^)]+\)\)", "", value)
@@ -82,23 +89,7 @@ def clean_description(raw):
     return value
 
 
-def release_changes(changelog):
-    lines = changelog.splitlines()
-    start = None
-    for index, line in enumerate(lines):
-        if heading_version(line) == version:
-            start = index + 1
-            break
-
-    if start is None:
-        raise SystemExit(f"release {version} was not found in {changelog_path}")
-
-    end = len(lines)
-    for index in range(start, len(lines)):
-        if lines[index].startswith("## "):
-            end = index
-            break
-
+def section_changes(lines, start, end):
     changes = []
     current_kind = "changed"
     current_change = None
@@ -114,8 +105,7 @@ def release_changes(changelog):
         if bullet_match:
             description = clean_description(bullet_match.group(1))
             if description:
-                kind = "security" if re.match(r"^security\s*:", description, re.IGNORECASE) else current_kind
-                current_change = {"kind": kind, "description": description}
+                current_change = {"kind": current_kind, "description": description}
                 changes.append(current_change)
             continue
 
@@ -124,6 +114,49 @@ def release_changes(changelog):
             if continuation:
                 current_change["description"] = f"{current_change['description']} {continuation}"
 
+    for change in changes:
+        if is_security_description(change["description"]):
+            change["kind"] = "security"
+
+    return changes
+
+
+def release_changes(changelog):
+    lines = changelog.splitlines()
+    headings = []
+    for index, line in enumerate(lines):
+        heading = heading_version(line)
+        if heading is not None:
+            headings.append((index, heading))
+
+    if not any(heading == version for _, heading in headings):
+        raise SystemExit(f"release {version} was not found in {changelog_path}")
+
+    stable_version = re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is not None
+    changes = []
+    for position, (heading_index, heading) in enumerate(headings):
+        include = heading == version
+        if stable_version and heading.startswith(f"{version}-"):
+            include = True
+        if not include:
+            continue
+
+        start = heading_index + 1
+        end = headings[position + 1][0] if position + 1 < len(headings) else len(lines)
+        changes.extend(section_changes(lines, start, end))
+
+    deduplicated = []
+    seen = {}
+    for change in changes:
+        description = change["description"]
+        if description in seen:
+            if change["kind"] == "security":
+                deduplicated[seen[description]]["kind"] = "security"
+            continue
+        seen[description] = len(deduplicated)
+        deduplicated.append(change)
+
+    changes = deduplicated
     if not changes:
         changes.append({"kind": "changed", "description": f"Release {version}"})
 

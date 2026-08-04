@@ -17,7 +17,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: prepare-release-as-pr-${{ inputs.target_branch }}-${{ inputs.version }}
+  group: prepare-release-as-pr-${{ inputs.target_branch }}
   cancel-in-progress: false
 
 jobs:
@@ -26,23 +26,6 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ !github.event.repository.fork }}
     steps:
-      - name: Validate inputs
-        env:
-          TARGET_BRANCH: ${{ inputs.target_branch }}
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-
-          if ! [[ "${TARGET_BRANCH}" =~ ^(main|release-[0-9]+(\.[0-9]+)*)$ ]]; then
-            echo "target_branch must be main or release-X[.Y...], got '${TARGET_BRANCH}'" >&2
-            exit 1
-          fi
-
-          if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "version must be SemVer, got '${VERSION}'" >&2
-            exit 1
-          fi
-
       - name: Mint GitHub App token (openbao-operator-release-pr)
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -55,36 +38,130 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
 
-      - name: Checkout target branch
+      - name: Checkout release tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.target_branch }}
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Create Release-As marker branch
-        id: marker
+      - name: Validate release request
+        id: request
         env:
           TARGET_BRANCH: ${{ inputs.target_branch }}
           VERSION: ${{ inputs.version }}
+        run: bash hack/ci/validate-release-as-request.sh
+
+      - name: Check for conflicting release state
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          VERSION: ${{ inputs.version }}
+          MARKER_BRANCH: ${{ steps.request.outputs.marker_branch }}
         run: |
           set -euo pipefail
 
-          marker_branch="release-as-${TARGET_BRANCH}-${VERSION}"
-          echo "branch=${marker_branch}" >> "${GITHUB_OUTPUT}"
+          if ! git ls-remote --exit-code --heads origin "refs/heads/${TARGET_BRANCH}" >/dev/null 2>&1; then
+            echo "target branch '${TARGET_BRANCH}' does not exist" >&2
+            exit 1
+          fi
 
-          if git ls-remote --exit-code --heads origin "${marker_branch}" >/dev/null 2>&1; then
-            git fetch origin "refs/heads/${marker_branch}:refs/remotes/origin/${marker_branch}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            echo "tag '${VERSION}' already exists" >&2
+            exit 1
+          fi
+
+          existing_release="$(
+            gh release list \
+              --repo "${REPO}" \
+              --limit 100 \
+              --json tagName \
+              --jq ".[] | select(.tagName == \"${VERSION}\") | .tagName"
+          )"
+          if [[ -n "${existing_release}" ]]; then
+            echo "GitHub Release '${VERSION}' already exists" >&2
+            exit 1
+          fi
+
+          release_pr="$(
+            gh pr list \
+              --repo "${REPO}" \
+              --state open \
+              --base "${TARGET_BRANCH}" \
+              --head "release-please--branches--${TARGET_BRANCH}" \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+          if [[ -n "${release_pr}" ]]; then
+            echo "release-please PR #${release_pr} is already open for '${TARGET_BRANCH}'" >&2
+            exit 1
+          fi
+
+          open_markers="$(
+            gh pr list \
+              --repo "${REPO}" \
+              --state open \
+              --base "${TARGET_BRANCH}" \
+              --json number,headRefName \
+              --jq '
+                .[]
+                | select(
+                    (.headRefName | startswith("automation/release-as-"))
+                    or (.headRefName | startswith("release-as-"))
+                  )
+                | [.number, .headRefName]
+                | @tsv
+              '
+          )"
+          conflicting_marker=""
+          while IFS=$'\t' read -r marker_number marker_head; do
+            if [[ -n "${marker_number}" && "${marker_head}" != "${MARKER_BRANCH}" ]]; then
+              conflicting_marker="${marker_number}"
+              break
+            fi
+          done <<< "${open_markers}"
+          if [[ -n "${conflicting_marker}" ]]; then
+            echo "release marker PR #${conflicting_marker} is already open for '${TARGET_BRANCH}'" >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --heads origin "refs/heads/${MARKER_BRANCH}" >/dev/null 2>&1; then
+            existing_marker="$(
+              gh pr list \
+                --repo "${REPO}" \
+                --state open \
+                --base "${TARGET_BRANCH}" \
+                --head "${MARKER_BRANCH}" \
+                --json number \
+                --jq '.[0].number // empty'
+            )"
+            if [[ -z "${existing_marker}" ]]; then
+              echo "marker branch '${MARKER_BRANCH}' exists without an open matching PR" >&2
+              exit 1
+            fi
+          fi
+
+      - name: Create Release-As marker branch
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+          VERSION: ${{ inputs.version }}
+          MARKER_BRANCH: ${{ steps.request.outputs.marker_branch }}
+        run: |
+          set -euo pipefail
+
+          git fetch origin "refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+          if git ls-remote --exit-code --heads origin "refs/heads/${MARKER_BRANCH}" >/dev/null 2>&1; then
+            git fetch origin "refs/heads/${MARKER_BRANCH}:refs/remotes/origin/${MARKER_BRANCH}"
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git switch -c "${marker_branch}"
+          git switch -C "${MARKER_BRANCH}" "origin/${TARGET_BRANCH}"
           git commit --allow-empty -s \
             -m "Release ${VERSION}" \
             -m "Release-As: ${VERSION}"
-          git push --force-with-lease="refs/heads/${marker_branch}" origin "HEAD:${marker_branch}"
+          git push --force-with-lease="refs/heads/${MARKER_BRANCH}" origin "HEAD:${MARKER_BRANCH}"
 
       - name: Open or update marker PR
         env:
@@ -92,7 +169,7 @@ jobs:
           REPO: ${{ github.repository }}
           TARGET_BRANCH: ${{ inputs.target_branch }}
           VERSION: ${{ inputs.version }}
-          MARKER_BRANCH: ${{ steps.marker.outputs.branch }}
+          MARKER_BRANCH: ${{ steps.request.outputs.marker_branch }}
         run: |
           set -euo pipefail
 
@@ -108,9 +185,39 @@ jobs:
 
           body="$(mktemp)"
           cat > "${body}" <<EOF
-          This PR adds an empty release marker commit for release-please.
+          ## Summary
 
-          After this PR merges into \`${TARGET_BRANCH}\`, the Release Please PR workflow should open or update the release PR for \`${VERSION}\`.
+          Add an auditable empty release marker commit for release-please.
+
+          After this PR merges into \`${TARGET_BRANCH}\`, the Release Please PR workflow opens or updates the
+          release PR for \`${VERSION}\`.
+
+          ## Related Issues
+
+          None.
+
+          ## Type of Change
+
+          - [x] CI, release, or build tooling
+
+          ## Risk and Compatibility
+
+          No runtime, API, CRD, Helm, RBAC, or compatibility impact.
+
+          ## Verification
+
+          - Release request inputs and repository state were validated by the workflow.
+
+          ## Reviewer Notes
+
+          Merge this marker PR before reviewing the generated release-please PR.
+
+          Release-As: ${VERSION}
+
+          ## Checklist
+
+          - [x] The target branch and requested version are correct.
+          - [x] No conflicting tag, release, release PR, or marker PR exists.
           EOF
 
           if [[ -n "${existing_pr}" ]]; then

@@ -148,8 +148,12 @@ verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 verify-go-toolchain-sync: ## Verify go.mod, Dockerfile builders, and the devcontainer use the same Go version.
 	@bash hack/ci/verify-go-toolchain-sync.sh
 
+.PHONY: verify-release-automation
+verify-release-automation: ## Test release request validation and Artifact Hub metadata generation.
+	@bash hack/ci/test-release-automation.sh
+
 .PHONY: verify-workflows
-verify-workflows: actionlint ## Validate GitHub Actions workflows with the repo-pinned actionlint.
+verify-workflows: actionlint verify-release-automation ## Validate workflows and release automation.
 	@"$(ACTIONLINT)" .github/workflows/*.yml
 
 .PHONY: verify-vendor

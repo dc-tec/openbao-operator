@@ -21,7 +21,14 @@ jobs:
   pr-title-conventional:
     name: PR Title Uses Conventional Commits
     runs-on: ubuntu-24.04
-    if: ${{ !endsWith(github.actor, '[bot]') }}
+    if: >-
+      ${{
+        !endsWith(github.actor, '[bot]')
+        && (
+          github.event.pull_request.head.repo.full_name != github.repository
+          || !startsWith(github.head_ref, 'release-please--branches--')
+        )
+      }}
     steps:
       - name: Validate PR title format
         env:
@@ -50,7 +57,14 @@ jobs:
   pr-template-check:
     name: PR Description Matches Template
     runs-on: ubuntu-24.04
-    if: ${{ !endsWith(github.actor, '[bot]') }}
+    if: >-
+      ${{
+        !endsWith(github.actor, '[bot]')
+        && (
+          github.event.pull_request.head.repo.full_name != github.repository
+          || !startsWith(github.head_ref, 'release-please--branches--')
+        )
+      }}
     steps:
       - name: Validate PR description sections
         env:
@@ -97,7 +111,14 @@ jobs:
   commit-messages-conventional:
     name: PR Commits Use Conventional Commits
     runs-on: ubuntu-24.04
-    if: ${{ !endsWith(github.actor, '[bot]') }}
+    if: >-
+      ${{
+        !endsWith(github.actor, '[bot]')
+        && (
+          github.event.pull_request.head.repo.full_name != github.repository
+          || !startsWith(github.head_ref, 'release-please--branches--')
+        )
+      }}
     steps:
       - name: Informational only (squash-merge model)
         run: |
