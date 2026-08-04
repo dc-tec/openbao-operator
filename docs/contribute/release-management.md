@@ -89,6 +89,14 @@ GitHub Actions runs workflow definitions from the branch that receives the push.
 
 </Callout>
 
+<Callout type="important" title="Create a release line after its first stable release">
+
+Cut prereleases and the first stable `X.Y.0` release from a frozen `main`. Create `release-X.Y` from the
+published stable commit only after `X.Y.0` completes. The release branch then becomes the source for narrowly
+scoped `X.Y.Z` patch releases while normal development resumes on `main`.
+
+</Callout>
+
 <CommandBlock
   language="bash"
   label="configure"
@@ -118,8 +126,15 @@ make docs-refresh-version DOCS_VERSION=X.Y.0`}
 # target_branch: main        # or release-0.2
 # version: 0.1.0-rc.6       # or 0.2.1`}
 >
-  This workflow creates a tiny PR containing an empty `Release-As: <version>` commit. Merge that marker PR first; the branch-aware Release Please workflow then opens or updates the real release PR.
+  This workflow validates the requested release line and repository state, then creates a tiny PR containing an
+  empty `Release-As: <version>` commit. Merge that marker PR first; the branch-aware Release Please workflow then
+  opens or updates the real release PR.
 </CommandBlock>
+
+The marker branch uses the `automation/release-as-*` namespace, outside the `release-X.Y` namespace watched by
+Release Please. Preparing or updating the marker therefore cannot create a release PR before the marker merges.
+The workflow also rejects a missing target branch, a version for the wrong release line, an existing tag or GitHub
+Release, an open release-please PR, and conflicting marker state.
 
 <Callout type="note" title="`workflow_dispatch` `release_as` path">
 
@@ -129,7 +144,15 @@ make docs-refresh-version DOCS_VERSION=X.Y.0`}
 
 <Callout type="note" title="Helm chart changelog">
 
-Release-please remains the source of truth for release notes. After release-please opens or updates a release PR, the `Release Please PR` workflow syncs `charts/openbao-operator/Chart.yaml` so Artifact Hub receives `artifacthub.io/changes`, image metadata, prerelease state, and security-update state from the release-please changelog.
+Release-please remains the source of truth for release notes. After release-please opens or updates a release PR,
+the `Release Please PR` workflow syncs `charts/openbao-operator/Chart.yaml` so Artifact Hub receives
+`artifacthub.io/changes`, image metadata, prerelease state, and security-update state from the release-please
+changelog.
+
+For a prerelease, Artifact Hub metadata contains only that exact changelog section. For the matching stable
+release, metadata rolls up and deduplicates the stable and `X.Y.Z-*` prerelease sections. This keeps the generated
+changelog incremental while giving the stable chart a complete change list. Security-scoped entries and dependency
+fixes that identify vulnerabilities, CVEs, or GHSAs set `artifacthub.io/containsSecurityUpdates`.
 
 </Callout>
 
