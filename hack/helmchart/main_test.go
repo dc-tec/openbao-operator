@@ -244,6 +244,42 @@ func TestHelmTemplateRendersNetworkPublicationAuthority(t *testing.T) {
 	}
 }
 
+func TestHelmTemplateWiresControllerTenancyMode(t *testing.T) {
+	for _, tt := range []struct {
+		name               string
+		args               []string
+		wantWatchNamespace string
+	}{
+		{name: "multi-tenant"},
+		{
+			name:               "single-tenant-target-namespace",
+			args:               []string{"--set", "tenancy.mode=single", "--set", "tenancy.targetNamespace=tenant-openbao"},
+			wantWatchNamespace: "tenant-openbao",
+		},
+		{
+			name:               "single-tenant-release-namespace-default",
+			args:               []string{"--set", "tenancy.mode=single"},
+			wantWatchNamespace: "openbao",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rendered := string(renderChart(t, tt.args...))
+			watchNamespace := "- name: WATCH_NAMESPACE\n              value: "
+
+			if tt.wantWatchNamespace == "" {
+				if strings.Contains(rendered, watchNamespace) {
+					t.Fatal("rendered multi-tenant chart unexpectedly sets WATCH_NAMESPACE")
+				}
+				return
+			}
+
+			if !strings.Contains(rendered, watchNamespace+`"`+tt.wantWatchNamespace+`"`) {
+				t.Fatalf("rendered single-tenant chart does not set WATCH_NAMESPACE=%q", tt.wantWatchNamespace)
+			}
+		})
+	}
+}
+
 func TestHelmTemplateRendersStrictYAML(t *testing.T) {
 	for _, tt := range []struct {
 		name string

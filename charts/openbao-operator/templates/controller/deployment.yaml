@@ -67,6 +67,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            {{- if eq .Values.tenancy.mode "single" }}
+            - name: WATCH_NAMESPACE
+              value: {{ .Values.tenancy.targetNamespace | default .Release.Namespace | quote }}
+            {{- end }}
             - name: OPERATOR_NAME_PREFIX
               value: {{ include "openbao-operator.fullname" . }}-
             - name: OPERATOR_SERVICE_ACCOUNT_NAME
