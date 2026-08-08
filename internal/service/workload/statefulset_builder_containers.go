@@ -350,5 +350,8 @@ func buildContainerResources(cluster *openbaov1alpha1.OpenBaoCluster, spec State
 		cluster.Spec.ReadReplicas.Template.Resources != nil {
 		return *cluster.Spec.ReadReplicas.Template.Resources.DeepCopy()
 	}
+	if spec.Pool == constants.LabelValueOpenBaoWorkloadPoolVoter && cluster.Spec.Resources != nil {
+		return *cluster.Spec.Resources.DeepCopy()
+	}
 	return corev1.ResourceRequirements{}
 }

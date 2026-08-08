@@ -496,6 +496,38 @@ func TestCRD_OpenBaoCluster_ValidatesSemanticVersion(t *testing.T) {
 	}
 }
 
+func TestCRD_OpenBaoCluster_AcceptsVoterResources(t *testing.T) {
+	cluster := newMinimalClusterObj(newTestNamespace(t), "cluster-voter-resources")
+	cluster.Spec.Resources = &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("500m"),
+			corev1.ResourceMemory: resource.MustParse("1Gi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1"),
+			corev1.ResourceMemory: resource.MustParse("2Gi"),
+		},
+	}
+
+	if err := k8sClient.Create(ctx, cluster); err != nil {
+		t.Fatalf("expected voter resources to be accepted, got: %v", err)
+	}
+
+	var stored openbaov1alpha1.OpenBaoCluster
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &stored); err != nil {
+		t.Fatalf("get OpenBaoCluster: %v", err)
+	}
+	if stored.Spec.Resources == nil {
+		t.Fatal("stored spec.resources is nil")
+	}
+	if got := stored.Spec.Resources.Requests.Cpu().String(); got != "500m" {
+		t.Fatalf("stored CPU request = %q, want %q", got, "500m")
+	}
+	if got := stored.Spec.Resources.Limits.Memory().String(); got != "2Gi" {
+		t.Fatalf("stored memory limit = %q, want %q", got, "2Gi")
+	}
+}
+
 func TestCRD_OpenBaoCluster_AcceptsMigratedStabilityFixture(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "fixtures", "api-migration", "0.5.0-openbaocluster.yaml"))
 	if err != nil {
