@@ -280,6 +280,91 @@ func TestHelmTemplateWiresControllerTenancyMode(t *testing.T) {
 	}
 }
 
+func TestHelmTemplateAllowsOperatorMetricsIngress(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		kind string
+	}{
+		{
+			name: "service-monitor",
+			args: []string{"--set", "metrics.serviceMonitor.enabled=true"},
+			kind: "ServiceMonitor",
+		},
+		{
+			name: "victoria-metrics",
+			args: []string{"--set", "metrics.victoriaMetrics.enabled=true"},
+			kind: "VMServiceScrape",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{
+				"--set", "tenancy.mode=multi",
+				"--set", "metrics.port=9443",
+				"--set", "networkPolicy.metricsAllowedNamespaceLabels.metrics=monitoring",
+			}
+			args = append(args, tt.args...)
+			rendered := string(renderChart(t, args...))
+
+			assertMetricsNetworkPolicy(t, rendered, "test-openbao-operator-allow-metrics", "controller")
+			assertMetricsNetworkPolicy(t, rendered, "test-openbao-operator-allow-provisioner-metrics", "provisioner")
+			if !hasRenderedObject(rendered, tt.kind, "test-openbao-operator-provisioner-metrics") {
+				t.Fatalf("rendered multi-tenant chart missing provisioner %s", tt.kind)
+			}
+		})
+	}
+}
+
+func TestHelmTemplateOmitsProvisionerMetricsInSingleTenantMode(t *testing.T) {
+	rendered := string(renderChart(
+		t,
+		"--set", "tenancy.mode=single",
+		"--set", "metrics.port=9443",
+		"--set", "networkPolicy.metricsAllowedNamespaceLabels.metrics=monitoring",
+		"--set", "metrics.serviceMonitor.enabled=true",
+		"--set", "metrics.victoriaMetrics.enabled=true",
+	))
+
+	assertMetricsNetworkPolicy(t, rendered, "test-openbao-operator-allow-metrics", "controller")
+	if strings.Contains(rendered, "test-openbao-operator-allow-provisioner-metrics") ||
+		strings.Contains(rendered, "test-openbao-operator-provisioner-metrics") {
+		t.Fatal("rendered single-tenant chart unexpectedly contains provisioner metrics resources")
+	}
+}
+
+func assertMetricsNetworkPolicy(t *testing.T, rendered, name, component string) {
+	t.Helper()
+
+	manifest, ok := findRenderedObject(rendered, "NetworkPolicy", name)
+	if !ok {
+		t.Fatalf("rendered chart missing NetworkPolicy %q", name)
+	}
+	for _, want := range []string{
+		"app.kubernetes.io/name: openbao-operator\n      app.kubernetes.io/component: " + component,
+		"metrics: monitoring",
+		"- port: 9443\n          protocol: TCP",
+	} {
+		if !strings.Contains(manifest, want) {
+			t.Fatalf("NetworkPolicy %q missing %q:\n%s", name, want, manifest)
+		}
+	}
+}
+
+func hasRenderedObject(rendered, kind, name string) bool {
+	_, ok := findRenderedObject(rendered, kind, name)
+	return ok
+}
+
+func findRenderedObject(rendered, kind, name string) (string, bool) {
+	for _, document := range strings.Split(rendered, "\n---") {
+		if strings.Contains(document, "\nkind: "+kind+"\n") &&
+			strings.Contains(document, "\n  name: "+name+"\n") {
+			return document, true
+		}
+	}
+	return "", false
+}
+
 func TestHelmTemplateRendersStrictYAML(t *testing.T) {
 	for _, tt := range []struct {
 		name string
