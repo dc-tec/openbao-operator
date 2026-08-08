@@ -1,41 +1,69 @@
-# Website
+# Documentation website
 
-This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
+This directory contains the canonical OpenBao Operator documentation site. Hugo builds the complete stable,
+planned-minor, and `next` documentation lines without a JavaScript package or browser-bundle dependency graph.
 
-## Installation
+The site uses a task-oriented product structure:
 
-```sh
-pnpm install --frozen-lockfile
-```
+- minor-line documentation organized by operator work
+- native Hugo version routing with `next` for `main`
+- release notes as the entry point for patch-level history
+- repository-owned Hugo layouts and CSS without a third-party theme
+- build-generated local search with a small browser script
+- Hugo shortcodes for the few structured patterns that improve scanning
+- no Node.js, package manager, package lock, browser bundle, or npm dependency graph
 
-## Local Development
-
-```sh
-pnpm start
-```
-
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
-
-## Build
+## Run locally
 
 ```sh
-pnpm build
+./website/scripts/sync-api-reference.sh --all --check
+
+# On the devcontainer, Hugo is already pinned and installed:
+make docs-serve
+
+# On a Nix workstation:
+nix shell nixpkgs#hugo --command \
+  make docs-serve HUGO=hugo
 ```
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
+Open <http://127.0.0.1:1313/openbao-operator/>.
 
-## Deployment
-
-Using SSH:
+## Build strictly
 
 ```sh
-USE_SSH=true pnpm deploy
+nix shell nixpkgs#hugo --command make docs-build HUGO=hugo
 ```
 
-Not using SSH:
+The API sync reads each line's exact `sourceRef` from `data/version_lines.yaml` and splits its generated reference into
+one Hugo page per custom resource. The 0.4.x line retains three release-specific runtime errata; later lines publish
+their matching generated source directly. The generated site is written to `website/public/` and is ignored by Git.
 
-```sh
-GIT_USER=<Your GitHub username> pnpm deploy
-```
+The redirect post-processing step writes version-aware compatibility pages into that generated destination. Its
+declarative policy and validation instructions live under `redirects/`.
 
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+## Version policy
+
+- The unprefixed site is the current stable `0.4.x` line through OpenBao Operator 0.4.2.
+- `/0.5.x/` is the planned 0.5 minor-line contract. It remains visibly marked as planned and does not become the
+  unprefixed default until 0.5.0 is tagged.
+- `/next/` tracks unreleased behavior on `main`. It must never be presented as a stable production contract.
+- `/latest/` and its retained suffix routes are compatibility redirects to the equivalent unprefixed stable pages.
+  They do not track `main` and are not another editable content tree.
+- Patch releases update their existing minor line. A 0.5.1 release updates `0.5.x`; it does not create a `0.5.1`
+  documentation route.
+
+Before publishing a minor release, copy the reviewed `next` contract into its stable minor line, replace the source
+commit with the final release tag, regenerate the API reference, and make that line the default. Afterward, advance
+`next` from `main` without changing the stable snapshot.
+
+## Source and publication boundary
+
+Hugo content under `content/` and `content-versions/` is the only hand-written documentation source. Generated API
+source lives under `generated/`; `make api-reference` refreshes it from `api/v1alpha1`. Do not recreate a parallel
+manual or edit generated pages directly.
+
+Pages and release workflows publish the validated `website/public/` artifact while preserving the independently
+published `edge/` and `nightly/` channel directories. The executable reference-deployments repository remains a
+separate future project.
+
+See [EDITORIAL.md](EDITORIAL.md) for the authoring, verification, versioning, and quality standard.

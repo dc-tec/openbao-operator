@@ -8,13 +8,12 @@
 documentation:
   - changed-files:
       - any-glob-to-any-file:
-          - 'docs/**/*'
           - 'README.md'
           - 'CONTRIBUTING.md'
           - 'CHANGELOG.md'
           - 'LICENSE'
           - '**/*.md'
-          - 'releases/**/*'
+          - '.hugo-version'
           - 'website/**/*'
 
 # Helm chart changes
@@ -87,7 +86,7 @@ api:
           - 'api/**/*'
           - 'config/crd/**/*'
           - 'charts/openbao-operator/crds/**/*'
-          - 'docs/reference/api.md'
+          - 'website/generated/api-reference.md'
 
 # Controller changes
 controller:

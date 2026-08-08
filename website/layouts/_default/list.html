@@ -1,0 +1,36 @@
+{{ define "body" }}
+  {{- $isDocs := eq .Section "docs" -}}
+  <div class="{{ if $isDocs }}docs-shell{{ else }}global-shell{{ end }}">
+    {{ if $isDocs }}{{ partial "sidebar.html" . }}{{ end }}
+    <main class="doc-main" id="main-content">
+      {{ partial "breadcrumbs.html" . }}
+      {{ if not $isDocs }}{{ partial "section-nav.html" . }}{{ end }}
+      {{ if $isDocs }}{{ partial "version-notice.html" . }}{{ end }}
+      <article class="doc-article section-article">
+        <header class="article-header">
+          <h1>{{ .Title }}</h1>
+          {{ with .Description }}<p class="article-lede">{{ . }}</p>{{ end }}
+        </header>
+        {{ partial "mobile-toc.html" . }}
+        <div class="article-content">
+          {{ .Content }}
+          {{ if and .Pages (not .Params.hideChildren) }}
+            <h2>Pages in this section</h2>
+            <div class="page-list">
+              {{ range .Pages.ByWeight }}
+                <a href="{{ .RelPermalink }}">
+                  <span>{{ .Params.eyebrow | default "Guide" }}</span>
+                  <strong>{{ .Title }}</strong>
+                  <p>{{ .Description }}</p>
+                  <b aria-hidden="true">→</b>
+                </a>
+              {{ end }}
+            </div>
+          {{ end }}
+        </div>
+      </article>
+      {{ partial "footer.html" . }}
+    </main>
+    {{ partial "toc.html" . }}
+  </div>
+{{ end }}

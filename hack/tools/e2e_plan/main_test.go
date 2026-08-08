@@ -532,7 +532,7 @@ func TestSealChangePathPatterns(t *testing.T) {
 		{path: "hack/tools/e2e_plan/main.go", want: true},
 		{path: ".github/actions/prepare-e2e-lane/action.yml", want: true},
 		{path: ".github/workflows/ci.yml", want: true},
-		{path: "docs/user-guide/openbaocluster/configuration/unseal.md", want: false},
+		{path: "website/content/docs/configure/unseal.md", want: false},
 		{path: "internal/service/backup/manager.go", want: false},
 		{path: "api/v1alpha1/openbaocluster_networking_types.go", want: false},
 	}

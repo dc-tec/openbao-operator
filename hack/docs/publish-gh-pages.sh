@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-build_dir="${1:-website/build}"
+build_dir="${1:-website/public}"
 remote="${GH_PAGES_REMOTE:-origin}"
 branch="${GH_PAGES_BRANCH:-gh-pages}"
 commit_message="${COMMIT_MESSAGE:-docs: publish site}"

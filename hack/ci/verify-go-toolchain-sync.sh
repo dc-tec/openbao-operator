@@ -16,7 +16,7 @@ while IFS= read -r -d '' file; do
   fi
 done < <(
   find "${ROOT_DIR}" \
-    \( -path "${ROOT_DIR}/.git" -o -path "${ROOT_DIR}/vendor" -o -path "${ROOT_DIR}/website/node_modules" -o -path "${ROOT_DIR}/.github/tools/node_modules" \) -prune \
+    \( -path "${ROOT_DIR}/.git" -o -path "${ROOT_DIR}/vendor" -o -path "${ROOT_DIR}/.github/tools/node_modules" \) -prune \
     -o -type f -name 'Dockerfile*' -print0
 )
 

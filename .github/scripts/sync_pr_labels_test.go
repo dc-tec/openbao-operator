@@ -44,7 +44,7 @@ func TestMatchingContentLabels(t *testing.T) {
 	}
 
 	files := []pullRequestFile{
-		{Filename: "docs/reference/api.md"},
+		{Filename: "website/generated/api-reference.md"},
 		{Filename: "internal/controller/openbaocluster/controller.go"},
 	}
 

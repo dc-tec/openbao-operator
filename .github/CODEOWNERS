@@ -13,7 +13,7 @@
 /charts/** @dc-tec
 
 # Release + supply-chain/security documentation
-/docs/contribute/release-management.md @dc-tec
-/docs/contribute/sdlc.md @dc-tec
-/docs/contribute/supply-chain-security.md @dc-tec
-/docs/security/workload/supply-chain.md @dc-tec
+/website/content/contribute/release.md @dc-tec
+/website/content/contribute/incident-response.md @dc-tec
+/website/content/contribute/supply-chain.md @dc-tec
+/website/content/docs/security/supply-chain.md @dc-tec

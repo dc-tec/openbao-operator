@@ -1,6 +1,6 @@
 # OpenBao Operator Helm Chart
 
-![OpenBao Operator logo](https://raw.githubusercontent.com/dc-tec/openbao-operator/main/docs/assets/repo_logo.png)
+![OpenBao Operator logo](https://raw.githubusercontent.com/dc-tec/openbao-operator/main/website/static/img/brand/logo.svg)
 
 This chart installs the OpenBao Operator and its cluster-scoped dependencies.
 

@@ -1,0 +1,4 @@
+<div class="checklist">
+  {{ with .Get "title" }}<p class="checklist-title">{{ . }}</p>{{ end }}
+  <div>{{ .Inner | markdownify }}</div>
+</div>

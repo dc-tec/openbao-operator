@@ -1,0 +1,68 @@
+{{ define "body" }}
+{{- $line := index hugo.Data.version_lines site.Version.Name -}}
+{{- $default := hugo.Sites.Default -}}
+{{- $versionHome := .Site.Home.RelPermalink -}}
+{{- $getStartedURL := printf "%sdocs/get-started/" $versionHome -}}
+{{- $compatibilityURL := printf "%sdocs/reference/compatibility/" $versionHome -}}
+<main id="main-content" class="home-main home-quiet">
+  <section class="home-intro">
+    <div class="home-intro-copy">
+      <h1>OpenBao Operator</h1>
+      <p class="home-summary">{{ if site.Version.IsDefault }}Install and operate OpenBao clusters on Kubernetes.{{ else }}OpenBao Operator documentation for {{ $line.label }}.{{ end }}</p>
+      <div class="hero-actions">
+        <a class="button button-primary" href="{{ $getStartedURL }}">
+          Get started <span>→</span>
+        </a>
+        <a class="button button-secondary" href="{{ $compatibilityURL }}">
+          Check compatibility
+        </a>
+      </div>
+    </div>
+    <aside class="home-current" aria-label="Documentation status">
+      <p>{{ if site.Version.IsDefault }}Current documentation{{ else }}Documentation line{{ end }}</p>
+      <dl>
+        <div><dt>Docs</dt><dd>{{ $line.label }}</dd></div>
+        <div><dt>Release</dt><dd>{{ $line.release }}</dd></div>
+        <div><dt>Status</dt><dd>{{ $line.state }}</dd></div>
+      </dl>
+      {{ if site.Version.IsDefault }}
+        {{ if eq $line.state "Planned stable" }}
+          <a href="{{ printf "%sdocs/reference/release-lifecycle/" $versionHome }}">Review release contract</a>
+        {{ else }}
+          <a href="{{ ($default.GetPage "/releases").RelPermalink }}">View release notes</a>
+        {{ end }}
+      {{ else }}
+        <a href="{{ ($default.GetPage "/docs").RelPermalink }}">Open current stable docs</a>
+      {{ end }}
+    </aside>
+  </section>
+
+  {{ if site.Version.IsDefault }}
+  <section class="home-project">
+    <div>
+      <h2>Project direction</h2>
+      <p>Review future modules and the design boundaries they must preserve.</p>
+    </div>
+    <div class="home-project-links">
+      <a href="{{ "project/roadmap/" | relURL }}">Roadmap</a>
+      <a href="{{ "project/" | relURL }}">Project overview</a>
+    </div>
+  </section>
+  {{ end }}
+
+  {{ if site.Version.IsDefault }}
+  <section class="home-project">
+    <div>
+      <h2>Contribute</h2>
+      <p>Set up the repository, follow the project standards, and run the required checks.</p>
+    </div>
+    <div class="home-project-links">
+      <a href="{{ "contribute/" | relURL }}">Contributor guide</a>
+      <a href="{{ site.Params.repository }}">GitHub repository</a>
+    </div>
+  </section>
+  {{ end }}
+
+  {{ partial "footer.html" . }}
+</main>
+{{ end }}

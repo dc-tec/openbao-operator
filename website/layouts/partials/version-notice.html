@@ -1,0 +1,7 @@
+{{- $line := index hugo.Data.version_lines site.Version.Name -}}
+{{- if $line.showNotice -}}
+<aside class="version-notice version-notice-{{ site.Version.Name | anchorize }}" aria-label="Documentation version notice">
+  <strong>{{ $line.label }} · {{ $line.state }}</strong>
+  <span>{{ $line.notice }}</span>
+</aside>
+{{- end -}}

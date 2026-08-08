@@ -1,0 +1,12 @@
+{{ if and (not .Params.hideToc) (gt (len .TableOfContents) 32) }}
+{{- $line := index hugo.Data.version_lines site.Version.Name -}}
+<aside class="page-toc">
+  <p>On this page</p>
+  {{ .TableOfContents }}
+  {{ if and $line.editable .File }}
+    <a class="edit-link" href="{{ site.Params.repository }}/edit/{{ $line.editRef }}/{{ $line.contentRoot }}/{{ .File.Path }}">Edit this page <span>↗</span></a>
+  {{ else }}
+    <p class="archive-label">Archived {{ $line.label }} contract</p>
+  {{ end }}
+</aside>
+{{ end }}

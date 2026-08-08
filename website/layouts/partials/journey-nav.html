@@ -1,0 +1,38 @@
+{{- if and (eq .Section "docs") (hasPrefix .RelPermalink (printf "%sdocs/get-started/" .Site.Home.RelPermalink)) -}}
+  {{- $group := index hugo.Data.navigation.primary 0 -}}
+  {{- $items := first 6 $group.items -}}
+  {{- $current := -1 -}}
+  {{- range $index, $item := $items -}}
+    {{- $url := printf "%s%s" $.Site.Home.RelPermalink $item.url -}}
+    {{- if eq $.RelPermalink $url }}{{ $current = $index }}{{ end -}}
+  {{- end -}}
+  {{- if ge $current 0 -}}
+    <nav class="journey-nav" aria-label="Multi-tenant Get Started path">
+      {{- if gt $current 0 -}}
+        {{- $previous := index $items (sub $current 1) -}}
+        <a href="{{ printf "%s%s" .Site.Home.RelPermalink $previous.url }}">
+          <span>Previous</span>
+          <strong>{{ $previous.title }}</strong>
+        </a>
+      {{- else -}}
+        <span></span>
+      {{- end -}}
+      {{- if lt (add $current 1) (len $items) -}}
+        {{- $next := index $items (add $current 1) -}}
+        <a href="{{ printf "%s%s" .Site.Home.RelPermalink $next.url }}">
+          <span>Next</span>
+          <strong>{{ $next.title }}</strong>
+        </a>
+      {{- end -}}
+    </nav>
+  {{- end -}}
+  {{- if hasSuffix .RelPermalink "/docs/get-started/single-tenant/" -}}
+    <nav class="journey-nav" aria-label="Single-tenant Get Started path">
+      <span></span>
+      <a href="{{ printf "%sdocs/get-started/create-cluster/" .Site.Home.RelPermalink }}">
+        <span>Next</span>
+        <strong>Create the first cluster</strong>
+      </a>
+    </nav>
+  {{- end -}}
+{{- end -}}

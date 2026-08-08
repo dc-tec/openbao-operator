@@ -1,0 +1,11 @@
+{{- $default := hugo.Sites.Default -}}
+{{- $releases := $default.GetPage "/releases" -}}
+{{- $contribute := $default.GetPage "/contribute" -}}
+<footer class="site-footer">
+  <p>OpenBao Operator is an independent open source project.</p>
+  <div>
+    <a href="{{ site.Params.repository }}">GitHub</a>
+    <a href="{{ $releases.RelPermalink }}">Releases</a>
+    <a href="{{ $contribute.RelPermalink }}">Contribute</a>
+  </div>
+</footer>

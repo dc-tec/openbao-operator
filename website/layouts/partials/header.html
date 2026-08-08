@@ -1,0 +1,40 @@
+{{- $default := hugo.Sites.Default -}}
+{{- $docsURL := printf "%sdocs/" .Site.Home.RelPermalink -}}
+{{- $releases := $default.GetPage "/releases" -}}
+{{- $project := $default.GetPage "/project" -}}
+{{- $contribute := $default.GetPage "/contribute" -}}
+{{- $hasDocsSidebar := and (not .IsHome) (eq .Section "docs") -}}
+{{- $navTarget := cond $hasDocsSidebar "site-sidebar" "primary-navigation" -}}
+<header class="site-header">
+  <div class="header-inner">
+    <button class="icon-button nav-toggle" type="button" aria-label="Open {{ if $hasDocsSidebar }}documentation{{ else }}primary{{ end }} navigation" aria-controls="{{ $navTarget }}" aria-expanded="false" data-nav-toggle>
+      <span></span><span></span><span></span>
+    </button>
+    <a class="brand" href="{{ site.Home.RelPermalink }}" aria-label="OpenBao Operator documentation home">
+      <img class="brand-logo" src="{{ "img/brand/logo.svg" | relURL }}" alt="">
+      <span class="brand-name">OpenBao <b>Operator</b></span>
+    </a>
+    <nav class="top-nav" id="primary-navigation" aria-label="Primary">
+      <a href="{{ $docsURL }}"{{ if eq .Section "docs" }} aria-current="location"{{ end }}>Docs</a>
+      <a href="{{ $releases.RelPermalink }}"{{ if eq .Section "releases" }} aria-current="location"{{ end }}>Releases</a>
+      <a href="{{ $project.RelPermalink }}"{{ if eq .Section "project" }} aria-current="location"{{ end }}>Project</a>
+      <a href="{{ $contribute.RelPermalink }}"{{ if eq .Section "contribute" }} aria-current="location"{{ end }}>Contribute</a>
+    </nav>
+    <div class="header-actions">
+      <button class="search-trigger" type="button" aria-haspopup="dialog" data-search-open>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+        <span>Search</span>
+        <kbd>⌘ K</kbd>
+      </button>
+      <div class="github-actions">
+        <a class="github-link" href="{{ site.Params.repository }}" aria-label="OpenBao Operator on GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.87c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.58 9.58 0 0 1 12 6.82c.85 0 1.7.12 2.5.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.76c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+        </a>
+        <a class="stargazers-link" href="{{ site.Params.repository }}" aria-label="View OpenBao Operator stars on GitHub" data-stargazers data-endpoint="{{ site.Params.repository_api }}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"/></svg>
+          <span class="stargazer-count" data-stargazer-count hidden></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</header>

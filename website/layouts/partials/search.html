@@ -1,0 +1,19 @@
+{{- $searchIndex := site.Home.OutputFormats.Get "json" -}}
+<dialog class="search-dialog" aria-label="Search documentation" data-search-dialog data-search-index="{{ $searchIndex.RelPermalink }}">
+  <section class="search-panel">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+      <label class="sr-only" for="site-search">Search documentation</label>
+      <input id="site-search" type="search" autocomplete="off" placeholder="Search the operator docs…" data-search-input>
+      <button class="search-close" type="button" aria-label="Close search" data-search-close>Close <kbd>Esc</kbd></button>
+    </div>
+    <div class="search-state" role="status" aria-live="polite" data-search-state>
+      <div>
+        <p id="search-title">Search the handbook</p>
+        <span>Try “install”, “threat model”, or “compatibility”.</span>
+      </div>
+    </div>
+    <ol class="search-results" aria-label="Search results" data-search-results></ol>
+    <footer><span><kbd>↑</kbd> <kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span></footer>
+  </section>
+</dialog>

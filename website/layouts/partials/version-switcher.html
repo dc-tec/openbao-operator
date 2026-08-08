@@ -1,0 +1,24 @@
+{{- $current := . -}}
+{{- $line := index hugo.Data.version_lines site.Version.Name -}}
+<details class="version-switcher">
+  <summary aria-label="Documentation version, currently {{ $line.label }}">
+    <span>{{ $line.label }}</span>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+  </summary>
+  <div class="version-menu">
+    {{- range hugo.Sites }}
+      {{- $targetSite := . -}}
+      {{- $targetURL := printf "%sdocs/" .Home.RelPermalink -}}
+      {{- range $current.Rotate "version" -}}
+        {{- if eq .Site.Version.Name $targetSite.Version.Name -}}
+          {{- $targetURL = .RelPermalink -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $targetLine := index hugo.Data.version_lines .Version.Name -}}
+      <a href="{{ $targetURL }}"{{ if eq .Version.Name $current.Site.Version.Name }} aria-current="page"{{ end }}>
+        <span>{{ $targetLine.label }}</span>
+        <small>{{ $targetLine.state }}</small>
+      </a>
+    {{- end }}
+  </div>
+</details>

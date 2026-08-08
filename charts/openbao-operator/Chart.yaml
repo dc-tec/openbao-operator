@@ -7,7 +7,7 @@ type: application
 version: 0.4.0
 appVersion: 0.4.0
 icon: >-
-  https://raw.githubusercontent.com/dc-tec/openbao-operator/main/docs/assets/logo.svg
+  https://raw.githubusercontent.com/dc-tec/openbao-operator/main/website/static/img/brand/logo.svg
 home: https://github.com/dc-tec/openbao-operator
 sources:
   - https://github.com/dc-tec/openbao-operator

@@ -6,7 +6,7 @@ description: Layered architecture and dependency direction rules for the OpenBao
 
 # Architecture Rules
 
-See [Architecture Documentation](docs/architecture/index.md).
+See [Architecture Documentation](../../website/content/docs/architecture/_index.md).
 
 ## Layer Model (L0-L7)
 

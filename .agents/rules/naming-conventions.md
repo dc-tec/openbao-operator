@@ -6,7 +6,7 @@ description: Naming conventions for the OpenBao Operator
 
 # Naming Conventions
 
-See [Go Style](docs/contribute/standards/go-style.md).
+See [project standards](../../website/content/contribute/standards.md).
 
 ## Go Naming
 

@@ -31,4 +31,4 @@ jobs:
       - name: Publish site root to GitHub Pages
         env:
           COMMIT_MESSAGE: "docs: publish main site (${{ github.sha }})"
-        run: bash hack/docs/publish-gh-pages.sh website/build
+        run: bash hack/docs/publish-gh-pages.sh website/public
