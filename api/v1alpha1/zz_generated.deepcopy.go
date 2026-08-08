@@ -964,6 +964,11 @@ func (in *OpenBaoClusterSpec) DeepCopyInto(out *OpenBaoClusterSpec) {
 		*out = new(ObservabilityConfig)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Resources != nil {
+		in, out := &in.Resources, &out.Resources
+		*out = new(v1.ResourceRequirements)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.ReadReplicas != nil {
 		in, out := &in.ReadReplicas, &out.ReadReplicas
 		*out = new(ReadReplicaConfig)

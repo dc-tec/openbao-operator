@@ -212,6 +212,10 @@ type OpenBaoClusterSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:default=3
 	Replicas int32 `json:"replicas"`
+	// Resources defines resource requests and limits for voter OpenBao containers.
+	// Read replicas use spec.readReplicas.template.resources instead.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 	// ReadReplicas configures the steady-state non-voter read-replica pool.
 	// +optional
 	ReadReplicas *ReadReplicaConfig `json:"readReplicas,omitempty"`

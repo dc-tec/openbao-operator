@@ -145,6 +145,10 @@ resources:
       - path: spec.replicas
         classification: beta-stable
         owner: workload
+      - path: spec.resources
+        classification: additive-unfrozen
+        owner: workload
+        rationale: Resource requirements apply to voter OpenBao containers; read replicas retain their pool-specific template setting.
       - path: spec.restore
         classification: beta-stable
         owner: restore

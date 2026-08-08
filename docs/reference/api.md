@@ -1059,6 +1059,7 @@ _Appears in:_
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core) array_ | ImagePullSecrets is a list of references to secrets in the same namespace<br />to use for pulling any images used by this Cluster (server, init, sidecars). |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configures telemetry and metrics integration. |  | Optional: \{\} <br /> |
 | `replicas` _integer_ | Replicas is the desired number of quorum-carrying voter Pods. | 3 | Minimum: 1 <br /> |
+| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#resourcerequirements-v1-core)_ | Resources defines resource requests and limits for voter OpenBao containers.<br />Read replicas use spec.readReplicas.template.resources instead. |  | Optional: \{\} <br /> |
 | `readReplicas` _[ReadReplicaConfig](#readreplicaconfig)_ | ReadReplicas configures the steady-state non-voter read-replica pool. |  | Optional: \{\} <br /> |
 | `paused` _boolean_ | Paused, when true, pauses reconciliation for this OpenBaoCluster (except delete and finalizers). |  | Optional: \{\} <br /> |
 | `maintenance` _[MaintenanceConfig](#maintenanceconfig)_ | Maintenance configures supported maintenance workflows. |  | Optional: \{\} <br /> |
