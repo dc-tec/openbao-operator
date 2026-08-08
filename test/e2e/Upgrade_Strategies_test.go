@@ -50,6 +50,7 @@ const (
 	invalidUpgradeJWTAuthRole  = "invalid-upgrade-role"
 	e2eAdminPolicyName         = "e2e-admin"
 	e2eAdminRoleName           = "e2e-admin"
+	e2eGatewayControllerName   = gatewayv1.GatewayController("openbao.org/e2e-gateway")
 )
 
 type serviceAvailabilityStats struct {
@@ -123,7 +124,7 @@ func ensureGatewayClassReady(
 	gatewayClass := &gatewayv1.GatewayClass{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: gatewayv1.GatewayClassSpec{
-			ControllerName: gatewayv1.GatewayController("openbao.org/e2e-gateway"),
+			ControllerName: e2eGatewayControllerName,
 		},
 	}
 	Expect(c.Create(ctx, gatewayClass)).To(Succeed())
@@ -158,6 +159,44 @@ func ensureGatewayClassReady(
 		}
 
 		g.Expect(c.Status().Patch(ctx, current, client.MergeFrom(original))).To(Succeed())
+	}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+}
+
+func markTLSRouteReady(
+	ctx context.Context,
+	c client.Client,
+	namespace, name string,
+) {
+	Eventually(func(g Gomega) {
+		route := &gatewayv1.TLSRoute{}
+		g.Expect(c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, route)).To(Succeed())
+		g.Expect(route.Spec.ParentRefs).To(HaveLen(1))
+
+		original := route.DeepCopy()
+		route.Status.Parents = []gatewayv1.RouteParentStatus{
+			{
+				ParentRef:      route.Spec.ParentRefs[0],
+				ControllerName: e2eGatewayControllerName,
+				Conditions: []metav1.Condition{
+					{
+						Type:               string(gatewayv1.RouteConditionAccepted),
+						Status:             metav1.ConditionTrue,
+						Reason:             string(gatewayv1.RouteReasonAccepted),
+						ObservedGeneration: route.Generation,
+						LastTransitionTime: metav1.Now(),
+					},
+					{
+						Type:               string(gatewayv1.RouteConditionResolvedRefs),
+						Status:             metav1.ConditionTrue,
+						Reason:             string(gatewayv1.RouteReasonResolvedRefs),
+						ObservedGeneration: route.Generation,
+						LastTransitionTime: metav1.Now(),
+					},
+				},
+			},
+		}
+
+		g.Expect(c.Status().Patch(ctx, route, client.MergeFrom(original))).To(Succeed())
 	}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 }
 
@@ -3371,6 +3410,12 @@ var _ = Describe("Upgrade Strategies", Label("upgrade", "upgrades", "cluster", "
 					},
 				}
 				Expect(admin.Create(ctx, passthroughCluster)).To(Succeed())
+				markTLSRouteReady(
+					ctx,
+					admin,
+					tenantNamespace,
+					fmt.Sprintf("%s-tlsroute", passthroughCluster.Name),
+				)
 
 				Eventually(func(g Gomega) {
 					updated := &openbaov1alpha1.OpenBaoCluster{}
