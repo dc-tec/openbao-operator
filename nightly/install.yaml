@@ -3378,6 +3378,67 @@ spec:
                 format: int32
                 minimum: 1
                 type: integer
+              resources:
+                description: |-
+                  Resources defines resource requests and limits for voter OpenBao containers.
+                  Read replicas use spec.readReplicas.template.resources instead.
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This field depends on the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
               restore:
                 description: Restore configures optional restore authentication bootstrap
                   for the cluster.
@@ -6891,10 +6952,10 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260806-1f5d771d739d
+          value: nightly-20260808-409f4827aa44
         - name: OPENBAO_JWT_AUDIENCE
           value: openbao-internal
-        image: ghcr.io/dc-tec/openbao-operator@sha256:ea705643005d948e8c343627223704220f6f86887e280103f8e1d4ab8ea9c570
+        image: ghcr.io/dc-tec/openbao-operator@sha256:ceee7966dccaeb63b1d57566de6d53d62853e48e671c4651ac5088b953ea4f37
         livenessProbe:
           httpGet:
             path: /healthz
@@ -7009,8 +7070,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: OPERATOR_VERSION
-          value: nightly-20260806-1f5d771d739d
-        image: ghcr.io/dc-tec/openbao-operator@sha256:ea705643005d948e8c343627223704220f6f86887e280103f8e1d4ab8ea9c570
+          value: nightly-20260808-409f4827aa44
+        image: ghcr.io/dc-tec/openbao-operator@sha256:ceee7966dccaeb63b1d57566de6d53d62853e48e671c4651ac5088b953ea4f37
         livenessProbe:
           httpGet:
             path: /healthz
