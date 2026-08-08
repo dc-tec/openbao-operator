@@ -265,6 +265,11 @@ Choose `BlueGreen` when you need parallel validation, a manual promotion point, 
   Use the hook to prove the Green revision is really healthy before promotion. If the hook fails, the operator either holds or rolls back depending on the `autoRollback` settings.
 </CommandBlock>
 
+Before creating the Job, the operator applies `spec.operatorImageVerification` to the hook image and pins a successful
+verification result by digest. `Block` prevents Job creation when verification fails; `Warn` continues with the original
+image reference. The Job inherits `spec.imagePullSecrets` for kubelet pulls and runs non-root with a read-only root
+filesystem, no automounted ServiceAccount token, and explicit resource requests and limits.
+
 <DecisionTable
   kind="reference"
   title="Control in-flight upgrades"

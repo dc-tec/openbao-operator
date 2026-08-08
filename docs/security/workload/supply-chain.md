@@ -86,9 +86,9 @@ description: Signature verification, transparency-log checks, digest pinning, an
     },
     {
       cells: [
-        "Init, backup, restore, and upgrade images",
+        "Init, backup, restore, upgrade, and BlueGreen validation-hook images",
         "`spec.operatorImageVerification`",
-        "Helper images are published by the operator project and often need their own trust policy.",
+        "Helper and custom hook images need a trust policy separate from the OpenBao server image.",
       ],
     },
     {
