@@ -1,0 +1,124 @@
+<!doctype html><html lang=en-US><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><meta name=theme-color content="#08141d"><meta name=description content="Scrape operator and workload metrics with explicit authentication, TLS verification, and network reachability."><meta name=robots content="noindex,follow"><title>Monitor OpenBao · Next · OpenBao Operator</title><link rel=canonical href=https://dc-tec.github.io/openbao-operator/next/docs/configure/monitor/><link rel=icon type=image/png href=/openbao-operator/img/brand/favicon.png><link rel=stylesheet href=/openbao-operator/css/site.min.11fbef8784b9dfc610dbe3cbc5bf42f1b10bf3b2041d8e82b961a6a7df06b64a.css integrity="sha256-Efvvh4S538YQ2+PLxb9C8bEL87IEHY6CuWGmp98Gtko="><script defer src=/openbao-operator/js/site.min.4ef3227924e1b4e4e97688f9a4e1e83e7d1e7634a619747ba70bf34ad6082498.js integrity="sha256-TvMieSThtOTpdoj5pOHoPn0edjSmGXR7pwvzStYIJJg="></script></head><body class="is-doc has-doc-sidebar"><a class=skip-link href=#main-content>Skip to content</a><header class=site-header><div class=header-inner><button class="icon-button nav-toggle" type=button aria-label="Open documentation navigation" aria-controls=site-sidebar aria-expanded=false data-nav-toggle>
+<span></span><span></span><span></span>
+</button>
+<a class=brand href=/openbao-operator/next/ aria-label="OpenBao Operator documentation home"><img class=brand-logo src=/openbao-operator/img/brand/logo.svg alt>
+<span class=brand-name>OpenBao <b>Operator</b></span></a><nav class=top-nav id=primary-navigation aria-label=Primary><a href=/openbao-operator/next/docs/ aria-current=location>Docs</a>
+<a href=/openbao-operator/releases/>Releases</a>
+<a href=/openbao-operator/project/>Project</a>
+<a href=/openbao-operator/contribute/>Contribute</a></nav><div class=header-actions><button class=search-trigger type=button aria-haspopup=dialog data-search-open>
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35M19 11A8 8 0 113 11a8 8 0 0116 0z"/></svg>
+<span>Search</span>
+<kbd>⌘ K</kbd></button><div class=github-actions><a class=github-link href=https://github.com/dc-tec/openbao-operator aria-label="OpenBao Operator on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 008.84 21.49c.5.09.68-.22.68-.48v-1.87c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.55-1.11-4.55-4.94.0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64.0.0.84-.27 2.75 1.02A9.58 9.58.0 0112 6.82c.85.0 1.7.12 2.5.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68.0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.76c0 .27.18.58.69.48A10 10 0 0012 2z"/></svg>
+</a><a class=stargazers-link href=https://github.com/dc-tec/openbao-operator aria-label="View OpenBao Operator stars on GitHub" data-stargazers data-endpoint=https://api.github.com/repos/dc-tec/openbao-operator><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3z"/></svg>
+<span class=stargazer-count data-stargazer-count hidden></span></a></div></div></div></header><button class=nav-scrim type=button aria-label="Close navigation" data-nav-close></button><div class=docs-shell><aside class=sidebar id=site-sidebar data-sidebar><div class=sidebar-head><p>Documentation</p><div class=sidebar-head-actions><details class=version-switcher><summary aria-label="Documentation version, currently Next"><span>Next</span>
+<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg></summary><div class=version-menu><a href=/openbao-operator/0.5.x/docs/configure/monitor/><span>0.5.x</span>
+<small>Planned stable</small>
+</a><a href=/openbao-operator/docs/configure/monitor/><span>0.4.x</span>
+<small>Current stable</small>
+</a><a href=/openbao-operator/next/docs/configure/monitor/ aria-current=page><span>Next</span>
+<small>Unreleased</small></a></div></details><button class=sidebar-collapse type=button aria-controls=site-sidebar aria-expanded=true title="Collapse sidebar" data-sidebar-collapse>
+<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg>
+<span class=sr-only data-sidebar-collapse-label>Collapse sidebar</span></button></div></div><nav aria-label=Documentation><div class=nav-group><a class=nav-group-link href=/openbao-operator/next/docs/get-started/><span>Get started</span></a></div><div class="nav-group is-active"><a class=nav-group-link href=/openbao-operator/next/docs/configure/><span>Configure</span></a><div class=nav-children><a href=/openbao-operator/next/docs/configure/>Overview</a>
+<a href=/openbao-operator/next/docs/configure/security-profile/>Choose a security profile</a>
+<a href=/openbao-operator/next/docs/configure/initialize/>Initialize the cluster</a>
+<a href=/openbao-operator/next/docs/configure/unseal/>Configure unseal</a>
+<a href=/openbao-operator/next/docs/configure/storage/>Configure storage</a>
+<a href=/openbao-operator/next/docs/configure/server/>Configure the server runtime</a>
+<a href=/openbao-operator/next/docs/configure/expose/>Expose OpenBao</a>
+<a href=/openbao-operator/next/docs/configure/gateway/>Use Gateway API</a>
+<a href=/openbao-operator/next/docs/configure/network/>Configure network policy</a>
+<a class=is-current href=/openbao-operator/next/docs/configure/monitor/ aria-current=page>Monitor OpenBao</a>
+<a href=/openbao-operator/next/docs/configure/read-replicas/>Configure read replicas</a>
+<a href=/openbao-operator/next/docs/configure/air-gapped/>Use private registries</a></div></div><div class=nav-group><a class=nav-group-link href=/openbao-operator/next/docs/operate/><span>Operate</span></a></div><div class=nav-group><a class=nav-group-link href=/openbao-operator/next/docs/security/><span>Security</span></a></div><div class=nav-group><a class=nav-group-link href=/openbao-operator/next/docs/reference/><span>Reference</span></a></div><div class=nav-group><a class=nav-group-link href=/openbao-operator/next/docs/architecture/><span>Architecture</span></a></div><div class=nav-divider></div><div class=nav-secondary-group><a class=nav-secondary href=/openbao-operator/releases/>Releases</a></div><div class=nav-secondary-group><a class=nav-secondary href=/openbao-operator/project/>Project</a></div><div class=nav-secondary-group><a class=nav-secondary href=/openbao-operator/contribute/>Contribute</a></div></nav></aside><main class=doc-main id=main-content><nav class=breadcrumbs aria-label=Breadcrumb><a href=/openbao-operator/next/>Home</a>
+<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+<a href=/openbao-operator/next/docs/>Documentation</a>
+<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+<a href=/openbao-operator/next/docs/configure/>Configure a cluster</a>
+<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+<span aria-current=page>Monitor OpenBao</span></nav><aside class="version-notice version-notice-next" aria-label="Documentation version notice"><strong>Next · Unreleased</strong>
+<span>Tracks unreleased behavior on main. Do not use it as a stable production contract.</span></aside><article class=doc-article><header class=article-header><h1>Monitor OpenBao</h1><p class=article-lede>Scrape operator and workload metrics with explicit authentication, TLS verification, and network reachability.</p><p class=page-meta>Updated 9 August 2026 · 4 min read</p></header><details class=mobile-toc><summary>On this page</summary><nav id=MobileTableOfContents><ul><li><a href=#scrape-operator-metrics>Scrape operator metrics</a></li><li><a href=#scrape-the-active-openbao-node>Scrape the active OpenBao node</a></li><li><a href=#scrape-every-openbao-node>Scrape every OpenBao node</a></li><li><a href=#start-with-a-small-signal-set>Start with a small signal set</a></li></ul></nav></details><div class=article-content><p>Monitor two separate surfaces: the operator control plane and each OpenBao workload. Enabling one does not configure
+the other.</p><table><thead><tr><th>Surface</th><th>Configure through</th><th>Shows</th></tr></thead><tbody><tr><td>Operator metrics</td><td>Helm or Kustomize installation</td><td>Reconcile, cluster, backup, restore, and upgrade behavior</td></tr><tr><td>Workload telemetry</td><td><code>spec.observability.metrics</code> on an <code>OpenBaoCluster</code></td><td>OpenBao application and Raft metrics</td></tr><tr><td>Audit records</td><td><code>spec.audit</code> and audit file storage</td><td>Security events; see <a href=../storage/#configure-audit-file-storage>storage</a></td></tr></tbody></table><h2 id=scrape-operator-metrics>Scrape operator metrics</h2><p>The operator exposes an HTTPS, RBAC-protected endpoint. With Prometheus Operator, enable the metrics reader binding and
+ServiceMonitor resources through Helm:</p><div class=command-block><div class=command-head><div><span>configure</span><p>Enable operator ServiceMonitors</p></div><button type=button data-copy-button>Copy</button></div><pre><code>metrics:
+  enabled: true
+  rbac:
+    enabled: true
+    subjects:
+      - name: prometheus-k8s
+        namespace: monitoring
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+    tlsConfig:
+      insecureSkipVerify: true</code></pre></div><p>The chart creates a controller ServiceMonitor and, in multi-tenant mode, a provisioner ServiceMonitor. Its default
+self-signed metrics certificate makes <code>insecureSkipVerify: true</code> the working bootstrap configuration. For strict
+verification, configure the chart&rsquo;s CA and server-name fields with certificate material your monitoring platform can
+read.</p><p>When the chart renders a provisioner scraper in multi-tenant mode, it also renders a provisioner-specific ingress
+NetworkPolicy. Both controller and Provisioner policies use <code>networkPolicy.metricsAllowedNamespaceLabels</code>; label the
+monitoring namespace to match that selector.</p><p>VictoriaMetrics users can set <code>metrics.victoriaMetrics.enabled: true</code> instead. A plain Prometheus installation can
+scrape a reachable operator metrics Service on HTTPS port 8443 with a bearer token authorized for <code>GET /metrics</code>.</p><p>The selector defaults to <code>metrics: enabled</code>.</p><h2 id=scrape-the-active-openbao-node>Scrape the active OpenBao node</h2><p>The default <code>Active</code> profile selects the active pod and reads <code>/v1/sys/metrics?format=prometheus</code> on the API listener.
+Enabling metrics configures OpenBao telemetry and creates a metrics Service. A ServiceMonitor is created by default
+when the Prometheus Operator CRD is installed, but metrics access is not made unauthenticated.</p><div class=command-block><div class=command-head><div><span>configure</span><p>Create an authenticated workload ServiceMonitor</p></div><button type=button data-copy-button>Copy</button></div><pre><code>spec:
+  observability:
+    metrics:
+      enabled: true
+      scrapeProfile: Active
+      serviceMonitor:
+        enabled: true
+        interval: 30s
+        scrapeTimeout: 10s
+        labels:
+          release: kube-prometheus-stack
+        authorization:
+          credentialsSecret:
+            name: openbao-metrics-token
+            key: token
+        tlsConfig:
+          serverName: openbao-cluster-prod-cluster.local
+          caConfigMap:
+            name: prod-cluster-metrics-ca
+            key: ca.crt
+  network:
+    trustedIngressPeers:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: monitoring</code></pre></div><p>Create the token with only <code>read</code> on <code>sys/metrics</code>. Trusted platform automation must also create and refresh the
+same-namespace <code>prod-cluster-metrics-ca</code> ConfigMap with the public <code>ca.crt</code> bundle. The operator does not create that
+observability ConfigMap. Do not place a CA private key in it.</p><p>The identity applying the <code>OpenBaoCluster</code> needs <code>get</code> on the authorization Secret and <code>use</code> or <code>get</code> on the CA
+ConfigMap. The monitoring peer is also required for the generated workload NetworkPolicy. Hardened clusters reject
+<code>insecureSkipVerify: true</code> for workload ServiceMonitors.</p><h2 id=scrape-every-openbao-node>Scrape every OpenBao node</h2><p>Use <code>AllNodes</code> only when standby and per-node Raft visibility justifies an additional listener. It requires OpenBao
+2.5.0 or newer, is not supported with ACME TLS, and enables unauthenticated metrics access on a metrics-only listener
+by default. Restrict that listener with NetworkPolicy.</p><div class=command-block><div class=command-head><div><span>configure</span><p>Expose all-node metrics only to monitoring</p></div><button type=button data-copy-button>Copy</button></div><pre><code>spec:
+  observability:
+    metrics:
+      enabled: true
+      scrapeProfile: AllNodes
+      metricsOnlyListener:
+        port: 8202
+        unauthenticatedMetricsAccess: true
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: kube-prometheus-stack
+        tlsConfig:
+          serverName: openbao-cluster-prod-cluster.local
+          caConfigMap:
+            name: prod-cluster-metrics-ca
+            key: ca.crt
+  network:
+    trustedIngressPeers:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: monitoring</code></pre></div><p>The operator renders the listener, a headless metrics Service, and ServiceMonitor relabeling for pod and node names.
+Use a pod selector in <code>trustedIngressPeers</code> as well when the monitoring namespace contains unrelated workloads.</p><h2 id=start-with-a-small-signal-set>Start with a small signal set</h2><table><thead><tr><th>Concern</th><th>Operator signals</th></tr></thead><tbody><tr><td>Availability</td><td><code>openbao_cluster_ready_replicas</code> and <code>Available</code> or <code>Degraded</code> conditions</td></tr><tr><td>Reconciliation</td><td><code>openbao_reconcile_errors_total</code> and <code>openbao_reconcile_duration_seconds</code></td></tr><tr><td>Backup</td><td><code>openbao_backup_last_success_timestamp</code> and backup readiness or failure state</td></tr><tr><td>Upgrade</td><td><code>openbao_upgrade_in_progress</code>, failure, rollback, and duration metrics</td></tr><tr><td>Read pool</td><td><code>openbao_cluster_read_replicas_desired</code>, <code>_ready</code>, <code>_registered</code>, and <code>_healthy</code></td></tr></tbody></table><p>The repository includes focused dashboards under <code>config/grafana/dashboards/</code>; apply <code>config/grafana</code> as a starting
+point. Alert rules remain user-managed. Begin with availability, stale backups, sustained reconciliation errors, and
+read-pool degradation, then tune thresholds from observed behavior. The last-success backup metric exists only after
+the first successful backup, so a freshness rule must also detect an absent or never-successful series.</p><p>Keep audit records out of the metrics pipeline. The audit PVC is a collector handoff buffer, not the final retention
+or tamper-resistance boundary.</p><p>Finally, verify the Service, ServiceMonitor or VMServiceScrape, Prometheus target state, certificate validation, token
+scope, NetworkPolicy path, and a representative query from each surface.</p></div></article><footer class=site-footer><p>OpenBao Operator is an independent open source project.</p><div><a href=https://github.com/dc-tec/openbao-operator>GitHub</a>
+<a href=/openbao-operator/releases/>Releases</a>
+<a href=/openbao-operator/contribute/>Contribute</a></div></footer></main><aside class=page-toc><p>On this page</p><nav id=TableOfContents><ul><li><a href=#scrape-operator-metrics>Scrape operator metrics</a></li><li><a href=#scrape-the-active-openbao-node>Scrape the active OpenBao node</a></li><li><a href=#scrape-every-openbao-node>Scrape every OpenBao node</a></li><li><a href=#start-with-a-small-signal-set>Start with a small signal set</a></li></ul></nav><a class=edit-link href=https://github.com/dc-tec/openbao-operator/edit/main/website/content-versions/next/docs/configure/monitor.md>Edit this page <span>↗</span></a></aside></div><dialog class=search-dialog aria-label="Search documentation" data-search-dialog data-search-index=/openbao-operator/next/index.json><section class=search-panel><div class=search-box><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35M19 11A8 8 0 113 11a8 8 0 0116 0z"/></svg>
+<label class=sr-only for=site-search>Search documentation</label>
+<input id=site-search type=search autocomplete=off placeholder="Search the operator docs…" data-search-input>
+<button class=search-close type=button aria-label="Close search" data-search-close>Close <kbd>Esc</kbd></button></div><div class=search-state role=status aria-live=polite data-search-state><div><p id=search-title>Search the handbook</p><span>Try “install”, “threat model”, or “compatibility”.</span></div></div><ol class=search-results aria-label="Search results" data-search-results></ol><footer><span><kbd>↑</kbd> <kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span></footer></section></dialog></body></html>

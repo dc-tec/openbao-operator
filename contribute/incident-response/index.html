@@ -1,0 +1,87 @@
+<!doctype html><html lang=en-US><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=color-scheme content="dark light"><meta name=theme-color content="#08141d"><meta name=description content="Maintainer runbook for containing and recovering from CI, release, GitHub App, signing-key, or GHCR compromise."><title>Respond to a publishing incident · OpenBao Operator</title><link rel=canonical href=https://dc-tec.github.io/openbao-operator/contribute/incident-response/><link rel=icon type=image/png href=/openbao-operator/img/brand/favicon.png><link rel=stylesheet href=/openbao-operator/css/site.min.11fbef8784b9dfc610dbe3cbc5bf42f1b10bf3b2041d8e82b961a6a7df06b64a.css integrity="sha256-Efvvh4S538YQ2+PLxb9C8bEL87IEHY6CuWGmp98Gtko="><script defer src=/openbao-operator/js/site.min.4ef3227924e1b4e4e97688f9a4e1e83e7d1e7634a619747ba70bf34ad6082498.js integrity="sha256-TvMieSThtOTpdoj5pOHoPn0edjSmGXR7pwvzStYIJJg="></script></head><body class=is-global><a class=skip-link href=#main-content>Skip to content</a><header class=site-header><div class=header-inner><button class="icon-button nav-toggle" type=button aria-label="Open primary navigation" aria-controls=primary-navigation aria-expanded=false data-nav-toggle>
+<span></span><span></span><span></span>
+</button>
+<a class=brand href=/openbao-operator/ aria-label="OpenBao Operator documentation home"><img class=brand-logo src=/openbao-operator/img/brand/logo.svg alt>
+<span class=brand-name>OpenBao <b>Operator</b></span></a><nav class=top-nav id=primary-navigation aria-label=Primary><a href=/openbao-operator/docs/>Docs</a>
+<a href=/openbao-operator/releases/>Releases</a>
+<a href=/openbao-operator/project/>Project</a>
+<a href=/openbao-operator/contribute/ aria-current=location>Contribute</a></nav><div class=header-actions><button class=search-trigger type=button aria-haspopup=dialog data-search-open>
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35M19 11A8 8 0 113 11a8 8 0 0116 0z"/></svg>
+<span>Search</span>
+<kbd>⌘ K</kbd></button><div class=github-actions><a class=github-link href=https://github.com/dc-tec/openbao-operator aria-label="OpenBao Operator on GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2A10 10 0 008.84 21.49c.5.09.68-.22.68-.48v-1.87c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.55-1.11-4.55-4.94.0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64.0.0.84-.27 2.75 1.02A9.58 9.58.0 0112 6.82c.85.0 1.7.12 2.5.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68.0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86v2.76c0 .27.18.58.69.48A10 10 0 0012 2z"/></svg>
+</a><a class=stargazers-link href=https://github.com/dc-tec/openbao-operator aria-label="View OpenBao Operator stars on GitHub" data-stargazers data-endpoint=https://api.github.com/repos/dc-tec/openbao-operator><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3z"/></svg>
+<span class=stargazer-count data-stargazer-count hidden></span></a></div></div></div></header><button class=nav-scrim type=button aria-label="Close navigation" data-nav-close></button><div class=global-shell><main class=doc-main id=main-content><nav class=breadcrumbs aria-label=Breadcrumb><a href=/openbao-operator/>Home</a>
+<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+<a href=/openbao-operator/contribute/>Contribute</a>
+<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+<span aria-current=page>Respond to a publishing incident</span></nav><nav class=section-nav aria-label="Contribute sections"><a href=/openbao-operator/contribute/>Overview</a><a href=/openbao-operator/contribute/setup/>Set up a contributor workstation</a><a href=/openbao-operator/contribute/standards/>Follow project standards</a><a href=/openbao-operator/contribute/testing/>Test a change</a><a href=/openbao-operator/contribute/ci/>Run CI-equivalent checks</a><a href=/openbao-operator/contribute/supply-chain/>Protect the software supply chain</a><a href=/openbao-operator/contribute/release/>Prepare a release</a><a href=/openbao-operator/contribute/incident-response/ aria-current=page>Respond to a publishing incident</a></nav><article class=doc-article><header class=article-header><h1>Respond to a publishing incident</h1><p class=article-lede>Maintainer runbook for containing and recovering from CI, release, GitHub App, signing-key, or GHCR compromise.</p><p class=page-meta>Updated 9 August 2026 · 5 min read</p></header><details class=mobile-toc><summary>On this page</summary><nav id=MobileTableOfContents><ul><li><a href=#contain-the-incident>Contain the incident</a></li><li><a href=#capture-workflow-evidence>Capture workflow evidence</a></li><li><a href=#compare-public-state-with-expected-state>Compare public state with expected state</a></li><li><a href=#determine-the-compromised-boundary>Determine the compromised boundary</a></li><li><a href=#recover-in-controlled-order>Recover in controlled order</a></li></ul></nav></details><div class=article-content><p>Contain publication first. Preserve enough evidence to identify affected runs and subjects, but do not leave a trusted
+workflow, GitHub App, or signing key active while collecting it.</p><h2 id=contain-the-incident>Contain the incident</h2><p>Perform these actions from a known-clean administrator session:</p><ol><li>Disable GitHub Actions or restrict execution to a reviewed allowlist while the cause is unknown.</li><li>Suspend the <code>openbao-operator-release-tag</code> GitHub App. Suspend <code>openbao-operator-release-pr</code> as well when release PR or
+marker activity is in scope.</li><li>Block SemVer tag creation through the repository ruleset and stop approvals for the <code>release-publish</code> environment.</li><li>Pause GHCR housekeeping so evidence and reachability metadata are not deleted during the investigation.</li><li>Revoke active sessions or tokens that may belong to a compromised maintainer or automation identity.</li><li>Rotate affected App private keys, release-tag GPG material, repository or organization secrets, PATs, SSH keys, and
+account credentials after capturing the identifiers needed for the incident record.</li></ol><p>These controls live in GitHub settings and App administration, not in the checkout. Record who changed each control and
+when.</p><aside class="callout callout-warning" role=note><div class=callout-icon aria-hidden=true>!</div><div><p class=callout-title>Do not repair publication in place</p><div class=callout-body>Do not move an existing SemVer tag, overwrite a published subject, or delete evidence to make verification pass. Treat
+unexpected tags, releases, and digests as incident subjects and document the replacement or revocation decision.</div></div></aside><h2 id=capture-workflow-evidence>Capture workflow evidence</h2><p>List every workflow that can change release source, tags, packages, trust roots, or public channel state. The current
+high-trust set is broader than the stable release workflow alone.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>List recent high-trust runs</p></div><button type=button data-copy-button>Copy</button></div><pre><code>REPO=dc-tec/openbao-operator
+
+for workflow in \
+  ci.yml \
+  nightly.yml \
+  release-please.yml \
+  prepare-release-as-pr.yml \
+  release-tag.yml \
+  release.yml \
+  post-release-verification.yml \
+  publish-edge.yml \
+  publish-nightly.yml \
+  ghcr-housekeeping.yml \
+  pages.yml \
+  trusted-root-refresh.yml
+do
+  gh run list --repo &#34;${REPO}&#34; --workflow &#34;${workflow}&#34; --limit 20
+done</code></pre></div><p>For each suspicious run, record the run ID, event, actor, source SHA, head branch, conclusion, attempt number, and linked
+artifacts before logs or artifacts expire.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Inspect and retain one run</p></div><button type=button data-copy-button>Copy</button></div><pre><code>RUN_ID=1234567890
+
+gh run view &#34;${RUN_ID}&#34; \
+  --repo dc-tec/openbao-operator \
+  --json databaseId,event,headBranch,headSha,displayTitle,conclusion,createdAt,updatedAt,url
+
+gh api &#34;repos/dc-tec/openbao-operator/actions/runs/${RUN_ID}&#34; \
+  --jq &#39;{id,event,actor:.actor.login,head_branch,head_sha,status,conclusion,run_attempt,created_at,updated_at,html_url}&#39;
+
+gh run view &#34;${RUN_ID}&#34; --repo dc-tec/openbao-operator --log &gt; &#34;run-${RUN_ID}.log&#34;
+gh run download &#34;${RUN_ID}&#34; --repo dc-tec/openbao-operator --dir &#34;run-${RUN_ID}-artifacts&#34;</code></pre></div><p>Store collected evidence outside the potentially compromised repository and record a checksum for every exported file.</p><h2 id=compare-public-state-with-expected-state>Compare public state with expected state</h2><p>Inspect tags, draft and published releases, images, executors, and the chart repository.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Inventory release and registry state</p></div><button type=button data-copy-button>Copy</button></div><pre><code>gh release list --repo dc-tec/openbao-operator --limit 30
+git ls-remote --tags origin
+
+for repository in \
+  openbao-operator \
+  openbao-init \
+  openbao-backup \
+  openbao-upgrade \
+  charts/openbao-operator
+do
+  crane ls &#34;ghcr.io/dc-tec/${repository}&#34; | sort -V | tail -n 30
+done</code></pre></div><p>For an affected version, resolve the annotated tag to its commit and verify the GPG signature. Compare the workflow,
+local actions, release scripts, dependency pins, chart metadata, and release notes at that commit with a reviewed
+baseline.</p><div class=command-block><div class=command-head><div><span>inspect</span><p>Resolve and verify a release tag</p></div><button type=button data-copy-button>Copy</button></div><pre><code>VERSION=X.Y.Z
+
+git fetch origin &#34;refs/tags/${VERSION}:refs/tags/${VERSION}&#34;
+git verify-tag &#34;${VERSION}&#34;
+git rev-list -n1 &#34;${VERSION}&#34;
+gh release view &#34;${VERSION}&#34; \
+  --repo dc-tec/openbao-operator \
+  --json tagName,isDraft,isPrerelease,assets,url</code></pre></div><p>Run the repository verifier for a release that should be valid:</p><div class=command-block><div class=command-head><div><span>verify</span><p>Verify published subjects and produce evidence</p></div><button type=button data-copy-button>Copy</button></div><pre><code>VERSION=X.Y.Z \
+REPO=dc-tec/openbao-operator \
+EVIDENCE_OUT=&#34;incident-${VERSION}-verification.json&#34; \
+hack/ci/verify-post-release.sh</code></pre></div><p>Signature and provenance success proves which workflow identity and source ref produced a subject. It does not prove
+that the workflow source at that ref was benign. Review the tagged source and the identity controls as separate evidence.</p><h2 id=determine-the-compromised-boundary>Determine the compromised boundary</h2><table><thead><tr><th>Boundary</th><th>Evidence to check</th></tr></thead><tbody><tr><td>Workflow source</td><td>Default-branch and tagged workflow diffs, pinned actions, local composite actions, release scripts, and recent merged PRs</td></tr><tr><td>Release identities</td><td>App installation permissions, private-key history, SemVer ruleset bypass, environment approvals, and workflow token permissions</td></tr><tr><td>Maintainer identity</td><td>Sessions, MFA events, SSH and GPG keys, PATs, recovery methods, and unexpected settings changes</td></tr><tr><td>Published subjects</td><td>Image and chart digests, signatures, attestations, checksum bundles, SBOMs, provenance index, draft releases, and channel manifests</td></tr><tr><td>Registry cleanup</td><td>GHCR housekeeping runs, deletion plans, retained referrers, and any package or version deletion</td></tr><tr><td>Trust roots</td><td><code>trusted-root-refresh</code> inputs and commits, signer expectations, and affected verification policy</td></tr></tbody></table><p>Assume every secret available to a compromised workflow or identity is exposed. Rotate from the root of trust outward:
+account recovery and sessions, GitHub App keys, release-tag GPG key, repository and organization secrets, PATs, SSH keys,
+then downstream provider credentials.</p><h2 id=recover-in-controlled-order>Recover in controlled order</h2><ol><li>Document the root cause, affected time window, workflow runs, commits, tags, releases, and GHCR digests.</li><li>Land reviewed workflow or policy repairs through the normal protected branch from a clean administrator session.</li><li>Complete credential rotation and verify App permissions, tag rules, and environment reviewers.</li><li>Re-enable only the minimum Actions surface needed to validate the repair.</li><li>Unsuspend the PR App first. Keep the tag App suspended while release PR behavior is verified.</li><li>Run normal CI, then an edge or nightly publication if that channel is part of the repaired boundary.</li><li>Create a controlled prerelease or release candidate through the marker and release-please path.</li><li>Verify the tag, published digests, signatures, attestations, assets, and post-release evidence.</li><li>Restore stable-release permissions and unsuspend the tag App only after the controlled release succeeds.</li></ol><p>Record every recovery action and its reviewer in the incident notes. Report externally according to
+<a href=https://github.com/dc-tec/openbao-operator/blob/main/SECURITY.md><code>SECURITY.md</code></a> when users or published artifacts may be
+affected.</p><aside class="callout callout-warning" role=note><div class=callout-icon aria-hidden=true>!</div><div><p class=callout-title>Single-maintainer constraint</p><div class=callout-body>This procedure creates a repeatable evidence trail, not independent approval. If the maintainer account is compromised,
+treat repository settings, Actions secrets, Apps, tags, and publication state as untrusted until verified from another
+administrative root.</div></div></aside><p>Return to <a href=/openbao-operator/contribute/release/>release management</a> only after containment and trust restoration are
+complete.</p></div></article><footer class=site-footer><p>OpenBao Operator is an independent open source project.</p><div><a href=https://github.com/dc-tec/openbao-operator>GitHub</a>
+<a href=/openbao-operator/releases/>Releases</a>
+<a href=/openbao-operator/contribute/>Contribute</a></div></footer></main><aside class=page-toc><p>On this page</p><nav id=TableOfContents><ul><li><a href=#contain-the-incident>Contain the incident</a></li><li><a href=#capture-workflow-evidence>Capture workflow evidence</a></li><li><a href=#compare-public-state-with-expected-state>Compare public state with expected state</a></li><li><a href=#determine-the-compromised-boundary>Determine the compromised boundary</a></li><li><a href=#recover-in-controlled-order>Recover in controlled order</a></li></ul></nav><a class=edit-link href=https://github.com/dc-tec/openbao-operator/edit/main/website/content-versions/0.4.x/contribute/incident-response.md>Edit this page <span>↗</span></a></aside></div><dialog class=search-dialog aria-label="Search documentation" data-search-dialog data-search-index=/openbao-operator/index.json><section class=search-panel><div class=search-box><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35M19 11A8 8 0 113 11a8 8 0 0116 0z"/></svg>
+<label class=sr-only for=site-search>Search documentation</label>
+<input id=site-search type=search autocomplete=off placeholder="Search the operator docs…" data-search-input>
+<button class=search-close type=button aria-label="Close search" data-search-close>Close <kbd>Esc</kbd></button></div><div class=search-state role=status aria-live=polite data-search-state><div><p id=search-title>Search the handbook</p><span>Try “install”, “threat model”, or “compatibility”.</span></div></div><ol class=search-results aria-label="Search results" data-search-results></ol><footer><span><kbd>↑</kbd> <kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span></footer></section></dialog></body></html>
