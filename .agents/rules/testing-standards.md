@@ -6,7 +6,7 @@ description: Testing standards for the OpenBao Operator
 
 # Testing Standards
 
-See [Testing Guide](docs/contribute/testing.md) for full documentation.
+See [Testing Guide](../../website/content/contribute/testing.md) for full documentation.
 
 ## Test Requirements by Change Type
 

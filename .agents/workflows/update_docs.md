@@ -23,4 +23,4 @@ make docs-build
 
 Follow:
 
-- `docs/contribute/docs-style-guide.md`
+- `website/EDITORIAL.md`

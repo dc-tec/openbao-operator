@@ -9,7 +9,7 @@
 # - IAM permissions for the pod to access KMS (via IRSA, another workload identity integration, or credentials Secret)
 # - If not using IRSA (IAM Roles for Service Accounts), create a credentials Secret
 #
-# See: docs/user-guide/security-considerations.md (section 15.2.2)
+# See: website/content/docs/configure/unseal.md
 apiVersion: openbao.org/v1alpha1
 kind: OpenBaoCluster
 metadata:

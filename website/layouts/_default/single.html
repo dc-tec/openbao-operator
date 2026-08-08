@@ -1,0 +1,27 @@
+{{ define "body" }}
+  {{- $isDocs := eq .Section "docs" -}}
+  <div class="{{ if $isDocs }}docs-shell{{ else }}global-shell{{ end }}">
+    {{ if $isDocs }}{{ partial "sidebar.html" . }}{{ end }}
+    <main class="doc-main" id="main-content">
+      {{ partial "breadcrumbs.html" . }}
+      {{ if not $isDocs }}{{ partial "section-nav.html" . }}{{ end }}
+      {{ if $isDocs }}{{ partial "version-notice.html" . }}{{ end }}
+      <article class="doc-article">
+        <header class="article-header">
+          <h1>{{ .Title }}</h1>
+          {{ with .Description }}<p class="article-lede">{{ . }}</p>{{ end }}
+          {{ if .GitInfo }}
+            <p class="page-meta">Updated {{ .Lastmod.Format "2 January 2006" }} · {{ .ReadingTime }} min read</p>
+          {{ end }}
+        </header>
+        {{ partial "mobile-toc.html" . }}
+        <div class="article-content">
+          {{ .Content }}
+        </div>
+        {{ partial "journey-nav.html" . }}
+      </article>
+      {{ partial "footer.html" . }}
+    </main>
+    {{ partial "toc.html" . }}
+  </div>
+{{ end }}

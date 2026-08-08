@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/repo_logo.png" alt="OpenBao Operator" width="520" />
+<img src="website/static/img/brand/logo.svg" alt="OpenBao Operator" width="520" />
 
 
 **Secure lifecycle management for OpenBao on Kubernetes.**
@@ -37,9 +37,9 @@ Full documentation is available at **[dc-tec.github.io/openbao-operator](https:/
 
 Recommended entry points:
 
-- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/docs/get-started/deployment-decision-guide)
-- [Operator Invariants](https://dc-tec.github.io/openbao-operator/docs/architecture/operator-invariants)
-- [Production Checklist](https://dc-tec.github.io/openbao-operator/docs/operate/production-checklist)
+- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/docs/get-started/deployment-model/)
+- [Operator Invariants](https://dc-tec.github.io/openbao-operator/docs/architecture/invariants-and-boundaries/)
+- [Production Checklist](https://dc-tec.github.io/openbao-operator/docs/operate/production-readiness/)
 
 ## Compatibility
 
@@ -69,10 +69,10 @@ For full details, see the [Compatibility Matrix](https://dc-tec.github.io/openba
 
 ## Security Model
 
-- **Threat model**: Design assumptions and attacker model ([Threat Model](https://dc-tec.github.io/openbao-operator/docs/security/fundamentals/threat-model))
-- **RBAC boundaries**: Least-privilege split between controller and provisioner ([RBAC](https://dc-tec.github.io/openbao-operator/docs/security/infrastructure/rbac))
-- **Guardrails**: Validating admission policies that block dangerous settings before they reach the cluster ([Admission Policies](https://dc-tec.github.io/openbao-operator/docs/security/infrastructure/admission-policies))
-- **Multi-tenancy**: Namespace isolation guarantees and limits ([Tenant Isolation](https://dc-tec.github.io/openbao-operator/docs/security/multi-tenancy/tenant-isolation))
+- **Threat model**: Design assumptions and attacker model ([Threat Model](https://dc-tec.github.io/openbao-operator/docs/security/threat-model/))
+- **RBAC boundaries**: Least-privilege split between controller and provisioner ([Tenant Boundaries](https://dc-tec.github.io/openbao-operator/docs/security/tenant-boundaries/))
+- **Guardrails**: Validating admission policies that block dangerous settings before they reach the cluster ([Admission Policies](https://dc-tec.github.io/openbao-operator/docs/security/admission/))
+- **Multi-tenancy**: Namespace isolation guarantees and limits ([Tenant Boundaries](https://dc-tec.github.io/openbao-operator/docs/security/tenant-boundaries/))
 
 ## Quick Start
 
@@ -150,12 +150,12 @@ The `Hardened` profile enforces:
 - Self-init enabled (`spec.selfInit.enabled: true`)
 
 Start with:
-- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/docs/get-started/deployment-decision-guide)
-- [Operator Installation](https://dc-tec.github.io/openbao-operator/docs/get-started/install)
-- [Onboard the Target Namespace](https://dc-tec.github.io/openbao-operator/docs/get-started/onboard-target-namespace)
-- [Create Your First Cluster](https://dc-tec.github.io/openbao-operator/docs/get-started/first-cluster)
-- [Security Profiles](https://dc-tec.github.io/openbao-operator/docs/user-guide/openbaocluster/configuration/security-profiles)
-- [Production Checklist](https://dc-tec.github.io/openbao-operator/docs/operate/production-checklist)
+- [Deployment Decision Guide](https://dc-tec.github.io/openbao-operator/docs/get-started/deployment-model/)
+- [Operator Installation](https://dc-tec.github.io/openbao-operator/docs/get-started/install/)
+- [Onboard the Target Namespace](https://dc-tec.github.io/openbao-operator/docs/get-started/onboard-namespace/)
+- [Create Your First Cluster](https://dc-tec.github.io/openbao-operator/docs/get-started/create-cluster/)
+- [Security Profiles](https://dc-tec.github.io/openbao-operator/docs/configure/security-profile/)
+- [Production Checklist](https://dc-tec.github.io/openbao-operator/docs/operate/production-readiness/)
 - Production samples in `config/samples/production/`
 
 ## Installation

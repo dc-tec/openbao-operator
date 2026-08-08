@@ -21,7 +21,6 @@ go.work
 .DS_Store
 .gocache
 .pnpm-store/
-.contribute-docs/
 node_modules/
 
 # Kubernetes Generated files - skip generated files, except for vendored files
@@ -43,7 +42,7 @@ node_modules/
 
 # Documentation build output
 site/*
-website/build/
+website/public/
 
 # Release workflow outputs (generated locally during validation)
 dist/install.yaml

@@ -1,0 +1,6 @@
+{{ if and (not .Params.hideToc) (gt (len .TableOfContents) 32) }}
+<details class="mobile-toc">
+  <summary>On this page</summary>
+  {{ .TableOfContents | replaceRE `id="TableOfContents"` `id="MobileTableOfContents"` | safeHTML }}
+</details>
+{{ end }}

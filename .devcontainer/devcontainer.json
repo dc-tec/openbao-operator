@@ -8,7 +8,7 @@
 
   "runArgs": ["--network=host"],
   "remoteEnv": {
-    "PATH": "${containerWorkspaceFolder}/bin:${containerWorkspaceFolder}/.venv-docs/bin:${containerEnv:PATH}"
+    "PATH": "${containerWorkspaceFolder}/bin:${containerEnv:PATH}"
   },
 
   "customizations": {

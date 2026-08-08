@@ -39,7 +39,8 @@ expected_actionlint="$(sed -n 's/^ACTIONLINT_VERSION ?= v\{0,1\}//p' mk/dependen
 expected_semgrep="$(sed -n 's/^SEMGREP_VERSION ?= //p' mk/dependencies.mk | head -n 1)"
 expected_node="$(tr -d '[:space:]' < .node-version)"
 expected_node_major="${expected_node%%.*}"
-expected_pnpm="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' website/package.json | head -n 1)"
+expected_pnpm="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' .github/tools/package.json | head -n 1)"
+expected_hugo="$(tr -d '[:space:]' < .hugo-version)"
 if command -v go >/dev/null 2>&1; then
   current_go="$(go env GOVERSION 2>/dev/null || true)"
   if [[ "${current_go}" == "go${expected_go}"* ]]; then
@@ -73,6 +74,17 @@ if command -v pnpm >/dev/null 2>&1; then
   fi
 else
   err "pnpm missing (enable Corepack for pnpm ${expected_pnpm})"
+fi
+
+if command -v hugo >/dev/null 2>&1; then
+  current_hugo="$(hugo version 2>/dev/null || true)"
+  if [[ "${current_hugo}" == *"v${expected_hugo}"* ]]; then
+    ok "Hugo matches .hugo-version (${expected_hugo})"
+  else
+    warn "Hugo version mismatch: expected ${expected_hugo}, found ${current_hugo:-unknown}"
+  fi
+else
+  warn "Hugo missing (required only for documentation work; use the Nix command in website/README.md)"
 fi
 
 check_cmd git "git" "required for repository workflows"

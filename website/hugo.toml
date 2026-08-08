@@ -1,0 +1,61 @@
+baseURL = "https://dc-tec.github.io/openbao-operator/"
+locale = "en-US"
+title = "OpenBao Operator"
+enableGitInfo = true
+disableKinds = ["taxonomy", "term", "RSS"]
+defaultContentVersion = "0.4.x"
+defaultContentVersionInSubdir = false
+
+[params]
+description = "OpenBao Operator documentation for secure lifecycle management on Kubernetes."
+repository = "https://github.com/dc-tec/openbao-operator"
+repository_api = "https://api.github.com/repos/dc-tec/openbao-operator"
+
+[versions."0.5.x"]
+weight = 1
+
+[versions."0.4.x"]
+weight = 2
+
+[versions.next]
+weight = 3
+
+[[module.mounts]]
+source = "content"
+target = "content"
+files = ["_index.md", "docs/**"]
+[module.mounts.sites.matrix]
+versions = ["0.5.x"]
+
+[[module.mounts]]
+source = "content"
+target = "content"
+files = ["project/**", "releases/**", "contribute/**"]
+[module.mounts.sites.matrix]
+versions = ["0.4.x"]
+
+[[module.mounts]]
+source = "content-versions/0.4.x"
+target = "content"
+[module.mounts.sites.matrix]
+versions = ["0.4.x"]
+
+[[module.mounts]]
+source = "content-versions/next"
+target = "content"
+[module.mounts.sites.matrix]
+versions = ["next"]
+
+[outputs]
+home = ["HTML", "JSON"]
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    noClasses = false
+    lineNos = false
+
+[minify]
+minifyOutput = true

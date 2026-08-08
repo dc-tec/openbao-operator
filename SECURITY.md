@@ -20,7 +20,7 @@ Security fixes are provided for:
 
 Release artifacts (container images and OCI Helm chart) are published to GHCR and are signed using keyless Sigstore signing via GitHub Actions OIDC.
 
-For trusted root maintenance used by keyless verification, see `docs/contribute/release-management.md`.
+For trusted root maintenance used by keyless verification, see `website/content/contribute/release.md`.
 
 ## Known dependency caveats
 

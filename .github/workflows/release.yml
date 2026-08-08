@@ -1085,26 +1085,8 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-        with:
-          node-version: "22"
-          cache-dependency-path: website/pnpm-lock.yaml
-
-      - name: Install docs dependencies
-        run: pnpm --dir website install --frozen-lockfile
-
-      - name: Verify stable release-line docs snapshot
-        if: ${{ !contains(needs.prepare.outputs.version, '-') }}
-        env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: pnpm --dir website run verify:docs-version "${VERSION}"
-
-      - name: Install Playwright browser
-        run: pnpm --dir website exec playwright install --with-deps chromium
-
-      - name: Run docs smoke suite
-        run: pnpm --dir website run test:e2e
+      - name: Build docs
+        uses: ./.github/actions/docs-build
 
       - name: Publish docs site
         env:
@@ -1112,4 +1094,4 @@ jobs:
           COMMIT_MESSAGE: "docs: publish release ${{ needs.prepare.outputs.version }}"
         run: |
           set -euo pipefail
-          bash hack/docs/publish-gh-pages.sh website/build
+          bash hack/docs/publish-gh-pages.sh website/public

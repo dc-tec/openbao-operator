@@ -1,0 +1,158 @@
+primary:
+  - title: Get started
+    description: Choose a model, install the operator, and create the first cluster.
+    url: docs/get-started/
+    items:
+      - title: Overview
+        url: docs/get-started/
+      - title: Choose a deployment model
+        url: docs/get-started/deployment-model/
+      - title: Install the operator
+        url: docs/get-started/install/
+      - title: Onboard a namespace
+        url: docs/get-started/onboard-namespace/
+      - title: Create an evaluation cluster
+        url: docs/get-started/create-cluster/
+      - title: Prepare for production operations
+        url: docs/get-started/prepare-day-2/
+      - title: Single-tenant mode
+        url: docs/get-started/single-tenant/
+      - title: Operator authentication
+        url: docs/get-started/operator-authentication/
+      - title: Operator authorization
+        url: docs/get-started/operator-authorization/
+  - title: Configure
+    description: Set the security, storage, network, and trust baseline.
+    url: docs/configure/
+    items:
+      - title: Overview
+        url: docs/configure/
+      - title: Choose a security profile
+        url: docs/configure/security-profile/
+      - title: Initialize the cluster
+        url: docs/configure/initialize/
+      - title: Configure unseal
+        url: docs/configure/unseal/
+      - title: Configure storage
+        url: docs/configure/storage/
+      - title: Configure the server runtime
+        url: docs/configure/server/
+      - title: Expose OpenBao
+        url: docs/configure/expose/
+      - title: Use Gateway API
+        url: docs/configure/gateway/
+      - title: Configure network policy
+        url: docs/configure/network/
+      - title: Monitor OpenBao
+        url: docs/configure/monitor/
+      - title: Configure read replicas
+        url: docs/configure/read-replicas/
+      - title: Use private registries
+        url: docs/configure/air-gapped/
+  - title: Operate
+    description: Prepare for upgrades, backups, incidents, and recovery.
+    url: docs/operate/
+    items:
+      - title: Operations overview
+        url: docs/operate/
+      - title: Review production readiness
+        url: docs/operate/production-readiness/
+      - title: Back up a cluster
+        url: docs/operate/backups/
+      - title: Upgrade a cluster
+        url: docs/operate/upgrades/
+      - title: Run planned maintenance
+        url: docs/operate/maintenance/
+      - title: Troubleshoot a cluster
+        url: docs/operate/troubleshoot/
+      - title: Recover from no leader
+        url: docs/operate/recover-no-leader/
+      - title: Recover a sealed cluster
+        url: docs/operate/recover-sealed/
+      - title: Recover a failed rollback
+        url: docs/operate/recover-failed-rollback/
+      - title: Restore a snapshot
+        url: docs/operate/restore/
+      - title: Decommission a cluster
+        url: docs/operate/decommission/
+  - title: Security
+    description: Review trust boundaries and production controls.
+    url: docs/security/
+    items:
+      - title: Security overview
+        url: docs/security/
+      - title: Threat model
+        url: docs/security/threat-model/
+      - title: Tenant boundaries
+        url: docs/security/tenant-boundaries/
+      - title: Secrets and credentials
+        url: docs/security/secrets/
+      - title: Admission guardrails
+        url: docs/security/admission/
+      - title: Workload security
+        url: docs/security/workload/
+      - title: Supply-chain verification
+        url: docs/security/supply-chain/
+  - title: Reference
+    description: Check compatibility, API, support, and observable contracts.
+    url: docs/reference/
+    items:
+      - title: Reference overview
+        url: docs/reference/
+      - title: Compatibility
+        url: docs/reference/compatibility/
+      - title: API reference
+        url: docs/reference/api/
+      - title: Status and events
+        url: docs/reference/status-and-events/
+      - title: Upgrade the operator
+        url: docs/reference/operator-upgrades/
+      - title: Release and support lifecycle
+        url: docs/reference/release-lifecycle/
+      - title: Known limitations
+        url: docs/reference/known-limitations/
+  - title: Architecture
+    description: Understand control-plane boundaries and lifecycle contracts.
+    url: docs/architecture/
+    items:
+      - title: Architecture overview
+        url: docs/architecture/
+      - title: Invariants and boundaries
+        url: docs/architecture/invariants-and-boundaries/
+      - title: Workload lifecycle
+        url: docs/architecture/workload-lifecycle/
+      - title: Operations
+        url: docs/architecture/operations/
+      - title: Tenant provisioning
+        url: docs/architecture/provisioning/
+secondary:
+  - title: Releases
+    url: releases/
+  - title: Project
+    url: project/
+    items:
+      - title: Project overview
+        url: project/
+      - title: Roadmap
+        url: project/roadmap/
+      - title: Claims and Service Offerings
+        url: project/claims-and-service-offerings/
+  - title: Contribute
+    url: contribute/
+    items:
+      - title: Contributor overview
+        url: contribute/
+      - title: Set up a workstation
+        url: contribute/setup/
+      - title: Project standards
+        url: contribute/standards/
+      - title: Testing
+        url: contribute/testing/
+      - title: CI
+        url: contribute/ci/
+      - title: Supply chain
+        url: contribute/supply-chain/
+      - title: Release management
+        url: contribute/release/
+      - title: Incident response
+        url: contribute/incident-response/

@@ -10,6 +10,7 @@ vendor/**
 
 # Build artifacts and published content are intentionally out of scope.
 dist/**
-docs/**
-releases/**
-website/**
+website/public/**
+website/generated/**
+website/content/**
+website/content-versions/**

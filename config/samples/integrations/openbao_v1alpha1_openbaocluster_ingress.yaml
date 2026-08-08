@@ -23,7 +23,7 @@ spec:
       traefik.ingress.kubernetes.io/service.serversscheme: https
       # Reference a ServersTransport that trusts the OpenBaoCluster CA certificate
       # Format: <namespace>-<name>@kubernetescrd (required even for same namespace in some Traefik versions)
-      # See docs/user-guide/openbaocluster/configuration/external-access.md (Traefik v3 section)
+      # See website/content/docs/configure/expose.md (Traefik v3 section)
       traefik.ingress.kubernetes.io/service.serverstransport: openbao-operator-system-openbao-tls-transport@kubernetescrd
   ingress:
     enabled: true

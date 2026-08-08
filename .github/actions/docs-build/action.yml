@@ -1,29 +1,17 @@
 name: Docs build
-description: Build and smoke-test the Docusaurus documentation site using the checked-in website lockfile.
-
-inputs:
-  node-version:
-    description: Node.js version used for the docs toolchain.
-    required: false
-    default: "22"
+description: Build and validate the canonical Hugo documentation site without Node.js dependencies.
 
 runs:
   using: composite
   steps:
-    - name: Setup Node.js and pnpm
-      uses: ./.github/actions/setup-node-pnpm
-      with:
-        node-version: ${{ inputs.node-version }}
-        cache-dependency-path: website/pnpm-lock.yaml
-
-    - name: Install docs dependencies
+    - name: Install pinned Hugo
       shell: bash
-      run: pnpm --dir website install --frozen-lockfile
+      run: |
+        set -euo pipefail
+        install_dir="${RUNNER_TEMP}/hugo-bin"
+        bash hack/docs/install-hugo.sh "${install_dir}"
+        echo "${install_dir}" >> "${GITHUB_PATH}"
 
-    - name: Install Playwright browser
+    - name: Build and validate documentation
       shell: bash
-      run: pnpm --dir website exec playwright install --with-deps chromium
-
-    - name: Run docs smoke suite
-      shell: bash
-      run: pnpm --dir website run test:e2e
+      run: make docs-build

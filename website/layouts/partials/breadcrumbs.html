@@ -1,0 +1,12 @@
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="{{ site.Home.RelPermalink }}">Home</a>
+  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+  {{ $ancestors := .Ancestors.Reverse }}
+  {{ range $ancestors }}
+    {{ if not .IsHome }}
+      <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+    {{ end }}
+  {{ end }}
+  <span aria-current="page">{{ .Title }}</span>
+</nav>

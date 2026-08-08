@@ -7,7 +7,7 @@ description: Generated artifacts workflows (CRDs/Helm/RBAC/golden files)
 # Generated Artifacts
 
 This repo has multiple generated outputs that must stay in sync with their sources.
-See `docs/contribute/standards/generated-artifacts.md` for the canonical guide.
+See `website/content/contribute/standards.md` for the canonical guide.
 This includes the committed Go `vendor/` tree.
 
 ## Rules of Thumb

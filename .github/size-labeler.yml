@@ -11,10 +11,9 @@ thresholds:
 
 ignore:
   - go.sum
-  - website/pnpm-lock.yaml
   - vendor/**/*
   - api/v1alpha1/zz_generated.deepcopy.go
-  - docs/reference/api.md
+  - website/generated/api-reference.md
   - dist/install.yaml
   - config/crd/bases/**/*
   - charts/openbao-operator/crds/**/*
@@ -22,8 +21,6 @@ ignore:
   - charts/openbao-operator/templates/admission/**/*
   - .ast-grep/rules/generated/**/*
   - internal/adapter/config/testdata/**/*
-  - website/versioned_docs/**/*
-  - website/versioned_sidebars/**/*
 
 comment:
   marker: "<!-- managed:pr-size-label -->"

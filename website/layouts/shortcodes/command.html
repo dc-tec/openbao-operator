@@ -1,0 +1,10 @@
+<div class="command-block">
+  <div class="command-head">
+    <div>
+      <span>{{ .Get "label" | default "terminal" }}</span>
+      <p>{{ .Get "title" | default "Run this command" }}</p>
+    </div>
+    <button type="button" data-copy-button>Copy</button>
+  </div>
+  <pre><code>{{ .Inner | strings.TrimSpace | htmlEscape | safeHTML }}</code></pre>
+</div>

@@ -1,0 +1,12 @@
+{{ define "body" }}
+{{- $docsURL := printf "%sdocs/" site.Home.RelPermalink -}}
+<main class="not-found" id="main-content">
+  <p>404</p>
+  <h1>Page not found</h1>
+  <p>Check the address or choose a current documentation route.</p>
+  <div class="hero-actions">
+    <a class="button button-primary" href="{{ $docsURL }}">Browse documentation</a>
+    <a class="button button-secondary" href="{{ site.Home.RelPermalink }}">Project home</a>
+  </div>
+</main>
+{{ end }}

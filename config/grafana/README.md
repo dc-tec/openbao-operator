@@ -143,6 +143,6 @@ If certain metrics show "No data", they may not be implemented yet. Refer to the
 
 ## References
 
-- [Architecture Document](../../docs/architecture.md) - Section 5 (Observability & Metrics)
+- [Monitoring documentation](../../website/content/docs/configure/monitor.md)
 - [Prometheus Integration](../prometheus/) - ServiceMonitor configuration
 - [Grafana Dashboard Documentation](https://grafana.com/docs/grafana/latest/dashboards/)

@@ -10,7 +10,8 @@ HELM_VERSION="${HELM_VERSION:-v3.17.4}"
 TRIVY_VERSION="${TRIVY_VERSION:-v0.69.3}"
 TILT_VERSION="${TILT_VERSION:-v0.37.0}"
 NODE_VERSION="${NODE_VERSION:-v$(tr -d '[:space:]' < "${ROOT_DIR}/.node-version")}"
-PNPM_VERSION="${PNPM_VERSION:-$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "${ROOT_DIR}/website/package.json" | head -n 1)}"
+PNPM_VERSION="${PNPM_VERSION:-$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "${ROOT_DIR}/.github/tools/package.json" | head -n 1)}"
+HUGO_VERSION="$(tr -d '[:space:]' < "${ROOT_DIR}/.hugo-version")"
 
 go_arch="$(go env GOARCH)"
 case "${go_arch}" in
@@ -180,6 +181,14 @@ ensure_pnpm() {
   corepack enable pnpm --install-directory "${INSTALL_DIR}"
 }
 
+ensure_hugo() {
+  if command -v hugo >/dev/null 2>&1 && hugo version 2>/dev/null | grep -q "v${HUGO_VERSION}"; then
+    return
+  fi
+
+  bash "${ROOT_DIR}/hack/docs/install-hugo.sh" "${INSTALL_DIR}"
+}
+
 ensure_kind() {
   if command -v kind >/dev/null 2>&1 && kind version 2>/dev/null | grep -q "${KIND_VERSION}"; then
     return
@@ -290,6 +299,7 @@ print_versions() {
   python3 --version
   node --version
   pnpm --version
+  hugo version
   kind version
   kubectl version --client
   helm version --short
@@ -300,6 +310,7 @@ print_versions() {
 ensure_apt_packages
 ensure_nodejs
 ensure_pnpm
+ensure_hugo
 ensure_kind
 ensure_kubectl
 ensure_helm

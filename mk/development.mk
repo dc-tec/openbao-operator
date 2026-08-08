@@ -7,11 +7,6 @@ bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-
 	else \
 		echo "Skipping ast-grep bootstrap because pnpm is not available."; \
 	fi
-	@if command -v "$(DOCS_PNPM)" >/dev/null 2>&1; then \
-		$(MAKE) docs-deps; \
-	else \
-		echo "Skipping docs bootstrap because pnpm is not available."; \
-	fi
 	@$(MAKE) git-hooks-install
 	@echo "Bootstrap complete."
 	@echo "Run 'make doctor' to validate external prerequisites."
@@ -39,7 +34,7 @@ doctor: ## Validate local prerequisites for the main contributor workflow.
 .PHONY: clean-artifacts
 clean-artifacts: ## Remove known local build, test, documentation, and report artifacts.
 	@$(RM) cover.out coverage.out report.xml
-	@$(RM) -r .contribute-docs website/.docusaurus website/build site artifacts
+	@$(RM) -r website/public site artifacts
 	@$(RM) -r dist/architecture dist/bench dist/fuzz dist/perf dist/test dist/mutation dist/licenses dist/semgrep
 	@$(RM) dist/install.yaml dist/crds.yaml dist/checksums.txt dist/sbom-*.spdx.json
 	@echo "Removed known local artifacts."
@@ -170,10 +165,10 @@ verify-vendor: ## Verify vendor/ is synchronized with go.mod/go.sum.
 .PHONY: verify-generated
 verify-generated: manifests generate api-reference ## Verify generated artifacts are up-to-date (does not modify tracked files).
 	@{ \
-		git diff --exit-code -- api/v1alpha1 config/crd/bases docs/reference/api.md; \
+		git diff --exit-code -- api/v1alpha1 config/crd/bases website/generated/api-reference.md; \
 	} || { \
 		echo "Generated artifacts are out of date. Run 'make manifests generate api-reference' and commit the result."; \
-		git --no-pager diff -- api/v1alpha1 config/crd/bases docs/reference/api.md; \
+		git --no-pager diff -- api/v1alpha1 config/crd/bases website/generated/api-reference.md; \
 		exit 1; \
 	}
 
@@ -419,39 +414,29 @@ verify-trusted-root: ## Verify that trusted_root.json exists and is valid JSON.
 	@echo "trusted_root.json is valid"
 
 DOCS_DIR ?= website
-DOCS_PNPM ?= $(PNPM)
-DOCS_VERSION ?=
+DOCS_DESTINATION ?= $(DOCS_DIR)/public
+HUGO ?= hugo
 TEST_ARTIFACT_DIR ?= dist/test
 GOTESTSUM_FORMAT ?= pkgname
 FUZZTIME ?= 3s
 FUZZ_GOMAXPROCS ?= 4
 FUZZ_TARGET_FILTER ?=
 
-.PHONY: docs-deps
-docs-deps: ## Install Docusaurus site dependencies from lockfile.
-	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" install --frozen-lockfile
-
 .PHONY: docs-build
-docs-build: docs-deps ## Build the Docusaurus docs site locally. Writes ./website/build/.
-	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run build
+docs-build: ## Build and validate the canonical Hugo documentation site. Writes ./website/public/.
+	@"$(DOCS_DIR)/scripts/sync-api-reference.sh" --all --check
+	@$(HUGO) --source "$(DOCS_DIR)" --gc --minify --panicOnWarning --cleanDestinationDir
+	@"$(DOCS_DIR)/scripts/apply-legacy-redirects.sh" --destination "$(DOCS_DESTINATION)"
+	@"$(DOCS_DIR)/scripts/apply-legacy-redirects.sh" --destination "$(DOCS_DESTINATION)" --check
+	@python3 "$(DOCS_DIR)/scripts/check-rendered-site.py" "$(DOCS_DESTINATION)"
 
 .PHONY: docs-serve
-docs-serve: docs-deps ## Serve docs locally. http://localhost:8000
-	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run start
+docs-serve: ## Serve the Hugo documentation locally. http://localhost:1313/openbao-operator/
+	@"$(DOCS_DIR)/scripts/sync-api-reference.sh" --all --check
+	@$(HUGO) server --source "$(DOCS_DIR)" --baseURL http://127.0.0.1:1313/openbao-operator/
 
 .PHONY: docs-preview
-docs-preview: docs-build ## Preview the built docs locally with production behavior, including search. http://localhost:3000
-	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run serve --host 0.0.0.0
-
-.PHONY: docs-version
-docs-version: docs-deps ## Snapshot the current docs into a versioned Docusaurus release. Set DOCS_VERSION=<version>.
-	@test -n "$(DOCS_VERSION)" || { echo "DOCS_VERSION is required, for example: make docs-version DOCS_VERSION=1.2.3"; exit 1; }
-	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run version:docs "$(DOCS_VERSION)"
-
-.PHONY: docs-refresh-version
-docs-refresh-version: docs-deps ## Refresh an existing release-line docs snapshot from the checked-out docs. Set DOCS_VERSION=<X.Y.0>.
-	@test -n "$(DOCS_VERSION)" || { echo "DOCS_VERSION is required, for example: make docs-refresh-version DOCS_VERSION=1.2.0"; exit 1; }
-	@$(DOCS_PNPM) --dir "$(DOCS_DIR)" run refresh:docs-version "$(DOCS_VERSION)"
+docs-preview: docs-serve ## Alias for the local Hugo server.
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -911,7 +896,7 @@ go_licenses_comma := ,
 GO_LICENSES_ALLOWED_CSV := $(subst $(go_licenses_space),$(go_licenses_comma),$(strip $(GO_LICENSES_ALLOWED)))
 SEMGREP_ARTIFACT_DIR ?= dist/semgrep
 SEMGREP_CONFIG_FLAGS ?= --config p/default --config .semgrep/rules
-SEMGREP_TARGETS ?= ./cmd ./internal ./api ./hack ./config ./.github
+SEMGREP_TARGETS ?= ./cmd ./internal ./api ./hack ./config ./.github ./website/assets/js
 SEMGREP_OUTPUT_JSON ?= $(SEMGREP_ARTIFACT_DIR)/semgrep.json
 
 .PHONY: lint
@@ -991,7 +976,6 @@ security-scan-fs: ## Run the Trivy filesystem scan used by CI.
 		--skip-files dist/install.yaml \
 		--skip-dirs test/manifests \
 		--skip-dirs vendor \
-		--skip-dirs website/node_modules \
 		--skip-dirs .github/tools/node_modules \
 		--skip-dirs bin \
 		.

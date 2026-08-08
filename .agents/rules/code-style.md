@@ -6,16 +6,12 @@ description: Go coding standards for the OpenBao Operator
 
 # Go Coding Standards
 
-- Follow the project coding standards in `docs/contribute/standards/`.
+- Follow the project coding standards in `website/content/contribute/standards.md`.
 - Use the [coding-guidelines skill](../skills/coding-guidelines/SKILL.md)
 
 ## References
 
-- [Go Style](docs/contribute/standards/go-style.md)
-- [Error Handling](docs/contribute/standards/error-handling.md)
-- [Kubernetes Patterns](docs/contribute/standards/kubernetes-patterns.md)
-- [Security Practices](docs/contribute/standards/security-practices.md)
-- [Project Conventions](docs/contribute/standards/project-conventions.md)
+- [Project standards](../../website/content/contribute/standards.md)
 
 ## Critical Rules
 

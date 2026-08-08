@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="{{ site.Language.Locale }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <meta name="theme-color" content="#08141d">
+    <meta name="description" content="{{ .Description | default site.Params.description }}">
+    {{ if eq site.Version.Name "next" }}<meta name="robots" content="noindex,follow">{{ end }}
+    <title>{{ if not .IsHome }}{{ .Title }} · {{ end }}{{ if not site.Version.IsDefault }}{{ (index hugo.Data.version_lines site.Version.Name).label }} · {{ end }}{{ site.Title }}</title>
+    <link rel="canonical" href="{{ .Permalink }}">
+    <link rel="icon" type="image/png" href="{{ "img/brand/favicon.png" | relURL }}">
+    {{ $styles := resources.Get "css/site.css" | minify | fingerprint }}
+    <link rel="stylesheet" href="{{ $styles.RelPermalink }}" integrity="{{ $styles.Data.Integrity }}">
+    {{ $script := resources.Get "js/site.js" | minify | fingerprint }}
+    <script defer src="{{ $script.RelPermalink }}" integrity="{{ $script.Data.Integrity }}"></script>
+  </head>
+  <body class="{{ if .IsHome }}is-home{{ else if eq .Section "docs" }}is-doc has-doc-sidebar{{ else }}is-global{{ end }}">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    {{ partial "header.html" . }}
+    <button class="nav-scrim" type="button" aria-label="Close navigation" data-nav-close></button>
+    {{ block "body" . }}{{ end }}
+    {{ partial "search.html" . }}
+  </body>
+</html>

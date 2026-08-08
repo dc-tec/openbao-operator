@@ -1,0 +1,740 @@
+# Complete route ledger captured from the final Docusaurus build before the Hugo migration.
+# Additional 0.4.x entries preserve the initial Hugo review URLs after 0.4.x became unprefixed stable.
+# Columns: legacy route, canonical Hugo route, mapping evidence or disposition.
+/	/	preserved canonical Hugo route
+/0.4.x/	/	previous Hugo 0.4.x route
+/0.4.x/docs/	/docs/	previous Hugo 0.4.x route
+/0.4.x/docs/architecture/	/docs/architecture/	previous Hugo 0.4.x route
+/0.4.x/docs/architecture/invariants-and-boundaries/	/docs/architecture/invariants-and-boundaries/	previous Hugo 0.4.x route
+/0.4.x/docs/architecture/operations/	/docs/architecture/operations/	previous Hugo 0.4.x route
+/0.4.x/docs/architecture/provisioning/	/docs/architecture/provisioning/	previous Hugo 0.4.x route
+/0.4.x/docs/architecture/workload-lifecycle/	/docs/architecture/workload-lifecycle/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/	/docs/configure/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/air-gapped/	/docs/configure/air-gapped/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/expose/	/docs/configure/expose/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/gateway/	/docs/configure/gateway/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/initialize/	/docs/configure/initialize/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/monitor/	/docs/configure/monitor/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/network/	/docs/configure/network/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/read-replicas/	/docs/configure/read-replicas/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/security-profile/	/docs/configure/security-profile/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/server/	/docs/configure/server/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/storage/	/docs/configure/storage/	previous Hugo 0.4.x route
+/0.4.x/docs/configure/unseal/	/docs/configure/unseal/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/	/docs/get-started/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/create-cluster/	/docs/get-started/create-cluster/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/deployment-model/	/docs/get-started/deployment-model/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/install/	/docs/get-started/install/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/onboard-namespace/	/docs/get-started/onboard-namespace/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/operator-authentication/	/docs/get-started/operator-authentication/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/operator-authorization/	/docs/get-started/operator-authorization/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/prepare-day-2/	/docs/get-started/prepare-day-2/	previous Hugo 0.4.x route
+/0.4.x/docs/get-started/single-tenant/	/docs/get-started/single-tenant/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/	/docs/operate/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/backups/	/docs/operate/backups/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/decommission/	/docs/operate/decommission/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/maintenance/	/docs/operate/maintenance/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/production-readiness/	/docs/operate/production-readiness/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/recover-failed-rollback/	/docs/operate/recover-failed-rollback/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/recover-no-leader/	/docs/operate/recover-no-leader/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/recover-sealed/	/docs/operate/recover-sealed/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/restore/	/docs/operate/restore/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/troubleshoot/	/docs/operate/troubleshoot/	previous Hugo 0.4.x route
+/0.4.x/docs/operate/upgrades/	/docs/operate/upgrades/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/	/docs/reference/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/api/	/docs/reference/api/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/api/openbaocluster/	/docs/reference/api/openbaocluster/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/api/openbaorestore/	/docs/reference/api/openbaorestore/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/api/openbaotenant/	/docs/reference/api/openbaotenant/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/compatibility/	/docs/reference/compatibility/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/known-limitations/	/docs/reference/known-limitations/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/operator-upgrades/	/docs/reference/operator-upgrades/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/release-lifecycle/	/docs/reference/release-lifecycle/	previous Hugo 0.4.x route
+/0.4.x/docs/reference/status-and-events/	/docs/reference/status-and-events/	previous Hugo 0.4.x route
+/0.4.x/docs/security/	/docs/security/	previous Hugo 0.4.x route
+/0.4.x/docs/security/admission/	/docs/security/admission/	previous Hugo 0.4.x route
+/0.4.x/docs/security/secrets/	/docs/security/secrets/	previous Hugo 0.4.x route
+/0.4.x/docs/security/supply-chain/	/docs/security/supply-chain/	previous Hugo 0.4.x route
+/0.4.x/docs/security/tenant-boundaries/	/docs/security/tenant-boundaries/	previous Hugo 0.4.x route
+/0.4.x/docs/security/threat-model/	/docs/security/threat-model/	previous Hugo 0.4.x route
+/0.4.x/docs/security/workload/	/docs/security/workload/	previous Hugo 0.4.x route
+/contribute/	/contribute/	preserved canonical Hugo route
+/contribute/ci/	/contribute/ci/	preserved canonical Hugo route
+/contribute/dependency-licenses/	/contribute/supply-chain/	docs/contribute/dependency-licenses.md
+/contribute/distribution/	/contribute/release/	docs/contribute/distribution.md
+/contribute/docs-style-guide/	/contribute/standards/	docs/contribute/docs-style-guide.md
+/contribute/getting-started/	/contribute/setup/	docs/contribute/getting-started/index.md
+/contribute/getting-started/development/	/contribute/setup/	docs/contribute/getting-started/development.md
+/contribute/project-governance/	/contribute/	docs/contribute/project-governance.mdx
+/contribute/release-management/	/contribute/release/	docs/contribute/release-management.md
+/contribute/sdlc/	/contribute/supply-chain/	docs/contribute/sdlc.md
+/contribute/standards/	/contribute/standards/	preserved canonical Hugo route
+/contribute/standards/conventional-commits/	/contribute/standards/	docs/contribute/standards/conventional-commits.md
+/contribute/standards/error-handling/	/contribute/standards/	docs/contribute/standards/error-handling.md
+/contribute/standards/generated-artifacts/	/contribute/standards/	docs/contribute/standards/generated-artifacts.md
+/contribute/standards/go-style/	/contribute/standards/	docs/contribute/standards/go-style.md
+/contribute/standards/kubernetes-patterns/	/contribute/standards/	docs/contribute/standards/kubernetes-patterns.md
+/contribute/standards/project-conventions/	/contribute/standards/	docs/contribute/standards/project-conventions.md
+/contribute/standards/security-practices/	/contribute/standards/	docs/contribute/standards/security-practices.md
+/contribute/supply-chain-incident-response/	/contribute/incident-response/	docs/contribute/supply-chain-incident-response.md
+/contribute/supply-chain-security/	/contribute/supply-chain/	docs/contribute/supply-chain-security.md
+/contribute/testing/	/contribute/testing/	preserved canonical Hugo route
+/contribute/validate-and-ship/	/contribute/ci/	docs/contribute/validate-and-ship.mdx
+/dev/	/next/	unreleased compatibility alias
+/dev/architecture/	/next/docs/architecture/	unreleased compatibility alias
+/dev/contributing/	/next/	unreleased compatibility alias
+/dev/security/	/next/docs/security/	unreleased compatibility alias
+/dev/user-guide/	/next/docs/get-started/	unreleased compatibility alias
+/docs/	/docs/	preserved canonical Hugo route
+/docs/0.1.0/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/backup-manager/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/cert-manager/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/components/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/infra-manager/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/init-manager/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/lifecycle/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/lifecycle/day0-provisioning/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/lifecycle/day1-creation/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/lifecycle/day2-operations/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/lifecycle/dayN-backups/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/operation-lifecycle/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/operator-invariants/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/provisioner-manager/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/restore-manager/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/architecture/upgrade-manager/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/configure/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/configure/cluster-overview/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/configure/external-access/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/configure/security-profiles/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/configure/unseal/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/deployment-decision-guide/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/first-cluster/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/install/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/next-steps/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/onboard-target-namespace/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/operator-authentication/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/operator-authorization/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/operator-identity/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/get-started/single-tenant-mode/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/operate/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/operate/backups/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/operate/decommission/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/operate/maintenance/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/operate/pause-reconciliation/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/operate/production-checklist/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/operate/troubleshooting/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/operate/upgrades/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/recover/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/recover/failed-rollback/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/recover/no-leader/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/recover/safe-mode/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/recover/sealed-cluster/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/api/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/compatibility/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/deprecation-policy/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/known-limitations/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/operator-upgrade-compatibility/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/release-policy/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/status-and-events/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/reference/support-policy/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/fundamentals/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/fundamentals/profiles/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/fundamentals/secrets-management/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/fundamentals/threat-model/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/infrastructure/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/infrastructure/admission-policies/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/infrastructure/network-security/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/infrastructure/rbac/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/multi-tenancy/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/multi-tenancy/tenant-isolation/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/workload/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/workload/supply-chain/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/workload/tls/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/security/workload/workload-security/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/tenant-onboarding/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/tenant-onboarding/multi-tenant-security/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaocluster/configuration/air-gapped/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaocluster/configuration/gateway-api/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaocluster/configuration/network/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaocluster/configuration/observability/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaocluster/configuration/resources-storage/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaocluster/configuration/self-init/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaocluster/configuration/server/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaorestore/overview/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaorestore/recovery-restore-after-upgrade/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/openbaorestore/restore/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/cloud/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/local/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/cloud/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/local/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/local/development-self-init-userpass/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/runbooks/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.1.0/validated-deployments/	/releases/0.1.0/	archived 0.1.x contract
+/docs/0.2.0/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/backup-manager/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/cert-manager/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/components/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/init-manager/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/lifecycle/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/lifecycle/day0-provisioning/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/lifecycle/day1-creation/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/lifecycle/day2-operations/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/lifecycle/dayN-backups/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/operation-lifecycle/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/operator-invariants/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/provisioner-manager/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/restore-manager/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/upgrade-manager/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/architecture/workload-managers/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/configure/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/configure/cluster-overview/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/configure/external-access/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/configure/read-replicas/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/configure/security-profiles/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/configure/unseal/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/deployment-decision-guide/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/first-cluster/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/install/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/next-steps/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/onboard-target-namespace/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/operator-authentication/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/operator-authorization/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/operator-identity/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/get-started/single-tenant-mode/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/operate/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/operate/backups/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/operate/decommission/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/operate/maintenance/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/operate/pause-reconciliation/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/operate/production-checklist/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/operate/troubleshooting/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/operate/upgrades/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/recover/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/recover/failed-rollback/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/recover/no-leader/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/recover/safe-mode/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/recover/sealed-cluster/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/api/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/compatibility/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/deprecation-policy/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/known-limitations/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/operator-upgrade-compatibility/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/release-policy/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/status-and-events/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/reference/support-policy/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/fundamentals/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/fundamentals/profiles/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/fundamentals/secrets-management/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/fundamentals/threat-model/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/infrastructure/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/infrastructure/admission-policies/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/infrastructure/network-security/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/infrastructure/rbac/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/multi-tenancy/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/multi-tenancy/tenant-isolation/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/workload/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/workload/supply-chain/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/workload/tls/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/security/workload/workload-security/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/tenant-onboarding/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/tenant-onboarding/multi-tenant-security/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaocluster/configuration/air-gapped/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaocluster/configuration/gateway-api/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaocluster/configuration/network/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaocluster/configuration/observability/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaocluster/configuration/resources-storage/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaocluster/configuration/self-init/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaocluster/configuration/server/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaorestore/overview/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaorestore/recovery-restore-after-upgrade/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/openbaorestore/restore/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/cloud/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/local/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/cloud/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/local/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/local/development-self-init-userpass/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/runbooks/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.2.0/validated-deployments/	/releases/0.2.0/	archived 0.2.x contract
+/docs/0.3.0/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/backup-manager/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/cert-manager/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/components/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/init-manager/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/lifecycle/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/lifecycle/day0-provisioning/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/lifecycle/day1-creation/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/lifecycle/day2-operations/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/lifecycle/dayN-backups/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/operation-lifecycle/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/operator-invariants/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/provisioner-manager/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/restore-manager/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/upgrade-manager/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/architecture/workload-managers/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/configure/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/configure/cluster-overview/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/configure/external-access/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/configure/read-replicas/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/configure/security-profiles/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/configure/unseal/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/design/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/design/claims-and-service-offerings/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/deployment-decision-guide/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/first-cluster/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/install/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/next-steps/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/onboard-target-namespace/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/operator-authentication/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/operator-authorization/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/operator-identity/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/get-started/single-tenant-mode/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/operate/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/operate/backups/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/operate/decommission/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/operate/maintenance/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/operate/pause-reconciliation/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/operate/production-checklist/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/operate/troubleshooting/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/operate/upgrades/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/recover/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/recover/failed-rollback/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/recover/no-leader/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/recover/safe-mode/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/recover/sealed-cluster/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/api/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/compatibility/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/deprecation-policy/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/known-limitations/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/operator-upgrade-compatibility/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/release-policy/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/status-and-events/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/reference/support-policy/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/roadmap/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/fundamentals/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/fundamentals/profiles/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/fundamentals/secrets-management/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/fundamentals/threat-model/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/infrastructure/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/infrastructure/admission-policies/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/infrastructure/network-security/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/infrastructure/rbac/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/multi-tenancy/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/multi-tenancy/tenant-isolation/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/workload/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/workload/supply-chain/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/workload/tls/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/security/workload/workload-security/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/tenant-onboarding/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/tenant-onboarding/multi-tenant-security/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaocluster/configuration/air-gapped/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaocluster/configuration/gateway-api/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaocluster/configuration/network/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaocluster/configuration/observability/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaocluster/configuration/resources-storage/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaocluster/configuration/self-init/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaocluster/configuration/server/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaorestore/overview/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaorestore/recovery-restore-after-upgrade/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/openbaorestore/restore/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/cloud/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/local/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/cloud/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/local/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/local/development-self-init-userpass/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/runbooks/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.3.0/validated-deployments/	/releases/0.3.0/	archived 0.3.x contract
+/docs/0.4.0/	/docs/	docs/index.mdx
+/docs/0.4.0/architecture/	/docs/architecture/	docs/architecture/index.mdx
+/docs/0.4.0/architecture/backup-manager/	/docs/architecture/operations/	docs/architecture/backup-manager.md
+/docs/0.4.0/architecture/cert-manager/	/docs/architecture/workload-lifecycle/	docs/architecture/cert-manager.md
+/docs/0.4.0/architecture/components/	/docs/architecture/invariants-and-boundaries/	docs/architecture/components.md
+/docs/0.4.0/architecture/init-manager/	/docs/architecture/workload-lifecycle/	docs/architecture/init-manager.md
+/docs/0.4.0/architecture/lifecycle/	/docs/architecture/	docs/architecture/lifecycle/index.md
+/docs/0.4.0/architecture/lifecycle/day0-provisioning/	/docs/architecture/provisioning/	docs/architecture/lifecycle/day0-provisioning.md
+/docs/0.4.0/architecture/lifecycle/day1-creation/	/docs/architecture/workload-lifecycle/	docs/architecture/lifecycle/day1-creation.md
+/docs/0.4.0/architecture/lifecycle/day2-operations/	/docs/architecture/operations/	docs/architecture/lifecycle/day2-operations.md
+/docs/0.4.0/architecture/lifecycle/dayN-backups/	/docs/architecture/operations/	docs/architecture/lifecycle/dayN-backups.md
+/docs/0.4.0/architecture/operation-lifecycle/	/docs/architecture/operations/	docs/architecture/operation-lifecycle.md
+/docs/0.4.0/architecture/operator-invariants/	/docs/architecture/invariants-and-boundaries/	docs/architecture/operator-invariants.md
+/docs/0.4.0/architecture/provisioner-manager/	/docs/architecture/provisioning/	docs/architecture/provisioner-manager.md
+/docs/0.4.0/architecture/restore-manager/	/docs/architecture/operations/	docs/architecture/restore-manager.md
+/docs/0.4.0/architecture/upgrade-manager/	/docs/architecture/operations/	docs/architecture/upgrade-manager.md
+/docs/0.4.0/architecture/workload-managers/	/docs/architecture/workload-lifecycle/	docs/architecture/workload-managers.md
+/docs/0.4.0/configure/	/docs/configure/	docs/user-guide/openbaocluster/configuration/index.mdx
+/docs/0.4.0/configure/cluster-overview/	/docs/get-started/create-cluster/	docs/user-guide/openbaocluster/overview.md
+/docs/0.4.0/configure/external-access/	/docs/configure/expose/	docs/user-guide/openbaocluster/configuration/external-access.md
+/docs/0.4.0/configure/read-replicas/	/docs/configure/read-replicas/	docs/user-guide/openbaocluster/configuration/read-replicas.md
+/docs/0.4.0/configure/security-profiles/	/docs/configure/security-profile/	docs/user-guide/openbaocluster/configuration/security-profiles.md
+/docs/0.4.0/configure/unseal/	/docs/configure/unseal/	docs/user-guide/openbaocluster/configuration/unseal.md
+/docs/0.4.0/design/	/project/	docs/design/index.mdx
+/docs/0.4.0/design/claims-and-service-offerings/	/project/claims-and-service-offerings/	docs/design/claims-and-service-offerings.mdx
+/docs/0.4.0/get-started/	/docs/get-started/	docs/user-guide/index.mdx
+/docs/0.4.0/get-started/deployment-decision-guide/	/docs/get-started/deployment-model/	docs/user-guide/operator/deployment-decision-guide.md
+/docs/0.4.0/get-started/first-cluster/	/docs/get-started/create-cluster/	docs/user-guide/openbaocluster/getting-started.md
+/docs/0.4.0/get-started/install/	/docs/get-started/install/	docs/user-guide/operator/installation.md
+/docs/0.4.0/get-started/next-steps/	/docs/get-started/prepare-day-2/	docs/user-guide/openbaocluster/next-steps.md
+/docs/0.4.0/get-started/onboard-target-namespace/	/docs/get-started/onboard-namespace/	docs/user-guide/openbaotenant/onboarding.md
+/docs/0.4.0/get-started/operator-authentication/	/docs/get-started/operator-authentication/	docs/user-guide/operator/authn.md
+/docs/0.4.0/get-started/operator-authorization/	/docs/get-started/operator-authorization/	docs/user-guide/operator/authz.md
+/docs/0.4.0/get-started/operator-identity/	/docs/get-started/operator-authentication/	docs/user-guide/operator/identity-and-access.md
+/docs/0.4.0/get-started/single-tenant-mode/	/docs/get-started/single-tenant/	docs/user-guide/operator/single-tenant-mode.md
+/docs/0.4.0/operate/	/docs/operate/	docs/user-guide/openbaocluster/operations/index.mdx
+/docs/0.4.0/operate/backups/	/docs/operate/backups/	docs/user-guide/openbaocluster/operations/backups.md
+/docs/0.4.0/operate/decommission/	/docs/operate/decommission/	docs/user-guide/openbaocluster/operations/deletion.md
+/docs/0.4.0/operate/maintenance/	/docs/operate/maintenance/	docs/user-guide/openbaocluster/operations/maintenance.md
+/docs/0.4.0/operate/pause-reconciliation/	/docs/operate/maintenance/	docs/user-guide/openbaocluster/operations/pausing.md
+/docs/0.4.0/operate/production-checklist/	/docs/operate/production-readiness/	docs/user-guide/openbaocluster/operations/production-checklist.md
+/docs/0.4.0/operate/troubleshooting/	/docs/operate/troubleshoot/	docs/user-guide/openbaocluster/operations/troubleshooting.md
+/docs/0.4.0/operate/upgrades/	/docs/operate/upgrades/	docs/user-guide/openbaocluster/operations/upgrades.md
+/docs/0.4.0/recover/	/docs/operate/	docs/user-guide/openbaocluster/recovery/index.mdx
+/docs/0.4.0/recover/failed-rollback/	/docs/operate/recover-failed-rollback/	docs/user-guide/openbaocluster/recovery/failed-rollback.md
+/docs/0.4.0/recover/no-leader/	/docs/operate/recover-no-leader/	docs/user-guide/openbaocluster/recovery/no-leader.md
+/docs/0.4.0/recover/safe-mode/	/docs/operate/recover-failed-rollback/	docs/user-guide/openbaocluster/recovery/safe-mode.md
+/docs/0.4.0/recover/sealed-cluster/	/docs/operate/recover-sealed/	docs/user-guide/openbaocluster/recovery/sealed-cluster.md
+/docs/0.4.0/reference/	/docs/reference/	docs/reference/index.mdx
+/docs/0.4.0/reference/api/	/docs/reference/api/	docs/reference/api.md
+/docs/0.4.0/reference/compatibility/	/docs/reference/compatibility/	docs/reference/compatibility.md
+/docs/0.4.0/reference/deprecation-policy/	/docs/reference/release-lifecycle/	docs/reference/deprecation-policy.md
+/docs/0.4.0/reference/known-limitations/	/docs/reference/known-limitations/	docs/reference/known-limitations.md
+/docs/0.4.0/reference/operator-upgrade-compatibility/	/docs/reference/operator-upgrades/	docs/reference/operator-upgrade-compatibility.md
+/docs/0.4.0/reference/release-policy/	/docs/reference/release-lifecycle/	docs/reference/release-policy.md
+/docs/0.4.0/reference/status-and-events/	/docs/reference/status-and-events/	docs/reference/status-and-events.md
+/docs/0.4.0/reference/support-policy/	/docs/reference/release-lifecycle/	docs/reference/support-policy.md
+/docs/0.4.0/roadmap/	/project/roadmap/	docs/roadmap.mdx
+/docs/0.4.0/security/	/docs/security/	docs/security/index.mdx
+/docs/0.4.0/security/fundamentals/	/docs/security/	docs/security/fundamentals/index.md
+/docs/0.4.0/security/fundamentals/profiles/	/docs/configure/security-profile/	docs/security/fundamentals/profiles.md
+/docs/0.4.0/security/fundamentals/secrets-management/	/docs/security/secrets/	docs/security/fundamentals/secrets-management.md
+/docs/0.4.0/security/fundamentals/threat-model/	/docs/security/threat-model/	docs/security/fundamentals/threat-model.md
+/docs/0.4.0/security/infrastructure/	/docs/security/	docs/security/infrastructure/index.md
+/docs/0.4.0/security/infrastructure/admission-policies/	/docs/security/admission/	docs/security/infrastructure/admission-policies.md
+/docs/0.4.0/security/infrastructure/network-security/	/docs/configure/network/	docs/security/infrastructure/network-security.md
+/docs/0.4.0/security/infrastructure/rbac/	/docs/security/tenant-boundaries/	docs/security/infrastructure/rbac.md
+/docs/0.4.0/security/multi-tenancy/	/docs/security/tenant-boundaries/	docs/security/multi-tenancy/index.md
+/docs/0.4.0/security/multi-tenancy/tenant-isolation/	/docs/security/tenant-boundaries/	docs/security/multi-tenancy/tenant-isolation.md
+/docs/0.4.0/security/workload/	/docs/security/	docs/security/workload/index.md
+/docs/0.4.0/security/workload/supply-chain/	/docs/security/supply-chain/	docs/security/workload/supply-chain.md
+/docs/0.4.0/security/workload/tls/	/docs/configure/expose/	docs/security/workload/tls.md
+/docs/0.4.0/security/workload/workload-security/	/docs/security/workload/	docs/security/workload/workload-security.md
+/docs/0.4.0/tenant-onboarding/	/docs/get-started/onboard-namespace/	docs/user-guide/openbaotenant/overview.md
+/docs/0.4.0/tenant-onboarding/multi-tenant-security/	/docs/security/tenant-boundaries/	docs/user-guide/openbaotenant/multi-tenancy.md
+/docs/0.4.0/user-guide/openbaocluster/configuration/air-gapped/	/docs/configure/air-gapped/	docs/user-guide/openbaocluster/configuration/air-gapped.md
+/docs/0.4.0/user-guide/openbaocluster/configuration/gateway-api/	/docs/configure/gateway/	docs/user-guide/openbaocluster/configuration/gateway-api.md
+/docs/0.4.0/user-guide/openbaocluster/configuration/network/	/docs/configure/network/	docs/user-guide/openbaocluster/configuration/network.md
+/docs/0.4.0/user-guide/openbaocluster/configuration/observability/	/docs/configure/monitor/	docs/user-guide/openbaocluster/configuration/observability.md
+/docs/0.4.0/user-guide/openbaocluster/configuration/resources-storage/	/docs/configure/storage/	docs/user-guide/openbaocluster/configuration/resources-storage.md
+/docs/0.4.0/user-guide/openbaocluster/configuration/self-init/	/docs/configure/initialize/	docs/user-guide/openbaocluster/configuration/self-init.md
+/docs/0.4.0/user-guide/openbaocluster/configuration/server/	/docs/configure/server/	docs/user-guide/openbaocluster/configuration/server.md
+/docs/0.4.0/user-guide/openbaorestore/overview/	/docs/operate/restore/	docs/user-guide/openbaorestore/overview.md
+/docs/0.4.0/user-guide/openbaorestore/recovery-restore-after-upgrade/	/docs/operate/restore/	docs/user-guide/openbaorestore/recovery-restore-after-upgrade.md
+/docs/0.4.0/user-guide/openbaorestore/restore/	/docs/operate/restore/	docs/user-guide/openbaorestore/restore.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/	/docs/architecture/	docs/user-guide/validated-deployments/architectures/index.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/cloud/	/docs/architecture/	docs/user-guide/validated-deployments/architectures/cloud/index.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3/	/docs/operate/backups/	docs/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme/	/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/local/	/docs/architecture/	docs/user-guide/validated-deployments/architectures/local/index.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs/	/docs/operate/restore/	docs/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs/	/docs/architecture/	docs/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme/	/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme.md
+/docs/0.4.0/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls/	/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/	/docs/	docs/user-guide/validated-deployments/recipes/index.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/cloud/	/docs/	docs/user-guide/validated-deployments/recipes/cloud/index.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3/	/docs/operate/backups/	docs/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme/	/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/local/	/docs/	docs/user-guide/validated-deployments/recipes/local/index.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/local/development-self-init-userpass/	/docs/configure/initialize/	docs/user-guide/validated-deployments/recipes/local/development-self-init-userpass.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls/	/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls/	/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls.md
+/docs/0.4.0/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap/	/docs/operate/restore/	docs/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap.md
+/docs/0.4.0/user-guide/validated-deployments/runbooks/	/docs/	docs/user-guide/validated-deployments/runbooks/index.md
+/docs/0.4.0/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs/	/docs/operate/restore/	docs/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs.md
+/docs/0.4.0/validated-deployments/	/docs/	docs/user-guide/validated-deployments/index.mdx
+/docs/architecture/	/docs/architecture/	preserved canonical Hugo route
+/docs/architecture/backup-manager/	/docs/architecture/operations/	docs/architecture/backup-manager.md
+/docs/architecture/cert-manager/	/docs/architecture/workload-lifecycle/	docs/architecture/cert-manager.md
+/docs/architecture/components/	/docs/architecture/invariants-and-boundaries/	docs/architecture/components.md
+/docs/architecture/init-manager/	/docs/architecture/workload-lifecycle/	docs/architecture/init-manager.md
+/docs/architecture/lifecycle/	/docs/architecture/	docs/architecture/lifecycle/index.md
+/docs/architecture/lifecycle/day0-provisioning/	/docs/architecture/provisioning/	docs/architecture/lifecycle/day0-provisioning.md
+/docs/architecture/lifecycle/day1-creation/	/docs/architecture/workload-lifecycle/	docs/architecture/lifecycle/day1-creation.md
+/docs/architecture/lifecycle/day2-operations/	/docs/architecture/operations/	docs/architecture/lifecycle/day2-operations.md
+/docs/architecture/lifecycle/dayN-backups/	/docs/architecture/operations/	docs/architecture/lifecycle/dayN-backups.md
+/docs/architecture/operation-lifecycle/	/docs/architecture/operations/	docs/architecture/operation-lifecycle.md
+/docs/architecture/operator-invariants/	/docs/architecture/invariants-and-boundaries/	docs/architecture/operator-invariants.md
+/docs/architecture/provisioner-manager/	/docs/architecture/provisioning/	docs/architecture/provisioner-manager.md
+/docs/architecture/restore-manager/	/docs/architecture/operations/	docs/architecture/restore-manager.md
+/docs/architecture/upgrade-manager/	/docs/architecture/operations/	docs/architecture/upgrade-manager.md
+/docs/architecture/workload-managers/	/docs/architecture/workload-lifecycle/	docs/architecture/workload-managers.md
+/docs/configure/	/docs/configure/	preserved canonical Hugo route
+/docs/configure/cluster-overview/	/docs/get-started/create-cluster/	docs/user-guide/openbaocluster/overview.md
+/docs/configure/external-access/	/docs/configure/expose/	docs/user-guide/openbaocluster/configuration/external-access.md
+/docs/configure/read-replicas/	/docs/configure/read-replicas/	preserved canonical Hugo route
+/docs/configure/security-profiles/	/docs/configure/security-profile/	docs/user-guide/openbaocluster/configuration/security-profiles.md
+/docs/configure/unseal/	/docs/configure/unseal/	preserved canonical Hugo route
+/docs/design/	/project/	docs/design/index.mdx
+/docs/design/claims-and-service-offerings/	/project/claims-and-service-offerings/	docs/design/claims-and-service-offerings.mdx
+/docs/get-started/	/docs/get-started/	preserved canonical Hugo route
+/docs/get-started/deployment-decision-guide/	/docs/get-started/deployment-model/	docs/user-guide/operator/deployment-decision-guide.md
+/docs/get-started/first-cluster/	/docs/get-started/create-cluster/	docs/user-guide/openbaocluster/getting-started.md
+/docs/get-started/install/	/docs/get-started/install/	preserved canonical Hugo route
+/docs/get-started/next-steps/	/docs/get-started/prepare-day-2/	docs/user-guide/openbaocluster/next-steps.md
+/docs/get-started/onboard-target-namespace/	/docs/get-started/onboard-namespace/	docs/user-guide/openbaotenant/onboarding.md
+/docs/get-started/operator-authentication/	/docs/get-started/operator-authentication/	preserved canonical Hugo route
+/docs/get-started/operator-authorization/	/docs/get-started/operator-authorization/	preserved canonical Hugo route
+/docs/get-started/operator-identity/	/docs/get-started/operator-authentication/	docs/user-guide/operator/identity-and-access.md
+/docs/get-started/single-tenant-mode/	/docs/get-started/single-tenant/	docs/user-guide/operator/single-tenant-mode.md
+/docs/next/	/next/docs/	docs/index.mdx
+/docs/next/architecture/	/next/docs/architecture/	docs/architecture/index.mdx
+/docs/next/architecture/backup-manager/	/next/docs/architecture/operations/	docs/architecture/backup-manager.md
+/docs/next/architecture/cert-manager/	/next/docs/architecture/workload-lifecycle/	docs/architecture/cert-manager.md
+/docs/next/architecture/components/	/next/docs/architecture/invariants-and-boundaries/	docs/architecture/components.md
+/docs/next/architecture/init-manager/	/next/docs/architecture/workload-lifecycle/	docs/architecture/init-manager.md
+/docs/next/architecture/lifecycle/	/next/docs/architecture/	docs/architecture/lifecycle/index.md
+/docs/next/architecture/lifecycle/day0-provisioning/	/next/docs/architecture/provisioning/	docs/architecture/lifecycle/day0-provisioning.md
+/docs/next/architecture/lifecycle/day1-creation/	/next/docs/architecture/workload-lifecycle/	docs/architecture/lifecycle/day1-creation.md
+/docs/next/architecture/lifecycle/day2-operations/	/next/docs/architecture/operations/	docs/architecture/lifecycle/day2-operations.md
+/docs/next/architecture/lifecycle/dayN-backups/	/next/docs/architecture/operations/	docs/architecture/lifecycle/dayN-backups.md
+/docs/next/architecture/operation-lifecycle/	/next/docs/architecture/operations/	docs/architecture/operation-lifecycle.md
+/docs/next/architecture/operator-invariants/	/next/docs/architecture/invariants-and-boundaries/	docs/architecture/operator-invariants.md
+/docs/next/architecture/provisioner-manager/	/next/docs/architecture/provisioning/	docs/architecture/provisioner-manager.md
+/docs/next/architecture/restore-manager/	/next/docs/architecture/operations/	docs/architecture/restore-manager.md
+/docs/next/architecture/upgrade-manager/	/next/docs/architecture/operations/	docs/architecture/upgrade-manager.md
+/docs/next/architecture/workload-managers/	/next/docs/architecture/workload-lifecycle/	docs/architecture/workload-managers.md
+/docs/next/configure/	/next/docs/configure/	docs/user-guide/openbaocluster/configuration/index.mdx
+/docs/next/configure/cluster-overview/	/next/docs/get-started/create-cluster/	docs/user-guide/openbaocluster/overview.md
+/docs/next/configure/external-access/	/next/docs/configure/expose/	docs/user-guide/openbaocluster/configuration/external-access.md
+/docs/next/configure/read-replicas/	/next/docs/configure/read-replicas/	docs/user-guide/openbaocluster/configuration/read-replicas.md
+/docs/next/configure/security-profiles/	/next/docs/configure/security-profile/	docs/user-guide/openbaocluster/configuration/security-profiles.md
+/docs/next/configure/unseal/	/next/docs/configure/unseal/	docs/user-guide/openbaocluster/configuration/unseal.md
+/docs/next/design/	/next/docs/	docs/design/index.mdx
+/docs/next/design/claims-and-service-offerings/	/next/docs/	docs/design/claims-and-service-offerings.mdx
+/docs/next/get-started/	/next/docs/get-started/	docs/user-guide/index.mdx
+/docs/next/get-started/deployment-decision-guide/	/next/docs/get-started/deployment-model/	docs/user-guide/operator/deployment-decision-guide.md
+/docs/next/get-started/first-cluster/	/next/docs/get-started/create-cluster/	docs/user-guide/openbaocluster/getting-started.md
+/docs/next/get-started/install/	/next/docs/get-started/install/	docs/user-guide/operator/installation.md
+/docs/next/get-started/next-steps/	/next/docs/get-started/prepare-day-2/	docs/user-guide/openbaocluster/next-steps.md
+/docs/next/get-started/onboard-target-namespace/	/next/docs/get-started/onboard-namespace/	docs/user-guide/openbaotenant/onboarding.md
+/docs/next/get-started/operator-authentication/	/next/docs/get-started/operator-authentication/	docs/user-guide/operator/authn.md
+/docs/next/get-started/operator-authorization/	/next/docs/get-started/operator-authorization/	docs/user-guide/operator/authz.md
+/docs/next/get-started/operator-identity/	/next/docs/get-started/operator-authentication/	docs/user-guide/operator/identity-and-access.md
+/docs/next/get-started/single-tenant-mode/	/next/docs/get-started/single-tenant/	docs/user-guide/operator/single-tenant-mode.md
+/docs/next/operate/	/next/docs/operate/	docs/user-guide/openbaocluster/operations/index.mdx
+/docs/next/operate/backups/	/next/docs/operate/backups/	docs/user-guide/openbaocluster/operations/backups.md
+/docs/next/operate/decommission/	/next/docs/operate/decommission/	docs/user-guide/openbaocluster/operations/deletion.md
+/docs/next/operate/maintenance/	/next/docs/operate/maintenance/	docs/user-guide/openbaocluster/operations/maintenance.md
+/docs/next/operate/pause-reconciliation/	/next/docs/operate/maintenance/	docs/user-guide/openbaocluster/operations/pausing.md
+/docs/next/operate/production-checklist/	/next/docs/operate/production-readiness/	docs/user-guide/openbaocluster/operations/production-checklist.md
+/docs/next/operate/troubleshooting/	/next/docs/operate/troubleshoot/	docs/user-guide/openbaocluster/operations/troubleshooting.md
+/docs/next/operate/upgrades/	/next/docs/operate/upgrades/	docs/user-guide/openbaocluster/operations/upgrades.md
+/docs/next/recover/	/next/docs/operate/	docs/user-guide/openbaocluster/recovery/index.mdx
+/docs/next/recover/failed-rollback/	/next/docs/operate/recover-failed-rollback/	docs/user-guide/openbaocluster/recovery/failed-rollback.md
+/docs/next/recover/no-leader/	/next/docs/operate/recover-no-leader/	docs/user-guide/openbaocluster/recovery/no-leader.md
+/docs/next/recover/safe-mode/	/next/docs/operate/recover-failed-rollback/	docs/user-guide/openbaocluster/recovery/safe-mode.md
+/docs/next/recover/sealed-cluster/	/next/docs/operate/recover-sealed/	docs/user-guide/openbaocluster/recovery/sealed-cluster.md
+/docs/next/reference/	/next/docs/reference/	docs/reference/index.mdx
+/docs/next/reference/api/	/next/docs/reference/api/	docs/reference/api.md
+/docs/next/reference/compatibility/	/next/docs/reference/compatibility/	docs/reference/compatibility.md
+/docs/next/reference/deprecation-policy/	/next/docs/reference/release-lifecycle/	docs/reference/deprecation-policy.md
+/docs/next/reference/known-limitations/	/next/docs/reference/known-limitations/	docs/reference/known-limitations.md
+/docs/next/reference/operator-upgrade-compatibility/	/next/docs/reference/operator-upgrades/	docs/reference/operator-upgrade-compatibility.md
+/docs/next/reference/release-policy/	/next/docs/reference/release-lifecycle/	docs/reference/release-policy.md
+/docs/next/reference/status-and-events/	/next/docs/reference/status-and-events/	docs/reference/status-and-events.md
+/docs/next/reference/support-policy/	/next/docs/reference/release-lifecycle/	docs/reference/support-policy.md
+/docs/next/roadmap/	/next/docs/	docs/roadmap.mdx
+/docs/next/security/	/next/docs/security/	docs/security/index.mdx
+/docs/next/security/fundamentals/	/next/docs/security/	docs/security/fundamentals/index.md
+/docs/next/security/fundamentals/profiles/	/next/docs/configure/security-profile/	docs/security/fundamentals/profiles.md
+/docs/next/security/fundamentals/secrets-management/	/next/docs/security/secrets/	docs/security/fundamentals/secrets-management.md
+/docs/next/security/fundamentals/threat-model/	/next/docs/security/threat-model/	docs/security/fundamentals/threat-model.md
+/docs/next/security/infrastructure/	/next/docs/security/	docs/security/infrastructure/index.md
+/docs/next/security/infrastructure/admission-policies/	/next/docs/security/admission/	docs/security/infrastructure/admission-policies.md
+/docs/next/security/infrastructure/network-security/	/next/docs/configure/network/	docs/security/infrastructure/network-security.md
+/docs/next/security/infrastructure/rbac/	/next/docs/security/tenant-boundaries/	docs/security/infrastructure/rbac.md
+/docs/next/security/multi-tenancy/	/next/docs/security/tenant-boundaries/	docs/security/multi-tenancy/index.md
+/docs/next/security/multi-tenancy/tenant-isolation/	/next/docs/security/tenant-boundaries/	docs/security/multi-tenancy/tenant-isolation.md
+/docs/next/security/workload/	/next/docs/security/	docs/security/workload/index.md
+/docs/next/security/workload/supply-chain/	/next/docs/security/supply-chain/	docs/security/workload/supply-chain.md
+/docs/next/security/workload/tls/	/next/docs/configure/expose/	docs/security/workload/tls.md
+/docs/next/security/workload/workload-security/	/next/docs/security/workload/	docs/security/workload/workload-security.md
+/docs/next/tenant-onboarding/	/next/docs/get-started/onboard-namespace/	docs/user-guide/openbaotenant/overview.md
+/docs/next/tenant-onboarding/multi-tenant-security/	/next/docs/security/tenant-boundaries/	docs/user-guide/openbaotenant/multi-tenancy.md
+/docs/next/user-guide/openbaocluster/configuration/air-gapped/	/next/docs/configure/air-gapped/	docs/user-guide/openbaocluster/configuration/air-gapped.md
+/docs/next/user-guide/openbaocluster/configuration/gateway-api/	/next/docs/configure/gateway/	docs/user-guide/openbaocluster/configuration/gateway-api.md
+/docs/next/user-guide/openbaocluster/configuration/network/	/next/docs/configure/network/	docs/user-guide/openbaocluster/configuration/network.md
+/docs/next/user-guide/openbaocluster/configuration/observability/	/next/docs/configure/monitor/	docs/user-guide/openbaocluster/configuration/observability.md
+/docs/next/user-guide/openbaocluster/configuration/resources-storage/	/next/docs/configure/storage/	docs/user-guide/openbaocluster/configuration/resources-storage.md
+/docs/next/user-guide/openbaocluster/configuration/self-init/	/next/docs/configure/initialize/	docs/user-guide/openbaocluster/configuration/self-init.md
+/docs/next/user-guide/openbaocluster/configuration/server/	/next/docs/configure/server/	docs/user-guide/openbaocluster/configuration/server.md
+/docs/next/user-guide/openbaorestore/overview/	/next/docs/operate/restore/	docs/user-guide/openbaorestore/overview.md
+/docs/next/user-guide/openbaorestore/recovery-restore-after-upgrade/	/next/docs/operate/restore/	docs/user-guide/openbaorestore/recovery-restore-after-upgrade.md
+/docs/next/user-guide/openbaorestore/restore/	/next/docs/operate/restore/	docs/user-guide/openbaorestore/restore.md
+/docs/next/user-guide/validated-deployments/architectures/	/next/docs/architecture/	docs/user-guide/validated-deployments/architectures/index.md
+/docs/next/user-guide/validated-deployments/architectures/cloud/	/next/docs/architecture/	docs/user-guide/validated-deployments/architectures/cloud/index.md
+/docs/next/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3/	/next/docs/operate/backups/	docs/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3.md
+/docs/next/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme/	/next/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme.md
+/docs/next/user-guide/validated-deployments/architectures/local/	/next/docs/architecture/	docs/user-guide/validated-deployments/architectures/local/index.md
+/docs/next/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs/	/next/docs/operate/restore/	docs/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs.md
+/docs/next/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs/	/next/docs/architecture/	docs/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs.md
+/docs/next/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme/	/next/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme.md
+/docs/next/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls/	/next/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls.md
+/docs/next/user-guide/validated-deployments/recipes/	/next/docs/	docs/user-guide/validated-deployments/recipes/index.md
+/docs/next/user-guide/validated-deployments/recipes/cloud/	/next/docs/	docs/user-guide/validated-deployments/recipes/cloud/index.md
+/docs/next/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3/	/next/docs/operate/backups/	docs/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3.md
+/docs/next/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme/	/next/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme.md
+/docs/next/user-guide/validated-deployments/recipes/local/	/next/docs/	docs/user-guide/validated-deployments/recipes/local/index.md
+/docs/next/user-guide/validated-deployments/recipes/local/development-self-init-userpass/	/next/docs/configure/initialize/	docs/user-guide/validated-deployments/recipes/local/development-self-init-userpass.md
+/docs/next/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls/	/next/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls.md
+/docs/next/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls/	/next/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls.md
+/docs/next/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap/	/next/docs/operate/restore/	docs/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap.md
+/docs/next/user-guide/validated-deployments/runbooks/	/next/docs/	docs/user-guide/validated-deployments/runbooks/index.md
+/docs/next/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs/	/next/docs/operate/restore/	docs/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs.md
+/docs/next/validated-deployments/	/next/docs/	docs/user-guide/validated-deployments/index.mdx
+/docs/next/validated-deployments/runbooks/restore-from-s3-compatible-snapshot/	/next/docs/operate/restore/	legacy redirect
+/docs/next/validated-deployments/runbooks/scheduled-backups-s3-compatible/	/next/docs/operate/backups/	legacy redirect
+/docs/operate/	/docs/operate/	preserved canonical Hugo route
+/docs/operate/backups/	/docs/operate/backups/	preserved canonical Hugo route
+/docs/operate/decommission/	/docs/operate/decommission/	preserved canonical Hugo route
+/docs/operate/maintenance/	/docs/operate/maintenance/	preserved canonical Hugo route
+/docs/operate/pause-reconciliation/	/docs/operate/maintenance/	docs/user-guide/openbaocluster/operations/pausing.md
+/docs/operate/production-checklist/	/docs/operate/production-readiness/	docs/user-guide/openbaocluster/operations/production-checklist.md
+/docs/operate/troubleshooting/	/docs/operate/troubleshoot/	docs/user-guide/openbaocluster/operations/troubleshooting.md
+/docs/operate/upgrades/	/docs/operate/upgrades/	preserved canonical Hugo route
+/docs/recover/	/docs/operate/	docs/user-guide/openbaocluster/recovery/index.mdx
+/docs/recover/failed-rollback/	/docs/operate/recover-failed-rollback/	docs/user-guide/openbaocluster/recovery/failed-rollback.md
+/docs/recover/no-leader/	/docs/operate/recover-no-leader/	docs/user-guide/openbaocluster/recovery/no-leader.md
+/docs/recover/safe-mode/	/docs/operate/recover-failed-rollback/	docs/user-guide/openbaocluster/recovery/safe-mode.md
+/docs/recover/sealed-cluster/	/docs/operate/recover-sealed/	docs/user-guide/openbaocluster/recovery/sealed-cluster.md
+/docs/reference/	/docs/reference/	preserved canonical Hugo route
+/docs/reference/api/	/docs/reference/api/	preserved canonical Hugo route
+/docs/reference/compatibility/	/docs/reference/compatibility/	preserved canonical Hugo route
+/docs/reference/deprecation-policy/	/docs/reference/release-lifecycle/	docs/reference/deprecation-policy.md
+/docs/reference/known-limitations/	/docs/reference/known-limitations/	preserved canonical Hugo route
+/docs/reference/operator-upgrade-compatibility/	/docs/reference/operator-upgrades/	docs/reference/operator-upgrade-compatibility.md
+/docs/reference/release-policy/	/docs/reference/release-lifecycle/	docs/reference/release-policy.md
+/docs/reference/status-and-events/	/docs/reference/status-and-events/	preserved canonical Hugo route
+/docs/reference/support-policy/	/docs/reference/release-lifecycle/	docs/reference/support-policy.md
+/docs/roadmap/	/project/roadmap/	docs/roadmap.mdx
+/docs/security/	/docs/security/	preserved canonical Hugo route
+/docs/security/fundamentals/	/docs/security/	docs/security/fundamentals/index.md
+/docs/security/fundamentals/profiles/	/docs/configure/security-profile/	docs/security/fundamentals/profiles.md
+/docs/security/fundamentals/secrets-management/	/docs/security/secrets/	docs/security/fundamentals/secrets-management.md
+/docs/security/fundamentals/threat-model/	/docs/security/threat-model/	docs/security/fundamentals/threat-model.md
+/docs/security/infrastructure/	/docs/security/	docs/security/infrastructure/index.md
+/docs/security/infrastructure/admission-policies/	/docs/security/admission/	docs/security/infrastructure/admission-policies.md
+/docs/security/infrastructure/network-security/	/docs/configure/network/	docs/security/infrastructure/network-security.md
+/docs/security/infrastructure/rbac/	/docs/security/tenant-boundaries/	docs/security/infrastructure/rbac.md
+/docs/security/multi-tenancy/	/docs/security/tenant-boundaries/	docs/security/multi-tenancy/index.md
+/docs/security/multi-tenancy/tenant-isolation/	/docs/security/tenant-boundaries/	docs/security/multi-tenancy/tenant-isolation.md
+/docs/security/workload/	/docs/security/workload/	preserved canonical Hugo route
+/docs/security/workload/supply-chain/	/docs/security/supply-chain/	docs/security/workload/supply-chain.md
+/docs/security/workload/tls/	/docs/configure/expose/	docs/security/workload/tls.md
+/docs/security/workload/workload-security/	/docs/security/workload/	docs/security/workload/workload-security.md
+/docs/tenant-onboarding/	/docs/get-started/onboard-namespace/	docs/user-guide/openbaotenant/overview.md
+/docs/tenant-onboarding/multi-tenant-security/	/docs/security/tenant-boundaries/	docs/user-guide/openbaotenant/multi-tenancy.md
+/docs/user-guide/openbaocluster/configuration/air-gapped/	/docs/configure/air-gapped/	docs/user-guide/openbaocluster/configuration/air-gapped.md
+/docs/user-guide/openbaocluster/configuration/gateway-api/	/docs/configure/gateway/	docs/user-guide/openbaocluster/configuration/gateway-api.md
+/docs/user-guide/openbaocluster/configuration/network/	/docs/configure/network/	docs/user-guide/openbaocluster/configuration/network.md
+/docs/user-guide/openbaocluster/configuration/observability/	/docs/configure/monitor/	docs/user-guide/openbaocluster/configuration/observability.md
+/docs/user-guide/openbaocluster/configuration/resources-storage/	/docs/configure/storage/	docs/user-guide/openbaocluster/configuration/resources-storage.md
+/docs/user-guide/openbaocluster/configuration/self-init/	/docs/configure/initialize/	docs/user-guide/openbaocluster/configuration/self-init.md
+/docs/user-guide/openbaocluster/configuration/server/	/docs/configure/server/	docs/user-guide/openbaocluster/configuration/server.md
+/docs/user-guide/openbaorestore/overview/	/docs/operate/restore/	docs/user-guide/openbaorestore/overview.md
+/docs/user-guide/openbaorestore/recovery-restore-after-upgrade/	/docs/operate/restore/	docs/user-guide/openbaorestore/recovery-restore-after-upgrade.md
+/docs/user-guide/openbaorestore/restore/	/docs/operate/restore/	docs/user-guide/openbaorestore/restore.md
+/docs/user-guide/validated-deployments/architectures/	/docs/architecture/	docs/user-guide/validated-deployments/architectures/index.md
+/docs/user-guide/validated-deployments/architectures/cloud/	/docs/architecture/	docs/user-guide/validated-deployments/architectures/cloud/index.md
+/docs/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3/	/docs/operate/backups/	docs/user-guide/validated-deployments/architectures/cloud/amazon-eks-development-awskms-s3.md
+/docs/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme/	/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/cloud/amazon-eks-hardened-awskms-acme.md
+/docs/user-guide/validated-deployments/architectures/local/	/docs/architecture/	docs/user-guide/validated-deployments/architectures/local/index.md
+/docs/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs/	/docs/operate/restore/	docs/user-guide/validated-deployments/architectures/local/k3d-cross-cluster-dr-transit-rustfs.md
+/docs/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs/	/docs/architecture/	docs/user-guide/validated-deployments/architectures/local/k3d-development-shared-edge-rustfs.md
+/docs/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme/	/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-acme.md
+/docs/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls/	/docs/configure/unseal/	docs/user-guide/validated-deployments/architectures/local/k3d-hardened-transit-external-tls.md
+/docs/user-guide/validated-deployments/recipes/	/docs/	docs/user-guide/validated-deployments/recipes/index.md
+/docs/user-guide/validated-deployments/recipes/cloud/	/docs/	docs/user-guide/validated-deployments/recipes/cloud/index.md
+/docs/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3/	/docs/operate/backups/	docs/user-guide/validated-deployments/recipes/cloud/amazon-eks-development-awskms-s3.md
+/docs/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme/	/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/cloud/amazon-eks-hardened-awskms-acme.md
+/docs/user-guide/validated-deployments/recipes/local/	/docs/	docs/user-guide/validated-deployments/recipes/local/index.md
+/docs/user-guide/validated-deployments/recipes/local/development-self-init-userpass/	/docs/configure/initialize/	docs/user-guide/validated-deployments/recipes/local/development-self-init-userpass.md
+/docs/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls/	/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/local/hardened-transit-acme-tls.md
+/docs/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls/	/docs/configure/unseal/	docs/user-guide/validated-deployments/recipes/local/hardened-transit-external-tls.md
+/docs/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap/	/docs/operate/restore/	docs/user-guide/validated-deployments/recipes/local/k3d-cross-cluster-dr-bootstrap.md
+/docs/user-guide/validated-deployments/runbooks/	/docs/	docs/user-guide/validated-deployments/runbooks/index.md
+/docs/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs/	/docs/operate/restore/	docs/user-guide/validated-deployments/runbooks/cross-cluster-dr-restore-rustfs.md
+/docs/validated-deployments/	/docs/	docs/user-guide/validated-deployments/index.mdx
+/docs/validated-deployments/runbooks/restore-from-s3-compatible-snapshot/	/docs/operate/restore/	legacy redirect
+/docs/validated-deployments/runbooks/scheduled-backups-s3-compatible/	/docs/operate/backups/	legacy redirect
+/latest/	/	stable compatibility alias
+/latest/architecture/	/docs/architecture/	stable compatibility alias
+/latest/contributing/	/contribute/	stable compatibility alias
+/latest/reference/compatibility/	/docs/reference/compatibility/	stable compatibility alias
+/latest/security/	/docs/security/	stable compatibility alias
+/latest/user-guide/	/docs/get-started/	stable compatibility alias
+/latest/user-guide/deployment-decision-guide/	/docs/get-started/deployment-model/	stable compatibility alias
+/releases/	/releases/	preserved canonical Hugo route
+/releases/0.1.0-rc.1/	/releases/0.1.0/	folded into 0.1.0 release archive
+/releases/0.1.0-rc.2/	/releases/0.1.0/	folded into 0.1.0 release archive
+/releases/0.1.0-rc.3/	/releases/0.1.0/	folded into 0.1.0 release archive
+/releases/0.1.0-rc.4/	/releases/0.1.0/	folded into 0.1.0 release archive
+/releases/0.1.0-rc.5/	/releases/0.1.0/	folded into 0.1.0 release archive
+/releases/0.1.0-rc.6/	/releases/0.1.0/	folded into 0.1.0 release archive
+/releases/0.1.0-rc.7/	/releases/0.1.0/	folded into 0.1.0 release archive
+/releases/0.1.0/	/releases/0.1.0/	preserved canonical Hugo route
+/releases/0.1.1/	/releases/0.1.1/	preserved canonical Hugo route
+/releases/0.2.0/	/releases/0.2.0/	preserved canonical Hugo route
+/releases/0.3.0/	/releases/0.3.0/	preserved canonical Hugo route
+/releases/0.4.0/	/releases/0.4.0/	preserved canonical Hugo route
