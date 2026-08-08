@@ -4,7 +4,7 @@
 {{- $versionHome := .Site.Home.RelPermalink -}}
 {{- $getStartedURL := printf "%sdocs/get-started/" $versionHome -}}
 {{- $compatibilityURL := printf "%sdocs/reference/compatibility/" $versionHome -}}
-<main id="main-content" class="home-main home-quiet">
+<main id="main-content" class="home-main home-quiet{{ if site.Version.IsDefault }} home-with-sections{{ end }}">
   <section class="home-intro">
     <div class="home-intro-copy">
       <h1>OpenBao Operator</h1>
