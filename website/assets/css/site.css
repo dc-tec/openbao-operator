@@ -7,8 +7,8 @@
   --paper-deep: #e9e5da;
   --text: #142731;
   --text-muted: #5b686c;
+  --green-primary: #336d5c;
   --mint: #87d6be;
-  --mint-strong: #62c9aa;
   --mint-wash: #dff4eb;
   --peach: #fdd0a4;
   --yellow: #fdfccf;
@@ -114,9 +114,9 @@ a {
   display: flex;
   align-items: center;
   gap: 2rem;
-  width: min(100%, 96rem);
+  width: 100%;
   height: 100%;
-  padding: 0 1.5rem;
+  padding: 0 clamp(1rem, 2vw, 3rem);
   margin: 0 auto;
 }
 
@@ -339,6 +339,7 @@ kbd {
 .home-main {
   position: relative;
   overflow: clip;
+  min-height: calc(100svh - var(--header-height));
   background:
     radial-gradient(circle at 78% 4%, rgba(135, 214, 190, 0.13), transparent 21rem),
     radial-gradient(circle at 13% 4%, rgba(253, 208, 164, 0.07), transparent 16rem),
@@ -396,7 +397,7 @@ kbd {
 
 .eyebrow {
   margin: 0 0 0.9rem;
-  color: #34816b;
+  color: var(--green-primary);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.72rem;
   font-weight: 760;
@@ -1313,7 +1314,7 @@ kbd {
   padding: 0.2rem 0 0.2rem 1.3rem;
   margin: 1.8rem 0;
   color: #536366;
-  border-left: 3px solid var(--mint-strong);
+  border-left: 3px solid var(--green-primary);
 }
 
 .article-content table {
@@ -1466,7 +1467,7 @@ kbd {
   margin: 1.7rem 0;
   background: var(--paper-raised);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--mint-strong);
+  border-left: 3px solid var(--green-primary);
   border-radius: 0.3rem;
 }
 
@@ -1846,7 +1847,11 @@ kbd {
 }
 
 .site-footer a:hover {
-  color: var(--mint-strong);
+  color: var(--mint);
+}
+
+.doc-main > .site-footer a:hover {
+  color: var(--green-primary);
 }
 
 .search-dialog {
@@ -2041,6 +2046,24 @@ kbd {
   color: rgba(237, 246, 241, 0.64);
   font-size: 0.68rem;
   border-top: 1px solid rgba(135, 214, 190, 0.1);
+}
+
+@media (min-width: 160rem) {
+  :root {
+    font-size: clamp(1rem, 0.7vw, 1.5rem);
+  }
+}
+
+@media (min-width: 100rem) and (min-height: 60rem) {
+  .home-quiet:not(.home-with-sections) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .home-quiet:not(.home-with-sections) .home-intro {
+    flex: 1 0 25rem;
+    align-items: center;
+  }
 }
 
 @media (max-width: 76rem) {
