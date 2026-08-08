@@ -465,18 +465,17 @@ spec:
                         == 0
                   tokenSecretRef:
                     description: |-
-                      TokenSecretRef optionally references a Secret containing an OpenBao API
-                      token to use for backup operations (fallback method).
+                      TokenSecretRef references a Secret containing an OpenBao API token to use
+                      for backup operations when JWT Auth is not effective.
 
                       The Secret must exist in the same namespace as the OpenBaoCluster.
                       Cross-namespace references are not allowed for security reasons.
 
-                      For standard clusters (non self-init), this is typically omitted and the
-                      operator uses the root token from <cluster>-root-token. For self-init
-                      clusters (no root token Secret), this field must reference a token with
-                      permission to read sys/storage/raft/snapshot.
-
-                      If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
+                      If an effective JWT role exists through JWTAuthRole or the SelfInit OIDC
+                      default, this field is ignored in favor of JWT Auth. Otherwise this field
+                      is required and must reference a token with permission to read
+                      sys/storage/raft/snapshot. The operator does not infer or fall back to a
+                      <cluster>-root-token Secret.
                     properties:
                       name:
                         default: ""
