@@ -22,7 +22,7 @@ type Provisioner interface {
 	EnsureTenantRBAC(ctx context.Context, tenant *openbaov1alpha1.OpenBaoTenant) error
 	EnsureTenantSecretRBAC(ctx context.Context, namespace string) error
 	IsTenantNamespaceProvisioned(ctx context.Context, namespace string) (bool, error)
-	CleanupTenantRBAC(ctx context.Context, namespace string) error
+	CleanupTenantResources(ctx context.Context, namespace string) error
 }
 
 // ProvisionerDependencies groups the runtime collaborators required to build the tenant provisioner.

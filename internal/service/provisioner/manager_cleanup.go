@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // IsTenantNamespaceProvisioned returns true if the tenant namespace has been provisioned
@@ -28,8 +31,37 @@ func (m *Manager) IsTenantNamespaceProvisioned(ctx context.Context, namespace st
 	return true, nil
 }
 
-// CleanupTenantRBAC removes the Role and RoleBinding from the given namespace.
-func (m *Manager) CleanupTenantRBAC(ctx context.Context, namespace string) error {
+// CleanupTenantResources removes the operator-managed governance and RBAC resources from the given namespace.
+func (m *Manager) CleanupTenantResources(ctx context.Context, namespace string) error {
+	governanceResources := []struct {
+		kind   string
+		name   string
+		object client.Object
+	}{
+		{
+			kind: "ResourceQuota",
+			name: TenantResourceQuotaName,
+			object: &corev1.ResourceQuota{ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      TenantResourceQuotaName,
+			}},
+		},
+		{
+			kind: "LimitRange",
+			name: TenantLimitRangeName,
+			object: &corev1.LimitRange{ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      TenantLimitRangeName,
+			}},
+		},
+	}
+	for _, resource := range governanceResources {
+		m.logger.Info("Deleting tenant "+resource.kind, "namespace", namespace, "name", resource.name)
+		if err := m.client.Delete(ctx, resource.object); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete %s %s/%s: %w", resource.kind, namespace, resource.name, err)
+		}
+	}
+
 	for _, name := range []string{
 		TenantSecretsReaderRoleBindingName,
 		TenantSecretsWriterRoleBindingName,

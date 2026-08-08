@@ -79,6 +79,7 @@ rules:
     verbs:
       - get
       - patch
+      - delete
   - apiGroups:
       - ""
     resources:
@@ -94,6 +95,7 @@ rules:
     verbs:
       - get
       - patch
+      - delete
 
   - apiGroups:
       - rbac.authorization.k8s.io

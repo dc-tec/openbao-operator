@@ -975,6 +975,65 @@ func TestKustomizeDefault_ProvisionerRoleDoesNotReadServiceAccounts(t *testing.T
 	}
 }
 
+func TestKustomizeDefault_ProvisionerRoleDeletesOnlyFixedTenantGovernanceResources(t *testing.T) {
+	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
+	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {
+		return u.GetAPIVersion() == "rbac.authorization.k8s.io/v1" &&
+			u.GetKind() == "ClusterRole" &&
+			u.GetName() == "openbao-operator-provisioner-role"
+	})
+
+	if len(objs) != 1 {
+		t.Fatalf("expected exactly one provisioner ClusterRole, got %d", len(objs))
+	}
+	rules, found, err := unstructured.NestedSlice(objs[0].Object, "rules")
+	if err != nil || !found {
+		t.Fatalf("read provisioner rules: found=%v err=%v", found, err)
+	}
+
+	for _, tc := range []struct {
+		resource string
+		name     string
+	}{
+		{resource: "resourcequotas", name: "openbao-operator-tenant-quota"},
+		{resource: "limitranges", name: "openbao-operator-tenant-limits"},
+	} {
+		t.Run(tc.resource, func(t *testing.T) {
+			foundScopedDelete := false
+			for _, rule := range rules {
+				ruleMap, ok := rule.(map[string]any)
+				if !ok {
+					continue
+				}
+				resources, _, _ := unstructured.NestedStringSlice(ruleMap, "resources")
+				verbs, _, _ := unstructured.NestedStringSlice(ruleMap, "verbs")
+				if !containsString(resources, tc.resource) || !containsString(verbs, "delete") {
+					continue
+				}
+
+				resourceNames, _, _ := unstructured.NestedStringSlice(ruleMap, "resourceNames")
+				if len(resourceNames) != 1 || resourceNames[0] != tc.name {
+					t.Fatalf("provisioner %s delete must be scoped to %q, got %#v", tc.resource, tc.name, ruleMap)
+				}
+				for _, wantVerb := range []string{"get", "patch", "delete"} {
+					if !containsString(verbs, wantVerb) {
+						t.Fatalf("provisioner %s rule missing %q: %#v", tc.resource, wantVerb, ruleMap)
+					}
+				}
+				for _, forbiddenVerb := range []string{"create", "list", "update", "watch"} {
+					if containsString(verbs, forbiddenVerb) {
+						t.Fatalf("provisioner %s scoped rule must not grant %q: %#v", tc.resource, forbiddenVerb, ruleMap)
+					}
+				}
+				foundScopedDelete = true
+			}
+			if !foundScopedDelete {
+				t.Fatalf("provisioner ClusterRole missing resourceNames-scoped delete for %s", tc.resource)
+			}
+		})
+	}
+}
+
 func TestKustomizeDefault_ControllerRoleReadsGatewayAPIByGetOnly(t *testing.T) {
 	yamlBytes := kustomizeBuild(t, filepath.Join("..", "..", "config", "default"))
 	objs := parseYAMLToUnstructured(t, yamlBytes, func(u *unstructured.Unstructured) bool {

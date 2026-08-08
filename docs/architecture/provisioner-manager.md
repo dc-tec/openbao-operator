@@ -144,7 +144,13 @@ The tenant `RoleBinding` is also the explicit handoff marker into the cluster co
       emphasis: 'recommended',
     },
     {
-      cells: ['Namespace emptied of managed clusters', 'Remove provisioned Role, RoleBinding, Secret allowlist roles, and default quota resources.'],
+      cells: ['Another active tenant claim remains', 'Preserve the shared namespace resources and remove only the deleting claim finalizer.'],
+    },
+    {
+      cells: ['Namespace emptied of managed clusters', 'Remove provisioned Role, RoleBinding, Secret allowlist roles, ResourceQuota, and LimitRange resources.'],
+    },
+    {
+      cells: ['Namespace policy', 'Leave Pod Security labels unchanged because the Provisioner does not record enough prior state to restore platform-owned labels safely.'],
     },
     {
       cells: ['Finalizer removal', 'Only remove the tenant finalizer after namespace-scoped provisioning artifacts are cleaned up.'],
