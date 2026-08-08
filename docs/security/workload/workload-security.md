@@ -56,7 +56,7 @@ description: Pod hardening, projected-token handling, and runtime guardrails for
     {
       cells: [
         "Job resource guardrails",
-        "Backup and restore Jobs run with explicit resource requests and limits.",
+        "Backup, restore, upgrade, and BlueGreen validation-hook Jobs run with explicit resource requests and limits.",
         "A lifecycle job should not starve the steady-state OpenBao Pods or neighboring workloads on the same node.",
       ],
     },

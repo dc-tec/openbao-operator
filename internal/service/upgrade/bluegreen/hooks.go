@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -38,6 +39,22 @@ func (m *Manager) ensureValidationHookJob(
 	ttlSeconds := ptr.To(int32(jobTTLSeconds))
 
 	return ensureJob(ctx, m.client, m.scheme, logger, cluster, jobName, func(jobName string) (*batchv1.Job, error) {
+		image := hook.Image
+		verifiedDigest, err := m.verifyOperatorImageDigest(
+			ctx,
+			logger,
+			cluster,
+			hook.Image,
+			constants.ReasonValidationHookImageVerificationFailed,
+			"Validation hook image verification failed",
+		)
+		if err != nil {
+			return nil, err
+		}
+		if verifiedDigest != "" {
+			image = verifiedDigest
+		}
+
 		jobLabels := map[string]string{
 			constants.LabelAppName:          constants.LabelValueAppNameOpenBao,
 			constants.LabelAppInstance:      cluster.Name,
@@ -83,12 +100,13 @@ func (m *Manager) ensureValidationHookJob(
 					},
 					Spec: corev1.PodSpec{
 						AutomountServiceAccountToken: ptr.To(false),
+						ImagePullSecrets:             cluster.Spec.ImagePullSecrets,
 						RestartPolicy:                corev1.RestartPolicyNever,
 						SecurityContext:              podSecurityContext,
 						Containers: []corev1.Container{
 							{
 								Name:    "validation",
-								Image:   hook.Image,
+								Image:   image,
 								Command: hook.Command,
 								Args:    hook.Args,
 								SecurityContext: &corev1.SecurityContext{
@@ -96,7 +114,18 @@ func (m *Manager) ensureValidationHookJob(
 									Capabilities: &corev1.Capabilities{
 										Drop: []corev1.Capability{"ALL"},
 									},
-									RunAsNonRoot: ptr.To(true),
+									ReadOnlyRootFilesystem: ptr.To(true),
+									RunAsNonRoot:           ptr.To(true),
+								},
+								Resources: corev1.ResourceRequirements{
+									Requests: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("100m"),
+										corev1.ResourceMemory: resource.MustParse("128Mi"),
+									},
+									Limits: corev1.ResourceList{
+										corev1.ResourceCPU:    resource.MustParse("500m"),
+										corev1.ResourceMemory: resource.MustParse("512Mi"),
+									},
 								},
 							},
 						},
