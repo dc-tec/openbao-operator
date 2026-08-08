@@ -8,10 +8,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	provisionersvc "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 )
 
@@ -36,7 +38,14 @@ func TestNamespaceProvisioner_SetupWithManager_ProvisionsTenantNamespace(t *test
 	require.NoError(t, liveClient.Create(ctx, tenant))
 
 	tenantKey := types.NamespacedName{Namespace: operatorNamespace, Name: tenant.Name}
-	waitForTenantProvisioned(t, ctx, liveClient, tenantKey)
+	current := waitForTenantProvisioned(t, ctx, liveClient, tenantKey)
+	condition := meta.FindStatusCondition(current.Status.Conditions, constants.TenantProvisionedConditionType)
+	require.NotNil(t, condition)
+	require.Equal(t, metav1.ConditionTrue, condition.Status)
+	require.Equal(t, current.Generation, condition.ObservedGeneration)
+	require.Equal(t, constants.ReasonTenantProvisioned, condition.Reason)
+	require.Equal(t, "Tenant RBAC provisioned for namespace tenant-provisioned", condition.Message)
+	require.False(t, condition.LastTransitionTime.IsZero())
 	waitForRole(t, ctx, liveClient, types.NamespacedName{
 		Namespace: "tenant-provisioned",
 		Name:      provisionersvc.TenantRoleName,

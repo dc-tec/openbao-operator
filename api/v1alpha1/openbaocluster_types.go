@@ -34,7 +34,7 @@ const (
 	DeletionPolicyRetain DeletionPolicy = "Retain"
 	// DeletionPolicyDeletePVCs deletes StatefulSets and PVCs, but retains external backups.
 	DeletionPolicyDeletePVCs DeletionPolicy = "DeletePVCs"
-	// DeletionPolicyDeleteAll deletes StatefulSets, PVCs, and attempts to delete external backups.
+	// DeletionPolicyDeleteAll deletes StatefulSets and PVCs, but retains external object-store backups.
 	DeletionPolicyDeleteAll DeletionPolicy = "DeleteAll"
 )
 

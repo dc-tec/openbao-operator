@@ -75,13 +75,13 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 		original := tenant.DeepCopy()
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
-		meta.SetStatusCondition(&tenant.Status.Conditions, metav1.Condition{
-			Type:               conditionTypeProvisioned(runtime),
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: tenant.Generation,
-			Reason:             constants.ReasonSecurityViolation,
-			Message:            err.Error(),
-		})
+		setTenantProvisionedCondition(
+			runtime,
+			tenant,
+			metav1.ConditionFalse,
+			constants.ReasonSecurityViolation,
+			err.Error(),
+		)
 		if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {
 			return recon.Result{}, fmt.Errorf("failed to patch status for security violation: %w", patchErr)
 		}
@@ -109,7 +109,9 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 		if apierrors.IsNotFound(err) {
 			original := tenant.DeepCopy()
 			tenant.Status.Provisioned = false
-			tenant.Status.LastError = fmt.Sprintf("target namespace %s not found", targetNS)
+			message := fmt.Sprintf("target namespace %s not found", targetNS)
+			tenant.Status.LastError = message
+			setTenantProvisionedCondition(runtime, tenant, metav1.ConditionFalse, ReasonTenantProvisioningBlocked, message)
 			runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked because target namespace %s was not found", targetNS))
 			if patchErr := patchStatus(ctx, runtime.Client, tenant, original); patchErr != nil {
 				return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", patchErr)
@@ -131,6 +133,7 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 		original := tenant.DeepCopy()
 		tenant.Status.Provisioned = false
 		tenant.Status.LastError = err.Error()
+		setTenantProvisionedCondition(runtime, tenant, metav1.ConditionFalse, ReasonTenantProvisioningFailed, err.Error())
 		if statusErr := patchStatus(ctx, runtime.Client, tenant, original); statusErr != nil {
 			return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w (original error: %w)", statusErr, err)
 		}
@@ -140,6 +143,13 @@ func ReconcileOpenBaoTenant(ctx context.Context, key types.NamespacedName, logge
 	original := tenant.DeepCopy()
 	tenant.Status.Provisioned = true
 	tenant.Status.LastError = ""
+	setTenantProvisionedCondition(
+		runtime,
+		tenant,
+		metav1.ConditionTrue,
+		ReasonTenantProvisioned,
+		fmt.Sprintf("Tenant RBAC provisioned for namespace %s", targetNS),
+	)
 	if err := patchStatus(ctx, runtime.Client, tenant, original); err != nil {
 		return recon.Result{}, fmt.Errorf("failed to update OpenBaoTenant status: %w", err)
 	}
@@ -233,19 +243,43 @@ func ensureAdmissionDependenciesReady(
 		return true, recon.Result{}
 	}
 
+	message := status.SummaryMessage()
 	original := tenant.DeepCopy()
 	tenant.Status.Provisioned = false
-	tenant.Status.LastError = status.SummaryMessage()
+	tenant.Status.LastError = message
+	setTenantProvisionedCondition(
+		runtime,
+		tenant,
+		metav1.ConditionFalse,
+		ReasonTenantProvisioningBlocked,
+		message,
+	)
 	// Keep existing behavior: best-effort status patch while requeueing.
 	_ = patchStatus(ctx, runtime.Client, tenant, original)
 
-	logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "summary", status.SummaryMessage())
-	runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked until admission dependencies are ready: %s", status.SummaryMessage()))
+	logger.Info("Admission policy dependencies not ready; delaying tenant provisioning", "summary", message)
+	runtime.emitTenantWarningEvent(tenant, ReasonTenantProvisioningBlocked, fmt.Sprintf("Tenant provisioning blocked until admission dependencies are ready: %s", message))
 	return false, recon.Result{RequeueAfter: admissionDependencyRequeueAfter}
 }
 
 func patchStatus(ctx context.Context, c client.Client, tenant *openbaov1alpha1.OpenBaoTenant, original *openbaov1alpha1.OpenBaoTenant) error {
 	return c.Status().Patch(ctx, tenant, client.MergeFrom(original))
+}
+
+func setTenantProvisionedCondition(
+	runtime TenantRuntime,
+	tenant *openbaov1alpha1.OpenBaoTenant,
+	status metav1.ConditionStatus,
+	reason string,
+	message string,
+) {
+	meta.SetStatusCondition(&tenant.Status.Conditions, metav1.Condition{
+		Type:               conditionTypeProvisioned(runtime),
+		Status:             status,
+		ObservedGeneration: tenant.Generation,
+		Reason:             reason,
+		Message:            message,
+	})
 }
 
 func conditionTypeProvisioned(runtime TenantRuntime) string {
