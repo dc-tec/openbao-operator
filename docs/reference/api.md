@@ -278,7 +278,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled controls whether the Operator creates a BackendTLSPolicy.<br />When true (default when Gateway is enabled), the Operator creates a BackendTLSPolicy<br />that enables HTTPS and certificate validation for backend connections.<br />When false, no BackendTLSPolicy is created and the Gateway will use HTTP (or rely on<br />external configuration for TLS).<br />Hardened clusters reject backendTLS.enabled=false. | true | Optional: \{\} <br /> |
-| `hostname` _string_ | Hostname is the hostname to verify in the backend certificate.<br />If not specified, defaults to the Service DNS name: &lt;service-name&gt;.&lt;namespace&gt;.svc<br />This should match the certificate SAN or the service DNS name. |  | Optional: \{\} <br /> |
+| `hostname` _string_ | Hostname is the hostname to verify in the backend certificate.<br />If not specified, defaults to the stable TLS server name used by operator-managed<br />clients (for example, openbao-cluster-&lt;cluster-name&gt;.local).<br />This must match a DNS SAN in the backend certificate. |  | Optional: \{\} <br /> |
 
 
 #### BackupRetention
@@ -1961,7 +1961,7 @@ _Appears in:_
 | `mode` _[TLSMode](#tlsmode)_ | Mode controls who manages the certificate lifecycle. | OperatorManaged | Enum: [OperatorManaged External ACME] <br />Optional: \{\} <br /> |
 | `acme` _[ACMEConfig](#acmeconfig)_ | ACME configures settings when Mode is 'ACME'. |  | Optional: \{\} <br /> |
 | `rotationPeriod` _string_ | RotationPeriod is a duration string (for example, "720h") controlling certificate rotation.<br />Only used when Mode is OperatorManaged. |  | MinLength: 1 <br />Optional: \{\} <br /> |
-| `extraSANs` _string array_ | ExtraSANs lists additional subject alternative names to include in server certificates.<br />Only used when Mode is OperatorManaged. |  | Optional: \{\} <br /> |
+| `extraSANs` _string array_ | ExtraSANs lists additional subject alternative names for server certificates.<br />In OperatorManaged mode, the operator includes these names when issuing the certificate.<br />In External mode, the operator requires the supplied certificate to contain them.<br />Values that parse as IP addresses are treated as IP SANs; all other values are DNS SANs. |  | Optional: \{\} <br /> |
 
 
 #### TLSMode

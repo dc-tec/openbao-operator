@@ -408,6 +408,7 @@ func buildServerSANs(cluster *openbaov1alpha1.OpenBaoCluster, additionalDNSNames
 	}
 
 	for _, san := range cluster.Spec.TLS.ExtraSANs {
+		san = strings.TrimSpace(san)
 		if ip := net.ParseIP(san); ip != nil {
 			addIP(ip)
 			continue

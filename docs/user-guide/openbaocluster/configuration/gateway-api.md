@@ -131,7 +131,9 @@ If `tls.mode` is `ACME`, do not terminate TLS at the Gateway. OpenBao must remai
 
 <ExpandableCallout type="note" title="What the operator adds for backend TLS">
 
-When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins backend validation to the cluster's CA ConfigMap and expected service hostname.
+When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins backend validation to the cluster's CA
+ConfigMap and stable internal TLS server name, such as `openbao-cluster-<cluster-name>.local`. Set
+`spec.gateway.backendTLS.hostname` only when the backend certificate uses a different DNS SAN.
 
 </ExpandableCallout>
 
@@ -185,6 +187,13 @@ When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins
         "The selected listener protocol and mode are compatible with the route type the operator is going to create.",
       ],
     },
+    {
+      cells: [
+        "Managed Route is attached",
+        "A created Route is not usable until the Gateway controller accepts its parent attachment and resolves its references.",
+        "The relevant HTTPRoute or TLSRoute parent status reports both `Accepted=True` and `ResolvedRefs=True` for the current generation.",
+      ],
+    },
   ]}
 />
 
@@ -196,7 +205,7 @@ When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins
     {
       cells: [
         "`GatewayIntegrationReady=True`",
-        "The operator verified the Gateway reference, class, listener path, and available controller support well enough for the chosen mode.",
+        "The operator verified the Gateway reference, class, listener path, controller support, and managed Route attachment for the chosen mode.",
         "Continue with end-to-end validation and client connectivity checks.",
       ],
       emphasis: "recommended",
@@ -204,15 +213,15 @@ When backend TLS is enabled, the operator creates a `BackendTLSPolicy` that pins
     {
       cells: [
         "`GatewayIntegrationReady=Unknown`",
-        "The controller has not published enough status, or feature support cannot be verified from the available information.",
-        "Wait for more Gateway status or inspect whether the controller publishes supported features at all.",
+        "The controller has not published enough Gateway or current Route status, or feature support cannot be verified from the available information.",
+        "Wait for more status; `GatewayRoutePending` specifically identifies a missing or still-pending managed Route attachment.",
       ],
     },
     {
       cells: [
         "`GatewayIntegrationReady=False`",
         "The operator found a concrete incompatibility or missing dependency.",
-        "Read the condition reason first: missing reference, unsupported feature, incompatible listener, or not-programmed gateway are the common cases.",
+        "Read the condition reason first. `GatewayRouteNotAccepted` and `GatewayRouteReferencesUnresolved` identify explicit Route attachment failures.",
       ],
     },
   ]}

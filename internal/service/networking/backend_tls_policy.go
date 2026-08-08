@@ -18,6 +18,7 @@ import (
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceidentity"
 	"github.com/dc-tec/openbao-operator/internal/platform/resourceownership"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 // ensureBackendTLSPolicy manages the Gateway API BackendTLSPolicy for the OpenBaoCluster.
@@ -111,7 +112,7 @@ func buildBackendTLSPolicy(cluster *openbaov1alpha1.OpenBaoCluster) *gatewayv1.B
 		hostname = gatewayCfg.BackendTLS.Hostname
 	}
 	if strings.TrimSpace(hostname) == "" {
-		hostname = fmt.Sprintf("%s.%s.svc", backendServiceName, cluster.Namespace)
+		hostname = portopenbao.ComputeTLSServerName(cluster)
 	}
 
 	targetRefs := []gatewayv1.LocalPolicyTargetReferenceWithSectionName{

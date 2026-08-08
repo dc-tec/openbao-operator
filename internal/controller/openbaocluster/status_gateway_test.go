@@ -56,11 +56,42 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 		}
 		return &gatewayv1.GatewayClass{
 			ObjectMeta: metav1.ObjectMeta{Name: "shared-class"},
+			Spec: gatewayv1.GatewayClassSpec{
+				ControllerName: "example.net/gateway-controller",
+			},
 			Status: gatewayv1.GatewayClassStatus{
 				Conditions:        conditions,
 				SupportedFeatures: supportedFeatures,
 			},
 		}
+	}
+	newHTTPRoute := func(conditions ...metav1.Condition) *gatewayv1.HTTPRoute {
+		gatewayNamespace := gatewayv1.Namespace("gateway-system")
+		return &gatewayv1.HTTPRoute{
+			ObjectMeta: metav1.ObjectMeta{Name: "example-httproute", Namespace: "default", Generation: 1},
+			Status: gatewayv1.HTTPRouteStatus{
+				RouteStatus: gatewayv1.RouteStatus{Parents: []gatewayv1.RouteParentStatus{{
+					ParentRef: gatewayv1.ParentReference{
+						Name:      "shared-gateway",
+						Namespace: &gatewayNamespace,
+					},
+					ControllerName: "example.net/gateway-controller",
+					Conditions:     conditions,
+				}}},
+			},
+		}
+	}
+	routeAcceptedTrue := metav1.Condition{
+		Type:               string(gatewayv1.RouteConditionAccepted),
+		Status:             metav1.ConditionTrue,
+		Reason:             string(gatewayv1.RouteReasonAccepted),
+		ObservedGeneration: 1,
+	}
+	routeResolvedRefsTrue := metav1.Condition{
+		Type:               string(gatewayv1.RouteConditionResolvedRefs),
+		Status:             metav1.ConditionTrue,
+		Reason:             string(gatewayv1.RouteReasonResolvedRefs),
+		ObservedGeneration: 1,
 	}
 
 	tests := []struct {
@@ -108,11 +139,12 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 					Port:     443,
 				}}, programmedTrue),
 				newGatewayClass([]string{"HTTPRoute"}, acceptedTrue, supportedVersionTrue),
+				newHTTPRoute(routeAcceptedTrue, routeResolvedRefsTrue),
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionTrue,
 			wantReason:    ReasonGatewayIntegrationReady,
-			wantMessageIn: "prerequisites are satisfied",
+			wantMessageIn: "Route attachment are ready",
 		},
 		{
 			name: "gateway integration ready when class omits SupportedVersion condition",
@@ -137,11 +169,99 @@ func TestSetGatewayIntegrationReadyCondition_FastContract(t *testing.T) {
 					Port:     443,
 				}}, programmedTrue),
 				newGatewayClass([]string{"HTTPRoute"}, acceptedTrue),
+				newHTTPRoute(routeAcceptedTrue, routeResolvedRefsTrue),
 			},
 			wantPresent:   true,
 			wantStatus:    metav1.ConditionTrue,
 			wantReason:    ReasonGatewayIntegrationReady,
-			wantMessageIn: "prerequisites are satisfied",
+			wantMessageIn: "Route attachment are ready",
+		},
+		{
+			name: "managed route pending is unknown",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newOpenBaoClusterStatusTestObject()
+				cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+					Enabled:  true,
+					Hostname: "bao.example.test",
+					GatewayRef: openbaov1alpha1.GatewayReference{
+						Name:      "shared-gateway",
+						Namespace: "gateway-system",
+					},
+				}
+				disabled := false
+				cluster.Spec.Gateway.BackendTLS = &openbaov1alpha1.BackendTLSConfig{Enabled: &disabled}
+				return cluster
+			}(),
+			objects: []client.Object{
+				newGateway([]gatewayv1.Listener{{Name: "https", Protocol: gatewayv1.HTTPSProtocolType, Port: 443}}, programmedTrue),
+				newGatewayClass([]string{"HTTPRoute"}, acceptedTrue, supportedVersionTrue),
+			},
+			wantPresent:   true,
+			wantStatus:    metav1.ConditionUnknown,
+			wantReason:    ReasonGatewayRoutePending,
+			wantMessageIn: "does not exist yet",
+		},
+		{
+			name: "managed route rejection is false",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newOpenBaoClusterStatusTestObject()
+				cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+					Enabled:  true,
+					Hostname: "bao.example.test",
+					GatewayRef: openbaov1alpha1.GatewayReference{
+						Name:      "shared-gateway",
+						Namespace: "gateway-system",
+					},
+				}
+				disabled := false
+				cluster.Spec.Gateway.BackendTLS = &openbaov1alpha1.BackendTLSConfig{Enabled: &disabled}
+				return cluster
+			}(),
+			objects: []client.Object{
+				newGateway([]gatewayv1.Listener{{Name: "https", Protocol: gatewayv1.HTTPSProtocolType, Port: 443}}, programmedTrue),
+				newGatewayClass([]string{"HTTPRoute"}, acceptedTrue, supportedVersionTrue),
+				newHTTPRoute(metav1.Condition{
+					Type:               string(gatewayv1.RouteConditionAccepted),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(gatewayv1.RouteReasonNotAllowedByListeners),
+					ObservedGeneration: 1,
+				}, routeResolvedRefsTrue),
+			},
+			wantPresent:   true,
+			wantStatus:    metav1.ConditionFalse,
+			wantReason:    ReasonGatewayRouteNotAccepted,
+			wantMessageIn: "was rejected",
+		},
+		{
+			name: "managed route unresolved references is false",
+			cluster: func() *openbaov1alpha1.OpenBaoCluster {
+				cluster := newOpenBaoClusterStatusTestObject()
+				cluster.Spec.Gateway = &openbaov1alpha1.GatewayConfig{
+					Enabled:  true,
+					Hostname: "bao.example.test",
+					GatewayRef: openbaov1alpha1.GatewayReference{
+						Name:      "shared-gateway",
+						Namespace: "gateway-system",
+					},
+				}
+				disabled := false
+				cluster.Spec.Gateway.BackendTLS = &openbaov1alpha1.BackendTLSConfig{Enabled: &disabled}
+				return cluster
+			}(),
+			objects: []client.Object{
+				newGateway([]gatewayv1.Listener{{Name: "https", Protocol: gatewayv1.HTTPSProtocolType, Port: 443}}, programmedTrue),
+				newGatewayClass([]string{"HTTPRoute"}, acceptedTrue, supportedVersionTrue),
+				newHTTPRoute(routeAcceptedTrue, metav1.Condition{
+					Type:               string(gatewayv1.RouteConditionResolvedRefs),
+					Status:             metav1.ConditionFalse,
+					Reason:             string(gatewayv1.RouteReasonBackendNotFound),
+					ObservedGeneration: 1,
+				}),
+			},
+			wantPresent:   true,
+			wantStatus:    metav1.ConditionFalse,
+			wantReason:    ReasonGatewayRouteReferencesUnresolved,
+			wantMessageIn: "unresolved references",
 		},
 		{
 			name: "gateway capabilities unknown when class omits features",

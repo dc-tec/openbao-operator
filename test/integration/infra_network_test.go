@@ -4,7 +4,6 @@
 package integration
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/go-logr/logr"
@@ -17,6 +16,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 )
 
 const (
@@ -537,7 +537,7 @@ func TestInfraNetwork_BackendTLSPolicy_CreatesAndDeletes(t *testing.T) {
 	if len(backendTLS.Spec.TargetRefs) != 1 || string(backendTLS.Spec.TargetRefs[0].Name) != mainSvcName {
 		t.Fatalf("expected BackendTLSPolicy target Service %q, got %#v", mainSvcName, backendTLS.Spec.TargetRefs)
 	}
-	expectedHostname := fmt.Sprintf("%s.%s.svc", mainSvcName, namespace)
+	expectedHostname := portopenbao.ComputeTLSServerName(cluster)
 	if string(backendTLS.Spec.Validation.Hostname) != expectedHostname {
 		t.Fatalf(
 			"expected BackendTLSPolicy validation hostname %q, got %q",

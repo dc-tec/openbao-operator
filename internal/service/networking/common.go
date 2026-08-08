@@ -47,6 +47,18 @@ var ErrGatewayProgrammingPending = errors.New("gateway programming pending")
 // incompatible with the selected HTTPRoute/TLSRoute mode.
 var ErrGatewayListenerIncompatible = errors.New("gateway listener incompatible")
 
+// ErrGatewayRoutePending indicates the operator-managed Route or its status
+// has not yet converged for the relevant Gateway parent.
+var ErrGatewayRoutePending = errors.New("gateway Route status pending")
+
+// ErrGatewayRouteNotAccepted indicates the relevant Gateway parent has
+// explicitly rejected the operator-managed Route.
+var ErrGatewayRouteNotAccepted = errors.New("gateway Route not accepted")
+
+// ErrGatewayRouteReferencesUnresolved indicates the relevant Gateway parent
+// cannot resolve one or more references from the operator-managed Route.
+var ErrGatewayRouteReferencesUnresolved = errors.New("gateway Route references unresolved")
+
 // ErrIngressClassMissing indicates the selected IngressClass does not exist.
 var ErrIngressClassMissing = errors.New("referenced IngressClass not found")
 

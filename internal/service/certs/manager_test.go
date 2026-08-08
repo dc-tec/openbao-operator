@@ -73,7 +73,7 @@ func TestBuildServerSANsIncludesDefaultsAndExtraSANs(t *testing.T) {
 				Enabled:        true,
 				RotationPeriod: "720h",
 				ExtraSANs: []string{
-					"10.0.0.10",
+					" 10.0.0.10 ",
 				},
 			},
 			Storage: openbaov1alpha1.StorageConfig{
@@ -114,6 +114,11 @@ func TestBuildServerSANsIncludesDefaultsAndExtraSANs(t *testing.T) {
 	for name, seen := range expectDNS {
 		if !seen {
 			t.Fatalf("expected DNS SAN %q to be present", name)
+		}
+	}
+	for _, name := range dnsNames {
+		if name == "10.0.0.10" || name == " 10.0.0.10 " {
+			t.Fatalf("expected IP extraSAN to be classified only as an IP SAN, found DNS SAN %q", name)
 		}
 	}
 

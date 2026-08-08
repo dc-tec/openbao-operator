@@ -211,7 +211,10 @@ For the cluster-facing TLS path, the operator reads fixed same-namespace Secret 
 - `<cluster-name>-tls-ca` with key `ca.crt`
 - `<cluster-name>-tls-server` with keys `tls.crt` and `tls.key`
 
-The server certificate must chain to the CA bundle and cover the internal service name `openbao-cluster-<cluster-name>.local`, plus any configured ingress hostname, gateway hostname, and `spec.tls.extraSANs`.
+The server certificate must chain to the CA bundle and cover the internal service name
+`openbao-cluster-<cluster-name>.local`, plus any configured ingress hostname, gateway hostname, and
+`spec.tls.extraSANs`. Each `extraSANs` value that parses as an IP address must appear as an IP SAN; every other value
+must appear as a DNS SAN.
 
 </Callout>
 

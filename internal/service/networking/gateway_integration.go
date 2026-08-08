@@ -24,7 +24,8 @@ const (
 
 // ValidateGatewayIntegration evaluates the operator-known Gateway API contract
 // for the selected Gateway mode. It validates the referenced Gateway/GatewayClass,
-// listener compatibility, advertised feature support, and controller status.
+// listener compatibility, advertised feature support, controller status, and
+// the current operator-managed Route attachment.
 func (m *Manager) ValidateGatewayIntegration(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {
 	if cluster == nil || cluster.Spec.Gateway == nil || !cluster.Spec.Gateway.Enabled {
 		return nil
@@ -100,8 +101,178 @@ func (m *Manager) ValidateGatewayIntegration(ctx context.Context, cluster *openb
 	if err := validateGatewayProgrammed(gateway); err != nil {
 		return err
 	}
+	if err := m.validateManagedRouteAttachment(ctx, cluster, gatewayClass); err != nil {
+		return err
+	}
 
 	return nil
+}
+
+func (m *Manager) validateManagedRouteAttachment(
+	ctx context.Context,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	gatewayClass *gatewayv1.GatewayClass,
+) error {
+	if cluster.Spec.Gateway.TLSPassthrough {
+		route := &gatewayv1.TLSRoute{}
+		name := types.NamespacedName{Namespace: cluster.Namespace, Name: tlsRouteName(cluster)}
+		if err := m.reader.Get(ctx, name, route); err != nil {
+			return classifyManagedRouteReadError(err, "TLSRoute", name)
+		}
+		return validateRouteParentStatus(cluster, gatewayClass, "TLSRoute", route.Generation, route.Status.Parents)
+	}
+
+	route := &gatewayv1.HTTPRoute{}
+	name := types.NamespacedName{Namespace: cluster.Namespace, Name: httpRouteName(cluster)}
+	if err := m.reader.Get(ctx, name, route); err != nil {
+		return classifyManagedRouteReadError(err, "HTTPRoute", name)
+	}
+	return validateRouteParentStatus(cluster, gatewayClass, "HTTPRoute", route.Generation, route.Status.Parents)
+}
+
+func classifyManagedRouteReadError(err error, kind string, name types.NamespacedName) error {
+	if operatorerrors.IsCRDMissingError(err) {
+		return ErrGatewayAPIMissing
+	}
+	if apierrors.IsNotFound(err) {
+		return fmt.Errorf("%w: operator-managed %s %s/%s does not exist yet", ErrGatewayRoutePending, kind, name.Namespace, name.Name)
+	}
+	if apierrors.IsForbidden(err) {
+		return fmt.Errorf(
+			"%w: cannot verify operator-managed %s %s/%s because the operator cannot read it: %v",
+			ErrGatewayCapabilitiesUnknown,
+			kind,
+			name.Namespace,
+			name.Name,
+			err,
+		)
+	}
+	return fmt.Errorf("failed to get operator-managed %s %s/%s: %w", kind, name.Namespace, name.Name, err)
+}
+
+func validateRouteParentStatus(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	gatewayClass *gatewayv1.GatewayClass,
+	routeKind string,
+	routeGeneration int64,
+	parents []gatewayv1.RouteParentStatus,
+) error {
+	parent := findManagedRouteParentStatus(cluster, gatewayClass, parents)
+	routeName := httpRouteName(cluster)
+	if cluster.Spec.Gateway.TLSPassthrough {
+		routeName = tlsRouteName(cluster)
+	}
+	if parent == nil {
+		return fmt.Errorf(
+			"%w: operator-managed %s %s/%s has not reported status for the configured Gateway parent",
+			ErrGatewayRoutePending,
+			routeKind,
+			cluster.Namespace,
+			routeName,
+		)
+	}
+
+	accepted := meta.FindStatusCondition(parent.Conditions, string(gatewayv1.RouteConditionAccepted))
+	resolvedRefs := meta.FindStatusCondition(parent.Conditions, string(gatewayv1.RouteConditionResolvedRefs))
+	if conditionIsCurrentFalse(accepted, routeGeneration) {
+		return fmt.Errorf(
+			"%w: operator-managed %s %s/%s was rejected by the configured Gateway parent (%s: %s)",
+			ErrGatewayRouteNotAccepted,
+			routeKind,
+			cluster.Namespace,
+			routeName,
+			accepted.Reason,
+			accepted.Message,
+		)
+	}
+	if conditionIsCurrentFalse(resolvedRefs, routeGeneration) {
+		return fmt.Errorf(
+			"%w: operator-managed %s %s/%s has unresolved references for the configured Gateway parent (%s: %s)",
+			ErrGatewayRouteReferencesUnresolved,
+			routeKind,
+			cluster.Namespace,
+			routeName,
+			resolvedRefs.Reason,
+			resolvedRefs.Message,
+		)
+	}
+	if !conditionIsCurrentTrue(accepted, routeGeneration) || !conditionIsCurrentTrue(resolvedRefs, routeGeneration) {
+		return fmt.Errorf(
+			"%w: operator-managed %s %s/%s has not reported current Accepted=True and ResolvedRefs=True conditions for the configured Gateway parent",
+			ErrGatewayRoutePending,
+			routeKind,
+			cluster.Namespace,
+			routeName,
+		)
+	}
+
+	return nil
+}
+
+func findManagedRouteParentStatus(
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	gatewayClass *gatewayv1.GatewayClass,
+	parents []gatewayv1.RouteParentStatus,
+) *gatewayv1.RouteParentStatus {
+	gatewayNamespace := strings.TrimSpace(cluster.Spec.Gateway.GatewayRef.Namespace)
+	if gatewayNamespace == "" {
+		gatewayNamespace = cluster.Namespace
+	}
+	gatewayName := strings.TrimSpace(cluster.Spec.Gateway.GatewayRef.Name)
+	listenerName := strings.TrimSpace(cluster.Spec.Gateway.ListenerName)
+
+	for i := range parents {
+		parent := &parents[i]
+		if parent.ControllerName != gatewayClass.Spec.ControllerName {
+			continue
+		}
+		if !gatewayParentReferenceMatches(parent.ParentRef, cluster.Namespace, gatewayNamespace, gatewayName, listenerName) {
+			continue
+		}
+		return parent
+	}
+
+	return nil
+}
+
+func gatewayParentReferenceMatches(
+	ref gatewayv1.ParentReference,
+	routeNamespace string,
+	gatewayNamespace string,
+	gatewayName string,
+	listenerName string,
+) bool {
+	group := gatewayv1.GroupVersion.Group
+	if ref.Group != nil {
+		group = string(*ref.Group)
+	}
+	kind := "Gateway"
+	if ref.Kind != nil {
+		kind = string(*ref.Kind)
+	}
+	namespace := routeNamespace
+	if ref.Namespace != nil {
+		namespace = string(*ref.Namespace)
+	}
+	sectionName := ""
+	if ref.SectionName != nil {
+		sectionName = string(*ref.SectionName)
+	}
+
+	return group == gatewayv1.GroupVersion.Group &&
+		kind == "Gateway" &&
+		string(ref.Name) == gatewayName &&
+		namespace == gatewayNamespace &&
+		sectionName == listenerName &&
+		ref.Port == nil
+}
+
+func conditionIsCurrentFalse(condition *metav1.Condition, generation int64) bool {
+	return condition != nil && condition.ObservedGeneration == generation && condition.Status == metav1.ConditionFalse
+}
+
+func conditionIsCurrentTrue(condition *metav1.Condition, generation int64) bool {
+	return condition != nil && condition.ObservedGeneration == generation && condition.Status == metav1.ConditionTrue
 }
 
 func validateGatewayListeners(cluster *openbaov1alpha1.OpenBaoCluster, gateway *gatewayv1.Gateway) error {

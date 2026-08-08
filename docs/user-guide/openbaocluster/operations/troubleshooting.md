@@ -162,7 +162,10 @@ If the logs show `Timeout during connect`, `secondary validation`, or repeated `
 
 ## Gateway passthrough mismatch
 
-If `ConditionDegraded=True` with reason `ACMEGatewayNotConfiguredForPassthrough`, or `GatewayIntegrationReady=False` with reasons such as `GatewayListenerIncompatible`, `GatewayFeatureUnsupported`, or `GatewayNotProgrammed`, start at the Gateway listener model.
+If `ConditionDegraded=True` with reason `ACMEGatewayNotConfiguredForPassthrough`, or `GatewayIntegrationReady=False`
+with reasons such as `GatewayListenerIncompatible`, `GatewayFeatureUnsupported`, `GatewayNotProgrammed`,
+`GatewayRouteNotAccepted`, or `GatewayRouteReferencesUnresolved`, start at the Gateway listener and managed Route
+status. `GatewayRoutePending` is `Unknown`: the Route object or current parent status has not appeared yet.
 
 For `tls.mode: ACME`:
 
