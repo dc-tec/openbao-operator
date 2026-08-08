@@ -178,6 +178,18 @@ func reconcileDeletion(
 
 	logger.Info("OpenBaoTenant is being deleted", "target_namespace", targetNS)
 
+	hasOtherClaim, err := hasOtherActiveTenantClaim(ctx, runtime, tenant, targetNS)
+	if err != nil {
+		return recon.Result{}, err
+	}
+	if hasOtherClaim {
+		logger.Info(
+			"Another active OpenBaoTenant targets this namespace; preserving shared tenant resources",
+			"target_namespace", targetNS,
+		)
+		return removeTenantFinalizer(ctx, runtime.Client, tenant, key)
+	}
+
 	// Keep tenant RBAC while OpenBaoCluster finalizers may still need it.
 	clusterList := &openbaov1alpha1.OpenBaoClusterList{}
 	if err := runtime.Client.List(ctx, clusterList, client.InNamespace(targetNS)); err != nil {
@@ -190,20 +202,74 @@ func reconcileDeletion(
 		return recon.Result{RequeueAfter: resolveRequeueShort(runtime)}, nil
 	}
 
-	logger.Info("No OpenBaoClusters found; cleaning up tenant RBAC", "target_namespace", targetNS)
-	if err := runtime.Provisioner.CleanupTenantRBAC(ctx, targetNS); err != nil {
-		return recon.Result{}, fmt.Errorf("failed to cleanup tenant RBAC for namespace %s: %w", targetNS, err)
+	logger.Info("No OpenBaoClusters found; cleaning up tenant resources", "target_namespace", targetNS)
+	if err := runtime.Provisioner.CleanupTenantResources(ctx, targetNS); err != nil {
+		return recon.Result{}, fmt.Errorf("failed to cleanup tenant resources for namespace %s: %w", targetNS, err)
 	}
 	logging.LogAuditEvent(logger, logging.EventTenantRBACCleaned, map[string]string{
 		"tenant_namespace": tenant.Namespace,
 		"tenant_name":      tenant.Name,
 		"target_namespace": targetNS,
 	})
-	runtime.emitTenantNormalEvent(tenant, ReasonTenantRBACCleaned, fmt.Sprintf("Cleaned tenant RBAC for namespace %s", targetNS))
+	runtime.emitTenantNormalEvent(
+		tenant,
+		ReasonTenantRBACCleaned,
+		fmt.Sprintf("Cleaned tenant RBAC, ResourceQuota, and LimitRange for namespace %s", targetNS),
+	)
 
+	return removeTenantFinalizer(ctx, runtime.Client, tenant, key)
+}
+
+func hasOtherActiveTenantClaim(
+	ctx context.Context,
+	runtime TenantRuntime,
+	tenant *openbaov1alpha1.OpenBaoTenant,
+	targetNS string,
+) (bool, error) {
+	reader := runtime.APIReader
+	if reader == nil {
+		reader = runtime.Client
+	}
+
+	claimNamespaces := []string{targetNS}
+	if runtime.OperatorNamespace != "" && runtime.OperatorNamespace != targetNS {
+		claimNamespaces = append(claimNamespaces, runtime.OperatorNamespace)
+	}
+
+	for _, claimNamespace := range claimNamespaces {
+		tenantList := &openbaov1alpha1.OpenBaoTenantList{}
+		if err := reader.List(ctx, tenantList, client.InNamespace(claimNamespace)); err != nil {
+			return false, fmt.Errorf(
+				"failed to list OpenBaoTenants in namespace %s while cleaning up namespace %s: %w",
+				claimNamespace,
+				targetNS,
+				err,
+			)
+		}
+
+		for i := range tenantList.Items {
+			other := &tenantList.Items[i]
+			if other.Namespace == tenant.Namespace && other.Name == tenant.Name {
+				continue
+			}
+			if other.DeletionTimestamp.IsZero() && other.Spec.TargetNamespace == targetNS {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+func removeTenantFinalizer(
+	ctx context.Context,
+	c client.Client,
+	tenant *openbaov1alpha1.OpenBaoTenant,
+	key types.NamespacedName,
+) (recon.Result, error) {
 	original := tenant.DeepCopy()
 	controllerutil.RemoveFinalizer(tenant, openbaov1alpha1.OpenBaoTenantFinalizer)
-	if err := runtime.Client.Patch(ctx, tenant, client.MergeFrom(original)); err != nil {
+	if err := c.Patch(ctx, tenant, client.MergeFrom(original)); err != nil {
 		return recon.Result{}, fmt.Errorf("failed to remove finalizer from OpenBaoTenant %s: %w", key, err)
 	}
 

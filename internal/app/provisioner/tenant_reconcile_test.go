@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"errors"
+	"maps"
 	"strings"
 	"testing"
 	"time"
@@ -31,11 +32,16 @@ import (
 
 type failingTenantProvisioner struct {
 	Provisioner
-	err error
+	ensureErr  error
+	cleanupErr error
 }
 
 func (p failingTenantProvisioner) EnsureTenantRBAC(context.Context, *openbaov1alpha1.OpenBaoTenant) error {
-	return p.err
+	return p.ensureErr
+}
+
+func (p failingTenantProvisioner) CleanupTenantResources(context.Context, string) error {
+	return p.cleanupErr
 }
 
 func expectEventContains(t *testing.T, recorder *events.FakeRecorder, parts ...string) {
@@ -341,7 +347,7 @@ func TestReconcileOpenBaoTenant_ProvisioningFailure(t *testing.T) {
 	}
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns"}}
 	runtime := newTenantRuntime(t, tenant, ns)
-	runtime.Provisioner = failingTenantProvisioner{Provisioner: runtime.Provisioner, err: provisioningErr}
+	runtime.Provisioner = failingTenantProvisioner{Provisioner: runtime.Provisioner, ensureErr: provisioningErr}
 	req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
 
 	result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
@@ -400,6 +406,11 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 
 	t.Run("removes finalizer after cleanup", func(t *testing.T) {
 		now := metav1.Now()
+		podSecurityLabels := map[string]string{
+			"pod-security.kubernetes.io/enforce": "restricted",
+			"pod-security.kubernetes.io/audit":   "restricted",
+			"pod-security.kubernetes.io/warn":    "restricted",
+		}
 		tenant := &openbaov1alpha1.OpenBaoTenant{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              "tenant",
@@ -409,8 +420,11 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 			},
 			Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
 		}
-		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns"}}
-		runtime := newTenantRuntime(t, tenant, ns)
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant-ns", Labels: podSecurityLabels}}
+		quota := provisionermanager.GenerateTenantResourceQuota("tenant-ns", nil)
+		limitRange := provisionermanager.GenerateTenantLimitRange("tenant-ns", nil)
+		runtime := newTenantRuntime(t, tenant, ns, quota, limitRange)
+		runtime.APIReader = nil
 		recorder := events.NewFakeRecorder(10)
 		runtime.Recorder = recorder
 		req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
@@ -431,8 +445,222 @@ func TestReconcileOpenBaoTenant_DeletionPaths(t *testing.T) {
 		} else if controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoTenantFinalizer) {
 			t.Fatalf("expected finalizer to be removed")
 		}
+		for _, obj := range []client.Object{
+			&corev1.ResourceQuota{},
+			&corev1.LimitRange{},
+		} {
+			name := provisionermanager.TenantResourceQuotaName
+			if _, ok := obj.(*corev1.LimitRange); ok {
+				name = provisionermanager.TenantLimitRangeName
+			}
+			getErr := runtime.Client.Get(context.Background(), types.NamespacedName{Namespace: "tenant-ns", Name: name}, obj)
+			if !apierrors.IsNotFound(getErr) {
+				t.Fatalf("expected %T %s to be deleted, got %v", obj, name, getErr)
+			}
+		}
+		updatedNamespace := &corev1.Namespace{}
+		if getErr := runtime.Client.Get(context.Background(), types.NamespacedName{Name: "tenant-ns"}, updatedNamespace); getErr != nil {
+			t.Fatalf("get namespace after cleanup: %v", getErr)
+		}
+		if got := updatedNamespace.Labels; !maps.Equal(got, podSecurityLabels) {
+			t.Fatalf("namespace labels = %#v, want unchanged %#v", got, podSecurityLabels)
+		}
 
 		expectEventContains(t, recorder, "Normal", ReasonTenantRBACCleaned)
+	})
+
+	t.Run("retains finalizer when tenant claim listing fails", func(t *testing.T) {
+		now := metav1.Now()
+		tenant := &openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "tenant",
+				Namespace:         "openbao-operator-system",
+				Finalizers:        []string{openbaov1alpha1.OpenBaoTenantFinalizer},
+				DeletionTimestamp: &now,
+			},
+			Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
+		}
+		runtime := newTenantRuntime(t, tenant)
+		listErr := errors.New("tenant list unavailable")
+		runtime.APIReader = fake.NewClientBuilder().
+			WithScheme(newTenantScheme(t)).
+			WithInterceptorFuncs(interceptor.Funcs{
+				List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
+					return listErr
+				},
+			}).
+			Build()
+		req := types.NamespacedName{Name: tenant.Name, Namespace: tenant.Namespace}
+
+		result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
+		if err == nil || !errors.Is(err, listErr) {
+			t.Fatalf("ReconcileOpenBaoTenant() error = %v, want tenant list error", err)
+		}
+		if result != (recon.Result{}) {
+			t.Fatalf("result=%v, want zero", result)
+		}
+
+		updated := &openbaov1alpha1.OpenBaoTenant{}
+		if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
+			t.Fatalf("get tenant after list failure: %v", getErr)
+		}
+		if !controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoTenantFinalizer) {
+			t.Fatal("expected finalizer to remain after tenant list failure")
+		}
+	})
+
+	t.Run("retains finalizer when cleanup fails", func(t *testing.T) {
+		now := metav1.Now()
+		tenant := &openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "tenant",
+				Namespace:         "openbao-operator-system",
+				Finalizers:        []string{openbaov1alpha1.OpenBaoTenantFinalizer},
+				DeletionTimestamp: &now,
+			},
+			Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
+		}
+		runtime := newTenantRuntime(t, tenant)
+		cleanupErr := errors.New("quota deletion denied")
+		runtime.Provisioner = failingTenantProvisioner{
+			Provisioner: runtime.Provisioner,
+			cleanupErr:  cleanupErr,
+		}
+		req := types.NamespacedName{Name: tenant.Name, Namespace: tenant.Namespace}
+
+		result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
+		if err == nil || !errors.Is(err, cleanupErr) {
+			t.Fatalf("ReconcileOpenBaoTenant() error = %v, want cleanup error", err)
+		}
+		if result != (recon.Result{}) {
+			t.Fatalf("result=%v, want zero", result)
+		}
+
+		updated := &openbaov1alpha1.OpenBaoTenant{}
+		if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
+			t.Fatalf("get tenant after cleanup failure: %v", getErr)
+		}
+		if !controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoTenantFinalizer) {
+			t.Fatal("expected finalizer to remain after cleanup failure")
+		}
+	})
+
+	t.Run("preserves resources for another active authorized claim", func(t *testing.T) {
+		now := metav1.Now()
+		deletingTenant := &openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "deleting-tenant",
+				Namespace:         "openbao-operator-system",
+				Finalizers:        []string{openbaov1alpha1.OpenBaoTenantFinalizer},
+				DeletionTimestamp: &now,
+			},
+			Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
+		}
+		activeTenant := &openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{Name: "active-tenant", Namespace: "tenant-ns"},
+			Spec:       openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
+		}
+		quota := provisionermanager.GenerateTenantResourceQuota("tenant-ns", nil)
+		limitRange := provisionermanager.GenerateTenantLimitRange("tenant-ns", nil)
+		runtime := newTenantRuntime(t, deletingTenant, activeTenant, quota, limitRange)
+		req := types.NamespacedName{Name: deletingTenant.Name, Namespace: deletingTenant.Namespace}
+
+		result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
+		if err != nil {
+			t.Fatalf("ReconcileOpenBaoTenant() error = %v", err)
+		}
+		if result != (recon.Result{}) {
+			t.Fatalf("result=%v, want zero", result)
+		}
+		if getErr := runtime.Client.Get(context.Background(), req, &openbaov1alpha1.OpenBaoTenant{}); !apierrors.IsNotFound(getErr) {
+			t.Fatalf("expected deleting tenant to finalize, got %v", getErr)
+		}
+		for _, obj := range []client.Object{&corev1.ResourceQuota{}, &corev1.LimitRange{}} {
+			name := provisionermanager.TenantResourceQuotaName
+			if _, ok := obj.(*corev1.LimitRange); ok {
+				name = provisionermanager.TenantLimitRangeName
+			}
+			if getErr := runtime.Client.Get(
+				context.Background(),
+				types.NamespacedName{Namespace: "tenant-ns", Name: name},
+				obj,
+			); getErr != nil {
+				t.Fatalf("expected shared %T %s to remain: %v", obj, name, getErr)
+			}
+		}
+	})
+}
+
+func TestReconcileOpenBaoTenant_DeletionClaimCollisions(t *testing.T) {
+	setAdmissionReady(t, true)
+
+	t.Run("ignores unauthorized active claim", func(t *testing.T) {
+		now := metav1.Now()
+		deletingTenant := &openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "deleting-tenant",
+				Namespace:         "openbao-operator-system",
+				Finalizers:        []string{openbaov1alpha1.OpenBaoTenantFinalizer},
+				DeletionTimestamp: &now,
+			},
+			Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
+		}
+		unauthorizedTenant := &openbaov1alpha1.OpenBaoTenant{
+			ObjectMeta: metav1.ObjectMeta{Name: "unauthorized-tenant", Namespace: "other-ns"},
+			Spec:       openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
+		}
+		quota := provisionermanager.GenerateTenantResourceQuota("tenant-ns", nil)
+		limitRange := provisionermanager.GenerateTenantLimitRange("tenant-ns", nil)
+		runtime := newTenantRuntime(t, deletingTenant, unauthorizedTenant, quota, limitRange)
+		req := types.NamespacedName{Name: deletingTenant.Name, Namespace: deletingTenant.Namespace}
+
+		if _, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime); err != nil {
+			t.Fatalf("ReconcileOpenBaoTenant() error = %v", err)
+		}
+		for _, obj := range []client.Object{&corev1.ResourceQuota{}, &corev1.LimitRange{}} {
+			name := provisionermanager.TenantResourceQuotaName
+			if _, ok := obj.(*corev1.LimitRange); ok {
+				name = provisionermanager.TenantLimitRangeName
+			}
+			getErr := runtime.Client.Get(
+				context.Background(),
+				types.NamespacedName{Namespace: "tenant-ns", Name: name},
+				obj,
+			)
+			if !apierrors.IsNotFound(getErr) {
+				t.Fatalf("expected %T %s to be deleted, got %v", obj, name, getErr)
+			}
+		}
+	})
+
+	t.Run("co-deleting claims do not block cleanup", func(t *testing.T) {
+		now := metav1.Now()
+		newDeletingTenant := func(name string) *openbaov1alpha1.OpenBaoTenant {
+			return &openbaov1alpha1.OpenBaoTenant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              name,
+					Namespace:         "openbao-operator-system",
+					Finalizers:        []string{openbaov1alpha1.OpenBaoTenantFinalizer},
+					DeletionTimestamp: &now,
+				},
+				Spec: openbaov1alpha1.OpenBaoTenantSpec{TargetNamespace: "tenant-ns"},
+			}
+		}
+		first := newDeletingTenant("tenant-one")
+		second := newDeletingTenant("tenant-two")
+		quota := provisionermanager.GenerateTenantResourceQuota("tenant-ns", nil)
+		limitRange := provisionermanager.GenerateTenantLimitRange("tenant-ns", nil)
+		runtime := newTenantRuntime(t, first, second, quota, limitRange)
+
+		for _, tenant := range []*openbaov1alpha1.OpenBaoTenant{first, second} {
+			key := types.NamespacedName{Name: tenant.Name, Namespace: tenant.Namespace}
+			if _, err := ReconcileOpenBaoTenant(context.Background(), key, logr.Discard(), runtime); err != nil {
+				t.Fatalf("ReconcileOpenBaoTenant(%s) error = %v", tenant.Name, err)
+			}
+			if getErr := runtime.Client.Get(context.Background(), key, &openbaov1alpha1.OpenBaoTenant{}); !apierrors.IsNotFound(getErr) {
+				t.Fatalf("expected %s to finalize, got %v", tenant.Name, getErr)
+			}
+		}
 	})
 }
 
@@ -489,7 +717,7 @@ func TestReconcileOpenBaoTenant_FinalizerAddUsesMergePatch(t *testing.T) {
 	}
 }
 
-func TestReconcileOpenBaoTenant_FinalizerRemoveUsesMergePatch(t *testing.T) {
+func TestReconcileOpenBaoTenant_FinalizerRemoveFailureUsesMergePatchAndRetainsFinalizer(t *testing.T) {
 	setAdmissionReady(t, true)
 
 	now := metav1.Now()
@@ -506,6 +734,7 @@ func TestReconcileOpenBaoTenant_FinalizerRemoveUsesMergePatch(t *testing.T) {
 
 	var patches int
 	var updates int
+	patchErr := errors.New("finalizer patch failed")
 	c := fake.NewClientBuilder().
 		WithScheme(newTenantScheme(t)).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoTenant{}).
@@ -518,6 +747,7 @@ func TestReconcileOpenBaoTenant_FinalizerRemoveUsesMergePatch(t *testing.T) {
 			Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 				if obj.GetName() == tenant.Name && obj.GetNamespace() == tenant.Namespace {
 					patches++
+					return patchErr
 				}
 				return c.Patch(ctx, obj, patch, opts...)
 			},
@@ -527,8 +757,8 @@ func TestReconcileOpenBaoTenant_FinalizerRemoveUsesMergePatch(t *testing.T) {
 	req := types.NamespacedName{Name: "tenant", Namespace: "openbao-operator-system"}
 
 	result, err := ReconcileOpenBaoTenant(context.Background(), req, logr.Discard(), runtime)
-	if err != nil {
-		t.Fatalf("ReconcileOpenBaoTenant() error = %v", err)
+	if err == nil || !errors.Is(err, patchErr) {
+		t.Fatalf("ReconcileOpenBaoTenant() error = %v, want finalizer patch error", err)
 	}
 	if result != (recon.Result{}) {
 		t.Fatalf("result=%v, want zero", result)
@@ -538,5 +768,13 @@ func TestReconcileOpenBaoTenant_FinalizerRemoveUsesMergePatch(t *testing.T) {
 	}
 	if patches != 1 {
 		t.Fatalf("Patch() calls = %d, want 1", patches)
+	}
+
+	updated := &openbaov1alpha1.OpenBaoTenant{}
+	if getErr := runtime.Client.Get(context.Background(), req, updated); getErr != nil {
+		t.Fatalf("get tenant after finalizer patch failure: %v", getErr)
+	}
+	if !controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoTenantFinalizer) {
+		t.Fatal("expected finalizer to remain after patch failure")
 	}
 }

@@ -22,6 +22,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // testScheme is a shared scheme used across tests.
@@ -464,15 +465,23 @@ func TestEnsureTenantRBAC_HandlesAlreadyExistsGracefully(t *testing.T) {
 	}
 }
 
-func TestCleanupTenantRBAC_DeletesRoleAndRoleBinding(t *testing.T) {
+func TestCleanupTenantResources_DeletesRBACAndGovernanceResources(t *testing.T) {
 	namespace := testNamespace
+	podSecurityLabels := map[string]string{
+		"pod-security.kubernetes.io/enforce": "restricted",
+		"pod-security.kubernetes.io/audit":   "restricted",
+		"pod-security.kubernetes.io/warn":    "restricted",
+	}
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace, Labels: podSecurityLabels}}
 	existingRole := GenerateTenantRole(namespace)
 	existingRoleBinding := GenerateTenantRoleBinding(namespace, OperatorServiceAccount{
 		Name:      "controller-manager",
 		Namespace: "openbao-operator-system",
 	})
+	existingQuota := GenerateTenantResourceQuota(namespace, nil)
+	existingLimitRange := GenerateTenantLimitRange(namespace, nil)
 
-	k8sClient := newTestClient(t, existingRole, existingRoleBinding)
+	k8sClient := newTestClient(t, ns, existingRole, existingRoleBinding, existingQuota, existingLimitRange)
 	logger := logr.Discard()
 	manager, err := NewManager(k8sClient, logger)
 	if err != nil {
@@ -481,33 +490,33 @@ func TestCleanupTenantRBAC_DeletesRoleAndRoleBinding(t *testing.T) {
 
 	ctx := context.Background()
 
-	err = manager.CleanupTenantRBAC(ctx, namespace)
+	err = manager.CleanupTenantResources(ctx, namespace)
 	if err != nil {
-		t.Fatalf("CleanupTenantRBAC() error = %v", err)
+		t.Fatalf("CleanupTenantResources() error = %v", err)
 	}
 
-	// Verify RoleBinding was deleted
-	roleBinding := &rbacv1.RoleBinding{}
-	err = k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      TenantRoleBindingName,
-	}, roleBinding)
-	if !apierrors.IsNotFound(err) {
-		t.Errorf("expected RoleBinding to be deleted, got error: %v", err)
+	for _, obj := range []client.Object{
+		&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: TenantRoleBindingName, Namespace: namespace}},
+		&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: TenantRoleName, Namespace: namespace}},
+		&corev1.ResourceQuota{ObjectMeta: metav1.ObjectMeta{Name: TenantResourceQuotaName, Namespace: namespace}},
+		&corev1.LimitRange{ObjectMeta: metav1.ObjectMeta{Name: TenantLimitRangeName, Namespace: namespace}},
+	} {
+		key := types.NamespacedName{Namespace: obj.GetNamespace(), Name: obj.GetName()}
+		if getErr := k8sClient.Get(ctx, key, obj); !apierrors.IsNotFound(getErr) {
+			t.Errorf("expected %T %s to be deleted, got error: %v", obj, key, getErr)
+		}
 	}
 
-	// Verify Role was deleted
-	role := &rbacv1.Role{}
-	err = k8sClient.Get(ctx, types.NamespacedName{
-		Namespace: namespace,
-		Name:      TenantRoleName,
-	}, role)
-	if !apierrors.IsNotFound(err) {
-		t.Errorf("expected Role to be deleted, got error: %v", err)
+	updatedNamespace := &corev1.Namespace{}
+	if getErr := k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, updatedNamespace); getErr != nil {
+		t.Fatalf("get namespace after cleanup: %v", getErr)
+	}
+	if !reflect.DeepEqual(updatedNamespace.Labels, podSecurityLabels) {
+		t.Fatalf("namespace labels = %#v, want unchanged %#v", updatedNamespace.Labels, podSecurityLabels)
 	}
 }
 
-func TestCleanupTenantRBAC_HandlesNotFoundGracefully(t *testing.T) {
+func TestCleanupTenantResources_HandlesNotFoundGracefully(t *testing.T) {
 	namespace := testNamespace
 	k8sClient := newTestClient(t)
 	logger := logr.Discard()
@@ -519,9 +528,181 @@ func TestCleanupTenantRBAC_HandlesNotFoundGracefully(t *testing.T) {
 	ctx := context.Background()
 
 	// Should not error when resources don't exist
-	err = manager.CleanupTenantRBAC(ctx, namespace)
+	err = manager.CleanupTenantResources(ctx, namespace)
 	if err != nil {
-		t.Fatalf("CleanupTenantRBAC() error = %v", err)
+		t.Fatalf("CleanupTenantResources() error = %v", err)
+	}
+}
+
+func TestCleanupTenantResources_DeletesGovernanceResourcesWithoutReadingThem(t *testing.T) {
+	namespace := testNamespace
+	quota := GenerateTenantResourceQuota(namespace, nil)
+	limitRange := GenerateTenantLimitRange(namespace, nil)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithObjects(quota, limitRange).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				switch obj.(type) {
+				case *corev1.ResourceQuota, *corev1.LimitRange:
+					return errors.New("unexpected governance resource read")
+				default:
+					return c.Get(ctx, key, obj, opts...)
+				}
+			},
+		}).
+		Build()
+	manager, err := NewManager(k8sClient, logr.Discard())
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	if err := manager.CleanupTenantResources(context.Background(), namespace); err != nil {
+		t.Fatalf("CleanupTenantResources() error = %v", err)
+	}
+}
+
+func TestCleanupTenantResources_ReturnsGovernanceDeleteError(t *testing.T) {
+	deleteErr := apierrors.NewForbidden(
+		corev1.Resource("resourcequotas"),
+		TenantResourceQuotaName,
+		errors.New("delete denied"),
+	)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(testScheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+				return deleteErr
+			},
+		}).
+		Build()
+	manager, err := NewManager(k8sClient, logr.Discard())
+	if err != nil {
+		t.Fatalf("NewManager() failed: %v", err)
+	}
+
+	err = manager.CleanupTenantResources(context.Background(), testNamespace)
+	if err == nil || !errors.Is(err, deleteErr) {
+		t.Fatalf("CleanupTenantResources() error = %v, want delete error", err)
+	}
+	for _, want := range []string{"ResourceQuota", testNamespace, TenantResourceQuotaName} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("CleanupTenantResources() error = %q, want it to contain %q", err, want)
+		}
+	}
+}
+
+func TestIsTenantNamespaceProvisioned(t *testing.T) {
+	t.Run("rejects empty namespace", func(t *testing.T) {
+		manager, err := NewManager(newTestClient(t), logr.Discard())
+		if err != nil {
+			t.Fatalf("NewManager() failed: %v", err)
+		}
+		if _, err := manager.IsTenantNamespaceProvisioned(context.Background(), ""); err == nil {
+			t.Fatal("IsTenantNamespaceProvisioned() error = nil, want namespace validation error")
+		}
+	})
+
+	t.Run("reports missing RoleBinding", func(t *testing.T) {
+		manager, err := NewManager(newTestClient(t), logr.Discard())
+		if err != nil {
+			t.Fatalf("NewManager() failed: %v", err)
+		}
+		provisioned, err := manager.IsTenantNamespaceProvisioned(context.Background(), testNamespace)
+		if err != nil || provisioned {
+			t.Fatalf("IsTenantNamespaceProvisioned() = (%v, %v), want (false, nil)", provisioned, err)
+		}
+	})
+
+	t.Run("reports existing RoleBinding", func(t *testing.T) {
+		binding := GenerateTenantRoleBinding(testNamespace, OperatorServiceAccount{Name: "controller", Namespace: "operator"})
+		manager, err := NewManager(newTestClient(t, binding), logr.Discard())
+		if err != nil {
+			t.Fatalf("NewManager() failed: %v", err)
+		}
+		provisioned, err := manager.IsTenantNamespaceProvisioned(context.Background(), testNamespace)
+		if err != nil || !provisioned {
+			t.Fatalf("IsTenantNamespaceProvisioned() = (%v, %v), want (true, nil)", provisioned, err)
+		}
+	})
+
+	t.Run("returns RoleBinding read error", func(t *testing.T) {
+		readErr := errors.New("RoleBinding read failed")
+		k8sClient := fake.NewClientBuilder().
+			WithScheme(testScheme).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+					return readErr
+				},
+			}).
+			Build()
+		manager, err := NewManager(k8sClient, logr.Discard())
+		if err != nil {
+			t.Fatalf("NewManager() failed: %v", err)
+		}
+		if _, err := manager.IsTenantNamespaceProvisioned(context.Background(), testNamespace); !errors.Is(err, readErr) {
+			t.Fatalf("IsTenantNamespaceProvisioned() error = %v, want read error", err)
+		}
+	})
+}
+
+func TestCleanupTenantResources_ReturnsRBACOperationError(t *testing.T) {
+	operatorSA := OperatorServiceAccount{Name: "controller", Namespace: "operator"}
+	for _, tc := range []struct {
+		name      string
+		operation string
+		object    client.Object
+	}{
+		{
+			name:      "RoleBinding delete",
+			operation: "delete",
+			object:    GenerateTenantSecretsReaderRoleBinding(testNamespace, operatorSA),
+		},
+		{
+			name:      "Role delete",
+			operation: "delete",
+			object:    GenerateTenantSecretsReaderRole(testNamespace, nil),
+		},
+		{
+			name:      "RoleBinding get",
+			operation: "get",
+			object:    GenerateTenantSecretsReaderRoleBinding(testNamespace, operatorSA),
+		},
+		{
+			name:      "Role get",
+			operation: "get",
+			object:    GenerateTenantSecretsReaderRole(testNamespace, nil),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rbacErr := errors.New("RBAC operation failed")
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(testScheme).
+				WithObjects(tc.object).
+				WithInterceptorFuncs(interceptor.Funcs{
+					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+						if tc.operation == "get" && key.Name == tc.object.GetName() {
+							return rbacErr
+						}
+						return c.Get(ctx, key, obj, opts...)
+					},
+					Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+						if tc.operation == "delete" && obj.GetName() == tc.object.GetName() {
+							return rbacErr
+						}
+						return c.Delete(ctx, obj, opts...)
+					},
+				}).
+				Build()
+			manager, err := NewManager(k8sClient, logr.Discard())
+			if err != nil {
+				t.Fatalf("NewManager() failed: %v", err)
+			}
+
+			if err := manager.CleanupTenantResources(context.Background(), testNamespace); !errors.Is(err, rbacErr) {
+				t.Fatalf("CleanupTenantResources() error = %v, want RBAC operation error", err)
+			}
+		})
 	}
 }
 

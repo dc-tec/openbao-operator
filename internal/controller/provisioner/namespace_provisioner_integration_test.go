@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -56,7 +57,7 @@ func TestNamespaceProvisioner_SetupWithManager_ProvisionsTenantNamespace(t *test
 	})
 }
 
-func TestNamespaceProvisioner_SetupWithManager_CleansUpTenantRBACOnDelete(t *testing.T) {
+func TestNamespaceProvisioner_SetupWithManager_CleansUpTenantResourcesOnDelete(t *testing.T) {
 	setAdmissionReady(t)
 
 	ctx := context.Background()
@@ -78,6 +79,16 @@ func TestNamespaceProvisioner_SetupWithManager_CleansUpTenantRBACOnDelete(t *tes
 
 	tenantKey := types.NamespacedName{Namespace: operatorNamespace, Name: tenant.Name}
 	current := waitForTenantProvisioned(t, ctx, liveClient, tenantKey)
+	quotaKey := types.NamespacedName{
+		Namespace: "tenant-cleanup",
+		Name:      provisionersvc.TenantResourceQuotaName,
+	}
+	limitRangeKey := types.NamespacedName{
+		Namespace: "tenant-cleanup",
+		Name:      provisionersvc.TenantLimitRangeName,
+	}
+	require.NoError(t, liveClient.Get(ctx, quotaKey, &corev1.ResourceQuota{}))
+	require.NoError(t, liveClient.Get(ctx, limitRangeKey, &corev1.LimitRange{}))
 	require.NoError(t, liveClient.Delete(ctx, current))
 
 	waitForNotFound(t, ctx, liveClient, types.NamespacedName{
@@ -91,5 +102,17 @@ func TestNamespaceProvisioner_SetupWithManager_CleansUpTenantRBACOnDelete(t *tes
 		Name:      "openbao-operator-controller",
 		Namespace: operatorNamespace,
 	}))
+	waitForNotFound(t, ctx, liveClient, quotaKey, &corev1.ResourceQuota{})
+	waitForNotFound(t, ctx, liveClient, limitRangeKey, &corev1.LimitRange{})
 	waitForNotFound(t, ctx, liveClient, tenantKey, &openbaov1alpha1.OpenBaoTenant{})
+
+	namespace := &corev1.Namespace{}
+	require.NoError(t, liveClient.Get(ctx, types.NamespacedName{Name: "tenant-cleanup"}, namespace))
+	for _, key := range []string{
+		"pod-security.kubernetes.io/enforce",
+		"pod-security.kubernetes.io/audit",
+		"pod-security.kubernetes.io/warn",
+	} {
+		require.Equal(t, "restricted", namespace.Labels[key], "Pod Security label %s must remain after cleanup", key)
+	}
 }

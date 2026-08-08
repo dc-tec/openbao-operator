@@ -202,7 +202,7 @@ Expect `Normal` events for routine progression and accepted operator input. Expe
 | Type | Reason | Notes |
 | :--- | :--- | :--- |
 | `Normal` | `TenantProvisioned` | Tenant namespace RBAC was provisioned successfully. |
-| `Normal` | `TenantRBACCleaned` | Tenant namespace RBAC was cleaned up during deletion. |
+| `Normal` | `TenantRBACCleaned` | Tenant namespace RBAC, ResourceQuota, and LimitRange were cleaned up during deletion. |
 | `Warning` | `TenantProvisioningBlocked` | Provisioning is blocked by guardrails, missing prerequisites, or dependency readiness checks. |
 | `Warning` | `TenantProvisioningFailed` | Provisioning failed while applying tenant RBAC. |
 

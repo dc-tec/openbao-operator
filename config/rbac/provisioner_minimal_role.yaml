@@ -94,6 +94,7 @@ rules:
     verbs:
       - get
       - patch
+      - delete
   - apiGroups:
       - ""
     resources:
@@ -109,6 +110,7 @@ rules:
     verbs:
       - get
       - patch
+      - delete
 
   # 3. Tenant onboarding resources (Server-Side Apply)
   # SECURITY: The Provisioner uses Server-Side Apply (PATCH) against fixed resource names.
