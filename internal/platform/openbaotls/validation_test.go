@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"testing"
 	"time"
 
@@ -31,22 +32,35 @@ func TestValidateExternalServerSecret(t *testing.T) {
 	}
 
 	t.Run("valid", func(t *testing.T) {
-		caSecret, serverSecret := newExternalTLSValidationSecrets(t, "openbao-cluster-example.local")
+		caSecret, serverSecret := newExternalTLSValidationSecrets(t, []string{"openbao-cluster-example.local"}, nil)
 		if err := ValidateExternalServerSecret(cluster, caSecret, serverSecret); err != nil {
 			t.Fatalf("ValidateExternalServerSecret() error = %v", err)
 		}
 	})
 
 	t.Run("missing required dns san", func(t *testing.T) {
-		caSecret, serverSecret := newExternalTLSValidationSecrets(t, "wrong-name.local")
+		caSecret, serverSecret := newExternalTLSValidationSecrets(t, []string{"wrong-name.local"}, nil)
 		err := ValidateExternalServerSecret(cluster, caSecret, serverSecret)
 		if err == nil || err.Error() == "" {
 			t.Fatal("expected SAN validation error")
 		}
 	})
+
+	t.Run("IP extra SAN is required only as an IP SAN", func(t *testing.T) {
+		cluster := cluster.DeepCopy()
+		cluster.Spec.TLS.ExtraSANs = []string{" 192.0.2.10 "}
+		caSecret, serverSecret := newExternalTLSValidationSecrets(
+			t,
+			[]string{"openbao-cluster-example.local"},
+			[]net.IP{net.ParseIP("192.0.2.10")},
+		)
+		if err := ValidateExternalServerSecret(cluster, caSecret, serverSecret); err != nil {
+			t.Fatalf("ValidateExternalServerSecret() error = %v", err)
+		}
+	})
 }
 
-func newExternalTLSValidationSecrets(t *testing.T, dnsName string) (*corev1.Secret, *corev1.Secret) {
+func newExternalTLSValidationSecrets(t *testing.T, dnsNames []string, ipAddresses []net.IP) (*corev1.Secret, *corev1.Secret) {
 	t.Helper()
 
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -84,7 +98,8 @@ func newExternalTLSValidationSecrets(t *testing.T, dnsName string) (*corev1.Secr
 		NotAfter:    now.Add(24 * time.Hour),
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		DNSNames:    []string{dnsName},
+		DNSNames:    dnsNames,
+		IPAddresses: ipAddresses,
 	}
 	serverDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caTemplate, &serverKey.PublicKey, caKey)
 	if err != nil {

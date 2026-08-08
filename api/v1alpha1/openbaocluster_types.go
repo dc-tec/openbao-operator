@@ -71,7 +71,7 @@ const (
 	ConditionAuditFileStorageReady ConditionType = "AuditFileStorageReady"
 	// ConditionGatewayIntegrationReady indicates whether the operator can verify
 	// the referenced Gateway and GatewayClass integration contract for the chosen
-	// Gateway API mode.
+	// Gateway API mode, including attachment of the operator-managed Route.
 	ConditionGatewayIntegrationReady ConditionType = "GatewayIntegrationReady"
 	// ConditionIngressIntegrationReady indicates whether the operator can verify
 	// the managed Ingress integration contract for the chosen ingress mode.

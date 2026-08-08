@@ -21,7 +21,7 @@ type GatewayIntegrationResult struct {
 }
 
 // EvaluateGatewayIntegration validates the operator-managed Gateway API
-// prerequisites and controller support for the selected Gateway mode.
+// prerequisites, controller support, and Route attachment for the selected mode.
 func EvaluateGatewayIntegration(
 	ctx context.Context,
 	deps StatusIntegrationDependencies,
@@ -41,7 +41,7 @@ func EvaluateGatewayIntegration(
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionTrue,
 			Reason:  constants.ReasonGatewayIntegrationReady,
-			Message: "Gateway integration prerequisites are satisfied",
+			Message: "Gateway integration prerequisites and Route attachment are ready",
 		}
 	case errors.Is(err, networkingmanager.ErrGatewayAPIMissing):
 		return GatewayIntegrationResult{
@@ -91,6 +91,18 @@ func EvaluateGatewayIntegration(
 			Reason:  constants.ReasonGatewayNotProgrammed,
 			Message: err.Error(),
 		}
+	case errors.Is(err, networkingmanager.ErrGatewayRouteNotAccepted):
+		return GatewayIntegrationResult{
+			Status:  metav1.ConditionFalse,
+			Reason:  constants.ReasonGatewayRouteNotAccepted,
+			Message: err.Error(),
+		}
+	case errors.Is(err, networkingmanager.ErrGatewayRouteReferencesUnresolved):
+		return GatewayIntegrationResult{
+			Status:  metav1.ConditionFalse,
+			Reason:  constants.ReasonGatewayRouteReferencesUnresolved,
+			Message: err.Error(),
+		}
 	case errors.Is(err, networkingmanager.ErrGatewayClassPending):
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionUnknown,
@@ -107,6 +119,12 @@ func EvaluateGatewayIntegration(
 		return GatewayIntegrationResult{
 			Status:  metav1.ConditionUnknown,
 			Reason:  constants.ReasonGatewayProgrammingPending,
+			Message: err.Error(),
+		}
+	case errors.Is(err, networkingmanager.ErrGatewayRoutePending):
+		return GatewayIntegrationResult{
+			Status:  metav1.ConditionUnknown,
+			Reason:  constants.ReasonGatewayRoutePending,
 			Message: err.Error(),
 		}
 	default:

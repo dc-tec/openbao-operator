@@ -96,8 +96,10 @@ type TLSConfig struct {
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	RotationPeriod string `json:"rotationPeriod,omitempty"`
-	// ExtraSANs lists additional subject alternative names to include in server certificates.
-	// Only used when Mode is OperatorManaged.
+	// ExtraSANs lists additional subject alternative names for server certificates.
+	// In OperatorManaged mode, the operator includes these names when issuing the certificate.
+	// In External mode, the operator requires the supplied certificate to contain them.
+	// Values that parse as IP addresses are treated as IP SANs; all other values are DNS SANs.
 	// +optional
 	ExtraSANs []string `json:"extraSANs,omitempty"`
 }
@@ -327,8 +329,9 @@ type BackendTLSConfig struct {
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 	// Hostname is the hostname to verify in the backend certificate.
-	// If not specified, defaults to the Service DNS name: <service-name>.<namespace>.svc
-	// This should match the certificate SAN or the service DNS name.
+	// If not specified, defaults to the stable TLS server name used by operator-managed
+	// clients (for example, openbao-cluster-<cluster-name>.local).
+	// This must match a DNS SAN in the backend certificate.
 	// +optional
 	Hostname string `json:"hostname,omitempty"`
 }

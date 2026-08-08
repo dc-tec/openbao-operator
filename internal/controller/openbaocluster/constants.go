@@ -60,6 +60,9 @@ const (
 	ReasonGatewayNotProgrammed                   = constants.ReasonGatewayNotProgrammed
 	ReasonGatewayProgrammingPending              = constants.ReasonGatewayProgrammingPending
 	ReasonGatewayListenerIncompatible            = constants.ReasonGatewayListenerIncompatible
+	ReasonGatewayRoutePending                    = constants.ReasonGatewayRoutePending
+	ReasonGatewayRouteNotAccepted                = constants.ReasonGatewayRouteNotAccepted
+	ReasonGatewayRouteReferencesUnresolved       = constants.ReasonGatewayRouteReferencesUnresolved
 	ReasonIngressClassMissing                    = constants.ReasonIngressClassMissing
 	ReasonIngressCapabilitiesUnknown             = constants.ReasonIngressCapabilitiesUnknown
 	ReasonIngressObjectPending                   = constants.ReasonIngressObjectPending

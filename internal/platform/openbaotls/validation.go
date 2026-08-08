@@ -136,8 +136,11 @@ func requiredExternalTLSSubjectAltNames(cluster *openbaov1alpha1.OpenBaoCluster)
 		addDNS(cluster.Spec.Gateway.Hostname)
 	}
 	for _, san := range cluster.Spec.TLS.ExtraSANs {
+		if net.ParseIP(strings.TrimSpace(san)) != nil {
+			addIP(san)
+			continue
+		}
 		addDNS(san)
-		addIP(san)
 	}
 
 	return dnsNames, ips
