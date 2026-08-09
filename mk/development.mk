@@ -3,24 +3,8 @@
 .PHONY: bootstrap
 bootstrap: controller-gen kustomize crd-ref-docs setup-envtest golangci-lint actionlint ginkgo govulncheck govulncheck-ignore go-licenses gotestsum semgrep ast-grep ## Install tools required by the core contributor workflow.
 	@echo "Bootstrap complete."
-	@echo "Devenv configures Git hooks automatically; otherwise run 'make git-hooks-install'."
+	@echo "Devenv configures Git hooks automatically."
 	@echo "Run 'make doctor' to validate external prerequisites."
-
-.PHONY: git-hooks-install
-git-hooks-install: ## Configure the repo-local Git hooks path.
-	@chmod +x .githooks/pre-commit .githooks/pre-push hack/dev/pre-commit.sh hack/dev/pre-push.sh
-	@git config --local core.hooksPath .githooks
-	@echo "Configured repo-local Git hooks: .githooks (pre-commit, pre-push)"
-
-.PHONY: git-hooks-uninstall
-git-hooks-uninstall: ## Remove the repo-local Git hooks path.
-	@current="$$(git config --local --get core.hooksPath || true)"; \
-	if [ "$$current" = ".githooks" ]; then \
-		git config --local --unset core.hooksPath; \
-		echo "Removed repo-local Git hooks configuration."; \
-	else \
-		echo "Repo-local Git hooks were not configured."; \
-	fi
 
 .PHONY: doctor
 doctor: ## Validate local prerequisites for the main contributor workflow.
@@ -139,7 +123,7 @@ verify-tidy: ## Verify go.mod/go.sum are tidy (does not modify tracked files).
 	}
 
 .PHONY: verify-go-toolchain-sync
-verify-go-toolchain-sync: ## Verify go.mod, Dockerfile builders, and the devcontainer use the same Go version.
+verify-go-toolchain-sync: ## Verify go.mod and Dockerfile builders use the same Go version.
 	@bash hack/ci/verify-go-toolchain-sync.sh
 
 .PHONY: verify-release-automation

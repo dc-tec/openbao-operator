@@ -21,6 +21,7 @@ go.work
 .DS_Store
 .devenv/
 .direnv/
+.pre-commit-config.yaml
 .gocache
 devenv.local.nix
 devenv.local.yaml
