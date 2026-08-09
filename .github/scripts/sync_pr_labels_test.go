@@ -210,8 +210,8 @@ func TestLabelerConfigMatchesCIRoutingLabels(t *testing.T) {
 			wantLabels: []string{"devops", "documentation"},
 		},
 		{
-			name:       "github tool dependencies route dependency and devops labels",
-			path:       ".github/tools/pnpm-lock.yaml",
+			name:       "repo tool dependencies route dependency and devops labels",
+			path:       "hack/dev/install-ast-grep.sh",
 			wantLabels: []string{"dependencies", "devops"},
 		},
 	}

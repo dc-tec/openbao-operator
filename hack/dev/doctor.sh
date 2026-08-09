@@ -37,9 +37,7 @@ printf 'Repository: %s\n\n' "${ROOT_DIR}"
 expected_go="$(sed -n 's/^go //p' go.mod | head -n 1)"
 expected_actionlint="$(sed -n 's/^ACTIONLINT_VERSION ?= v\{0,1\}//p' mk/dependencies.mk | head -n 1)"
 expected_semgrep="$(sed -n 's/^SEMGREP_VERSION ?= //p' mk/dependencies.mk | head -n 1)"
-expected_node="$(tr -d '[:space:]' < .node-version)"
-expected_node_major="${expected_node%%.*}"
-expected_pnpm="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' .github/tools/package.json | head -n 1)"
+expected_ast_grep="$(sed -n 's/^AST_GREP_VERSION ?= //p' mk/dependencies.mk | head -n 1)"
 expected_hugo="$(tr -d '[:space:]' < .hugo-version)"
 if command -v go >/dev/null 2>&1; then
   current_go="$(go env GOVERSION 2>/dev/null || true)"
@@ -50,30 +48,6 @@ if command -v go >/dev/null 2>&1; then
   fi
 else
   err "Go toolchain missing (install Go ${expected_go})"
-fi
-
-if command -v node >/dev/null 2>&1; then
-  current_node="$(node --version 2>/dev/null || true)"
-  current_node_major="${current_node#v}"
-  current_node_major="${current_node_major%%.*}"
-  if [ "${current_node_major}" = "${expected_node_major}" ]; then
-    ok "Node.js major version matches .node-version (${current_node})"
-  else
-    err "Node.js major version mismatch: expected ${expected_node_major}.x, found ${current_node:-unknown}"
-  fi
-else
-  err "Node.js missing (install Node.js ${expected_node})"
-fi
-
-if command -v pnpm >/dev/null 2>&1; then
-  current_pnpm="$(pnpm --version 2>/dev/null || true)"
-  if [ "${current_pnpm}" = "${expected_pnpm}" ]; then
-    ok "pnpm version matches packageManager (${current_pnpm})"
-  else
-    err "pnpm version mismatch: expected ${expected_pnpm}, found ${current_pnpm:-unknown}"
-  fi
-else
-  err "pnpm missing (enable Corepack for pnpm ${expected_pnpm})"
 fi
 
 if command -v hugo >/dev/null 2>&1; then
@@ -88,6 +62,7 @@ else
 fi
 
 check_cmd git "git" "required for repository workflows"
+check_cmd curl "curl" "required to install pinned release tools"
 check_cmd docker "docker" "required for image builds and config compatibility checks"
 check_cmd kubectl "kubectl" "required for install/deploy workflows"
 check_cmd helm "helm" "required for verify-helm and helm-test"
@@ -106,8 +81,13 @@ else
   warn "tilt missing (optional for the local Kubernetes dev loop)"
 fi
 
-if [ -x "${ROOT_DIR}/.github/tools/node_modules/.bin/ast-grep" ]; then
-  ok "ast-grep bootstrapped locally"
+if [ -x "${ROOT_DIR}/bin/ast-grep" ]; then
+  current_ast_grep="$("${ROOT_DIR}/bin/ast-grep" --version 2>/dev/null || true)"
+  if [ "${current_ast_grep}" = "ast-grep ${expected_ast_grep}" ]; then
+    ok "ast-grep bootstrapped locally (${current_ast_grep})"
+  else
+    warn "ast-grep version mismatch: expected ${expected_ast_grep}, found ${current_ast_grep:-unknown} (run 'make ast-grep')"
+  fi
 else
   warn "ast-grep not bootstrapped locally yet (run 'make bootstrap' or 'make ast-grep')"
 fi

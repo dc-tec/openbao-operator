@@ -1,12 +1,7 @@
 ##@ Development
 
 .PHONY: bootstrap
-bootstrap: controller-gen kustomize crd-ref-docs envtest setup-envtest golangci-lint actionlint ginkgo govulncheck govulncheck-ignore go-licenses gomu gotestsum dlv air benchstat semgrep ## Install repo-managed tools and local development dependencies.
-	@if command -v "$(PNPM)" >/dev/null 2>&1; then \
-		$(MAKE) ast-grep; \
-	else \
-		echo "Skipping ast-grep bootstrap because pnpm is not available."; \
-	fi
+bootstrap: controller-gen kustomize crd-ref-docs setup-envtest golangci-lint actionlint ginkgo govulncheck govulncheck-ignore go-licenses gotestsum semgrep ast-grep ## Install tools required by the core contributor workflow.
 	@$(MAKE) git-hooks-install
 	@echo "Bootstrap complete."
 	@echo "Run 'make doctor' to validate external prerequisites."
@@ -66,7 +61,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt" paths="./api/..."
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -980,7 +975,6 @@ security-scan-fs: ## Run the Trivy filesystem scan used by CI.
 		--skip-files dist/install.yaml \
 		--skip-dirs test/manifests \
 		--skip-dirs vendor \
-		--skip-dirs .github/tools/node_modules \
 		--skip-dirs bin \
 		.
 

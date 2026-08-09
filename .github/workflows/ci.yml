@@ -158,7 +158,7 @@ jobs:
             echo "workflow=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(devenv\.(nix|yaml|lock)$|\.node-version$|\.hugo-version$|go\.mod$|\.github/tools/(package\.json|pnpm-lock\.yaml)$|hack/dev/verify-devenv\.sh$|Makefile|mk/)'; then
+          if changed_matches '^(devenv\.(nix|yaml|lock)$|\.hugo-version$|go\.mod$|hack/dev/(install-ast-grep|verify-devenv)\.sh$|Makefile|mk/)'; then
             echo "toolchain=true" >> "${GITHUB_OUTPUT}"
           else
             echo "toolchain=false" >> "${GITHUB_OUTPUT}"
@@ -170,7 +170,7 @@ jobs:
             echo "docs=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|api/|config/|test/|website/generated/api-reference\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|tools/|helm(chart|values)/|boilerplate\.go\.txt)|\.golangci\.yml|\.github/tools/)'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|test/|website/generated/api-reference\.md|go\.(mod|sum)$|vendor/|Makefile|mk/|hack/(ci/|dev/install-ast-grep\.sh|tools/|helm(chart|values)/|boilerplate\.go\.txt)|\.golangci\.yml)'; then
             echo "go_quality=true" >> "${GITHUB_OUTPUT}"
           else
             echo "go_quality=false" >> "${GITHUB_OUTPUT}"
@@ -284,7 +284,7 @@ jobs:
           exit-code: "1"
           trivyignores: .trivyignore
           skip-files: config/rbac/provisioner_minimal_role.yaml,charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml,config/rbac/single_tenant_clusterrole.yaml,config/overlays/single-tenant/single_tenant_clusterrole.yaml,config/overlays/single-tenant-custom-identity/single_tenant_clusterrole.yaml,dist/install.yaml
-          skip-dirs: test/manifests,vendor,.github/tools/node_modules,bin
+          skip-dirs: test/manifests,vendor,bin
           trivy-config: .trivy.yaml
 
   dependency-licenses:
@@ -402,25 +402,6 @@ jobs:
 
       - name: Setup repo tools
         uses: ./.github/actions/setup-repo-tools
-
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node-pnpm
-        with:
-          node-version: "22"
-          cache-dependency-path: .github/tools/pnpm-lock.yaml
-
-      - name: Install ast-grep
-        run: pnpm --dir .github/tools install --frozen-lockfile
-
-      - name: Add local Node.js tools to PATH
-        run: echo "${GITHUB_WORKSPACE}/.github/tools/node_modules/.bin" >> "${GITHUB_PATH}"
-
-      - name: Verify ast-grep version
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="$(ast-grep --version)"
-          echo "${version}"
 
       - name: Run linter
         run: make lint-ci

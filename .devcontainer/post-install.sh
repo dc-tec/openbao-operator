@@ -9,8 +9,6 @@ KUBECTL_VERSION="${KUBECTL_VERSION:-v1.35.1}"
 HELM_VERSION="${HELM_VERSION:-v3.17.4}"
 TRIVY_VERSION="${TRIVY_VERSION:-v0.69.3}"
 TILT_VERSION="${TILT_VERSION:-v0.37.0}"
-NODE_VERSION="${NODE_VERSION:-v$(tr -d '[:space:]' < "${ROOT_DIR}/.node-version")}"
-PNPM_VERSION="${PNPM_VERSION:-$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "${ROOT_DIR}/.github/tools/package.json" | head -n 1)}"
 HUGO_VERSION="$(tr -d '[:space:]' < "${ROOT_DIR}/.hugo-version")"
 
 go_arch="$(go env GOARCH)"
@@ -20,14 +18,12 @@ case "${go_arch}" in
     helm_arch="amd64"
     trivy_arch="64bit"
     tilt_arch="x86_64"
-    node_arch="x64"
     ;;
   arm64)
     linux_arch="arm64"
     helm_arch="arm64"
     trivy_arch="ARM64"
     tilt_arch="arm64"
-    node_arch="arm64"
     ;;
   *)
     echo "unsupported architecture: ${go_arch}" >&2
@@ -42,42 +38,11 @@ install_binary() {
   install -m 0755 "${source_path}" "${INSTALL_DIR}/${target_name}"
 }
 
-install_symlink() {
-  local source_path="$1"
-  local target_name="$2"
-
-  ln -sf "${source_path}" "${INSTALL_DIR}/${target_name}"
-}
-
 download_to_file() {
   local url="$1"
   local output_path="$2"
 
   curl -fsSL "${url}" -o "${output_path}"
-}
-
-install_from_url() {
-  local url="$1"
-  local target_name="$2"
-  local tmp
-
-  tmp="$(mktemp)"
-  download_to_file "${url}" "${tmp}"
-  install_binary "${tmp}" "${target_name}"
-  rm -f "${tmp}"
-}
-
-install_from_tarball() {
-  local url="$1"
-  local archive_path="$2"
-  local target_name="$3"
-  local tmp_dir
-
-  tmp_dir="$(mktemp -d)"
-  download_to_file "${url}" "${tmp_dir}/archive.tgz"
-  tar -xzf "${tmp_dir}/archive.tgz" -C "${tmp_dir}"
-  install_binary "${tmp_dir}/${archive_path}" "${target_name}"
-  rm -rf "${tmp_dir}"
 }
 
 verify_sha256_from_checksums() {
@@ -132,53 +97,7 @@ ensure_apt_packages() {
     python3 \
     python3-pip \
     python3-venv \
-    tar \
-    unzip \
-    xz-utils
-}
-
-ensure_nodejs() {
-  if command -v node >/dev/null 2>&1; then
-    local current_version
-    current_version="$(node -p 'process.versions.node')"
-    if [ "${current_version}" = "${NODE_VERSION#v}" ]; then
-      return
-    fi
-  fi
-
-  local asset_name="node-${NODE_VERSION}-linux-${node_arch}.tar.xz"
-  local checksums_name="SHASUMS256.txt"
-  local base_url="https://nodejs.org/download/release/${NODE_VERSION}"
-  local install_root="/usr/local/lib/node-${NODE_VERSION}"
-  local tmp_dir
-
-  tmp_dir="$(mktemp -d)"
-  download_to_file "${base_url}/${asset_name}" "${tmp_dir}/${asset_name}"
-  download_to_file "${base_url}/${checksums_name}" "${tmp_dir}/${checksums_name}"
-  verify_sha256_from_checksums "${tmp_dir}/${checksums_name}" "${asset_name}" "${tmp_dir}/${asset_name}"
-  rm -rf "${install_root}"
-  install -d /usr/local/lib
-  tar -xJf "${tmp_dir}/${asset_name}" -C /usr/local/lib
-  mv "/usr/local/lib/node-${NODE_VERSION}-linux-${node_arch}" "${install_root}"
-  install_symlink "${install_root}/bin/node" "node"
-  install_symlink "${install_root}/bin/npm" "npm"
-  install_symlink "${install_root}/bin/npx" "npx"
-  install_symlink "${install_root}/bin/corepack" "corepack"
-  rm -rf "${tmp_dir}"
-}
-
-ensure_pnpm() {
-  if command -v pnpm >/dev/null 2>&1 && [ "$(pnpm --version 2>/dev/null)" = "${PNPM_VERSION}" ]; then
-    return
-  fi
-
-  if ! command -v corepack >/dev/null 2>&1; then
-    echo "corepack is required to install pnpm ${PNPM_VERSION}" >&2
-    exit 1
-  fi
-
-  corepack prepare "pnpm@${PNPM_VERSION}" --activate
-  corepack enable pnpm --install-directory "${INSTALL_DIR}"
+    tar
 }
 
 ensure_hugo() {
@@ -297,8 +216,6 @@ print_versions() {
   go version
   docker --version
   python3 --version
-  node --version
-  pnpm --version
   hugo version
   kind version
   kubectl version --client
@@ -308,8 +225,6 @@ print_versions() {
 }
 
 ensure_apt_packages
-ensure_nodejs
-ensure_pnpm
 ensure_hugo
 ensure_kind
 ensure_kubectl

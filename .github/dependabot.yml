@@ -48,20 +48,3 @@ updates:
       docker-images:
         patterns:
           - "*"
-
-  # Dependabot uses the npm ecosystem value for pnpm manifests and lockfiles.
-  - package-ecosystem: npm
-    directory: "/.github/tools"
-    schedule:
-      interval: weekly
-      day: thursday
-      time: "03:00"
-      timezone: Europe/Amsterdam
-    cooldown:
-      default-days: 7
-    labels:
-      - dependencies
-    groups:
-      pnpm-tools:
-        patterns:
-          - "*"

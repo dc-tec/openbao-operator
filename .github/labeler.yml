@@ -76,8 +76,8 @@ dependencies:
           - 'vendor/**/*'
           - 'Dockerfile*'
           - '.github/dependabot.yml'
-          - '.github/tools/package.json'
-          - '.github/tools/pnpm-lock.yaml'
+          - 'mk/dependencies.mk'
+          - 'hack/dev/install-ast-grep.sh'
 
 # API / CRD changes
 api:
@@ -199,8 +199,6 @@ devops:
           - '.github/pull_request_template.md'
           - '.github/labeler.yml'
           - '.github/size-labeler.yml'
-          - '.github/tools/package.json'
-          - '.github/tools/pnpm-lock.yaml'
           - 'Makefile'
           - 'mk/**/*'
           - '**/Makefile'
