@@ -46,6 +46,7 @@ runs:
 
         install_dir="${INSTALL_DIR_INPUT/#\~/$HOME}"
         install -d "${install_dir}"
+        install_dir="$(realpath "${install_dir}")"
         arch="$(go env GOARCH)"
 
         if [[ ! -x "${install_dir}/kind" ]] || ! "${install_dir}/kind" version 2>/dev/null | grep -q "${KIND_VERSION}"; then
