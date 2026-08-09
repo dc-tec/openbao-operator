@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   pkgs,
   ...
@@ -71,7 +72,8 @@ in
   ];
 
   env = {
-    GOROOT = "${goPackage}/share/go";
+    # Match the Go language module's normalized value when the editor profile is active.
+    GOROOT = "${goPackage}/share/go/";
     GOTOOLCHAIN = "local";
   };
 
@@ -90,13 +92,48 @@ in
   '';
 
   tasks = {
+    "operator:git-hooks" = {
+      description = "Configure the repository-local Git hooks path";
+      exec = "make git-hooks-install";
+      status = ''
+        hooks_path="$(git config --local --get core.hooksPath 2>/dev/null || true)"
+        test "$hooks_path" = ".githooks" \
+          && test -x .githooks/pre-commit \
+          && test -x .githooks/pre-push \
+          && test -x hack/dev/pre-commit.sh \
+          && test -x hack/dev/pre-push.sh
+      '';
+      cwd = config.git.root;
+      before = [ "devenv:enterShell" ];
+    };
+
     "operator:verify-toolchain" = {
+      description = "Verify the pinned service-independent toolchain contract";
       exec = "make verify-devenv";
+      cwd = config.git.root;
+      after = [ "operator:git-hooks" ];
       before = [ "devenv:enterTest" ];
     };
 
-    "operator:setup".exec = "make bootstrap";
-    "operator:doctor".exec = "make doctor";
-    "operator:ci-core".exec = "make ci-core";
+    "operator:bootstrap" = {
+      description = "Install repository-managed tools required by the core contributor workflow";
+      exec = "make bootstrap";
+      cwd = config.git.root;
+      after = [ "operator:git-hooks" ];
+    };
+
+    "operator:doctor" = {
+      description = "Check external runtime prerequisites such as Docker and Kubernetes access";
+      exec = "make doctor";
+      cwd = config.git.root;
+      after = [ "operator:git-hooks" ];
+    };
+
+    "operator:ci-core" = {
+      description = "Run the cluster-independent pull-request-equivalent gate";
+      exec = "make ci-core";
+      cwd = config.git.root;
+      after = [ "operator:git-hooks" ];
+    };
   };
 }

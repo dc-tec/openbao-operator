@@ -28,5 +28,5 @@
   },
 
   "onCreateCommand": "bash .devcontainer/post-install.sh",
-  "postCreateCommand": "bash -lc 'make bootstrap && make doctor'"
+  "postCreateCommand": "bash -lc 'make bootstrap && make git-hooks-install && make doctor'"
 }

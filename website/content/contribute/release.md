@@ -44,10 +44,11 @@ For a patch, make the conventional commit or squash title describe the user-visi
 to generate the changelog.
 
 {{< command label="verify" title="Check release automation locally" >}}
-make bootstrap
-make doctor
-make ci-core
-make verify-workflows
+devenv test
+devenv tasks run operator:bootstrap
+devenv tasks run operator:doctor
+devenv tasks run operator:ci-core
+devenv shell -- make verify-workflows
 {{< /command >}}
 
 Also confirm that compatibility guidance, generated API surfaces, and release notes match the candidate. Review current

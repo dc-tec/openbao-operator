@@ -22,9 +22,10 @@ Start at the lowest-cost layer that can prove the contract. Move upward when the
 The controller-runtime fake client is not a replacement for the API server. Use EnvTest when the test depends on validation, defaulting, subresources, watches, cache wiring, `Generation`, or `ResourceVersion`.
 
 {{< command label="verify" title="Run the baseline before review" >}}
-make bootstrap
-make doctor
-make ci-core
+devenv test
+devenv tasks run operator:bootstrap
+devenv tasks run operator:doctor
+devenv tasks run operator:ci-core
 {{< /command >}}
 
 ## Run specialized lanes

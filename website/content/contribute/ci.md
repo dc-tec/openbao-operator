@@ -18,24 +18,22 @@ Pull-request CI routes checks by changed path and risk. Nightly and release work
 
 {{< command label="verify" title="Run the local pull-request baseline" >}}
 devenv test
-devenv shell
-
-# Run these commands inside the shell.
-make bootstrap
-make doctor
-make ci-core
+devenv tasks run operator:bootstrap
+devenv tasks run operator:doctor
+devenv tasks run operator:ci-core
 {{< /command >}}
 
-The advisory `Devenv Contract` job runs on toolchain changes and pushes to `main`. It proves that the pinned base shell
-can be constructed on the CI runner and that its version contract passes. The job pulls from the public project and
-Devenv caches. It publishes newly built paths to the project cache only from pushes to `main` when the repository has
-a per-cache `CACHIX_AUTH_TOKEN`; pull requests are always read-only. The existing required jobs remain the merge
-authority while the project migrates their setup steps incrementally.
+The advisory `Devenv Contract` job runs on toolchain changes and pushes to `main`. It proves that the pinned base and
+editor-profile shells can be constructed on the CI runner and that their version contracts pass. Base and editor
+duration and closure measurements remain separate. The job pulls from the public project and Devenv caches. It
+publishes newly built paths to the project cache only from pushes to `main` when the repository has a per-cache
+`CACHIX_AUTH_TOKEN`; pull requests are always read-only. The existing required jobs remain the merge authority while
+the project migrates their setup steps incrementally.
 
 | CI concern | Local entry point |
 | --- | --- |
 | Pinned environment contract | `devenv test` |
-| Core quality gates | `make ci-core` |
+| Core quality gates | `devenv tasks run operator:ci-core` |
 | Hugo documentation and redirects | `make docs-build` |
 | Vendored dependencies and licenses | `make verify-vendor`, `make license-check` |
 | Static and filesystem security | `make semgrep-ci`, `make security-ci` |

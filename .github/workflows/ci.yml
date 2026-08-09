@@ -391,19 +391,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          started_at="${SECONDS}"
+          base_started_at="${SECONDS}"
           devenv test
-          elapsed_seconds="$((SECONDS - started_at))"
-          profile_path="$(realpath .devenv/profile)"
-          closure_size="$(nix path-info -Sh "${profile_path}" | awk '{print $2, $3}')"
+          base_elapsed_seconds="$((SECONDS - base_started_at))"
+          base_profile_path="$(devenv shell --quiet -- printenv DEVENV_PROFILE)"
+          base_closure_size="$(nix path-info -Sh "${base_profile_path}" | awk '{print $2, $3}')"
+
+          editor_started_at="${SECONDS}"
+          devenv --profile editor test
+          editor_elapsed_seconds="$((SECONDS - editor_started_at))"
+          editor_profile_path="$(devenv --profile editor shell --quiet -- printenv DEVENV_PROFILE)"
+          editor_closure_size="$(nix path-info -Sh "${editor_profile_path}" | awk '{print $2, $3}')"
 
           {
-            echo "### Devenv base shell"
+            echo "### Devenv shell contracts"
             echo
-            echo "| Measurement | Result |"
-            echo "| --- | ---: |"
-            echo "| Contract duration | ${elapsed_seconds}s |"
-            echo "| Runtime closure | ${closure_size} |"
+            echo "| Profile | Contract duration | Runtime closure |"
+            echo "| --- | ---: | ---: |"
+            echo "| Base | ${base_elapsed_seconds}s | ${base_closure_size} |"
+            echo "| Editor | ${editor_elapsed_seconds}s | ${editor_closure_size} |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
   lint:

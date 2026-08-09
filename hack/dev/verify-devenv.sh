@@ -43,6 +43,17 @@ if [[ "${devenv_root}" != "${ROOT_DIR}" ]]; then
   fail "DEVENV_ROOT points to ${devenv_root}, expected ${ROOT_DIR}"
 fi
 
+hooks_path="$(git config --local --get core.hooksPath 2>/dev/null || true)"
+if [[ "${hooks_path}" != ".githooks" ]]; then
+  fail "Devenv must configure core.hooksPath=.githooks, found ${hooks_path:-unset}"
+fi
+for hook in .githooks/pre-commit .githooks/pre-push hack/dev/pre-commit.sh hack/dev/pre-push.sh; do
+  if [[ ! -x "${hook}" ]]; then
+    fail "Devenv-managed Git hook is not executable: ${hook}"
+  fi
+done
+ok "repository-local Git hooks are configured"
+
 if [[ -z "${DEVENV_PROFILE:-}" ]]; then
   fail "DEVENV_PROFILE is not set inside devenv"
 fi
@@ -55,10 +66,11 @@ if [[ "${GOTOOLCHAIN:-}" != "local" ]]; then
   fail "GOTOOLCHAIN must be local inside devenv, found ${GOTOOLCHAIN:-unset}"
 fi
 
-if [[ "${GOROOT:-}" != /nix/store/*/share/go ]]; then
+goroot_path="${GOROOT%/}"
+if [[ "${goroot_path}" != /nix/store/*/share/go ]]; then
   fail "GOROOT must point to the pinned Nix Go package, found ${GOROOT:-unset}"
 fi
-ok "GOROOT points to the pinned Nix Go package (${GOROOT})"
+ok "GOROOT points to the pinned Nix Go package (${goroot_path})"
 
 if [[ -z "${GOPATH:-}" ]]; then
   fail "GOPATH is not set inside devenv"
