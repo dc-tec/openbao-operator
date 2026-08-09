@@ -43,9 +43,22 @@ if [[ "${devenv_root}" != "${ROOT_DIR}" ]]; then
   fail "DEVENV_ROOT points to ${devenv_root}, expected ${ROOT_DIR}"
 fi
 
+if [[ -z "${DEVENV_PROFILE:-}" ]]; then
+  fail "DEVENV_PROFILE is not set inside devenv"
+fi
+if [[ "${PATH%%:*}" != "${DEVENV_PROFILE}/bin" ]]; then
+  fail "the active devenv profile must take precedence in PATH"
+fi
+ok "active devenv profile takes precedence in PATH"
+
 if [[ "${GOTOOLCHAIN:-}" != "local" ]]; then
   fail "GOTOOLCHAIN must be local inside devenv, found ${GOTOOLCHAIN:-unset}"
 fi
+
+if [[ "${GOROOT:-}" != /nix/store/*/share/go ]]; then
+  fail "GOROOT must point to the pinned Nix Go package, found ${GOROOT:-unset}"
+fi
+ok "GOROOT points to the pinned Nix Go package (${GOROOT})"
 
 if [[ -z "${GOPATH:-}" ]]; then
   fail "GOPATH is not set inside devenv"

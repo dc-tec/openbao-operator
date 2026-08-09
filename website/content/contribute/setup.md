@@ -47,6 +47,13 @@ required by the core contributor workflow plus local Git hooks. Specialized targ
 live-reload, mutation, or benchmark tools only when invoked. Treat the hook bypass variables as deliberate one-off
 exceptions, not a normal workflow.
 
+The default shell keeps the runtime and CI toolchain small. Activate the optional editor profile when an editor needs
+Gopls, Delve, or the additional Go editor helpers supplied by Devenv:
+
+{{< command label="develop" title="Enter the shell with Go editor tooling" >}}
+devenv --profile editor shell
+{{< /command >}}
+
 ## Choose a development loop
 
 | Loop | Use it for | Commands |

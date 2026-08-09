@@ -42,16 +42,11 @@ let
     else
       throw "${name} version mismatch: expected ${expected}, nixpkgs provides ${lib.getVersion package}";
 
+  goPackage = exactPackage "Go" goVersion pkgs.go;
+
 in
 {
   name = "openbao-operator";
-
-  languages.go = {
-    enable = true;
-    version = goVersion;
-    delve.enable = false;
-    lsp.enable = false;
-  };
 
   packages = [
     pkgs.bash
@@ -63,6 +58,7 @@ in
     pkgs.git
     pkgs.gnugrep
     pkgs.gnused
+    goPackage
     pkgs.jq
     (exactPackage "Kind" (toolVersion "KIND_VERSION") pkgs.kind)
     (exactPackage "kubectl" (toolVersion "KUBECTL_VERSION") pkgs.kubectl)
@@ -74,9 +70,23 @@ in
     (exactPackage "Hugo" hugoVersion pkgs.hugo)
   ];
 
+  env = {
+    GOROOT = "${goPackage}/share/go";
+    GOTOOLCHAIN = "local";
+  };
+
+  profiles.editor.module = {
+    languages.go = {
+      enable = true;
+      package = goPackage;
+      delve.enable = true;
+      lsp.enable = true;
+    };
+  };
+
   enterShell = ''
     export GOPATH="''${XDG_CACHE_HOME:-$HOME/.cache}/openbao-operator/go"
-    export PATH="$DEVENV_ROOT/bin:$GOPATH/bin:$PATH"
+    export PATH="$DEVENV_PROFILE/bin:$DEVENV_ROOT/bin:$GOPATH/bin:$PATH"
   '';
 
   tasks = {
