@@ -20,6 +20,7 @@ VERIFY_ONLY="${OPERATOR_UPGRADE_E2E_VERIFY_ONLY:-false}"
 KIND_BIN="${KIND:-kind}"
 KUBECTL_BIN="${KUBECTL:-kubectl}"
 HELM_BIN="${HELM:-helm}"
+HELM_INSTALL_BIN="${HELM_INSTALL:-${HELM_BIN}}"
 DOCKER_BIN="${DOCKER:-docker}"
 CLUSTER_NAME="${OPERATOR_UPGRADE_E2E_KIND_CLUSTER:-openbao-operator-upgrade-e2e}"
 KUBERNETES_VERSION="${OPERATOR_UPGRADE_E2E_KUBERNETES_VERSION:-}"
@@ -301,7 +302,7 @@ if [[ "${VERIFY_ONLY}" == "true" ]]; then
   exit 0
 fi
 
-for command_name in "${KIND_BIN}" "${KUBECTL_BIN}" "${HELM_BIN}" "${DOCKER_BIN}" jq python3; do
+for command_name in "${KIND_BIN}" "${KUBECTL_BIN}" "${HELM_INSTALL_BIN}" "${HELM_BIN}" "${DOCKER_BIN}" jq python3; do
   require_command "${command_name}"
 done
 
@@ -390,7 +391,8 @@ echo "Installing cert-manager..." >&2
   --timeout=5m >/dev/null
 
 echo "Installing released operator ${FROM_VERSION}..." >&2
-"${HELM_BIN}" install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
+echo "Install client: $("${HELM_INSTALL_BIN}" version --short)" >&2
+"${HELM_INSTALL_BIN}" install openbao-operator oci://ghcr.io/dc-tec/charts/openbao-operator \
   --version "${FROM_VERSION}" \
   --namespace "${OPERATOR_NAMESPACE}" \
   --create-namespace \
@@ -548,6 +550,7 @@ chart_path.write_text(contents, encoding="utf-8")
 PY
 
 echo "Upgrading the operator to candidate ${TARGET_VERSION}..." >&2
+echo "Upgrade client: $("${HELM_BIN}" version --short)" >&2
 "${HELM_BIN}" upgrade openbao-operator "${CANDIDATE_CHART}" \
   --namespace "${OPERATOR_NAMESPACE}" \
   --set-string image.repository=operator-upgrade.local/openbao-operator \

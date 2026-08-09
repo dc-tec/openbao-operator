@@ -4,6 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
+# shellcheck source=/dev/null
+source "${ROOT_DIR}/hack/dev/tool-versions.env"
+
 fail() {
   printf 'ERR  %s\n' "$1" >&2
   exit 1
@@ -67,19 +70,34 @@ fi
 ok "Hugo ${expected_hugo} matches .hugo-version"
 
 current_helm="$(helm version --short 2>/dev/null || true)"
-if [[ ! "${current_helm}" =~ ^v3\. ]]; then
-  fail "Helm 3 is required, found ${current_helm:-unknown}"
+if [[ "${current_helm}" != "${HELM_VERSION}" && "${current_helm}" != "${HELM_VERSION}"+* ]]; then
+  fail "Helm mismatch: expected ${HELM_VERSION}, found ${current_helm:-unknown}"
 fi
-ok "Helm 3 contract satisfied (${current_helm})"
+ok "Helm matches tool-versions.env (${current_helm})"
 
 current_kubectl="$(kubectl version --client --output=json 2>/dev/null | jq -r '.clientVersion.gitVersion // empty')"
-if [[ ! "${current_kubectl}" =~ ^v1\.([0-9]+)\. ]]; then
-  fail "unable to parse kubectl client version: ${current_kubectl:-unknown}"
+if [[ "${current_kubectl}" != "${KUBECTL_VERSION}" ]]; then
+  fail "kubectl mismatch: expected ${KUBECTL_VERSION}, found ${current_kubectl:-unknown}"
 fi
-if (( BASH_REMATCH[1] < 33 )); then
-  fail "kubectl 1.33 or newer is required, found ${current_kubectl}"
+ok "kubectl matches tool-versions.env (${current_kubectl})"
+
+current_kind="$(kind version 2>/dev/null || true)"
+if [[ "${current_kind}" != *"${KIND_VERSION}"* ]]; then
+  fail "Kind mismatch: expected ${KIND_VERSION}, found ${current_kind:-unknown}"
 fi
-ok "kubectl compatibility contract satisfied (${current_kubectl})"
+ok "Kind matches tool-versions.env (${current_kind})"
+
+current_trivy="$(trivy version 2>/dev/null | sed -n 's/^Version: //p' | head -n 1)"
+if [[ "v${current_trivy}" != "${TRIVY_VERSION}" ]]; then
+  fail "Trivy mismatch: expected ${TRIVY_VERSION}, found ${current_trivy:-unknown}"
+fi
+ok "Trivy matches tool-versions.env (v${current_trivy})"
+
+current_tilt="$(tilt version 2>/dev/null | sed -n 's/^v\([^,]*\).*/v\1/p' | head -n 1)"
+if [[ "${current_tilt}" != "${TILT_VERSION}" ]]; then
+  fail "Tilt mismatch: expected ${TILT_VERSION}, found ${current_tilt:-unknown}"
+fi
+ok "Tilt matches tool-versions.env (${current_tilt})"
 
 for command_name in \
   bash curl docker git go helm hugo jq kind kubectl make python3 tilt trivy; do

@@ -69,7 +69,7 @@ fmt: ## Run go fmt against code.
 
 .PHONY: verify-fmt
 verify-fmt: ## Verify all Go code is gofmt'd (does not modify files).
-	@unformatted="$$(find . -path ./vendor -prune -o -name '*.go' -print0 | xargs -0 gofmt -l)"; \
+	@unformatted="$$(find . \( -path ./.devenv -o -path ./vendor \) -prune -o -name '*.go' -print0 | xargs -0 gofmt -l)"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "The following files are not gofmt'd:"; \
 		echo "$$unformatted"; \
@@ -290,9 +290,9 @@ helm-test: helm-sync helm-lint ## Test the Helm chart without requiring a live c
 		--include-crds \
 		--set tenancy.mode=multi \
 		--set fullnameOverride=baoctl)"; \
-		echo "$$render" | grep -q "name: baoctl-provisioner"; \
-		echo "$$render" | grep -q "'baoctl-provisioner'"; \
-		if echo "$$render" | grep -q "'openbao-operator-provisioner'"; then \
+		grep -q "name: baoctl-provisioner" <<< "$$render"; \
+		grep -q "'baoctl-provisioner'" <<< "$$render"; \
+		if grep -q "'openbao-operator-provisioner'" <<< "$$render"; then \
 			echo "Helm admission policies rendered a stale provisioner ServiceAccount name"; \
 			exit 1; \
 		fi
@@ -976,6 +976,7 @@ security-scan-fs: ## Run the Trivy filesystem scan used by CI.
 		--skip-dirs test/manifests \
 		--skip-dirs vendor \
 		--skip-dirs bin \
+		--skip-dirs .devenv \
 		.
 
 .PHONY: security-scan-image

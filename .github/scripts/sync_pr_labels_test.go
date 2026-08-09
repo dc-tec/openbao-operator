@@ -200,6 +200,11 @@ func TestLabelerConfigMatchesCIRoutingLabels(t *testing.T) {
 			wantLabels: []string{"devops"},
 		},
 		{
+			name:       "shared tool versions route dependency and devops labels",
+			path:       "hack/dev/tool-versions.env",
+			wantLabels: []string{"dependencies", "devops"},
+		},
+		{
 			name:       "issue templates are devops changes",
 			path:       ".github/ISSUE_TEMPLATE/bug_report.yml",
 			wantLabels: []string{"devops"},

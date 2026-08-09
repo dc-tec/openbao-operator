@@ -1,0 +1,84 @@
+name: Setup Kubernetes CLI tools
+description: Install checksum-verified kind and kubectl versions from the shared toolchain manifest.
+
+inputs:
+  kind-version:
+    description: Optional kind version override (for example, v0.32.0).
+    required: false
+    default: ""
+  kubectl-version:
+    description: Optional kubectl version override (for example, v1.36.3).
+    required: false
+    default: ""
+  install-dir:
+    description: Directory in which to install kind and kubectl.
+    required: false
+    default: ~/.local/bin
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve tool versions
+      id: versions
+      shell: bash
+      env:
+        KIND_VERSION_INPUT: ${{ inputs.kind-version }}
+        KUBECTL_VERSION_INPUT: ${{ inputs.kubectl-version }}
+      run: |
+        set -euo pipefail
+        # shellcheck source=/dev/null
+        source "${GITHUB_ACTION_PATH}/../../../hack/dev/tool-versions.env"
+        kind_version="${KIND_VERSION_INPUT:-${KIND_VERSION}}"
+        kubectl_version="${KUBECTL_VERSION_INPUT:-${KUBECTL_VERSION}}"
+        {
+          echo "kind=${kind_version}"
+          echo "kubectl=${kubectl_version}"
+        } >> "${GITHUB_OUTPUT}"
+
+    - name: Install kind and kubectl
+      shell: bash
+      env:
+        INSTALL_DIR_INPUT: ${{ inputs.install-dir }}
+        KIND_VERSION: ${{ steps.versions.outputs.kind }}
+        KUBECTL_VERSION: ${{ steps.versions.outputs.kubectl }}
+      run: |
+        set -euo pipefail
+
+        install_dir="${INSTALL_DIR_INPUT/#\~/$HOME}"
+        install -d "${install_dir}"
+        arch="$(go env GOARCH)"
+
+        if [[ ! -x "${install_dir}/kind" ]] || ! "${install_dir}/kind" version 2>/dev/null | grep -q "${KIND_VERSION}"; then
+          kind_asset="kind-linux-${arch}"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "${tmp_dir}"' EXIT
+          curl -fsSLo "${tmp_dir}/${kind_asset}" \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/${kind_asset}"
+          curl -fsSLo "${tmp_dir}/${kind_asset}.sha256sum" \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/${kind_asset}.sha256sum"
+          (
+            cd "${tmp_dir}"
+            sha256sum -c "${kind_asset}.sha256sum"
+          )
+          install -m 0755 "${tmp_dir}/${kind_asset}" "${install_dir}/kind"
+          rm -rf "${tmp_dir}"
+          trap - EXIT
+        fi
+
+        if [[ ! -x "${install_dir}/kubectl" ]] || \
+          [[ "$("${install_dir}/kubectl" version --client --output=json 2>/dev/null | jq -r '.clientVersion.gitVersion // empty')" != "${KUBECTL_VERSION}" ]]; then
+          kubectl_base="https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}"
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "${tmp_dir}"' EXIT
+          curl -fsSLo "${tmp_dir}/kubectl" "${kubectl_base}/kubectl"
+          curl -fsSLo "${tmp_dir}/kubectl.sha256" "${kubectl_base}/kubectl.sha256"
+          printf '%s  %s\n' "$(tr -d '[:space:]' < "${tmp_dir}/kubectl.sha256")" "${tmp_dir}/kubectl" | sha256sum -c -
+          install -m 0755 "${tmp_dir}/kubectl" "${install_dir}/kubectl"
+          rm -rf "${tmp_dir}"
+          trap - EXIT
+        fi
+
+        echo "${install_dir}" >> "${GITHUB_PATH}"
+        echo "KIND=$(realpath "${install_dir}/kind")" >> "${GITHUB_ENV}"
+        "${install_dir}/kind" version
+        "${install_dir}/kubectl" version --client

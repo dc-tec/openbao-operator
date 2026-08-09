@@ -1,8 +1,6 @@
 inputs:
   nixpkgs:
-    url: github:NixOS/nixpkgs/9bc02893134c733dd85de46ee4fb2fac696b5529
-  nixpkgs-helm3:
-    url: github:NixOS/nixpkgs/nixos-25.11
+    url: github:NixOS/nixpkgs/nixos-unstable
   go-overlay:
     url: github:purpleclay/go-overlay
     inputs:

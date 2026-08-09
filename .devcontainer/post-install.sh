@@ -4,11 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_DIR="/usr/local/bin"
 
-KIND_VERSION="${KIND_VERSION:-v0.31.0}"
-KUBECTL_VERSION="${KUBECTL_VERSION:-v1.35.1}"
-HELM_VERSION="${HELM_VERSION:-v3.17.4}"
-TRIVY_VERSION="${TRIVY_VERSION:-v0.69.3}"
-TILT_VERSION="${TILT_VERSION:-v0.37.0}"
+# shellcheck source=/dev/null
+source "${ROOT_DIR}/hack/dev/tool-versions.env"
 HUGO_VERSION="$(tr -d '[:space:]' < "${ROOT_DIR}/.hugo-version")"
 
 go_arch="$(go env GOARCH)"
