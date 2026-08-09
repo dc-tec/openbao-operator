@@ -463,18 +463,17 @@ spec:
                         == 0
                   tokenSecretRef:
                     description: |-
-                      TokenSecretRef optionally references a Secret containing an OpenBao API
-                      token to use for backup operations (fallback method).
+                      TokenSecretRef references a Secret containing an OpenBao API token to use
+                      for backup operations when JWT Auth is not effective.
 
                       The Secret must exist in the same namespace as the OpenBaoCluster.
                       Cross-namespace references are not allowed for security reasons.
 
-                      For standard clusters (non self-init), this is typically omitted and the
-                      operator uses the root token from <cluster>-root-token. For self-init
-                      clusters (no root token Secret), this field must reference a token with
-                      permission to read sys/storage/raft/snapshot.
-
-                      If JWTAuthRole is set, this field is ignored in favor of JWT Auth.
+                      If an effective JWT role exists through JWTAuthRole or the SelfInit OIDC
+                      default, this field is ignored in favor of JWT Auth. Otherwise this field
+                      is required and must reference a token with permission to read
+                      sys/storage/raft/snapshot. The operator does not infer or fall back to a
+                      <cluster>-root-token Secret.
                     properties:
                       name:
                         default: ""
@@ -772,8 +771,9 @@ spec:
                       hostname:
                         description: |-
                           Hostname is the hostname to verify in the backend certificate.
-                          If not specified, defaults to the Service DNS name: <service-name>.<namespace>.svc
-                          This should match the certificate SAN or the service DNS name.
+                          If not specified, defaults to the stable TLS server name used by operator-managed
+                          clients (for example, openbao-cluster-<cluster-name>.local).
+                          This must match a DNS SAN in the backend certificate.
                         type: string
                     type: object
                   enabled:
@@ -1806,8 +1806,9 @@ spec:
               operatorImageVerification:
                 description: |-
                   OperatorImageVerification configures supply chain security checks for operator-managed helper images
-                  (init container, backup/upgrade/restore executors). These images are typically signed
-                  by the operator project (e.g., dc-tec/openbao-operator) rather than the OpenBao upstream project.
+                  (init container and backup/upgrade/restore executors) and custom BlueGreen validation-hook images.
+                  Helper images are typically signed by the operator project (e.g., dc-tec/openbao-operator)
+                  rather than the OpenBao upstream project.
                   If omitted, helper image verification does not fall back to ImageVerification.
                   In Development, omitted means disabled. In Hardened, omitted means enabled.
                 properties:
@@ -4263,8 +4264,10 @@ spec:
                     type: boolean
                   extraSANs:
                     description: |-
-                      ExtraSANs lists additional subject alternative names to include in server certificates.
-                      Only used when Mode is OperatorManaged.
+                      ExtraSANs lists additional subject alternative names for server certificates.
+                      In OperatorManaged mode, the operator includes these names when issuing the certificate.
+                      In External mode, the operator requires the supplied certificate to contain them.
+                      Values that parse as IP addresses are treated as IP SANs; all other values are DNS SANs.
                     items:
                       type: string
                     type: array
