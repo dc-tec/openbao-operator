@@ -12,10 +12,7 @@ let
     lib.findFirst (line: lib.hasPrefix "go " line) (throw "go.mod does not declare a Go version")
       (lib.splitString "\n" (builtins.readFile ./go.mod));
   goVersion = lib.removePrefix "go " goLine;
-  nodeVersion = readVersionFile ./.node-version;
   hugoVersion = readVersionFile ./.hugo-version;
-  toolsPackage = builtins.fromJSON (builtins.readFile ./.github/tools/package.json);
-  pnpmVersion = lib.removePrefix "pnpm@" toolsPackage.packageManager;
 
   exactPackage =
     name: expected: package:
@@ -54,8 +51,6 @@ in
     pkgs.git
     pkgs.gnugrep
     pkgs.gnused
-    pkgs.gnutar
-    pkgs.gzip
     pkgs.jq
     pkgs.kind
     pkgs.kubectl
@@ -63,17 +58,13 @@ in
     pkgs.python3
     pkgs.tilt
     pkgs.trivy
-    pkgs.unzip
-    pkgs.xz
-    pkgs.yq-go
     helmPackage
     (exactPackage "Hugo" hugoVersion pkgs.hugo)
-    (exactPackage "Node.js" nodeVersion pkgs.nodejs_22)
-    (exactPackage "pnpm" pnpmVersion pkgs.pnpm_10)
   ];
 
   enterShell = ''
-    export PATH="$DEVENV_ROOT/bin:$PATH"
+    export GOPATH="''${XDG_CACHE_HOME:-$HOME/.cache}/openbao-operator/go"
+    export PATH="$DEVENV_ROOT/bin:$GOPATH/bin:$PATH"
   '';
 
   tasks = {

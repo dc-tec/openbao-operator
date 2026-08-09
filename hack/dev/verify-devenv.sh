@@ -44,26 +44,20 @@ if [[ "${GOTOOLCHAIN:-}" != "local" ]]; then
   fail "GOTOOLCHAIN must be local inside devenv, found ${GOTOOLCHAIN:-unset}"
 fi
 
+if [[ -z "${GOPATH:-}" ]]; then
+  fail "GOPATH is not set inside devenv"
+fi
+if [[ "${GOPATH}" == "${ROOT_DIR}" || "${GOPATH}" == "${ROOT_DIR}/"* ]]; then
+  fail "GOPATH must stay outside the repository so generators do not scan its module cache: ${GOPATH}"
+fi
+ok "GOPATH is outside the repository (${GOPATH})"
+
 expected_go="$(sed -n 's/^go //p' go.mod | head -n 1)"
 current_go="$(go env GOVERSION 2>/dev/null || true)"
 if [[ "${current_go}" != "go${expected_go}" ]]; then
   fail "Go toolchain mismatch: expected go${expected_go}, found ${current_go:-unknown}"
 fi
 ok "Go ${expected_go} matches go.mod"
-
-expected_node="$(tr -d '[:space:]' < .node-version)"
-current_node="$(node --version 2>/dev/null || true)"
-if [[ "${current_node}" != "v${expected_node}" ]]; then
-  fail "Node.js mismatch: expected v${expected_node}, found ${current_node:-unknown}"
-fi
-ok "Node.js ${expected_node} matches .node-version"
-
-expected_pnpm="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' .github/tools/package.json | head -n 1)"
-current_pnpm="$(pnpm --version 2>/dev/null || true)"
-if [[ "${current_pnpm}" != "${expected_pnpm}" ]]; then
-  fail "pnpm mismatch: expected ${expected_pnpm}, found ${current_pnpm:-unknown}"
-fi
-ok "pnpm ${expected_pnpm} matches packageManager"
 
 expected_hugo="$(tr -d '[:space:]' < .hugo-version)"
 current_hugo="$(hugo version 2>/dev/null || true)"
@@ -88,7 +82,7 @@ fi
 ok "kubectl compatibility contract satisfied (${current_kubectl})"
 
 for command_name in \
-  bash curl docker git go helm hugo jq kind kubectl make node pnpm python3 tilt trivy yq; do
+  bash curl docker git go helm hugo jq kind kubectl make python3 tilt trivy; do
   require_nix_command "${command_name}"
 done
 

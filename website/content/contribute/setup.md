@@ -8,11 +8,12 @@ verifiedBy:
   - devenv.yaml
   - devenv.lock
   - hack/dev/verify-devenv.sh
+  - hack/dev/install-ast-grep.sh
+  - mk/dependencies.mk
   - mk/development.mk
   - mk/deploy.mk
   - mk/build.mk
   - go.mod
-  - .github/tools/package.json
   - .hugo-version
   - .devcontainer/post-install.sh
 ---
@@ -23,9 +24,9 @@ loop only when the behavior depends on admission, RBAC, networking, storage, or 
 ## Install prerequisites
 
 Install [Nix](https://nixos.org/download/) and [devenv](https://devenv.sh/getting-started/), then let `devenv.lock`
-select the package set. The environment reads the repository's existing Go, Node.js, pnpm, and Hugo declarations and
-rejects a package set that does not match them. It also supplies Docker CLI, `kubectl` 1.33 or newer, Helm 3, Trivy,
-Python 3, Kind, and Tilt.
+select the package set. The environment reads the repository's existing Go and Hugo declarations and rejects a
+package set that does not match them. It also supplies Docker CLI, `kubectl` 1.33 or newer, Helm 3, Trivy, Python 3,
+Kind, and Tilt.
 
 Docker daemon access and a Kubernetes cluster remain external runtime dependencies. Kind is available for a
 reproducible local cluster; Tilt shortens repeated in-cluster rebuilds. The devcontainer remains a supported fallback
@@ -40,8 +41,9 @@ make bootstrap
 make doctor
 {{< /command >}}
 
-`devenv test` validates the pinned, service-independent toolchain contract. `make bootstrap` then installs the
-repository-managed Go and AST tools plus local Git hooks. Treat the hook bypass variables as deliberate one-off
+`devenv test` validates the pinned, service-independent toolchain contract. `make bootstrap` then installs the tools
+required by the core contributor workflow plus local Git hooks. Specialized targets install their debugger,
+live-reload, mutation, or benchmark tools only when invoked. Treat the hook bypass variables as deliberate one-off
 exceptions, not a normal workflow.
 
 ## Choose a development loop

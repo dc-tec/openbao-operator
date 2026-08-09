@@ -80,7 +80,7 @@ jobs:
           exit-code: "1"
           trivyignores: .trivyignore
           skip-files: config/rbac/provisioner_minimal_role.yaml,charts/openbao-operator/templates/rbac/provisioner-clusterroles.yaml,config/rbac/single_tenant_clusterrole.yaml,config/overlays/single-tenant/single_tenant_clusterrole.yaml,config/overlays/single-tenant-custom-identity/single_tenant_clusterrole.yaml,dist/install.yaml
-          skip-dirs: test/manifests,vendor,.github/tools/node_modules,bin
+          skip-dirs: test/manifests,vendor,bin
           trivy-config: .trivy.yaml
 
   openbao-config-compat:

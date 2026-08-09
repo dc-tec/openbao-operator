@@ -8,7 +8,6 @@ $(LOCALBIN):
 ## Tool Binaries
 KUBECTL ?= kubectl
 KIND ?= kind
-PNPM ?= pnpm
 TILT ?= tilt
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
@@ -27,8 +26,7 @@ AIR ?= $(LOCALBIN)/air
 BENCHSTAT ?= $(LOCALBIN)/benchstat
 SEMGREP ?= $(LOCALBIN)/semgrep
 SEMGREP_VENV ?= $(LOCALBIN)/semgrep-venv
-AST_GREP_PREFIX ?= .github/tools
-AST_GREP_LOCAL_BIN ?= $(abspath $(AST_GREP_PREFIX)/node_modules/.bin/ast-grep)
+AST_GREP_LOCAL_BIN ?= $(LOCALBIN)/ast-grep
 AST_GREP ?= $(AST_GREP_LOCAL_BIN)
 
 define go-install-tool
@@ -73,6 +71,7 @@ DLV_VERSION ?= v1.26.1
 AIR_VERSION ?= v1.64.5
 BENCHSTAT_VERSION ?= v0.0.0-20260211190930-8161c38c6cdc
 SEMGREP_VERSION ?= 1.157.0
+AST_GREP_VERSION ?= 0.42.3
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -177,10 +176,7 @@ $(SEMGREP): $(LOCALBIN)
 	@ln -sf "$$(realpath "$(SEMGREP_VENV)/bin/semgrep")" "$(SEMGREP)"
 
 .PHONY: ast-grep
-ast-grep: $(AST_GREP_LOCAL_BIN) ## Install ast-grep locally via pnpm if necessary.
-$(AST_GREP_LOCAL_BIN): .github/tools/package.json .github/tools/pnpm-lock.yaml
-	@command -v "$(PNPM)" >/dev/null 2>&1 || { \
-		echo "pnpm is required to install ast-grep. Install Node.js 22 and enable Corepack, then retry."; \
-		exit 1; \
-	}
-	@"$(PNPM)" --dir "$(AST_GREP_PREFIX)" install --frozen-lockfile
+ast-grep: $(LOCALBIN) ## Install the pinned ast-grep release binary locally if necessary.
+	@AST_GREP_VERSION="$(AST_GREP_VERSION)" \
+		AST_GREP_DESTINATION="$(AST_GREP_LOCAL_BIN)" \
+		bash hack/dev/install-ast-grep.sh
