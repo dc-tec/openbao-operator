@@ -58,6 +58,7 @@ jobs:
       manual_seal_e2e: ${{ steps.diff.outputs.manual_seal_e2e }}
       chart: ${{ steps.diff.outputs.chart }}
       workflow: ${{ steps.diff.outputs.workflow }}
+      toolchain: ${{ steps.diff.outputs.toolchain }}
       docs: ${{ steps.diff.outputs.docs }}
       go_quality: ${{ steps.diff.outputs.go_quality }}
       go_toolchain: ${{ steps.diff.outputs.go_toolchain }}
@@ -106,7 +107,7 @@ jobs:
               echo "manual_upgrade_e2e=${MANUAL_UPGRADE_E2E}"
               echo "manual_hardened_e2e=${MANUAL_HARDENED_E2E}"
               echo "manual_seal_e2e=${MANUAL_SEAL_E2E}"
-              for key in chart workflow docs go_quality go_toolchain go_tests config_compat security_scan security_image fuzz e2e operator_upgrade_e2e e2e_backup e2e_upgrade e2e_hardened e2e_seal; do
+              for key in chart workflow toolchain docs go_quality go_toolchain go_tests config_compat security_scan security_image fuzz e2e operator_upgrade_e2e e2e_backup e2e_upgrade e2e_hardened e2e_seal; do
                 echo "${key}=false"
               done
             } >> "${GITHUB_OUTPUT}"
@@ -155,6 +156,12 @@ jobs:
             echo "workflow=true" >> "${GITHUB_OUTPUT}"
           else
             echo "workflow=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if changed_matches '^(devenv\.(nix|yaml|lock)$|\.node-version$|\.hugo-version$|go\.mod$|\.github/tools/(package\.json|pnpm-lock\.yaml)$|hack/dev/verify-devenv\.sh$|Makefile|mk/)'; then
+            echo "toolchain=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "toolchain=false" >> "${GITHUB_OUTPUT}"
           fi
 
           if changed_matches '^(\.hugo-version$|website/|release-notes/|hack/docs/|CHANGELOG\.md|README\.md|CONTRIBUTING\.md|\.github/actions/docs-build/)'; then
@@ -355,6 +362,34 @@ jobs:
 
       - name: Run actionlint
         run: make verify-workflows
+
+  devenv-contract:
+    name: Devenv Contract (advisory)
+    needs: changes
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || needs.changes.outputs.toolchain == 'true'
+    runs-on: *runner
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31
+
+      - name: Configure the devenv binary cache
+        uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: devenv
+
+      - name: Install devenv from the pinned package set
+        shell: bash
+        run: |
+          set -euo pipefail
+          nixpkgs_url="$(awk '/^  nixpkgs:/{getline; sub(/^    url: /, ""); print; exit}' devenv.yaml)"
+          nix profile add "${nixpkgs_url}#devenv"
+
+      - name: Verify the devenv contract
+        run: devenv test
 
   lint:
     name: Lint

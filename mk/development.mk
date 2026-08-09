@@ -31,6 +31,10 @@ git-hooks-uninstall: ## Remove the repo-local Git hooks path.
 doctor: ## Validate local prerequisites for the main contributor workflow.
 	@bash hack/dev/doctor.sh
 
+.PHONY: verify-devenv
+verify-devenv: ## Verify the pinned devenv toolchain contract without external service checks.
+	@bash hack/dev/verify-devenv.sh
+
 .PHONY: clean-artifacts
 clean-artifacts: ## Remove known local build, test, documentation, and report artifacts.
 	@$(RM) cover.out coverage.out report.xml

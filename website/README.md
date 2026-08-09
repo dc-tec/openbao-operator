@@ -18,12 +18,8 @@ The site uses a task-oriented product structure:
 ```sh
 ./website/scripts/sync-api-reference.sh --all --check
 
-# On the devcontainer, Hugo is already pinned and installed:
-make docs-serve
-
-# On a Nix workstation:
-nix shell nixpkgs#hugo --command \
-  make docs-serve HUGO=hugo
+# The devenv shell provides the repository-pinned Hugo version.
+devenv shell make docs-serve
 ```
 
 Open <http://127.0.0.1:1313/openbao-operator/>.
@@ -31,7 +27,7 @@ Open <http://127.0.0.1:1313/openbao-operator/>.
 ## Build strictly
 
 ```sh
-nix shell nixpkgs#hugo --command make docs-build HUGO=hugo
+devenv shell make docs-build
 ```
 
 The API sync reads each line's exact `sourceRef` from `data/version_lines.yaml` and splits its generated reference into
