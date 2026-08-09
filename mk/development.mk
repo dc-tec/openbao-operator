@@ -2,8 +2,8 @@
 
 .PHONY: bootstrap
 bootstrap: controller-gen kustomize crd-ref-docs setup-envtest golangci-lint actionlint ginkgo govulncheck govulncheck-ignore go-licenses gotestsum semgrep ast-grep ## Install tools required by the core contributor workflow.
-	@$(MAKE) git-hooks-install
 	@echo "Bootstrap complete."
+	@echo "Devenv configures Git hooks automatically; otherwise run 'make git-hooks-install'."
 	@echo "Run 'make doctor' to validate external prerequisites."
 
 .PHONY: git-hooks-install

@@ -211,7 +211,8 @@ kubectl delete -f https://github.com/dc-tec/openbao-operator/releases/download/X
 We welcome contributions! Please see the [Contributing Guide](https://dc-tec.github.io/openbao-operator/contribute) for details on:
 
 - Setting up your development environment.
-- Running the PR-equivalent local gate (`make bootstrap && make doctor && make ci-core`).
+- Running the PR-equivalent local gate (`devenv test` followed by the `operator:bootstrap`, `operator:doctor`, and
+  `operator:ci-core` Devenv tasks).
 - Our AI-Assisted Contribution Policy.
 
 ## Official OpenBao Documentation

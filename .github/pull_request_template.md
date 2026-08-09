@@ -23,7 +23,8 @@
 ## Verification
 
 <!-- Commands, tests, screenshots, manifests, or cluster checks used to verify this change. -->
-<!-- PR-equivalent local checks are: `make bootstrap`, `make doctor`, `make ci-core`. -->
+<!-- PR-equivalent local checks are `devenv test`, then the `operator:bootstrap`,
+`operator:doctor`, and `operator:ci-core` Devenv tasks. -->
 
 ## Reviewer Notes
 

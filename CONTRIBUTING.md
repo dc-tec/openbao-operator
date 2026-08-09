@@ -26,10 +26,7 @@ We welcome AI-assisted contributions. However, all code must meet our quality st
 
 ```sh
 devenv test
-devenv shell
-
-# Run these commands inside the shell.
-make bootstrap
-make doctor
-make ci-core
+devenv tasks run operator:bootstrap
+devenv tasks run operator:doctor
+devenv tasks run operator:ci-core
 ```

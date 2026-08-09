@@ -25,9 +25,10 @@ Contributions may use AI assistance, but the submitter remains responsible for c
 </ol>
 
 {{< command label="verify" title="PR-equivalent local gate" >}}
-make bootstrap
-make doctor
-make ci-core
+devenv test
+devenv tasks run operator:bootstrap
+devenv tasks run operator:doctor
+devenv tasks run operator:ci-core
 {{< /command >}}
 
 ## Contributor routes
