@@ -24,14 +24,15 @@ let
     else
       throw "${name} version mismatch: expected ${expected}, nixpkgs provides ${lib.getVersion package}";
 
-  helmPackages = import inputs.nixpkgs-helm3 {
-    system = pkgs.stdenv.hostPlatform.system;
-  };
+  # Build Helm 3 with the primary package set instead of mixing Nixpkgs stdenvs.
+  helmFromPinnedDefinition = pkgs.callPackage (
+    inputs.nixpkgs-helm3 + "/pkgs/applications/networking/cluster/helm"
+  ) { };
   helmPackage =
-    if lib.hasPrefix "3." (lib.getVersion helmPackages.kubernetes-helm) then
-      helmPackages.kubernetes-helm
+    if lib.hasPrefix "3." (lib.getVersion helmFromPinnedDefinition) then
+      helmFromPinnedDefinition
     else
-      throw "Helm 3 is required, nixpkgs-helm3 provides ${lib.getVersion helmPackages.kubernetes-helm}";
+      throw "Helm 3 is required, nixpkgs-helm3 provides ${lib.getVersion helmFromPinnedDefinition}";
 in
 {
   name = "openbao-operator";
