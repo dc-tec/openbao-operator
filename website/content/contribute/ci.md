@@ -26,8 +26,10 @@ make doctor
 make ci-core
 {{< /command >}}
 
-The advisory `Devenv Contract` job runs on toolchain changes and pushes to `main`. It proves that the pinned shell can
-be constructed on the CI runner and that its version contract passes. The existing required jobs remain the merge
+The advisory `Devenv Contract` job runs on toolchain changes and pushes to `main`. It proves that the pinned base shell
+can be constructed on the CI runner and that its version contract passes. The job pulls from the public project and
+Devenv caches. It publishes newly built paths to the project cache only from pushes to `main` when the repository has
+a per-cache `CACHIX_AUTH_TOKEN`; pull requests are always read-only. The existing required jobs remain the merge
 authority while the project migrates their setup steps incrementally.
 
 | CI concern | Local entry point |

@@ -372,10 +372,13 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31
 
-      - name: Configure the devenv binary cache
+      - name: Configure project and devenv binary caches
         uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
         with:
-          name: devenv
+          name: dc-tec-openbao-operator
+          extraPullNames: devenv
+          authToken: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.CACHIX_AUTH_TOKEN || '' }}
+          skipPush: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' || secrets.CACHIX_AUTH_TOKEN == '' }}
 
       - name: Install devenv from the pinned package set
         shell: bash
@@ -385,7 +388,23 @@ jobs:
           nix profile add "${nixpkgs_url}#devenv"
 
       - name: Verify the devenv contract
-        run: devenv test
+        shell: bash
+        run: |
+          set -euo pipefail
+          started_at="${SECONDS}"
+          devenv test
+          elapsed_seconds="$((SECONDS - started_at))"
+          profile_path="$(realpath .devenv/profile)"
+          closure_size="$(nix path-info -Sh "${profile_path}" | awk '{print $2, $3}')"
+
+          {
+            echo "### Devenv base shell"
+            echo
+            echo "| Measurement | Result |"
+            echo "| --- | ---: |"
+            echo "| Contract duration | ${elapsed_seconds}s |"
+            echo "| Runtime closure | ${closure_size} |"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
   lint:
     name: Lint

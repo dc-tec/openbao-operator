@@ -1,10 +1,5 @@
 inputs:
   nixpkgs:
     url: github:NixOS/nixpkgs/nixos-unstable
-  go-overlay:
-    url: github:purpleclay/go-overlay
-    inputs:
-      nixpkgs:
-        follows: nixpkgs
 
 require_version: ">=2.1"
