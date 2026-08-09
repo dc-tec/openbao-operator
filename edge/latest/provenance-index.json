@@ -4,7 +4,7 @@
     "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:b15f8de292cc9098b51acbe005023e2dfcd892e73ab17df64d1b6f4cea29040d",
     "digest": "sha256:b15f8de292cc9098b51acbe005023e2dfcd892e73ab17df64d1b6f4cea29040d",
     "path": "../dist/checksums.txt",
-    "signature_bundle_digest": "sha256:f147bbb97ab0843b20855f4a0c17245d1eb1b81f769ee839cf0c0f5ec054d03d",
+    "signature_bundle_digest": "sha256:c4c8c481186772a1f758b239261faac0e710c0485857f39a7c11c7bb3fd76edd",
     "signature_bundle_path": "../dist/checksums.txt.bundle"
   },
   "commit": "40bc6cd5a2c29cc0e790dcc69fe57950e8a210c7",
@@ -67,7 +67,7 @@
   "repository": "dc-tec/openbao-operator",
   "run": {
     "attempt": "1",
-    "id": "31323583636"
+    "id": "31333825161"
   },
   "schema_version": "v1alpha1",
   "source_ref": "refs/heads/main",
