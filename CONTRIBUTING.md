@@ -25,6 +25,10 @@ We welcome AI-assisted contributions. However, all code must meet our quality st
 ## Local Checks (PR-equivalent)
 
 ```sh
+devenv test
+devenv shell
+
+# Run these commands inside the shell.
 make bootstrap
 make doctor
 make ci-core

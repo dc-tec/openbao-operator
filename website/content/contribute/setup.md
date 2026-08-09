@@ -4,6 +4,10 @@ description: Bootstrap repository-managed tools and choose a local controller de
 eyebrow: Contribute
 weight: 1
 verifiedBy:
+  - devenv.nix
+  - devenv.yaml
+  - devenv.lock
+  - hack/dev/verify-devenv.sh
   - mk/development.mk
   - mk/deploy.mk
   - mk/build.mk
@@ -13,22 +17,32 @@ verifiedBy:
   - .devcontainer/post-install.sh
 ---
 
-Run the repository-managed bootstrap before changing code. Use a cluster loop only when the behavior depends on admission, RBAC, networking, storage, or workload lifecycle.
+Use the pinned development environment and run the repository-managed bootstrap before changing code. Use a cluster
+loop only when the behavior depends on admission, RBAC, networking, storage, or workload lifecycle.
 
 ## Install prerequisites
 
-The repository currently expects Go 1.26.5, Docker, `kubectl` 1.33 or newer, Helm 3, Trivy, Python 3, and access to a
-Kubernetes cluster. Node.js 22 and pnpm 10.34.5 remain scoped to the repository's AST tooling; the documentation site
-does not use them. The devcontainer installs Hugo 0.164.0; use the documented Nix command on a host workstation.
+Install [Nix](https://nixos.org/download/) and [devenv](https://devenv.sh/getting-started/), then let `devenv.lock`
+select the package set. The environment reads the repository's existing Go, Node.js, pnpm, and Hugo declarations and
+rejects a package set that does not match them. It also supplies Docker CLI, `kubectl` 1.33 or newer, Helm 3, Trivy,
+Python 3, Kind, and Tilt.
 
-Kind and Tilt are optional. Kind provides a reproducible local cluster; Tilt shortens repeated in-cluster rebuilds.
+Docker daemon access and a Kubernetes cluster remain external runtime dependencies. Kind is available for a
+reproducible local cluster; Tilt shortens repeated in-cluster rebuilds. The devcontainer remains a supported fallback
+while it is migrated to the same generated environment contract.
 
-{{< command label="verify" title="Bootstrap and inspect the workstation" >}}
+{{< command label="verify" title="Validate and enter the development environment" >}}
+devenv test
+devenv shell
+
+# Run these commands inside the shell.
 make bootstrap
 make doctor
 {{< /command >}}
 
-`make bootstrap` installs repository-managed tools and local Git hooks. Treat the hook bypass variables as deliberate one-off exceptions, not a normal workflow.
+`devenv test` validates the pinned, service-independent toolchain contract. `make bootstrap` then installs the
+repository-managed Go and AST tools plus local Git hooks. Treat the hook bypass variables as deliberate one-off
+exceptions, not a normal workflow.
 
 ## Choose a development loop
 
@@ -58,6 +72,9 @@ kubectl get pods -n openbao-operator-system
 ## Establish the local baseline
 
 {{< command label="verify" title="Run the PR-equivalent core gate" >}}
+devenv shell
+
+# Run these commands inside the shell.
 make bootstrap
 make doctor
 make ci-core

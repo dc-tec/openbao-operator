@@ -4,6 +4,10 @@ description: Map local validation to pull-request, main, nightly, and release wo
 eyebrow: Contribute
 weight: 4
 verifiedBy:
+  - devenv.nix
+  - devenv.yaml
+  - devenv.lock
+  - hack/dev/verify-devenv.sh
   - .github/workflows/ci.yml
   - .github/workflows/nightly.yml
   - .github/workflows/release.yml
@@ -13,13 +17,22 @@ verifiedBy:
 Pull-request CI routes checks by changed path and risk. Nightly and release workflows broaden compatibility, lifecycle, provenance, and reproducibility coverage.
 
 {{< command label="verify" title="Run the local pull-request baseline" >}}
+devenv test
+devenv shell
+
+# Run these commands inside the shell.
 make bootstrap
 make doctor
 make ci-core
 {{< /command >}}
 
+The advisory `Devenv Contract` job runs on toolchain changes and pushes to `main`. It proves that the pinned shell can
+be constructed on the CI runner and that its version contract passes. The existing required jobs remain the merge
+authority while the project migrates their setup steps incrementally.
+
 | CI concern | Local entry point |
 | --- | --- |
+| Pinned environment contract | `devenv test` |
 | Core quality gates | `make ci-core` |
 | Hugo documentation and redirects | `make docs-build` |
 | Vendored dependencies and licenses | `make verify-vendor`, `make license-check` |

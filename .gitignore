@@ -19,8 +19,12 @@ go.work
 
 # Local development files
 .DS_Store
+.devenv/
+.direnv/
 .gocache
 .pnpm-store/
+devenv.local.nix
+devenv.local.yaml
 node_modules/
 
 # Kubernetes Generated files - skip generated files, except for vendored files
