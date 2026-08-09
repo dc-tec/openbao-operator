@@ -92,8 +92,12 @@ else
   warn "ast-grep not bootstrapped locally yet (run 'make bootstrap' or 'make ast-grep')"
 fi
 
-if [ -x "${ROOT_DIR}/bin/semgrep" ]; then
-  current_semgrep="$("${ROOT_DIR}/bin/semgrep" --version 2>/dev/null || true)"
+if [ -x "${ROOT_DIR}/bin/semgrep-venv/bin/python" ]; then
+  current_semgrep="$(
+    "${ROOT_DIR}/bin/semgrep-venv/bin/python" \
+      -c 'import importlib.metadata; print(importlib.metadata.version("semgrep"))' \
+      2>/dev/null || true
+  )"
   if [ "${current_semgrep}" = "${expected_semgrep}" ]; then
     ok "semgrep bootstrapped locally (${current_semgrep})"
   else

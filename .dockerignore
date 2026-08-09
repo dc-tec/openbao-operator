@@ -21,3 +21,7 @@
 
 # Re-include compiled Linux binaries for fast builds (excludes local mac/others)
 !bin/linux_amd64/
+
+# Devenv keeps an internal Go module cache under the repository root. Keep it
+# excluded even though the Go source rule above re-includes nested *.go files.
+.devenv/

@@ -78,6 +78,7 @@ dependencies:
           - '.github/dependabot.yml'
           - 'mk/dependencies.mk'
           - 'hack/dev/install-ast-grep.sh'
+          - 'hack/dev/tool-versions.env'
 
 # API / CRD changes
 api:

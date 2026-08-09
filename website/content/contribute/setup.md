@@ -25,8 +25,9 @@ loop only when the behavior depends on admission, RBAC, networking, storage, or 
 
 Install [Nix](https://nixos.org/download/) and [devenv](https://devenv.sh/getting-started/), then let `devenv.lock`
 select the package set. The environment reads the repository's existing Go and Hugo declarations and rejects a
-package set that does not match them. It also supplies Docker CLI, `kubectl` 1.33 or newer, Helm 3, Trivy, Python 3,
-Kind, and Tilt.
+package set that does not match them. Shared CLI versions live in `hack/dev/tool-versions.env`; Devenv, the
+devcontainer, and GitHub Actions consume that manifest. The environment supplies Docker CLI, kubectl, Helm 4,
+Trivy, Python 3, Kind, and Tilt.
 
 Docker daemon access and a Kubernetes cluster remain external runtime dependencies. Kind is available for a
 reproducible local cluster; Tilt shortens repeated in-cluster rebuilds. The devcontainer remains a supported fallback

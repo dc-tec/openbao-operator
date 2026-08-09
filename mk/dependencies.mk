@@ -164,8 +164,8 @@ $(SEMGREP): $(LOCALBIN)
 		exit 1; \
 	}
 	@current_version=""; \
-	if [ -x "$(SEMGREP_VENV)/bin/semgrep" ]; then \
-		current_version="$$(\"$(SEMGREP_VENV)/bin/semgrep\" --version 2>/dev/null || true)"; \
+	if [ -x "$(SEMGREP_VENV)/bin/python" ]; then \
+		current_version="$$("$(SEMGREP_VENV)/bin/python" -c 'import importlib.metadata; print(importlib.metadata.version("semgrep"))' 2>/dev/null || true)"; \
 	fi; \
 	if [ "$$current_version" != "$(SEMGREP_VERSION)" ]; then \
 		rm -rf "$(SEMGREP_VENV)"; \

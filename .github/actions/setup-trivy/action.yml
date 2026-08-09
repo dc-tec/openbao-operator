@@ -1,0 +1,31 @@
+name: Setup Trivy
+description: Install the Trivy version selected by the shared toolchain manifest.
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Trivy version
+      id: version
+      shell: bash
+      run: |
+        set -euo pipefail
+        # shellcheck source=/dev/null
+        source "${GITHUB_ACTION_PATH}/../../../hack/dev/tool-versions.env"
+        echo "value=${TRIVY_VERSION}" >> "${GITHUB_OUTPUT}"
+
+    - name: Install Trivy
+      uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+      with:
+        version: ${{ steps.version.outputs.value }}
+
+    - name: Verify Trivy version
+      shell: bash
+      env:
+        TRIVY_VERSION: ${{ steps.version.outputs.value }}
+      run: |
+        set -euo pipefail
+        current="$(trivy version | sed -n 's/^Version: //p' | head -n 1)"
+        if [[ "v${current}" != "${TRIVY_VERSION}" ]]; then
+          echo "Trivy mismatch: expected ${TRIVY_VERSION}, found ${current:-unknown}" >&2
+          exit 1
+        fi

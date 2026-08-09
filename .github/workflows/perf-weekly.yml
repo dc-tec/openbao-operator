@@ -45,8 +45,8 @@ jobs:
           path: bin/
           key: ${{ runner.os }}-tools-${{ hashFiles('Makefile', 'go.mod', 'go.sum') }}
 
-      - name: Install kind (pinned)
-        uses: ./.github/actions/install-kind
+      - name: Setup Kubernetes CLI tools
+        uses: ./.github/actions/setup-kubernetes-tools
         with:
           install-dir: bin/
 

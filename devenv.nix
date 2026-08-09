@@ -1,5 +1,4 @@
 {
-  inputs,
   lib,
   pkgs,
   ...
@@ -7,6 +6,28 @@
 
 let
   readVersionFile = path: lib.removeSuffix "\n" (builtins.readFile path);
+
+  parseToolVersion = line:
+    let
+      match = builtins.match "([A-Z0-9_]+)=(v?[0-9].*)" line;
+    in
+    if match == null then
+      null
+    else
+      {
+        name = builtins.elemAt match 0;
+        value = builtins.elemAt match 1;
+      };
+  toolVersions = builtins.listToAttrs (
+    builtins.filter (entry: entry != null) (
+      map parseToolVersion (lib.splitString "\n" (builtins.readFile ./hack/dev/tool-versions.env))
+    )
+  );
+  toolVersion = name:
+    if builtins.hasAttr name toolVersions then
+      lib.removePrefix "v" toolVersions.${name}
+    else
+      throw "hack/dev/tool-versions.env does not declare ${name}";
 
   goLine =
     lib.findFirst (line: lib.hasPrefix "go " line) (throw "go.mod does not declare a Go version")
@@ -21,15 +42,6 @@ let
     else
       throw "${name} version mismatch: expected ${expected}, nixpkgs provides ${lib.getVersion package}";
 
-  # Build Helm 3 with the primary package set instead of mixing Nixpkgs stdenvs.
-  helmFromPinnedDefinition = pkgs.callPackage (
-    inputs.nixpkgs-helm3 + "/pkgs/applications/networking/cluster/helm"
-  ) { };
-  helmPackage =
-    if lib.hasPrefix "3." (lib.getVersion helmFromPinnedDefinition) then
-      helmFromPinnedDefinition
-    else
-      throw "Helm 3 is required, nixpkgs-helm3 provides ${lib.getVersion helmFromPinnedDefinition}";
 in
 {
   name = "openbao-operator";
@@ -52,13 +64,13 @@ in
     pkgs.gnugrep
     pkgs.gnused
     pkgs.jq
-    pkgs.kind
-    pkgs.kubectl
+    (exactPackage "Kind" (toolVersion "KIND_VERSION") pkgs.kind)
+    (exactPackage "kubectl" (toolVersion "KUBECTL_VERSION") pkgs.kubectl)
     pkgs.gnumake
     pkgs.python3
-    pkgs.tilt
-    pkgs.trivy
-    helmPackage
+    (exactPackage "Tilt" (toolVersion "TILT_VERSION") pkgs.tilt)
+    (exactPackage "Trivy" (toolVersion "TRIVY_VERSION") pkgs.trivy)
+    (exactPackage "Helm" (toolVersion "HELM_VERSION") pkgs.kubernetes-helm)
     (exactPackage "Hugo" hugoVersion pkgs.hugo)
   ];
 

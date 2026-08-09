@@ -1,0 +1,54 @@
+name: Setup Helm
+description: Install the Helm version selected by the shared toolchain manifest.
+
+inputs:
+  version-key:
+    description: Variable name in hack/dev/tool-versions.env.
+    required: false
+    default: HELM_VERSION
+
+outputs:
+  helm-path:
+    description: Path to the installed Helm binary.
+    value: ${{ steps.helm.outputs.helm-path }}
+  version:
+    description: Installed Helm version.
+    value: ${{ steps.version.outputs.value }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Helm version
+      id: version
+      shell: bash
+      env:
+        VERSION_KEY: ${{ inputs.version-key }}
+      run: |
+        set -euo pipefail
+        # shellcheck source=/dev/null
+        source "${GITHUB_ACTION_PATH}/../../../hack/dev/tool-versions.env"
+        version="${!VERSION_KEY:-}"
+        if [[ -z "${version}" ]]; then
+          echo "${VERSION_KEY} is not declared in hack/dev/tool-versions.env" >&2
+          exit 1
+        fi
+        echo "value=${version}" >> "${GITHUB_OUTPUT}"
+
+    - name: Install Helm
+      id: helm
+      uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      with:
+        version: ${{ steps.version.outputs.value }}
+
+    - name: Verify Helm version
+      shell: bash
+      env:
+        HELM_PATH: ${{ steps.helm.outputs.helm-path }}
+        HELM_VERSION: ${{ steps.version.outputs.value }}
+      run: |
+        set -euo pipefail
+        current="$("${HELM_PATH}" version --short)"
+        if [[ "${current}" != "${HELM_VERSION}" && "${current}" != "${HELM_VERSION}"+* ]]; then
+          echo "Helm mismatch: expected ${HELM_VERSION}, found ${current}" >&2
+          exit 1
+        fi

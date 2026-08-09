@@ -146,19 +146,19 @@ jobs:
             grep -qE -f "$1" <<< "${changed}"
           }
 
-          if changed_matches '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/)'; then
+          if changed_matches '^(charts/openbao-operator/|config/(crd|policy|rbac)/|hack/helm(chart|values)/|hack/dev/tool-versions\.env$)'; then
             echo "chart=true" >> "${GITHUB_OUTPUT}"
           else
             echo "chart=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(\.github/workflows/|\.github/actions/)'; then
+          if changed_matches '^(\.github/workflows/|\.github/actions/|hack/dev/tool-versions\.env$)'; then
             echo "workflow=true" >> "${GITHUB_OUTPUT}"
           else
             echo "workflow=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(devenv\.(nix|yaml|lock)$|\.hugo-version$|go\.mod$|hack/dev/(install-ast-grep|verify-devenv)\.sh$|Makefile|mk/)'; then
+          if changed_matches '^(devenv\.(nix|yaml|lock)$|\.hugo-version$|go\.mod$|hack/dev/(install-ast-grep|verify-devenv)\.sh$|hack/dev/tool-versions\.env$|Makefile|mk/)'; then
             echo "toolchain=true" >> "${GITHUB_OUTPUT}"
           else
             echo "toolchain=false" >> "${GITHUB_OUTPUT}"
@@ -194,13 +194,13 @@ jobs:
             echo "config_compat=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|api/|config/|charts/|Dockerfile(\..*)?$|hack/(ci/|tools/)|go\.(mod|sum)$|vendor/|website/assets/js/|\.trivyignore|\.trivy\.yaml|Makefile|mk/)'; then
+          if changed_matches '^(internal/|cmd/|api/|config/|charts/|Dockerfile(\..*)?$|hack/(ci/|tools/)|hack/dev/tool-versions\.env$|go\.(mod|sum)$|vendor/|website/assets/js/|\.trivyignore|\.trivy\.yaml|Makefile|mk/)'; then
             echo "security_scan=true" >> "${GITHUB_OUTPUT}"
           else
             echo "security_scan=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|go\.(mod|sum)$|vendor/|Dockerfile(\..*)?$|\.dockerignore|Makefile|mk/|\.github/workflows/ci\.yml)'; then
+          if changed_matches '^(internal/|cmd/|go\.(mod|sum)$|vendor/|Dockerfile(\..*)?$|\.dockerignore|hack/dev/tool-versions\.env$|Makefile|mk/|\.github/workflows/ci\.yml)'; then
             echo "security_image=true" >> "${GITHUB_OUTPUT}"
           else
             echo "security_image=false" >> "${GITHUB_OUTPUT}"
@@ -212,13 +212,13 @@ jobs:
             echo "fuzz=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|go\.(mod|sum)$|Makefile|mk/)'; then
+          if changed_matches '^(internal/|cmd/|api/|test/e2e/|Dockerfile(\..*)?$|hack/ci/|hack/dev/tool-versions\.env$|go\.(mod|sum)$|Makefile|mk/)'; then
             echo "e2e=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(api/stability/v1alpha1\.yaml|charts/openbao-operator/|release-notes/|test/e2e/suites\.yaml|test/fixtures/(api-migration|operator-upgrade)/|Dockerfile(\.init)?$|hack/ci/operator-upgrade-e2e\.sh|Makefile|mk/)'; then
+          if changed_matches '^(api/stability/v1alpha1\.yaml|charts/openbao-operator/|release-notes/|test/e2e/suites\.yaml|test/fixtures/(api-migration|operator-upgrade)/|Dockerfile(\.init)?$|hack/ci/operator-upgrade-e2e\.sh|hack/dev/tool-versions\.env$|Makefile|mk/)'; then
             echo "operator_upgrade_e2e=true" >> "${GITHUB_OUTPUT}"
           else
             echo "operator_upgrade_e2e=false" >> "${GITHUB_OUTPUT}"
@@ -268,9 +268,7 @@ jobs:
         run: make semgrep-ci
 
       - name: Install Trivy (safe pinned release)
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-        with:
-          version: v0.69.3
+        uses: ./.github/actions/setup-trivy
 
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
@@ -331,9 +329,7 @@ jobs:
         run: make ${{ matrix.build_target }} IMG="${{ matrix.image_ref }}"
 
       - name: Install Trivy (safe pinned release)
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-        with:
-          version: v0.69.3
+        uses: ./.github/actions/setup-trivy
 
       - name: Run Trivy image scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
@@ -599,9 +595,7 @@ jobs:
         run: make verify-helm
 
       - name: Setup Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-        with:
-          version: v4.1.1
+        uses: ./.github/actions/setup-helm
 
       - name: Lint
         run: helm lint charts/openbao-operator --namespace openbao-operator-system
@@ -626,12 +620,10 @@ jobs:
         uses: ./.github/actions/setup-repo-tools
 
       - name: Setup Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-        with:
-          version: v4.1.1
+        uses: ./.github/actions/setup-helm
 
-      - name: Install kind (pinned)
-        uses: ./.github/actions/install-kind
+      - name: Setup Kubernetes CLI tools
+        uses: ./.github/actions/setup-kubernetes-tools
         with:
           install-dir: bin/
 
@@ -852,13 +844,18 @@ jobs:
         with:
           cache-tools: false
 
-      - name: Setup Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Setup Helm 3 compatibility client
+        id: helm3
+        uses: ./.github/actions/setup-helm
         with:
-          version: v4.1.1
+          version-key: HELM3_COMPAT_VERSION
 
-      - name: Install kind (pinned)
-        uses: ./.github/actions/install-kind
+      - name: Setup Helm 4
+        id: helm4
+        uses: ./.github/actions/setup-helm
+
+      - name: Setup Kubernetes CLI tools
+        uses: ./.github/actions/setup-kubernetes-tools
         with:
           install-dir: bin/
 
@@ -871,6 +868,8 @@ jobs:
 
       - name: Upgrade previous stable operator to CI candidate
         env:
+          HELM: ${{ steps.helm4.outputs.helm-path }}
+          HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}
           OPERATOR_UPGRADE_E2E_MANAGER_SOURCE: ${{ needs.build-e2e-images.outputs.manager_ref }}
           OPERATOR_UPGRADE_E2E_INIT_SOURCE: ${{ needs.build-e2e-images.outputs.config_init_ref }}
         run: make test-e2e-operator-upgrade
@@ -1018,9 +1017,9 @@ jobs:
         if: env.SHOULD_RUN == 'true'
         uses: ./.github/actions/setup-repo-tools
 
-      - name: Install kind (pinned)
+      - name: Setup Kubernetes CLI tools
         if: env.SHOULD_RUN == 'true'
-        uses: ./.github/actions/install-kind
+        uses: ./.github/actions/setup-kubernetes-tools
         with:
           install-dir: bin/
 
