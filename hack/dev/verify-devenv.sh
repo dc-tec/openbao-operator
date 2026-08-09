@@ -44,15 +44,26 @@ if [[ "${devenv_root}" != "${ROOT_DIR}" ]]; then
 fi
 
 hooks_path="$(git config --local --get core.hooksPath 2>/dev/null || true)"
-if [[ "${hooks_path}" != ".githooks" ]]; then
-  fail "Devenv must configure core.hooksPath=.githooks, found ${hooks_path:-unset}"
+if [[ "${hooks_path}" == ".githooks" ]]; then
+  fail "Devenv did not migrate the retired core.hooksPath=.githooks setting"
 fi
-for hook in .githooks/pre-commit .githooks/pre-push hack/dev/pre-commit.sh hack/dev/pre-push.sh; do
+
+hooks_dir="$(git rev-parse --path-format=absolute --git-path hooks)"
+
+if [[ ! -L .pre-commit-config.yaml ]]; then
+  fail "Devenv did not generate .pre-commit-config.yaml"
+fi
+config_target="$(readlink .pre-commit-config.yaml)"
+if [[ "${config_target}" != /nix/store/* ]]; then
+  fail "Devenv Git hook configuration resolved outside the Nix store: ${config_target}"
+fi
+
+for hook in "${hooks_dir}/pre-commit" "${hooks_dir}/pre-push" hack/dev/pre-commit.sh hack/dev/pre-push.sh; do
   if [[ ! -x "${hook}" ]]; then
     fail "Devenv-managed Git hook is not executable: ${hook}"
   fi
 done
-ok "repository-local Git hooks are configured"
+ok "native Devenv Git hooks are configured"
 
 if [[ -z "${DEVENV_PROFILE:-}" ]]; then
   fail "DEVENV_PROFILE is not set inside devenv"

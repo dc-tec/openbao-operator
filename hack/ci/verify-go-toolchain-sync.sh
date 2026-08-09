@@ -43,24 +43,8 @@ for dockerfile in "${dockerfiles[@]}"; do
   fi
 done
 
-devcontainer_file=".devcontainer/devcontainer.json"
-devcontainer_tag="$(sed -nE 's/.*"image"[[:space:]]*:[[:space:]]*"golang:([^"@]+).*/\1/p' "${ROOT_DIR}/${devcontainer_file}" | head -n 1)"
-if [ -z "${devcontainer_tag}" ]; then
-  echo "error: ${devcontainer_file} does not declare a golang image" >&2
-  failed=true
-elif [[ ! "${devcontainer_tag}" =~ ^([0-9]+\.[0-9]+(\.[0-9]+)?(rc[0-9]+)?)(-|$) ]]; then
-  echo "error: ${devcontainer_file} uses an unrecognized golang tag: ${devcontainer_tag}" >&2
-  failed=true
-else
-  devcontainer_go_version="${BASH_REMATCH[1]}"
-  if [ "${devcontainer_go_version}" != "${go_mod_version}" ]; then
-    echo "error: ${devcontainer_file} uses golang:${devcontainer_tag}, but go.mod declares go ${go_mod_version}" >&2
-    failed=true
-  fi
-fi
-
 if [ "${failed}" = true ]; then
-  echo "Go toolchain versions must stay aligned across go.mod, Dockerfile builder images, and the devcontainer." >&2
+  echo "Go toolchain versions must stay aligned across go.mod and Dockerfile builder images." >&2
   exit 1
 fi
 

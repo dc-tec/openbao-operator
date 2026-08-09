@@ -91,27 +91,46 @@ in
     export PATH="$DEVENV_PROFILE/bin:$DEVENV_ROOT/bin:$GOPATH/bin:$PATH"
   '';
 
+  git-hooks.hooks = {
+    openbao-operator-pre-commit = {
+      enable = true;
+      name = "OpenBao Operator pre-commit";
+      entry = "${pkgs.bash}/bin/bash hack/dev/pre-commit.sh";
+      stages = [ "pre-commit" ];
+      pass_filenames = false;
+      always_run = true;
+    };
+
+    openbao-operator-pre-push = {
+      enable = true;
+      name = "OpenBao Operator pre-push";
+      entry = "${pkgs.bash}/bin/bash hack/dev/pre-push.sh";
+      stages = [ "pre-push" ];
+      pass_filenames = false;
+      always_run = true;
+    };
+  };
+
   tasks = {
-    "operator:git-hooks" = {
-      description = "Configure the repository-local Git hooks path";
-      exec = "make git-hooks-install";
+    "operator:migrate-legacy-git-hooks" = {
+      description = "Remove the retired .githooks path before Devenv installs native hooks";
+      exec = ''
+        if test "$(git config --local --get core.hooksPath 2>/dev/null || true)" = ".githooks"; then
+          git config --local --unset-all core.hooksPath
+        fi
+      '';
       status = ''
-        hooks_path="$(git config --local --get core.hooksPath 2>/dev/null || true)"
-        test "$hooks_path" = ".githooks" \
-          && test -x .githooks/pre-commit \
-          && test -x .githooks/pre-push \
-          && test -x hack/dev/pre-commit.sh \
-          && test -x hack/dev/pre-push.sh
+        test "$(git config --local --get core.hooksPath 2>/dev/null || true)" != ".githooks"
       '';
       cwd = config.git.root;
-      before = [ "devenv:enterShell" ];
+      before = [ "devenv:git-hooks:install" ];
     };
 
     "operator:verify-toolchain" = {
       description = "Verify the pinned service-independent toolchain contract";
       exec = "make verify-devenv";
       cwd = config.git.root;
-      after = [ "operator:git-hooks" ];
+      after = [ "devenv:git-hooks:install" ];
       before = [ "devenv:enterTest" ];
     };
 
@@ -119,21 +138,18 @@ in
       description = "Install repository-managed tools required by the core contributor workflow";
       exec = "make bootstrap";
       cwd = config.git.root;
-      after = [ "operator:git-hooks" ];
     };
 
     "operator:doctor" = {
       description = "Check external runtime prerequisites such as Docker and Kubernetes access";
       exec = "make doctor";
       cwd = config.git.root;
-      after = [ "operator:git-hooks" ];
     };
 
     "operator:ci-core" = {
       description = "Run the cluster-independent pull-request-equivalent gate";
       exec = "make ci-core";
       cwd = config.git.root;
-      after = [ "operator:git-hooks" ];
     };
   };
 }

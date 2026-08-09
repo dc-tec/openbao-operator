@@ -15,7 +15,6 @@ verifiedBy:
   - mk/build.mk
   - go.mod
   - .hugo-version
-  - .devcontainer/post-install.sh
 ---
 
 Use the pinned development environment and run the repository-managed bootstrap before changing code. Use a cluster
@@ -25,13 +24,12 @@ loop only when the behavior depends on admission, RBAC, networking, storage, or 
 
 Install [Nix](https://nixos.org/download/) and [devenv](https://devenv.sh/getting-started/), then let `devenv.lock`
 select the package set. The environment reads the repository's existing Go and Hugo declarations and rejects a
-package set that does not match them. Shared CLI versions live in `hack/dev/tool-versions.env`; Devenv, the
-devcontainer, and GitHub Actions consume that manifest. The environment supplies Docker CLI, kubectl, Helm 4,
-Trivy, Python 3, Kind, and Tilt.
+package set that does not match them. Shared CLI versions live in `hack/dev/tool-versions.env`; Devenv and GitHub
+Actions consume that manifest. The environment supplies Docker CLI, kubectl, Helm 4, Trivy, Python 3,
+Kind, and Tilt.
 
 Docker daemon access and a Kubernetes cluster remain external runtime dependencies. Kind is available for a
-reproducible local cluster; Tilt shortens repeated in-cluster rebuilds. The devcontainer remains a supported fallback
-while it is migrated to the same generated environment contract.
+reproducible local cluster; Tilt shortens repeated in-cluster rebuilds.
 
 {{< command label="verify" title="Validate and enter the development environment" >}}
 devenv test
@@ -41,13 +39,11 @@ devenv shell
 {{< /command >}}
 
 `devenv test` validates the pinned, service-independent toolchain contract. Entering or testing the environment also
-configures the repository-local Git hooks idempotently. `operator:bootstrap` installs the additional repository-managed
-tools required by the core contributor workflow, while `operator:doctor` checks external services such as Docker and
-Kubernetes access. Run `devenv tasks list` to inspect the supported contributor entry points. Specialized Make targets
-install their debugger, live-reload, mutation, or benchmark tools only when invoked.
-
-Outside Devenv, `make bootstrap`, `make git-hooks-install`, and `make doctor` remain explicit fallbacks. Treat the hook
-bypass variables as deliberate one-off exceptions, not a normal workflow.
+installs the declaratively configured pre-commit and pre-push hooks idempotently. `operator:bootstrap` installs the
+additional repository-managed tools required by the core contributor workflow, while `operator:doctor` checks external
+services such as Docker and Kubernetes access. Run `devenv tasks list` to inspect the supported contributor entry
+points. Specialized Make targets install their debugger, live-reload, mutation, or benchmark tools only when invoked.
+Treat the hook bypass variables as deliberate one-off exceptions, not a normal workflow.
 
 The default shell keeps the runtime and CI toolchain small. Activate the optional editor profile when an editor needs
 Gopls, Delve, or the additional Go editor helpers supplied by Devenv:

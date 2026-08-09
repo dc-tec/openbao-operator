@@ -210,7 +210,6 @@ devops:
           - 'hack/build*'
           - 'hack/release*'
           - '.golangci.yml'
-          - '.devcontainer/**/*'
           - '.vscode/**/*'
           - 'release-please-*.json'
           - 'hack/boilerplate.go.txt'
