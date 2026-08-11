@@ -1,10 +1,10 @@
 {
   "channel": "nightly",
   "checksums": {
-    "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:e5355a5b6c6d17e89eca3eec7be991766f702513d838b612f27fc5ff366bd023",
-    "digest": "sha256:e5355a5b6c6d17e89eca3eec7be991766f702513d838b612f27fc5ff366bd023",
+    "attestation_api": "https://api.github.com/repos/dc-tec/openbao-operator/attestations/sha256:06ef4a7a937e24c183792c329bf8cf4bae46cb7610572325ae4fa2f94e8af2a8",
+    "digest": "sha256:06ef4a7a937e24c183792c329bf8cf4bae46cb7610572325ae4fa2f94e8af2a8",
     "path": "../dist/checksums.txt",
-    "signature_bundle_digest": "sha256:01558bed8b9b95f1dfd487b618d4a7253f10cd75b65ddc819acea019c7681277",
+    "signature_bundle_digest": "sha256:d038806f85a2b9523ac55365aa292383d3648aa3e57d2ee9edfd11a43b559599",
     "signature_bundle_path": "../dist/checksums.txt.bundle"
   },
   "commit": "40bc6cd5a2c29cc0e790dcc69fe57950e8a210c7",
@@ -59,7 +59,7 @@
       "path": "../dist/crds.yaml"
     },
     "install_yaml": {
-      "digest": "sha256:0792010ad0118fe906c720bd8176a16da5b1de4a171e741ce1177b0906866fc1",
+      "digest": "sha256:1590220cba34c555030f9202e0f560c1bf4c5b0409071855f75d44f112036815",
       "path": "../dist/install.yaml"
     }
   },
@@ -67,9 +67,9 @@
   "repository": "dc-tec/openbao-operator",
   "run": {
     "attempt": "1",
-    "id": "31356967091"
+    "id": "31458786682"
   },
   "schema_version": "v1alpha1",
   "source_ref": "refs/heads/main",
-  "version": "nightly-20260810-40bc6cd5a2c2"
+  "version": "nightly-20260811-40bc6cd5a2c2"
 }
