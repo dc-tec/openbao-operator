@@ -82,8 +82,10 @@ For a patch, use `target_branch=release-X.Y` and a version in that release line.
 missing or mismatched branches, existing tags or releases, open release-please PRs, and conflicting marker state. It
 creates an empty signed-off commit containing `Release-As: <version>` on an `automation/release-as-*` branch.
 
-Merge the marker PR first. The branch-aware `Release Please PR` workflow then opens or updates the actual release PR.
-The direct `release_as` dispatch input remains available, but the marker PR is the preferred auditable path.
+Merge the marker PR first. Because protected branches require squash merges, the branch-aware `Release Please PR`
+workflow validates that the resulting marker commit is empty and recovers the exact version from its generated squash
+subject. It then opens or updates the actual release PR. The direct `release_as` dispatch input remains available, but
+the marker PR is the preferred auditable path.
 
 ## Review and merge the release PR
 

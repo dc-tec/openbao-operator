@@ -210,7 +210,8 @@ jobs:
 
           ## Reviewer Notes
 
-          Merge this marker PR before reviewing the generated release-please PR.
+          Merge this marker PR before reviewing the generated release-please PR. The Release Please workflow
+          validates the empty squash commit and recovers the exact version from this PR's generated title.
 
           Release-As: ${VERSION}
 
