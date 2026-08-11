@@ -7,7 +7,7 @@ usage() {
 usage: VERSION=X.Y.Z [REPO=dc-tec/openbao-operator] hack/ci/verify-post-release.sh
 
 Verifies the post-release invariants that should hold after the Release workflow
-has published a stable release.
+has published a stable or prerelease release.
 
 Environment:
   VERSION       Required release version, for example 0.3.0.
@@ -101,6 +101,15 @@ fi
 is_draft="$(jq -r '.isDraft' <<<"${release_json}")"
 if [[ "${is_draft}" == "true" && "${ALLOW_DRAFT}" != "1" ]]; then
   fail "GitHub Release ${VERSION} is still a draft"
+fi
+
+expected_prerelease="false"
+if [[ "${VERSION}" == *-* ]]; then
+  expected_prerelease="true"
+fi
+is_prerelease="$(jq -r '.isPrerelease' <<<"${release_json}")"
+if [[ "${is_prerelease}" != "${expected_prerelease}" ]]; then
+  fail "GitHub Release ${VERSION} prerelease flag is '${is_prerelease}', expected '${expected_prerelease}'"
 fi
 
 mapfile -t asset_names < <(jq -r '.assets[].name' <<<"${release_json}" | LC_ALL=C sort)
@@ -282,6 +291,7 @@ if [[ -n "${EVIDENCE_OUT}" ]]; then
       checks: {
         remote_tag_present: true,
         github_release_published: true,
+        github_release_prerelease_flag_verified: true,
         required_assets_present: true,
         checksums_signature_verified: true,
         helm_chart_published: true,

@@ -6,6 +6,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VALIDATOR="${ROOT_DIR}/hack/ci/validate-release-as-request.sh"
 CHART_PREPARER="${ROOT_DIR}/hack/ci/prepare-release-chart.sh"
 SPDX_NORMALIZER="${ROOT_DIR}/hack/ci/normalize-spdx-json.sh"
+POST_RELEASE_VERIFIER="${ROOT_DIR}/hack/ci/verify-post-release.sh"
+RELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release.yml"
+RELEASE_PR_GATE_WORKFLOW="${ROOT_DIR}/.github/workflows/release-pr-gate.yml"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
@@ -76,7 +79,22 @@ assert_not_contains() {
   fi
 }
 
-bash -n "${VALIDATOR}" "${CHART_PREPARER}" "${SPDX_NORMALIZER}"
+bash -n "${VALIDATOR}" "${CHART_PREPARER}" "${SPDX_NORMALIZER}" "${POST_RELEASE_VERIFIER}"
+
+assert_contains "${RELEASE_WORKFLOW}" "Setup Helm 3 compatibility client"
+assert_contains "${RELEASE_WORKFLOW}" 'HELM: ${{ steps.helm4.outputs.helm-path }}'
+assert_contains "${RELEASE_WORKFLOW}" 'HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}'
+
+assert_contains "${RELEASE_PR_GATE_WORKFLOW}" "pull_request_review:"
+assert_contains "${RELEASE_PR_GATE_WORKFLOW}" "      - dismissed"
+assert_contains "${RELEASE_PR_GATE_WORKFLOW}" 'head_sha="$(gh api'
+assert_contains "${RELEASE_PR_GATE_WORKFLOW}" 'review_state="$(jq -r'
+assert_contains "${RELEASE_PR_GATE_WORKFLOW}" 'review_commit="$(jq -r'
+assert_not_contains "${RELEASE_PR_GATE_WORKFLOW}" "    paths:"
+
+assert_contains "${POST_RELEASE_VERIFIER}" 'if [[ "${VERSION}" == *-* ]]; then'
+assert_contains "${POST_RELEASE_VERIFIER}" 'if [[ "${is_prerelease}" != "${expected_prerelease}" ]]; then'
+assert_contains "${POST_RELEASE_VERIFIER}" "github_release_prerelease_flag_verified: true"
 
 spdx_fixture="${tmp_dir}/normalizer.spdx.json"
 cat > "${spdx_fixture}" <<'EOF'
