@@ -136,8 +136,15 @@ fi
 ok "Tilt matches tool-versions.env (${current_tilt})"
 
 for command_name in \
-  bash curl docker git go helm hugo jq kind kubectl make python3 tilt trivy; do
+  bash check-jsonschema curl docker git go helm hugo jq kind kubectl make python3 tilt trivy; do
   require_nix_command "${command_name}"
 done
+
+for schema_path in "${SPDX_SCHEMA_2_2:-}" "${SPDX_SCHEMA_2_3:-}"; do
+  if [[ "${schema_path}" != /nix/store/* || ! -f "${schema_path}" ]]; then
+    fail "SPDX schemas must resolve to immutable Nix store files, found ${schema_path:-unset}"
+  fi
+done
+ok "SPDX 2.2 and 2.3 schemas resolve to immutable Nix store files"
 
 printf '\nPinned devenv toolchain contract verified.\n'

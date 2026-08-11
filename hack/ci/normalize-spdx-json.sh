@@ -33,17 +33,19 @@ def sort_list(entries, keys):
 def canonicalize(node):
     if isinstance(node, dict):
         out = {k: canonicalize(v) for k, v in node.items()}
-        out["packages"] = sort_list(out.get("packages"), ("SPDXID", "name", "versionInfo"))
-        out["relationships"] = sort_list(
-            out.get("relationships"),
-            ("spdxElementId", "relationshipType", "relatedSpdxElement", "comment"),
+        sortable_fields = (
+            ("packages", ("SPDXID", "name", "versionInfo")),
+            (
+                "relationships",
+                ("spdxElementId", "relationshipType", "relatedSpdxElement", "comment"),
+            ),
+            ("files", ("SPDXID", "fileName")),
+            ("annotations", ("SPDXID", "annotationDate", "comment")),
+            ("hasExtractedLicensingInfos", ("licenseId", "name", "comment")),
         )
-        out["files"] = sort_list(out.get("files"), ("SPDXID", "fileName"))
-        out["annotations"] = sort_list(out.get("annotations"), ("SPDXID", "annotationDate", "comment"))
-        out["hasExtractedLicensingInfos"] = sort_list(
-            out.get("hasExtractedLicensingInfos"),
-            ("licenseId", "name", "comment"),
-        )
+        for field, keys in sortable_fields:
+            if field in out:
+                out[field] = sort_list(out[field], keys)
         return out
     if isinstance(node, list):
         return [canonicalize(v) for v in node]

@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VALIDATOR="${ROOT_DIR}/hack/ci/validate-release-as-request.sh"
 CHART_PREPARER="${ROOT_DIR}/hack/ci/prepare-release-chart.sh"
+SPDX_NORMALIZER="${ROOT_DIR}/hack/ci/normalize-spdx-json.sh"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
@@ -75,7 +76,52 @@ assert_not_contains() {
   fi
 }
 
-bash -n "${VALIDATOR}" "${CHART_PREPARER}"
+bash -n "${VALIDATOR}" "${CHART_PREPARER}" "${SPDX_NORMALIZER}"
+
+spdx_fixture="${tmp_dir}/normalizer.spdx.json"
+cat > "${spdx_fixture}" <<'EOF'
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "creationInfo": {
+    "created": "2040-01-01T00:00:00Z",
+    "creators": ["Tool: release-automation-test"]
+  },
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://example.test/original",
+  "files": [
+    {
+      "SPDXID": "SPDXRef-File-A",
+      "checksums": [{"algorithm": "SHA256", "checksumValue": "aa"}],
+      "fileName": "a"
+    }
+  ],
+  "name": "normalizer-test",
+  "packages": [],
+  "relationships": []
+}
+EOF
+SOURCE_DATE_EPOCH=1700000000 bash "${SPDX_NORMALIZER}" "${spdx_fixture}"
+python3 - "${spdx_fixture}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+document = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+checksum = document["files"][0]["checksums"][0]
+if set(checksum) != {"algorithm", "checksumValue"}:
+    raise SystemExit(f"normalizer added fields to checksum object: {sorted(checksum)}")
+creation_info = document["creationInfo"]
+unexpected = {
+    "packages",
+    "relationships",
+    "files",
+    "annotations",
+    "hasExtractedLicensingInfos",
+}.intersection(creation_info)
+if unexpected:
+    raise SystemExit(f"normalizer added fields to creationInfo: {sorted(unexpected)}")
+PY
 
 expect_valid_request "main" "0.5.0-rc.1" "automation/release-as-main-0.5.0-rc.1"
 expect_valid_request "release-0.5" "0.5.1" "automation/release-as-release-0.5-0.5.1"

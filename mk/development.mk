@@ -130,6 +130,10 @@ verify-go-toolchain-sync: ## Verify go.mod and Dockerfile builders use the same 
 verify-release-automation: ## Test release request validation and Artifact Hub metadata generation.
 	@bash hack/ci/test-release-automation.sh
 
+.PHONY: verify-spdx-normalizer
+verify-spdx-normalizer: ## Validate deterministic SPDX normalization against the SPDX 2.2 and 2.3 schemas.
+	@bash hack/ci/test-normalize-spdx-json.sh
+
 .PHONY: verify-workflows
 verify-workflows: actionlint verify-release-automation ## Validate workflows and release automation.
 	@"$(ACTIONLINT)" .github/workflows/*.yml
