@@ -383,7 +383,14 @@ jobs:
         with:
           cache-tools: false
 
-      - name: Setup Helm
+      - name: Setup Helm 3 compatibility client
+        id: helm3
+        uses: ./.github/actions/setup-helm
+        with:
+          version-key: HELM3_COMPAT_VERSION
+
+      - name: Setup Helm 4
+        id: helm4
         uses: ./.github/actions/setup-helm
 
       - name: Setup Kubernetes CLI tools
@@ -400,6 +407,8 @@ jobs:
 
       - name: Upgrade previous stable operator to release candidate
         env:
+          HELM: ${{ steps.helm4.outputs.helm-path }}
+          HELM_INSTALL: ${{ steps.helm3.outputs.helm-path }}
           OPERATOR_UPGRADE_E2E_TARGET_VERSION: ${{ needs.prepare.outputs.version }}
           OPERATOR_UPGRADE_E2E_MANAGER_SOURCE: >-
             ${{ needs.prepare.outputs.manager_image }}:${{ needs.prepare.outputs.build_tag }}

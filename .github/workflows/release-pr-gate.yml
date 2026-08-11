@@ -4,12 +4,15 @@ on:
   pull_request_target:
     types:
       - opened
+      - reopened
       - synchronize
       - labeled
+      - unlabeled
       - ready_for_review
-    paths:
-      - 'CHANGELOG.md'
-      - '.release-please-manifest.json'
+  pull_request_review:
+    types:
+      - submitted
+      - dismissed
 
 permissions:
   contents: read
@@ -50,11 +53,23 @@ jobs:
             exit 1
           fi
 
-          # Require an explicit approval from a designated release manager.
-          # Note: GitHub required-review settings usually ignore self-approvals.
-          approvers="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" --paginate --jq '.[] | select(.state=="APPROVED") | .user.login' | sort -u)"
-          if ! echo "${approvers}" | grep -qx "${REQUIRED_APPROVER}"; then
-            echo "Missing required approval from '${REQUIRED_APPROVER}' on release PR." >&2
+          # Require the designated release manager's latest review to approve the
+          # current head commit. A later review or push invalidates an older approval.
+          head_sha="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          reviews="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/reviews" --paginate --jq '.[]')"
+          latest_review="$(
+            jq -sc \
+              --arg required_approver "${REQUIRED_APPROVER}" \
+              '[.[] | select(.user.login == $required_approver)]
+               | sort_by(.submitted_at // "", .id // 0)
+               | last // {}' \
+              <<<"${reviews}"
+          )"
+          review_state="$(jq -r '.state // ""' <<<"${latest_review}")"
+          review_commit="$(jq -r '.commit_id // ""' <<<"${latest_review}")"
+          if [[ "${review_state}" != "APPROVED" || "${review_commit}" != "${head_sha}" ]]; then
+            echo "Missing current-head approval from '${REQUIRED_APPROVER}' on release PR." >&2
+            echo "Expected APPROVED review for ${head_sha}; got state='${review_state}' commit='${review_commit}'." >&2
             exit 1
           fi
 
