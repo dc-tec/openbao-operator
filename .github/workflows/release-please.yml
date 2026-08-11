@@ -26,8 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ !github.event.repository.fork }}
     steps:
-      - name: Checkout for release-only guard
-        if: ${{ github.event_name == 'push' }}
+      - name: Checkout release tooling and release-only guard
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -69,6 +68,28 @@ jobs:
           echo "Push only changed release artifacts; skipping release-please."
           echo "skip_release_please=true" >> "${GITHUB_OUTPUT}"
 
+      - name: Resolve Release-As override
+        id: release-as
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_BRANCH: ${{ github.ref_name }}
+          DISPATCH_RELEASE_AS: ${{ inputs.release_as || '' }}
+        run: |
+          set -euo pipefail
+
+          commit_subject=""
+          commit_is_empty="false"
+          if [[ "${EVENT_NAME}" == "push" ]]; then
+            commit_subject="$(git show -s --format=%s "${GITHUB_SHA}")"
+            if git diff --quiet "${GITHUB_SHA}^" "${GITHUB_SHA}"; then
+              commit_is_empty="true"
+            fi
+          fi
+
+          COMMIT_SUBJECT="${commit_subject}" \
+            COMMIT_IS_EMPTY="${commit_is_empty}" \
+            bash hack/ci/resolve-release-as-override.sh
+
       - name: Mint GitHub App token (openbao-operator-release-pr)
         id: app-token
         if: ${{ steps.release-artifact-guard.outputs.skip_release_please != 'true' }}
@@ -91,7 +112,7 @@ jobs:
           target-branch: ${{ github.ref_name }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          release-as: ${{ github.event_name == 'workflow_dispatch' && inputs.release_as || '' }}
+          release-as: ${{ steps.release-as.outputs.release_as }}
           skip-github-release: true
 
       - name: Check out release PR branch

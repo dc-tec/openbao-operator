@@ -4,10 +4,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VALIDATOR="${ROOT_DIR}/hack/ci/validate-release-as-request.sh"
+RELEASE_AS_RESOLVER="${ROOT_DIR}/hack/ci/resolve-release-as-override.sh"
 CHART_PREPARER="${ROOT_DIR}/hack/ci/prepare-release-chart.sh"
 SPDX_NORMALIZER="${ROOT_DIR}/hack/ci/normalize-spdx-json.sh"
 POST_RELEASE_VERIFIER="${ROOT_DIR}/hack/ci/verify-post-release.sh"
 RELEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release.yml"
+RELEASE_PLEASE_WORKFLOW="${ROOT_DIR}/.github/workflows/release-please.yml"
 RELEASE_PR_GATE_WORKFLOW="${ROOT_DIR}/.github/workflows/release-pr-gate.yml"
 
 tmp_dir="$(mktemp -d)"
@@ -41,6 +43,28 @@ expect_invalid_request() {
 
   if TARGET_BRANCH="${target_branch}" VERSION="${version}" bash "${VALIDATOR}" >/dev/null 2>&1; then
     fail "expected target='${target_branch}' version='${version}' to be rejected"
+  fi
+}
+
+resolve_release_as() {
+  local event_name="$1"
+  local target_branch="$2"
+  local dispatch_release_as="$3"
+  local commit_subject="$4"
+  local commit_is_empty="$5"
+
+  env -u GITHUB_OUTPUT \
+    EVENT_NAME="${event_name}" \
+    TARGET_BRANCH="${target_branch}" \
+    DISPATCH_RELEASE_AS="${dispatch_release_as}" \
+    COMMIT_SUBJECT="${commit_subject}" \
+    COMMIT_IS_EMPTY="${commit_is_empty}" \
+    bash "${RELEASE_AS_RESOLVER}"
+}
+
+expect_invalid_release_as_resolution() {
+  if resolve_release_as "$@" >/dev/null 2>&1; then
+    fail "expected Release-As resolution to fail for '$*'"
   fi
 }
 
@@ -79,7 +103,16 @@ assert_not_contains() {
   fi
 }
 
-bash -n "${VALIDATOR}" "${CHART_PREPARER}" "${SPDX_NORMALIZER}" "${POST_RELEASE_VERIFIER}"
+bash -n \
+  "${VALIDATOR}" \
+  "${RELEASE_AS_RESOLVER}" \
+  "${CHART_PREPARER}" \
+  "${SPDX_NORMALIZER}" \
+  "${POST_RELEASE_VERIFIER}"
+
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" "Resolve Release-As override"
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" "bash hack/ci/resolve-release-as-override.sh"
+assert_contains "${RELEASE_PLEASE_WORKFLOW}" 'release-as: ${{ steps.release-as.outputs.release_as }}'
 
 assert_contains "${RELEASE_WORKFLOW}" "Setup Helm 3 compatibility client"
 assert_contains "${RELEASE_WORKFLOW}" 'HELM: ${{ steps.helm4.outputs.helm-path }}'
@@ -149,6 +182,51 @@ expect_invalid_request "release-0.5" "0.6.0"
 expect_invalid_request "main" "0.5"
 expect_invalid_request "main" "00.5.0"
 expect_invalid_request "main" "0.5.0-rc.01"
+
+release_as="$(
+  resolve_release_as \
+    "push" \
+    "main" \
+    "" \
+    "chore(main): request release 0.5.0-rc.1 (#619)" \
+    "true"
+)"
+[[ "${release_as}" == "0.5.0-rc.1" ]] || fail "failed to recover the squash-safe Release-As version"
+
+release_as="$(
+  resolve_release_as \
+    "workflow_dispatch" \
+    "release-0.5" \
+    "0.5.1" \
+    "" \
+    "false"
+)"
+[[ "${release_as}" == "0.5.1" ]] || fail "failed to preserve the dispatch Release-As version"
+
+release_as="$(resolve_release_as "push" "main" "" "fix(release): normal change (#620)" "false")"
+[[ -z "${release_as}" ]] || fail "normal pushes must not set a Release-As override"
+
+release_as="$(resolve_release_as "workflow_dispatch" "main" "" "" "false")"
+[[ -z "${release_as}" ]] || fail "an empty dispatch override must stay empty"
+
+expect_invalid_release_as_resolution \
+  "push" \
+  "main" \
+  "" \
+  "chore(main): request release 0.5.0-rc.1 (#619)" \
+  "false"
+expect_invalid_release_as_resolution \
+  "push" \
+  "main" \
+  "" \
+  "chore(release-0.5): request release 0.5.1 (#619)" \
+  "true"
+expect_invalid_release_as_resolution \
+  "push" \
+  "main" \
+  "" \
+  "chore(main): request release 0.5.0-rc.01 (#619)" \
+  "true"
 
 marker_branch="$(env -u GITHUB_OUTPUT TARGET_BRANCH=main VERSION=0.5.0-rc.1 bash "${VALIDATOR}")"
 if [[ "${marker_branch}" == release-* ]]; then
