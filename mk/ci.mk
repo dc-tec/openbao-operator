@@ -15,7 +15,7 @@ endif
 	@echo "✅ All CI checks passed!"
 
 .PHONY: ci-core
-ci-core: security-ci security-scan-built-images lint-ci verify-fmt verify-tidy verify-go-toolchain-sync verify-workflows verify-vendor verify-generated verify-api-stability-inventory report-crd-compatibility verify-e2e-manifest verify-operator-upgrade-e2e test-ci fuzz verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
+ci-core: security-ci security-scan-built-images lint-ci verify-fmt verify-tidy verify-go-toolchain-sync verify-workflows verify-spdx-normalizer verify-vendor verify-generated verify-api-stability-inventory report-crd-compatibility verify-e2e-manifest verify-operator-upgrade-e2e test-ci fuzz verify-openbao-config-compat docs-build verify-helm helm-test ## Run all CI checks except E2E tests (cluster-independent).
 
 CI_MANAGER_SCAN_IMG ?= local/openbao-operator:ci
 CI_INIT_SCAN_IMG ?= local/openbao-init:ci

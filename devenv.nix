@@ -44,6 +44,22 @@ let
       throw "${name} version mismatch: expected ${expected}, nixpkgs provides ${lib.getVersion package}";
 
   goPackage = exactPackage "Go" goVersion pkgs.go;
+  spdxSchema22 = pkgs.fetchurl {
+    url = "https://raw.githubusercontent.com/spdx/spdx-spec/a05c12a2dd4652b1396fd2659f2cd3ea1f37faba/schemas/spdx-schema.json";
+    hash = "sha256-yDKNFMM2Iaa+kXVprUwyPTcCIEEu263cN8zx6T48qIo=";
+  };
+  spdxSchema23 = pkgs.fetchurl {
+    url = "https://raw.githubusercontent.com/spdx/spdx-spec/aadf3b0b8dbbabdb4d880b0fc714255fea436ff7/schemas/spdx-schema.json";
+    hash = "sha256-I5IIt6woezz12amvI/nWmGOXEQKl4Vh6J6OYtDSQuJs=";
+  };
+  spdxFixture22 = pkgs.fetchurl {
+    url = "https://raw.githubusercontent.com/spdx/spdx-spec/a05c12a2dd4652b1396fd2659f2cd3ea1f37faba/examples/SPDXJSONExample-v2.2.spdx.json";
+    hash = "sha256-4FusyQ1y2fUwu+aLdspor9duoLBzuUXHvJdfUiBRrOw=";
+  };
+  spdxFixture23 = pkgs.fetchurl {
+    url = "https://raw.githubusercontent.com/anchore/syft/2293641e3bd628a01bb37639318d62c0ebe89b39/syft/format/spdxjson/testdata/identify/2.3.json";
+    hash = "sha256-OaBZ+Nf1kvK7H1DQrjH1aKlEcUBdyLEq+OOMCQSsvAU=";
+  };
 
 in
 {
@@ -51,6 +67,7 @@ in
 
   packages = [
     pkgs.bash
+    pkgs.check-jsonschema
     pkgs.coreutils
     pkgs.curl
     pkgs.docker-client
@@ -75,6 +92,10 @@ in
     # Match the Go language module's normalized value when the editor profile is active.
     GOROOT = "${goPackage}/share/go/";
     GOTOOLCHAIN = "local";
+    SPDX_SCHEMA_2_2 = "${spdxSchema22}";
+    SPDX_SCHEMA_2_3 = "${spdxSchema23}";
+    SPDX_FIXTURE_2_2 = "${spdxFixture22}";
+    SPDX_FIXTURE_2_3 = "${spdxFixture23}";
   };
 
   profiles.editor.module = {
@@ -131,6 +152,14 @@ in
       exec = "make verify-devenv";
       cwd = config.git.root;
       after = [ "devenv:git-hooks:install" ];
+      before = [ "devenv:enterTest" ];
+    };
+
+    "operator:verify-spdx-normalizer" = {
+      description = "Validate deterministic SPDX normalization against SPDX 2.2 and 2.3";
+      exec = "make verify-spdx-normalizer";
+      cwd = config.git.root;
+      after = [ "operator:verify-toolchain" ];
       before = [ "devenv:enterTest" ];
     };
 

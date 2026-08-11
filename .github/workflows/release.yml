@@ -739,7 +739,22 @@ jobs:
             dist/primary/sbom-openbao-init.spdx.json
             dist/primary/sbom-openbao-backup.spdx.json
             dist/primary/sbom-openbao-upgrade.spdx.json
-          retention-days: 7
+          retention-days: 30
+
+      - name: Upload rebuild validation assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-rebuild-validation-assets
+          path: |
+            dist/rebuild/install.yaml
+            dist/rebuild/crds.yaml
+            dist/rebuild/checksums.txt
+            dist/rebuild/openbao-operator-${{ needs.prepare.outputs.chart_version }}.tgz
+            dist/rebuild/sbom-openbao-operator.spdx.json
+            dist/rebuild/sbom-openbao-init.spdx.json
+            dist/rebuild/sbom-openbao-backup.spdx.json
+            dist/rebuild/sbom-openbao-upgrade.spdx.json
+          retention-days: 30
 
       - name: Upload reproducibility report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
