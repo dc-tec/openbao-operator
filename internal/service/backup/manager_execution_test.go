@@ -240,6 +240,42 @@ func TestReconcile_ProcessesOwnedBackupBeforePendingOperations(t *testing.T) {
 	}
 }
 
+func TestReconcile_RestoreInProgressRequeues(t *testing.T) {
+	cluster := newTestClusterWithBackup("restore-requeue", "default")
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "active-restore",
+			Namespace: cluster.Namespace,
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{Cluster: cluster.Name},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseRunning,
+		},
+	}
+
+	k8sClient := newTestClient(t, cluster, restore)
+	manager := newBackupManager(k8sClient)
+
+	result, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result.RequeueAfter != constants.RequeueShort {
+		t.Fatalf("RequeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueShort)
+	}
+
+	jobs := &batchv1.JobList{}
+	if err := k8sClient.List(context.Background(), jobs,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabels(backupLabels(cluster)),
+	); err != nil {
+		t.Fatalf("List() backup Jobs error = %v", err)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("backup Jobs = %d, want 0", len(jobs.Items))
+	}
+}
+
 func TestReconcile_ProcessesOwnedTerminalJobFromSingleObservation(t *testing.T) {
 	cluster := newTestClusterWithBackup("terminal-list-race", "default")
 	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{

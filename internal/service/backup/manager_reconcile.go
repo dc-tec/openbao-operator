@@ -76,8 +76,10 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
-	if shouldSkip, err := m.handleRestoreInProgress(ctx, logger, cluster, backupDue); shouldSkip || err != nil {
+	if shouldSkip, err := m.handleRestoreInProgress(ctx, logger, cluster, backupDue); err != nil {
 		return recon.Result{}, err
+	} else if shouldSkip {
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	if err := m.checkPreconditions(ctx, logger, cluster); err != nil {

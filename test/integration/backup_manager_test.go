@@ -222,8 +222,8 @@ func TestBackupManager_RestoreInProgress_ReleasesStaleBackupLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
-	if result.RequeueAfter != 0 {
-		t.Fatalf("expected no requeue while restore is in progress, got %v", result.RequeueAfter)
+	if result.RequeueAfter != constants.RequeueShort {
+		t.Fatalf("expected short requeue while restore is in progress, got %v", result.RequeueAfter)
 	}
 
 	var updated openbaov1alpha1.OpenBaoCluster
