@@ -77,7 +77,10 @@ func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config imag
 	}
 
 	// Step 2: Check verification cache BEFORE expensive cryptographic verification
-	cacheKey := v.cacheKey(digest, config)
+	cacheKey, err := v.cacheKey(digest, config)
+	if err != nil {
+		return "", fmt.Errorf("failed to create image verification cache key: %w", err)
+	}
 	if v.cache.isVerifiedByKey(cacheKey) {
 		v.logger.V(1).Info("Image verification cache hit", "digest", digest)
 		return digest, nil

@@ -2,6 +2,7 @@ package security
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -236,7 +237,7 @@ func TestImageVerifier_Verify_KeylessRegExpCacheHit(t *testing.T) {
 		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
 		SubjectRegExp: "^https://github\\.com/dc-tec/openbao-operator/.+@refs/tags/.+$",
 	}
-	cacheKey := verifier.cacheKey(testImageDigest, config)
+	cacheKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
 	verifier.cache.markVerifiedByKey(cacheKey)
 
 	result, err := verifier.Verify(context.Background(), testImageDigest, config)
@@ -262,7 +263,7 @@ func TestImageVerifier_Verify_CacheHit(t *testing.T) {
 	// Mark as verified in cache using the cache key method
 	// With the new cache-first implementation, if we pre-populate the cache
 	// with the digest, the Verify method should return early without calling verifyImageSignature
-	cacheKey := verifier.cacheKey(digest, config)
+	cacheKey := requireImageVerificationCacheKey(t, verifier, digest, config)
 	verifier.cache.markVerifiedByKey(cacheKey)
 
 	ctx := context.Background()
@@ -523,130 +524,158 @@ func TestTagResolutionCache_ConcurrentAccess(t *testing.T) {
 	}
 }
 
-func TestImageVerifier_CacheKey_StaticKey(t *testing.T) {
-	logger := logr.Discard()
-	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client, nil)
+func requireImageVerificationCacheKey(
+	t *testing.T,
+	verifier *ImageVerifier,
+	digest string,
+	config imageverify.VerifyConfig,
+) string {
+	t.Helper()
+
+	key, err := verifier.cacheKey(digest, config)
+	if err != nil {
+		t.Fatalf("cacheKey() error = %v", err)
+	}
+	return key
+}
+
+func TestImageVerifier_CacheKey_DeterministicAndOpaque(t *testing.T) {
+	verifier := NewImageVerifier(logr.Discard(), fake.NewClientBuilder().Build(), nil)
+	config := imageverify.VerifyConfig{
+		PublicKey:        "sensitive-public-key-material",
+		Issuer:           testOIDCIssuer,
+		Subject:          testOIDCSubject,
+		IssuerRegExp:     "issuer-regexp",
+		SubjectRegExp:    "subject-regexp",
+		IgnoreTlog:       true,
+		ImagePullSecrets: []corev1.LocalObjectReference{{Name: "registry-credentials"}},
+		Namespace:        "tenant-a",
+	}
+
+	firstKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
+	secondKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
+
+	if firstKey != secondKey {
+		t.Fatalf("cacheKey() must be deterministic, got %q and %q", firstKey, secondKey)
+	}
+	if len(firstKey) != len("sha256:")+sha256.Size*2 || !strings.HasPrefix(firstKey, "sha256:") {
+		t.Fatalf("cacheKey() = %q, want an opaque SHA-256 identity", firstKey)
+	}
+	for _, rawValue := range []string{testImageDigest, config.PublicKey, config.Issuer, config.Namespace} {
+		if strings.Contains(firstKey, rawValue) {
+			t.Fatalf("cacheKey() exposes raw identity value %q", rawValue)
+		}
+	}
+}
+
+func TestImageVerifier_CacheKey_PartitionsCompletePolicy(t *testing.T) {
+	verifier := NewImageVerifier(logr.Discard(), fake.NewClientBuilder().Build(), nil)
+	baseConfig := imageverify.VerifyConfig{
+		PublicKey:        "public-key-a",
+		Issuer:           "issuer-a",
+		Subject:          "subject-a",
+		IssuerRegExp:     "issuer-regexp-a",
+		SubjectRegExp:    "subject-regexp-a",
+		ImagePullSecrets: []corev1.LocalObjectReference{{Name: "pull-secret-a"}},
+		Namespace:        "tenant-a",
+	}
+	baseKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, baseConfig)
 
 	tests := []struct {
-		name       string
-		digest     string
-		config     imageverify.VerifyConfig
-		wantPrefix string
+		name         string
+		digest       string
+		mutateConfig func(*imageverify.VerifyConfig)
 	}{
-		{
-			name:   "simple digest and key",
-			digest: testImageDigest,
-			config: imageverify.VerifyConfig{
-				PublicKey: "test-key",
-			},
-			wantPrefix: testImageDigest + "@key:",
-		},
-		{
-			name:   "digest with full hash",
-			digest: "test-image@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-			config: imageverify.VerifyConfig{
-				PublicKey: "test-key",
-			},
-			wantPrefix: "test-image@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890@key:",
-		},
-		{
-			name:   "long public key",
-			digest: testImageDigest,
-			config: imageverify.VerifyConfig{
-				PublicKey: "very-long-public-key-that-should-be-truncated-in-cache-key",
-			},
-			wantPrefix: testImageDigest + "@key:",
-		},
+		{name: "digest", digest: strings.Replace(testImageDigest, "e3b0", "a3b0", 1)},
+		{name: "public key", mutateConfig: func(config *imageverify.VerifyConfig) { config.PublicKey = "public-key-b" }},
+		{name: "issuer", mutateConfig: func(config *imageverify.VerifyConfig) { config.Issuer = "issuer-b" }},
+		{name: "subject", mutateConfig: func(config *imageverify.VerifyConfig) { config.Subject = "subject-b" }},
+		{name: "issuer regexp", mutateConfig: func(config *imageverify.VerifyConfig) {
+			config.IssuerRegExp = "issuer-regexp-b"
+		}},
+		{name: "subject regexp", mutateConfig: func(config *imageverify.VerifyConfig) {
+			config.SubjectRegExp = "subject-regexp-b"
+		}},
+		{name: "ignore transparency log", mutateConfig: func(config *imageverify.VerifyConfig) { config.IgnoreTlog = true }},
+		{name: "image pull secrets", mutateConfig: func(config *imageverify.VerifyConfig) {
+			config.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "pull-secret-b"}}
+		}},
+		{name: "namespace", mutateConfig: func(config *imageverify.VerifyConfig) { config.Namespace = "tenant-b" }},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := verifier.cacheKey(tt.digest, tt.config)
-
-			if !strings.HasPrefix(key, tt.wantPrefix) {
-				t.Errorf("cacheKey() = %v, want prefix %v", key, tt.wantPrefix)
+			digest := testImageDigest
+			if tt.digest != "" {
+				digest = tt.digest
 			}
-
-			// Key should be consistent for same inputs
-			key2 := verifier.cacheKey(tt.digest, tt.config)
-			if key != key2 {
-				t.Errorf("cacheKey() should be deterministic, got %v and %v", key, key2)
+			config := baseConfig
+			if tt.mutateConfig != nil {
+				tt.mutateConfig(&config)
+			}
+			otherKey := requireImageVerificationCacheKey(t, verifier, digest, config)
+			if baseKey == otherKey {
+				t.Fatal("cacheKey() must change when the digest or verification policy changes")
 			}
 		})
 	}
 }
 
-func TestImageVerifier_CacheKey_Keyless(t *testing.T) {
-	logger := logr.Discard()
-	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client, nil)
+func TestImageVerifier_CacheKey_DistinctPEMKeys(t *testing.T) {
+	verifier := NewImageVerifier(logr.Discard(), fake.NewClientBuilder().Build(), nil)
+	firstKey := `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEADzj0BZr2PNIi6MV6zHTJJxePXUxxcseBO7TJoEJbYlw=
+-----END PUBLIC KEY-----`
+	secondKey := `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEALw1Zfprgjhns+qGZibqV852Eo+BQpmzMWMjyE0YB6Vc=
+-----END PUBLIC KEY-----`
 
-	digest := testImageDigest
-	config := imageverify.VerifyConfig{
-		Issuer:  testOIDCIssuer,
-		Subject: testOIDCSubject,
-	}
+	firstCacheKey := requireImageVerificationCacheKey(
+		t,
+		verifier,
+		testImageDigest,
+		imageverify.VerifyConfig{PublicKey: firstKey},
+	)
+	secondCacheKey := requireImageVerificationCacheKey(
+		t,
+		verifier,
+		testImageDigest,
+		imageverify.VerifyConfig{PublicKey: secondKey},
+	)
 
-	key := verifier.cacheKey(digest, config)
-	expectedPrefix := testImageDigest + "@oidc:" + testOIDCIssuer + "|" + testOIDCSubject
-
-	if key != expectedPrefix {
-		t.Errorf("cacheKey() = %v, want %v", key, expectedPrefix)
-	}
-
-	// Key should be consistent for same inputs
-	key2 := verifier.cacheKey(digest, config)
-	if key != key2 {
-		t.Errorf("cacheKey() should be deterministic, got %v and %v", key, key2)
-	}
-}
-
-func TestImageVerifier_CacheKey_KeylessRegExp(t *testing.T) {
-	logger := logr.Discard()
-	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client, nil)
-
-	digest := testImageDigest
-	config := imageverify.VerifyConfig{
-		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
-		SubjectRegExp: "^https://github\\.com/openbao/openbao/.+@refs/tags/.+$",
-	}
-
-	key := verifier.cacheKey(digest, config)
-	expected := testImageDigest + "@oidc-re:" + config.IssuerRegExp + "|" + config.SubjectRegExp
-	if key != expected {
-		t.Errorf("cacheKey() = %v, want %v", key, expected)
+	if firstCacheKey == secondCacheKey {
+		t.Fatal("cacheKey() must isolate distinct PEM public keys")
 	}
 }
 
-func TestImageVerifier_CacheKey_DifferentModes(t *testing.T) {
-	logger := logr.Discard()
-	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client, nil)
+func TestImageVerifier_CacheKey_IgnoreTlog(t *testing.T) {
+	verifier := NewImageVerifier(logr.Discard(), fake.NewClientBuilder().Build(), nil)
+	config := imageverify.VerifyConfig{PublicKey: "test-public-key"}
 
-	digest := testImageDigest
-	staticKeyConfig := imageverify.VerifyConfig{
-		PublicKey: "test-key",
-	}
-	keylessConfig := imageverify.VerifyConfig{
-		Issuer:  testOIDCIssuer,
-		Subject: testOIDCSubject,
-	}
-	keylessRegexpConfig := imageverify.VerifyConfig{
-		IssuerRegExp:  "^https://token\\.actions\\.githubusercontent\\.com$",
-		SubjectRegExp: "^https://github\\.com/openbao/openbao/.+@refs/tags/.+$",
-	}
+	withTlog := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
+	config.IgnoreTlog = true
+	withoutTlog := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
 
-	key1 := verifier.cacheKey(digest, staticKeyConfig)
-	key2 := verifier.cacheKey(digest, keylessConfig)
-	key3 := verifier.cacheKey(digest, keylessRegexpConfig)
-
-	if key1 == key2 {
-		t.Error("cacheKey() should generate different keys for static key vs keyless modes")
+	if withTlog == withoutTlog {
+		t.Fatal("cacheKey() must isolate transparency log policies")
 	}
-	if key2 == key3 {
-		t.Error("cacheKey() should generate different keys for strict keyless vs regexp keyless modes")
+}
+
+func TestVerificationCache_PolicyIsolation(t *testing.T) {
+	verifier := NewImageVerifier(logr.Discard(), fake.NewClientBuilder().Build(), nil)
+	verifiedPolicy := imageverify.VerifyConfig{
+		PublicKey: "test-public-key",
+		Namespace: "tenant-a",
+	}
+	otherPolicy := verifiedPolicy
+	otherPolicy.Namespace = "tenant-b"
+
+	verifiedKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, verifiedPolicy)
+	otherKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, otherPolicy)
+	verifier.cache.markVerifiedByKey(verifiedKey)
+
+	if verifier.cache.isVerifiedByKey(otherKey) {
+		t.Fatal("verification cache must miss for a different policy")
 	}
 }
 

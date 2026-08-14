@@ -2,6 +2,8 @@ package security
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -73,17 +75,20 @@ func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, conf
 	return digestRef.String(), nil
 }
 
-// cacheKey generates a cache key from image digest and verification config.
-func (v *ImageVerifier) cacheKey(digest string, config imageverify.VerifyConfig) string {
-	if config.PublicKey != "" {
-		keyHash := []byte(config.PublicKey)
-		if len(keyHash) > 16 {
-			keyHash = keyHash[:16]
-		}
-		return fmt.Sprintf("%s@key:%x", digest, keyHash)
+// cacheKey generates a cache key from the complete image digest and verification policy.
+func (v *ImageVerifier) cacheKey(digest string, config imageverify.VerifyConfig) (string, error) {
+	identity := struct {
+		Digest string
+		Policy imageverify.VerifyConfig
+	}{
+		Digest: digest,
+		Policy: config,
 	}
-	if hasStrictKeylessConfig(config) {
-		return fmt.Sprintf("%s@oidc:%s|%s", digest, config.Issuer, config.Subject)
+	encodedIdentity, err := json.Marshal(identity)
+	if err != nil {
+		return "", fmt.Errorf("marshal verification cache identity: %w", err)
 	}
-	return fmt.Sprintf("%s@oidc-re:%s|%s", digest, config.IssuerRegExp, config.SubjectRegExp)
+
+	identityHash := sha256.Sum256(encodedIdentity)
+	return fmt.Sprintf("sha256:%x", identityHash), nil
 }
