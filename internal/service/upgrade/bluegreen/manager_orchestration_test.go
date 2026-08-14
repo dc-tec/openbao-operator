@@ -70,6 +70,10 @@ func TestManager_MaybeAcquireUpgradeLock_Contention(t *testing.T) {
 	t.Parallel()
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "lock-contention",
+			Namespace: "default",
+		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			BlueGreen: &openbaov1alpha1.BlueGreenStatus{Phase: openbaov1alpha1.PhaseDeployingGreen},
 			OperationLock: &openbaov1alpha1.OperationLockStatus{
@@ -79,7 +83,13 @@ func TestManager_MaybeAcquireUpgradeLock_Contention(t *testing.T) {
 			},
 		},
 	}
-	mgr := &Manager{}
+	scheme := newBlueGreenTestScheme(t)
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
+	mgr := &Manager{client: k8sClient, reader: k8sClient, scheme: scheme}
 
 	t.Run("not active upgrade requeues on contention", func(t *testing.T) {
 		handled, result, err := mgr.maybeAcquireUpgradeLock(context.Background(), logr.Discard(), cluster.DeepCopy(), false, true)

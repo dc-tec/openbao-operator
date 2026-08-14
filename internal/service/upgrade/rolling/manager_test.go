@@ -2,7 +2,6 @@ package rolling
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -1113,24 +1112,23 @@ func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
 		},
 	}
 
-	var applyPayloads []string
+	var patchPayloads []string
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
 		WithObjects(cluster).
 		WithInterceptorFuncs(interceptor.Funcs{
-			SubResourceApply: func(ctx context.Context, c client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
 				if subResourceName == "status" {
-					payload, err := json.Marshal(obj)
+					payload, err := patch.Data(obj)
 					if err != nil {
 						return err
 					}
-					applyPayloads = append(applyPayloads, string(payload))
+					patchPayloads = append(patchPayloads, string(payload))
 				}
-				return c.Status().Apply(ctx, obj, opts...)
+				return c.Status().Patch(ctx, obj, patch, opts...)
 			},
 		}).
-		WithReturnManagedFields().
 		Build()
 	mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
 	mgr.WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
@@ -1143,14 +1141,14 @@ func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
 		t.Fatalf("Reconcile() result = %+v, want empty result", result)
 	}
 
-	if len(applyPayloads) != 2 {
-		t.Fatalf("expected takeover and clear SSA applies, got %d payloads", len(applyPayloads))
+	if len(patchPayloads) != 1 {
+		t.Fatalf("expected one optimistic lock clear patch, got %d payloads", len(patchPayloads))
 	}
-	if !strings.Contains(applyPayloads[0], `"operationLock":{"`) {
-		t.Fatalf("expected first payload to take ownership of operationLock, got %s", applyPayloads[0])
+	if !strings.Contains(patchPayloads[0], `"operationLock":null`) {
+		t.Fatalf("expected patch to explicitly clear operationLock, got %s", patchPayloads[0])
 	}
-	if strings.Contains(applyPayloads[1], `"operationLock":{"`) || !strings.Contains(applyPayloads[1], `"operationLock":null`) {
-		t.Fatalf("expected second payload to explicitly clear operationLock, got %s", applyPayloads[1])
+	if !strings.Contains(patchPayloads[0], `"resourceVersion":`) {
+		t.Fatalf("expected patch to include a resourceVersion precondition, got %s", patchPayloads[0])
 	}
 	if cluster.Status.OperationLock != nil {
 		t.Fatalf("expected in-memory operation lock to be released, got %+v", cluster.Status.OperationLock)

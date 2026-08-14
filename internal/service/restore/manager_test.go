@@ -2,7 +2,6 @@ package restore
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -398,24 +397,23 @@ func TestReconcileTerminalPhase_ReleasesOperationLock(t *testing.T) {
 	}
 	setTestResourceVersion(restore)
 
-	var applyPayloads []string
+	var patchPayloads []string
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(cluster, restore).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
 		WithInterceptorFuncs(interceptor.Funcs{
-			SubResourceApply: func(ctx context.Context, c client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
 				if subResourceName == "status" {
-					payload, err := json.Marshal(obj)
+					payload, err := patch.Data(obj)
 					if err != nil {
 						return err
 					}
-					applyPayloads = append(applyPayloads, string(payload))
+					patchPayloads = append(patchPayloads, string(payload))
 				}
-				return c.Status().Apply(ctx, obj, opts...)
+				return c.Status().Patch(ctx, obj, patch, opts...)
 			},
 		}).
-		WithReturnManagedFields().
 		Build()
 
 	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
@@ -423,10 +421,9 @@ func TestReconcileTerminalPhase_ReleasesOperationLock(t *testing.T) {
 	result, err := mgr.Reconcile(context.Background(), testLogger(), restore)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), int64(result.RequeueAfter))
-	require.Len(t, applyPayloads, 2, "expected lock takeover apply followed by omission clear apply")
-	assert.Contains(t, applyPayloads[0], `"operationLock":{"`)
-	assert.NotContains(t, applyPayloads[1], `"operationLock":{"`)
-	assert.Contains(t, applyPayloads[1], `"operationLock":null`)
+	require.Len(t, patchPayloads, 1, "expected one optimistic lock clear patch")
+	assert.Contains(t, patchPayloads[0], `"operationLock":null`)
+	assert.Contains(t, patchPayloads[0], `"resourceVersion":`)
 }
 
 func TestReconcileTerminalPhase_RetriesLockReleaseAfterTransientFailure(t *testing.T) {
@@ -466,29 +463,28 @@ func TestReconcileTerminalPhase_RetriesLockReleaseAfterTransientFailure(t *testi
 	}
 	setTestResourceVersion(restore)
 
-	failStatusApplyOnce := true
-	var applyPayloads []string
+	failStatusPatchOnce := true
+	var patchPayloads []string
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(cluster, restore).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
 		WithInterceptorFuncs(interceptor.Funcs{
-			SubResourceApply: func(ctx context.Context, c client.Client, subResourceName string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
+			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
 				if subResourceName == "status" {
-					payload, err := json.Marshal(obj)
+					payload, err := patch.Data(obj)
 					if err != nil {
 						return err
 					}
-					applyPayloads = append(applyPayloads, string(payload))
-					if failStatusApplyOnce {
-						failStatusApplyOnce = false
-						return apierrors.NewInternalError(fmt.Errorf("transient status apply failure"))
+					patchPayloads = append(patchPayloads, string(payload))
+					if failStatusPatchOnce {
+						failStatusPatchOnce = false
+						return apierrors.NewInternalError(fmt.Errorf("transient status patch failure"))
 					}
 				}
-				return c.Status().Apply(ctx, obj, opts...)
+				return c.Status().Patch(ctx, obj, patch, opts...)
 			},
 		}).
-		WithReturnManagedFields().
 		Build()
 
 	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
@@ -498,8 +494,8 @@ func TestReconcileTerminalPhase_RetriesLockReleaseAfterTransientFailure(t *testi
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to release cluster operation lock for terminal restore")
 	assert.Equal(t, int64(0), int64(result.RequeueAfter))
-	assert.False(t, failStatusApplyOnce, "expected injected transient apply failure to be consumed")
-	require.Len(t, applyPayloads, 1, "first terminal reconcile should fail on the first lock SSA apply")
+	assert.False(t, failStatusPatchOnce, "expected injected transient patch failure to be consumed")
+	require.Len(t, patchPayloads, 1, "first terminal reconcile should fail on the first lock patch")
 
 	// Second terminal reconcile should succeed and clear the lock.
 	freshRestore := &openbaov1alpha1.OpenBaoRestore{}
@@ -508,10 +504,9 @@ func TestReconcileTerminalPhase_RetriesLockReleaseAfterTransientFailure(t *testi
 	result, err = mgr.Reconcile(context.Background(), testLogger(), freshRestore)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), int64(result.RequeueAfter))
-	require.Len(t, applyPayloads, 3, "second terminal reconcile should issue takeover and clear applies")
-	assert.Contains(t, applyPayloads[1], `"operationLock":{"`)
-	assert.True(t, !strings.Contains(applyPayloads[2], `"operationLock":{"`) && strings.Contains(applyPayloads[2], `"operationLock":null`),
-		"final payload should explicitly null operationLock after ownership takeover: %s", applyPayloads[2])
+	require.Len(t, patchPayloads, 2, "second terminal reconcile should retry the lock clear patch")
+	assert.Contains(t, patchPayloads[1], `"operationLock":null`)
+	assert.Contains(t, patchPayloads[1], `"resourceVersion":`)
 }
 
 func TestHandleValidating_PersistsOperationLockOverrideCondition(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -145,7 +144,7 @@ func TestApplyOpenBaoClusterOperationLockStatus_ApplyOptions(t *testing.T) {
 	}
 }
 
-func TestMutateAndApplyOpenBaoClusterOperationLockStatus_PropagatesMutatorError(t *testing.T) {
+func TestMutateAndPatchOpenBaoClusterOperationLockStatus_PropagatesMutatorError(t *testing.T) {
 	t.Parallel()
 
 	cluster := &openbaov1alpha1.OpenBaoCluster{
@@ -162,7 +161,7 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_PropagatesMutatorError(
 		Build()
 
 	wantErr := errors.New("boom")
-	_, err := MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(
+	_, err := MutateAndPatchOpenBaoClusterOperationLockStatusWithReader(
 		context.Background(),
 		nil,
 		k8sClient,
@@ -170,23 +169,25 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_PropagatesMutatorError(
 		func(obj *openbaov1alpha1.OpenBaoCluster) error {
 			return wantErr
 		},
-		OpenBaoClusterOperationLockStatusApplyOptions{},
 	)
 	if !errors.Is(err, wantErr) {
-		t.Fatalf("MutateAndApplyOpenBaoClusterOperationLockStatusWithReader() error = %v, want %v", err, wantErr)
+		t.Fatalf("MutateAndPatchOpenBaoClusterOperationLockStatusWithReader() error = %v, want %v", err, wantErr)
 	}
 }
 
-func TestMutateAndApplyOpenBaoClusterOperationLockStatus_ClearTakesOwnershipThenOmitsField(t *testing.T) {
+func TestMutateAndPatchOpenBaoClusterOperationLockStatus_UsesOptimisticLockPatch(t *testing.T) {
 	t.Parallel()
 
 	acquiredAt := metav1.Now()
 	stored := &openbaov1alpha1.OpenBaoCluster{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "operationlock-clear",
-			Namespace: "default",
+			Name:            "operationlock-patch",
+			Namespace:       "default",
+			ResourceVersion: "17",
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Phase:         openbaov1alpha1.ClusterPhaseRunning,
+			ReadyReplicas: 3,
 			OperationLock: &openbaov1alpha1.OperationLockStatus{
 				Operation:  openbaov1alpha1.ClusterOperationBackup,
 				Holder:     "openbaocluster/backup",
@@ -197,27 +198,39 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_ClearTakesOwnershipThen
 		},
 	}
 
-	var applyPayloads []string
+	var patchPayload map[string]json.RawMessage
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(newOpenBaoClusterStatusTestScheme(t)).
 		WithStatusSubresource(stored).
 		WithObjects(stored.DeepCopy()).
 		WithInterceptorFuncs(interceptor.Funcs{
-			SubResourceApply: func(ctx context.Context, c client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
-				if subResource == "status" {
-					payload, err := json.Marshal(obj)
-					if err != nil {
-						return err
-					}
-					applyPayloads = append(applyPayloads, string(payload))
+			SubResourcePatch: func(
+				ctx context.Context,
+				c client.Client,
+				subResource string,
+				obj client.Object,
+				patch client.Patch,
+				opts ...client.SubResourcePatchOption,
+			) error {
+				if subResource != "status" {
+					t.Fatalf("subResource = %q, want status", subResource)
 				}
-				return c.Status().Apply(ctx, obj, opts...)
+				if patch.Type() != types.MergePatchType {
+					t.Fatalf("patch type = %q, want %q", patch.Type(), types.MergePatchType)
+				}
+				payload, err := patch.Data(obj)
+				if err != nil {
+					return err
+				}
+				if err := json.Unmarshal(payload, &patchPayload); err != nil {
+					return err
+				}
+				return c.Status().Patch(ctx, obj, patch, opts...)
 			},
 		}).
-		WithReturnManagedFields().
 		Build()
 
-	_, err := MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(
+	_, err := MutateAndPatchOpenBaoClusterOperationLockStatusWithReader(
 		context.Background(),
 		nil,
 		k8sClient,
@@ -226,19 +239,37 @@ func TestMutateAndApplyOpenBaoClusterOperationLockStatus_ClearTakesOwnershipThen
 			obj.Status.OperationLock = nil
 			return nil
 		},
-		OpenBaoClusterOperationLockStatusApplyOptions{},
 	)
 	if err != nil {
-		t.Fatalf("MutateAndApplyOpenBaoClusterOperationLockStatusWithReader() error = %v", err)
+		t.Fatalf("MutateAndPatchOpenBaoClusterOperationLockStatusWithReader() error = %v", err)
 	}
 
-	if len(applyPayloads) != 2 {
-		t.Fatalf("apply payloads = %#v, want 2 status apply calls (take ownership, then clear)", applyPayloads)
+	if len(patchPayload) != 2 {
+		t.Fatalf("patch top-level fields = %#v, want only metadata and status", patchPayload)
 	}
-	if !strings.Contains(applyPayloads[0], `"operationLock":{"`) {
-		t.Fatalf("ownership payload missing operationLock object: %s", applyPayloads[0])
+	var metadataPayload map[string]json.RawMessage
+	if err := json.Unmarshal(patchPayload["metadata"], &metadataPayload); err != nil {
+		t.Fatalf("unmarshal metadata patch: %v", err)
 	}
-	if strings.Contains(applyPayloads[1], `"operationLock":{"`) || !strings.Contains(applyPayloads[1], `"operationLock":null`) {
-		t.Fatalf("clear payload should explicitly null operationLock after ownership takeover: %s", applyPayloads[1])
+	if len(metadataPayload) != 1 || string(metadataPayload["resourceVersion"]) != `"17"` {
+		t.Fatalf("metadata patch = %#v, want only resourceVersion 17", metadataPayload)
+	}
+	var statusPayload map[string]json.RawMessage
+	if err := json.Unmarshal(patchPayload["status"], &statusPayload); err != nil {
+		t.Fatalf("unmarshal status patch: %v", err)
+	}
+	if len(statusPayload) != 1 || string(statusPayload["operationLock"]) != "null" {
+		t.Fatalf("status patch = %#v, want only operationLock null", statusPayload)
+	}
+
+	got := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(stored), got); err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if got.Status.OperationLock != nil {
+		t.Fatalf("stored operation lock = %+v, want nil", got.Status.OperationLock)
+	}
+	if got.Status.Phase != stored.Status.Phase || got.Status.ReadyReplicas != stored.Status.ReadyReplicas {
+		t.Fatalf("unowned status fields changed: got=%+v want=%+v", got.Status, stored.Status)
 	}
 }
