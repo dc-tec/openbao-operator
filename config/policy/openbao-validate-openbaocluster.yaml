@@ -2,6 +2,8 @@ apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
   name: openbao-validate-openbaocluster
+  annotations:
+    openbao.org/admission-policy-fingerprint: sha256:828902329ac47bb74fa1ef8ab7f92d80e1f16b3e2d088b8e585d2dd77b9fd6c1
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -358,6 +360,46 @@ spec:
         !has(object.spec.unseal.transit.token) ||
         size(object.spec.unseal.transit.token) == 0
       message: Hardened profile does not allow spec.unseal.transit.token; use spec.unseal.credentialsSecretRef instead.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.awskms) ||
+        !has(object.spec.unseal.awskms.secretKey) ||
+        size(object.spec.unseal.awskms.secretKey) == 0
+      message: Hardened profile does not allow spec.unseal.awskms.secretKey; use spec.unseal.credentialsSecretRef or workload identity instead.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.awskms) ||
+        !has(object.spec.unseal.awskms.sessionToken) ||
+        size(object.spec.unseal.awskms.sessionToken) == 0
+      message: Hardened profile does not allow spec.unseal.awskms.sessionToken; use spec.unseal.credentialsSecretRef or workload identity instead.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.azureKeyVault) ||
+        !has(object.spec.unseal.azureKeyVault.clientSecret) ||
+        size(object.spec.unseal.azureKeyVault.clientSecret) == 0
+      message: Hardened profile does not allow spec.unseal.azureKeyVault.clientSecret; use spec.unseal.credentialsSecretRef or managed identity instead.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.pkcs11) ||
+        !has(object.spec.unseal.pkcs11.pin) ||
+        size(object.spec.unseal.pkcs11.pin) == 0
+      message: Hardened profile does not allow spec.unseal.pkcs11.pin; use spec.unseal.credentialsSecretRef instead.
+    - expression: >-
+        !has(object.spec.profile) ||
+        object.spec.profile != "Hardened" ||
+        !has(object.spec.unseal) ||
+        !has(object.spec.unseal.kms) ||
+        !has(object.spec.unseal.kms.config) ||
+        size(object.spec.unseal.kms.config) == 0
+      message: Hardened profile does not allow non-empty spec.unseal.kms.config; use spec.unseal.credentialsSecretRef instead.
     - expression: >-
         !has(object.spec.unseal) ||
         !has(object.spec.unseal.transit) ||

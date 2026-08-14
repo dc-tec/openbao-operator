@@ -90,6 +90,62 @@ func Fixtures() []Fixture {
 			},
 		},
 		{
+			Name:          "aws-inline-secret-key",
+			AdmissionRule: hardenedcontract.RuleAWSInlineSecretKey,
+			Configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal.AWSKMS.SecretKey = "fixture-secret-key"
+			},
+		},
+		{
+			Name:          "aws-inline-session-token",
+			AdmissionRule: hardenedcontract.RuleAWSInlineSessionToken,
+			Configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal.AWSKMS.SessionToken = "fixture-session-token"
+			},
+		},
+		{
+			Name:          "azure-inline-client-secret",
+			AdmissionRule: hardenedcontract.RuleAzureInlineClientSecret,
+			Configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+					Type: "azurekeyvault",
+					AzureKeyVault: &openbaov1alpha1.AzureKeyVaultSealConfig{
+						VaultName:    "fixture-vault",
+						KeyName:      "fixture-key",
+						ClientSecret: "fixture-client-secret",
+					},
+				}
+			},
+		},
+		{
+			Name:          "pkcs11-inline-pin",
+			AdmissionRule: hardenedcontract.RulePKCS11InlinePIN,
+			Configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+					Type: "pkcs11",
+					PKCS11: &openbaov1alpha1.PKCS11SealConfig{
+						Lib:      "/usr/lib/libpkcs11.so",
+						Slot:     "0",
+						PIN:      "fixture-pin",
+						KeyLabel: "openbao",
+					},
+				}
+			},
+		},
+		{
+			Name:          "kms-plugin-inline-config",
+			AdmissionRule: hardenedcontract.RuleKMSPluginInlineConfig,
+			Configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
+				cluster.Spec.Unseal = &openbaov1alpha1.UnsealConfig{
+					Type: "kms",
+					KMS: &openbaov1alpha1.KMSPluginSealConfig{
+						PluginName: "corp-kms",
+						Config:     map[string]string{"token": "fixture-token"},
+					},
+				}
+			},
+		},
+		{
 			Name:          "image-verification-disabled",
 			AdmissionRule: hardenedcontract.RuleImageVerificationEnabled,
 			Configure: func(cluster *openbaov1alpha1.OpenBaoCluster) {
