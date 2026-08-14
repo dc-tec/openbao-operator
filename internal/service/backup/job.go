@@ -108,7 +108,7 @@ func clearBackupFailure(status *openbaov1alpha1.BackupStatus) {
 func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string, scheduledTime time.Time) (bool, error) {
 	job := &batchv1.Job{}
 
-	err := m.client.Get(ctx, types.NamespacedName{
+	err := m.reader.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      jobName,
 	}, job)
@@ -254,7 +254,7 @@ type backupJobProcessResult struct {
 func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (backupJobProcessResult, error) {
 	job := &batchv1.Job{}
 
-	err := m.client.Get(ctx, types.NamespacedName{
+	err := m.reader.Get(ctx, types.NamespacedName{
 		Namespace: cluster.Namespace,
 		Name:      jobName,
 	}, job)

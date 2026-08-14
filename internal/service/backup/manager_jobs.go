@@ -58,7 +58,7 @@ func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger,
 		constants.LabelOpenBaoComponent: ComponentBackup,
 	})
 
-	if err := m.client.List(ctx, jobList,
+	if err := m.reader.List(ctx, jobList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {
@@ -109,7 +109,7 @@ func (m *Manager) hasActiveBackupJob(ctx context.Context, cluster *openbaov1alph
 		constants.LabelOpenBaoComponent: ComponentBackup,
 	})
 
-	if err := m.client.List(ctx, jobList,
+	if err := m.reader.List(ctx, jobList,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {

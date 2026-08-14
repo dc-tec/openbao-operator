@@ -84,11 +84,7 @@ func (m *Manager) executeAndProcessBackup(
 	}
 
 	if jobResult.successfulCompletion {
-		if cluster.Spec.Backup.Retention != nil {
-			if err := m.applyRetention(ctx, logger, cluster, metrics); err != nil {
-				logger.Error(err, "Failed to apply retention policy")
-			}
-		}
+		m.applyRetentionAfterSuccess(ctx, logger, cluster, metrics)
 		nextScheduledMeta := metav1.NewTime(nextScheduled)
 		cluster.Status.Backup.NextScheduledBackup = &nextScheduledMeta
 		if err := m.patchStatusSSA(ctx, cluster); err != nil {
@@ -103,6 +99,20 @@ func (m *Manager) executeAndProcessBackup(
 		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 	return recon.Result{RequeueAfter: time.Until(nextScheduled)}, nil
+}
+
+func (m *Manager) applyRetentionAfterSuccess(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	metrics *Metrics,
+) {
+	if cluster.Spec.Backup == nil || cluster.Spec.Backup.Retention == nil {
+		return
+	}
+	if err := m.applyRetention(ctx, logger, cluster, metrics); err != nil {
+		logger.Error(err, "Failed to apply retention policy")
+	}
 }
 
 func (m *Manager) acquireBackupLock(

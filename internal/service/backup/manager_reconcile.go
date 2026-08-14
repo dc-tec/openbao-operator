@@ -20,7 +20,23 @@ import (
 // It checks if a backup is due, executes it if needed, and applies retention policies.
 func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
 	if cluster.Spec.Backup == nil {
-		return recon.Result{}, nil
+		if !backupOperationLock.IsHeldBy(cluster.Status.OperationLock) {
+			return recon.Result{}, nil
+		}
+		if cluster.Status.Backup == nil {
+			if err := m.ensureBackupStatus(ctx, cluster); err != nil {
+				return recon.Result{}, err
+			}
+		}
+		hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
+		if err != nil {
+			return recon.Result{}, fmt.Errorf("failed to check for active backup job after backup was disabled: %w", err)
+		}
+		if hasActiveJob {
+			logger.V(1).Info("Backup was disabled while its Job is in progress; requeueing to observe completion")
+			return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+		}
+		return m.finishOwnedBackup(ctx, logger, cluster, nil)
 	}
 
 	if err := validateBackupHardenedConfiguration(cluster); err != nil {
@@ -63,6 +79,18 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 	}
 	backupDue := manualTrigger || !now.Before(scheduledTime)
 
+	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
+	if err != nil {
+		return recon.Result{}, fmt.Errorf("failed to check for active backup job: %w", err)
+	}
+	if hasActiveJob {
+		logger.V(1).Info("Backup Job in progress; requeueing to observe completion")
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+	}
+	if backupOperationLock.IsHeldBy(cluster.Status.OperationLock) {
+		return m.finishOwnedBackup(ctx, logger, cluster, metrics)
+	}
+
 	if shouldSkip, err := m.handleRestoreInProgress(ctx, logger, cluster, backupDue); shouldSkip || err != nil {
 		return recon.Result{}, err
 	}
@@ -79,21 +107,34 @@ func (m *Manager) Reconcile(ctx context.Context, logger logr.Logger, cluster *op
 		return recon.Result{}, err
 	}
 
-	hasActiveJob, err := m.hasActiveBackupJob(ctx, cluster)
-	if err != nil {
-		return recon.Result{}, fmt.Errorf("failed to check for active backup job: %w", err)
-	}
-	if hasActiveJob {
-		logger.V(1).Info("Backup Job in progress; requeueing to observe completion")
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
-
-	shouldReturn, result, err := m.checkBackupDue(ctx, logger, cluster, now, scheduledTime, manualTrigger)
+	shouldReturn, result, err := m.checkBackupDue(ctx, logger, cluster, metrics, now, scheduledTime, manualTrigger)
 	if shouldReturn {
 		return result, err
 	}
 
 	return m.executeAndProcessBackup(ctx, logger, cluster, schedule, metrics, now, scheduledTime, manualTriggerToken)
+}
+
+func (m *Manager) finishOwnedBackup(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	metrics *Metrics,
+) (recon.Result, error) {
+	jobResult, err := m.checkForCompletedJobs(ctx, logger, cluster)
+	if err != nil {
+		return recon.Result{}, fmt.Errorf("failed to check for completed backup jobs: %w", err)
+	}
+	if jobResult.successfulCompletion && jobResult.statusUpdated {
+		m.applyRetentionAfterSuccess(ctx, logger, cluster, metrics)
+	}
+	if !jobResult.completed {
+		logger.Info("Releasing backup operation lock because no active or completed backup Job exists")
+	}
+	if err := m.releaseBackupLock(ctx, logger, cluster, "after owned Job observation"); err != nil {
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+	}
+	return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 }
 
 func (m *Manager) ensureBackupStatus(ctx context.Context, cluster *openbaov1alpha1.OpenBaoCluster) error {

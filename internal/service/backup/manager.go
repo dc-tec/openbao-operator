@@ -60,7 +60,7 @@ func NewManager(c client.Client, scheme *runtime.Scheme, clientConfig portopenba
 	}
 }
 
-// WithReader configures a live reader for status read-before-write flows.
+// WithReader configures a live reader for operation state and status read-before-write flows.
 func (m *Manager) WithReader(reader client.Reader) *Manager {
 	if reader != nil {
 		m.reader = reader

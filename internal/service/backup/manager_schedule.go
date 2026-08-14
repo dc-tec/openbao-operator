@@ -52,6 +52,7 @@ func (m *Manager) checkBackupDue(
 	ctx context.Context,
 	logger logr.Logger,
 	cluster *openbaov1alpha1.OpenBaoCluster,
+	metrics *Metrics,
 	now time.Time,
 	scheduledTime time.Time,
 	manualTrigger bool,
@@ -71,6 +72,9 @@ func (m *Manager) checkBackupDue(
 		if err := m.releaseBackupLock(ctx, logger, cluster, "after completed Job processing"); err != nil {
 			return true, recon.Result{RequeueAfter: constants.RequeueShort}, nil
 		}
+	}
+	if jobResult.successfulCompletion && jobResult.statusUpdated {
+		m.applyRetentionAfterSuccess(ctx, logger, cluster, metrics)
 	}
 	if jobResult.statusUpdated {
 		logger.Info("Found completed backup job, requesting requeue to persist status")
