@@ -228,10 +228,52 @@ func maybeDeleteRestoreModelRequest(
 	}
 	reconcileRestoreModel(t, mgr, latest, "delete terminal restore")
 
+	remaining := &openbaov1alpha1.OpenBaoRestore{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, remaining)
+	if apierrors.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("get restore after first deletion reconcile: %v", err)
+	}
+	assertRestoreModelFinalizer(t, remaining, true)
+	completeRestoreModelJobForegroundDeletion(t, namespace, name)
+	reconcileRestoreModel(t, mgr, remaining, "delete terminal restore after Job deletion")
+
 	deleted := &openbaov1alpha1.OpenBaoRestore{}
-	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, deleted)
+	err = k8sClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, deleted)
 	if !apierrors.IsNotFound(err) {
-		t.Fatalf("restore still exists after deletion reconcile: %v", err)
+		t.Fatalf("restore still exists after Job deletion completed: %v", err)
+	}
+}
+
+func completeRestoreModelJobForegroundDeletion(t rapid.TB, namespace, restoreName string) {
+	t.Helper()
+
+	job := &batchv1.Job{}
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      restore.RestoreJobNamePrefix + restoreName,
+	}, job)
+	if apierrors.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("get restore Job after deletion request: %v", err)
+	}
+	if job.DeletionTimestamp.IsZero() {
+		t.Fatalf("restore Job deletionTimestamp is zero after foreground deletion request")
+	}
+
+	finalizers := make([]string, 0, len(job.Finalizers))
+	for _, finalizer := range job.Finalizers {
+		if finalizer != metav1.FinalizerDeleteDependents {
+			finalizers = append(finalizers, finalizer)
+		}
+	}
+	job.Finalizers = finalizers
+	if err := k8sClient.Update(ctx, job); err != nil && !apierrors.IsNotFound(err) {
+		t.Fatalf("complete restore Job foreground deletion: %v", err)
 	}
 }
 
