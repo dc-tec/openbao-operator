@@ -27,7 +27,7 @@ requires a non-static provider. `Development` can use the operator-managed stati
 | `transit` | A separate OpenBao cluster owns the wrapping key | Namespace-local Secret for the token and optional mTLS files |
 | `ocikms` | OCI KMS is the external trust source | Principal identity or an OCI SDK config Secret |
 | `kmip` | An enterprise key manager exposes KMIP | Secret-mounted client certificate, key, and optional CA |
-| `kms` | An OpenBao 2.6+ KMS plugin owns the wrapping operation | Declared KMS plugin plus plugin-specific config and optional Secret-mounted files |
+| `kms` | An OpenBao 2.6+ KMS plugin owns the wrapping operation | Declared KMS plugin; Hardened does not permit plugin configuration entries |
 | `pkcs11` | An HSM and vendor library are available in the OpenBao image | Secret-backed PIN and runtime environment or configuration files |
 | `static` | The cluster is disposable and uses `Development` | Operator-generated immutable Kubernetes Secret |
 
@@ -45,9 +45,8 @@ When `spec.unseal.credentialsSecretRef` is set:
 - missing, empty, invalid JSON, invalid PEM, or mismatched certificate material is rejected where the provider contract
   can validate it.
 
-Use workload identity instead of long-lived cloud keys when the provider and platform support it. Inline cloud
-credentials remain API-supported, but they are stored in the `OpenBaoCluster` and therefore in etcd. Hardened rejects
-an inline transit token specifically.
+Use workload identity instead of long-lived cloud keys when the provider and platform support it. Inline credential
+fields remain API-supported for `Development`, but they are stored in the `OpenBaoCluster` and therefore in etcd.
 
 {{< command label="reference" title="Map mounted paths to Secret keys" >}}
 spec:
@@ -62,6 +61,24 @@ spec:
 
 This fragment requires `unseal-creds` keys named `ca.crt`, `client.crt`, and `client.key`.
 
+## Keep Hardened credentials out of the custom resource
+
+Hardened admission rejects these fields when they contain values:
+
+| Provider | Rejected field | Use instead |
+| --- | --- | --- |
+| AWS KMS | `spec.unseal.awskms.secretKey` and `sessionToken` | Workload identity or `credentialsSecretRef` keys `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` |
+| Azure Key Vault | `spec.unseal.azureKeyVault.clientSecret` | Managed identity, workload identity, or the `AZURE_CLIENT_SECRET` key in `credentialsSecretRef` |
+| Transit | `spec.unseal.transit.token` | The `token` key in `credentialsSecretRef` |
+| PKCS#11 | `spec.unseal.pkcs11.pin` | The `BAO_HSM_PIN` key in `credentialsSecretRef` |
+| KMS plugin | Any non-empty `spec.unseal.kms.config` map | Omit the map; use plugin defaults, external identity, or Secret files under `/etc/bao/seal-creds` |
+
+{{< callout type="warning" title="Migrate existing Hardened objects before upgrade" >}}
+Create the replacement Secret or workload identity before you install the new admission policy. Submit one
+`OpenBaoCluster` update that adds the replacement and removes each prohibited inline field. The API server rejects
+later updates while any prohibited field remains in the submitted object.
+{{< /callout >}}
+
 ## Meet the provider credential contract
 
 | Provider | Secret keys or mounted-file requirements |
@@ -69,10 +86,10 @@ This fragment requires `unseal-creds` keys named `ca.crt`, `client.crt`, and `cl
 | AWS KMS | `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; `AWS_SESSION_TOKEN` is optional. Omit the Secret for IRSA or the standard AWS credential chain. |
 | GCP Cloud KMS | A valid JSON key, normally `credentials.json`, when not using Workload Identity or Application Default Credentials. |
 | Azure Key Vault | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`; optional environment and resource keys are also wired. Omit the Secret for managed identity or Azure Workload Identity. |
-| Transit | `token` unless an inline token is used, plus files referenced by `tlsCACert`, `tlsClientCert`, and `tlsClientKey`. Client certificate and key must be set together. |
+| Transit | Hardened requires the `token` Secret key. Development can use an inline token. Add files referenced by `tlsCACert`, `tlsClientCert`, and `tlsClientKey`; the client certificate and key must be set together. |
 | OCI KMS API key | `config` with a `[DEFAULT]` profile and the key file named by `key_file`. Both files must be under `/etc/bao/seal-creds`. |
 | KMIP | Files named by `clientCert`, `clientKey`, and optional `caCert`. The client certificate and key must match. |
-| KMS plugin | Plugin-specific keys for file paths referenced by `spec.unseal.kms.config`, normally under `/etc/bao/seal-creds`. |
+| KMS plugin | All Secret keys are mounted under `/etc/bao/seal-creds`. Hardened requires an empty `spec.unseal.kms.config`; the plugin must use defaults, external identity, or fixed Secret-file paths. |
 | PKCS#11 | `BAO_HSM_PIN` when `pin` is omitted, plus every key referenced by `runtime.env` and `runtime.fileEnv`. |
 
 ## Configure a cloud KMS
@@ -120,10 +137,12 @@ permissions. Set both `tlsClientCert` and `tlsClientKey` when using client-certi
 ## Configure a plugin-backed KMS seal
 
 OpenBao 2.6.0 and later can use a plugin catalog entry with `type: kms` as the seal implementation. The unseal
-configuration must reference the declared plugin by name:
+configuration must reference the declared plugin by name. `Development` can pass plugin attributes through
+`spec.unseal.kms.config`. The next fragment uses that Development-only path:
 
-{{< command label="configure" title="Use a KMS seal plugin" >}}
+{{< command label="configure" title="Use a KMS seal plugin in Development" >}}
 spec:
+  profile: Development
   version: "2.6.1"
   configuration:
     plugin:
@@ -147,10 +166,14 @@ spec:
         ca_file: "/etc/bao/seal-creds/ca.crt"
 {{< /command >}}
 
-Config keys must be valid HCL identifiers and values are stored in the `OpenBaoCluster`; use paths to mounted Secret
-files for sensitive material. The operator verifies the plugin reference and renders string attributes, but the plugin
-owns the meaning of its config. With a command-based plugin, the binary must already exist in the OpenBao image before
-startup.
+Do not use this `kms.config` fragment with `Hardened`. A KMS plugin used with `Hardened` must work without entries in
+that map. It can use plugin defaults, external identity, or fixed files mounted from `credentialsSecretRef` under
+`/etc/bao/seal-creds`.
+
+In `Development`, config keys must be valid HCL identifiers. The values are stored in the `OpenBaoCluster`. Use paths
+to mounted Secret files for sensitive material. The operator verifies the plugin reference and renders string
+attributes, but the plugin owns the meaning of its config. With a command-based plugin, the binary must already exist
+in the OpenBao image before startup.
 
 ## Configure KMIP
 
