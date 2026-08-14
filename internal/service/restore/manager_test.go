@@ -1693,6 +1693,7 @@ func TestEnsureFinalizer_TransientPatchFailureThenSuccess(t *testing.T) {
 func TestHandleDeletion(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
 	require.NoError(t, corev1.AddToScheme(scheme))
 
 	now := metav1.Now()
@@ -1728,6 +1729,7 @@ func TestHandleDeletion(t *testing.T) {
 func TestHandleDeletion_KeepsFinalizerWhenLockReleaseFails(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
 
 	now := metav1.Now()
 	restore := &openbaov1alpha1.OpenBaoRestore{
@@ -1764,6 +1766,66 @@ func TestHandleDeletion_KeepsFinalizerWhenLockReleaseFails(t *testing.T) {
 	current := &openbaov1alpha1.OpenBaoRestore{}
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), current))
 	assert.Contains(t, current.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
+}
+
+func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	now := metav1.Now()
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "running-restore",
+			Namespace:         "default",
+			DeletionTimestamp: &now,
+			Finalizers:        []string{openbaov1alpha1.OpenBaoRestoreFinalizer},
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{Cluster: "test-cluster"},
+	}
+	setTestResourceVersion(restore)
+	lock := restoreOperationLock(restore)
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: restore.Spec.Cluster, Namespace: restore.Namespace},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: lock.Operation,
+				Holder:    lock.Holder,
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: restoreJobName(restore), Namespace: restore.Namespace}}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore, cluster, job).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		Build()
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handleDeletion(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.Equal(t, restoreRequeueImmediately, result.RequeueAfter)
+
+	currentCluster := &openbaov1alpha1.OpenBaoCluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), currentCluster))
+	require.NotNil(t, currentCluster.Status.OperationLock)
+	assert.Equal(t, lock.Holder, currentCluster.Status.OperationLock.Holder)
+	currentRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), currentRestore))
+	assert.Contains(t, currentRestore.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
+	assert.True(t, apierrors.IsNotFound(k8sClient.Get(
+		context.Background(),
+		client.ObjectKey{Namespace: restore.Namespace, Name: restoreJobName(restore)},
+		&batchv1.Job{},
+	)))
+
+	result, err = mgr.handleDeletion(context.Background(), testLogger(), currentRestore)
+	require.NoError(t, err)
+	assert.Zero(t, result.RequeueAfter)
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), currentCluster))
+	assert.Nil(t, currentCluster.Status.OperationLock)
 }
 
 // TestReleaseClusterLock tests the cluster lock release.
