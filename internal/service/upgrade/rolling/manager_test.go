@@ -1155,6 +1155,85 @@ func TestReconcile_ReleasesStaleUpgradeLockWhenUpgradeIsIdle(t *testing.T) {
 	}
 }
 
+func TestReconcile_RetriesStaleUpgradeLockReleaseAfterFailure(t *testing.T) {
+	t.Parallel()
+
+	scheme := newScheme()
+	now := metav1.Now()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Version:  "2.4.0",
+			Replicas: 3,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized:    true,
+			CurrentVersion: "2.4.0",
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation:  openbaov1alpha1.ClusterOperationUpgrade,
+				Holder:     upgradecore.UpgradeOperationLockHolder,
+				Message:    "stale upgrade lock",
+				AcquiredAt: &now,
+				RenewedAt:  &now,
+			},
+		},
+	}
+
+	failPatchOnce := true
+	patchAttempts := 0
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+				if subResourceName == "status" {
+					patchAttempts++
+					if failPatchOnce {
+						failPatchOnce = false
+						return errors.New("transient status patch failure")
+					}
+				}
+				return c.Status().Patch(ctx, obj, patch, opts...)
+			},
+		}).
+		Build()
+	mgr := NewManager(k8sClient, scheme, nil, portopenbao.ClientConfig{}, nil, "")
+	mgr.WithReader(k8sClient).WithAdminOpsStatusMutator(testAdminOpsMutator(k8sClient))
+
+	result, err := mgr.Reconcile(context.Background(), testLogger(), cluster)
+	if err != nil {
+		t.Fatalf("first Reconcile() error = %v, want nil", err)
+	}
+	if result.RequeueAfter != constants.RequeueShort {
+		t.Fatalf("first Reconcile() RequeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueShort)
+	}
+	if cluster.Status.OperationLock == nil {
+		t.Fatal("first Reconcile() cleared the lock after a failed patch")
+	}
+
+	freshCluster := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), freshCluster); err != nil {
+		t.Fatalf("failed to get cluster before retry: %v", err)
+	}
+	result, err = mgr.Reconcile(context.Background(), testLogger(), freshCluster)
+	if err != nil {
+		t.Fatalf("second Reconcile() error = %v, want nil", err)
+	}
+	if result != (recon.Result{}) {
+		t.Fatalf("second Reconcile() result = %+v, want empty result", result)
+	}
+	if freshCluster.Status.OperationLock != nil {
+		t.Fatalf("second Reconcile() operation lock = %+v, want nil", freshCluster.Status.OperationLock)
+	}
+	if patchAttempts != 2 {
+		t.Fatalf("status patch attempts = %d, want 2", patchAttempts)
+	}
+}
+
 func TestReconcile_PersistsFailureWhenUpgradeLockIsBlockedMidUpgrade(t *testing.T) {
 	t.Parallel()
 

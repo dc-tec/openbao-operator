@@ -45,8 +45,11 @@ func (m *Manager) ensureUpgradeLock(
 	resumeUpgrade bool,
 ) (recon.Result, bool, error) {
 	if !upgradeNeeded && !resumeUpgrade {
-		m.releaseIdleUpgradeLock(ctx, logger, cluster)
 		upgrade.SetInactiveProgressMetrics(metrics)
+		if err := m.releaseIdleUpgradeLock(ctx, logger, cluster); err != nil {
+			logger.Error(err, "Failed to release stale upgrade operation lock")
+			return recon.Result{RequeueAfter: constants.RequeueShort}, true, nil
+		}
 		return recon.Result{}, true, nil
 	}
 
@@ -58,10 +61,8 @@ func (m *Manager) ensureUpgradeLock(
 	return recon.Result{}, false, nil
 }
 
-func (m *Manager) releaseIdleUpgradeLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) {
-	if err := core.ReleaseUpgradeLockIfHeldWithReader(ctx, m.reader, m.client, logger, cluster); err != nil {
-		logger.Error(err, "Failed to release stale upgrade operation lock")
-	}
+func (m *Manager) releaseIdleUpgradeLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	return core.ReleaseUpgradeLockIfHeldWithReader(ctx, m.reader, m.client, logger, cluster)
 }
 
 func (m *Manager) acquireUpgradeLock(
