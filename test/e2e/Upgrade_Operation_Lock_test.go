@@ -46,6 +46,7 @@ type backupFirstUpgradeCase struct {
 
 func runBackupFirstUpgradeCase(
 	ctx context.Context,
+	cfg *rest.Config,
 	admin client.Client,
 	tenantFW *framework.Framework,
 	tenantNamespace string,
@@ -126,6 +127,28 @@ func runBackupFirstUpgradeCase(
 	By("stopping the controller before the held backup can be processed")
 	controllerDeployment, err := getControllerDeployment(ctx, admin, operatorNamespace)
 	Expect(err).NotTo(HaveOccurred())
+	controllerServiceAccount := controllerDeployment.Spec.Template.Spec.ServiceAccountName
+	Expect(controllerServiceAccount).NotTo(BeEmpty())
+	controllerUser := fmt.Sprintf(
+		"system:serviceaccount:%s:%s",
+		controllerDeployment.Namespace,
+		controllerServiceAccount,
+	)
+	controllerGroups := []string{
+		"system:serviceaccounts",
+		fmt.Sprintf("system:serviceaccounts:%s", controllerDeployment.Namespace),
+		"system:authenticated",
+	}
+	runAsController := func(action func(client.Client) error) error {
+		return e2ehelpers.RunWithImpersonation(
+			ctx,
+			cfg,
+			admin.Scheme(),
+			controllerUser,
+			controllerGroups,
+			action,
+		)
+	}
 	originalControllerReplicas := int32(1)
 	if controllerDeployment.Spec.Replicas != nil {
 		originalControllerReplicas = *controllerDeployment.Spec.Replicas
@@ -151,14 +174,18 @@ func runBackupFirstUpgradeCase(
 	}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
 
 	By("replacing the held Job with the same Job configured to complete")
-	Expect(admin.Delete(ctx, heldJob)).To(Succeed())
+	Expect(runAsController(func(controllerClient client.Client) error {
+		return controllerClient.Delete(ctx, heldJob)
+	})).To(Succeed())
 	Eventually(func() bool {
 		err := admin.Get(ctx, types.NamespacedName{Name: heldJob.Name, Namespace: heldJob.Namespace}, &batchv1.Job{})
 		return apierrors.IsNotFound(err)
 	}, 2*time.Minute, time.Second).Should(BeTrue())
 
 	replacementJob := replacementBackupJob(heldJob, backupExecutorImage)
-	Expect(admin.Create(ctx, replacementJob)).To(Succeed())
+	Expect(runAsController(func(controllerClient client.Client) error {
+		return controllerClient.Create(ctx, replacementJob)
+	})).To(Succeed())
 	Eventually(func(g Gomega) {
 		completed := &batchv1.Job{}
 		g.Expect(admin.Get(ctx, types.NamespacedName{Name: replacementJob.Name, Namespace: replacementJob.Namespace}, completed)).To(Succeed())
@@ -488,7 +515,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 		"covers:backup-owner-first",
 		"covers:rolling-upgrade",
 	), func() {
-		runBackupFirstUpgradeCase(ctx, admin, tenantFW, tenantNamespace, credentialsSecret.Name, backupFirstUpgradeCase{
+		runBackupFirstUpgradeCase(ctx, cfg, admin, tenantFW, tenantNamespace, credentialsSecret.Name, backupFirstUpgradeCase{
 			clusterName:    "backup-first-rolling",
 			strategy:       openbaov1alpha1.UpdateStrategyRollingUpdate,
 			initialVersion: initialVersion,
@@ -503,7 +530,7 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 		"covers:backup-owner-first",
 		"covers:bluegreen-upgrade",
 	), func() {
-		runBackupFirstUpgradeCase(ctx, admin, tenantFW, tenantNamespace, credentialsSecret.Name, backupFirstUpgradeCase{
+		runBackupFirstUpgradeCase(ctx, cfg, admin, tenantFW, tenantNamespace, credentialsSecret.Name, backupFirstUpgradeCase{
 			clusterName:    "backup-first-bluegreen",
 			strategy:       openbaov1alpha1.UpdateStrategyBlueGreen,
 			initialVersion: blueGreenUpgradeFromVersion(),
