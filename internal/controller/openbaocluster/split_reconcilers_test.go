@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -337,6 +338,55 @@ func TestOpenBaoClusterStatusReconciler_FinalizerRemoveUsesMergePatch(t *testing
 	}
 	if patches != 1 {
 		t.Fatalf("Patch() calls = %d, want 1", patches)
+	}
+}
+
+func TestOpenBaoClusterStatusReconciler_DeletionBypassesTenantOnboarding(t *testing.T) {
+	t.Parallel()
+
+	scheme := newOpenBaoClusterTestScheme(t)
+	now := metav1.Now()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "delete-without-onboarding",
+			Namespace:         "tenant-a",
+			Finalizers:        []string{openbaov1alpha1.OpenBaoClusterFinalizer},
+			DeletionTimestamp: &now,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster.DeepCopy()).
+		Build()
+
+	parent := &OpenBaoClusterReconciler{
+		Client: fakeClient,
+		ControllerRuntime: ControllerRuntime{
+			APIReader:        fakeClient,
+			SingleTenantMode: false,
+		},
+		Applications: newStatusTestApplications(fakeClient, scheme),
+	}
+	reconciler := &openBaoClusterStatusReconciler{parent: parent}
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result != (ctrl.Result{}) {
+		t.Fatalf("Reconcile() result = %v, want zero", result)
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	err = fakeClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updated)
+	if err == nil && controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoClusterFinalizer) {
+		t.Fatal("cluster finalizer remains after deletion cleanup")
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		t.Fatalf("Get() after deletion cleanup error = %v", err)
 	}
 }
 

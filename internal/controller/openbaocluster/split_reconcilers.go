@@ -202,10 +202,6 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoCluster %s/%s: %w", req.Namespace, req.Name, err)
 	}
 
-	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameStatus, cluster.Namespace); blocked {
-		return result, err
-	}
-
 	if !cluster.DeletionTimestamp.IsZero() {
 		logger.Info("OpenBaoCluster is marked for deletion")
 		if controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
@@ -222,6 +218,10 @@ func (r *openBaoClusterStatusReconciler) Reconcile(ctx context.Context, req ctrl
 			}
 		}
 		return ctrl.Result{}, nil
+	}
+
+	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameStatus, cluster.Namespace); blocked {
+		return result, err
 	}
 
 	if !controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
