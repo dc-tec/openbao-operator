@@ -272,7 +272,8 @@ func completeRestoreModelJobForegroundDeletion(t rapid.TB, namespace, restoreNam
 		}
 	}
 	job.Finalizers = finalizers
-	if err := k8sClient.Update(ctx, job); err != nil && !apierrors.IsNotFound(err) {
+	garbageCollectorClient := newRestoreModelGarbageCollectorClient(t)
+	if err := garbageCollectorClient.Update(ctx, job); err != nil && !apierrors.IsNotFound(err) {
 		t.Fatalf("complete restore Job foreground deletion: %v", err)
 	}
 }
@@ -555,6 +556,21 @@ func newRestoreModelControllerClient(t rapid.TB) client.Client {
 	c, err := client.New(impersonated, client.Options{Scheme: k8sScheme})
 	if err != nil {
 		t.Fatalf("create controller client: %v", err)
+	}
+	return c
+}
+
+func newRestoreModelGarbageCollectorClient(t rapid.TB) client.Client {
+	t.Helper()
+
+	impersonated := rest.CopyConfig(cfg)
+	impersonated.Impersonate = rest.ImpersonationConfig{
+		UserName: "system:serviceaccount:kube-system:generic-garbage-collector",
+		Groups:   []string{"system:masters", "system:serviceaccounts:kube-system"},
+	}
+	c, err := client.New(impersonated, client.Options{Scheme: k8sScheme})
+	if err != nil {
+		t.Fatalf("create garbage collector client: %v", err)
 	}
 	return c
 }
