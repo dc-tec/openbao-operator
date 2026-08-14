@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
@@ -16,8 +17,9 @@ type OpenBaoClusterAdminOpsStatusMutator func(*openbaov1alpha1.OpenBaoCluster) e
 
 // MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader safely persists the full
 // adminops status plane with a read-mutate-apply flow using reader for
-// read-before-write and read-after-write freshness. Callers should pass an
-// uncached APIReader when immediate apiserver visibility matters.
+// read-before-write and read-after-write freshness. A resource-version conflict
+// repeats the fresh read and mutation before another apply attempt. Callers
+// should pass an uncached APIReader when immediate apiserver visibility matters.
 func MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(
 	ctx context.Context,
 	reader client.Reader,
@@ -39,17 +41,20 @@ func MutateAndApplyOpenBaoClusterAdminOpsStatusWithReader(
 		reader = c
 	}
 
-	current := &openbaov1alpha1.OpenBaoCluster{}
-	if err := reader.Get(ctx, key, current); err != nil {
-		return nil, fmt.Errorf("failed to get cluster %s/%s before adminops status apply: %w", key.Namespace, key.Name, err)
-	}
+	var current, desired *openbaov1alpha1.OpenBaoCluster
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current = &openbaov1alpha1.OpenBaoCluster{}
+		if err := reader.Get(ctx, key, current); err != nil {
+			return fmt.Errorf("failed to get cluster %s/%s before adminops status apply: %w", key.Namespace, key.Name, err)
+		}
 
-	desired := current.DeepCopy()
-	if err := mutate(desired); err != nil {
-		return nil, err
-	}
+		desired = current.DeepCopy()
+		if err := mutate(desired); err != nil {
+			return err
+		}
 
-	if err := ApplyOpenBaoClusterAdminOpsStatus(ctx, c, desired, opts); err != nil {
+		return ApplyOpenBaoClusterAdminOpsStatus(ctx, c, desired, opts)
+	}); err != nil {
 		return nil, fmt.Errorf("failed to apply adminops status for cluster %s/%s: %w", key.Namespace, key.Name, err)
 	}
 

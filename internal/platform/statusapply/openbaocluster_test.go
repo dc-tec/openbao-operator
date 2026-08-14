@@ -2,6 +2,7 @@ package statusapply
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -113,8 +114,9 @@ func TestApplyOpenBaoClusterAdminOpsStatus_ApplyOptions(t *testing.T) {
 
 			cluster := &openbaov1alpha1.OpenBaoCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "adminops-options",
-					Namespace: "default",
+					Name:            "adminops-options",
+					Namespace:       "default",
+					ResourceVersion: "17",
 				},
 				Status: openbaov1alpha1.OpenBaoClusterStatus{
 					AdminOps: &openbaov1alpha1.AdminOpsControllerStatus{},
@@ -122,6 +124,7 @@ func TestApplyOpenBaoClusterAdminOpsStatus_ApplyOptions(t *testing.T) {
 			}
 
 			var capturedOptions client.SubResourceApplyOptions
+			var capturedResourceVersion string
 			var subResourceName string
 
 			k8sClient := fake.NewClientBuilder().
@@ -132,6 +135,19 @@ func TestApplyOpenBaoClusterAdminOpsStatus_ApplyOptions(t *testing.T) {
 					SubResourceApply: func(ctx context.Context, c client.Client, subResource string, obj runtime.ApplyConfiguration, opts ...client.SubResourceApplyOption) error {
 						subResourceName = subResource
 						capturedOptions = *(&client.SubResourceApplyOptions{}).ApplyOpts(opts)
+						payload, err := json.Marshal(obj)
+						if err != nil {
+							return err
+						}
+						var applyPayload struct {
+							Metadata struct {
+								ResourceVersion string `json:"resourceVersion"`
+							} `json:"metadata"`
+						}
+						if err := json.Unmarshal(payload, &applyPayload); err != nil {
+							return err
+						}
+						capturedResourceVersion = applyPayload.Metadata.ResourceVersion
 						return c.Status().Apply(ctx, obj, opts...)
 					},
 				}).
@@ -149,6 +165,9 @@ func TestApplyOpenBaoClusterAdminOpsStatus_ApplyOptions(t *testing.T) {
 			}
 			if capturedOptions.FieldManager != constants.FieldOwnerAdminOpsStatus {
 				t.Fatalf("FieldManager = %q, want %q", capturedOptions.FieldManager, constants.FieldOwnerAdminOpsStatus)
+			}
+			if capturedResourceVersion != cluster.ResourceVersion {
+				t.Fatalf("ResourceVersion = %q, want %q", capturedResourceVersion, cluster.ResourceVersion)
 			}
 
 			force := capturedOptions.Force != nil && *capturedOptions.Force
