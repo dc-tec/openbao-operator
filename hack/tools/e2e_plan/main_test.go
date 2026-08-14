@@ -553,6 +553,60 @@ func TestSealChangePathPatterns(t *testing.T) {
 	}
 }
 
+func TestLifecycleChangePathPatterns(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join("..", "..", "..", "hack", "ci", "e2e-lifecycle-paths.txt")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read lifecycle change paths: %v", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	patterns := make([]*regexp.Regexp, 0, len(lines))
+	for lineNumber, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		pattern, err := regexp.Compile(line)
+		if err != nil {
+			t.Fatalf("compile lifecycle change path line %d: %v", lineNumber+1, err)
+		}
+		patterns = append(patterns, pattern)
+	}
+	if len(patterns) == 0 {
+		t.Fatal("lifecycle change path patterns are empty")
+	}
+
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{path: "internal/app/openbaocluster/adminops/reconcile.go", want: true},
+		{path: "internal/platform/statusapply/openbaocluster_operationlock.go", want: true},
+		{path: "internal/service/opslifecycle/lock.go", want: true},
+		{path: "internal/service/backup/manager.go", want: false},
+		{path: "internal/service/upgrade/rolling/manager.go", want: false},
+		{path: "website/content/docs/architecture/operations.md", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got := false
+			for _, pattern := range patterns {
+				if pattern.MatchString(tt.path) {
+					got = true
+					break
+				}
+			}
+			if got != tt.want {
+				t.Fatalf("lifecycle change path match = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCIWorkflowWiresSealLaneFixtures(t *testing.T) {
 	t.Parallel()
 
@@ -580,6 +634,21 @@ func TestCIWorkflowWiresSealLaneFixtures(t *testing.T) {
 		if !strings.Contains(workflow, value) {
 			t.Errorf("CI workflow is missing seal-lane contract %q", value)
 		}
+	}
+}
+
+func TestCIWorkflowRoutesLifecycleChangesToBackupAndUpgrade(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join("..", "..", "..", ".github", "workflows", "ci.yml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read CI workflow: %v", err)
+	}
+
+	const lifecycleMatcher = "changed_matches_file 'hack/ci/e2e-lifecycle-paths.txt'"
+	if count := strings.Count(string(data), lifecycleMatcher); count != 2 {
+		t.Fatalf("CI lifecycle matcher count = %d, want 2 for backup and upgrade", count)
 	}
 }
 
