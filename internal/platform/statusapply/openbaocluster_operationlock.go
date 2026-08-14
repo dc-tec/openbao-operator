@@ -11,61 +11,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
-	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
-
-// OpenBaoClusterOperationLockStatusApplyOptions configures operation lock SSA.
-type OpenBaoClusterOperationLockStatusApplyOptions struct {
-	ForceOwnership bool
-}
 
 // OpenBaoClusterOperationLockStatusMutator updates operation lock status fields
 // on the provided desired cluster object before the apply is persisted.
 type OpenBaoClusterOperationLockStatusMutator func(*openbaov1alpha1.OpenBaoCluster) error
-
-// ApplyOpenBaoClusterOperationLockStatus applies the operation lock status
-// plane under the dedicated lock field owner.
-func ApplyOpenBaoClusterOperationLockStatus(
-	ctx context.Context,
-	c client.Client,
-	cluster *openbaov1alpha1.OpenBaoCluster,
-	opts OpenBaoClusterOperationLockStatusApplyOptions,
-) error {
-	if cluster == nil {
-		return fmt.Errorf("cluster is required")
-	}
-
-	applyCluster := &openbaov1alpha1.OpenBaoCluster{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: openbaov1alpha1.GroupVersion.String(),
-			Kind:       "OpenBaoCluster",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-		},
-		Status: openbaov1alpha1.OpenBaoClusterStatus{
-			OperationLock: cluster.Status.OperationLock,
-		},
-	}
-
-	applyConfig, err := ToApplyConfiguration(applyCluster, c)
-	if cluster.Status.OperationLock == nil {
-		applyConfig, err = ToApplyConfigurationWithExplicitNulls(applyCluster, c, "status.operationLock")
-	}
-	if err != nil {
-		return fmt.Errorf("failed to convert cluster to ApplyConfiguration: %w", err)
-	}
-
-	applyOpts := []client.SubResourceApplyOption{
-		client.FieldOwner(constants.FieldOwnerOperationLockStatus),
-	}
-	if opts.ForceOwnership {
-		applyOpts = append(applyOpts, client.ForceOwnership)
-	}
-
-	return c.Status().Apply(ctx, applyConfig, applyOpts...)
-}
 
 // MutateAndPatchOpenBaoClusterOperationLockStatusWithReader updates the lock
 // plane with a fresh read and an optimistic status patch. A resource-version
