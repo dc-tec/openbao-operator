@@ -650,11 +650,13 @@ suites:
       - slow
     coverage:
       - backup-queueing
+      - backup-owner-first
+      - bluegreen-upgrade
       - operation-lock
       - rolling-upgrade
     runtime:
       observed: 3m32.524s
-      budget: 5m30s
+      budget: 15m
     ci:
       lanes:
         - upgrade-rolling

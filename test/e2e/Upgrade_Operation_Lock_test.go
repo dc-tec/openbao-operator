@@ -10,8 +10,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,7 +29,328 @@ import (
 	e2ehelpers "github.com/dc-tec/openbao-operator/test/e2e/helpers"
 )
 
-var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade", "backup", "operation-lock", "slow"), Ordered, func() {
+const (
+	heldBackupExecutorImage        = "invalid.invalid/openbao-backup:e2e-hold"
+	backupFirstMinSyncDuration     = "15s"
+	backupFirstTLSRotationPeriod   = "720h"
+	backupFirstStorageSize         = "1Gi"
+	backupFirstObjectStorageRegion = "us-east-1"
+)
+
+type backupFirstUpgradeCase struct {
+	clusterName    string
+	strategy       openbaov1alpha1.UpdateStrategyType
+	initialVersion string
+	targetVersion  string
+}
+
+func runBackupFirstUpgradeCase(
+	ctx context.Context,
+	admin client.Client,
+	tenantFW *framework.Framework,
+	tenantNamespace string,
+	credentialsSecretName string,
+	testCase backupFirstUpgradeCase,
+) {
+	if testCase.initialVersion == testCase.targetVersion {
+		Skip(fmt.Sprintf("Backup-first operation ordering test skipped: versions identical (%s)", testCase.initialVersion))
+	}
+
+	cluster := newBackupFirstUpgradeCluster(tenantNamespace, credentialsSecretName, testCase)
+	clusterKey := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
+
+	By(fmt.Sprintf("creating the %s backup-first operation ordering cluster", testCase.strategy))
+	Expect(admin.Create(ctx, cluster)).To(Succeed())
+	DeferCleanup(func() {
+		current := &openbaov1alpha1.OpenBaoCluster{}
+		err := admin.Get(ctx, clusterKey, current)
+		if apierrors.IsNotFound(err) {
+			return
+		}
+		Expect(err).NotTo(HaveOccurred())
+		Expect(admin.Delete(ctx, current)).To(Succeed())
+		Eventually(func() bool {
+			err := admin.Get(ctx, clusterKey, &openbaov1alpha1.OpenBaoCluster{})
+			return apierrors.IsNotFound(err)
+		}, 5*time.Minute, 5*time.Second).Should(BeTrue())
+	})
+
+	waitForBackupFirstClusterReady(ctx, admin, clusterKey, testCase.strategy, testCase.initialVersion)
+
+	By("configuring a backup Job that remains pending")
+	Eventually(func(g Gomega) {
+		updated := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
+		original := updated.DeepCopy()
+		updated.Spec.Backup.Image = heldBackupExecutorImage
+		g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+	}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+	preTriggerJobUIDs := backupJobUIDs(ctx, admin, cluster.Namespace, cluster.Name)
+	Expect(triggerManualBackup(ctx, admin, cluster.Namespace, cluster.Name)).To(Succeed())
+	Expect(tenantFW.TriggerReconcile(ctx, cluster.Name)).To(Succeed())
+
+	By("waiting for the backup operation lock and held Job")
+	var heldJob *batchv1.Job
+	Eventually(func(g Gomega) {
+		updated := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
+		g.Expect(updated.Status.OperationLock).NotTo(BeNil())
+		g.Expect(updated.Status.OperationLock.Operation).To(Equal(openbaov1alpha1.ClusterOperationBackup))
+
+		jobs := &batchv1.JobList{}
+		g.Expect(admin.List(ctx, jobs,
+			client.InNamespace(cluster.Namespace),
+			client.MatchingLabels{
+				constants.LabelOpenBaoCluster:   cluster.Name,
+				constants.LabelOpenBaoComponent: backup.ComponentBackup,
+			},
+		)).To(Succeed())
+		for i := range jobs.Items {
+			job := &jobs.Items[i]
+			if _, found := preTriggerJobUIDs[job.UID]; found {
+				continue
+			}
+			g.Expect(job.Spec.Template.Spec.Containers).NotTo(BeEmpty())
+			if job.Spec.Template.Spec.Containers[0].Image != heldBackupExecutorImage {
+				continue
+			}
+			g.Expect(job.Status.Succeeded).To(BeZero())
+			g.Expect(job.Status.Failed).To(BeZero())
+			heldJob = job.DeepCopy()
+			break
+		}
+		g.Expect(heldJob).NotTo(BeNil())
+	}, 5*time.Minute, time.Second).Should(Succeed())
+
+	By("stopping the controller before the held backup can be processed")
+	controllerDeployment, err := getControllerDeployment(ctx, admin, operatorNamespace)
+	Expect(err).NotTo(HaveOccurred())
+	originalControllerReplicas := int32(1)
+	if controllerDeployment.Spec.Replicas != nil {
+		originalControllerReplicas = *controllerDeployment.Spec.Replicas
+	}
+	DeferCleanup(func() {
+		current, err := getControllerDeployment(ctx, admin, operatorNamespace)
+		Expect(err).NotTo(HaveOccurred())
+		if current.Spec.Replicas == nil || *current.Spec.Replicas != originalControllerReplicas {
+			Expect(scaleControllerDeployment(ctx, admin, operatorNamespace, originalControllerReplicas)).To(Succeed())
+		}
+	})
+	Expect(scaleControllerDeployment(ctx, admin, operatorNamespace, 0)).To(Succeed())
+
+	By("requesting the upgrade while the backup owns the operation lock")
+	Eventually(func(g Gomega) {
+		updated := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
+		original := updated.DeepCopy()
+		updated.Spec.Version = testCase.targetVersion
+		updated.Spec.Image = fmt.Sprintf("openbao/openbao:%s", testCase.targetVersion)
+		updated.Spec.Backup.Image = backupExecutorImage
+		g.Expect(admin.Patch(ctx, updated, client.MergeFrom(original))).To(Succeed())
+	}, framework.DefaultWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+	By("replacing the held Job with the same Job configured to complete")
+	Expect(admin.Delete(ctx, heldJob)).To(Succeed())
+	Eventually(func() bool {
+		err := admin.Get(ctx, types.NamespacedName{Name: heldJob.Name, Namespace: heldJob.Namespace}, &batchv1.Job{})
+		return apierrors.IsNotFound(err)
+	}, 2*time.Minute, time.Second).Should(BeTrue())
+
+	replacementJob := replacementBackupJob(heldJob, backupExecutorImage)
+	Expect(admin.Create(ctx, replacementJob)).To(Succeed())
+	Eventually(func(g Gomega) {
+		completed := &batchv1.Job{}
+		g.Expect(admin.Get(ctx, types.NamespacedName{Name: replacementJob.Name, Namespace: replacementJob.Namespace}, completed)).To(Succeed())
+		g.Expect(completed.Status.Failed).To(BeZero())
+		g.Expect(completed.Status.Succeeded).To(BeNumerically(">", 0))
+	}, 10*time.Minute, 5*time.Second).Should(Succeed())
+
+	backupKey := replacementJob.Annotations["openbao.org/backup-key"]
+	Expect(backupKey).NotTo(BeEmpty())
+	Consistently(func(g Gomega) {
+		updated := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
+		g.Expect(updated.Status.OperationLock).NotTo(BeNil())
+		g.Expect(updated.Status.OperationLock.Operation).To(Equal(openbaov1alpha1.ClusterOperationBackup))
+		g.Expect(updated.Status.Backup).NotTo(BeNil())
+		g.Expect(updated.Status.Backup.LastBackupName).NotTo(Equal(backupKey))
+	}, 5*time.Second, time.Second).Should(Succeed())
+
+	By("starting the controller with a terminal backup Job and a pending upgrade")
+	Expect(scaleControllerDeployment(ctx, admin, operatorNamespace, originalControllerReplicas)).To(Succeed())
+	Expect(tenantFW.TriggerReconcile(ctx, cluster.Name)).To(Succeed())
+
+	By("verifying the backup result is processed and the backup lock is released")
+	Eventually(func(g Gomega) {
+		updated := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
+		g.Expect(updated.Status.Backup).NotTo(BeNil())
+		g.Expect(updated.Status.Backup.LastBackupName).To(Equal(backupKey))
+		if updated.Status.OperationLock != nil {
+			g.Expect(updated.Status.OperationLock.Operation).NotTo(Equal(openbaov1alpha1.ClusterOperationBackup))
+		}
+	}, 3*time.Minute, 2*time.Second).Should(Succeed())
+
+	By(fmt.Sprintf("verifying the %s upgrade starts after backup completion", testCase.strategy))
+	Eventually(func(g Gomega) {
+		updated := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
+		g.Expect(updated.Status.OperationLock).NotTo(BeNil())
+		g.Expect(updated.Status.OperationLock.Operation).To(Equal(openbaov1alpha1.ClusterOperationUpgrade))
+
+		if testCase.strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+			g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+			g.Expect(updated.Status.BlueGreen.Phase).NotTo(Equal(openbaov1alpha1.PhaseIdle))
+			g.Expect(updated.Status.BlueGreen.GreenRevision).NotTo(BeEmpty())
+			return
+		}
+		g.Expect(updated.Status.Upgrade).NotTo(BeNil())
+		g.Expect(updated.Status.Upgrade.TargetVersion).To(Equal(testCase.targetVersion))
+	}, 5*time.Minute, 2*time.Second).Should(Succeed())
+}
+
+func newBackupFirstUpgradeCluster(
+	namespace string,
+	credentialsSecretName string,
+	testCase backupFirstUpgradeCase,
+) *openbaov1alpha1.OpenBaoCluster {
+	upgradeConfig := &openbaov1alpha1.UpgradeConfig{
+		Strategy: testCase.strategy,
+		Image:    upgradeExecutorImage,
+	}
+	if testCase.strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+		upgradeConfig.BlueGreen = &openbaov1alpha1.BlueGreenConfig{
+			AutoPromote: true,
+			Verification: &openbaov1alpha1.VerificationConfig{
+				MinSyncDuration: backupFirstMinSyncDuration,
+			},
+		}
+	}
+
+	return &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: testCase.clusterName, Namespace: namespace},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile:  openbaov1alpha1.ProfileDevelopment,
+			Version:  testCase.initialVersion,
+			Image:    fmt.Sprintf("openbao/openbao:%s", testCase.initialVersion),
+			Replicas: 1,
+			InitContainer: &openbaov1alpha1.InitContainerConfig{
+				Enabled: true,
+				Image:   configInitImage,
+			},
+			SelfInit: &openbaov1alpha1.SelfInitConfig{
+				Enabled:  true,
+				OIDC:     &openbaov1alpha1.SelfInitOIDCConfig{Enabled: true},
+				Requests: e2ehelpers.CreateE2ERequests(namespace),
+			},
+			TLS: openbaov1alpha1.TLSConfig{
+				Enabled:        true,
+				Mode:           openbaov1alpha1.TLSModeOperatorManaged,
+				RotationPeriod: backupFirstTLSRotationPeriod,
+			},
+			Storage: openbaov1alpha1.StorageConfig{Size: backupFirstStorageSize},
+			Network: &openbaov1alpha1.NetworkConfig{APIServerCIDR: apiServerCIDR},
+			Upgrade: upgradeConfig,
+			Backup: &openbaov1alpha1.BackupSchedule{
+				Schedule: "0 5 * * *",
+				Image:    backupExecutorImage,
+				Target: openbaov1alpha1.BackupTarget{
+					Endpoint:     rustfsEndpoint,
+					Bucket:       rustfsBucket,
+					Region:       backupFirstObjectStorageRegion,
+					UsePathStyle: true,
+					CredentialsSecretRef: &corev1.LocalObjectReference{
+						Name: credentialsSecretName,
+					},
+				},
+			},
+			DeletionPolicy: openbaov1alpha1.DeletionPolicyDeleteAll,
+		},
+	}
+}
+
+func waitForBackupFirstClusterReady(
+	ctx context.Context,
+	admin client.Client,
+	clusterKey types.NamespacedName,
+	strategy openbaov1alpha1.UpdateStrategyType,
+	initialVersion string,
+) {
+	Eventually(func(g Gomega) {
+		updated := &openbaov1alpha1.OpenBaoCluster{}
+		g.Expect(admin.Get(ctx, clusterKey, updated)).To(Succeed())
+		g.Expect(updated.Status.Initialized).To(BeTrue())
+		g.Expect(updated.Status.CurrentVersion).To(Equal(initialVersion))
+
+		available := meta.FindStatusCondition(updated.Status.Conditions, string(openbaov1alpha1.ConditionAvailable))
+		g.Expect(available).NotTo(BeNil())
+		g.Expect(available.Status).To(Equal(metav1.ConditionTrue))
+		if strategy == openbaov1alpha1.UpdateStrategyBlueGreen {
+			g.Expect(updated.Status.BlueGreen).NotTo(BeNil())
+			g.Expect(updated.Status.BlueGreen.Phase).To(Equal(openbaov1alpha1.PhaseIdle))
+		}
+	}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+
+	Eventually(func(g Gomega) {
+		statefulSets := &appsv1.StatefulSetList{}
+		g.Expect(admin.List(ctx, statefulSets,
+			client.InNamespace(clusterKey.Namespace),
+			client.MatchingLabels{constants.LabelOpenBaoCluster: clusterKey.Name},
+		)).To(Succeed())
+		var readyReplicas int32
+		for i := range statefulSets.Items {
+			readyReplicas += statefulSets.Items[i].Status.ReadyReplicas
+		}
+		g.Expect(readyReplicas).To(Equal(int32(1)))
+	}, framework.DefaultLongWaitTimeout, framework.DefaultPollInterval).Should(Succeed())
+}
+
+func backupJobUIDs(ctx context.Context, admin client.Client, namespace, clusterName string) map[types.UID]struct{} {
+	jobs := &batchv1.JobList{}
+	ExpectWithOffset(1, admin.List(ctx, jobs,
+		client.InNamespace(namespace),
+		client.MatchingLabels{
+			constants.LabelOpenBaoCluster:   clusterName,
+			constants.LabelOpenBaoComponent: backup.ComponentBackup,
+		},
+	)).To(Succeed())
+
+	uids := make(map[types.UID]struct{}, len(jobs.Items))
+	for i := range jobs.Items {
+		uids[jobs.Items[i].UID] = struct{}{}
+	}
+	return uids
+}
+
+func replacementBackupJob(heldJob *batchv1.Job, executorImage string) *batchv1.Job {
+	replacement := heldJob.DeepCopy()
+	replacement.ResourceVersion = ""
+	replacement.UID = ""
+	replacement.Generation = 0
+	replacement.CreationTimestamp = metav1.Time{}
+	replacement.DeletionTimestamp = nil
+	replacement.DeletionGracePeriodSeconds = nil
+	replacement.ManagedFields = nil
+	replacement.Finalizers = nil
+	replacement.Status = batchv1.JobStatus{}
+	replacement.Spec.Selector = nil
+	replacement.Spec.ManualSelector = nil
+
+	for _, label := range []string{
+		batchv1.ControllerUidLabel,
+		batchv1.JobNameLabel,
+		"controller-uid",
+		"job-name",
+	} {
+		delete(replacement.Labels, label)
+		delete(replacement.Spec.Template.Labels, label)
+	}
+	replacement.Spec.Template.Spec.Containers[0].Image = executorImage
+	return replacement
+}
+
+var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade", "backup", "operation-lock", "slow"), Serial, Ordered, func() {
 	ctx := context.Background()
 
 	var (
@@ -156,6 +479,36 @@ var _ = Describe("Upgrade Strategies: Operation Lock Contention", Label("upgrade
 		if tenantFW != nil {
 			_ = tenantFW.Cleanup(ctx)
 		}
+	})
+
+	It("processes a completed backup before starting a rolling upgrade", Label(
+		"e2e-anchor",
+		"case:backup-first-rolling-operation-order",
+		"covers:operation-lock",
+		"covers:backup-owner-first",
+		"covers:rolling-upgrade",
+	), func() {
+		runBackupFirstUpgradeCase(ctx, admin, tenantFW, tenantNamespace, credentialsSecret.Name, backupFirstUpgradeCase{
+			clusterName:    "backup-first-rolling",
+			strategy:       openbaov1alpha1.UpdateStrategyRollingUpdate,
+			initialVersion: initialVersion,
+			targetVersion:  targetVersion,
+		})
+	})
+
+	It("processes a completed backup before starting a blue-green upgrade", Label(
+		"e2e-anchor",
+		"case:backup-first-bluegreen-operation-order",
+		"covers:operation-lock",
+		"covers:backup-owner-first",
+		"covers:bluegreen-upgrade",
+	), func() {
+		runBackupFirstUpgradeCase(ctx, admin, tenantFW, tenantNamespace, credentialsSecret.Name, backupFirstUpgradeCase{
+			clusterName:    "backup-first-bluegreen",
+			strategy:       openbaov1alpha1.UpdateStrategyBlueGreen,
+			initialVersion: blueGreenUpgradeFromVersion(),
+			targetVersion:  blueGreenUpgradeToVersion(),
+		})
 	})
 
 	It("holds a manual backup request until the rolling upgrade lock is released", Label(

@@ -9,6 +9,8 @@ Note: recorded checkpoints are best-effort extracts from literal `By(...)` calls
 | Case ID | Spec | State | Covers | Labels |
 | --- | --- | --- | --- | --- |
 | `upgrade-backup-lock-contention` | holds a manual backup request until the rolling upgrade lock is released | active | `operation-lock`, `rolling-upgrade`, `backup-queueing` | `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor` |
+| `backup-first-bluegreen-operation-order` | processes a completed backup before starting a blue-green upgrade | active | `operation-lock`, `backup-owner-first`, `bluegreen-upgrade` | `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor` |
+| `backup-first-rolling-operation-order` | processes a completed backup before starting a rolling upgrade | active | `operation-lock`, `backup-owner-first`, `rolling-upgrade` | `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor` |
 
 ## `upgrade-backup-lock-contention`
 
@@ -30,3 +32,29 @@ Recorded checkpoints:
 - waiting for the upgrade to complete
 - re-triggering reconcile so the queued backup request is picked up immediately
 - verifying the queued backup starts once the upgrade lock is released
+
+
+## `backup-first-bluegreen-operation-order`
+
+Path: `Upgrade Strategies: Operation Lock Contention > processes a completed backup before starting a blue-green upgrade`
+
+State: `active`
+
+Generated fallback ID: `upgrade-operation-lock-processes-a-completed-backup-before-starting-45917e47`
+
+Covers: `operation-lock`, `backup-owner-first`, `bluegreen-upgrade`
+
+Labels: `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor`
+
+
+## `backup-first-rolling-operation-order`
+
+Path: `Upgrade Strategies: Operation Lock Contention > processes a completed backup before starting a rolling upgrade`
+
+State: `active`
+
+Generated fallback ID: `upgrade-operation-lock-processes-a-completed-backup-before-starting-a10c668a`
+
+Covers: `operation-lock`, `backup-owner-first`, `rolling-upgrade`
+
+Labels: `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor`
