@@ -112,7 +112,11 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		cluster,
 		recordError,
 	)
-	if appErr == nil && appResult.RequeueAfter <= 0 && !r.parent.SingleTenantMode {
+	if appErr == nil &&
+		appResult.RequeueAfter <= 0 &&
+		cluster.Status.Workload != nil &&
+		cluster.Status.Workload.LastError == nil &&
+		!r.parent.SingleTenantMode {
 		appResult.RequeueAfter = steadyStateStatusRefreshRequeueAfter(time.Now())
 	}
 	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr

@@ -111,6 +111,7 @@ func (m *Manager) reconcileOwnedBackup(
 	if err := m.ensureBackupStatus(ctx, cluster); err != nil {
 		return recon.Result{}, err
 	}
+	m.syncBackupStatusMetrics(cluster, metrics)
 	if err := m.clearManualTriggerAnnotation(ctx, logger, cluster); err != nil {
 		return recon.Result{}, fmt.Errorf("failed to clear manual backup trigger while finishing owned operation: %w", err)
 	}
@@ -120,6 +121,7 @@ func (m *Manager) reconcileOwnedBackup(
 		return recon.Result{}, fmt.Errorf("failed to observe owned backup Jobs: %w", err)
 	}
 	if observation.hasActive {
+		m.applyBackupJobSnapshotToMetrics(cluster, metrics, backupJobMetricsSnapshot{inProgress: true})
 		logger.V(1).Info("Owned backup Job is in progress; requeueing to observe completion")
 		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
