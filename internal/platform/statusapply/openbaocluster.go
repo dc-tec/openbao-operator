@@ -37,8 +37,9 @@ func ApplyOpenBaoClusterAdminOpsStatus(
 			Kind:       "OpenBaoCluster",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
+			Name:            cluster.Name,
+			Namespace:       cluster.Namespace,
+			ResourceVersion: cluster.ResourceVersion,
 		},
 		Status: openbaov1alpha1.OpenBaoClusterStatus{
 			AcceptedUpgradeStrategy: cluster.Status.AcceptedUpgradeStrategy,

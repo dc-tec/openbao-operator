@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -90,6 +91,55 @@ func TestSetupWithManager_SingleTenantRecreatesDeletedConfigMap(t *testing.T) {
 		}
 		return current.UID != originalUID
 	}, 20*time.Second, 200*time.Millisecond, "expected single-tenant Owns() watch to recreate deleted ConfigMap")
+}
+
+func TestSetupWithManager_MultiTenantRecreatesDeletedChildrenOnPoll(t *testing.T) {
+	ctx := context.Background()
+	namespace := "multi-tenant-poll-test"
+	originalRequeueStandard := constants.RequeueStandard
+	constants.RequeueStandard = 250 * time.Millisecond
+	t.Cleanup(func() {
+		constants.RequeueStandard = originalRequeueStandard
+	})
+	liveClient := startOpenBaoClusterManager(t, namespace, false)
+
+	cluster := newManagerTestCluster(namespace, "poll-recreate-cluster")
+	require.NoError(t, liveClient.Create(ctx, cluster))
+	t.Cleanup(func() {
+		_ = liveClient.Delete(context.Background(), cluster)
+	})
+
+	configMap := waitForManagedConfigMap(t, ctx, liveClient, namespace, cluster.Name)
+	originalUID := configMap.UID
+
+	require.NoError(t, liveClient.Delete(ctx, configMap))
+	waitForNotFound(t, ctx, liveClient, configMap)
+
+	configMapKey := client.ObjectKey{Namespace: namespace, Name: cluster.Name + constants.SuffixConfigMap}
+	require.Eventually(t, func() bool {
+		current := &corev1.ConfigMap{}
+		if err := liveClient.Get(ctx, configMapKey, current); err != nil {
+			return false
+		}
+		return current.UID != originalUID
+	}, 20*time.Second, 200*time.Millisecond, "expected multi-tenant polling to recreate deleted ConfigMap")
+
+	statefulSetKey := client.ObjectKey{Namespace: namespace, Name: cluster.Name}
+	statefulSet := &appsv1.StatefulSet{}
+	require.Eventually(t, func() bool {
+		return liveClient.Get(ctx, statefulSetKey, statefulSet) == nil
+	}, 20*time.Second, 200*time.Millisecond, "expected manager-driven reconcile to create the managed StatefulSet")
+	originalStatefulSetUID := statefulSet.UID
+
+	require.NoError(t, liveClient.Delete(ctx, statefulSet))
+	waitForNotFound(t, ctx, liveClient, statefulSet)
+	require.Eventually(t, func() bool {
+		current := &appsv1.StatefulSet{}
+		if err := liveClient.Get(ctx, statefulSetKey, current); err != nil {
+			return false
+		}
+		return current.UID != originalStatefulSetUID
+	}, 20*time.Second, 200*time.Millisecond, "expected multi-tenant polling to recreate deleted StatefulSet")
 }
 
 func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant bool) client.Client {

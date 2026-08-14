@@ -5,6 +5,8 @@ metadata:
   name: {{ include "openbao-operator.fullname" . }}-openbao-lock-managed-resource-mutations
   labels:
     {{- include "openbao-operator.labels" . | nindent 4 }}
+  annotations:
+    openbao.org/admission-policy-fingerprint: sha256:da94c35652f641eb4a7767be72ecaeeb0c1cfbf8f82bb17e0ed394a0e1124109
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -146,12 +148,6 @@ spec:
     - name: is_endpoints_controller_request
       expression: >-
         request.resource.resource in ["endpoints", "endpointslices"]
-    - name: is_cert_manager
-      expression: >-
-        request.userInfo.username.startsWith("system:serviceaccount:cert-manager:")
-    - name: is_cert_manager_secret_request
-      expression: >-
-        variables.is_cert_manager && request.resource.resource == "secrets"
     - name: is_pod_request
       expression: >-
         request.kind.group == "" && request.kind.kind == "Pod"
@@ -475,7 +471,6 @@ spec:
         variables.is_storage_pvc_binding_update ||
         (variables.is_kube_system_controller && variables.is_endpoints_controller_request) ||
         variables.is_kube_system_service_metadata_update ||
-        variables.is_cert_manager_secret_request ||
         (variables.is_pod_request && variables.is_kubelet_node && request.operation == "DELETE") ||
         variables.is_service_registration_label_update ||
         variables.is_kube_system_pod_finalizer_update ||

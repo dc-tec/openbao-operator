@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -22,27 +21,6 @@ type metricsBlobStore struct {
 	headErr    error
 	closeCount int
 }
-
-type capturingLogSink struct {
-	infoCount  int
-	errorCount int
-}
-
-func (c *capturingLogSink) Init(logr.RuntimeInfo) {}
-
-func (c *capturingLogSink) Enabled(int) bool { return true }
-
-func (c *capturingLogSink) Info(int, string, ...interface{}) {
-	c.infoCount++
-}
-
-func (c *capturingLogSink) Error(error, string, ...interface{}) {
-	c.errorCount++
-}
-
-func (c *capturingLogSink) WithValues(...interface{}) logr.LogSink { return c }
-
-func (c *capturingLogSink) WithName(string) logr.LogSink { return c }
 
 func (m *metricsBlobStore) Upload(context.Context, string, io.Reader) error { return nil }
 

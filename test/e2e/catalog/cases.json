@@ -2067,6 +2067,86 @@
     "suiteTitle": ""
   },
   {
+    "id": "backup-first-bluegreen-operation-order",
+    "generatedId": "upgrade-operation-lock-processes-a-completed-backup-before-starting-45917e47",
+    "caseLabel": "backup-first-bluegreen-operation-order",
+    "coverage": [
+      "operation-lock",
+      "backup-owner-first",
+      "bluegreen-upgrade"
+    ],
+    "file": "test/e2e/Upgrade_Operation_Lock_test.go",
+    "type": "It",
+    "name": "processes a completed backup before starting a blue-green upgrade",
+    "path": [
+      "Upgrade Strategies: Operation Lock Contention",
+      "processes a completed backup before starting a blue-green upgrade"
+    ],
+    "labels": [
+      "upgrade",
+      "backup",
+      "operation-lock",
+      "slow",
+      "e2e-anchor",
+      "case:backup-first-bluegreen-operation-order",
+      "covers:operation-lock",
+      "covers:backup-owner-first",
+      "covers:bluegreen-upgrade"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "backup",
+      "operation-lock",
+      "slow",
+      "e2e-anchor"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
+    "id": "backup-first-rolling-operation-order",
+    "generatedId": "upgrade-operation-lock-processes-a-completed-backup-before-starting-a10c668a",
+    "caseLabel": "backup-first-rolling-operation-order",
+    "coverage": [
+      "operation-lock",
+      "backup-owner-first",
+      "rolling-upgrade"
+    ],
+    "file": "test/e2e/Upgrade_Operation_Lock_test.go",
+    "type": "It",
+    "name": "processes a completed backup before starting a rolling upgrade",
+    "path": [
+      "Upgrade Strategies: Operation Lock Contention",
+      "processes a completed backup before starting a rolling upgrade"
+    ],
+    "labels": [
+      "upgrade",
+      "backup",
+      "operation-lock",
+      "slow",
+      "e2e-anchor",
+      "case:backup-first-rolling-operation-order",
+      "covers:operation-lock",
+      "covers:backup-owner-first",
+      "covers:rolling-upgrade"
+    ],
+    "domainLabels": [
+      "upgrade",
+      "backup",
+      "operation-lock",
+      "slow",
+      "e2e-anchor"
+    ],
+    "steps": null,
+    "focused": false,
+    "pending": false,
+    "suiteFile": "",
+    "suiteTitle": ""
+  },
+  {
     "id": "upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17",
     "generatedId": "upgrade-strategies-holds-in-syncing-until-manual-promotion-f3915b17",
     "file": "test/e2e/Upgrade_Strategies_test.go",

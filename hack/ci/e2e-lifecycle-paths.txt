@@ -1,0 +1,3 @@
+^internal/app/openbaocluster/adminops/
+^internal/platform/statusapply/
+^internal/service/opslifecycle/

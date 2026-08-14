@@ -5,7 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/go-logr/logr"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -15,8 +17,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	appopenbaocluster "github.com/dc-tec/openbao-operator/internal/app/openbaocluster"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
+	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
+	recon "github.com/dc-tec/openbao-operator/internal/platform/reconcile"
 )
+
+type workloadSubReconcilerStub struct {
+	err error
+}
+
+func (s workloadSubReconcilerStub) Reconcile(context.Context, logr.Logger, *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	return recon.Result{}, s.err
+}
 
 func TestOpenBaoClusterAdminOpsReconcilerReconcile_UsesAPIReaderWhenAvailable(t *testing.T) {
 	t.Parallel()
@@ -56,6 +70,131 @@ func TestOpenBaoClusterAdminOpsReconcilerReconcile_UsesAPIReaderWhenAvailable(t 
 	})
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
+	}
+}
+
+func TestOpenBaoClusterWorkloadReconciler_MultiTenantSteadyStateRequeue(t *testing.T) {
+	permanentErr := operatorerrors.WithReason(
+		constants.ReasonImageVersionMismatch,
+		operatorerrors.WrapPermanentConfig(errors.New("image version does not match spec.version")),
+	)
+	tests := []struct {
+		name        string
+		reconcilers []appopenbaocluster.SubReconciler
+		wantRequeue bool
+		wantReason  string
+	}{
+		{
+			name:        "successful steady state requeues",
+			wantRequeue: true,
+		},
+		{
+			name:        "handled permanent error does not requeue",
+			reconcilers: []appopenbaocluster.SubReconciler{workloadSubReconcilerStub{err: permanentErr}},
+			wantReason:  constants.ReasonImageVersionMismatch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheme := newOpenBaoClusterTestScheme(t)
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "multi-tenant-workload",
+					Namespace:       "default",
+					ResourceVersion: "1",
+				},
+			}
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+				WithObjects(cluster.DeepCopy()).
+				Build()
+			parent := &OpenBaoClusterReconciler{
+				Client: fakeClient,
+				Applications: appopenbaocluster.NewApplications(appopenbaocluster.ApplicationsConfig{
+					Client:              fakeClient,
+					WorkloadReconcilers: tt.reconcilers,
+					WorkloadPolicy:      appopenbaocluster.DefaultWorkloadResultPolicy(),
+				}),
+			}
+
+			result, err := (&openBaoClusterWorkloadReconciler{parent: parent}).reconcileCluster(
+				context.Background(),
+				logr.Discard(),
+				cluster,
+				func(error) {},
+			)
+			if err != nil {
+				t.Fatalf("reconcileCluster() error = %v", err)
+			}
+			if tt.wantRequeue && result.RequeueAfter != constants.RequeueStandard {
+				t.Fatalf("reconcileCluster() requeueAfter = %s, want %s", result.RequeueAfter, constants.RequeueStandard)
+			}
+			if !tt.wantRequeue && result.RequeueAfter != 0 {
+				t.Fatalf("reconcileCluster() requeueAfter = %s, want 0", result.RequeueAfter)
+			}
+			if cluster.Status.Workload == nil {
+				t.Fatal("reconcileCluster() did not initialize workload status")
+			}
+			if tt.wantReason == "" && cluster.Status.Workload.LastError != nil {
+				t.Fatalf("reconcileCluster() lastError = %#v, want nil", cluster.Status.Workload.LastError)
+			}
+			if tt.wantReason != "" && (cluster.Status.Workload.LastError == nil || cluster.Status.Workload.LastError.Reason != tt.wantReason) {
+				t.Fatalf("reconcileCluster() lastError = %#v, want reason %q", cluster.Status.Workload.LastError, tt.wantReason)
+			}
+		})
+	}
+}
+
+func TestWorkloadAndAdminOpsWaitForClusterFinalizer(t *testing.T) {
+	t.Parallel()
+
+	scheme := newOpenBaoClusterTestScheme(t)
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wait-for-finalizer",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
+	admissionTracker := admission.NewTracker(nil, nil, nil, 0)
+	admissionTracker.MarkReadyForUnsafeMode()
+	parent := &OpenBaoClusterReconciler{
+		Client: fakeClient,
+		ControllerRuntime: ControllerRuntime{
+			APIReader:        fakeClient,
+			AdmissionTracker: admissionTracker,
+			SingleTenantMode: true,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		reconciler admissionRuntimeTestReconciler
+	}{
+		{name: "workload", reconciler: &openBaoClusterWorkloadReconciler{parent: parent}},
+		{name: "adminops", reconciler: &openBaoClusterAdminOpsReconciler{parent: parent}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+			})
+			if err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if result.RequeueAfter != constants.RequeueShort {
+				t.Fatalf("Reconcile() requeueAfter = %s, want %s", result.RequeueAfter, constants.RequeueShort)
+			}
+		})
 	}
 }
 
@@ -285,6 +424,55 @@ func TestOpenBaoClusterStatusReconciler_FinalizerRemoveUsesMergePatch(t *testing
 	}
 	if patches != 1 {
 		t.Fatalf("Patch() calls = %d, want 1", patches)
+	}
+}
+
+func TestOpenBaoClusterStatusReconciler_DeletionBypassesTenantOnboarding(t *testing.T) {
+	t.Parallel()
+
+	scheme := newOpenBaoClusterTestScheme(t)
+	now := metav1.Now()
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "delete-without-onboarding",
+			Namespace:         "tenant-a",
+			Finalizers:        []string{openbaov1alpha1.OpenBaoClusterFinalizer},
+			DeletionTimestamp: &now,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster.DeepCopy()).
+		Build()
+
+	parent := &OpenBaoClusterReconciler{
+		Client: fakeClient,
+		ControllerRuntime: ControllerRuntime{
+			APIReader:        fakeClient,
+			SingleTenantMode: false,
+		},
+		Applications: newStatusTestApplications(fakeClient, scheme),
+	}
+	reconciler := &openBaoClusterStatusReconciler{parent: parent}
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+	})
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result != (ctrl.Result{}) {
+		t.Fatalf("Reconcile() result = %v, want zero", result)
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	err = fakeClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updated)
+	if err == nil && controllerutil.ContainsFinalizer(updated, openbaov1alpha1.OpenBaoClusterFinalizer) {
+		t.Fatal("cluster finalizer remains after deletion cleanup")
+	}
+	if err != nil && !apierrors.IsNotFound(err) {
+		t.Fatalf("Get() after deletion cleanup error = %v", err)
 	}
 }
 

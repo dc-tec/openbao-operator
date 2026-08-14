@@ -868,3 +868,74 @@ func TestVAP_LockManagedRBAC_DeniesDirectMutationOfProvisionerManagedRoleBinding
 
 	t.Fatalf("expected VAP to deny direct mutation of provisioner-managed RoleBinding after retries")
 }
+
+func TestVAP_LockManagedRBAC_DoesNotTrustCertManagerNamespace(t *testing.T) {
+	ensureDefaultAdmissionPoliciesApplied(t)
+
+	namespace := newTestNamespace(t)
+	controllerClient := newPrivilegedImpersonatedClient(t, controllerUsername)
+	certManagerClient := newPrivilegedImpersonatedClient(
+		t,
+		"system:serviceaccount:cert-manager:cert-manager",
+	)
+
+	managedSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "example-tls-server",
+			Namespace: namespace,
+			Labels: map[string]string{
+				constants.LabelAppName:        constants.LabelValueAppNameOpenBao,
+				constants.LabelAppInstance:    "example",
+				constants.LabelAppManagedBy:   constants.LabelValueAppManagedByOpenBaoOperator,
+				constants.LabelOpenBaoCluster: "example",
+			},
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       []byte("managed-certificate"),
+			corev1.TLSPrivateKeyKey: []byte("managed-key"),
+		},
+	}
+	if err := controllerClient.Create(ctx, managedSecret); err != nil {
+		t.Fatalf("create managed Secret: %v", err)
+	}
+
+	var managedMutationDenied bool
+	for attempt := 0; attempt < 25; attempt++ {
+		var latest corev1.Secret
+		if err := certManagerClient.Get(ctx, types.NamespacedName{Namespace: namespace, Name: managedSecret.Name}, &latest); err != nil {
+			t.Fatalf("get managed Secret: %v", err)
+		}
+		latest.Data[corev1.TLSCertKey] = []byte("replaced-certificate")
+		err := certManagerClient.Update(ctx, &latest)
+		if err == nil {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		requireAdmissionDenied(t, err)
+		if !strings.Contains(err.Error(), "Direct modification of OpenBao-managed resources is prohibited") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		managedMutationDenied = true
+		break
+	}
+	if !managedMutationDenied {
+		t.Fatal("expected the managed Secret mutation to be denied")
+	}
+
+	externalSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "external-tls",
+			Namespace: namespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: map[string][]byte{
+			corev1.TLSCertKey:       []byte("external-certificate"),
+			corev1.TLSPrivateKeyKey: []byte("external-key"),
+		},
+	}
+	if err := certManagerClient.Create(ctx, externalSecret); err != nil {
+		t.Fatalf("expected cert-manager to create an external TLS Secret, got: %v", err)
+	}
+}

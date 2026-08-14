@@ -2,6 +2,8 @@ package security
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -47,7 +49,7 @@ func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, conf
 	}
 
 	var ggcrOpts []ggcrremote.Option
-	if len(config.ImagePullSecrets) > 0 && v.client != nil {
+	if len(config.ImagePullSecrets) > 0 && v.reader != nil {
 		keychain, err := v.buildKeychain(ctx, config.ImagePullSecrets, config.Namespace)
 		if err != nil {
 			return "", fmt.Errorf("failed to build keychain for image pull secrets: %w", err)
@@ -73,17 +75,26 @@ func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, conf
 	return digestRef.String(), nil
 }
 
-// cacheKey generates a cache key from image digest and verification config.
-func (v *ImageVerifier) cacheKey(digest string, config imageverify.VerifyConfig) string {
-	if config.PublicKey != "" {
-		keyHash := []byte(config.PublicKey)
-		if len(keyHash) > 16 {
-			keyHash = keyHash[:16]
-		}
-		return fmt.Sprintf("%s@key:%x", digest, keyHash)
+// cacheKey generates a cache key from the complete image digest and verification policy.
+func (v *ImageVerifier) cacheKey(
+	digest string,
+	config imageverify.VerifyConfig,
+	trustedRootIdentity string,
+) (string, error) {
+	identity := struct {
+		Digest              string
+		Policy              imageverify.VerifyConfig
+		TrustedRootIdentity string
+	}{
+		Digest:              digest,
+		Policy:              config,
+		TrustedRootIdentity: trustedRootIdentity,
 	}
-	if hasStrictKeylessConfig(config) {
-		return fmt.Sprintf("%s@oidc:%s|%s", digest, config.Issuer, config.Subject)
+	encodedIdentity, err := json.Marshal(identity)
+	if err != nil {
+		return "", fmt.Errorf("marshal verification cache identity: %w", err)
 	}
-	return fmt.Sprintf("%s@oidc-re:%s|%s", digest, config.IssuerRegExp, config.SubjectRegExp)
+
+	identityHash := sha256.Sum256(encodedIdentity)
+	return fmt.Sprintf("sha256:%x", identityHash), nil
 }

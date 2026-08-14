@@ -1,6 +1,9 @@
 package admission
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -8,6 +11,7 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+	sigsyaml "sigs.k8s.io/yaml"
 )
 
 func TestDefaultDependencies(t *testing.T) {
@@ -15,9 +19,10 @@ func TestDefaultDependencies(t *testing.T) {
 
 	expected := []Dependency{
 		{
-			Name:        dependencyOpenBaoValidateOpenBaoCluster,
-			PolicyName:  dependencyOpenBaoValidateOpenBaoCluster,
-			BindingName: dependencyBindingValidateOpenBaoCluster,
+			Name:                dependencyOpenBaoValidateOpenBaoCluster,
+			PolicyName:          dependencyOpenBaoValidateOpenBaoCluster,
+			BindingName:         dependencyBindingValidateOpenBaoCluster,
+			ExpectedFingerprint: fingerprintOpenBaoValidateOpenBaoCluster,
 		},
 		{
 			Name:        dependencyOpenBaoValidateOpenBaoTenant,
@@ -65,9 +70,10 @@ func TestDefaultDependencies(t *testing.T) {
 			BindingName: dependencyBindingRestrictControllerSecretWrites,
 		},
 		{
-			Name:        dependencyOpenBaoLockManagedResourceMutations,
-			PolicyName:  dependencyOpenBaoLockManagedResourceMutations,
-			BindingName: dependencyBindingLockManagedResourceMutations,
+			Name:                dependencyOpenBaoLockManagedResourceMutations,
+			PolicyName:          dependencyOpenBaoLockManagedResourceMutations,
+			BindingName:         dependencyBindingLockManagedResourceMutations,
+			ExpectedFingerprint: fingerprintOpenBaoLockManagedResourceMutations,
 		},
 		{
 			Name:        dependencyOpenBaoEnforceManagedImageDigests,
@@ -137,6 +143,84 @@ func TestDefaultDependenciesCoverConfigPolicyValidatingPolicies(t *testing.T) {
 			missingFromDependencies,
 			missingFromConfig,
 		)
+	}
+}
+
+func TestExpectedPolicyFingerprintsMatchSourcePolicyContent(t *testing.T) {
+	t.Parallel()
+
+	expected := map[string]string{}
+	for _, dependency := range DefaultDependencies() {
+		if dependency.ExpectedFingerprint != "" {
+			expected[dependency.PolicyName] = dependency.ExpectedFingerprint
+		}
+	}
+
+	configPolicyDir := filepath.Join("..", "..", "..", "config", "policy")
+	kustomizationBytes, err := os.ReadFile(filepath.Join(configPolicyDir, "kustomization.yaml"))
+	if err != nil {
+		t.Fatalf("read policy kustomization: %v", err)
+	}
+	var k policyKustomization
+	if err := yaml.Unmarshal(kustomizationBytes, &k); err != nil {
+		t.Fatalf("decode policy kustomization: %v", err)
+	}
+
+	seen := map[string]bool{}
+	for _, resource := range k.Resources {
+		manifestBytes, err := os.ReadFile(filepath.Join(configPolicyDir, resource))
+		if err != nil {
+			t.Fatalf("read policy resource %q: %v", resource, err)
+		}
+		manifestJSON, err := sigsyaml.YAMLToJSON(manifestBytes)
+		if err != nil {
+			t.Fatalf("convert policy resource %q to JSON: %v", resource, err)
+		}
+		var policy map[string]any
+		if err := json.Unmarshal(manifestJSON, &policy); err != nil {
+			t.Fatalf("decode policy resource %q: %v", resource, err)
+		}
+		metadata, ok := policy["metadata"].(map[string]any)
+		if !ok {
+			continue
+		}
+		policyName, _ := metadata["name"].(string)
+		expectedFingerprint, found := expected[policyName]
+		if !found {
+			continue
+		}
+		seen[policyName] = true
+
+		encodedSpec, err := json.Marshal(policy["spec"])
+		if err != nil {
+			t.Fatalf("encode policy %q spec: %v", policyName, err)
+		}
+		sum := sha256.Sum256(encodedSpec)
+		contentFingerprint := "sha256:" + hex.EncodeToString(sum[:])
+		annotations, _ := metadata["annotations"].(map[string]any)
+		annotationFingerprint, _ := annotations[PolicyFingerprintAnnotation].(string)
+		if annotationFingerprint != contentFingerprint {
+			t.Errorf(
+				"policy %q annotation fingerprint = %q, want content fingerprint %q",
+				policyName,
+				annotationFingerprint,
+				contentFingerprint,
+			)
+		}
+		if expectedFingerprint != annotationFingerprint {
+			t.Errorf(
+				"policy %q dependency fingerprint = %q, want annotation fingerprint %q",
+				policyName,
+				expectedFingerprint,
+				annotationFingerprint,
+			)
+		}
+	}
+
+	for policyName := range expected {
+		if !seen[policyName] {
+			t.Errorf("policy %q has an expected fingerprint but no source manifest", policyName)
+		}
 	}
 }
 

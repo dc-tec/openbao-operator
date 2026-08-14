@@ -224,13 +224,13 @@ jobs:
             echo "operator_upgrade_e2e=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/service/backup/|internal/service/restore/|cmd/bao-backup/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|backup_restore_test\.go)|Makefile|mk/)'; then
+          if changed_matches '^(internal/service/backup/|internal/service/restore/|cmd/bao-backup/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|backup_restore_test\.go)|Makefile|mk/)' || changed_matches_file 'hack/ci/e2e-lifecycle-paths.txt'; then
             echo "e2e_backup=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_backup=false" >> "${GITHUB_OUTPUT}"
           fi
 
-          if changed_matches '^(internal/service/upgrade/|cmd/bao-upgrade/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|Upgrade_Strategies_test\.go|Upgrade_Target_Drift_test\.go|Upgrade_Operation_Lock_test\.go)|Makefile|mk/)'; then
+          if changed_matches '^(internal/service/upgrade/|cmd/bao-upgrade/|test/e2e/(e2e_suite_test\.go|framework/.*|helpers/.*|Upgrade_Strategies_test\.go|Upgrade_Target_Drift_test\.go|Upgrade_Operation_Lock_test\.go)|Makefile|mk/)' || changed_matches_file 'hack/ci/e2e-lifecycle-paths.txt'; then
             echo "e2e_upgrade=true" >> "${GITHUB_OUTPUT}"
           else
             echo "e2e_upgrade=false" >> "${GITHUB_OUTPUT}"

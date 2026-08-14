@@ -28,7 +28,7 @@ type ImageVerifier struct {
 	logger            logr.Logger
 	cache             *verificationCache
 	tagCache          *tagResolutionCache
-	client            client.Client
+	reader            client.Reader
 	trustedRootConfig *TrustedRootConfig
 }
 
@@ -41,16 +41,16 @@ type TrustedRootConfig struct {
 	ConfigMapNamespace string
 }
 
-// NewImageVerifier creates a new ImageVerifier with the provided logger and Kubernetes client.
-// The client is used to read ImagePullSecrets for private registry authentication.
+// NewImageVerifier creates a new ImageVerifier with the provided logger and Kubernetes API reader.
+// The reader loads ImagePullSecrets and external trusted roots.
 // trustedRootConfig is optional. When it names a ConfigMap, missing or invalid
 // ConfigMap data fails closed instead of falling back to the embedded root.
-func NewImageVerifier(logger logr.Logger, k8sClient client.Client, trustedRootConfig *TrustedRootConfig) *ImageVerifier {
+func NewImageVerifier(logger logr.Logger, k8sReader client.Reader, trustedRootConfig *TrustedRootConfig) *ImageVerifier {
 	return &ImageVerifier{
 		logger:            logger,
 		cache:             newVerificationCache(),
 		tagCache:          newTagResolutionCache(),
-		client:            k8sClient,
+		reader:            k8sReader,
 		trustedRootConfig: trustedRootConfig,
 	}
 }
@@ -77,7 +77,14 @@ func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config imag
 	}
 
 	// Step 2: Check verification cache BEFORE expensive cryptographic verification
-	cacheKey := v.cacheKey(digest, config)
+	trustedRoot, err := v.verificationTrustedRoot(ctx, config)
+	if err != nil {
+		return "", fmt.Errorf("failed to load trusted root for image verification: %w", err)
+	}
+	cacheKey, err := v.cacheKey(digest, config, trustedRoot.identity)
+	if err != nil {
+		return "", fmt.Errorf("failed to create image verification cache key: %w", err)
+	}
 	if v.cache.isVerifiedByKey(cacheKey) {
 		v.logger.V(1).Info("Image verification cache hit", "digest", digest)
 		return digest, nil
@@ -89,7 +96,7 @@ func (v *ImageVerifier) Verify(ctx context.Context, imageRef string, config imag
 		mode = "keyless"
 	}
 	v.logger.Info("Verifying image signature", "image", imageRef, "digest", digest, "mode", mode, "ignoreTlog", config.IgnoreTlog)
-	if err := v.verifyImageSignature(ctx, digest, config); err != nil {
+	if err := v.verifyImageSignature(ctx, digest, config, trustedRoot.material); err != nil {
 		return "", fmt.Errorf("image verification failed for %q: %w", imageRef, err)
 	}
 

@@ -64,6 +64,27 @@ type subReconciler interface {
 	Reconcile(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (recon.Result, error)
 }
 
+type reconcilerPlan struct {
+	upgradeReconcilers []subReconciler
+	backupReconciler   subReconciler
+}
+
+func (p reconcilerPlan) orderedFor(cluster *openbaov1alpha1.OpenBaoCluster) []subReconciler {
+	reconcilers := make([]subReconciler, 0, len(p.upgradeReconcilers)+1)
+	backupOwnsLock := cluster != nil &&
+		cluster.Status.OperationLock != nil &&
+		cluster.Status.OperationLock.Operation == openbaov1alpha1.ClusterOperationBackup
+
+	if backupOwnsLock && p.backupReconciler != nil {
+		reconcilers = append(reconcilers, p.backupReconciler)
+	}
+	reconcilers = append(reconcilers, p.upgradeReconcilers...)
+	if !backupOwnsLock && p.backupReconciler != nil {
+		reconcilers = append(reconcilers, p.backupReconciler)
+	}
+	return reconcilers
+}
+
 var adminOpsReconcilersBuilder = buildReconcilers
 
 // Reconcile executes admin-operations orchestration and status patching.
@@ -83,7 +104,7 @@ func Reconcile(
 		errorStatus = defaultErrorStatus
 	}
 
-	for _, rec := range adminOpsReconcilersBuilder(deps) {
+	for _, rec := range adminOpsReconcilersBuilder(deps).orderedFor(cluster) {
 		result, err := rec.Reconcile(ctx, logger, cluster)
 		if err != nil {
 			if recordError != nil {
@@ -143,7 +164,7 @@ func ensureAdminOpsStatus(cluster *openbaov1alpha1.OpenBaoCluster) {
 	}
 }
 
-func buildReconcilers(deps Dependencies) []subReconciler {
+func buildReconcilers(deps Dependencies) reconcilerPlan {
 	workloadMgr := workloadmanager.NewManager(deps.Client, deps.Scheme, deps.Platform).WithReader(deps.APIReader)
 	backupRuntime := backupmanager.NewUpgradeStrategyRuntime(deps.Client, deps.Scheme)
 	strategyReader := deps.APIReader
@@ -162,29 +183,31 @@ func buildReconcilers(deps Dependencies) []subReconciler {
 		})
 	}
 
-	return []subReconciler{
-		upgrademanager.NewStrategyTransitionManager(strategyReader),
-		bluegreen.NewManager(
-			deps.Client,
-			deps.Scheme,
-			workloadMgr,
-			backupRuntime,
-			deps.SmartClientConfig,
-			deps.ImageVerifier,
-			deps.OperatorImageVerifier,
-			deps.Platform,
-			deps.Recorder,
-		).WithReader(deps.APIReader),
-		rollingupgrade.NewManager(
-			deps.Client,
-			deps.Scheme,
-			backupRuntime,
-			deps.SmartClientConfig,
-			deps.OperatorImageVerifier,
-			deps.Platform,
-			deps.Recorder,
-		).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
-		backupmanager.NewManager(
+	return reconcilerPlan{
+		upgradeReconcilers: []subReconciler{
+			upgrademanager.NewStrategyTransitionManager(strategyReader),
+			bluegreen.NewManager(
+				deps.Client,
+				deps.Scheme,
+				workloadMgr,
+				backupRuntime,
+				deps.SmartClientConfig,
+				deps.ImageVerifier,
+				deps.OperatorImageVerifier,
+				deps.Platform,
+				deps.Recorder,
+			).WithReader(deps.APIReader),
+			rollingupgrade.NewManager(
+				deps.Client,
+				deps.Scheme,
+				backupRuntime,
+				deps.SmartClientConfig,
+				deps.OperatorImageVerifier,
+				deps.Platform,
+				deps.Recorder,
+			).WithReader(deps.APIReader).WithAdminOpsStatusMutator(adminOpsMutator),
+		},
+		backupReconciler: backupmanager.NewManager(
 			deps.Client,
 			deps.Scheme,
 			deps.SmartClientConfig,

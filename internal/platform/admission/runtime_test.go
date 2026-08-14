@@ -271,6 +271,67 @@ func TestCheckDependencies_DependencyMatrix(t *testing.T) {
 	}
 }
 
+func TestCheckDependencies_RequiresExpectedPolicyFingerprint(t *testing.T) {
+	t.Parallel()
+
+	const expectedFingerprint = "sha256:expected"
+	dep := Dependency{
+		Name:                "dep",
+		PolicyName:          "policy",
+		BindingName:         "binding",
+		ExpectedFingerprint: expectedFingerprint,
+	}
+	fail := ptrFailurePolicy(admissionregistrationv1.Fail)
+
+	tests := []struct {
+		name        string
+		fingerprint string
+		wantReady   bool
+		wantIssue   string
+	}{
+		{
+			name:      "missing fingerprint",
+			wantReady: false,
+			wantIssue: "does not have expected admission policy fingerprint",
+		},
+		{
+			name:        "stale fingerprint",
+			fingerprint: "sha256:stale",
+			wantReady:   false,
+			wantIssue:   "does not have expected admission policy fingerprint",
+		},
+		{
+			name:        "current fingerprint",
+			fingerprint: expectedFingerprint,
+			wantReady:   true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			policy := newPolicy("policy", fail)
+			if test.fingerprint != "" {
+				policy.Annotations = map[string]string{PolicyFingerprintAnnotation: test.fingerprint}
+			}
+			reader := newAdmissionClient(t,
+				newBinding("binding", "policy", admissionregistrationv1.Deny),
+				policy,
+			)
+
+			status, err := CheckDependencies(context.Background(), reader, []Dependency{dep}, []string{""})
+			if err != nil {
+				t.Fatalf("CheckDependencies() error = %v", err)
+			}
+			if status.OverallReady != test.wantReady {
+				t.Fatalf("OverallReady=%v, want %v", status.OverallReady, test.wantReady)
+			}
+			if test.wantIssue != "" && !strings.Contains(strings.Join(status.Dependencies[0].Issues, " | "), test.wantIssue) {
+				t.Fatalf("issues=%q, expected substring %q", status.Dependencies[0].Issues, test.wantIssue)
+			}
+		})
+	}
+}
+
 func TestCheckDependencies_SummaryMessage(t *testing.T) {
 	t.Parallel()
 

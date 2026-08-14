@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	portopenbao "github.com/dc-tec/openbao-operator/internal/port/openbao"
 	backupconfig "github.com/dc-tec/openbao-operator/internal/service/backup"
 )
+
+const backupCleanupTimeout = 30 * time.Second
 
 func run(ctx context.Context) error {
 	flag.Parse()
@@ -50,17 +53,49 @@ func run(ctx context.Context) error {
 		_ = storageClient.Close()
 	}()
 
-	if err := uploadBackupSnapshot(ctx, baoClient, storageClient, backupKey); err != nil {
-		return err
-	}
-
-	objInfo, err := verifyBackupUpload(ctx, storageClient, backupKey)
+	objInfo, err := publishBackupSnapshot(ctx, baoClient, storageClient, backupKey)
 	if err != nil {
 		return err
 	}
 
 	_, _ = fmt.Fprintf(os.Stdout, "Backup completed successfully: %s (size: %d bytes)\n", backupKey, objInfo.Size)
 	return nil
+}
+
+func publishBackupSnapshot(
+	ctx context.Context,
+	baoClient portopenbao.ClusterActions,
+	storageClient blobstore.BlobStore,
+	backupKey string,
+) (*blobstore.ObjectInfo, error) {
+	if err := uploadBackupSnapshot(ctx, baoClient, storageClient, backupKey); err != nil {
+		return nil, cleanupFailedBackup(ctx, storageClient, backupKey, err)
+	}
+
+	objInfo, err := verifyBackupUpload(ctx, storageClient, backupKey)
+	if err != nil {
+		return nil, cleanupFailedBackup(ctx, storageClient, backupKey, err)
+	}
+
+	return objInfo, nil
+}
+
+func cleanupFailedBackup(
+	ctx context.Context,
+	storageClient blobstore.BlobStore,
+	backupKey string,
+	failure error,
+) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), backupCleanupTimeout)
+	defer cancel()
+
+	if err := storageClient.Delete(cleanupCtx, backupKey); err != nil {
+		return errors.Join(
+			failure,
+			categorizef(errStorageCategory, "failed to delete incomplete backup %s: %w", backupKey, err),
+		)
+	}
+	return failure
 }
 
 func findBackupLeader(ctx context.Context, cfg *backupconfig.ExecutorConfig) (string, error) {
@@ -91,25 +126,42 @@ func uploadBackupSnapshot(
 	backupKey string,
 ) error {
 	pr, pw := io.Pipe()
-	snapshotErrCh := make(chan error, 1)
+	type snapshotStreamResult struct {
+		snapshotErr error
+		closeErr    error
+	}
+	snapshotResultCh := make(chan snapshotStreamResult, 1)
 	go func() {
-		defer func() {
-			if err := pw.Close(); err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "bao-backup warning: failed to close pipe writer: %v\n", err)
-			}
-		}()
-		snapshotErrCh <- baoClient.Snapshot(ctx, pw)
+		snapshotErr := baoClient.Snapshot(ctx, pw)
+		snapshotResultCh <- snapshotStreamResult{
+			snapshotErr: snapshotErr,
+			closeErr:    pw.CloseWithError(snapshotErr),
+		}
 	}()
 
-	if err := storageClient.Upload(ctx, backupKey, pr); err != nil {
+	uploadErr := storageClient.Upload(ctx, backupKey, pr)
+	var uploadAbortErr error
+	if uploadErr != nil {
+		uploadAbortErr = fmt.Errorf("upload stopped snapshot stream: %w", uploadErr)
+		_ = pr.CloseWithError(uploadAbortErr)
+	} else {
 		_ = pr.Close()
-		_ = pw.Close()
-		return categorizef(errStorageCategory, "failed to upload backup: %w", err)
 	}
+	snapshotResult := <-snapshotResultCh
 
-	_ = pr.Close()
-	if err := <-snapshotErrCh; err != nil {
-		return categorizef(errSnapshotCategory, "failed to get snapshot: %w", err)
+	independentSnapshotFailure := snapshotResult.snapshotErr != nil &&
+		(uploadAbortErr == nil || !errors.Is(snapshotResult.snapshotErr, uploadAbortErr))
+	if independentSnapshotFailure {
+		return categorizef(errSnapshotCategory, "failed to get snapshot: %w", snapshotResult.snapshotErr)
+	}
+	if uploadErr != nil {
+		return categorizef(errStorageCategory, "failed to upload backup: %w", uploadErr)
+	}
+	if snapshotResult.snapshotErr != nil {
+		return categorizef(errSnapshotCategory, "failed to get snapshot: %w", snapshotResult.snapshotErr)
+	}
+	if snapshotResult.closeErr != nil && !errors.Is(snapshotResult.closeErr, io.ErrClosedPipe) {
+		return categorizef(errSnapshotCategory, "failed to close snapshot stream: %w", snapshotResult.closeErr)
 	}
 
 	return nil

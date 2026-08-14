@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
 	provisionerpkg "github.com/dc-tec/openbao-operator/internal/service/provisioner"
 	hardenedfixtures "github.com/dc-tec/openbao-operator/test/fixtures/hardenedcontract"
@@ -724,11 +725,28 @@ func TestVAP_OpenBaoCluster_GuardsIdleUpgradeStrategySwitches(t *testing.T) {
 		status.AcceptedUpgradeStrategy = openbaov1alpha1.UpdateStrategyBlueGreen
 		status.BlueGreen = &openbaov1alpha1.BlueGreenStatus{Phase: openbaov1alpha1.PhaseIdle}
 	})
-	if err := statusapply.ApplyOpenBaoClusterOperationLockStatus(
-		ctx,
+	explicitNullCluster := &openbaov1alpha1.OpenBaoCluster{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: openbaov1alpha1.GroupVersion.String(),
+			Kind:       "OpenBaoCluster",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      latest.Name,
+			Namespace: latest.Namespace,
+		},
+	}
+	applyConfig, err := statusapply.ToApplyConfigurationWithExplicitNulls(
+		explicitNullCluster,
 		k8sClient,
-		&latest,
-		statusapply.OpenBaoClusterOperationLockStatusApplyOptions{},
+		"status.operationLock",
+	)
+	if err != nil {
+		t.Fatalf("build explicit-null operation lock apply: %v", err)
+	}
+	if err := k8sClient.Status().Apply(
+		ctx,
+		applyConfig,
+		client.FieldOwner(constants.FieldOwnerOperationLockStatus),
 	); err != nil {
 		t.Fatalf("persist cleared operation lock as explicit null: %v", err)
 	}

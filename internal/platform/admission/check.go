@@ -20,6 +20,8 @@ type Dependency struct {
 	PolicyName string
 	// BindingName is the base metadata.name of the ValidatingAdmissionPolicyBinding in manifests.
 	BindingName string
+	// ExpectedFingerprint identifies the required policy content revision.
+	ExpectedFingerprint string
 }
 
 // DependencyStatus contains the evaluation result for a single Dependency.
@@ -38,6 +40,13 @@ type Status struct {
 }
 
 const (
+	// PolicyFingerprintAnnotation stores the source-policy content fingerprint.
+	// Helm keeps this value when it renders installation-specific names and identities.
+	PolicyFingerprintAnnotation = "openbao.org/admission-policy-fingerprint"
+
+	fingerprintOpenBaoValidateOpenBaoCluster       = "sha256:828902329ac47bb74fa1ef8ab7f92d80e1f16b3e2d088b8e585d2dd77b9fd6c1"
+	fingerprintOpenBaoLockManagedResourceMutations = "sha256:da94c35652f641eb4a7767be72ecaeeb0c1cfbf8f82bb17e0ed394a0e1124109"
+
 	dependencyOpenBaoValidateOpenBaoCluster             = "openbao-validate-openbaocluster"
 	dependencyOpenBaoValidateOpenBaoTenant              = "openbao-validate-openbao-tenant"
 	dependencyOpenBaoValidateOpenBaoRestore             = "openbao-validate-openbaorestore"
@@ -105,9 +114,10 @@ func DefaultNamePrefixes() []string {
 func DefaultDependencies() []Dependency {
 	return []Dependency{
 		{
-			Name:        dependencyOpenBaoValidateOpenBaoCluster,
-			PolicyName:  dependencyOpenBaoValidateOpenBaoCluster,
-			BindingName: dependencyBindingValidateOpenBaoCluster,
+			Name:                dependencyOpenBaoValidateOpenBaoCluster,
+			PolicyName:          dependencyOpenBaoValidateOpenBaoCluster,
+			BindingName:         dependencyBindingValidateOpenBaoCluster,
+			ExpectedFingerprint: fingerprintOpenBaoValidateOpenBaoCluster,
 		},
 		{
 			Name:        dependencyOpenBaoValidateOpenBaoTenant,
@@ -155,9 +165,10 @@ func DefaultDependencies() []Dependency {
 			BindingName: dependencyBindingRestrictControllerSecretWrites,
 		},
 		{
-			Name:        dependencyOpenBaoLockManagedResourceMutations,
-			PolicyName:  dependencyOpenBaoLockManagedResourceMutations,
-			BindingName: dependencyBindingLockManagedResourceMutations,
+			Name:                dependencyOpenBaoLockManagedResourceMutations,
+			PolicyName:          dependencyOpenBaoLockManagedResourceMutations,
+			BindingName:         dependencyBindingLockManagedResourceMutations,
+			ExpectedFingerprint: fingerprintOpenBaoLockManagedResourceMutations,
 		},
 		{
 			Name:        dependencyOpenBaoEnforceManagedImageDigests,
@@ -281,6 +292,13 @@ func checkDependency(ctx context.Context, c client.Reader, dep Dependency, nameP
 	if policy.Spec.FailurePolicy == nil || *policy.Spec.FailurePolicy != admissionregistrationv1.Fail {
 		depStatus.Ready = false
 		depStatus.Issues = append(depStatus.Issues, fmt.Sprintf("policy %q must have failurePolicy=Fail", policyName))
+	}
+	if dep.ExpectedFingerprint != "" && policy.Annotations[PolicyFingerprintAnnotation] != dep.ExpectedFingerprint {
+		depStatus.Ready = false
+		depStatus.Issues = append(
+			depStatus.Issues,
+			fmt.Sprintf("policy %q does not have expected admission policy fingerprint", policyName),
+		)
 	}
 
 	if !bindingDenies(binding) {

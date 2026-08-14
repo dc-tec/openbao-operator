@@ -47,7 +47,9 @@ func (m *Manager) handleManualTrigger(
 			"reason":            "active_job_in_progress",
 		})
 		m.emitNormalEvent(cluster, ReasonBackupSkipped, "Skipping manual backup because a backup Job is already in progress")
-		m.clearTriggerAnnotation(ctx, logger, cluster, triggerAnnotation)
+		if err := m.clearManualTriggerAnnotation(ctx, logger, cluster); err != nil {
+			return "", time.Time{}, err
+		}
 		return "", time.Time{}, nil
 	}
 
@@ -56,17 +58,22 @@ func (m *Manager) handleManualTrigger(
 	return val, now, nil
 }
 
-// clearTriggerAnnotation removes the manual trigger annotation from the cluster.
-func (m *Manager) clearTriggerAnnotation(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, annotation string) {
+// clearManualTriggerAnnotation removes the manual backup trigger annotation from the cluster.
+func (m *Manager) clearManualTriggerAnnotation(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) error {
+	const annotation = constants.AnnotationTriggerBackup
+	if cluster.Annotations == nil {
+		return nil
+	}
+	if _, found := cluster.Annotations[annotation]; !found {
+		return nil
+	}
+
 	// We use MergeFrom for annotation deletion to avoid claiming ownership of all annotations.
 	original := cluster.DeepCopy()
-	if cluster.Annotations == nil {
-		cluster.Annotations = make(map[string]string)
-	}
 	delete(cluster.Annotations, annotation)
 	if err := m.client.Patch(ctx, cluster, client.MergeFrom(original)); err != nil {
-		logger.Error(err, "Failed to clear manual backup trigger annotation")
-	} else {
-		logger.Info("Cleared manual backup trigger annotation")
+		return fmt.Errorf("failed to clear manual backup trigger annotation: %w", err)
 	}
+	logger.Info("Cleared manual backup trigger annotation")
+	return nil
 }

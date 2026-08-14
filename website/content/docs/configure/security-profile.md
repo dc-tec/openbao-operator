@@ -70,7 +70,7 @@ Before you create a `Hardened` cluster, define all of these fields and dependenc
 
 1. Set `profile: Hardened`, at least three voters, a supported OpenBao version, and persistent storage.
 2. Set `tls.enabled: true` and choose `tls.mode: External` or `ACME`.
-3. Configure an explicit non-static unseal provider. Do not put a transit token inline.
+3. Configure an explicit non-static unseal provider. Use workload identity or a namespace-local Secret for credentials.
 4. Enable self-init and provide at least one request.
 5. Create a usable human authentication method, policy, and role before self-init revokes the bootstrap credential.
 6. Enable operator OIDC bootstrap when backup, upgrade, or restore Jobs will use projected JWT authentication.
@@ -86,7 +86,8 @@ executable production example.
 Hardened admission rejects these configurations:
 
 - TLS disablement, operator-managed TLS, and transit `tlsSkipVerify`;
-- static unseal and inline transit tokens;
+- static unseal; inline transit tokens; inline AWS secret keys and session tokens; inline Azure client secrets; inline
+  PKCS#11 PINs; and non-empty KMS plugin configuration maps;
 - fewer than three voters;
 - self-init without requests;
 - disabled image verification or `failurePolicy: Warn` for OpenBao or operator helper images;
@@ -99,6 +100,12 @@ Hardened admission rejects these configurations:
 
 When backup or pre-upgrade snapshots are enabled, Hardened also requires non-empty egress rules. Custom image trust
 roots and custom executables require their delegated API permissions.
+
+{{< callout type="warning" title="Migrate inline unseal credentials before upgrade" >}}
+The API server evaluates the full `OpenBaoCluster` on each create or update. After this admission policy is installed,
+it rejects an update if the submitted Hardened object still contains a prohibited inline field. Create the replacement
+Secret or workload identity first. Then submit one update that adds the replacement and removes the inline field.
+{{< /callout >}}
 
 ## Use image verification defaults deliberately
 

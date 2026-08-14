@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -19,6 +20,7 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/storage"
+	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 	"github.com/dc-tec/openbao-operator/internal/port/blobstore"
 )
 
@@ -54,6 +56,58 @@ func TestSyncBackupStatusMetricsReflectsClusterStatus(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(backupLastDurationSeconds.WithLabelValues(cluster.Namespace, cluster.Name)); got != 45 {
 		t.Fatalf("backupLastDurationSeconds = %v, want 45", got)
+	}
+}
+
+func TestReconcileOwnedActiveBackupRestoresMetrics(t *testing.T) {
+	cluster := newTestClusterWithBackup("owner-recovery-metrics", "backup-ns")
+	attemptTime := metav1.NewTime(time.Unix(1700000100, 0))
+	successTime := metav1.NewTime(time.Unix(1700000200, 0))
+	cluster.Status.Backup = &openbaov1alpha1.BackupStatus{
+		ConsecutiveFailures: 2,
+		LastAttemptTime:     &attemptTime,
+		LastBackupTime:      &successTime,
+		LastBackupSize:      4096,
+		LastBackupDuration:  "45s",
+	}
+	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+		Operation: openbaov1alpha1.ClusterOperationBackup,
+		Holder:    backupOperationLockHolder,
+	}
+	job := newBackupJobForCluster(cluster, "owner-recovery-metrics-active", time.Unix(1700000300, 0))
+	job.Status.Active = 1
+
+	metrics := NewMetrics(cluster.Namespace, cluster.Name)
+	resetBackupTestState(cluster.Namespace, cluster.Name)
+	defer metrics.Clear()
+
+	manager := newBackupManager(newTestClient(t, cluster, job))
+	result, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result.RequeueAfter != constants.RequeueShort {
+		t.Fatalf("RequeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueShort)
+	}
+
+	assertBackupGaugeValue(t, backupState, cluster, 3)
+	assertBackupGaugeValue(t, backupInProgress, cluster, 1)
+	assertBackupGaugeValue(t, backupConsecutiveFailures, cluster, 2)
+	assertBackupGaugeValue(t, backupLastAttemptTimestamp, cluster, 1700000100)
+	assertBackupGaugeValue(t, backupLastSuccessTimestamp, cluster, 1700000200)
+	assertBackupGaugeValue(t, backupLastSizeBytes, cluster, 4096)
+	assertBackupGaugeValue(t, backupLastDurationSeconds, cluster, 45)
+}
+
+func assertBackupGaugeValue(
+	t *testing.T,
+	gauge *prometheus.GaugeVec,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	want float64,
+) {
+	t.Helper()
+	if got := testutil.ToFloat64(gauge.WithLabelValues(cluster.Namespace, cluster.Name)); got != want {
+		t.Fatalf("backup gauge = %v, want %v", got, want)
 	}
 }
 

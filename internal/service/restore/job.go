@@ -322,7 +322,8 @@ func buildRestoreVolumes(restore *openbaov1alpha1.OpenBaoRestore, cluster *openb
 			Name: restoreTokenVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: restore.Spec.TokenSecretRef.Name,
+					SecretName:  restore.Spec.TokenSecretRef.Name,
+					DefaultMode: ptr.To(int32(0400)),
 				},
 			},
 		})

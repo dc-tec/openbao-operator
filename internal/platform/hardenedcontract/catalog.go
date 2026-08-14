@@ -20,6 +20,11 @@ const (
 const (
 	RuleHardenedBaseline                   RuleID = "hardened.baseline"
 	RuleTransitInlineToken                 RuleID = "hardened.unseal.transit-inline-token"
+	RuleAWSInlineSecretKey                 RuleID = "hardened.unseal.aws-inline-secret-key"
+	RuleAWSInlineSessionToken              RuleID = "hardened.unseal.aws-inline-session-token"
+	RuleAzureInlineClientSecret            RuleID = "hardened.unseal.azure-inline-client-secret"
+	RulePKCS11InlinePIN                    RuleID = "hardened.unseal.pkcs11-inline-pin"
+	RuleKMSPluginInlineConfig              RuleID = "hardened.unseal.kms-plugin-inline-config"
 	RuleImageVerificationEnabled           RuleID = "hardened.image-verification.enabled"
 	RuleOperatorImageVerificationEnabled   RuleID = "hardened.operator-image-verification.enabled"
 	RuleImageVerificationFailurePolicy     RuleID = "hardened.image-verification.failure-policy"
@@ -75,6 +80,36 @@ var rules = []Rule{
 		ID:     RuleTransitInlineToken,
 		Layers: []EnforcementLayer{LayerAdmissionPolicy},
 		AdmissionMessage: "Hardened profile does not allow spec.unseal.transit.token; use " +
+			"spec.unseal.credentialsSecretRef instead.",
+	},
+	{
+		ID:     RuleAWSInlineSecretKey,
+		Layers: []EnforcementLayer{LayerAdmissionPolicy},
+		AdmissionMessage: "Hardened profile does not allow spec.unseal.awskms.secretKey; use " +
+			"spec.unseal.credentialsSecretRef or workload identity instead.",
+	},
+	{
+		ID:     RuleAWSInlineSessionToken,
+		Layers: []EnforcementLayer{LayerAdmissionPolicy},
+		AdmissionMessage: "Hardened profile does not allow spec.unseal.awskms.sessionToken; use " +
+			"spec.unseal.credentialsSecretRef or workload identity instead.",
+	},
+	{
+		ID:     RuleAzureInlineClientSecret,
+		Layers: []EnforcementLayer{LayerAdmissionPolicy},
+		AdmissionMessage: "Hardened profile does not allow spec.unseal.azureKeyVault.clientSecret; use " +
+			"spec.unseal.credentialsSecretRef or managed identity instead.",
+	},
+	{
+		ID:     RulePKCS11InlinePIN,
+		Layers: []EnforcementLayer{LayerAdmissionPolicy},
+		AdmissionMessage: "Hardened profile does not allow spec.unseal.pkcs11.pin; use " +
+			"spec.unseal.credentialsSecretRef instead.",
+	},
+	{
+		ID:     RuleKMSPluginInlineConfig,
+		Layers: []EnforcementLayer{LayerAdmissionPolicy},
+		AdmissionMessage: "Hardened profile does not allow non-empty spec.unseal.kms.config; use " +
 			"spec.unseal.credentialsSecretRef instead.",
 	},
 	{

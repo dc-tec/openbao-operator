@@ -875,14 +875,17 @@ func TestProcessBackupJobResult_JobSucceeded(t *testing.T) {
 		k8sClient,
 	)
 
-	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	result, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
 
 	// Verify status was updated
-	if !statusUpdated {
+	if !result.statusUpdated {
 		t.Error("processBackupJobResult() should return true when job succeeded")
+	}
+	if !result.completed || !result.successfulCompletion {
+		t.Fatalf("processBackupJobResult() result = %#v, want successful completion", result)
 	}
 
 	if cluster.Status.Backup.LastBackupTime == nil {
@@ -932,14 +935,17 @@ func TestProcessBackupJobResult_JobFailed(t *testing.T) {
 		k8sClient,
 	)
 
-	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	result, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
 
 	// Verify status was updated
-	if !statusUpdated {
+	if !result.statusUpdated {
 		t.Error("processBackupJobResult() should return true when job failed")
+	}
+	if !result.completed || result.successfulCompletion {
+		t.Fatalf("processBackupJobResult() result = %#v, want failed completion", result)
 	}
 
 	if cluster.Status.Backup.ConsecutiveFailures != 1 {
@@ -1011,11 +1017,11 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 	)
 
 	// First call should update status
-	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	result, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() first call error = %v", err)
 	}
-	if !statusUpdated {
+	if !result.statusUpdated {
 		t.Error("processBackupJobResult() first call should return true")
 	}
 	if cluster.Status.Backup.ConsecutiveFailures != 1 {
@@ -1023,11 +1029,11 @@ func TestProcessBackupJobResult_JobFailedIdempotent(t *testing.T) {
 	}
 
 	// Second call should NOT update status (already processed)
-	statusUpdated, err = manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	result, err = manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() second call error = %v", err)
 	}
-	if statusUpdated {
+	if result.statusUpdated {
 		t.Error("processBackupJobResult() second call should return false (already processed)")
 	}
 	// ConsecutiveFailures should still be 1, not 2
@@ -1072,12 +1078,12 @@ func TestProcessBackupJobResult_JobNotFound(t *testing.T) {
 	)
 
 	// Should not error when job doesn't exist
-	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	result, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() with missing job should not error, got: %v", err)
 	}
 
-	if statusUpdated {
+	if result.statusUpdated {
 		t.Error("processBackupJobResult() should return false when job doesn't exist")
 	}
 }
@@ -1106,7 +1112,7 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	)
 	manager.operatorImageVerifier = security.NewImageVerifier(log.Log.WithName("backup-image-verifier"), k8sClient, nil)
 
-	statusUpdated, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
+	result, err := manager.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
@@ -1114,7 +1120,7 @@ func TestProcessBackupJobResult_JobRunning(t *testing.T) {
 	// Status should indicate backup is in progress
 	// (We can't easily test the condition without exposing setBackingUpCondition)
 	// Status was updated (condition set) but job is still running, so no requeue needed
-	if statusUpdated {
+	if result.statusUpdated {
 		t.Error("processBackupJobResult() should return false when job is still running")
 	}
 }

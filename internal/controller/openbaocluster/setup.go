@@ -38,13 +38,6 @@ func (r *OpenBaoClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // immediate reaction to child resource changes (StatefulSet, Service, etc.).
 // This requires list/watch permissions in the watched namespace.
 func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error {
-	sharedOptions := controller.Options{
-		RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
-			&workqueue.TypedBucketRateLimiter[ctrl.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		),
-	}
-
 	// Workload controller with Owns() watches for event-driven reconciliation.
 	// Also reacts to BlueGreen status changes to clean up temporary services after upgrades.
 	if err := ctrl.NewControllerManagedBy(mgr).
@@ -62,7 +55,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,
-			RateLimiter:             sharedOptions.RateLimiter,
+			RateLimiter:             newControllerRateLimiter(),
 		}).
 		Named(controllerNameWorkload).
 		Complete(&openBaoClusterWorkloadReconciler{parent: r}); err != nil {
@@ -79,7 +72,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 		Owns(&batchv1.Job{}). // Watch Jobs for backup completion
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
-			RateLimiter:             sharedOptions.RateLimiter,
+			RateLimiter:             newControllerRateLimiter(),
 		}).
 		Named(controllerNameAdminOps).
 		Complete(&openBaoClusterAdminOpsReconciler{parent: r}); err != nil {
@@ -99,7 +92,7 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
-			RateLimiter:             sharedOptions.RateLimiter,
+			RateLimiter:             newControllerRateLimiter(),
 		}).
 		Named(controllerNameStatus).
 		Complete(&openBaoClusterStatusReconciler{parent: r}); err != nil {
@@ -119,13 +112,6 @@ func (r *OpenBaoClusterReconciler) setupSingleTenantMode(mgr ctrl.Manager) error
 // reconciles child resources when the OpenBaoCluster itself changes or via
 // explicit requeues in the reconciliation logic.
 func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error {
-	sharedOptions := controller.Options{
-		RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
-			workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
-			&workqueue.TypedBucketRateLimiter[ctrl.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
-		),
-	}
-
 	// Workload controller: reconciles certs/infra/init. Also reacts to BlueGreen status changes
 	// to clean up temporary services after upgrades.
 	if err := ctrl.NewControllerManagedBy(mgr).
@@ -137,7 +123,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 2,
-			RateLimiter:             sharedOptions.RateLimiter,
+			RateLimiter:             newControllerRateLimiter(),
 		}).
 		Named(controllerNameWorkload).
 		Complete(&openBaoClusterWorkloadReconciler{parent: r}); err != nil {
@@ -153,7 +139,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
-			RateLimiter:             sharedOptions.RateLimiter,
+			RateLimiter:             newControllerRateLimiter(),
 		}).
 		Named(controllerNameAdminOps).
 		Complete(&openBaoClusterAdminOpsReconciler{parent: r}); err != nil {
@@ -173,7 +159,7 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 		})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
-			RateLimiter:             sharedOptions.RateLimiter,
+			RateLimiter:             newControllerRateLimiter(),
 		}).
 		Named(controllerNameStatus).
 		Complete(&openBaoClusterStatusReconciler{parent: r}); err != nil {
@@ -181,4 +167,11 @@ func (r *OpenBaoClusterReconciler) setupMultiTenantMode(mgr ctrl.Manager) error 
 	}
 
 	return nil
+}
+
+func newControllerRateLimiter() workqueue.TypedRateLimiter[ctrl.Request] {
+	return workqueue.NewTypedMaxOfRateLimiter(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[ctrl.Request](1*time.Second, 60*time.Second),
+		&workqueue.TypedBucketRateLimiter[ctrl.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+	)
 }

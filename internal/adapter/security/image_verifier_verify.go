@@ -14,19 +14,25 @@ import (
 	"github.com/sigstore/cosign/v3/pkg/oci"
 	ociremote "github.com/sigstore/cosign/v3/pkg/oci/remote"
 	"github.com/sigstore/cosign/v3/pkg/signature"
+	"github.com/sigstore/sigstore-go/pkg/root"
 
 	operatorerrors "github.com/dc-tec/openbao-operator/internal/platform/errors"
 	"github.com/dc-tec/openbao-operator/internal/port/imageverify"
 )
 
-func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef string, config imageverify.VerifyConfig) error {
+func (v *ImageVerifier) verifyImageSignature(
+	ctx context.Context,
+	digestRef string,
+	config imageverify.VerifyConfig,
+	trustedRoot root.TrustedMaterial,
+) error {
 	ref, err := name.ParseReference(digestRef)
 	if err != nil {
 		return fmt.Errorf("failed to parse digest reference: %w", err)
 	}
 
 	var remoteOpts []ociremote.Option
-	if len(config.ImagePullSecrets) > 0 && v.client != nil {
+	if len(config.ImagePullSecrets) > 0 && v.reader != nil {
 		keychain, err := v.buildKeychain(ctx, config.ImagePullSecrets, config.Namespace)
 		if err != nil {
 			return fmt.Errorf("failed to build keychain for image pull secrets: %w", err)
@@ -36,7 +42,7 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 		}
 	}
 
-	legacyCheckOpts, err := v.buildCheckOpts(ctx, config, remoteOpts, false)
+	legacyCheckOpts, err := v.buildCheckOpts(config, remoteOpts, false, trustedRoot)
 	if err != nil {
 		return err
 	}
@@ -62,7 +68,7 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 		return fmt.Errorf("image signature verification failed: %w", legacyErr)
 	}
 
-	if err := v.verifyImageSignatureWithBundles(ctx, ref, digestRef, config, remoteOpts); err != nil {
+	if err := v.verifyImageSignatureWithBundles(ctx, ref, digestRef, config, remoteOpts, trustedRoot); err != nil {
 		return fmt.Errorf("image signature verification failed (legacy+bundle): legacy=%v; bundle=%w", legacyErr, err)
 	}
 
@@ -70,10 +76,10 @@ func (v *ImageVerifier) verifyImageSignature(ctx context.Context, digestRef stri
 }
 
 func (v *ImageVerifier) buildCheckOpts(
-	ctx context.Context,
 	config imageverify.VerifyConfig,
 	remoteOpts []ociremote.Option,
 	newBundleFormat bool,
+	trustedRoot root.TrustedMaterial,
 ) (*cosign.CheckOpts, error) {
 	co := &cosign.CheckOpts{
 		RegistryClientOpts: remoteOpts,
@@ -88,16 +94,14 @@ func (v *ImageVerifier) buildCheckOpts(
 		co.SigVerifier = verifier
 		co.IgnoreTlog = config.IgnoreTlog
 		if !config.IgnoreTlog {
-			trustedRoot, err := v.loadTrustedRoot(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("failed to load trusted root material for transparency log verification: %w", err)
+			if trustedRoot == nil {
+				return nil, fmt.Errorf("trusted root material is required for transparency log verification")
 			}
 			co.TrustedMaterial = trustedRoot
 		}
 	} else {
-		trustedRoot, err := v.loadTrustedRoot(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load trusted root material for keyless verification: %w", err)
+		if trustedRoot == nil {
+			return nil, fmt.Errorf("trusted root material is required for keyless verification")
 		}
 		co.TrustedMaterial = trustedRoot
 		identity := cosign.Identity{}
@@ -132,8 +136,9 @@ func (v *ImageVerifier) verifyImageSignatureWithBundles(
 	digestRef string,
 	config imageverify.VerifyConfig,
 	remoteOpts []ociremote.Option,
+	trustedRoot root.TrustedMaterial,
 ) error {
-	bundleCheckOpts, err := v.buildCheckOpts(ctx, config, remoteOpts, true)
+	bundleCheckOpts, err := v.buildCheckOpts(config, remoteOpts, true, trustedRoot)
 	if err != nil {
 		return err
 	}

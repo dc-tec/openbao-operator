@@ -12,9 +12,9 @@ Notes:
 ## Summary
 
 - Files: `20`
-- Specs: `83`
-- Explicit case IDs: `34`
-- Coverage tags: `46`
+- Specs: `85`
+- Explicit case IDs: `36`
+- Coverage tags: `48`
 
 ## Suites
 
@@ -34,7 +34,7 @@ Notes:
 | [Security Guardrails](suites/Security_Guardrails_test.md) | 22 | 2 | 0 | `security`, `critical`, `admission`, `pentest`, `config`, `tokens`, `rbac`, `tamper` | `test/e2e/Security_Guardrails_test.go` |
 | [Tenant Data Isolation](suites/Tenant_Data_Isolation_test.md) | 1 | 1 | 0 | `security`, `tenant`, `tenancy` | `test/e2e/Tenant_Data_Isolation_test.go` |
 | [Tenant Isolation](suites/Tenant_Isolation_test.md) | 6 | 0 | 0 | `security`, `tenant`, `tenancy`, `critical`, `single-tenant` | `test/e2e/Tenant_Isolation_test.go` |
-| [Upgrade Strategies: Operation Lock Contention](suites/Upgrade_Operation_Lock_test.md) | 1 | 1 | 0 | `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor` | `test/e2e/Upgrade_Operation_Lock_test.go` |
+| [Upgrade Strategies: Operation Lock Contention](suites/Upgrade_Operation_Lock_test.md) | 3 | 3 | 0 | `upgrade`, `backup`, `operation-lock`, `slow`, `e2e-anchor` | `test/e2e/Upgrade_Operation_Lock_test.go` |
 | [Upgrade Strategies](suites/Upgrade_Strategies_test.md) | 12 | 6 | 0 | `upgrade`, `upgrades`, `cluster`, `slow`, `bluegreen`, `verification`, `e2e-anchor`, `failure`, `gateway`, `requires-gateway-api`, `tls-passthrough`, `rollback`, `rolling`, `recovery`, `snapshot`, `read-replicas`, `read-replicas-rolling`, `chaos` | `test/e2e/Upgrade_Strategies_test.go` |
 | [Upgrade Strategy Switching](suites/Upgrade_Strategy_Switch_test.md) | 1 | 1 | 0 | `upgrade`, `rolling`, `bluegreen`, `slow` | `test/e2e/Upgrade_Strategy_Switch_test.go` |
 | [Upgrade Strategies: Blue/Green Drift](suites/Upgrade_Target_Drift_test.md) | 1 | 1 | 0 | `upgrade`, `bluegreen`, `slow` | `test/e2e/Upgrade_Target_Drift_test.go` |
@@ -46,12 +46,16 @@ Notes:
 | Coverage | Cases |
 | --- | ---: |
 | `deletion-policy` | 3 |
+| `operation-lock` | 3 |
 | `anti-tamper` | 2 |
+| `backup-owner-first` | 2 |
 | `pvc-cleanup` | 2 |
 | `recoverability-secret-cleanup` | 2 |
+| `rolling-upgrade` | 2 |
 | `admission-runtime-recheck` | 1 |
 | `backup-queueing` | 1 |
 | `bluegreen-drift` | 1 |
+| `bluegreen-upgrade` | 1 |
 | `cert-replacement` | 1 |
 | `configmap-protection` | 1 |
 | `controller-failover` | 1 |
@@ -66,7 +70,6 @@ Notes:
 | `managed-resource-pause-on-policy-loss` | 1 |
 | `manager-metrics-endpoint` | 1 |
 | `network-isolation` | 1 |
-| `operation-lock` | 1 |
 | `plugin-auto-download` | 1 |
 | `plugin-directory` | 1 |
 | `pod-rollout` | 1 |
@@ -77,7 +80,6 @@ Notes:
 | `recoverability-secret-retention` | 1 |
 | `restart-at` | 1 |
 | `restore-static-token-secret-identity` | 1 |
-| `rolling-upgrade` | 1 |
 | `scale-reconcile` | 1 |
 | `secret-regeneration` | 1 |
 | `stable-workload-identity` | 1 |

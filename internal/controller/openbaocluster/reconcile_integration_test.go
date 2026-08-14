@@ -251,6 +251,7 @@ var _ = Describe("OpenBaoCluster Reconcile", func() {
 			)
 
 			cluster := createMinimalCluster(clusterName, false)
+			cluster.Finalizers = append(cluster.Finalizers, openbaov1alpha1.OpenBaoClusterFinalizer)
 			cluster.Spec.Version = targetVersion
 			cluster.Spec.Image = mismatchedImage
 			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())

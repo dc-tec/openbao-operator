@@ -24,6 +24,7 @@ type fakeBlobStore struct {
 	objects    []blobstore.ObjectInfo
 	deleted    []string
 	closeCount int
+	listCount  int
 }
 
 func (f *fakeBlobStore) Upload(_ context.Context, _ string, _ io.Reader) error {
@@ -44,6 +45,7 @@ func (f *fakeBlobStore) DeleteBatch(_ context.Context, keys []string) error {
 }
 
 func (f *fakeBlobStore) List(_ context.Context, _ string) ([]blobstore.ObjectInfo, error) {
+	f.listCount++
 	return f.objects, nil
 }
 

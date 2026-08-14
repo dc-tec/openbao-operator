@@ -7,7 +7,6 @@ import (
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/statusapply"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -23,6 +22,16 @@ type OperationLock struct {
 type AcquireOptions struct {
 	Message string
 	Force   bool
+	// ForceIf permits replacement of the current foreign lock when it returns
+	// true. The function runs after each fresh read, including conflict retries.
+	ForceIf func(*openbaov1alpha1.OperationLockStatus) bool
+}
+
+// AcquireResult describes the lock state observed by the successful acquire
+// or renewal attempt.
+type AcquireResult struct {
+	PreviousLock *openbaov1alpha1.OperationLockStatus
+	Forced       bool
 }
 
 var (
@@ -60,68 +69,63 @@ func AcquireWithReader(
 	lock OperationLock,
 	opts AcquireOptions,
 ) error {
+	_, err := AcquireWithReaderResult(ctx, reader, c, cluster, lock, opts)
+	return err
+}
+
+// AcquireWithReaderResult acquires or renews the lock and returns the lock
+// observed by the successful fresh-read attempt.
+func AcquireWithReaderResult(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	lock OperationLock,
+	opts AcquireOptions,
+) (AcquireResult, error) {
 	if cluster == nil {
-		return fmt.Errorf("cluster is required")
+		return AcquireResult{}, fmt.Errorf("cluster is required")
 	}
 	if lock.Holder == "" {
-		return fmt.Errorf("holder is required")
+		return AcquireResult{}, fmt.Errorf("holder is required")
 	}
 	if lock.Operation == "" {
-		return fmt.Errorf("operation is required")
+		return AcquireResult{}, fmt.Errorf("operation is required")
 	}
 
-	now := metav1.Now()
-
-	if cluster.Status.OperationLock == nil {
-		desired := &openbaov1alpha1.OperationLockStatus{
-			Operation:  lock.Operation,
-			Holder:     lock.Holder,
-			Message:    opts.Message,
-			AcquiredAt: &now,
-			RenewedAt:  &now,
+	result := AcquireResult{}
+	err := mutateOperationLockStatus(ctx, reader, c, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+		now := metav1.Now()
+		current := obj.Status.OperationLock
+		result = AcquireResult{}
+		if current != nil {
+			result.PreviousLock = current.DeepCopy()
 		}
-		if err := patchOperationLockStatus(ctx, reader, c, cluster, desired); err != nil {
-			return err
+		switch {
+		case current == nil:
+			obj.Status.OperationLock = newOperationLockStatus(lock, opts.Message, now)
+			return nil
+		case lock.IsHeldBy(current):
+			desired := current.DeepCopy()
+			desired.Message = opts.Message
+			desired.RenewedAt = &now
+			if desired.AcquiredAt == nil {
+				desired.AcquiredAt = &now
+			}
+			obj.Status.OperationLock = desired
+			return nil
+		case opts.Force || (opts.ForceIf != nil && opts.ForceIf(current)):
+			result.Forced = true
+			obj.Status.OperationLock = newOperationLockStatus(lock, opts.Message, now)
+			return nil
+		default:
+			return heldErrorFor(current)
 		}
-		cluster.Status.OperationLock = desired
-		return nil
+	})
+	if err != nil {
+		return AcquireResult{}, err
 	}
-
-	current := cluster.Status.OperationLock
-	if current.Operation == lock.Operation && current.Holder == lock.Holder {
-		desired := current.DeepCopy()
-		desired.Message = opts.Message
-		desired.RenewedAt = &now
-		if desired.AcquiredAt == nil {
-			desired.AcquiredAt = &now
-		}
-		if err := patchOperationLockStatus(ctx, reader, c, cluster, desired); err != nil {
-			return err
-		}
-		cluster.Status.OperationLock = desired
-		return nil
-	}
-
-	if opts.Force {
-		desired := &openbaov1alpha1.OperationLockStatus{
-			Operation:  lock.Operation,
-			Holder:     lock.Holder,
-			Message:    opts.Message,
-			AcquiredAt: &now,
-			RenewedAt:  &now,
-		}
-		if err := patchOperationLockStatus(ctx, reader, c, cluster, desired); err != nil {
-			return err
-		}
-		cluster.Status.OperationLock = desired
-		return nil
-	}
-
-	return &HeldError{
-		Operation: current.Operation,
-		Holder:    current.Holder,
-		Message:   current.Message,
-	}
+	return result, nil
 }
 
 // ReleaseWithReader releases the lock when it is owned by the given operation
@@ -143,24 +147,18 @@ func ReleaseWithReader(
 		return fmt.Errorf("operation is required")
 	}
 
-	if cluster.Status.OperationLock == nil {
-		return nil
-	}
-
-	current := cluster.Status.OperationLock
-	if current.Operation != lock.Operation || current.Holder != lock.Holder {
-		return &HeldError{
-			Operation: current.Operation,
-			Holder:    current.Holder,
-			Message:   current.Message,
+	return mutateOperationLockStatus(ctx, reader, c, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+		current := obj.Status.OperationLock
+		switch {
+		case current == nil:
+			return nil
+		case !lock.IsHeldBy(current):
+			return heldErrorFor(current)
+		default:
+			obj.Status.OperationLock = nil
+			return nil
 		}
-	}
-
-	if err := patchOperationLockStatus(ctx, reader, c, cluster, nil); err != nil {
-		return err
-	}
-	cluster.Status.OperationLock = nil
-	return nil
+	})
 }
 
 // IsLockHeld reports whether err indicates the lock is currently held by another operation.
@@ -190,38 +188,46 @@ func AddHeldAuditFields(fields map[string]string, err error) {
 	fields["held_by_holder"] = heldErr.Holder
 }
 
-func patchOperationLockStatus(
+func newOperationLockStatus(
+	lock OperationLock,
+	message string,
+	now metav1.Time,
+) *openbaov1alpha1.OperationLockStatus {
+	return &openbaov1alpha1.OperationLockStatus{
+		Operation:  lock.Operation,
+		Holder:     lock.Holder,
+		Message:    message,
+		AcquiredAt: &now,
+		RenewedAt:  &now,
+	}
+}
+
+func heldErrorFor(lock *openbaov1alpha1.OperationLockStatus) *HeldError {
+	return &HeldError{
+		Operation: lock.Operation,
+		Holder:    lock.Holder,
+		Message:   lock.Message,
+	}
+}
+
+func mutateOperationLockStatus(
 	ctx context.Context,
 	reader client.Reader,
 	c client.Client,
 	cluster *openbaov1alpha1.OpenBaoCluster,
-	desired *openbaov1alpha1.OperationLockStatus,
+	mutate statusapply.OpenBaoClusterOperationLockStatusMutator,
 ) error {
 	key := types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}
-	applyLock := func(forceOwnership bool) (*openbaov1alpha1.OpenBaoCluster, error) {
-		return statusapply.MutateAndApplyOpenBaoClusterOperationLockStatusWithReader(
-			ctx,
-			reader,
-			c,
-			key,
-			func(obj *openbaov1alpha1.OpenBaoCluster) error {
-				obj.Status.OperationLock = desired
-				return nil
-			},
-			statusapply.OpenBaoClusterOperationLockStatusApplyOptions{
-				ForceOwnership: forceOwnership,
-			},
-		)
-	}
-
-	updated, err := applyLock(false)
-	if err != nil && apierrors.IsConflict(err) {
-		updated, err = applyLock(true)
-	}
+	updated, err := statusapply.MutateAndPatchOpenBaoClusterOperationLockStatusWithReader(ctx, reader, c, key, mutate)
 	if err != nil {
-		return fmt.Errorf("failed to apply operation lock status: %w", err)
+		return fmt.Errorf("failed to patch operation lock status: %w", err)
 	}
 
 	cluster.ResourceVersion = updated.ResourceVersion
+	if updated.Status.OperationLock == nil {
+		cluster.Status.OperationLock = nil
+	} else {
+		cluster.Status.OperationLock = updated.Status.OperationLock.DeepCopy()
+	}
 	return nil
 }

@@ -43,7 +43,21 @@ let
     else
       throw "${name} version mismatch: expected ${expected}, nixpkgs provides ${lib.getVersion package}";
 
-  goPackage = exactPackage "Go" goVersion pkgs.go;
+  goPackage =
+    if lib.getVersion pkgs.go == goVersion then
+      pkgs.go
+    else if lib.getVersion pkgs.go == "1.26.5" && goVersion == "1.26.6" then
+      exactPackage "Go" goVersion (
+        pkgs.go.overrideAttrs {
+          version = goVersion;
+          src = pkgs.fetchurl {
+            url = "https://go.dev/dl/go${goVersion}.src.tar.gz";
+            hash = "sha256-oHIcVMaIkBRI13rZs+x+p8R0cwdV/4kTgukuy5P/LLE=";
+          };
+        }
+      )
+    else
+      throw "Go version mismatch: expected ${goVersion}, nixpkgs provides ${lib.getVersion pkgs.go}";
   spdxSchema22 = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/spdx/spdx-spec/a05c12a2dd4652b1396fd2659f2cd3ea1f37faba/schemas/spdx-schema.json";
     hash = "sha256-yDKNFMM2Iaa+kXVprUwyPTcCIEEu263cN8zx6T48qIo=";
