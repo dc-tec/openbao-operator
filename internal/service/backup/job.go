@@ -244,11 +244,14 @@ func (m *Manager) ensureBackupJob(ctx context.Context, logger logr.Logger, clust
 	return true, nil
 }
 
+type backupJobProcessResult struct {
+	completed            bool
+	successfulCompletion bool
+	statusUpdated        bool
+}
+
 // processBackupJobResult processes the result of a completed backup Job and updates cluster status.
-// Returns (statusUpdated, error) where statusUpdated indicates if the status was modified
-// (job completed successfully or failed). This is used to determine if a requeue is needed
-// to persist the status update.
-func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (bool, error) {
+func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, jobName string) (backupJobProcessResult, error) {
 	job := &batchv1.Job{}
 
 	err := m.client.Get(ctx, types.NamespacedName{
@@ -259,9 +262,9 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// Job was cleaned up or doesn't exist
-			return false, nil
+			return backupJobProcessResult{}, nil
 		}
-		return false, fmt.Errorf("failed to get backup Job %s/%s: %w", cluster.Namespace, jobName, err)
+		return backupJobProcessResult{}, fmt.Errorf("failed to get backup Job %s/%s: %w", cluster.Namespace, jobName, err)
 	}
 
 	// Check Job status
@@ -275,14 +278,14 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		if cluster.Status.Backup.LastBackupName == backupKey && backupKey != "" {
 			// Already processed this job success, don't update status again
 			logger.V(1).Info("Backup Job success already processed", "job", jobName, "backupKey", backupKey)
-			return false, nil
+			return backupJobProcessResult{completed: true, successfulCompletion: true}, nil
 		}
 
 		// Skip processing successful jobs that are older than the last recorded backup.
 		// This prevents re-processing old successful jobs if they're still in the job list.
 		if cluster.Status.Backup.LastBackupTime != nil && job.CreationTimestamp.Before(cluster.Status.Backup.LastBackupTime) {
 			logger.V(1).Info("Skipping stale successful backup job (older than last backup time)", "job", jobName)
-			return false, nil
+			return backupJobProcessResult{completed: true}, nil
 		}
 
 		now := metav1.Now()
@@ -294,7 +297,7 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		clearBackupFailure(cluster.Status.Backup)
 
 		if err := m.patchStatusSSA(ctx, cluster); err != nil {
-			return false, fmt.Errorf("failed to patch backup status (success): %w", err)
+			return backupJobProcessResult{}, fmt.Errorf("failed to patch backup status (success): %w", err)
 		}
 
 		logger.Info("Backup Job completed successfully, status updated", "job", jobName, "lastBackupTime", now, "backupKey", backupKey)
@@ -304,7 +307,11 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 			"job":               jobName,
 		})
 		m.emitNormalEvent(cluster, ReasonBackupCompleted, "Backup completed successfully from Job %s", jobName)
-		return true, nil // Status was updated - request requeue to persist
+		return backupJobProcessResult{
+			completed:            true,
+			successfulCompletion: true,
+			statusUpdated:        true,
+		}, nil
 	}
 
 	if kube.JobFailed(job) {
@@ -314,21 +321,21 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		if backupFailureMatches(cluster.Status.Backup, ReasonBackupFailed, expectedFailureMessage) {
 			// Already processed this job failure, don't update status again
 			logger.V(1).Info("Backup Job failure already processed", "job", jobName)
-			return false, nil
+			return backupJobProcessResult{completed: true}, nil
 		}
 
 		// Skip processing failed jobs that are older than the last successful backup.
 		// This prevents re-processing old failures after a successful backup clears the failure status.
 		if cluster.Status.Backup.LastBackupTime != nil && job.CreationTimestamp.Before(cluster.Status.Backup.LastBackupTime) {
 			logger.V(1).Info("Skipping stale failed backup job (older than last successful backup)", "job", jobName)
-			return false, nil
+			return backupJobProcessResult{completed: true}, nil
 		}
 
 		cluster.Status.Backup.ConsecutiveFailures++
 		setBackupFailure(cluster.Status.Backup, ReasonBackupFailed, expectedFailureMessage)
 
 		if err := m.patchStatusSSA(ctx, cluster); err != nil {
-			return false, fmt.Errorf("failed to patch backup status (failed): %w", err)
+			return backupJobProcessResult{}, fmt.Errorf("failed to patch backup status (failed): %w", err)
 		}
 
 		logger.Error(fmt.Errorf("backup job failed"), "Backup Job failed, status updated",
@@ -341,11 +348,11 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 			"consecutive_failures": fmt.Sprintf("%d", cluster.Status.Backup.ConsecutiveFailures),
 		})
 		m.emitWarningEvent(cluster, ReasonBackupFailed, "Backup Job %s failed", jobName)
-		return true, nil // Status was updated - request requeue to persist
+		return backupJobProcessResult{completed: true, statusUpdated: true}, nil
 	}
 
 	// Job is still running
-	return false, nil // Status updated but job still running - no requeue needed yet
+	return backupJobProcessResult{}, nil
 }
 
 func backupJobName(cluster *openbaov1alpha1.OpenBaoCluster, scheduledTime time.Time) string {

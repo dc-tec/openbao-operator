@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -59,8 +60,11 @@ func (m *Manager) executeAndProcessBackup(
 
 	jobInProgress, err := m.ensureBackupJob(ctx, logger, cluster, jobName, scheduledTime)
 	if err != nil {
-		m.releaseBackupLock(ctx, logger, cluster, "after job ensure failure")
-		return recon.Result{}, fmt.Errorf("failed to ensure backup Job: %w", err)
+		ensureErr := fmt.Errorf("failed to ensure backup Job: %w", err)
+		if releaseErr := m.releaseBackupLock(ctx, logger, cluster, "after job ensure failure"); releaseErr != nil {
+			return recon.Result{}, errors.Join(ensureErr, releaseErr)
+		}
+		return recon.Result{}, ensureErr
 	}
 
 	if manualTrigger {
@@ -71,19 +75,15 @@ func (m *Manager) executeAndProcessBackup(
 		logger.Error(err, "Failed to record backup attempt")
 	}
 
-	if jobInProgress {
-		if _, err := m.processBackupJobResult(ctx, logger, cluster, jobName); err != nil {
-			return recon.Result{}, fmt.Errorf("failed to process backup Job result: %w", err)
-		}
-		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
-	}
-
-	statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
+	jobResult, err := m.processBackupJobResult(ctx, logger, cluster, jobName)
 	if err != nil {
 		return recon.Result{}, fmt.Errorf("failed to process backup Job result: %w", err)
 	}
+	if jobInProgress && !jobResult.completed {
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+	}
 
-	if cluster.Status.Backup != nil && cluster.Status.Backup.LastBackupTime != nil {
+	if jobResult.successfulCompletion {
 		if cluster.Spec.Backup.Retention != nil {
 			if err := m.applyRetention(ctx, logger, cluster, metrics); err != nil {
 				logger.Error(err, "Failed to apply retention policy")
@@ -96,8 +96,10 @@ func (m *Manager) executeAndProcessBackup(
 		}
 	}
 
-	m.releaseBackupLock(ctx, logger, cluster, "after completion")
-	if statusUpdated {
+	if err := m.releaseBackupLock(ctx, logger, cluster, "after completion"); err != nil {
+		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
+	}
+	if jobResult.statusUpdated {
 		return recon.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 	return recon.Result{RequeueAfter: time.Until(nextScheduled)}, nil

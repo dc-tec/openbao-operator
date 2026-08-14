@@ -123,7 +123,9 @@ func (m *Manager) handleRestoreInProgress(ctx context.Context, logger logr.Logge
 			return false, fmt.Errorf("failed to check for active backup job while restore is in progress: %w", err)
 		}
 		if !hasActiveJob {
-			m.releaseBackupLock(ctx, logger, cluster, "while restore is in progress")
+			if err := m.releaseBackupLock(ctx, logger, cluster, "while restore is in progress"); err != nil {
+				return true, err
+			}
 		}
 	}
 	if backupDue {
@@ -133,10 +135,10 @@ func (m *Manager) handleRestoreInProgress(ctx context.Context, logger logr.Logge
 	return true, nil
 }
 
-func (m *Manager) releaseBackupLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, contextNote string) {
+func (m *Manager) releaseBackupLock(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster, contextNote string) error {
 	if err := opslifecycle.ReleaseWithReader(ctx, m.reader, m.client, cluster, backupOperationLock); err != nil && !opslifecycle.IsLockHeld(err) {
 		logger.Error(err, "Failed to release backup operation lock", "context", contextNote)
-		return
+		return fmt.Errorf("failed to release backup operation lock %s: %w", contextNote, err)
 	} else if err == nil {
 		logging.LogAuditEvent(logger, logging.EventOperationLockReleased, map[string]string{
 			"cluster_namespace": cluster.Namespace,
@@ -145,4 +147,5 @@ func (m *Manager) releaseBackupLock(ctx context.Context, logger logr.Logger, clu
 			"holder":            backupOperationLockHolder,
 		})
 	}
+	return nil
 }

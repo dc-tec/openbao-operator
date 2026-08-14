@@ -123,11 +123,11 @@ func TestProcessBackupJobResult_EmitsCompletedEvent(t *testing.T) {
 		k8sClient,
 	)
 
-	statusUpdated, err := manager.processBackupJobResult(context.Background(), logr.Discard(), cluster, jobName)
+	result, err := manager.processBackupJobResult(context.Background(), logr.Discard(), cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
-	if !statusUpdated {
+	if !result.statusUpdated {
 		t.Fatal("statusUpdated = false, want true")
 	}
 
@@ -164,11 +164,11 @@ func TestProcessBackupJobResult_EmitsFailedEvent(t *testing.T) {
 		k8sClient,
 	)
 
-	statusUpdated, err := manager.processBackupJobResult(context.Background(), logr.Discard(), cluster, jobName)
+	result, err := manager.processBackupJobResult(context.Background(), logr.Discard(), cluster, jobName)
 	if err != nil {
 		t.Fatalf("processBackupJobResult() error = %v", err)
 	}
-	if !statusUpdated {
+	if !result.statusUpdated {
 		t.Fatal("statusUpdated = false, want true")
 	}
 

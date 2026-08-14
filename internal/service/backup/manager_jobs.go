@@ -46,11 +46,10 @@ func (m *Manager) hasPreUpgradeBackupJob(ctx context.Context, cluster *openbaov1
 }
 
 // checkForCompletedJobs checks for any completed backup jobs and processes them.
-// Returns (statusUpdated, error) where statusUpdated indicates if any job was processed and status was updated.
 // This is used to ensure completed jobs are processed even when backup is not due yet.
 // Only the most recent completed job is processed to avoid incrementing ConsecutiveFailures multiple times
 // when there are several old failed jobs.
-func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (bool, error) {
+func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger, cluster *openbaov1alpha1.OpenBaoCluster) (backupJobProcessResult, error) {
 	jobList := &batchv1.JobList{}
 	labelSelector := labels.SelectorFromSet(map[string]string{
 		constants.LabelAppInstance:      cluster.Name,
@@ -63,7 +62,7 @@ func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger,
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {
-		return false, fmt.Errorf("failed to list backup jobs: %w", err)
+		return backupJobProcessResult{}, fmt.Errorf("failed to list backup jobs: %w", err)
 	}
 
 	// Find the most recent completed job (by creation timestamp).
@@ -80,23 +79,23 @@ func (m *Manager) checkForCompletedJobs(ctx context.Context, logger logr.Logger,
 	}
 
 	if mostRecentCompleted == nil {
-		return false, nil // No completed jobs to process.
+		return backupJobProcessResult{}, nil
 	}
 
 	logger.Info("Processing completed backup job", "job", mostRecentCompleted.Name,
 		"succeeded", mostRecentCompleted.Status.Succeeded, "failed", mostRecentCompleted.Status.Failed)
 
-	statusUpdated, err := m.processBackupJobResult(ctx, logger, cluster, mostRecentCompleted.Name)
+	result, err := m.processBackupJobResult(ctx, logger, cluster, mostRecentCompleted.Name)
 	if err != nil {
-		return false, err
+		return backupJobProcessResult{}, err
 	}
-	if statusUpdated {
+	if result.statusUpdated {
 		logger.Info("Completed backup job processed, status updated", "job", mostRecentCompleted.Name)
 	} else {
 		logger.V(1).Info("Completed backup job already processed", "job", mostRecentCompleted.Name)
 	}
 
-	return statusUpdated, nil
+	return result, nil
 }
 
 // hasActiveBackupJob checks if there's any backup job (scheduled or manual) running or pending for this cluster.
