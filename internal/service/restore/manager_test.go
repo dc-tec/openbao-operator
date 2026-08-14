@@ -37,6 +37,44 @@ func testLogger() logr.Logger {
 	return logr.Discard()
 }
 
+const statusSubresourceName = "status"
+
+type operationLockConflictProbe struct {
+	injected      bool
+	patchAttempts int
+}
+
+func operationLockConflictOnce(
+	t *testing.T,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	currentOwner *openbaov1alpha1.OperationLockStatus,
+	probe *operationLockConflictProbe,
+) interceptor.Funcs {
+	t.Helper()
+	return interceptor.Funcs{
+		SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+			if subResourceName == statusSubresourceName {
+				if _, ok := obj.(*openbaov1alpha1.OpenBaoCluster); ok {
+					probe.patchAttempts++
+					if !probe.injected {
+						latest := &openbaov1alpha1.OpenBaoCluster{}
+						require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(cluster), latest))
+						latest.Status.OperationLock = currentOwner.DeepCopy()
+						require.NoError(t, c.Status().Update(ctx, latest))
+						probe.injected = true
+						return apierrors.NewConflict(
+							schema.GroupResource{Group: openbaov1alpha1.GroupVersion.Group, Resource: "openbaoclusters"},
+							cluster.Name,
+							errors.New("operation lock owner changed"),
+						)
+					}
+				}
+			}
+			return c.Status().Patch(ctx, obj, patch, opts...)
+		},
+	}
+}
+
 // setTestResourceVersion sets ResourceVersion on test objects for fake client SSA compatibility.
 // Controller-runtime 0.23 sets ResourceVersion for SSA operations, so test objects need it to avoid conflicts.
 func setTestResourceVersion(obj metav1.Object) {
@@ -404,7 +442,7 @@ func TestReconcileTerminalPhase_ReleasesOperationLock(t *testing.T) {
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
 		WithInterceptorFuncs(interceptor.Funcs{
 			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
-				if subResourceName == "status" {
+				if subResourceName == statusSubresourceName {
 					payload, err := patch.Data(obj)
 					if err != nil {
 						return err
@@ -471,7 +509,7 @@ func TestReconcileTerminalPhase_RetriesLockReleaseAfterTransientFailure(t *testi
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
 		WithInterceptorFuncs(interceptor.Funcs{
 			SubResourcePatch: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
-				if subResourceName == "status" {
+				if subResourceName == statusSubresourceName {
 					payload, err := patch.Data(obj)
 					if err != nil {
 						return err
@@ -509,7 +547,7 @@ func TestReconcileTerminalPhase_RetriesLockReleaseAfterTransientFailure(t *testi
 	assert.Contains(t, patchPayloads[1], `"resourceVersion":`)
 }
 
-func TestHandleValidating_PersistsOperationLockOverrideCondition(t *testing.T) {
+func TestHandleValidating_ForceRetryUsesCurrentNonRestoreOwner(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
 	require.NoError(t, corev1.AddToScheme(scheme))
@@ -556,11 +594,18 @@ func TestHandleValidating_PersistsOperationLockOverrideCondition(t *testing.T) {
 	}
 	setTestResourceVersion(restore)
 
+	currentOwner := &openbaov1alpha1.OperationLockStatus{
+		Operation: openbaov1alpha1.ClusterOperationUpgrade,
+		Holder:    "openbao-adminops-controller/upgrade",
+		Message:   "upgrade in progress",
+	}
+	conflictProbe := &operationLockConflictProbe{}
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(cluster, restore).
 		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
 		WithReturnManagedFields().
+		WithInterceptorFuncs(operationLockConflictOnce(t, cluster, currentOwner, conflictProbe)).
 		Build()
 
 	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
@@ -568,6 +613,8 @@ func TestHandleValidating_PersistsOperationLockOverrideCondition(t *testing.T) {
 	result, err := mgr.handleValidating(context.Background(), testLogger(), restore)
 	require.NoError(t, err)
 	assert.True(t, result.RequeueAfter > 0)
+	assert.True(t, conflictProbe.injected, "expected the first acquire patch to conflict")
+	assert.Equal(t, 2, conflictProbe.patchAttempts, "expected the acquire to retry after the conflict")
 
 	updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
 	require.NoError(t, k8sClient.Get(context.Background(), types.NamespacedName{Name: "test-restore", Namespace: "default"}, updatedRestore))
@@ -582,9 +629,90 @@ func TestHandleValidating_PersistsOperationLockOverrideCondition(t *testing.T) {
 		foundOverrideCondition = true
 		assert.Equal(t, metav1.ConditionTrue, cond.Status)
 		assert.Equal(t, constants.ReasonOperationLockOverridden, cond.Reason)
+		assert.Contains(t, cond.Message, "operation=Upgrade")
+		assert.Contains(t, cond.Message, "holder=openbao-adminops-controller/upgrade")
+		assert.NotContains(t, cond.Message, "openbao-adminops-support-controller/backup")
 		break
 	}
 	assert.True(t, foundOverrideCondition, "expected operation lock override condition to be persisted")
+}
+
+func TestHandleValidating_ForceRetryDoesNotReplaceCurrentRestoreOwner(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			Initialized: true,
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationBackup,
+				Holder:    "openbao-adminops-support-controller/backup",
+				Message:   "backup job",
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-restore",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{
+			Cluster:               "test-cluster",
+			OverrideOperationLock: true,
+			Force:                 true,
+			Source: openbaov1alpha1.RestoreSource{
+				Key: "snapshot-key",
+			},
+		},
+		Status: openbaov1alpha1.OpenBaoRestoreStatus{
+			Phase: openbaov1alpha1.RestorePhaseValidating,
+		},
+	}
+	setTestResourceVersion(restore)
+
+	currentOwner := &openbaov1alpha1.OperationLockStatus{
+		Operation: openbaov1alpha1.ClusterOperationRestore,
+		Holder:    constants.ControllerNameOpenBaoRestore + "/other-restore",
+		Message:   "restore default/other-restore",
+	}
+	conflictProbe := &operationLockConflictProbe{}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, restore).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}, &openbaov1alpha1.OpenBaoRestore{}).
+		WithReturnManagedFields().
+		WithInterceptorFuncs(operationLockConflictOnce(t, cluster, currentOwner, conflictProbe)).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	result, err := mgr.handleValidating(context.Background(), testLogger(), restore)
+	require.NoError(t, err)
+	assert.True(t, result.RequeueAfter > 0)
+	assert.True(t, conflictProbe.injected, "expected the first acquire patch to conflict")
+	assert.Equal(t, 1, conflictProbe.patchAttempts, "expected the retry to reject the current restore owner before patching")
+
+	updatedCluster := &openbaov1alpha1.OpenBaoCluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updatedCluster))
+	require.NotNil(t, updatedCluster.Status.OperationLock)
+	assert.Equal(t, currentOwner.Operation, updatedCluster.Status.OperationLock.Operation)
+	assert.Equal(t, currentOwner.Holder, updatedCluster.Status.OperationLock.Holder)
+
+	updatedRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), updatedRestore))
+	assert.Equal(t, openbaov1alpha1.RestorePhaseValidating, updatedRestore.Status.Phase)
+	assert.Contains(t, updatedRestore.Status.Message, "operation=Restore")
+	assert.Contains(t, updatedRestore.Status.Message, currentOwner.Holder)
+	assert.Nil(t, meta.FindStatusCondition(updatedRestore.Status.Conditions, constants.ConditionTypeOperationLockOverride))
 }
 
 func TestHandleValidating_SetsActionableOperationLockWaitMessage(t *testing.T) {

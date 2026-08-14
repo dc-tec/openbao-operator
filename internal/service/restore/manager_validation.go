@@ -62,23 +62,22 @@ func (m *Manager) validateCluster(ctx context.Context, logger logr.Logger, resto
 // Returns (lockBefore, forceAcquired, result, error) where result is non-nil if lock acquisition failed and should return early.
 func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, restore *openbaov1alpha1.OpenBaoRestore, cluster *openbaov1alpha1.OpenBaoCluster) (*openbaov1alpha1.OperationLockStatus, bool, *ctrl.Result, error) {
 	lock := restoreOperationLock(restore)
-	forceAcquire := false
 
-	if restore.Spec.OverrideOperationLock {
-		if !restore.Spec.Force {
-			result, err := m.failRestore(ctx, logger, restore, "overrideOperationLock requires force: true")
-			return nil, false, &result, err
-		}
-		if cluster.Status.OperationLock != nil && cluster.Status.OperationLock.Operation != openbaov1alpha1.ClusterOperationRestore {
-			forceAcquire = true
-		}
+	if restore.Spec.OverrideOperationLock && !restore.Spec.Force {
+		result, err := m.failRestore(ctx, logger, restore, "overrideOperationLock requires force: true")
+		return nil, false, &result, err
 	}
 
-	lockBefore := cluster.Status.OperationLock
-	if err := opslifecycle.AcquireWithReader(ctx, m.reader, m.client, cluster, lock, opslifecycle.AcquireOptions{
+	acquireResult, err := opslifecycle.AcquireWithReaderResult(ctx, m.reader, m.client, cluster, lock, opslifecycle.AcquireOptions{
 		Message: restoreLockMessage(restore),
-		Force:   forceAcquire,
-	}); err != nil {
+		ForceIf: func(current *openbaov1alpha1.OperationLockStatus) bool {
+			return restore.Spec.OverrideOperationLock &&
+				restore.Spec.Force &&
+				current != nil &&
+				current.Operation != openbaov1alpha1.ClusterOperationRestore
+		},
+	})
+	if err != nil {
 		if opslifecycle.IsLockHeld(err) {
 			fields := map[string]string{
 				"cluster_namespace": restore.Namespace,
@@ -100,8 +99,10 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 		}
 		return nil, false, nil, fmt.Errorf("failed to acquire cluster operation lock: %w", err)
 	}
+	lockBefore := acquireResult.PreviousLock
+	forceAcquired := acquireResult.Forced
 
-	if forceAcquire && lockBefore != nil {
+	if forceAcquired && lockBefore != nil {
 		logging.LogAuditEvent(logger, logging.EventOperationLockForceAcquired, map[string]string{
 			"cluster_namespace":  restore.Namespace,
 			"cluster_name":       restore.Spec.Cluster,
@@ -121,7 +122,7 @@ func (m *Manager) acquireOperationLock(ctx context.Context, logger logr.Logger, 
 		})
 	}
 
-	return lockBefore, forceAcquire, nil, nil
+	return lockBefore, forceAcquired, nil, nil
 }
 
 // handleLockOverride records an event and sets a condition when a lock override occurs.

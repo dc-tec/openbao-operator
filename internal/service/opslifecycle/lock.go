@@ -22,6 +22,16 @@ type OperationLock struct {
 type AcquireOptions struct {
 	Message string
 	Force   bool
+	// ForceIf permits replacement of the current foreign lock when it returns
+	// true. The function runs after each fresh read, including conflict retries.
+	ForceIf func(*openbaov1alpha1.OperationLockStatus) bool
+}
+
+// AcquireResult describes the lock state observed by the successful acquire
+// or renewal attempt.
+type AcquireResult struct {
+	PreviousLock *openbaov1alpha1.OperationLockStatus
+	Forced       bool
 }
 
 var (
@@ -59,19 +69,38 @@ func AcquireWithReader(
 	lock OperationLock,
 	opts AcquireOptions,
 ) error {
+	_, err := AcquireWithReaderResult(ctx, reader, c, cluster, lock, opts)
+	return err
+}
+
+// AcquireWithReaderResult acquires or renews the lock and returns the lock
+// observed by the successful fresh-read attempt.
+func AcquireWithReaderResult(
+	ctx context.Context,
+	reader client.Reader,
+	c client.Client,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	lock OperationLock,
+	opts AcquireOptions,
+) (AcquireResult, error) {
 	if cluster == nil {
-		return fmt.Errorf("cluster is required")
+		return AcquireResult{}, fmt.Errorf("cluster is required")
 	}
 	if lock.Holder == "" {
-		return fmt.Errorf("holder is required")
+		return AcquireResult{}, fmt.Errorf("holder is required")
 	}
 	if lock.Operation == "" {
-		return fmt.Errorf("operation is required")
+		return AcquireResult{}, fmt.Errorf("operation is required")
 	}
 
-	return mutateOperationLockStatus(ctx, reader, c, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
+	result := AcquireResult{}
+	err := mutateOperationLockStatus(ctx, reader, c, cluster, func(obj *openbaov1alpha1.OpenBaoCluster) error {
 		now := metav1.Now()
 		current := obj.Status.OperationLock
+		result = AcquireResult{}
+		if current != nil {
+			result.PreviousLock = current.DeepCopy()
+		}
 		switch {
 		case current == nil:
 			obj.Status.OperationLock = newOperationLockStatus(lock, opts.Message, now)
@@ -85,13 +114,18 @@ func AcquireWithReader(
 			}
 			obj.Status.OperationLock = desired
 			return nil
-		case opts.Force:
+		case opts.Force || (opts.ForceIf != nil && opts.ForceIf(current)):
+			result.Forced = true
 			obj.Status.OperationLock = newOperationLockStatus(lock, opts.Message, now)
 			return nil
 		default:
 			return heldErrorFor(current)
 		}
 	})
+	if err != nil {
+		return AcquireResult{}, err
+	}
+	return result, nil
 }
 
 // ReleaseWithReader releases the lock when it is owned by the given operation
