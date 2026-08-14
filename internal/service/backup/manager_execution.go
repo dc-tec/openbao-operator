@@ -68,7 +68,9 @@ func (m *Manager) executeAndProcessBackup(
 	}
 
 	if manualTrigger {
-		m.clearTriggerAnnotation(ctx, logger, cluster, constants.AnnotationTriggerBackup)
+		if err := m.clearManualTriggerAnnotation(ctx, logger, cluster); err != nil {
+			return recon.Result{}, err
+		}
 	}
 
 	if err := m.recordBackupAttempt(ctx, cluster, now, scheduledTime, nextScheduled, manualTriggerToken); err != nil {

@@ -266,7 +266,19 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 		}
 		return backupJobProcessResult{}, fmt.Errorf("failed to get backup Job %s/%s: %w", cluster.Namespace, jobName, err)
 	}
+	return m.processBackupJob(ctx, logger, cluster, job)
+}
 
+func (m *Manager) processBackupJob(
+	ctx context.Context,
+	logger logr.Logger,
+	cluster *openbaov1alpha1.OpenBaoCluster,
+	job *batchv1.Job,
+) (backupJobProcessResult, error) {
+	if job == nil {
+		return backupJobProcessResult{}, nil
+	}
+	jobName := job.Name
 	// Check Job status
 	if kube.JobSucceeded(job) {
 		// Job succeeded - extract result from Job annotations
@@ -317,7 +329,11 @@ func (m *Manager) processBackupJobResult(ctx context.Context, logger logr.Logger
 	if kube.JobFailed(job) {
 		// Job failed - check if we've already processed this specific job failure
 		// to avoid incrementing ConsecutiveFailures on every reconcile
-		expectedFailureMessage := backupJobFailureMessage(job, workloadidentity.FailureHint(cluster.Spec.Backup.Target, backupServiceAccountName(cluster)))
+		failureHint := ""
+		if cluster.Spec.Backup != nil {
+			failureHint = workloadidentity.FailureHint(cluster.Spec.Backup.Target, backupServiceAccountName(cluster))
+		}
+		expectedFailureMessage := backupJobFailureMessage(job, failureHint)
 		if backupFailureMatches(cluster.Status.Backup, ReasonBackupFailed, expectedFailureMessage) {
 			// Already processed this job failure, don't update status again
 			logger.V(1).Info("Backup Job failure already processed", "job", jobName)

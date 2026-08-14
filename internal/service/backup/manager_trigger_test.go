@@ -121,7 +121,7 @@ func TestHandleManualTrigger(t *testing.T) {
 	})
 }
 
-func TestClearTriggerAnnotationLogsPatchError(t *testing.T) {
+func TestClearTriggerAnnotationReturnsPatchError(t *testing.T) {
 	cluster := newTestClusterWithBackup("manual-patch-error", "backup-ns")
 	cluster.Annotations = map[string]string{
 		constants.AnnotationTriggerBackup: "now",
@@ -139,16 +139,9 @@ func TestClearTriggerAnnotationLogsPatchError(t *testing.T) {
 		Build()
 
 	manager := newBackupManager(k8sClient)
-	logSink := &capturingLogSink{}
-	logger := logr.New(logSink)
-
-	manager.clearTriggerAnnotation(context.Background(), logger, cluster, constants.AnnotationTriggerBackup)
-
-	if logSink.errorCount != 1 {
-		t.Fatalf("error log count = %d, want 1", logSink.errorCount)
-	}
-	if logSink.infoCount != 0 {
-		t.Fatalf("info log count = %d, want 0", logSink.infoCount)
+	err := manager.clearManualTriggerAnnotation(context.Background(), logr.Discard(), cluster)
+	if err == nil || err.Error() != "failed to clear manual backup trigger annotation: patch failed" {
+		t.Fatalf("clearManualTriggerAnnotation() error = %v, want wrapped patch failure", err)
 	}
 	if _, ok := cluster.Annotations[constants.AnnotationTriggerBackup]; ok {
 		t.Fatal("manual trigger annotation still present on in-memory object after patch failure")

@@ -95,6 +95,33 @@ type failOnceReader struct {
 	clusterGetFailed bool
 }
 
+type deleteTerminalJobsAfterListReader struct {
+	client.Reader
+	client  client.Client
+	deleted bool
+}
+
+func (r *deleteTerminalJobsAfterListReader) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	if err := r.Reader.List(ctx, list, opts...); err != nil {
+		return err
+	}
+	jobs, ok := list.(*batchv1.JobList)
+	if !ok || r.deleted {
+		return nil
+	}
+	for i := range jobs.Items {
+		job := &jobs.Items[i]
+		if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
+			continue
+		}
+		if err := r.client.Delete(ctx, job); err != nil {
+			return err
+		}
+		r.deleted = true
+	}
+	return nil
+}
+
 func (r *failOnceReader) Get(ctx context.Context, key types.NamespacedName, obj client.Object, opts ...client.GetOption) error {
 	if _, ok := obj.(*openbaov1alpha1.OpenBaoCluster); ok && !r.clusterGetFailed {
 		r.clusterGetFailed = true
@@ -170,6 +197,7 @@ func TestReconcile_ProcessesOwnedBackupBeforePendingOperations(t *testing.T) {
 	cluster.Status.CurrentVersion = cluster.Spec.Version
 	cluster.Spec.Version = "2.5.0"
 	cluster.Spec.Image = "openbao/openbao:2.5.0"
+	cluster.Spec.Backup.Schedule = "invalid schedule"
 	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
 		Operation: openbaov1alpha1.ClusterOperationBackup,
 		Holder:    backupOperationLockHolder,
@@ -209,6 +237,91 @@ func TestReconcile_ProcessesOwnedBackupBeforePendingOperations(t *testing.T) {
 	}
 	if updated.Status.Backup == nil || updated.Status.Backup.LastBackupName != job.Annotations["openbao.org/backup-key"] {
 		t.Fatalf("backup status = %#v, want completed Job result", updated.Status.Backup)
+	}
+}
+
+func TestReconcile_ProcessesOwnedTerminalJobFromSingleObservation(t *testing.T) {
+	cluster := newTestClusterWithBackup("terminal-list-race", "default")
+	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+		Operation: openbaov1alpha1.ClusterOperationBackup,
+		Holder:    backupOperationLockHolder,
+	}
+	job := newBackupJobForCluster(cluster, "terminal-list-race-complete", time.Now().UTC().Add(-time.Minute))
+	job.Annotations = map[string]string{
+		"openbao.org/backup-key": "backups/default/terminal-list-race/complete.snap",
+	}
+	job.Status = batchv1.JobStatus{Succeeded: 1}
+
+	k8sClient := newTestClient(t, cluster, job)
+	reader := &deleteTerminalJobsAfterListReader{Reader: k8sClient, client: k8sClient}
+	manager := newBackupManager(k8sClient).WithReader(reader)
+
+	result, err := manager.Reconcile(context.Background(), logr.Discard(), cluster)
+	if err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if result.RequeueAfter != constants.RequeueShort {
+		t.Fatalf("RequeueAfter = %v, want %v", result.RequeueAfter, constants.RequeueShort)
+	}
+	if !reader.deleted {
+		t.Fatal("test reader did not delete the terminal Job after List")
+	}
+
+	updated := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), updated); err != nil {
+		t.Fatalf("Get() cluster error = %v", err)
+	}
+	if updated.Status.OperationLock != nil {
+		t.Fatalf("operation lock = %#v, want released", updated.Status.OperationLock)
+	}
+	if updated.Status.Backup == nil || updated.Status.Backup.LastBackupName != job.Annotations["openbao.org/backup-key"] {
+		t.Fatalf("backup status = %#v, want terminal Job result", updated.Status.Backup)
+	}
+}
+
+func TestReconcile_OwnedBackupClearsCrashRecoveredManualTrigger(t *testing.T) {
+	cluster := newTestClusterWithBackup("manual-crash-recovery", "default")
+	cluster.Annotations = map[string]string{constants.AnnotationTriggerBackup: "manual-request-1"}
+	cluster.Spec.Backup.JWTAuthRole = "backup-role"
+	nextScheduled := metav1.NewTime(time.Now().UTC().Add(24 * time.Hour))
+	cluster.Status.Backup.NextScheduledBackup = &nextScheduled
+	cluster.Status.Initialized = true
+	cluster.Status.CurrentVersion = cluster.Spec.Version
+	cluster.Status.OperationLock = &openbaov1alpha1.OperationLockStatus{
+		Operation: openbaov1alpha1.ClusterOperationBackup,
+		Holder:    backupOperationLockHolder,
+	}
+	job := newBackupJobForCluster(cluster, "manual-crash-recovery-complete", time.Now().UTC().Add(-time.Minute))
+	job.Annotations = map[string]string{
+		"openbao.org/backup-key": "backups/default/manual-crash-recovery/complete.snap",
+	}
+	job.Status = batchv1.JobStatus{Succeeded: 1}
+
+	k8sClient := newTestClient(t, cluster, job)
+	manager := newBackupManager(k8sClient)
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), cluster); err != nil {
+		t.Fatalf("owned Reconcile() error = %v", err)
+	}
+
+	current := &openbaov1alpha1.OpenBaoCluster{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), current); err != nil {
+		t.Fatalf("Get() cluster error = %v", err)
+	}
+	if _, found := current.Annotations[constants.AnnotationTriggerBackup]; found {
+		t.Fatal("manual trigger remains after owned backup completion")
+	}
+	if _, err := manager.Reconcile(context.Background(), logr.Discard(), current); err != nil {
+		t.Fatalf("post-recovery Reconcile() error = %v", err)
+	}
+	jobs := &batchv1.JobList{}
+	if err := k8sClient.List(context.Background(), jobs,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabels{constants.LabelOpenBaoCluster: cluster.Name},
+	); err != nil {
+		t.Fatalf("List() Jobs error = %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("backup Job count = %d, want 1", len(jobs.Items))
 	}
 }
 
@@ -271,11 +384,13 @@ func TestReconcile_AppliesRetentionOnceForNewSuccessfulJob(t *testing.T) {
 
 func TestReconcile_DisabledBackupFinishesOwnedOperation(t *testing.T) {
 	testCases := []struct {
-		name        string
-		withJob     bool
-		wantLastKey string
+		name         string
+		jobStatus    *batchv1.JobStatus
+		wantLastKey  string
+		wantFailures int32
 	}{
-		{name: "completed Job", withJob: true, wantLastKey: "backups/default/disabled-backup/complete.snap"},
+		{name: "completed Job", jobStatus: &batchv1.JobStatus{Succeeded: 1}, wantLastKey: "backups/default/disabled-backup/complete.snap"},
+		{name: "failed Job", jobStatus: &batchv1.JobStatus{Failed: 1}, wantFailures: 1},
 		{name: "no Job"},
 	}
 
@@ -287,10 +402,10 @@ func TestReconcile_DisabledBackupFinishesOwnedOperation(t *testing.T) {
 				Holder:    backupOperationLockHolder,
 			}
 			objects := []client.Object{cluster}
-			if testCase.withJob {
+			if testCase.jobStatus != nil {
 				job := newBackupJobForCluster(cluster, "disabled-backup-complete", time.Now().UTC().Add(-time.Minute))
 				job.Annotations = map[string]string{"openbao.org/backup-key": testCase.wantLastKey}
-				job.Status = batchv1.JobStatus{Succeeded: 1}
+				job.Status = *testCase.jobStatus
 				objects = append(objects, job)
 			}
 			cluster.Spec.Backup = nil
@@ -314,6 +429,9 @@ func TestReconcile_DisabledBackupFinishesOwnedOperation(t *testing.T) {
 			}
 			if testCase.wantLastKey != "" && (updated.Status.Backup == nil || updated.Status.Backup.LastBackupName != testCase.wantLastKey) {
 				t.Fatalf("backup status = %#v, want key %q", updated.Status.Backup, testCase.wantLastKey)
+			}
+			if updated.Status.Backup == nil || updated.Status.Backup.ConsecutiveFailures != testCase.wantFailures {
+				t.Fatalf("backup status = %#v, want consecutive failures %d", updated.Status.Backup, testCase.wantFailures)
 			}
 		})
 	}
