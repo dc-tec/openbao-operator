@@ -14,7 +14,7 @@ import (
 
 // buildKeychain constructs a keychain from ImagePullSecrets.
 func (v *ImageVerifier) buildKeychain(ctx context.Context, imagePullSecrets []corev1.LocalObjectReference, namespace string) (authn.Keychain, error) {
-	if len(imagePullSecrets) == 0 || v.client == nil {
+	if len(imagePullSecrets) == 0 || v.reader == nil {
 		return nil, nil
 	}
 
@@ -25,7 +25,7 @@ func (v *ImageVerifier) buildKeychain(ctx context.Context, imagePullSecrets []co
 	combinedConfig := dockerConfig{Auths: make(map[string]dockerAuthConfig)}
 	for _, secretRef := range imagePullSecrets {
 		secret := &corev1.Secret{}
-		if err := v.client.Get(ctx, types.NamespacedName{
+		if err := v.reader.Get(ctx, types.NamespacedName{
 			Namespace: namespace,
 			Name:      secretRef.Name,
 		}, secret); err != nil {

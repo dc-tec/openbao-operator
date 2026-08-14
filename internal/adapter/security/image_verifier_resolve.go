@@ -49,7 +49,7 @@ func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, conf
 	}
 
 	var ggcrOpts []ggcrremote.Option
-	if len(config.ImagePullSecrets) > 0 && v.client != nil {
+	if len(config.ImagePullSecrets) > 0 && v.reader != nil {
 		keychain, err := v.buildKeychain(ctx, config.ImagePullSecrets, config.Namespace)
 		if err != nil {
 			return "", fmt.Errorf("failed to build keychain for image pull secrets: %w", err)
@@ -76,13 +76,19 @@ func (v *ImageVerifier) resolveDigest(ctx context.Context, imageRef string, conf
 }
 
 // cacheKey generates a cache key from the complete image digest and verification policy.
-func (v *ImageVerifier) cacheKey(digest string, config imageverify.VerifyConfig) (string, error) {
+func (v *ImageVerifier) cacheKey(
+	digest string,
+	config imageverify.VerifyConfig,
+	trustedRootIdentity string,
+) (string, error) {
 	identity := struct {
-		Digest string
-		Policy imageverify.VerifyConfig
+		Digest              string
+		Policy              imageverify.VerifyConfig
+		TrustedRootIdentity string
 	}{
-		Digest: digest,
-		Policy: config,
+		Digest:              digest,
+		Policy:              config,
+		TrustedRootIdentity: trustedRootIdentity,
 	}
 	encodedIdentity, err := json.Marshal(identity)
 	if err != nil {

@@ -31,8 +31,8 @@ const (
 
 func TestNewImageVerifier(t *testing.T) {
 	logger := logr.Discard()
-	client := fake.NewClientBuilder().Build()
-	verifier := NewImageVerifier(logger, client, nil)
+	reader := &readerOnly{Reader: fake.NewClientBuilder().Build()}
+	verifier := NewImageVerifier(logger, reader, nil)
 
 	if verifier == nil {
 		t.Fatal("NewImageVerifier() returned nil")
@@ -50,9 +50,13 @@ func TestNewImageVerifier(t *testing.T) {
 		t.Error("NewImageVerifier() tagCache not initialized")
 	}
 
-	if verifier.client != client {
-		t.Error("NewImageVerifier() client not set correctly")
+	if verifier.reader != reader {
+		t.Error("NewImageVerifier() reader not set correctly")
 	}
+}
+
+type readerOnly struct {
+	crclient.Reader
 }
 
 func TestImageVerifier_LoadTrustedRoot_UsesEmbeddedWhenConfigAbsent(t *testing.T) {
@@ -532,7 +536,11 @@ func requireImageVerificationCacheKey(
 ) string {
 	t.Helper()
 
-	key, err := verifier.cacheKey(digest, config)
+	trustedRoot, err := verifier.verificationTrustedRoot(context.Background(), config)
+	if err != nil {
+		t.Fatalf("verificationTrustedRoot() error = %v", err)
+	}
+	key, err := verifier.cacheKey(digest, config, trustedRoot.identity)
 	if err != nil {
 		t.Fatalf("cacheKey() error = %v", err)
 	}
@@ -676,6 +684,80 @@ func TestVerificationCache_PolicyIsolation(t *testing.T) {
 
 	if verifier.cache.isVerifiedByKey(otherKey) {
 		t.Fatal("verification cache must miss for a different policy")
+	}
+}
+
+func TestImageVerifier_CacheKey_ExternalTrustedRootChange(t *testing.T) {
+	ctx := context.Background()
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sigstore-root",
+			Namespace: "openbao-system",
+		},
+		Data: map[string]string{trustedRootConfigMapKey: string(embeddedTrustedRootJSON)},
+	}
+	client := newTrustedRootTestClient(t, configMap)
+	verifier := NewImageVerifier(logr.Discard(), client, &TrustedRootConfig{
+		ConfigMapName:      configMap.Name,
+		ConfigMapNamespace: configMap.Namespace,
+	})
+	config := imageverify.VerifyConfig{
+		Issuer:  testOIDCIssuer,
+		Subject: testOIDCSubject,
+	}
+
+	firstKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
+	var current corev1.ConfigMap
+	if err := client.Get(ctx, crclient.ObjectKeyFromObject(configMap), &current); err != nil {
+		t.Fatalf("get trusted root ConfigMap: %v", err)
+	}
+	current.Data[trustedRootConfigMapKey] += "\n"
+	if err := client.Update(ctx, &current); err != nil {
+		t.Fatalf("update trusted root ConfigMap: %v", err)
+	}
+	secondKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
+
+	if firstKey == secondKey {
+		t.Fatal("cacheKey() must change when external trusted-root content changes")
+	}
+}
+
+func TestImageVerifier_Verify_DoesNotReuseCacheAfterExternalTrustedRootChange(t *testing.T) {
+	ctx := context.Background()
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sigstore-root",
+			Namespace: "openbao-system",
+		},
+		Data: map[string]string{trustedRootConfigMapKey: string(embeddedTrustedRootJSON)},
+	}
+	client := newTrustedRootTestClient(t, configMap)
+	verifier := NewImageVerifier(logr.Discard(), client, &TrustedRootConfig{
+		ConfigMapName:      configMap.Name,
+		ConfigMapNamespace: configMap.Namespace,
+	})
+	config := imageverify.VerifyConfig{
+		Issuer:  testOIDCIssuer,
+		Subject: testOIDCSubject,
+	}
+	cacheKey := requireImageVerificationCacheKey(t, verifier, testImageDigest, config)
+	verifier.cache.markVerifiedByKey(cacheKey)
+
+	var current corev1.ConfigMap
+	if err := client.Get(ctx, crclient.ObjectKeyFromObject(configMap), &current); err != nil {
+		t.Fatalf("get trusted root ConfigMap: %v", err)
+	}
+	current.Data[trustedRootConfigMapKey] = "not-json"
+	if err := client.Update(ctx, &current); err != nil {
+		t.Fatalf("update trusted root ConfigMap: %v", err)
+	}
+
+	_, err := verifier.Verify(ctx, testImageDigest, config)
+	if err == nil {
+		t.Fatal("Verify() reused a result from the previous trusted root")
+	}
+	if !strings.Contains(err.Error(), "failed to parse trusted_root.json") {
+		t.Fatalf("Verify() error = %q, want trusted-root parse failure", err.Error())
 	}
 }
 

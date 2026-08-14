@@ -54,10 +54,10 @@ func buildControllerProcessRuntime(
 
 	clientMgr := openbao.NewClientManager(smartClientConfig)
 	initMgr := initmanager.NewManager(config, clientset, clientMgr, mgr.GetEventRecorder(controllerNameOpenBaoCluster))
-	imageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("image-verifier"), mgr.GetClient(), nil)
+	imageVerifier := security.NewImageVerifier(mgr.GetLogger().WithName("image-verifier"), mgr.GetAPIReader(), nil)
 	operatorImageVerifier := security.NewImageVerifier(
 		mgr.GetLogger().WithName("operator-image-verifier"),
-		mgr.GetClient(),
+		mgr.GetAPIReader(),
 		nil,
 	)
 
