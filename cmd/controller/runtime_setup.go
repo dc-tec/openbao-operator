@@ -128,6 +128,7 @@ func setupControllers(mgr ctrl.Manager, runtime controllerProcessRuntime) error 
 		Recorder:         mgr.GetEventRecorder(controllerNameOpenBaoRestore),
 		RestoreReconciler: appopenbaorestore.NewRestoreReconciler(appopenbaorestore.RestoreDependencies{
 			Client:                mgr.GetClient(),
+			APIReader:             mgr.GetAPIReader(),
 			Scheme:                mgr.GetScheme(),
 			Recorder:              mgr.GetEventRecorder(controllerNameOpenBaoRestore),
 			OperatorImageVerifier: runtime.imageVerificationRuntime.OperatorImageVerifier,

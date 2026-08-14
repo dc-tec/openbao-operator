@@ -160,7 +160,7 @@ func (m *Manager) handleDeletion(ctx context.Context, logger logr.Logger, restor
 	}
 
 	if err := m.releaseClusterLock(ctx, logger, restore); err != nil {
-		logger.Error(err, "Failed to release cluster operation lock during restore deletion")
+		return ctrl.Result{}, fmt.Errorf("failed to release cluster operation lock during restore deletion: %w", err)
 	}
 
 	original := restore.DeepCopy()

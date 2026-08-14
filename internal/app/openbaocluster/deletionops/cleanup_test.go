@@ -14,6 +14,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
@@ -157,6 +158,52 @@ func TestDeletePVCsSkipsLabelMatchedPVCWithoutOwnerProof(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("expected unproven PVC to be preserved, got error: %v", err)
+	}
+}
+
+func TestDeletePVCsPreservesForeignFinalizers(t *testing.T) {
+	cluster := newCleanupTestCluster("cleanup-finalizers")
+	pvc := newCleanupTestPVC(cluster.Namespace, cluster.Name, "data-cleanup-finalizers-0")
+	pvc.Finalizers = []string{
+		"kubernetes.io/pvc-protection",
+		"external-provisioner.volume.kubernetes.io/finalizer",
+	}
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme(core) error = %v", err)
+	}
+	if err := openbaov1alpha1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme(openbao) error = %v", err)
+	}
+	patchCalls := 0
+	deleteCalls := 0
+	kubeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster, pvc).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+				patchCalls++
+				return c.Patch(ctx, obj, patch, opts...)
+			},
+			Delete: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.DeleteOption) error {
+				deleteCalls++
+				if got := obj.GetFinalizers(); len(got) != 2 || got[0] != pvc.Finalizers[0] || got[1] != pvc.Finalizers[1] {
+					t.Fatalf("Delete() finalizers = %v, want %v", got, pvc.Finalizers)
+				}
+				return nil
+			},
+		}).
+		Build()
+
+	if err := Cleanup(context.Background(), logr.Discard(), kubeClient, cluster, openbaov1alpha1.DeletionPolicyDeletePVCs); err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+	if patchCalls != 0 {
+		t.Fatalf("Patch() calls = %d, want 0", patchCalls)
+	}
+	if deleteCalls != 1 {
+		t.Fatalf("Delete() calls = %d, want 1", deleteCalls)
 	}
 }
 

@@ -1575,6 +1575,16 @@ func TestBuildRestoreVolumes(t *testing.T) {
 			for _, expected := range tt.expectedVolumeNames {
 				assert.Contains(t, volumeNames, expected, "should contain volume %s", expected)
 			}
+			if tt.tokenSecretRef != nil {
+				for i := range volumes {
+					if volumes[i].Name != restoreTokenVolumeName {
+						continue
+					}
+					require.NotNil(t, volumes[i].Secret)
+					require.NotNil(t, volumes[i].Secret.DefaultMode)
+					assert.Equal(t, int32(0400), *volumes[i].Secret.DefaultMode)
+				}
+			}
 		})
 	}
 }
@@ -1713,6 +1723,47 @@ func TestHandleDeletion(t *testing.T) {
 	// the fake client now removes the object entirely, which is correct behavior.
 	// We don't need to verify finalizers since successful return indicates
 	// the finalizer was removed and deletion proceeded.
+}
+
+func TestHandleDeletion_KeepsFinalizerWhenLockReleaseFails(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+
+	now := metav1.Now()
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "test-restore",
+			Namespace:         "default",
+			DeletionTimestamp: &now,
+			Finalizers:        []string{openbaov1alpha1.OpenBaoRestoreFinalizer},
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{Cluster: "test-cluster"},
+	}
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		Build()
+	expected := errors.New("transient cluster read failure")
+	reader := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*openbaov1alpha1.OpenBaoCluster); ok {
+					return expected
+				}
+				return c.Get(ctx, key, obj, opts...)
+			},
+		}).
+		Build()
+
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "").WithReader(reader)
+	_, err := mgr.handleDeletion(context.Background(), testLogger(), restore)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, expected.Error())
+
+	current := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), current))
+	assert.Contains(t, current.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
 }
 
 // TestReleaseClusterLock tests the cluster lock release.

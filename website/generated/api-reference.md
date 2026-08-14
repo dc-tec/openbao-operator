@@ -545,9 +545,9 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `Retain` | DeletionPolicyRetain keeps StatefulSets, PVCs, and external backups.<br /> |
-| `DeletePVCs` | DeletionPolicyDeletePVCs deletes StatefulSets and PVCs, but retains external backups.<br /> |
-| `DeleteAll` | DeletionPolicyDeleteAll deletes StatefulSets and PVCs, but retains external object-store backups.<br /> |
+| `Retain` | DeletionPolicyRetain removes operator-managed compute and keeps PVCs and external backups.<br /> |
+| `DeletePVCs` | DeletionPolicyDeletePVCs removes operator-managed compute and PVCs, but retains external backups.<br /> |
+| `DeleteAll` | DeletionPolicyDeleteAll removes operator-managed compute and PVCs, but retains external object-store backups.<br /> |
 
 
 #### FileAuditOptions

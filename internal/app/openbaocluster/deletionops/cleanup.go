@@ -69,13 +69,6 @@ func deletePVCs(ctx context.Context, logger logr.Logger, kubeClient client.Clien
 			logger.Info("Skipping PVC cleanup because owner proof is missing", "pvc", pvc.Name)
 			continue
 		}
-		if len(pvc.Finalizers) > 0 {
-			original := pvc.DeepCopy()
-			pvc.Finalizers = nil
-			if err := kubeClient.Patch(ctx, pvc, client.MergeFrom(original)); err != nil && !apierrors.IsNotFound(err) {
-				return err
-			}
-		}
 		if err := kubeClient.Delete(ctx, pvc); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}

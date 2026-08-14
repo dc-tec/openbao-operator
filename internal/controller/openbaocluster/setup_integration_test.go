@@ -92,6 +92,38 @@ func TestSetupWithManager_SingleTenantRecreatesDeletedConfigMap(t *testing.T) {
 	}, 20*time.Second, 200*time.Millisecond, "expected single-tenant Owns() watch to recreate deleted ConfigMap")
 }
 
+func TestSetupWithManager_MultiTenantRecreatesDeletedConfigMapOnPoll(t *testing.T) {
+	ctx := context.Background()
+	namespace := "multi-tenant-poll-test"
+	originalRequeueStandard := constants.RequeueStandard
+	constants.RequeueStandard = 250 * time.Millisecond
+	t.Cleanup(func() {
+		constants.RequeueStandard = originalRequeueStandard
+	})
+	liveClient := startOpenBaoClusterManager(t, namespace, false)
+
+	cluster := newManagerTestCluster(namespace, "poll-recreate-cluster")
+	require.NoError(t, liveClient.Create(ctx, cluster))
+	t.Cleanup(func() {
+		_ = liveClient.Delete(context.Background(), cluster)
+	})
+
+	configMap := waitForManagedConfigMap(t, ctx, liveClient, namespace, cluster.Name)
+	originalUID := configMap.UID
+
+	require.NoError(t, liveClient.Delete(ctx, configMap))
+	waitForNotFound(t, ctx, liveClient, configMap)
+
+	configMapKey := client.ObjectKey{Namespace: namespace, Name: cluster.Name + constants.SuffixConfigMap}
+	require.Eventually(t, func() bool {
+		current := &corev1.ConfigMap{}
+		if err := liveClient.Get(ctx, configMapKey, current); err != nil {
+			return false
+		}
+		return current.UID != originalUID
+	}, 20*time.Second, 200*time.Millisecond, "expected multi-tenant polling to recreate deleted ConfigMap")
+}
+
 func startOpenBaoClusterManager(t *testing.T, namespace string, singleTenant bool) client.Client {
 	t.Helper()
 	t.Setenv("OPENBAO_UNSAFE_ADMISSION_DISABLED", "true")

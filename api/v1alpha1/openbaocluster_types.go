@@ -30,11 +30,11 @@ const (
 	// runs before an OpenBaoCluster is fully deleted.
 	OpenBaoClusterFinalizer = "openbao.org/openbaocluster-finalizer"
 
-	// DeletionPolicyRetain keeps StatefulSets, PVCs, and external backups.
+	// DeletionPolicyRetain removes operator-managed compute and keeps PVCs and external backups.
 	DeletionPolicyRetain DeletionPolicy = "Retain"
-	// DeletionPolicyDeletePVCs deletes StatefulSets and PVCs, but retains external backups.
+	// DeletionPolicyDeletePVCs removes operator-managed compute and PVCs, but retains external backups.
 	DeletionPolicyDeletePVCs DeletionPolicy = "DeletePVCs"
-	// DeletionPolicyDeleteAll deletes StatefulSets and PVCs, but retains external object-store backups.
+	// DeletionPolicyDeleteAll removes operator-managed compute and PVCs, but retains external object-store backups.
 	DeletionPolicyDeleteAll DeletionPolicy = "DeleteAll"
 )
 

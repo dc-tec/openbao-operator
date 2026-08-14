@@ -72,13 +72,15 @@ func (r *openBaoClusterWorkloadReconciler) Reconcile(ctx context.Context, req ct
 	if shouldSkipWorkloadReconcile(cluster) {
 		return ctrl.Result{}, nil
 	}
-
 	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameWorkload, cluster.Namespace); blocked {
 		return result, err
 	}
 
 	if result, blocked := r.parent.pauseForAdmissionDependencyLoss(ctx, logger, controllerNameWorkload); blocked {
 		return result, nil
+	}
+	if !controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	result, err = r.reconcileCluster(ctx, logger, cluster, recordError)
@@ -110,6 +112,9 @@ func (r *openBaoClusterWorkloadReconciler) reconcileCluster(
 		cluster,
 		recordError,
 	)
+	if appErr == nil && appResult.RequeueAfter <= 0 && !r.parent.SingleTenantMode {
+		appResult.RequeueAfter = steadyStateStatusRefreshRequeueAfter(time.Now())
+	}
 	return ctrl.Result{RequeueAfter: appResult.RequeueAfter}, appErr
 }
 
@@ -149,13 +154,15 @@ func (r *openBaoClusterAdminOpsReconciler) Reconcile(ctx context.Context, req ct
 	if !cluster.DeletionTimestamp.IsZero() || cluster.Spec.Paused || cluster.Spec.Profile == "" {
 		return ctrl.Result{}, nil
 	}
-
 	if result, err, blocked := r.parent.pauseForTenantOnboarding(ctx, logger, controllerNameAdminOps, cluster.Namespace); blocked {
 		return result, err
 	}
 
 	if result, blocked := r.parent.pauseForAdmissionDependencyLoss(ctx, logger, controllerNameAdminOps); blocked {
 		return result, nil
+	}
+	if !controllerutil.ContainsFinalizer(cluster, openbaov1alpha1.OpenBaoClusterFinalizer) {
+		return ctrl.Result{RequeueAfter: constants.RequeueShort}, nil
 	}
 
 	original := cluster.DeepCopy()

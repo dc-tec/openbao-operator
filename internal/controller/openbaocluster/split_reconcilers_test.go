@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
+	"github.com/dc-tec/openbao-operator/internal/platform/admission"
 	"github.com/dc-tec/openbao-operator/internal/platform/constants"
 )
 
@@ -56,6 +57,57 @@ func TestOpenBaoClusterAdminOpsReconcilerReconcile_UsesAPIReaderWhenAvailable(t 
 	})
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
+	}
+}
+
+func TestWorkloadAndAdminOpsWaitForClusterFinalizer(t *testing.T) {
+	t.Parallel()
+
+	scheme := newOpenBaoClusterTestScheme(t)
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "wait-for-finalizer",
+			Namespace: "default",
+		},
+		Spec: openbaov1alpha1.OpenBaoClusterSpec{
+			Profile: openbaov1alpha1.ProfileDevelopment,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		WithObjects(cluster).
+		Build()
+	admissionTracker := admission.NewTracker(nil, nil, nil, 0)
+	admissionTracker.MarkReadyForUnsafeMode()
+	parent := &OpenBaoClusterReconciler{
+		Client: fakeClient,
+		ControllerRuntime: ControllerRuntime{
+			APIReader:        fakeClient,
+			AdmissionTracker: admissionTracker,
+			SingleTenantMode: true,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		reconciler admissionRuntimeTestReconciler
+	}{
+		{name: "workload", reconciler: &openBaoClusterWorkloadReconciler{parent: parent}},
+		{name: "adminops", reconciler: &openBaoClusterAdminOpsReconciler{parent: parent}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.reconciler.Reconcile(context.Background(), ctrl.Request{
+				NamespacedName: types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace},
+			})
+			if err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if result.RequeueAfter != constants.RequeueShort {
+				t.Fatalf("Reconcile() requeueAfter = %s, want %s", result.RequeueAfter, constants.RequeueShort)
+			}
+		})
 	}
 }
 
