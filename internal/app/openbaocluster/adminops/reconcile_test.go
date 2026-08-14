@@ -46,15 +46,96 @@ func (f fakeMutatingSubReconciler) Reconcile(_ context.Context, _ logr.Logger, c
 	return f.result, f.err
 }
 
+type recordingSubReconciler struct {
+	name   string
+	calls  *[]string
+	result recon.Result
+}
+
+func (f recordingSubReconciler) Reconcile(_ context.Context, _ logr.Logger, _ *openbaov1alpha1.OpenBaoCluster) (recon.Result, error) {
+	*f.calls = append(*f.calls, f.name)
+	return f.result, nil
+}
+
 func withAdminOpsReconcilers(t *testing.T, recs ...subReconciler) {
 	t.Helper()
 	orig := adminOpsReconcilersBuilder
-	adminOpsReconcilersBuilder = func(_ Dependencies) []subReconciler {
-		return recs
+	adminOpsReconcilersBuilder = func(_ Dependencies) reconcilerPlan {
+		return reconcilerPlan{upgradeReconcilers: recs}
 	}
 	t.Cleanup(func() {
 		adminOpsReconcilersBuilder = orig
 	})
+}
+
+func TestReconcile_RunsCurrentOperationOwnerFirst(t *testing.T) {
+	tests := []struct {
+		name          string
+		operationLock *openbaov1alpha1.OperationLockStatus
+		wantCalls     []string
+	}{
+		{
+			name: "backup lock runs backup before blocked upgrade",
+			operationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationBackup,
+				Holder:    "openbao-cluster/backup",
+			},
+			wantCalls: []string{"backup", "upgrade"},
+		},
+		{
+			name:      "no lock keeps upgrade priority",
+			wantCalls: []string{"upgrade"},
+		},
+		{
+			name: "upgrade lock keeps upgrade priority",
+			operationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: openbaov1alpha1.ClusterOperationUpgrade,
+				Holder:    "openbao-cluster/upgrade",
+			},
+			wantCalls: []string{"upgrade"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls []string
+			orig := adminOpsReconcilersBuilder
+			adminOpsReconcilersBuilder = func(_ Dependencies) reconcilerPlan {
+				return reconcilerPlan{
+					upgradeReconcilers: []subReconciler{recordingSubReconciler{
+						name:   "upgrade",
+						calls:  &calls,
+						result: recon.Result{RequeueAfter: time.Minute},
+					}},
+					backupReconciler: recordingSubReconciler{name: "backup", calls: &calls},
+				}
+			}
+			t.Cleanup(func() { adminOpsReconcilersBuilder = orig })
+
+			cluster := &openbaov1alpha1.OpenBaoCluster{
+				Status: openbaov1alpha1.OpenBaoClusterStatus{OperationLock: tt.operationLock},
+			}
+			result, err := Reconcile(
+				context.Background(),
+				logr.Discard(),
+				Dependencies{},
+				cluster.DeepCopy(),
+				cluster,
+				nil,
+				nil,
+				nil,
+			)
+			if err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			if result.RequeueAfter != time.Minute {
+				t.Fatalf("RequeueAfter = %v, want %v", result.RequeueAfter, time.Minute)
+			}
+			if !reflect.DeepEqual(calls, tt.wantCalls) {
+				t.Fatalf("calls = %v, want %v", calls, tt.wantCalls)
+			}
+		})
+	}
 }
 
 func TestReconcile_AdminOpsErrorPaths(t *testing.T) {
@@ -328,30 +409,31 @@ func TestBuildReconcilers_InjectsRecorderIntoManagers(t *testing.T) {
 		Scheme:    scheme,
 		Recorder:  recorder,
 	})
+	orderedReconcilers := reconcilers.orderedFor(&openbaov1alpha1.OpenBaoCluster{})
 
-	if len(reconcilers) != 4 {
-		t.Fatalf("len(reconcilers) = %d, want 4", len(reconcilers))
+	if len(orderedReconcilers) != 4 {
+		t.Fatalf("len(reconcilers) = %d, want 4", len(orderedReconcilers))
 	}
 
-	if _, ok := reconcilers[0].(*upgrademanager.StrategyTransitionManager); !ok {
-		t.Fatalf("reconcilers[0] = %T, want *upgrade.StrategyTransitionManager", reconcilers[0])
+	if _, ok := orderedReconcilers[0].(*upgrademanager.StrategyTransitionManager); !ok {
+		t.Fatalf("reconcilers[0] = %T, want *upgrade.StrategyTransitionManager", orderedReconcilers[0])
 	}
 
-	blueGreenMgr, ok := reconcilers[1].(*bluegreen.Manager)
+	blueGreenMgr, ok := orderedReconcilers[1].(*bluegreen.Manager)
 	if !ok {
-		t.Fatalf("reconcilers[1] = %T, want *bluegreen.Manager", reconcilers[1])
+		t.Fatalf("reconcilers[1] = %T, want *bluegreen.Manager", orderedReconcilers[1])
 	}
 	assertRecorderInjected(t, blueGreenMgr)
 
-	rollingMgr, ok := reconcilers[2].(*rollingupgrade.Manager)
+	rollingMgr, ok := orderedReconcilers[2].(*rollingupgrade.Manager)
 	if !ok {
-		t.Fatalf("reconcilers[2] = %T, want *rollingupgrade.Manager", reconcilers[2])
+		t.Fatalf("reconcilers[2] = %T, want *rollingupgrade.Manager", orderedReconcilers[2])
 	}
 	assertRecorderInjected(t, rollingMgr)
 
-	backupMgr, ok := reconcilers[3].(*backupmanager.Manager)
+	backupMgr, ok := orderedReconcilers[3].(*backupmanager.Manager)
 	if !ok {
-		t.Fatalf("reconcilers[3] = %T, want *backup.Manager", reconcilers[3])
+		t.Fatalf("reconcilers[3] = %T, want *backup.Manager", orderedReconcilers[3])
 	}
 	assertRecorderInjected(t, backupMgr)
 }
