@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -82,8 +83,18 @@ func (r *OpenBaoRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if r.RestoreReconciler == nil {
 		return ctrl.Result{}, fmt.Errorf("restore reconciler is not configured")
 	}
-	if result, blocked := r.pauseForAdmissionDependencyLoss(ctx, logger); blocked {
-		return result, nil
+
+	restoreResource := &openbaov1alpha1.OpenBaoRestore{}
+	if getErr := r.Get(ctx, req.NamespacedName, restoreResource); getErr != nil {
+		if apierrors.IsNotFound(getErr) {
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, fmt.Errorf("failed to get OpenBaoRestore before admission dependency check: %w", getErr)
+	}
+	if restoreResource.DeletionTimestamp == nil {
+		if result, blocked := r.pauseForAdmissionDependencyLoss(ctx, logger); blocked {
+			return result, nil
+		}
 	}
 
 	appResult, appErr := appopenbaorestore.ReconcileOpenBaoRestore(

@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	openbaov1alpha1 "github.com/dc-tec/openbao-operator/api/v1alpha1"
 	"github.com/dc-tec/openbao-operator/internal/adapter/security"
@@ -1906,6 +1907,7 @@ func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "running-restore",
 			Namespace:         "default",
+			UID:               types.UID("running-restore-uid"),
 			DeletionTimestamp: &now,
 			Finalizers:        []string{openbaov1alpha1.OpenBaoRestoreFinalizer},
 		},
@@ -1924,6 +1926,7 @@ func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
 	}
 	setTestResourceVersion(cluster)
 	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: restoreJobName(restore), Namespace: restore.Namespace}}
+	require.NoError(t, controllerutil.SetControllerReference(restore, job, scheme))
 
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -1954,6 +1957,72 @@ func TestHandleDeletion_WaitsForRestoreJobBeforeLockRelease(t *testing.T) {
 	assert.Zero(t, result.RequeueAfter)
 	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), currentCluster))
 	assert.Nil(t, currentCluster.Status.OperationLock)
+}
+
+func TestHandleDeletion_RejectsForeignRestoreJob(t *testing.T) {
+	scheme := runtime.NewScheme()
+	require.NoError(t, openbaov1alpha1.AddToScheme(scheme))
+	require.NoError(t, batchv1.AddToScheme(scheme))
+
+	now := metav1.Now()
+	restore := &openbaov1alpha1.OpenBaoRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "running-restore",
+			Namespace:         "default",
+			UID:               types.UID("running-restore-uid"),
+			DeletionTimestamp: &now,
+			Finalizers:        []string{openbaov1alpha1.OpenBaoRestoreFinalizer},
+		},
+		Spec: openbaov1alpha1.OpenBaoRestoreSpec{Cluster: "test-cluster"},
+	}
+	setTestResourceVersion(restore)
+	lock := restoreOperationLock(restore)
+	cluster := &openbaov1alpha1.OpenBaoCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: restore.Spec.Cluster, Namespace: restore.Namespace},
+		Status: openbaov1alpha1.OpenBaoClusterStatus{
+			OperationLock: &openbaov1alpha1.OperationLockStatus{
+				Operation: lock.Operation,
+				Holder:    lock.Holder,
+			},
+		},
+	}
+	setTestResourceVersion(cluster)
+	foreignController := true
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{
+		Name:      restoreJobName(restore),
+		Namespace: restore.Namespace,
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "batch/v1",
+				Kind:       "Job",
+				Name:       "foreign-controller",
+				UID:        types.UID("foreign-controller-uid"),
+				Controller: &foreignController,
+			},
+		},
+	}}
+
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore, cluster, job).
+		WithStatusSubresource(&openbaov1alpha1.OpenBaoCluster{}).
+		Build()
+	mgr := NewManager(k8sClient, scheme, nil, security.NewImageVerifier(testLogger(), k8sClient, nil), "")
+
+	_, err := mgr.handleDeletion(context.Background(), testLogger(), restore)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "not controlled by the current OpenBaoRestore")
+	assert.ErrorContains(t, err, "delete or rename the foreign Job")
+
+	currentJob := &batchv1.Job{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(job), currentJob))
+	currentCluster := &openbaov1alpha1.OpenBaoCluster{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), currentCluster))
+	require.NotNil(t, currentCluster.Status.OperationLock)
+	assert.Equal(t, lock.Holder, currentCluster.Status.OperationLock.Holder)
+	currentRestore := &openbaov1alpha1.OpenBaoRestore{}
+	require.NoError(t, k8sClient.Get(context.Background(), client.ObjectKeyFromObject(restore), currentRestore))
+	assert.Contains(t, currentRestore.Finalizers, openbaov1alpha1.OpenBaoRestoreFinalizer)
 }
 
 // TestReleaseClusterLock tests the cluster lock release.

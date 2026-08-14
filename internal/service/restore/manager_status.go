@@ -190,6 +190,21 @@ func (m *Manager) deleteRestoreJob(ctx context.Context, logger logr.Logger, rest
 		}
 		return false, fmt.Errorf("failed to get restore Job during deletion: %w", err)
 	}
+	if !metav1.IsControlledBy(job, restore) {
+		controllerOwner := "none"
+		if ref := metav1.GetControllerOfNoCopy(job); ref != nil {
+			controllerOwner = fmt.Sprintf("%s %s with UID %q", ref.Kind, ref.Name, ref.UID)
+		}
+		return false, fmt.Errorf(
+			"refusing to delete restore Job %s/%s because it is not controlled by the current OpenBaoRestore %s/%s with UID %q; found controller owner %s; delete or rename the foreign Job, then retry restore deletion",
+			job.Namespace,
+			job.Name,
+			restore.Namespace,
+			restore.Name,
+			restore.UID,
+			controllerOwner,
+		)
+	}
 
 	if job.DeletionTimestamp.IsZero() {
 		if err := m.client.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !apierrors.IsNotFound(err) {
